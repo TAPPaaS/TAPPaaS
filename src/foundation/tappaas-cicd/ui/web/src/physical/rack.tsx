@@ -7,7 +7,8 @@
 // colours of the Device view, labelled on hover, a click opening the cable's
 // link in the side panel (the same panel the Device view opens). A device
 // only a cable record places (the ISP's modem) stands left of the racks.
-// Every location of the site is drawn, the primary first, its heading a link
+// Every location of the site is drawn, one above the other, the primary first
+// (the drawing fits to the first and scrolls to the rest), its heading a link
 // to its record on the Site page with its address: after its rooms, the
 // devices that are at it and placed nowhere (with no room, somewhere there),
 // and a backup buddy or a satellite that is there.
@@ -16,164 +17,19 @@
 
 import { MutableRefObject, PointerEvent as ReactPointerEvent, ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { zoneColor } from "../colors";
-import { PlatePort, RackCable, RackInfo, PlacementInfo, PositionsView, TopoOutside, Topology } from "../types";
+import { PlatePort, RackCable, PositionsView, Topology } from "../types";
 import { navigate } from "../ui";
 import { locationHref } from "../locations";
-import { Sel } from "./layout";
+import { R, RackLayout, Sel, dropTargetAt, inner, layoutRacks, portKey, selOf } from "./layout";
 import { isPatchPanel, linkId, panelPortSel } from "./devicegraph";
 import { Box, Placed, nameArea, portCells } from "./platelayout";
 import { PortAt, routeCables } from "./cableroute";
-import { Dragged, Drop, DropTarget, dropAt, rowOf, spanOf, unitAt } from "./dragplace";
+import { Dragged, Drop, dropAt, unitAt } from "./dragplace";
 import type { DragState } from "./dragdrop";
 
-// Geometry: one rack unit, the rails with their numbers, a 19in and a 10in
-// interior (wider than true scale, so a 12-port plate stays legible).
-export const R = { u: 30, rail: 24, w19: 440, w10: 240, gap: 150, top: 116, margin: 24, outsideW: 230, bottom: 40, roomPad: 18, looseGap: 18, locPad: 14, roomY: 40, nowhereW: 240 };
-
-const inner = (r: RackInfo) => (r.width === "10in" ? R.w10 : R.w19);
-const span = spanOf;
-
+export { R, selOf, layoutRacks } from "./layout";
+export type { RackLayout } from "./layout";
 export type { Box, Placed } from "./platelayout";
-
-export interface RackLayout {
-  width: number;
-  height: number;
-  racks: { r: RackInfo; x: number }[];
-  // Each location an area around its rooms and, in a column after them, what
-  // is at it placed nowhere (with no room: somewhere there); each room an
-  // area: its racks and the devices loose in it.
-  locations: { name: string; title: string; sub: string; primary: boolean; x: number; y: number; w: number; h: number; roomless: boolean; nowhereX: number; nowhere: { device: string; label: string; sel: Sel }[] }[];
-  rooms: { name: string; title: string; sub: string; recorded: boolean; x: number; y: number; w: number; h: number }[];
-  placed: Placed[];
-  ports: Map<string, PortAt>;
-}
-
-const key = (device: string, port: string) => `${device}\u0000${port}`;
-
-// What stands at a location placed nowhere: its unplaced devices, then the
-// backup buddies and satellites the topology has there (a satellite is also a
-// machine of the site, so it is listed once).
-function nowhereAt(v: PositionsView, loc: { name: string; unplaced: string[] }, outside: TopoOutside[]): RackLayout["locations"][number]["nowhere"] {
-  const kindOf = (device: string): Placed["kind"] => v.unplaced.find((u) => u.device === device)?.kind ?? "device";
-  const out = loc.unplaced.map((device) => ({ device, label: device, sel: selOf(kindOf(device), device) }));
-  for (const o of outside) if (o.at === loc.name && !loc.unplaced.includes(o.name)) out.push({ device: o.name, label: `${o.name} (${o.kind === "buddy" ? "backup buddy" : "satellite"})`, sel: { kind: "outside", id: o.name } });
-  return out;
-}
-
-export function layoutRacks(v: PositionsView, outside: TopoOutside[] = []): RackLayout {
-  const placed: Placed[] = [];
-  const ports: RackLayout["ports"] = new Map();
-  let x = R.margin;
-  // A device a cable record places stands left of the racks.
-  if (v.outside.length) {
-    let y = R.top + 10;
-    for (const o of v.outside) {
-      const h = (o.plate?.units ?? 1) * R.u + 6;
-      placed.push({ device: o.device, kind: "outside", plate: o.plate, box: { x, y, w: R.outsideW, h }, up: null, title: o.device, sub: o.faceplate ?? "placed by a cable record", rack: null });
-      y += h + 26;
-    }
-    x += R.outsideW + R.gap * 0.7;
-  }
-  const racks: RackLayout["racks"] = [];
-  const rooms: RackLayout["rooms"] = [];
-  let maxH = 0;
-  const drawRack = (r: RackInfo) => {
-    racks.push({ r, x });
-    const iw = inner(r);
-    for (const m of r.placements) {
-      if (m.face !== "front") continue;
-      const [a, b] = span(m);
-      const top = rowOf(r, m.u + m.height - 1);
-      placed.push({
-        device: m.device,
-        kind: m.kind,
-        plate: m.plate,
-        box: { x: x + R.rail + iw * a + 1, y: R.top + Math.min(top, rowOf(r, m.u)) * R.u + 1, w: iw * (b - a) - 2, h: m.height * R.u - 2 },
-        up: m.up,
-        title: m.label ? `${m.device} · ${m.label}` : m.device,
-        sub: m.plate ? `${m.plate.vendor} ${m.plate.model}${m.suggested ? " (suggested)" : ""}` : "no faceplate",
-        rack: r.name,
-      });
-    }
-    maxH = Math.max(maxH, r.units * R.u);
-    x += iw + 2 * R.rail + R.gap;
-  };
-  // The devices loose in a room: a column of faceplates beside its racks.
-  const drawLoose = (ms: PlacementInfo[]) => {
-    if (!ms.length) return;
-    let y = R.top;
-    const colW = Math.max(...ms.map((m) => (m.width === "full" ? 320 : m.width === "half" ? 180 : 130)));
-    for (const m of ms) {
-      const w = m.width === "full" ? 320 : m.width === "half" ? 180 : 130;
-      const h = Math.max(1, m.height) * R.u;
-      placed.push({ device: m.device, kind: m.kind, plate: m.plate, box: { x, y, w, h }, up: m.up, title: m.label ? `${m.device} · ${m.label}` : m.device, sub: m.plate ? `${m.plate.vendor} ${m.plate.model}` : "no faceplate", rack: null });
-      y += h + R.looseGap;
-    }
-    maxH = Math.max(maxH, y - R.top);
-    x += colW + R.gap;
-  };
-  // Location by location (the primary first), room by room (a rack in no
-  // room after them, in no area).
-  const locations: RackLayout["locations"] = [];
-  const roomed = new Set((v.rooms ?? []).flatMap((r) => r.racks));
-  const groups = v.locations?.length ? v.locations : [{ name: "", displayName: null, kind: "site" as const, primary: true, place: null, rooms: (v.rooms ?? []).map((r) => r.name), unplaced: [] }];
-  for (const loc of groups) {
-    const inLoc = (v.rooms ?? []).filter((r) => loc.rooms.includes(r.name));
-    const nowhere = loc.name ? nowhereAt(v, loc, outside) : [];
-    if (!loc.name && !inLoc.length) continue;
-    const lx0 = x;
-    for (const room of inLoc) {
-      const x0 = x;
-      for (const name of room.racks) {
-        const r = v.racks.find((y) => y.name === name);
-        if (r) drawRack(r);
-      }
-      drawLoose(room.loose);
-      if (x === x0) x += 200; // an empty room still shows
-      rooms.push({ name: room.name, title: room.displayName ?? room.name, sub: room.recorded ? "" : "not recorded", recorded: room.recorded, x: x0 - R.roomPad, y: R.roomY, w: x - R.gap - x0 + 2 * R.roomPad, h: 0 });
-      x += 30;
-    }
-    // After the rooms (or in their place): what is here placed nowhere.
-    const nowhereX = inLoc.length ? x - 30 - R.gap / 2 : x;
-    if (!inLoc.length || nowhere.length) x = nowhereX + R.nowhereW + R.gap;
-    if (loc.name) {
-      const place = [loc.place?.address, loc.place?.city, loc.place?.country].filter(Boolean).join(", ");
-      const title = loc.displayName ?? loc.name;
-      const sub = [place, loc.primary ? "the primary location" : loc.kind === "remote" ? "another site's" : ""].filter(Boolean).join(" · ");
-      // As wide as its heading at least: the title, then its address.
-      const head = 28 + title.length * 9.5 + 10 + sub.length * 5.6;
-      let w = x - (inLoc.length && !nowhere.length ? R.gap + 30 : R.gap) - lx0 + 2 * (R.roomPad + R.locPad);
-      if (head > w) {
-        x += head - w;
-        w = head;
-      }
-      locations.push({
-        name: loc.name,
-        title,
-        sub,
-        primary: loc.primary,
-        x: lx0 - R.roomPad - R.locPad,
-        y: 2,
-        w,
-        h: 0,
-        roomless: !inLoc.length,
-        nowhereX,
-        nowhere,
-      });
-    }
-    x += 40;
-  }
-  for (const r of v.racks) if (!roomed.has(r.name)) drawRack(r);
-  for (const p of placed) {
-    for (const c of portCells(p)) ports.set(key(p.device, c.port.id), { x: c.box.x + c.box.w / 2, y: c.box.y + c.box.h / 2, h: c.box.h, plateY: p.box.y, plateH: p.box.h, rack: p.rack });
-  }
-  const outsideH = placed.filter((p) => p.kind === "outside").reduce((h, p) => Math.max(h, p.box.y + p.box.h), 0);
-  const nowhereH = Math.max(0, ...locations.map((l) => R.roomY + 40 + l.nowhere.length * 20));
-  const height = Math.max(R.top + maxH + R.bottom, outsideH + R.bottom, nowhereH + R.bottom);
-  for (const room of rooms) room.h = height - room.y - 16;
-  for (const l of locations) l.h = height - l.y - 4;
-  return { width: Math.max(x - R.gap + R.margin + 160, 400), height, locations, racks, rooms, placed, ports };
-}
 
 // A trunk's colour by what it joins, bright enough to tell apart on the
 // light canvas (CABLE_KINDS is also the legend's).
@@ -248,15 +104,6 @@ function Port({ c, selected, cabled, rear, onClick }: { c: { port: PlatePort; bo
   );
 }
 
-// What a click on a plate or a port selects: the device's own side card (a
-// node, a switch or one of its ports, an access point), else the placed device's.
-export function selOf(kind: Placed["kind"], device: string, port?: string): Sel {
-  if (kind === "switch") return port ? { kind: "port", id: port, switch: device } : { kind: "switch", id: device };
-  if (kind === "node") return { kind: "node", id: device };
-  if (kind === "ap") return { kind: "ap", id: device };
-  return { kind: "mount", id: device };
-}
-
 const isSel = (s: Sel | null, kind: Placed["kind"], device: string): boolean =>
   !!s && (((s.kind === "node" || s.kind === "switch" || s.kind === "ap" || s.kind === "mount") && s.id === device) || (s.kind === "port" && s.switch === device && kind === "switch") || (s.kind === "panelport" && s.panel === device));
 
@@ -302,19 +149,6 @@ export function PlateSvg({ p, on, portOn, cabled, rear, onPlate, onPort, onGrab,
   );
 }
 
-// Where a point of the drawing falls for a drop: a rack's row and the fraction
-// across its interior (its rails count as its edge), else a room's area.
-export function dropTargetAt(L: RackLayout, x: number, y: number, grab: number): DropTarget | null {
-  for (const { r, x: rx } of L.racks) {
-    const iw = inner(r);
-    if (x < rx || x > rx + iw + 2 * R.rail || y < R.top || y > R.top + r.units * R.u) continue;
-    const row = Math.min(r.units - 1, Math.floor((y - R.top) / R.u));
-    return { rack: r.name, row: row - grab, across: Math.max(0, Math.min(0.999, (x - rx - R.rail) / iw)) };
-  }
-  const room = L.rooms.find((m) => x >= m.x && x <= m.x + m.w && y >= m.y && y <= m.y + m.h);
-  return room ? { room: room.name } : null;
-}
-
 // A drop on its way: the plate at its units, or its name in the room's area.
 function PendingDrop({ L, d, drop }: { L: RackLayout; d: Dragged; drop: Drop }) {
   const room = drop.room ? L.rooms.find((m) => m.name === drop.room) : null;
@@ -330,7 +164,7 @@ function PendingDrop({ L, d, drop }: { L: RackLayout; d: Dragged; drop: Drop }) 
   if (!at || !drop.rows || !drop.span) return null;
   const iw = inner(at.r);
   const [a, b] = drop.span;
-  const box = { x: at.x + R.rail + iw * a + 1, y: R.top + drop.rows[0] * R.u + 1, w: iw * (b - a) - 2, h: (drop.rows[1] - drop.rows[0] + 1) * R.u - 2 };
+  const box = { x: at.x + R.rail + iw * a + 1, y: at.y + drop.rows[0] * R.u + 1, w: iw * (b - a) - 2, h: (drop.rows[1] - drop.rows[0] + 1) * R.u - 2 };
   const was = L.placed.find((p) => p.device === d.device);
   const p: Placed = { device: d.device, kind: d.kind as Placed["kind"], plate: was?.plate ?? null, box, up: null, title: was?.title ?? d.device, sub: d.from ? "moving here…" : "placing here…", rack: drop.rack ?? null };
   return (
@@ -373,9 +207,9 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane, drag, dropRef, onG
   const fit = () => {
     const el = wrap.current;
     if (!el) return;
-    setScale(Math.max(0.3, Math.min(1.6, (el.clientWidth - 8) / L.width, (el.clientHeight - 8) / L.height)));
+    setScale(Math.max(0.3, Math.min(1.6, (el.clientWidth - 8) / L.width, (el.clientHeight - 8) / L.fitH)));
   };
-  useLayoutEffect(fit, [L.width, L.height]);
+  useLayoutEffect(fit, [L.width, L.fitH]);
   useEffect(() => {
     const el = wrap.current;
     if (!el || typeof ResizeObserver === "undefined") return;
@@ -384,7 +218,7 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane, drag, dropRef, onG
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [L.width, L.height]);
+  }, [L.width, L.fitH]);
   const zoom = (f: number) => {
     zoomed.current = true;
     setScale(Math.max(0.2, Math.min(3, (scale ?? 1) * f)));
@@ -395,7 +229,7 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane, drag, dropRef, onG
   const wires = v.cables.flatMap((c) => (c.segments?.length ? c.segments.map((s) => ({ c, from: s.from, to: s.to })) : [{ c, from: c.from, to: c.to }]));
   const drawn = useMemo(() => {
     const ok = wires
-      .map((w, i) => ({ c: w.c, w, i, a: L.ports.get(key(w.from.device, w.from.port)), b: L.ports.get(key(w.to.device, w.to.port)) }))
+      .map((w, i) => ({ c: w.c, w, i, a: L.ports.get(portKey(w.from.device, w.from.port)), b: L.ports.get(portKey(w.to.device, w.to.port)) }))
       .filter((x): x is typeof x & { a: PortAt; b: PortAt } => !!x.a && !!x.b);
     // Each one curve, port to port; a bundle between two devices fans out.
     const routes = routeCables(ok.map((x) => ({ a: x.a, b: x.b, sideA: x.w.from.side, sideB: x.w.to.side, device: [x.w.from.device, x.w.to.device] })));
@@ -451,12 +285,12 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane, drag, dropRef, onG
             </text>
             {l.sub ? <text x={l.x + 14 + l.title.length * 9.5 + 10} y={l.y + 20} className="rack-where">{l.sub}</text> : null}
             {l.roomless || l.nowhere.length ? (
-              <text x={l.nowhereX} y={R.roomY + 12} className="rack-where">
+              <text x={l.nowhereX} y={l.nowhereY + 12} className="rack-where">
                 {!l.roomless ? "placed nowhere here:" : l.nowhere.length ? "no room here — somewhere at this location:" : "no room here, and nothing recorded at it"}
               </text>
             ) : null}
             {l.nowhere.map((n, i) => (
-              <text key={n.device} x={l.nowhereX} y={R.roomY + 34 + i * 20} className="rack-location-device" onClick={(e) => (e.stopPropagation(), pick(n.sel))}>
+              <text key={n.device} x={l.nowhereX} y={l.nowhereY + 34 + i * 20} className="rack-location-device" onClick={(e) => (e.stopPropagation(), pick(n.sel))}>
                 {n.label}
               </text>
             ))}
@@ -469,24 +303,24 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane, drag, dropRef, onG
             {room.sub ? <text x={room.x + 12} y={room.y + 38} className="rack-where">{room.sub}</text> : null}
           </g>
         ))}
-        {L.racks.map(({ r, x }) => {
+        {L.racks.map(({ r, x, y }) => {
           const iw = inner(r);
           const h = r.units * R.u;
           return (
             <g key={r.name} className="rack-frame">
-              <text x={x} y={R.top - 24} className="rack-title" onClick={(e) => (e.stopPropagation(), pick({ kind: "rack", id: r.name }))}>
+              <text x={x} y={y - 24} className="rack-title" onClick={(e) => (e.stopPropagation(), pick({ kind: "rack", id: r.name }))}>
                 {r.displayName ?? r.name}
               </text>
-              <text x={x} y={R.top - 10} className="rack-where">
+              <text x={x} y={y - 10} className="rack-where">
                 {[`${r.units}U ${r.width}`, r.room].filter(Boolean).join(" · ")}
               </text>
-              <rect x={x} y={R.top} width={iw + 2 * R.rail} height={h} rx={4} fill="#f8fafc" stroke={sel?.kind === "rack" && sel.id === r.name ? "#3b6fd4" : "#334155"} strokeWidth={sel?.kind === "rack" && sel.id === r.name ? 3 : 2} onClick={(e) => (e.stopPropagation(), pick({ kind: "rack", id: r.name }))} />
-              <rect x={x + R.rail} y={R.top} width={iw} height={h} fill="#eef2f6" />
+              <rect x={x} y={y} width={iw + 2 * R.rail} height={h} rx={4} fill="#f8fafc" stroke={sel?.kind === "rack" && sel.id === r.name ? "#3b6fd4" : "#334155"} strokeWidth={sel?.kind === "rack" && sel.id === r.name ? 3 : 2} onClick={(e) => (e.stopPropagation(), pick({ kind: "rack", id: r.name }))} />
+              <rect x={x + R.rail} y={y} width={iw} height={h} fill="#eef2f6" />
               {Array.from({ length: r.units }, (_, row) => (
                 <g key={row}>
-                  <line x1={x + R.rail} x2={x + R.rail + iw} y1={R.top + row * R.u} y2={R.top + row * R.u} stroke="#dbe2ea" />
-                  <text x={x + R.rail / 2} y={R.top + row * R.u + R.u / 2 + 3.5} className="rack-unit">{unitAt(r, row)}</text>
-                  <text x={x + R.rail * 1.5 + iw} y={R.top + row * R.u + R.u / 2 + 3.5} className="rack-unit">{unitAt(r, row)}</text>
+                  <line x1={x + R.rail} x2={x + R.rail + iw} y1={y + row * R.u} y2={y + row * R.u} stroke="#dbe2ea" />
+                  <text x={x + R.rail / 2} y={y + row * R.u + R.u / 2 + 3.5} className="rack-unit">{unitAt(r, row)}</text>
+                  <text x={x + R.rail * 1.5 + iw} y={y + row * R.u + R.u / 2 + 3.5} className="rack-unit">{unitAt(r, row)}</text>
                 </g>
               ))}
             </g>
@@ -502,7 +336,7 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane, drag, dropRef, onG
           if (!at) return null;
           const iw = inner(at.r);
           const [a, b] = drop.span;
-          return <rect className={drop.ok ? "drop-ok" : "drop-bad"} x={at.x + R.rail + iw * a + 1} y={R.top + drop.rows[0] * R.u + 1} width={iw * (b - a) - 2} height={(drop.rows[1] - drop.rows[0] + 1) * R.u - 2} rx={3} pointerEvents="none" />;
+          return <rect className={drop.ok ? "drop-ok" : "drop-bad"} x={at.x + R.rail + iw * a + 1} y={at.y + drop.rows[0] * R.u + 1} width={iw * (b - a) - 2} height={(drop.rows[1] - drop.rows[0] + 1) * R.u - 2} rx={3} pointerEvents="none" />;
         })() : null}
         {pending ? <PendingDrop L={L} d={pending.d} drop={pending.drop} /> : null}
         {cables

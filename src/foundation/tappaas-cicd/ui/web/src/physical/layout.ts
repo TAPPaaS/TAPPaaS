@@ -1,7 +1,14 @@
 // layout.ts — what the Physical, Device and Storage views select (the side
-// panel shows it), and a switch port's far end in words.
+// panel shows it), a switch port's far end in words, and where the Physical
+// view draws things: the locations one above the other, the primary first,
+// their rooms, racks and plates, and which rack unit or room a point of the
+// drawing falls on. Pure: the drawing (rack.tsx) and its tests use the same
+// numbers.
 
-import { TopoPort } from "../types";
+import { PlacementInfo, PositionsView, RackInfo, TopoOutside, TopoPort } from "../types";
+import { PortAt } from "./cableroute";
+import { DropTarget, rowOf, spanOf } from "./dragplace";
+import { Placed, portCells } from "./platelayout";
 
 export type Sel =
   | { kind: "node"; id: string }
@@ -29,4 +36,184 @@ export function portLabel(p: TopoPort): string {
   if (p.target.kind === "isp") return p.description ?? "ISP hand-off";
   const nm = p.target.name ?? "?";
   return `${nm}${p.target.port ? ` ${p.target.port}` : ""}${p.role === "node-wan" ? " (wan)" : ""}`;
+}
+
+// Geometry: one rack unit, the rails with their numbers, a 19in and a 10in
+// interior (wider than true scale, so a 12-port plate stays legible); from a
+// location's top to its rooms' (locHead), from a room's top to its racks'
+// (rackHead).
+export const R = { u: 30, rail: 24, w19: 440, w10: 240, gap: 150, margin: 8, outsideW: 230, roomPad: 18, looseGap: 18, locPad: 14, locHead: 38, locGap: 18, rackHead: 76, roomGap: 40, nowhereW: 240 };
+
+export const inner = (r: RackInfo) => (r.width === "10in" ? R.w10 : R.w19);
+
+export interface RackLayout {
+  width: number;
+  height: number;
+  fitH: number; // the height "fit" shows: the first location; the others are scrolled to
+  racks: { r: RackInfo; x: number; y: number }[];
+  // Each location an area around its rooms and, in a column after them, what
+  // is at it placed nowhere (with no room: somewhere there); each room an
+  // area: its racks and the devices loose in it.
+  locations: { name: string; title: string; sub: string; primary: boolean; x: number; y: number; w: number; h: number; roomless: boolean; nowhereX: number; nowhereY: number; nowhere: { device: string; label: string; sel: Sel }[] }[];
+  rooms: { name: string; title: string; sub: string; recorded: boolean; x: number; y: number; w: number; h: number }[];
+  placed: Placed[];
+  ports: Map<string, PortAt>;
+}
+
+export const portKey = (device: string, port: string) => `${device}\u0000${port}`;
+
+// What a click on a plate or a port selects: the device's own side card (a
+// node, a switch or one of its ports, an access point), else the placed device's.
+export function selOf(kind: Placed["kind"], device: string, port?: string): Sel {
+  if (kind === "switch") return port ? { kind: "port", id: port, switch: device } : { kind: "switch", id: device };
+  if (kind === "node") return { kind: "node", id: device };
+  if (kind === "ap") return { kind: "ap", id: device };
+  return { kind: "mount", id: device };
+}
+
+// What stands at a location placed nowhere: its unplaced devices, then the
+// backup buddies and satellites the topology has there (a satellite is also a
+// machine of the site, so it is listed once).
+function nowhereAt(v: PositionsView, loc: { name: string; unplaced: string[] }, outside: TopoOutside[]): RackLayout["locations"][number]["nowhere"] {
+  const kindOf = (device: string): Placed["kind"] => v.unplaced.find((u) => u.device === device)?.kind ?? "device";
+  const out = loc.unplaced.map((device) => ({ device, label: device, sel: selOf(kindOf(device), device) }));
+  for (const o of outside) if (o.at === loc.name && !loc.unplaced.includes(o.name)) out.push({ device: o.name, label: `${o.name} (${o.kind === "buddy" ? "backup buddy" : "satellite"})`, sel: { kind: "outside", id: o.name } });
+  return out;
+}
+
+const looseW = (m: PlacementInfo) => (m.width === "full" ? 320 : m.width === "half" ? 180 : 130);
+
+export function layoutRacks(v: PositionsView, outside: TopoOutside[] = []): RackLayout {
+  const placed: Placed[] = [];
+  const ports: RackLayout["ports"] = new Map();
+  let left = R.margin;
+  let outsideBottom = 0;
+  // A device a cable record places stands left of the locations.
+  if (v.outside.length) {
+    let y = R.locHead + R.rackHead + 12;
+    for (const o of v.outside) {
+      const h = (o.plate?.units ?? 1) * R.u + 6;
+      placed.push({ device: o.device, kind: "outside", plate: o.plate, box: { x: left, y, w: R.outsideW, h }, up: null, title: o.device, sub: o.faceplate ?? "placed by a cable record", rack: null });
+      outsideBottom = y + h;
+      y += h + 26;
+    }
+    left += R.outsideW + R.gap * 0.7;
+  }
+  const racks: RackLayout["racks"] = [];
+  const rooms: RackLayout["rooms"] = [];
+  // A rack at (x, y): its width; its height is its units.
+  const drawRack = (r: RackInfo, x: number, y: number): number => {
+    racks.push({ r, x, y });
+    const iw = inner(r);
+    for (const m of r.placements) {
+      if (m.face !== "front") continue;
+      const [a, b] = spanOf(m);
+      const top = rowOf(r, m.u + m.height - 1);
+      placed.push({
+        device: m.device,
+        kind: m.kind,
+        plate: m.plate,
+        box: { x: x + R.rail + iw * a + 1, y: y + Math.min(top, rowOf(r, m.u)) * R.u + 1, w: iw * (b - a) - 2, h: m.height * R.u - 2 },
+        up: m.up,
+        title: m.label ? `${m.device} · ${m.label}` : m.device,
+        sub: m.plate ? `${m.plate.vendor} ${m.plate.model}${m.suggested ? " (suggested)" : ""}` : "no faceplate",
+        rack: r.name,
+      });
+    }
+    return iw + 2 * R.rail;
+  };
+  // The devices loose in a room: a column of faceplates at (x, y); its size.
+  const drawLoose = (ms: PlacementInfo[], x: number, y0: number): { w: number; h: number } => {
+    let y = y0;
+    for (const m of ms) {
+      const h = Math.max(1, m.height) * R.u;
+      placed.push({ device: m.device, kind: m.kind, plate: m.plate, box: { x, y, w: looseW(m), h }, up: m.up, title: m.label ? `${m.device} · ${m.label}` : m.device, sub: m.plate ? `${m.plate.vendor} ${m.plate.model}` : "no faceplate", rack: null });
+      y += h + R.looseGap;
+    }
+    return { w: Math.max(0, ...ms.map(looseW)), h: ms.length ? y - R.looseGap - y0 : 0 };
+  };
+  // Location by location, one above the other (the primary first), room by
+  // room (a rack in no room below them, in no area).
+  const locations: RackLayout["locations"] = [];
+  const roomed = new Set((v.rooms ?? []).flatMap((r) => r.racks));
+  const groups = v.locations?.length ? v.locations : [{ name: "", displayName: null, kind: "site" as const, primary: true, place: null, rooms: (v.rooms ?? []).map((r) => r.name), unplaced: [] }];
+  let y = 2;
+  let right = left;
+  for (const loc of groups) {
+    const inLoc = (v.rooms ?? []).filter((r) => loc.rooms.includes(r.name));
+    const nowhere = loc.name ? nowhereAt(v, loc, outside) : [];
+    if (!loc.name && !inLoc.length) continue;
+    const roomY = y + R.locHead;
+    const top = roomY + R.rackHead;
+    const firstRoom = rooms.length;
+    let x = left + R.locPad;
+    let bottom = roomY;
+    for (const room of inLoc) {
+      let cx = x + R.roomPad;
+      for (const name of room.racks) {
+        const r = v.racks.find((c) => c.name === name);
+        if (!r) continue;
+        cx += drawRack(r, cx, top) + R.gap;
+        bottom = Math.max(bottom, top + r.units * R.u);
+      }
+      const l = drawLoose(room.loose, cx, top);
+      if (l.h) {
+        cx += l.w + R.gap;
+        bottom = Math.max(bottom, top + l.h);
+      }
+      const w = (cx === x + R.roomPad ? 200 : cx - R.gap - x - R.roomPad) + 2 * R.roomPad; // an empty room still shows
+      rooms.push({ name: room.name, title: room.displayName ?? room.name, sub: room.recorded ? "" : "not recorded", recorded: room.recorded, x, y: roomY, w, h: 0 });
+      x += w + R.roomGap;
+    }
+    // After the rooms (or in their place): what is here placed nowhere.
+    const nowhereX = x;
+    if (!inLoc.length || nowhere.length) {
+      x += R.nowhereW + R.roomGap;
+      bottom = Math.max(bottom, roomY + 34 + nowhere.length * 20);
+    }
+    bottom += R.roomPad;
+    for (const room of rooms.slice(firstRoom)) room.h = bottom - room.y;
+    let w = x - R.roomGap + R.locPad - left;
+    if (loc.name) {
+      const place = [loc.place?.address, loc.place?.city, loc.place?.country].filter(Boolean).join(", ");
+      const title = loc.displayName ?? loc.name;
+      const sub = [place, loc.primary ? "the primary location" : loc.kind === "remote" ? "another site's" : ""].filter(Boolean).join(" · ");
+      // As wide as its heading at least: the title, then its address.
+      w = Math.max(w, 28 + title.length * 11 + 10 + sub.length * 6);
+      locations.push({ name: loc.name, title, sub, primary: loc.primary, x: left, y, w, h: bottom + R.locPad - y, roomless: !inLoc.length, nowhereX, nowhereY: roomY, nowhere });
+    }
+    right = Math.max(right, left + w);
+    y = bottom + R.locPad + R.locGap;
+  }
+  // One width for all, so the stack reads as one column.
+  for (const l of locations) l.w = right - left;
+  const fitH = locations.length ? locations[0].y + locations[0].h + 4 : 0;
+  const loose = v.racks.filter((r) => !roomed.has(r.name));
+  if (loose.length) {
+    let x = left + R.locPad;
+    const top = y + 40;
+    for (const r of loose) {
+      x += drawRack(r, x, top) + R.gap;
+      y = Math.max(y, top + r.units * R.u + R.roomPad);
+    }
+    right = Math.max(right, x - R.gap + R.locPad);
+  }
+  for (const p of placed) {
+    for (const c of portCells(p)) ports.set(portKey(p.device, c.port.id), { x: c.box.x + c.box.w / 2, y: c.box.y + c.box.h / 2, h: c.box.h, plateY: p.box.y, plateH: p.box.h, rack: p.rack });
+  }
+  const height = Math.max(y, outsideBottom + R.locGap, 200);
+  return { width: Math.max(right + R.margin, 400), height, fitH: Math.max(fitH, outsideBottom + R.locGap) || height, locations, racks, rooms, placed, ports };
+}
+
+// Where a point of the drawing falls for a drop: a rack's row and the fraction
+// across its interior (its rails count as its edge), else a room's area.
+export function dropTargetAt(L: RackLayout, x: number, y: number, grab: number): DropTarget | null {
+  for (const { r, x: rx, y: ry } of L.racks) {
+    const iw = inner(r);
+    if (x < rx || x > rx + iw + 2 * R.rail || y < ry || y > ry + r.units * R.u) continue;
+    const row = Math.min(r.units - 1, Math.floor((y - ry) / R.u));
+    return { rack: r.name, row: row - grab, across: Math.max(0, Math.min(0.999, (x - rx - R.rail) / iw)) };
+  }
+  const room = L.rooms.find((m) => x >= m.x && x <= m.x + m.w && y >= m.y && y <= m.y + m.h);
+  return room ? { room: room.name } : null;
 }

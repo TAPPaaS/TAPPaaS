@@ -74,7 +74,8 @@ pools with a fill bar coloured by state and its disks with a problem, and every 
 topology and the storage inventory, each linked to the view and the object it is on. Below
 that, the site's records: `site.json` (Modify), the update schedule, the release train's preview
 and status, and the repositories (sync, hold, release, stashes, reconcile).
-**Physical** (`/site/physical`): every location of the site (the primary first), each as an area
+**Physical** (`/site/physical`): every location of the site, one above the other with the primary
+first (fit shows the first, the drawing scrolls down to the others), each as an area
 headed by its name — a link to its row in the Site page's Locations — and its address, around its
 rooms and, after them, what is at it placed nowhere (with no room: somewhere there) and a backup
 buddy or satellite that is there; each room of
