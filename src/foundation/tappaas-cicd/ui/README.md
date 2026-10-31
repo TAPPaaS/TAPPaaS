@@ -88,7 +88,7 @@ bundle between two devices fanning out, a dot at each end, one long curve to ano
 an access link in its zone's colour, a trunk in its kind's (node trunk, switch uplink, peer link, access point,
 device, patch), highlighted with a label on hover, a selected cable labelled midway with its ports — a link
 through a patch panel as its two wires —, a
-device only a cable record places beside the rack, and an Unplaced tray of the devices placed
+device only a cable record places beside the rack, and, left of the racks, an Unplaced tray of the devices placed
 nowhere, by location, each with Place… (one form: a rack and its units, or loose in a room;
 `asset-manager place`) — or, for a device a switch port sees and nobody recorded, Record…
 (`asset-manager asset record`: its MAC kept on its port, the port's link recorded as its cable); the header's
@@ -96,16 +96,29 @@ Add a room… (`asset-manager room add`, at one of the site's locations), Add a
 rack…, Record a device… (`asset-manager asset add`: kind, a catalog model or free text, ports, location; the
 site's own plates first in the model list), the last also in a rack's and a room's card, and Add a faceplate…
 (`asset-manager faceplate add`: a plate for a model the catalog lacks — its key, units, width, kind and ports as a
-port spec the form explains, drawn as the rack will draw it while the fields change), and a How to card while nothing is selected; a click on a cable opens its link, whose panel
+port spec the form explains, drawn as the rack will draw it while the fields change), and a How to card under the Unplaced tray; a click on a cable opens its link, whose panel
 lists the wires, its Details the pages of its ends, where Attach to patch panel… is on the port's cable; a click on a patch panel's port (on its plate or in its port table) opens the link through it, a free one its port, whose Details offer Attach a wire here… (the links that could run through it) (`asset-manager cable split`, its `--check` the
 preview, the free panel ports to choose from), and Remove patch panel (`cable join`) on the cable; a click on a plate or a port
-opens the side card to the left of the racks, with the device's location and placement as two
+opens the side card to the right of the racks (as everywhere in the console), with the device's location and placement as two
 lines — the location a link to its row on the Site page, the placement to its rack or room in the
 Physical view, from any view — and at its top the Details link to the device's page under Assets,
 where Place… (the rooms and racks at the device's own location only;
 with none there, Add a room… at it), Move to…, Change placement… and Unplace… are, besides the
 object's own changes; a machine module's page shows the same two lines with the same actions; a seen device's card shows the port it is seen at, its MAC, what LLDP and
-the lease say, its Details the Assets page where Record… is. **Devices** (`/site/devices`, formerly `/site/assets` and `/site/device`) — a view on the assets that are physical devices (the cluster nodes, the
+the lease say, its Details the Assets page where Record… is.
+An operator also places by dragging: a device from the Unplaced tray onto a rack's units or into a
+room's area, a placed device (in a rack or loose in a room) to other units of its rack, another rack
+or a room. While it is dragged the units it would take (its height, its column for a half- or
+third-wide plate) are green when free and red when they overlap another device, run past the end of
+the rack, or the rack or room is at another location than the device's (a room not recorded is red
+too); a label beside the pointer says which. A release on green runs one job — the check, then the
+apply — `asset-manager place <device> --rack <rack> --u <n> --height <n>` with the plate, width and
+column the Place… form would start with (`--room <room>` into a room), or `place modify <device>
+--set rack=… --set u=…` (`--set room=…`) for a placed one; the device's card opens on the right with
+the job's state, Stop, and its output, and the drawing is read again when it ends. Escape or a
+release anywhere else changes nothing. Place…, Move to… and Change placement… stay for the
+keyboard and for what a drag does not set (the face, the plate, a label). Below 900 px wide the
+tray, the racks and the card stack. **Devices** (`/site/devices`, formerly `/site/assets` and `/site/device`) — a view on the assets that are physical devices (the cluster nodes, the
 switches, the access points, the machines and devices a placement or a cable record names, the devices a switch port sees (marked as seen), the internet
 and the backup buddies) as a card with its kind's icon and its name, a server's with its bay row (a
 small cell per disk in it, by bay, coloured by the disk's health), coloured by
