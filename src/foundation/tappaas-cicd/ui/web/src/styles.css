@@ -484,6 +484,12 @@ ol.setup .output { white-space: pre-wrap; overflow-wrap: anywhere; }
 .dev-card.dev-seen .dev-icon { opacity: .7; }
 .dev-icon { font-size: 14px; color: var(--muted); width: 16px; text-align: center; flex: none; }
 .dev-name { overflow: hidden; text-overflow: ellipsis; }
+/* A server's bay row: a cell per disk, coloured by its health. */
+.bay-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 4px 0 8px; }
+.bay-row-compact { display: inline-flex; flex-wrap: nowrap; gap: 2px; margin: 0 0 0 4px; }
+.bay { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+.bay-cell { display: inline-block; width: 10px; height: 14px; border-radius: 2px; border: 1px solid rgba(0, 0, 0, .15); background: var(--skip); }
+.bay-row-compact .bay-cell { width: 8px; height: 12px; }
 /* The side panel's device: its kind and state, its drawing. */
 .dev-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 5px; font-size: 13px; vertical-align: -2px; border: 1px solid var(--line); }
 .dev-badge.st-ok { background: var(--pass-bg); }

@@ -2,7 +2,9 @@
 // room → rack → asset (by its placement), the ones placed nowhere — in stock,
 // ordered, or a device a switch port sees that nobody recorded — under their
 // location's Not placed, the disposed ones under Disposed. Each asset with its
-// stage, its role and its ports (the cables on them, a port's MAC). An asset
+// stage, its role, its ports (the cables on them, a port's MAC) and the disks
+// in it (by bay, with their health and pool); a disk in stock stands under
+// its location's Not placed like any other asset. An asset
 // opens its own page (AssetPage.tsx); a location, a room, a rack or a device
 // no asset records opens beside the tree with its facts and its operations:
 // a room's and a rack's record changed or deleted, a room or a rack added, a
@@ -13,6 +15,7 @@ import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useRead } from "../api";
 import { AssetsSel, STAGES, assetsSelOf, assetsSelText, filterLocation, itemsOf, stageCounts } from "../assetview";
 import { assetPath } from "../details";
+import { DISK_COLOR, adoptOffer, diskText, healthText } from "../diskview";
 import { OperateButton, Step } from "../operate";
 import { faceplateAddSteps } from "../physical/faceplateform";
 import { AddRoomButton, PlaceActions, RecordDeviceButton, RecordSeenButton, rackAddSteps, rackDeleteSteps, rackModifySteps, roomAddSteps, roomModifySteps } from "../physical/rackops";
@@ -45,7 +48,6 @@ function Ports({ a }: { a: AssetRow }) {
       <summary>
         {a.ports.length} port{a.ports.length === 1 ? "" : "s"}
         {cabled ? `, ${cabled} cabled` : ""}
-        {a.disks?.length ? ` · ${a.disks.length} disk(s)` : ""}
       </summary>
       <ul>
         {a.ports.map((p) => (
@@ -56,6 +58,35 @@ function Ports({ a }: { a: AssetRow }) {
             ))}
           </li>
         ))}
+      </ul>
+    </details>
+  );
+}
+
+// The disks in an asset, by bay: each its own asset (a link to its page),
+// with its serial, size, kind, health and the pool it is a member of.
+function Disks({ a }: { a: AssetRow }) {
+  const adopt = adoptOffer(a);
+  if (!a.disks.length && !adopt) return null;
+  const bad = a.disks.filter((d) => d.state === "warn" || d.state === "fail").length;
+  return (
+    <details className="atree-ports">
+      <summary>
+        {a.disks.length} disk{a.disks.length === 1 ? "" : "s"}
+        {bad ? `, ${bad} not healthy` : ""}
+        {adopt ? ` · ${adopt.count} the CMDB knows, not recorded` : ""}
+      </summary>
+      <ul>
+        {a.disks.map((d) => (
+          <li key={d.name} className="small">
+            <i className="st-swatch" style={{ background: DISK_COLOR[d.state] }} title={healthText(d)} />{" "}
+            {d.bay ? <span className="muted">bay {d.bay} </span> : null}
+            <Link to={assetPath(d.name)}>{d.displayName ?? d.name}</Link>
+            {d.displayName ? <span className="muted mono"> {d.name}</span> : null}
+            <span className="muted"> {diskText(d)}{d.state !== "ok" && d.ci ? ` · ${healthText(d)}` : ""}</span>
+          </li>
+        ))}
+        {adopt ? <li className="small muted">Not recorded: {adopt.text} — Adopt the disks the CMDB knows… on its page.</li> : null}
       </ul>
     </details>
   );
@@ -87,9 +118,10 @@ function Item({ tree, it, sel, pick }: { tree: AssetTree; it: AssetTreeItem; sel
         <StageBadge a={a} />
         {a.role ? <span className="small">plays <b>{a.role}</b></span> : null}
         {a.allocationDrift ? <Badge level="warn" title={`the CMDB has it allocated to ${a.cmdb?.allocatedTo ?? "nothing"}`}>CMDB differs</Badge> : null}
-        <span className="muted small">{[a.vendor, a.model].filter(Boolean).join(" ")}</span>
+        <span className="muted small">{a.asDisk ? diskText(a.asDisk) : [a.vendor, a.model].filter(Boolean).join(" ")}</span>
       </div>
       <Ports a={a} />
+      <Disks a={a} />
     </li>
   );
 }
@@ -336,6 +368,7 @@ export function Assets() {
       </div>
       <ReadState env={r.env} failure={r.failure} what="the assets (asset-manager's record, through the topology)" />
       {tree?.allocationsError ? <div className="readstate readstate-warn">The CMDB's allocations were not read: {tree.allocationsError}. The roles shown are asset-manager's record.</div> : null}
+      {tree?.disksError && !tree.allocationsError ? <div className="readstate readstate-warn">The CMDB's disks were not read: {tree.disksError}. The disks are listed from asset-manager's record, without their health or pool.</div> : null}
       <div className="assets-view">
         <div className="assets-tree">
           <Section title="By location, room and rack" aside={<input className="search" type="search" placeholder="filter: name, kind, model, serial, role…" value={q} onChange={(e) => setQ(e.target.value)} />}>

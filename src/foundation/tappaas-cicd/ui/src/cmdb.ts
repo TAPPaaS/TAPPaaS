@@ -18,6 +18,8 @@ export interface CmdbObject {
   name: string;
   displayName?: string | null;
   physical?: boolean;
+  created?: string | null; // POST /v1/query answers when it began
+  ended?: string | null; // and when it ended (includeEnded)
   attributes: Obj;
 }
 

@@ -1111,10 +1111,14 @@ export interface AssetRow {
   role: string | null;
   location?: string | null;
   placed: boolean;
-  disks?: unknown[];
+  in?: { asset: string; bay: string | null }; // a disk's: the asset it is in
+  disk?: { kind?: string; bus?: string; wwn?: string; size?: number; firmware?: string }; // a disk's own record
   placedAs: string;
   where: { location: string; room: string | null; rack: string | null; at: string | null };
   ports: AssetTreePort[];
+  disks: AssetTreeDisk[]; // the disks in it, by bay
+  unrecordedDisks: UnrecordedDisk[]; // the disks its CI lists that no asset records
+  asDisk: AssetTreeDisk | null; // a disk's own row
   cmdb: { id: string; allocatedTo: string | null } | null;
   allocationDrift: boolean;
 }
@@ -1122,4 +1126,40 @@ export interface AssetTree {
   locations: AssetTreeLocation[];
   assets: AssetRow[];
   allocationsError: string | null;
+  disksError: string | null; // the CMDB's disks were not read: no health, no pool
+}
+// A disk's state as the views colour it (the backend's assets.ts DiskState).
+export type DiskState = "ok" | "warn" | "fail" | "unknown";
+// A disk as the asset it is in lists it (the backend's assets.ts TreeDisk).
+export interface AssetTreeDisk {
+  name: string; // its tag, dsk-NN
+  displayName: string | null; // its by-id name
+  serial: string | null;
+  size: number | null; // bytes
+  kind: string | null; // nvme, ssd, hdd, usb
+  stage: string;
+  faulty: boolean;
+  host: string | null; // the asset it is in; null: in stock
+  bay: string | null;
+  ci: string | null; // its live disk CI's id
+  health: string | null; // Proxmox's word: PASSED, FAILED, UNKNOWN
+  state: DiskState;
+  reason: string | null;
+  pool: { name: string; node: string | null; vdev: string | null } | null;
+}
+// A disk a server's CI lists that no asset records: what disk adopt records.
+export interface UnrecordedDisk {
+  name: string;
+  serial: string | null;
+  model: string | null;
+  size: number | null;
+  type: string | null;
+}
+// GET assets/disk/<disk>/placements: which assets a disk has been in.
+export interface DiskPlacement {
+  asset: string;
+  bay: string | null;
+  ci: string;
+  from: string;
+  until: string | null; // null: it is there now
 }

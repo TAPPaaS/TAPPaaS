@@ -1,18 +1,21 @@
 // storageview.tsx — the Storage view (storage-manager inventory): the shared
 // graph's column mode with the nodes, their boot devices and pools, and each
 // pool's disks; every card coloured by its state with the reason on hover, a
-// pool's fill bar on its card. A click opens the side card: a disk's records,
-// a pool's records and a pie of what it holds, the findings on either.
+// pool's fill bar on its card; a disk an asset records carries its tag. A
+// click opens the side card: a disk's records (and its asset's), a pool's
+// records, its members as disks with their state (each a click to its card)
+// and a pie of what it holds, the findings on either.
 
 import { ReactNode, useMemo, useState } from "react";
 import { GEdge, GNode, Graph } from "../graph";
-import { StorageDisk, StorageInventory, StoragePool, StorageState } from "../types";
+import { AssetTree, StorageDisk, StorageInventory, StoragePool, StorageState } from "../types";
+import { diskAssetOf } from "../diskview";
 import { KV, Link, OpenIn, Tag } from "../ui";
 import { Sel } from "./layout";
 import { AddPoolButton } from "./nodepools";
 import { poolDisks } from "../nodeadd";
 import { STATE_COLOR, stateClass } from "./state";
-import { Slice, StorageNote, bytes, diskKey, findDisk, nodeKey, poolKey, poolPct, poolSlices, stateWith, storageLayout } from "./storage";
+import { Slice, StorageNote, bytes, diskKey, findDisk, nodeKey, poolKey, poolMembers, poolPct, poolSlices, stateWith, storageLayout } from "./storage";
 
 const W = { node: 210, mid: 290, disk: 340 };
 
@@ -34,7 +37,7 @@ const hover = (state: StorageState, reasons: string[], notes: StorageNote[] | un
   return all.length ? `${state}: ${all.join("; ")}` : state;
 };
 
-export function StorageGraph({ inv, notes, sel, pick }: { inv: StorageInventory; notes: Map<string, StorageNote[]>; sel: Sel | null; pick: (s: Sel) => void }) {
+export function StorageGraph({ inv, notes, sel, pick, tree }: { inv: StorageInventory; notes: Map<string, StorageNote[]>; sel: Sel | null; pick: (s: Sel) => void; tree?: AssetTree | null }) {
   const { nodes, edges } = useMemo(() => {
     const lay = storageLayout(inv);
     const on = (kind: string, node: string, id: string) => sel !== null && sel.kind === kind && (sel.kind === "node" ? sel.id === node : "node" in sel && sel.node === node && sel.id === id);
@@ -111,7 +114,10 @@ export function StorageGraph({ inv, notes, sel, pick }: { inv: StorageInventory;
             <>
               {g?.first ? <div className="vdev-text" title={`vdev ${g.label}`}>{g.label}</div> : null}
               <div className="cf-title">{d.device} <span className="muted">{bytes(d.size)}</span>{d.exportedPool ? <span className="muted"> · pool {d.exportedPool.name} (not imported)</span> : null}</div>
-              <div className="cf-sub">{d.model ?? "?"}{d.serial ? ` · ${d.serial}` : ""}</div>
+              <div className="cf-sub">{d.model ?? "?"}{d.serial ? ` · ${d.serial}` : ""}{(() => {
+                const a = diskAssetOf(tree, d.serial);
+                return a ? ` · ${a.name}${a.in?.bay ? ` bay ${a.in.bay}` : ""}` : "";
+              })()}</div>
               <div className="cf-sub">{diskLine(d)}</div>
             </>
           ), () => pick({ kind: "disk", node: it.node, id: d.device }), on("disk", it.node, d.device), it.after);
@@ -131,7 +137,7 @@ export function StorageGraph({ inv, notes, sel, pick }: { inv: StorageInventory;
     }
     const lines: GEdge[] = lay.edges.map((e) => ({ source: e.source, target: e.target }));
     return { nodes: out, edges: lines };
-  }, [inv, notes, sel, pick]);
+  }, [inv, notes, sel, pick, tree]);
   return <Graph nodes={nodes} edges={edges} height="100%" nodesep={14} ranksep={70} />;
 }
 
@@ -288,7 +294,7 @@ function PieRow({ s, color, pct, hot, setHot, open, setOpen }: { s: Slice; color
   );
 }
 
-export function PoolBody({ inv, notes, node, pool }: { inv: StorageInventory; notes: Map<string, StorageNote[]>; node: string; pool: string }): { title: string; body: ReactNode; open: ReactNode } | null {
+export function PoolBody({ inv, notes, node, pool, pick }: { inv: StorageInventory; notes: Map<string, StorageNote[]>; node: string; pool: string; pick?: (s: Sel) => void }): { title: string; body: ReactNode; open: ReactNode } | null {
   const p = inv.nodes.find((x) => x.name === node)?.pools.find((x) => x.name === pool);
   if (!p) return null;
   const s = stateWith(p.state, notes.get(poolKey(node, pool)));
@@ -312,12 +318,23 @@ export function PoolBody({ inv, notes, node, pool }: { inv: StorageInventory; no
             ["compression", p.compression ? `${p.compression}${p.compressRatio ? ` · ${p.compressRatio}x` : ""}` : null],
           ]}
         />
-        <h3>Vdevs</h3>
+        <h3>Members</h3>
         <ul className="plain small">
           {p.vdevs.map((v) => (
             <li key={v.name}>
               <i className="st-swatch" style={{ background: STATE_COLOR[v.state] }} /> <b>{v.name}</b> {v.type}
-              {v.role !== "data" ? ` · ${v.role}` : ""} · {v.health} · {v.disks.map((d) => d.device).concat(v.missing.map((m) => `${m.name} (missing)`)).join(", ")}
+              {v.role !== "data" ? ` · ${v.role}` : ""} · {v.health}
+              <ul className="plain">
+                {poolMembers(node, p, notes)
+                  .filter((m) => m.vdev === v.name)
+                  .map((m) => (
+                    <li key={m.device}>
+                      <i className="st-swatch" style={{ background: STATE_COLOR[m.state] }} />{" "}
+                      {pick && !m.missing ? <button className="linklike" onClick={() => pick({ kind: "disk", node, id: m.device })}>{m.device}</button> : <span className="mono">{m.device}</span>}
+                      <span className="muted">{m.serial ? ` · ${m.serial}` : ""}{m.text ? ` · ${m.text}` : ""}</span>
+                    </li>
+                  ))}
+              </ul>
             </li>
           ))}
         </ul>

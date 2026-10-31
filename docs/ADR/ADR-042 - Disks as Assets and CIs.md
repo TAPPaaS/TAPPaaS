@@ -160,7 +160,7 @@ records it (ADR-040 D7's disposal note).
    `report` sends `built-on` with the groups; `report --discover` carries SMART.
 3. **Done.** health-manager: the `disk` judgement from observations; `storage-disks` retired, replication
    kept as a gate; the storage-manager inventory's SMART read behind the sweep.
-4. Console: Assets view and asset page with disks; server card bay row; Storage view members;
+4. **Done.** Console: Assets view and asset page with disks; server card bay row; Storage view members;
    disposal with the wipe question.
 5. Live on the test system: `disk adopt` on the three servers, a sweep, `topology --diff` and
    `health-manager assess --timing` before and after.

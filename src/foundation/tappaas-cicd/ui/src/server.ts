@@ -57,6 +57,7 @@ const TYPES: Record<string, string> = {
 const OBJECT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CI_NAME = /^[^\x00-\x1f]{1,200}$/; // an object's name: a module, an asset tag, <device>:<port>
 const CLASS_NAME = /^[a-z][a-z0-9-]{0,63}$/;
+const ASSET_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/; // an asset's own name: srv-01, dsk-03
 
 const JUMP_KINDS = new Set<JumpKind>(["node", "module", "switch", "port", "lag", "ap", "zone", "peer", "site", "disk", "pool"]);
 
@@ -308,9 +309,17 @@ export class ConsoleServer {
       case "topology":
         return sendJson(res, 200, envelope(await r.topology.get()));
       case "assets":
-        // assets/tree: every asset by where it stands, with its ports and the
-        // CMDB's allocation of it (the Assets view).
-        if (a !== "tree" || parts.length !== 2) return sendJson(res, 404, { error: "assets/tree" });
+        // assets/tree: every asset by where it stands, with its ports, its
+        // disks and the CMDB's allocation of it (the Assets view).
+        // assets/disk/<disk>/placements: which assets a disk has been in.
+        if (a === "disk" && parts.length === 4 && parts[3] === "placements") {
+          if (!b || !ASSET_NAME.test(b)) return sendJson(res, 400, { error: "not an asset name" });
+          return r.diskPlacementsOf(b).then(
+            (data) => sendJson(res, 200, { data, at: new Date().toISOString(), ageSeconds: 0, refreshing: false, error: null }),
+            (e: Error) => sendJson(res, 200, { data: null, at: null, ageSeconds: null, refreshing: false, error: e.message }),
+          );
+        }
+        if (a !== "tree" || parts.length !== 2) return sendJson(res, 404, { error: "assets/tree | assets/disk/<disk>/placements" });
         return sendJson(res, 200, envelope(await r.assetTree()));
       case "storage":
         return sendJson(res, 200, envelope(await r.storage.get()));

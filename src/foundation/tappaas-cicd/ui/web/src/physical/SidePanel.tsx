@@ -2,7 +2,10 @@
 // Physical, Assets (the Site page's device view) or Storage view: its records
 // as the managers report them, the findings on it, where the hardware is
 // (location and placement, each a link to its object), a device's drawing and
-// neighbours, a disk, a pool with what it holds, a node's storage. At its top
+// neighbours (a server's with its bay row: its disks by bay, coloured by
+// health), a disk with its asset (its tag, health, pool, the assets it has been
+// in, its CMDB record), a pool with its members and what it holds, a node's
+// storage. At its top
 // the Details link (details.ts) opens the page that shows the object in full
 // and changes it: an asset's page under Assets (its record, placement, ports,
 // cables and their operations), a module's page, the Assets page for a rack
@@ -11,12 +14,14 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useRead } from "../api";
 import { zoneColor } from "../colors";
-import { Health, ModuleSummary, StorageInventory, TopoFinding, TopoRef, Topology } from "../types";
+import { AssetTree, Health, ModuleSummary, StorageInventory, TopoFinding, TopoRef, Topology } from "../types";
+import { diskAssetOf, disksOf } from "../diskview";
+import { BayRow, DiskAssetPart } from "./disks";
 import { DetailsLinks, KV, Link, Tag } from "../ui";
 import { selDetails } from "../details";
 import { Sel, portLabel } from "./layout";
 import { publicAddress } from "../zonegraph";
-import { StorageNote } from "./storage";
+import { StorageNote, findDisk } from "./storage";
 import { DiskBody, NodeStorage, PoolBody } from "./storageview";
 import { DevLink, DevNode, deviceGraph, deviceState, isPatchPanel, panelPortSel, panelPortUse, selectedDevice, splittable } from "./devicegraph";
 import { iconOf, kindName } from "./devicecard";
@@ -105,7 +110,7 @@ export function ciRefOf(d: DevNode): CiRef | null {
 // The far end of a link, seen from one device.
 const farEnd = (l: DevLink, device: string) => (l.a === device ? l.b : l.a);
 
-export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: Sel; close: () => void; pick: (s: Sel) => void; storage?: { inv: StorageInventory; notes: Map<string, StorageNote[]> } | null }) {
+export function SidePanel({ t, sel, close, pick, storage, tree }: { t: Topology; sel: Sel; close: () => void; pick: (s: Sel) => void; storage?: { inv: StorageInventory; notes: Map<string, StorageNote[]> } | null; tree?: AssetTree | null }) {
   const modules = useRead<ModuleSummary[]>("modules").env?.data ?? null;
   const health = useRead<Health>("health");
   const siteSsids = useRead<SiteSsid[]>("ssids", 600_000).env?.data ?? null;
@@ -122,7 +127,15 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
     const l = portsOf(g.links, d.name).get(port);
     if (l) pick({ kind: "link", id: l.id, port: `${d.name}:${port}` });
   };
-  const drawing = (d: DevNode, ringed: Set<string>) => <DeviceDrawing key={d.id} t={t} d={d} cabled={new Set(portsOf(g.links, d.name).keys())} ringed={ringed} onPort={portClick(d)} />;
+  const drawing = (d: DevNode, ringed: Set<string>) => (
+    <>
+      <DeviceDrawing key={d.id} t={t} d={d} cabled={new Set(portsOf(g.links, d.name).keys())} ringed={ringed} onPort={portClick(d)} />
+      <BayRow disks={disksOf(tree, d.name)} />
+    </>
+  );
+  // A disk of the Storage view: the asset that records it, by its serial.
+  const diskSerial = sel.kind === "disk" && storage ? findDisk(storage.inv, sel.node, sel.id)?.disk.serial ?? null : null;
+  const diskAsset = sel.kind === "disk" ? diskAssetOf(tree, diskSerial) : null;
   // A device's neighbours, each a click away.
   const neighbours = (d: DevNode) => {
     const ls = g.links.filter((l) => l.a === d.id || l.b === d.id);
@@ -512,10 +525,15 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
     case "disk":
     case "pool": {
       if (!storage) break;
-      const b = sel.kind === "disk" ? DiskBody({ inv: storage.inv, notes: storage.notes, node: sel.node, device: sel.id }) : PoolBody({ inv: storage.inv, notes: storage.notes, node: sel.node, pool: sel.id });
+      const b = sel.kind === "disk" ? DiskBody({ inv: storage.inv, notes: storage.notes, node: sel.node, device: sel.id }) : PoolBody({ inv: storage.inv, notes: storage.notes, node: sel.node, pool: sel.id, pick });
       if (!b) break;
-      title = b.title;
-      body = b.body;
+      title = sel.kind === "disk" && diskAsset ? `${b.title} · ${diskAsset.name}` : b.title;
+      body = sel.kind === "disk" ? (
+        <>
+          {b.body}
+          {tree ? <DiskAssetPart a={diskAsset} serial={diskSerial} node={sel.node} openRecord={(name) => setRecord({ name, cls: "disk" })} /> : null}
+        </>
+      ) : b.body;
       break;
     }
     case "room": {
@@ -649,8 +667,9 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
     firewall: t.site.wan.firewall?.module ?? null,
     outsideKind: sel.kind === "outside" ? t.outside.find((x) => x.name === sel.id)?.kind ?? null : null,
     seen: sel.kind === "mount" && !!t.devices?.some((x) => x.name === sel.id && x.source === "seen"),
+    diskAsset: diskAsset?.name ?? null,
   });
-  if (record) return <CiPanel start={record} close={close} back={{ label: dev?.name ?? "Device", go: () => setRecord(null) }} />;
+  if (record) return <CiPanel start={record} close={close} back={{ label: dev?.name ?? (sel.kind === "disk" ? sel.id : "Device"), go: () => setRecord(null) }} />;
   return (
     <aside className="sidepanel">
       <header>

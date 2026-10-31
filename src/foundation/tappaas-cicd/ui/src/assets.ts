@@ -5,9 +5,14 @@
 // beside the role the record gives it. An asset placed nowhere — in stock,
 // ordered, or a device a switch port sees that nobody recorded — stands under
 // its location as not placed; a disposed one under its location's disposed.
-// Pure: reads.ts reads, this shapes.
+// A disk (an asset of kind disk) is a part of the asset it is in: listed with
+// that asset, by bay, with its health and the pool it is a member of from the
+// CMDB (the disk CI and the pool's built-on relation); a disk in stock stands
+// under its location's not placed like any other asset. Pure: reads.ts reads,
+// this shapes.
 
-import { CmdbRelationRow } from "./cmdb";
+import { CmdbObject, CmdbRelationRow } from "./cmdb";
+import { conditionsOf } from "./health";
 
 // ── the input: the parts of the topology's positions read here ──────────
 
@@ -38,7 +43,8 @@ export interface PosAsset {
   location?: string | null;
   placed: boolean;
   ports?: PosPort[];
-  disks?: unknown[];
+  in?: { asset: string; bay: string | null }; // a disk's: the asset it is in
+  disk?: { kind?: string; bus?: string; wwn?: string; size?: number; firmware?: string }; // a disk's own record
 }
 
 export interface PosPlacement {
@@ -124,10 +130,45 @@ export interface TreePort extends PosPort {
   cables: TreeCable[];
 }
 
+// A disk's state as the views colour it: the worst condition health-manager
+// judged on its CI, else Proxmox's health word; unknown when neither is known.
+export type DiskState = "ok" | "warn" | "fail" | "unknown";
+
+// A disk as the asset it is in lists it (and as its own page shows it).
+export interface TreeDisk {
+  name: string; // its tag, dsk-NN
+  displayName: string | null; // its by-id name
+  serial: string | null;
+  size: number | null; // bytes
+  kind: string | null; // nvme, ssd, hdd, usb
+  stage: string;
+  faulty: boolean;
+  host: string | null; // the asset it is in, by its own name; null: in stock
+  bay: string | null;
+  ci: string | null; // its live disk CI's id
+  health: string | null; // Proxmox's word on the CI: PASSED, FAILED, UNKNOWN
+  state: DiskState;
+  reason: string | null; // the worst condition's message, when one is not ok
+  pool: { name: string; node: string | null; vdev: string | null } | null; // the pool built on it
+}
+
+// A disk the CMDB's server CI lists (site-manager's discovery) that no disk
+// asset records, by serial: what disk adopt would record.
+export interface UnrecordedDisk {
+  name: string;
+  serial: string | null;
+  model: string | null;
+  size: number | null;
+  type: string | null;
+}
+
 export interface TreeAsset extends Omit<PosAsset, "ports"> {
   placedAs: string; // the name placements and cables know it by: its role's while it plays one
   where: { location: string; room: string | null; rack: string | null; at: string | null };
   ports: TreePort[];
+  disks: TreeDisk[]; // the disks in it, by bay
+  unrecordedDisks: UnrecordedDisk[]; // the disks its CI lists that no asset records
+  asDisk: TreeDisk | null; // a disk's own row
   cmdb: { id: string; allocatedTo: string | null } | null; // null: the CMDB has no allocation of it (or was not read)
   allocationDrift: boolean; // the CMDB's allocation is not the record's role
 }
@@ -136,6 +177,15 @@ export interface AssetTree {
   locations: TreeLocation[];
   assets: TreeAsset[];
   allocationsError: string | null;
+  disksError: string | null; // the CMDB's disks were not read: no health, no pool
+}
+
+// What the CMDB says of disks: the live disk CIs, the built-on relations from
+// the pools to them, and the server CIs with their discovered disks[].
+export interface DiskFacts {
+  disks: CmdbObject[];
+  builtOn: CmdbRelationRow[];
+  servers: CmdbObject[];
 }
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, "en", { numeric: true });
@@ -175,11 +225,92 @@ export function allocationsOf(rows: CmdbRelationRow[]): Map<string, { id: string
   return m;
 }
 
+// A serial as it is compared (ADR-042 D2, lib/ts positions.ts serialKey):
+// case, whitespace and dashes do not count.
+export const serialKey = (s: string | null | undefined): string => (s ?? "").toLowerCase().replace(/[\s-]+/g, "");
+
+const STATE_RANK: Record<DiskState, number> = { ok: 0, unknown: 1, warn: 2, fail: 3 };
+const FROM_STATUS: Record<string, DiskState> = { ok: "ok", unknown: "unknown", warning: "warn", critical: "fail" };
+
+/** A disk CI's state: the worst of its conditions, else its health word. */
+export function diskState(attributes: Record<string, unknown> | null | undefined): { state: DiskState; reason: string | null } {
+  const conds = conditionsOf(attributes ?? {});
+  if (conds.length) {
+    const worst = conds.map((c) => ({ c, s: FROM_STATUS[c.status] ?? "unknown" })).sort((a, b) => STATE_RANK[b.s] - STATE_RANK[a.s])[0];
+    return { state: worst.s, reason: worst.s === "ok" ? null : worst.c.message ?? worst.c.reason ?? null };
+  }
+  const h = typeof attributes?.health === "string" ? attributes.health.toUpperCase() : "";
+  if (h === "FAILED") return { state: "fail", reason: "Proxmox says FAILED" };
+  if (h === "PASSED" || h === "OK") return { state: "ok", reason: null };
+  return { state: "unknown", reason: null };
+}
+
+// The pool built on a disk CI: its name, and the node and vdev its
+// redundancy group names (<node>:<pool>:<vdev>).
+function poolOf(builtOn: CmdbRelationRow[], ci: string): TreeDisk["pool"] {
+  const r = builtOn.find((x) => x.to.id === ci);
+  if (!r) return null;
+  const g = typeof r.attributes?.redundancyGroup === "string" ? r.attributes.redundancyGroup.split(":") : null;
+  return { name: r.from.name, node: g && g.length >= 3 ? g[0] : null, vdev: g && g.length >= 3 ? g.slice(2).join(":") : null };
+}
+
+const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+const str = (v: unknown): string | null => (typeof v === "string" && v ? v : null);
+
+/** The disks of the tree: each disk asset's row (its CI's health and pool
+ *  when the CMDB answered), and per server the disks its CI lists that no
+ *  asset records. */
+export function diskRows(assets: PosAsset[], facts: DiskFacts | null): { rows: Map<string, TreeDisk>; unrecorded: Map<string, UnrecordedDisk[]> } {
+  const cis = new Map((facts?.disks ?? []).map((o) => [o.name, o]));
+  const rows = new Map<string, TreeDisk>();
+  for (const a of assets) {
+    if (a.kind !== "disk") continue;
+    const ci = a.in ? cis.get(a.name) ?? null : null;
+    const st = ci ? diskState(ci.attributes) : { state: "unknown" as DiskState, reason: null };
+    rows.set(a.name, {
+      name: a.name,
+      displayName: a.displayName,
+      serial: a.serial,
+      size: num(a.disk?.size),
+      kind: str(a.disk?.kind),
+      stage: a.stage,
+      faulty: a.faulty === true,
+      host: a.in?.asset ?? null,
+      bay: a.in?.bay ?? null,
+      ci: ci?.id ?? null,
+      health: str(ci?.attributes.health),
+      state: st.state,
+      reason: st.reason,
+      pool: ci ? poolOf(facts?.builtOn ?? [], ci.id) : null,
+    });
+  }
+  const known = new Set(assets.map((a) => serialKey(a.serial)).filter((k) => k));
+  const unrecorded = new Map<string, UnrecordedDisk[]>();
+  for (const s of facts?.servers ?? []) {
+    const list = Array.isArray(s.attributes.disks) ? (s.attributes.disks as Record<string, unknown>[]) : [];
+    const missing = list
+      .filter((d) => d && typeof d === "object" && !known.has(serialKey(str(d.serial))))
+      .map((d) => ({ name: str(d.name) ?? str(d.device) ?? "?", serial: str(d.serial), model: str(d.model), size: num(d.size), type: str(d.type) }));
+    if (missing.length) unrecorded.set(s.name, missing);
+  }
+  return { rows, unrecorded };
+}
+
+// Bays in their natural order (1, 2, … 10; a by-id name after the numbers);
+// a disk with no bay last, by its tag.
+export function byBay(a: TreeDisk, b: TreeDisk): number {
+  if (a.bay === null || b.bay === null) return Number(a.bay === null) - Number(b.bay === null) || a.name.localeCompare(b.name, "en", { numeric: true });
+  return a.bay.localeCompare(b.bay, "en", { numeric: true }) || a.name.localeCompare(b.name, "en", { numeric: true });
+}
+
 /** The tree of a site's assets. allocations: the CMDB's allocated-to
- *  relations, or an error when the CMDB could not be read. */
-export function assetTree(pos: AssetPositions | null, allocations: CmdbRelationRow[] | Error): AssetTree {
+ *  relations, or an error when the CMDB could not be read; disks: what the
+ *  CMDB says of disks, or an error (the disks are listed without health). */
+export function assetTree(pos: AssetPositions | null, allocations: CmdbRelationRow[] | Error, disks: DiskFacts | Error | null = null): AssetTree {
   const alloc = allocations instanceof Error ? null : allocationsOf(allocations);
   const assets = [...(pos?.assets ?? [])].sort(byName);
+  const facts = disks instanceof Error ? null : disks;
+  const { rows: diskOf, unrecorded } = diskRows(assets, facts);
   const cables = pos?.cables ?? [];
   const byDevice = new Map(assets.map((a) => [a.role ?? a.name, a]));
   const primary = pos?.locations?.find((l) => l.primary)?.name ?? null;
@@ -245,6 +376,8 @@ export function assetTree(pos: AssetPositions | null, allocations: CmdbRelationR
   for (const a of assets) {
     const device = a.role ?? a.name;
     if (where.has(device) || listed.has(device)) continue;
+    // A disk in an asset is listed with it (below), not under a location.
+    if (a.kind === "disk" && a.in && a.stage !== "disposed" && assets.some((x) => x.name === a.in!.asset)) continue;
     const l = loc(a.location);
     (a.stage === "disposed" ? l.disposed : l.unplaced).push({ device, asset: a.name, kind: a.kind, at: null, seen: false });
     where.set(device, { location: l.name, room: null, rack: null, at: null });
@@ -255,6 +388,15 @@ export function assetTree(pos: AssetPositions | null, allocations: CmdbRelationR
     l.disposed.sort(order);
   }
 
+  const whereOf = (a: PosAsset): TreeAsset["where"] => {
+    const placedAs = a.role ?? a.name;
+    const own = where.get(placedAs);
+    if (own) return own;
+    // A disk stands where the asset it is in stands.
+    const host = a.in ? assets.find((x) => x.name === a.in!.asset) : undefined;
+    const at = host ? where.get(host.role ?? host.name) : undefined;
+    return at ? { ...at, at: null } : { location: a.location ?? primary ?? "", room: null, rack: null, at: null };
+  };
   const out: TreeAsset[] = assets.map((a) => {
     const placedAs = a.role ?? a.name;
     const c = alloc?.get(a.name) ?? null;
@@ -262,13 +404,52 @@ export function assetTree(pos: AssetPositions | null, allocations: CmdbRelationR
     return {
       ...rest,
       placedAs,
-      where: where.get(placedAs) ?? { location: a.location ?? primary ?? "", room: null, rack: null, at: null },
+      where: whereOf(a),
       ports: portsOf(a, placedAs, cables),
+      disks: [...diskOf.values()].filter((d) => d.host === a.name && d.stage !== "disposed").sort(byBay),
+      unrecordedDisks: unrecorded.get(a.name) ?? [],
+      asDisk: diskOf.get(a.name) ?? null,
       cmdb: c,
-      allocationDrift: alloc !== null && (c?.allocatedTo ?? null) !== (a.role ?? null),
+      // A disk plays no role; the CMDB allocates none to it.
+      allocationDrift: a.kind !== "disk" && alloc !== null && (c?.allocatedTo ?? null) !== (a.role ?? null),
     };
   });
   // The primary location first, then by name; a location with nothing in it stays.
   const locations = [...locs.values()].sort((x, y) => Number(y.primary) - Number(x.primary) || x.name.localeCompare(y.name));
-  return { locations, assets: out, allocationsError: allocations instanceof Error ? allocations.message : null };
+  return {
+    locations,
+    assets: out,
+    allocationsError: allocations instanceof Error ? allocations.message : null,
+    disksError: disks instanceof Error ? disks.message : null,
+  };
+}
+
+// ── a disk's placements (ADR-042 D6) ──────────────────────────────────
+
+// One period of a disk in an asset: the disk CI that was part of it.
+export interface DiskPlacement {
+  asset: string; // the asset it was in
+  bay: string | null;
+  ci: string;
+  from: string;
+  until: string | null; // null: it is there now
+}
+
+/** Which assets a disk has been in, the newest first: each disk CI of its
+ *  name (moved, the CI in the old asset ends and one in the new begins), the
+ *  asset from its part-of relation's period, the bay its last. */
+export function diskPlacements(cis: { id: string; created?: string | null; ended?: string | null }[], histories: Map<string, { attributes: { name: string; value: unknown; from: string; to: string | null }[]; relations?: { type: string; direction: string; other: { name: string }; from: string; to: string | null }[] }>): DiskPlacement[] {
+  const out: DiskPlacement[] = [];
+  for (const ci of cis) {
+    const h = histories.get(ci.id);
+    const parts = (h?.relations ?? []).filter((r) => r.type === "part-of" && r.direction === "out");
+    const bays = (h?.attributes ?? []).filter((x) => x.name === "bay").sort((a, b) => Date.parse(b.from) - Date.parse(a.from));
+    const bay = typeof bays[0]?.value === "string" ? (bays[0].value as string) : null;
+    if (parts.length) {
+      for (const r of parts) out.push({ asset: r.other.name, bay, ci: ci.id, from: r.from, until: r.to });
+    } else if (ci.created) {
+      out.push({ asset: "?", bay, ci: ci.id, from: ci.created, until: ci.ended ?? null });
+    }
+  }
+  return out.sort((a, b) => Date.parse(b.from) - Date.parse(a.from));
 }

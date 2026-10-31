@@ -2407,7 +2407,7 @@
   "devices": [],
   "findings": [
     {
-      "gate": "storage-disks",
+      "gate": "storage-pools",
       "level": "warn",
       "text": "tappaas3/tankc1: DEGRADED: one or more devices has experienced an unrecoverable error",
       "on": {

@@ -232,7 +232,7 @@ const SHIPPED_PARENTS: Record<string, string> = {
   "storage-pool": "storage-element", share: "storage-element", datastore: "storage-element", "backup-peer": "storage-element",
   organization: "identity", group: "identity", user: "identity", role: "identity",
   location: "place", room: "place", rack: "place",
-  server: "asset", "network-device": "asset", appliance: "asset", "passive-device": "asset", "other-device": "asset", asset: "resource", port: "resource", pool: "resource",
+  server: "asset", "network-device": "asset", appliance: "asset", "passive-device": "asset", "other-device": "asset", asset: "resource", port: "resource", disk: "resource", pool: "resource",
 };
 
 export function emptyCounts(): Counts {

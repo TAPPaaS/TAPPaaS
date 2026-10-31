@@ -55,12 +55,14 @@ export function assetsSelOf(v: string | null): AssetsSel | null {
 export const assetsSelText = (s: AssetsSel): string => `${s.kind}:${s.id}`;
 
 // A filter's text against a row: its device, its asset, the asset's display
-// name, kind, model, serial, tag and role.
+// name, kind, model, serial, tag and role, and the tags, by-id names and
+// serials of the disks in it.
 export function itemMatches(tree: AssetTree, it: AssetTreeItem, q: string): boolean {
   const t = q.trim().toLowerCase();
   if (!t) return true;
   const a = it.asset ? tree.assets.find((x) => x.name === it.asset) : null;
-  return [it.device, it.asset, it.kind, a?.displayName, a?.model, a?.vendor, a?.serial, a?.assetTag, a?.role, a?.stage].some((x) => typeof x === "string" && x.toLowerCase().includes(t));
+  const disks = (a?.disks ?? []).flatMap((d) => [d.name, d.displayName, d.serial]);
+  return [it.device, it.asset, it.kind, a?.displayName, a?.model, a?.vendor, a?.serial, a?.assetTag, a?.role, a?.stage, ...disks].some((x) => typeof x === "string" && x.toLowerCase().includes(t));
 }
 
 // A location as a filter leaves it: only the rows that match, and the rooms

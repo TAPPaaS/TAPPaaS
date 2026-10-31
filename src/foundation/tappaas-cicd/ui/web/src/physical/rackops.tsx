@@ -11,6 +11,7 @@ import { fieldsStep } from "../fields";
 import { OperateButton, Step, Values } from "../operate";
 import { ManifestVerb, PositionsView, RackInfo, TopoDevice } from "../types";
 import { SiteLocation, locationOption, useSiteLocations } from "../locations";
+import { placeFieldsFor } from "../diskview";
 
 const RM = "asset-manager";
 
@@ -60,9 +61,11 @@ export function placePrefill(v: PositionsView | null | undefined, device: string
   return out;
 }
 
-// A placement's fields: in a rack, or loose in a room (its plate gives its size).
-const IN_RACK = ["rack", "u", "height", "width", "slot", "face", "faceplate", "label", "description"];
-const IN_ROOM = ["room", "faceplate", "label", "description"];
+// A placement's fields: in a rack, or loose in a room (its plate gives its
+// size); never in an asset, which only a disk is (placeFieldsFor).
+const DEVICE_FIELDS = placeFieldsFor("device");
+const IN_RACK = DEVICE_FIELDS.filter((f) => f !== "room");
+const IN_ROOM = DEVICE_FIELDS.filter((f) => ["room", "faceplate", "label", "description"].includes(f));
 
 // Place…: one form, a rack and its units or a room. Switching between the two
 // starts the fields again, so a rack's units never go with a room.
@@ -118,8 +121,10 @@ export function moveSteps(device: string, loose = false): Step[] {
   ];
 }
 
+// A device's placement record: its rack or room fields; a disk's (in, bay)
+// are its own form's (disks.tsx Move to…).
 export function placementModifySteps(device: string): Step[] {
-  return [fieldsStep({ title: `asset-manager place modify '${device}'`, bin: RM, verb: "place modify", fixed: [device], kind: "placement", name: device, mode: "modify" })];
+  return [fieldsStep({ title: `asset-manager place modify '${device}'`, bin: RM, verb: "place modify", fixed: [device], kind: "placement", name: device, mode: "modify", fields: placeFieldsFor("device") })];
 }
 
 export function unplaceSteps(device: string): Step[] {

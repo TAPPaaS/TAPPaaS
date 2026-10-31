@@ -1,7 +1,9 @@
 // devicecard.tsx — a device as the Device graph draws it: its kind's small
-// icon and its name on a card coloured by its state, and nothing else (the
-// details are the side panel's); a link's colour and dash.
+// icon and its name on a card coloured by its state, a server's bay row (its
+// disks, each coloured by its health), and nothing else (the details are the
+// side panel's); a link's colour and dash.
 
+import { ReactNode } from "react";
 import { zoneColor } from "../colors";
 import { RecordedKind, Topology } from "../types";
 import { DevKind, DevLink, DevNode, DevState } from "./devicegraph";
@@ -15,11 +17,12 @@ export const RECORDED_NAME: Record<RecordedKind, string> = { modem: "modem", ont
 export const iconOf = (d: DevNode): string => (d.recorded ? RECORDED_ICON[d.recorded] : d.seen ? "?" : KIND_ICON[d.kind]);
 export const kindName = (d: DevNode): string => (d.recorded ? `${RECORDED_NAME[d.recorded]} (recorded)` : d.seen ? "device seen at a switch port, recorded nowhere" : KIND_NAME[d.kind]);
 
-export function DevLabel({ d, s }: { d: DevNode; s: DevState }) {
+export function DevLabel({ d, s, bays }: { d: DevNode; s: DevState; bays?: ReactNode }) {
   return (
     <div className={`dev-card${d.seen ? " dev-seen" : ""}`} title={`${d.name} · ${kindName(d)} · ${s.reasons.length ? `${s.state}: ${s.reasons.join("; ")}` : "ok"}`}>
       <span className="dev-icon" aria-label={kindName(d)}>{iconOf(d)}</span>
       <span className="dev-name">{d.name}</span>
+      {bays}
     </div>
   );
 }
