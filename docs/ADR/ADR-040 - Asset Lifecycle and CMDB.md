@@ -699,7 +699,8 @@ takes part by implementing `report --discover` the same way.
   operational and faulty (D7).
 - **O4** *(closed 2026-10-29, operator)* Disks become assets and CIs of their own eventually —
   they move between machines, fail and must be wiped — but not in the first implementation, where
-  `bootDisks[]` and a pool's member disks stay attributes of the server and the pool.
+  `bootDisks[]` and a pool's member disks stay attributes of the server and the pool. Done in
+  [ADR-042](<ADR-042 - Disks as Assets and CIs.md>) (2026-10-31).
 - **O5** *(closed 2026-10-29, operator: scheme (c))* Naming of the assets the migration makes, for every node, switch, AP and
   recorded device that exists today. The name is immutable and shows wherever the asset does, long
   after its first role. The candidates, with hrossen's boxes as examples:
@@ -749,4 +750,4 @@ takes part by implementing `report --discover` the same way.
 6. Drift recorded (ADR-020's differ into the CMDB).
 7. The discovery sweep (D15): `cmdb sweep`, the timer, the health check; `--discover` on every
    controller to the depth of D15's table.
-8. Later, each in its own ADR: resource allocation (O10), event management (O6), disks as assets (O4).
+8. Later, each in its own ADR: resource allocation (O10), event management (O6), disks as assets (O4: ADR-042, 2026-10-31).
