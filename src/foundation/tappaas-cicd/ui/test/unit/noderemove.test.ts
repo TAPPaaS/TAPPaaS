@@ -95,6 +95,9 @@ check(res.parked.map((p) => `${p.sw}|${p.port}`).join() === "USW Pro XG 10 PoE|4
 check(res.asset?.key === "srv-03" && res.asset.fate === "kept" && res.asset.where === "rack1 U20-U21", "the asset kept, where");
 const res2 = parseRemoval("✓ tappaas4 is out of the cluster.\n✓ asset srv-03 released from tappaas4\n✓ asset srv-03 removed: its cables, placement and record");
 check(res2.asset?.fate === "removed", "the asset removed");
+const res2d = parseRemoval("✓ tappaas4 is out of the cluster.\n✓ asset srv-03 released from tappaas4\n✓ asset srv-03 removed: its cables, placement and record and its 3 disks' records");
+check(res2d.asset?.fate === "removed" && res2d.asset.key === "srv-03", "the asset removed with its disks");
+check(parseCheck("  then: asset srv-03 is released from tappaas4 and removed: its placement in rack1 U20, its record and its 2 disks' records", "tappaas4", { exit: 0 }).asset?.fate === "removed", "an asset to be removed with its disks");
 const res3 = parseRemoval("✓ tappaas4 is out of the cluster.\n[Warning] asset srv-03 is not removed: asset-manager unplace srv-03: refused — run the rest by hand");
 check(!!res3.assetTrouble && /asset page/.test(res3.assetTrouble), "an asset step that failed: finish it on its page");
 

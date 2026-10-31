@@ -156,8 +156,8 @@ which carries the positions resolved against the site.
 | `asset allocate <asset> --role <name>` | It takes a role: a node or machine (a server), a switch, an access point the topology knows — or, for another kind, a device nothing manages. Its placement and recorded cables move to the role's name. |
 | `asset release <asset>` | The role ends: its placement and cables stay with the box, under its own name; it is placed or in stock again. |
 | `asset fault <asset> --note <text>` / `asset repaired <asset>` | The faulty flag beside its stage, with what is wrong; cleared. |
-| `asset dispose <asset> --how sold\|recycled\|returned\|lost [--wiped] [--when <date>]` | It leaves the site; refused while it has a role, a placement or a recorded cable (three acts, ADR-040 D8). The record stays, read-only. |
-| `asset remove <asset>` | A record made by mistake: unplaced, no recorded cable, in no role but its own. A disposed asset's record stays. |
+| `asset dispose <asset> --how sold\|recycled\|returned\|lost [--wiped] [--when <date>] [--with-disks \| --disks-to-stock]` | It leaves the site; refused while it has a role, a placement or a recorded cable (three acts). The record stays, read-only. One that holds disks needs an answer for them: `--with-disks` takes each disk out and disposes of it the same way (`--how`, `--when`, wiped as `--wiped` says), then the asset; `--disks-to-stock` takes them out into stock first. |
+| `asset remove <asset> [--with-disks \| --disks-to-stock]` | A record made by mistake, or a machine that leaves the site: unplaced, no recorded cable, in no role but its own. A disposed asset's record stays. One that holds disks is refused unless told what becomes of them: `--with-disks` removes each disk's recorded cables, placement and record, then the asset's (the machine leaves with its disks); `--disks-to-stock` takes them out first (they stay recorded, in stock, for another asset). |
 | `port add <asset> <port> --kind rj45\|sfp\|wifi\|usb-a\|usb-c [--speed] [--standard] [--bands <list>] [--module] [--role lan\|wan\|bmc] [--mac] [--side front\|rear]` | A port of its own: its connector and what goes with it (rj45 is 1g unless told). |
 | `port modify <asset> <port> --set <field>=<value>... --unset <field>...` | A port's kind, speed, standard, bands, module, role, mac or side; a port of its model's plate takes an entry of its own, merged over it. |
 | `port remove <asset> <port>` | A port of its own no recorded cable uses; one over its plate's goes back to the plate's. |
@@ -239,6 +239,20 @@ asset-manager disk list srv-02
 asset-manager place dsk-04 --in srv-03              # moved to another server
 asset-manager unplace dsk-04                        # pulled: in stock
 asset-manager asset dispose dsk-04 --how recycled --wiped
+```
+
+A machine with its disks: `asset remove` and `asset dispose` refuse one that holds disks
+until told what becomes of them. Each disk is its own step, a line of its own and its own
+report to the CMDB (a disk's CI ends before its asset's); the file is written once, and a
+refusal anywhere changes nothing:
+
+```
+asset-manager asset remove srv-04 --with-disks --check
+[check] would remove disk 'dsk-11' (serial S1), in srv-04, bay sda
+[check] would remove disk 'dsk-12' (serial S2), in srv-04, bay sdb
+[check] would remove asset 'srv-04'
+asset-manager asset remove srv-04 --disks-to-stock             # the disks kept, in stock
+asset-manager asset dispose srv-04 --how recycled --wiped --with-disks
 ```
 
 ### Recording a device

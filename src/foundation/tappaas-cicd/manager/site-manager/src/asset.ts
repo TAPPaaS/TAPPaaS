@@ -25,6 +25,7 @@ import {
   assetsOf,
   cablesOf,
   currentName,
+  disksIn,
   nextTag,
   placementsOf,
   placeWhere,
@@ -346,13 +347,14 @@ export function assetFate(given: string | undefined, lost: boolean): AssetFate |
 
 // The asset-manager calls that take a released asset off the site, in order:
 // a `cable remove` per recorded cable it is an end of (by its own end), its
-// `unplace`, then `asset remove`. Each is asset-manager's own verb, so each
+// `unplace`, then `asset remove --with-disks`: the disks it holds leave with
+// it, their records with its own. Each is asset-manager's own verb, so each
 // change reaches the CMDB through its change report. Computed on the doc as
 // it stands; an asset still in a role is named as it plays (the release comes
 // first, nodeasset.ts).
-export function assetRemovalSteps(doc: PositionsDoc, key: string): { steps: string[][]; cables: number; placed: string | null } {
+export function assetRemovalSteps(doc: PositionsDoc, key: string): { steps: string[][]; cables: number; placed: string | null; disks: number } {
   const a = assetsOf(doc)[key];
-  if (!a) return { steps: [], cables: 0, placed: null };
+  if (!a) return { steps: [], cables: 0, placed: null, disks: 0 };
   const me = currentName(key, a);
   const steps: string[][] = [];
   const seen = new Set<string>();
@@ -364,6 +366,6 @@ export function assetRemovalSteps(doc: PositionsDoc, key: string): { steps: stri
   }
   const m = placementsOf(doc)[me];
   if (m) steps.push(["unplace", me]);
-  steps.push(["asset", "remove", key]);
-  return { steps, cables: seen.size, placed: m ? placeWhere(m) : null };
+  steps.push(["asset", "remove", key, "--with-disks"]);
+  return { steps, cables: seen.size, placed: m ? placeWhere(m) : null, disks: disksIn(doc, key).length };
 }

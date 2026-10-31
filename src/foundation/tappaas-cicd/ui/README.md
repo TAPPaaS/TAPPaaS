@@ -371,7 +371,10 @@ Network: show and Network: set…; a switch's or an access point's Location…; 
 record: kind, speed, MAC, role), a switch port's Change port… (its record, then reconcile) and
 Park…, Record a cable… or Remove the cable…, Attach to patch panel… or Remove patch panel on a
 cable, and on a patch panel's free port Attach a wire here…. `#port-<name>` in the address marks
-and scrolls to a port's row. A node's disks and pools are in the Storage view, linked from the page.
+and scrolls to a port's row. On an asset that holds disks, Remove the record… and Dispose… ask in
+their form what becomes of the disks: *the disks' records go with it* (disposed of with it, for
+Dispose…; `--with-disks`, the default) or *the disks go to stock* (taken out first, kept for
+another asset; `--disks-to-stock`). A node's disks and pools are in the Storage view, linked from the page.
 
 **Disks.** An asset's page lists the disks in it with their bay row and, per disk, its bay, its
 page, serial, size, kind, health and pool, with Move to… (`asset-manager place <disk> --in

@@ -427,9 +427,10 @@ Its asset is released from the node, and then, by `--asset`:
 - `keep` (the default): it goes back to stock, or stays placed for its next role; its
   place in the rack, its ports and its cables stay recorded under its own name. `node add`
   on the same box later matches it by serial or MAC.
-- `remove`: the machine leaves the site — its recorded cables, its placement and its record
-  are removed with asset-manager's verbs (`cable remove`, `unplace`, `asset remove`), each
-  reported to the CMDB, where the asset's history stays.
+- `remove`: the machine leaves the site with its disks — its recorded cables, its placement
+  and its record are removed with asset-manager's verbs (`cable remove`, `unplace`, `asset
+  remove --with-disks`), and with them the records of the disks it holds, each reported to
+  the CMDB, where the asset's history stays. The preview counts the disks' records.
 
 A `--lost` node's asset is removed unless `--asset keep` is given. `--config-only` deletes
 (or archives) the record and keeps or removes the asset without touching the cluster.

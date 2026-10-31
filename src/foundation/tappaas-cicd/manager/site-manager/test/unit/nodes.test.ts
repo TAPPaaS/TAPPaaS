@@ -200,14 +200,14 @@ function quiet(argv: string[]): { rc: number; out: string[] } {
     d = fresh();
     process.env.PATH = `${join(d, "bin")}:${PATH}`;
     r = quiet(["node", "delete", "tappaas2", "--config-only", "--asset", "remove", "--config-dir", d]);
-    check(r.rc === 0 && calls(d).slice(1).join("; ") === "asset-manager asset release srv-02; asset-manager cable remove srv-02:1; asset-manager unplace srv-02; asset-manager asset remove srv-02",
+    check(r.rc === 0 && calls(d).slice(1).join("; ") === "asset-manager asset release srv-02; asset-manager cable remove srv-02:1; asset-manager unplace srv-02; asset-manager asset remove srv-02 --with-disks",
       `--asset remove: release, its cable, its placement, its record (${calls(d).join("; ")})`);
     check(r.out.some((l) => /asset srv-02 removed: its cables, placement and record/.test(l)), "it says the asset is removed");
 
     d = fresh();
     process.env.PATH = `${join(d, "bin")}:${PATH}`;
     r = quiet(["node", "delete", "--lost", "tappaas2", "--config-only", "--config-dir", d]);
-    check(r.rc === 0 && calls(d).includes("asset-manager asset remove srv-02"), `a lost node's asset is removed without being asked (${calls(d).join("; ")})`);
+    check(r.rc === 0 && calls(d).includes("asset-manager asset remove srv-02 --with-disks"), `a lost node's asset is removed without being asked (${calls(d).join("; ")})`);
 
     d = fresh();
     process.env.PATH = `${join(d, "bin")}:${PATH}`;

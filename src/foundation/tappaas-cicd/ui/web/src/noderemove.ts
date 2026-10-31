@@ -16,7 +16,7 @@ export const HOWS: { id: How; label: string; detail: string }[] = [
 
 export const ASSET_CHOICES: { id: AssetChoice; label: string; detail: string }[] = [
   { id: "keep", label: "keep the machine's asset record", detail: "It goes back to stock; its place in the rack and its cables stay recorded, ready for its next role." },
-  { id: "remove", label: "remove the machine's asset record", detail: "Its record, place and cables are removed: the machine leaves the site." },
+  { id: "remove", label: "remove the machine's asset record", detail: "Its record, place and cables are removed, and the records of the disks in it: the machine leaves the site with its disks." },
 ];
 
 export const checkArgv = (node: string, how: How): string[] => ["site-manager", "node", "delete", node, `--${how}`];
