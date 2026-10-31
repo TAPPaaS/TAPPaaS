@@ -50,6 +50,8 @@ async function main(): Promise<void> {
   check(u.state === "activating" && u.since === "Sat 2026-10-17 03:00:01 CEST", "systemctl show is read for state and since");
   check(parseUnitShow("ActiveState=inactive\nActiveEnterTimestamp=n/a\n").since === null, "n/a is no time");
   check(shellQuote(["switch-manager", "update-port", "USW Pro XG 10 PoE", "1"]) === "switch-manager update-port 'USW Pro XG 10 PoE' 1", "the argv as one types it, quoted where it must be");
+  check(shellQuote(["health-manager", "ack", "--until", "2026-11-05 12:00", "--note", "it's fine"]) === "health-manager ack --until '2026-11-05 12:00' --note 'it'\\''s fine'", "a value with a space or a quote stays one word");
+  check(shellQuote(["--until", "2026-11-05"]) === "--until 2026-11-05", "a plain date needs no quotes");
 
   // ── a site to run against ───────────────────────────────────────────
   const dir = mkdtempSync(join(tmpdir(), "console-jobs-"));

@@ -32,6 +32,24 @@ export function formParts(step: ArgvStep & { hide?: string[]; only?: string[] },
   };
 }
 
+// How an option's value is entered, where text will not do: a date is a
+// calendar, YYYY-MM-DD, by the step's word or its arg; a future-date starts
+// tomorrow (an --until of today has already passed: a date is its midnight UTC).
+export type FieldKind = "date" | "future-date";
+export const fieldKind = (kinds: Record<string, FieldKind> | undefined, key: string, arg: string | null): FieldKind | null =>
+  kinds?.[key] ?? (arg === "<date>" ? "date" : null);
+
+// The first day a future-date offers, in the browser's own calendar.
+export function tomorrow(now: Date): string {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// A help's arg as a form's placeholder: a single letter (<n>, D) or a word that
+// only says a value goes here says nothing to an operator, so the box stays blank.
+export const placeholderOf = (arg: string | null): string | null =>
+  arg === null || /^<?([a-z]|value|text|arg)>?$/i.test(arg) ? null : arg;
+
 export function buildArgv(step: ArgvStep, verb: ManifestVerb | null, values: Values): string[] {
   if (!verb) return [step.bin, ...(step.words ?? []), ...(step.fixed ?? [])];
   const words = step.words ?? verb.keys[0] ?? [];

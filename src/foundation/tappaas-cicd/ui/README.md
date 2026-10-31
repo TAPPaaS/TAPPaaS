@@ -286,7 +286,9 @@ the CMDB never moves a card.
 
 **The CI panel (right)**: conditions with their `since`, the root cause or what it impacts, drift,
 the conditions' history, the changes to it, relations both ways, the health verbs as jobs (Ack…,
-Unack…, Maintenance…, health-manager's own, offered once its manifest declares them), **Details**
+Unack…, Maintenance…, health-manager's own, offered once its manifest declares them; the dialog's
+title names the condition, the type is not a field, and **until** is a calendar that sends a date,
+ending at that day's midnight UTC, from tomorrow on), **Details**
 at its top, the page that shows the object in full and where its operations are, and **Show in tree**, which opens the tree
 down to it. A panel shows status, not operations.
 

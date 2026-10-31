@@ -32,7 +32,7 @@ export const EMIT_HELP: HelpVerb[] = [
       ["--type <t>", "This condition only (default: every one that is not ok)."],
       ["--note <n>", "Why (required)."],
       ["--until <time>", `When it ends (default: when the condition recovers). ${WHEN}`],
-      ["--sticky", "Hold through status changes, until ok; otherwise the next change ends it."],
+      ["--sticky", "Keep it through status changes, until the condition is ok; without this the next status change ends it."],
     ],
     details: "The condition keeps its status and stops counting for validate, mails and the Overview. On a\nroot cause its impact conditions are silenced with it, while the root's ack holds.",
   },

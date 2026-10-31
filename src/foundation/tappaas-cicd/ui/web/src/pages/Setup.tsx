@@ -9,7 +9,7 @@
 
 import { ReactNode, useEffect, useState } from "react";
 import { Read, post, useRead } from "../api";
-import { JobOutput, JobStatusLine, stripAnsi } from "../jobs";
+import { JobOutput, JobStatusLine, quote, stripAnsi } from "../jobs";
 import { OperateButton, Step } from "../operate";
 import { fieldsStep } from "../fields";
 import { useJobRun } from "../run";
@@ -209,7 +209,7 @@ function CheckRun({ id, onEnd }: { id: string; onEnd: (id: string) => void }) {
   if (!job) return <p className="muted small">starting…</p>;
   return (
     <div className="jobview">
-      <JobStatusLine job={job} label={job.argv.join(" ")} />
+      <JobStatusLine job={job} label={quote(job.argv)} />
       <JobOutput job={job} fold={run.ok ? "closed" : "tail"} tail={8} />
     </div>
   );

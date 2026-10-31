@@ -19,7 +19,7 @@ import { confirmMatches, proposalFlow } from "./argv";
 import { TargetValues, resolveTarget } from "./consoletargets";
 import { requestOpen } from "./opener";
 import { useJobRun } from "./run";
-import { Command, JobOutput, JobStatusLine } from "./jobs";
+import { Command, JobOutput, JobStatusLine, quote } from "./jobs";
 import { AssistantStatus, Me } from "./types";
 import { FindingList, Link, TypedConfirm, canOperate, navigate, useMe } from "./ui";
 import { refusalLines, runFailure } from "./wizards";
@@ -185,7 +185,7 @@ function ProposalCard({ p, conversation, me }: { p: Proposal; conversation: stri
   const ready = direct || (previewDone && !refusedByDryRun);
   const canRun = may && !spent && !failed && ready && typed && !run.live;
 
-  if (dismissed) return <div className="card-proposal card-dismissed muted small">Proposal dismissed: <code className="mono">{p.argv.join(" ")}</code></div>;
+  if (dismissed) return <div className="card-proposal card-dismissed muted small">Proposal dismissed: <code className="mono">{quote(p.argv)}</code></div>;
 
   const doPreview = () => {
     run.retry();

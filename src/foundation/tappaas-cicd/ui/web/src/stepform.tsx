@@ -3,9 +3,9 @@
 // above the button. A disruption (--force, --allow-disruption, --yes) is a
 // checkbox that names its consequence.
 
-import { ReactNode, createContext, useEffect, useMemo, useState } from "react";
+import { MouseEvent, ReactNode, createContext, useEffect, useMemo, useState } from "react";
 import { useVerb } from "./api";
-import { ArgvStep, Flow, Values, buildArgv, formParts, missingFields, prefillValues, writeMarkOf } from "./argv";
+import { ArgvStep, FieldKind, Flow, Values, buildArgv, fieldKind, formParts, missingFields, placeholderOf, prefillValues, tomorrow, writeMarkOf } from "./argv";
 import { Job, ManifestVerb } from "./types";
 
 export interface Step extends ArgvStep {
@@ -20,6 +20,7 @@ export interface Step extends ArgvStep {
   labels?: Record<string, string>;
   descriptions?: Record<string, ReactNode>; // an option's text in the wizard's words, in place of the verb's help, by flag
   placeholders?: Record<string, string>; // an example in place of the help's <arg>, by "@name" or flag
+  kinds?: Record<string, FieldKind>; // a calendar in place of text, by "@name" or flag (an arg of <date> is one already)
   asides?: Record<string, ReactNode>; // shown under an option's input, by "@name" or flag (a link to add what the dropdown lacks)
   render?: (values: Values, set: (v: Values) => void, verb: ManifestVerb) => ReactNode; // a change form of its own, its name rows included
   note?: ReactNode;
@@ -51,6 +52,20 @@ export function applyForm(verb: ManifestVerb | null, argv: string[]): string[] {
   return argv;
 }
 
+// A calendar. A date box cannot show a placeholder, so one that has one stays a
+// text box until it is focused and empty again; a click opens the calendar.
+function DateField({ kind, hint, value, set }: { kind: FieldKind; hint?: string; value: string; set: (v: string) => void }) {
+  const [focused, setFocused] = useState(false);
+  const open = (e: MouseEvent<HTMLInputElement>) => {
+    try {
+      e.currentTarget.showPicker();
+    } catch {
+      // Not a date box yet, or a browser without it: the box itself still works.
+    }
+  };
+  return <input type={hint && !focused && !value ? "text" : "date"} placeholder={hint} min={kind === "future-date" ? tomorrow(new Date()) : undefined} value={value} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} onClick={open} onChange={(e) => set(e.target.value)} />;
+}
+
 // part: "all" is the positionals, the options and the disruptions. A step with
 // a form of its own (fields.tsx: the name rows, then the fields) shows "bottom"
 // below it: the verb's options that are not fields under "Options", then the
@@ -60,8 +75,9 @@ function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb:
   const { names: pos, options: opts, disruptions } = formParts(step, verb);
   const field = (key: string, arg0: string | null, choices: string[] | null, repeatable: boolean) => {
     const offered = step.choices?.[key] ?? choices;
-    const arg = step.placeholders?.[key] ?? arg0;
+    const arg = step.placeholders?.[key] ?? placeholderOf(arg0);
     const v = values[key];
+    const kind = fieldKind(step.kinds, key, arg0);
     if (offered) {
       return (
         <select value={typeof v === "string" ? v : ""} onChange={(e) => set({ ...values, [key]: e.target.value })}>
@@ -72,6 +88,7 @@ function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb:
         </select>
       );
     }
+    if (kind) return <DateField kind={kind} hint={step.placeholders?.[key]} value={typeof v === "string" ? v : ""} set={(d) => set({ ...values, [key]: d })} />;
     const hints = step.suggest?.[key];
     if (hints) {
       const id = `suggest-${key.replace(/[^a-z0-9]/gi, "")}`;

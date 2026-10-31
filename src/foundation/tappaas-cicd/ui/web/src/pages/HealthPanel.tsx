@@ -18,6 +18,11 @@ import { CiPanel } from "./CiPanel";
 const LEVEL: Record<HealthStatus, Level> = { ok: "pass", warning: "warn", critical: "fail", unknown: "skip" };
 const hm = (title: string, verb: string, id: string, extra: Partial<Step> = {}): Step => ({ title, bin: "health-manager", verb, fixed: [id], ...extra });
 
+// The dialogs' fields in words: the calendar sends a date, which the verb reads
+// as that day's midnight UTC.
+const WHY = "why, for the record";
+const UNTIL = "It ends at the start of that day (midnight UTC).";
+
 function Pick({ id, label, status, pick }: { id: string; label: string; status?: HealthStatus | null; pick: (id: string) => void }) {
   return (
     <button className="hlink" onClick={() => pick(id)}>
@@ -44,9 +49,9 @@ function ConditionRow({ o, c, canAck, canUnack }: { o: HealthObject; c: HealthCo
         {c.window ? <span className="muted small"> · maintenance{c.window.until ? ` until ${when(c.window.until)}` : ""}{c.window.note ? `: ${c.window.note}` : ""}</span> : null}
       </span>
       {c.status !== "ok" && !c.derived && !silenced ? (
-        <OperateButton label="Ack…" disabled={!canAck} hint={canAck ? undefined : "health-manager on this site has no ack verb"} title={`Acknowledge ${c.type} on ${o.label}`} steps={[hm(`health-manager ack ${o.label} --type ${c.type}`, "ack", o.id, { initial: { "--type": c.type }, note: "The condition keeps its status but stops counting for validate, mails and the Overview. On a root cause it covers the symptoms too." })]} />
+        <OperateButton label="Ack…" disabled={!canAck} hint={canAck ? undefined : "health-manager on this site has no ack verb"} title={`Acknowledge ${c.type} on ${o.label}`} steps={[hm(`health-manager ack ${o.label} --type ${c.type}`, "ack", o.id, { initial: { "--type": c.type }, hide: ["--type"], kinds: { "--until": "future-date" }, placeholders: { "--note": WHY, "--until": "when the condition recovers" }, labels: { "--note": "note", "--until": "until", "--sticky": "sticky" }, descriptions: { "--note": "Required.", "--until": UNTIL, "--sticky": "keep it through status changes, until the condition is ok; without this the next status change ends it" }, note: "The condition keeps its status but stops counting for validate, mails and the Overview. On a root cause it covers the symptoms too." })]} />
       ) : null}
-      {c.ack ? <OperateButton label="Unack…" disabled={!canUnack} hint={canUnack ? undefined : "health-manager on this site has no unack verb"} title={`Remove the acknowledgement of ${c.type} on ${o.label}`} steps={[hm(`health-manager unack ${o.label} --type ${c.type}`, "unack", o.id, { initial: { "--type": c.type } })]} /> : null}
+      {c.ack ? <OperateButton label="Unack…" disabled={!canUnack} hint={canUnack ? undefined : "health-manager on this site has no unack verb"} title={`Remove the acknowledgement of ${c.type} on ${o.label}`} steps={[hm(`health-manager unack ${o.label} --type ${c.type}`, "unack", o.id, { initial: { "--type": c.type }, hide: ["--type"] })]} /> : null}
     </li>
   );
 }
@@ -57,7 +62,7 @@ function Verbs({ o }: { o: HealthObject }) {
   const maint = useVerb("health-manager", "maintenance");
   return (
     <div className="toolbar">
-      <OperateButton label="Maintenance…" disabled={!maint} hint={maint ? undefined : "health-manager on this site has no maintenance verb"} title={`A maintenance window on ${o.label}`} steps={[hm(`health-manager maintenance ${o.label}`, "maintenance", o.id, { note: "During the window transitions are recorded but neither mailed nor counted." })]} />
+      <OperateButton label="Maintenance…" disabled={!maint} hint={maint ? undefined : "health-manager on this site has no maintenance verb"} title={`A maintenance window on ${o.label}`} steps={[hm(`health-manager maintenance ${o.label}`, "maintenance", o.id, { placeholders: { "--note": WHY }, kinds: { "--until": "future-date" }, labels: { "--note": "note", "--until": "until" }, descriptions: { "--note": "Required.", "--until": `Required. ${UNTIL}` }, note: "During the window transitions are recorded but neither mailed nor counted." })]} />
     </div>
   );
 }
