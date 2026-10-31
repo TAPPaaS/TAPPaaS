@@ -12,7 +12,7 @@ import { AccessConfig, Me, decide, setupState } from "../../src/access";
 import { Jobs } from "../../src/jobs";
 import { Runner, Streamer } from "../../src/run";
 import { parseKv, secretStatus, writeSecret } from "../../src/secrets";
-import { SetupInputs, TESTS_FILE, physicalStep, readPhysical, WifiInputs, clientZonesWithoutWifi, closeSetupToken, gatherSetup, parseApList, parseSwitches, parseWgvpnPeers, readSetupTests, readWifiZones, recordSetupTest, runSetupTests, setupComplete, setupSteps, wifiStep } from "../../src/setup";
+import { SetupInputs, TESTS_FILE, physicalStep, readPhysical, WifiInputs, clientZonesWithoutWifi, closeSetupToken, gatherSetup, parseApList, parseSwitches, parseWgvpnPeers, readSetupTests, readWifiZones, recordSetupTest, setupCheckModules, setupComplete, setupSteps, wifiStep } from "../../src/setup";
 import { testGate } from "./gate-fixture";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
@@ -113,8 +113,7 @@ async function main(): Promise<void> {
   steps = setupSteps(inputs);
   check(!setupComplete(steps) && steps.filter((s) => s.required && s.done === true).length === 0, "a fresh install: no required step is done");
   check(!ran.some((r) => r.startsWith("module-manager test")), "…and no module test runs on a read");
-  await runSetupTests({ configDir: cfg, stateDir: state, run });
-  check(!ran.some((r) => r.startsWith("module-manager test")) && Object.keys(readSetupTests(state)).length === 0, "…nor on a refresh, for a module that is not installed");
+  check(setupCheckModules(cfg, state).length === 0, "…and Check has nothing to test while no module is installed");
   check(inputs.siteNodes.join() === "tappaas1,tappaas2" && steps.find((s) => s.id === "nodes")!.detail.includes("tappaas2"), "the registered nodes are what membership is checked against");
 
   // the install proceeds: records appear, the checklist follows (resumable for free)
@@ -141,14 +140,15 @@ async function main(): Promise<void> {
   steps = setupSteps(await gather());
   check(steps.find((s) => s.id === "backup")!.done === null, "…nor from a run that ended before the module was installed");
   unlinkSync(join(cfg, "last-update-result.json"));
-  // the explicit refresh (GET /setup?refresh=1): the tests run once, their results are kept
-  await runSetupTests({ configDir: cfg, stateDir: state, run }, () => Date.parse("2026-10-18T10:00:00Z"));
-  check(ran.filter((r) => r.startsWith("module-manager test")).length === 3, "the explicit refresh tests every installed module once");
+  // Check (POST /setup/check): a test job per installed module, its result kept as it ends
+  const checked = setupCheckModules(cfg, state);
+  check(checked.join() === "backup,identity,logging", "Check tests every installed module");
+  for (const m of checked) recordSetupTest(state, { argv: ["module-manager", "test", m], state: "done", exit: 0, ended: "2026-10-18T10:00:00.000Z" }, "ok");
   const kept = JSON.parse(readFileSync(join(state, TESTS_FILE), "utf8")) as Record<string, { rc: number; at: string }>;
-  check(kept.backup?.rc === 0 && kept.logging?.at === "2026-10-18T10:00:00.000Z", "…and keeps each result, with its time, in the state directory");
+  check(kept.backup?.rc === 0 && kept.logging?.at === "2026-10-18T10:00:00.000Z", "…and each result is kept, with its time, in the state directory");
   inputs = await gather();
   steps = setupSteps(inputs);
-  check(ran.filter((r) => r.startsWith("module-manager test")).length === 3, "the next read is from the kept results: no test ran");
+  check(!ran.some((r) => r.startsWith("module-manager test")), "the next read is from the kept results: no test ran");
   check(steps.filter((s) => s.done !== true).map((s) => s.id).join() === "vpn,physical,stacks", "with the records in place every step is done but the VPN peer (and the optional physical site and stacks)");
   check(readPhysical(cfg)?.rooms.length === 0, "no positions.json: an empty one");
   writeFileSync(join(cfg, "racks.json"), JSON.stringify({ rooms: { basement: {} }, mounts: { tappaas1: { rack: "rack1", u: 1 } } }));
@@ -161,15 +161,14 @@ async function main(): Promise<void> {
   unlinkSync(join(cfg, "positions.json"));
   unlinkSync(join(cfg, "racks.json"));
   check(steps.find((s) => s.id === "wifi")!.done === true && ran.includes("ap-manager list --json"), "…WiFi: no zones.json, no Client zone to serve (ap-manager list was read)");
-  // a module removed: its kept result goes with it on the next refresh
+  // a module removed: its kept result goes with it on the next Check
   rmSync(join(cfg, "logging.json"));
-  await runSetupTests({ configDir: cfg, stateDir: state, run });
-  check(readSetupTests(state).logging === undefined && readSetupTests(state).backup !== undefined, "a module no longer installed keeps no result");
+  check(setupCheckModules(cfg, state).join() === "backup,identity", "a module no longer installed is not tested");
+  check(readSetupTests(state).logging === undefined && readSetupTests(state).backup !== undefined, "…and keeps no result");
 
   // ── a test run as a job counts too (the step's Test button) ─────────
   // On hrossen 2026-10-18 `module-manager test identity` ran as a job and
-  // passed, and the step still said its test had not run: only the Check's
-  // results were kept.
+  // passed, and the step still said its test had not run.
   writeFileSync(join(cfg, "logging.json"), "{}");
   rmSync(join(state, TESTS_FILE));
   check(setupSteps(await gather()).find((s) => s.id === "identity")!.done === null, "no result kept: the identity step is unknown");

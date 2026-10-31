@@ -110,13 +110,15 @@ export async function runJson<T>(run: Runner, bin: string, args: string[], opts:
 
 // A job's child: its output as it comes (stdout and stderr in one stream, the
 // order the child wrote them), its exit code at the end. stdin is closed, so a
-// script that would prompt fails rather than waits. `ctl.onSpawn` is handed
+// script that would prompt fails rather than waits; `ctl.input`, a secret
+// (Jobs.createWithSecret), is written to it once first. `ctl.onSpawn` is handed
 // the way to signal it (a job's Stop, jobs.ts); `ctl.env` is the job's
 // (jobEnv), added to the config-root environment.
 export type StopSignal = "SIGINT" | "SIGTERM";
 export interface StreamControl {
   onSpawn?: (signal: (s: StopSignal) => boolean) => void;
   env?: JobEnv;
+  input?: string;
 }
 export type Streamer = (bin: string, args: string[], onOutput: (chunk: string) => void, timeoutMs?: number, ctl?: StreamControl) => Promise<{ rc: number; ran: boolean; error: string | null }>;
 
@@ -127,7 +129,7 @@ export const streamAsync: Streamer = (bin, args, onOutput, timeoutMs = 4 * 3600_
   new Promise((resolve) => {
     let child: ChildProcess;
     try {
-      child = spawn(bin, args, { env: { ...configEnv(), NO_COLOR: "1", TERM: "dumb", ...ctl?.env }, stdio: ["ignore", "pipe", "pipe"], detached: true });
+      child = spawn(bin, args, { env: { ...configEnv(), NO_COLOR: "1", TERM: "dumb", ...ctl?.env }, stdio: [ctl?.input === undefined ? "ignore" : "pipe", "pipe", "pipe"], detached: true });
     } catch (e) {
       resolve({ rc: -1, ran: false, error: (e as Error).message });
       return;
@@ -158,4 +160,6 @@ export const streamAsync: Streamer = (bin, args, onOutput, timeoutMs = 4 * 3600_
     child.stderr?.on("data", (c) => onOutput(c.toString("utf8")));
     child.on("error", (e) => done({ rc: -1, ran: false, error: e.message }));
     child.on("close", (code) => done({ rc: code ?? -1, ran: true, error: null }));
+    child.stdin?.on("error", () => undefined);
+    child.stdin?.end(ctl?.input);
   });

@@ -23,6 +23,7 @@ export interface JobRun {
   preview: (argv: string[], from?: CardRef) => Promise<void>;
   read: (argv: string[], from?: CardRef) => Promise<void>;
   applyPreview: (previewId: string, confirm?: string) => Promise<void>;
+  start: (call: () => Promise<Posted<Job>>) => Promise<void>; // a route of its own that answers with a job
   attach: (id: string) => void; // a job found again, or started elsewhere
   retry: () => void; // back to idle
 }
@@ -88,6 +89,7 @@ export function useJobRun({ attach: found = null, onApplied, onDone }: { attach?
     preview: (argv, from) => launch(() => previewJob(argv, from)),
     read: (argv, from) => launch(() => readJob(argv, from)),
     applyPreview: (previewId, confirm) => launch(() => applyJob(previewId, confirm)),
+    start: launch,
     attach: (j) => {
       seq.current++;
       setId(j);

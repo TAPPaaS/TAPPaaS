@@ -17,13 +17,13 @@ import { HealthLive } from "./healthlive";
 import { JumpKind, jumpsFor } from "./jumps";
 import { Assistant, AssistantEvent } from "./assistant";
 import { LiteLLM } from "./litellm";
-import { Jobs, jobsNaming, summary } from "./jobs";
+import { CreateResult, JobSummary, Jobs, jobsNaming, summary } from "./jobs";
 import { Manifests } from "./manifest";
 import { MODULE_NAME, NODE_NAME, OBJECT_NAME, Reads } from "./reads";
 import { ownerSummary, readConfigs } from "./owner";
 import { SECRETS, isSecretName, secretCommand, secretStatus, writeSecret } from "./secrets";
 import { StdinRunner, jobEnv, runWithStdin } from "./run";
-import { closeSetupToken, setupComplete, setupSteps } from "./setup";
+import { closeSetupToken, setupCheckModules, setupComplete, setupSteps } from "./setup";
 import { FIELD_KINDS, FieldKind } from "./fieldmanifest";
 
 export interface ServerConfig {
@@ -173,6 +173,7 @@ export class ConsoleServer {
     }
     if (head === "jobs") return this.jobsApi(method, a, b, me, res, req, url);
     if (head === "secrets") return this.secretsApi(method, a, me, res, req);
+    if (head === "setup" && a === "check") return this.setupCheck(method, me, res, req);
     if (head === "assistant") return this.assistantApi(method, a, b, me, res, req);
     if (head === "operations") return this.operationsApi(method, a, parts.length, me, res, req);
     if (method !== "GET") return sendJson(res, 405, { error: `${method} /api/v1/${head ?? ""}: reads are GET; a change is a job (POST /api/v1/jobs)` });
@@ -290,9 +291,8 @@ export class ConsoleServer {
       }
       case "setup": {
         // The checklist, derived from the records each time it is read (D10).
-        // ?refresh=1 is the one place the foundation modules' tests run.
+        // No test runs here: POST /setup/check, or a Test job.
         closeSetupToken(this.cfg.access, this.cfg.log);
-        if (url.searchParams.get("refresh") === "1") await r.refreshSetup();
         const e = await r.setup.get();
         const steps = e.value ? setupSteps(e.value) : null;
         const st = setupState(this.cfg.access);
@@ -607,9 +607,35 @@ export class ConsoleServer {
     else if (sub === "apply") r = await jobs.applyPreview(me, setup, id, { confirm: body.confirm });
     else if (sub === "cancel") r = jobs.cancel(me, setup, id);
     else return sendJson(res, 404, { error: `jobs/${id}/${sub ?? ""}` });
+    return this.sendJob(res, r);
+  }
+
+  private sendJob(res: ServerResponse, r: CreateResult): void {
     if (r.job) this.cfg.log(`job ${r.job.id} ${r.job.kind} ${r.job.state}${r.job.refused ? ` (${r.job.refused})` : ""}: ${r.job.argv.join(" ")}`);
     if (r.status >= 400) return sendJson(res, r.status, { error: r.error, ...(r.job ? { data: summary(r.job) } : {}), ...(r.sweep ? { sweep: r.sweep } : {}) });
-    return sendJson(res, r.status, { data: r.job ? (jobs.get(r.job.id) ?? r.job) : null }); // with its output so far
+    return sendJson(res, r.status, { data: r.job ? (this.jobs?.get(r.job.id) ?? r.job) : null }); // with its output so far
+  }
+
+  // ── the Setup page's Check ────────────────────────────────────────
+  //   POST /setup/check   the installed foundation modules' tests, a read job
+  //                       each; main.ts keeps their results (recordSetupTest).
+  // A read, so whoever may read Setup may ask it, the loopback's read role
+  // too (the jobs' argv is this route's): JSON only, as no cross-site form can
+  // start one.
+  private setupCheck(method: string, me: Me, res: ServerResponse, req?: IncomingMessage): void {
+    const jobs = this.jobs;
+    if (!jobs) return sendJson(res, 503, { error: "this console runs no jobs" });
+    if (method !== "POST") return sendJson(res, 405, { error: "setup/check: POST" });
+    const ctype = req ? String(req.headers["content-type"] ?? "") : "";
+    if (!/^application\/json\b/i.test(ctype)) return sendJson(res, 415, { error: "a check is posted as application/json" });
+    const started: JobSummary[] = [];
+    for (const m of setupCheckModules(this.reads.configDir, this.reads.stateDir)) {
+      const r = jobs.createRead(me, ["module-manager", "test", m]);
+      if (!r.job) return sendJson(res, r.status, { error: r.error });
+      this.cfg.log(`job ${r.job.id} read by ${me.user ?? me.via}: ${r.job.argv.join(" ")}`);
+      started.push(r.job);
+    }
+    return sendJson(res, 201, { data: started });
   }
 
   // ── the assistant (ADR-034 D7) ────────────────────────────────────
@@ -670,7 +696,8 @@ export class ConsoleServer {
 
   // ── the wizard's secrets (secrets.ts) ─────────────────────────────
   //   GET  /secrets          which are set, and which keys (never a value)
-  //   POST /secrets/<name>   write it where its script reads it (the installer)
+  //   POST /secrets/<name>   write it where its script reads it (the installer);
+  //                          one its owner's verb takes minutes over: a job, its answer
   private async secretsApi(method: string, name: string | undefined, me: Me, res: ServerResponse, req?: IncomingMessage): Promise<void> {
     const home = this.cfg.home;
     if (!home) return sendJson(res, 503, { error: "this console writes no secrets" });
@@ -694,6 +721,10 @@ export class ConsoleServer {
     // verb on stdin: never in argv, never in a log, never in the answer.
     const cmd = secretCommand(name, body);
     if (typeof cmd === "string") return sendJson(res, 400, { error: cmd });
+    if (cmd?.job) {
+      if (!this.jobs) return sendJson(res, 503, { error: "this console runs no jobs" });
+      return this.sendJob(res, await this.jobs.createWithSecret(me, setupState(this.cfg.access), [cmd.bin, ...cmd.args], { input: cmd.input, timeoutMs: cmd.timeoutMs }));
+    }
     if (cmd) {
       const run = this.cfg.runStdin ?? runWithStdin;
       // The verb runs as the job its Activity record will be (its CMDB change names it).
@@ -710,14 +741,7 @@ export class ConsoleServer {
       if (this.jobs) this.jobs.recordSecret(me, name, file, cmd.keys, `${cmd.bin} ${cmd.args.join(" ")}`, jobId);
       this.cfg.log(`secret ${name} set by ${me.user ?? "?"} (${me.via}) through ${cmd.bin} ${cmd.args.join(" ")}`);
       if (name === "wlan") void this.reads.ssids.refreshAfterChange();
-      if (name === "backup-keys") {
-        void this.reads.backupKeys.refreshAfterChange();
-        void this.reads.health.refreshAfterChange();
-      }
-      // What the verb said (a key stick: the keys read back, the stick ejected),
-      // for the form; the secret itself is never printed by these verbs.
-      const said = `${out.stdout}\n${out.stderr}`.replace(/\x1b\[[0-9;]*m/g, "").trim().split("\n").filter((l) => l.trim()).slice(-20).join("\n");
-      return sendJson(res, 200, { data: { ...secretStatus(home, name), output: said } });
+      return sendJson(res, 200, { data: secretStatus(home, name) });
     }
     const r = writeSecret(home, name, body);
     if (!r.ok) return sendJson(res, 400, { error: r.error });

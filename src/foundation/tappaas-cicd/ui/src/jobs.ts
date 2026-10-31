@@ -17,7 +17,10 @@
 //            runs at once, beside the queue
 //
 // Who may: access.ts mayWrite — the gate's installer, or the setup token while
-// setup is open; never loopback without the gate.
+// setup is open; never loopback without the gate. Two kinds of job come from
+// the console's own routes, not from an argv a caller posts: a verb with a
+// secret on stdin (createWithSecret, POST /secrets/<name>), and a read of the
+// console's own choosing (createRead, Setup's Check, for whoever may ask it).
 //
 // From the assistant (ADR-034 D7): a proposed-job card posts its job (a read,
 // a preview, or an apply straight from the card) with {conversation, proposal}; the proposal must be in the caller's
@@ -177,6 +180,7 @@ export class Jobs {
   private running: JobSummary | null = null;
   private readonly reads = new Set<string>(); // read jobs running beside the queue
   private readonly signals = new Map<string, (s: StopSignal) => boolean>(); // a running job's child, to stop it
+  private readonly secrets = new Map<string, { input: string; timeoutMs?: number }>(); // held for a job until it has run: never recorded
   private readonly listeners = new Map<string, Set<Listener>>();
   private readonly keep: number;
   private readonly rotateAt: number;
@@ -445,16 +449,7 @@ export class Jobs {
     if (!v.ok) return { status: 400, error: v.reason };
     const card = this.card(me, req.assistant, baseArgv(v));
     if (typeof card === "string") return { status: 400, error: card };
-    if (v.read) {
-      const job = this.newJob(me, v, "read", [v.bin, ...v.args], null, card);
-      this.add(job);
-      this.reads.add(job.id);
-      void this.execute(job).finally(() => {
-        this.reads.delete(job.id);
-        this.settle();
-      });
-      return { status: 201, job };
-    }
+    if (v.read) return this.startRead(me, v, card);
     if (req.apply === true) return this.createApply(me, setup, v, card, req.confirm);
     if (req.preview !== true) {
       return { status: 409, error: "a change is previewed first (ADR-034 T3): POST /jobs {argv, preview: true}, then POST /jobs/<id>/apply; or {argv, apply: true}, which runs the preview first" };
@@ -479,6 +474,29 @@ export class Jobs {
     }
     this.enqueue(job);
     return { status: 201, job };
+  }
+
+  private startRead(me: Me, v: Validated, card: Job["assistant"]): CreateResult {
+    const job = this.newJob(me, v, "read", [v.bin, ...v.args], null, card);
+    this.add(job);
+    this.reads.add(job.id);
+    void this.execute(job).finally(() => {
+      this.reads.delete(job.id);
+      this.settle();
+    });
+    return { status: 201, job };
+  }
+
+  // A read the console itself asks for (Setup's Check: the foundation modules'
+  // tests): `argv` is the route's, never a caller's, so this has that route's
+  // rights, not a job's. Anything but a read is refused.
+  createRead(me: Me, argv: string[]): CreateResult {
+    const ms = this.cfg.manifests();
+    if (!ms) return { status: 503, error: "the verb manifests are still loading" };
+    const v = validateArgv(ms, argv);
+    if (!v.ok) return { status: 400, error: v.reason };
+    if (!v.read) return { status: 409, error: `${argv.join(" ")} is not a read` };
+    return this.startRead(me, v, null);
   }
 
   // The card a job came from, checked: the proposal is in the caller's own
@@ -526,7 +544,7 @@ export class Jobs {
   // refusal, the apply in the same job (one hold of the runner: nothing runs
   // between them). A verb with no dry run applies at once, as after its
   // preview. The caller and the typed name are checked before anything runs.
-  private async createApply(me: Me, setup: SetupState, v: Validated, card: Job["assistant"], confirm: unknown): Promise<CreateResult> {
+  private async createApply(me: Me, setup: SetupState, v: Validated, card: Job["assistant"], confirm: unknown, secret?: { input: string; timeoutMs?: number }): Promise<CreateResult> {
     const w = mayWrite(me, setup);
     if (!w.ok) return { status: w.status, error: w.reason };
     if (v.destructive && confirm !== v.object && confirm !== v.objectLabel) {
@@ -538,8 +556,25 @@ export class Jobs {
     this.add(job);
     const s = await this.refuseForSweep(job);
     if (s) return { status: 409, job, error: job.refused ?? "", sweep: s };
+    if (secret) this.secrets.set(job.id, secret);
     this.enqueue(job);
     return { status: 201, job };
+  }
+
+  // POST /secrets/<name>, for a verb that takes minutes (a key stick): a job
+  // like any apply, its verb the manifest's, with the secret on its stdin. The
+  // secret is held in memory until the job has run, in no record; the argv
+  // (which never holds it) is what Activity shows, and a verb that printed it
+  // would not have it kept.
+  async createWithSecret(me: Me, setup: SetupState, argv: string[], secret: { input: string; timeoutMs?: number }): Promise<CreateResult> {
+    const w = mayWrite(me, setup);
+    if (!w.ok) return { status: w.status, error: w.reason };
+    const ms = this.cfg.manifests();
+    if (!ms) return { status: 503, error: "the verb manifests are still loading" };
+    const v = validateArgv(ms, argv);
+    if (!v.ok) return { status: 400, error: v.reason };
+    if (v.read || v.preview.kind !== "none") return { status: 409, error: `${argv.join(" ")}: a job with a secret has no dry run` };
+    return this.createApply(me, setup, v, null, undefined, secret);
   }
 
   // A secret the Setup wizard wrote (secrets.ts): in Activity like any change,
@@ -626,6 +661,7 @@ export class Jobs {
 
   private endCancelled(job: JobSummary, note: string): void {
     const t = this.now();
+    this.secrets.delete(job.id);
     Object.assign(job, { state: "done", ended: new Date(t).toISOString(), durationMs: job.started ? t - Date.parse(job.started) : null });
     this.appendOutput(job.id, note);
     this.record(job);
@@ -664,6 +700,7 @@ export class Jobs {
         }
       }
     } finally {
+      this.secrets.delete(job.id);
       this.running = null;
       void this.pump(); // takes the next job synchronously, if there is one
       this.settle();
@@ -721,7 +758,10 @@ export class Jobs {
       const last = job.cancelled?.signals.at(-1);
       if (last) signal(last);
     };
-    const r = await this.cfg.stream(argv[0], argv.slice(1), (chunk) => {
+    const secret = this.secrets.get(job.id);
+    const word = secret?.input.replace(/\n$/, "");
+    const r = await this.cfg.stream(argv[0], argv.slice(1), (raw) => {
+      const chunk = word ? raw.split(word).join("…") : raw;
       out.tail = (out.tail + chunk).slice(-4096);
       if (out.written < MAX_OUTPUT) {
         const part = chunk.slice(0, MAX_OUTPUT - out.written);
@@ -729,7 +769,7 @@ export class Jobs {
         this.appendOutput(job.id, part);
         this.emit(job, { type: "output", chunk: part });
       } else job.truncated = true;
-    }, undefined, { onSpawn, env: jobEnv(job.id, job.who) }).finally(() => this.signals.delete(job.id));
+    }, secret?.timeoutMs, { onSpawn, env: jobEnv(job.id, job.who), input: secret?.input }).finally(() => this.signals.delete(job.id));
     if (!r.ran) {
       const note = `\n[console] could not run ${argv[0]}: ${r.error ?? "not found"}\n`;
       out.written += note.length;
