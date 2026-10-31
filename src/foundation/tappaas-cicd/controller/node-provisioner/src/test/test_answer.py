@@ -304,8 +304,11 @@ class TestHandleAnswerPost(unittest.TestCase):
             info, self.registry, self.SITE,
             domain="mgmt.internal", secrets_directory=self.secrets,
             boot_disk_override=bootdisk, boot_mirror_override=bootmirror,
-            posted_disks=disks,
+            posted_disks=disks, request_ip="10.0.0.211",
         )
+
+    def _install_ip(self, name):
+        return json.loads(self.registry._path(name).with_name(f"{name}.json.consumed").read_text())["install_ip"]
 
     # ADR-037 D4: the installer resolves the fields and sends kernel names.
     def test_installer_named_mirror_is_raid1_over_both(self):
@@ -425,6 +428,7 @@ class TestHandleAnswerPost(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn('filter.ID_NET_NAME_MAC = "*aabbccddee03"', body)
         self.assertIn('cidr = "10.0.0.12/24"', body)
+        self.assertEqual(self._install_ip("tappaas3"), "10.0.0.12", "the answer's address, not the lease it posted from")
 
     def test_unpinned_registration_stays_on_dhcp(self):
         self.registry.register("tappaas4")
@@ -432,6 +436,7 @@ class TestHandleAnswerPost(unittest.TestCase):
             status, body = self._post(["de:ad:be:ef:00:01"])
         self.assertEqual(status, 200)
         self.assertIn('source = "from-dhcp"', body)
+        self.assertEqual(self._install_ip("tappaas4"), "10.0.0.211", "the installer bakes its lease")
 
     def test_single_pending_fallback_serves(self):
         self.registry.register("tappaas4")

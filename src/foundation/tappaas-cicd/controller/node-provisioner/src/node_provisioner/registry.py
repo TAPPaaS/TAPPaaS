@@ -264,10 +264,8 @@ class Registry:
     def consume(self, name: str, install_ip: str = "", identity=None) -> bool:
         """One-shot: rename <name>.json -> <name>.json.consumed.
 
-        install_ip: the address the installer posted from. The PVE
-        installer bakes its DHCP lease as a STATIC address (stage-1
-        finding), so this is where the installed node boots — recorded
-        for the operator / the node-add step.
+        install_ip: where the installed node boots — recorded for the
+        operator / the node-add step.
         identity: what the installer's post said of the machine (vendor,
         model, serial, nics) — site-manager node add reads it for the node's
         asset (ADR-040 D8).

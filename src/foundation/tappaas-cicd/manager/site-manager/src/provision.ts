@@ -416,7 +416,7 @@ export function provisionNode(o: ProvisionOpts): void {
       if (rec.install_ip) installIp = String(rec.install_ip);
     } catch { /* fall back to the standard IP (MAC-pinned reservation) */ }
     answered = true;
-    info(`  ${GN}✓${CL} answer served — installing; node will boot at ${installIp} (installer bakes its lease statically)`);
+    info(`  ${GN}✓${CL} answer served — installing; node will boot at ${installIp}`);
 
     // disarm ------------------------------------------------------------------
     step("install underway — closing the boot window");

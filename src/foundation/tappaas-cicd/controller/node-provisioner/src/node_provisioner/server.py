@@ -406,16 +406,14 @@ def handle_answer_post(
         **settings,
     )
 
-    registry.consume(reg.name, install_ip=request_ip, identity=extract_identity(system_info))
+    # A pinned answer sets the address itself. Otherwise the PVE installer BAKES
+    # its DHCP lease as a STATIC address (stage-1 finding), so the node comes up
+    # where it posted from. The join step normalizes to the standard IP either way.
+    boot_ip = net["mgmt_cidr"].split("/")[0] if net else request_ip
+    registry.consume(reg.name, install_ip=boot_ip, identity=extract_identity(system_info))
     info(f"registration '{reg.name}' consumed (one-shot); the machine's identity kept for its asset")
-    if request_ip:
-        # The PVE installer BAKES its DHCP lease as a STATIC address
-        # (stage-1 finding) — so the installed node comes up exactly here
-        # (unless a pre-boot reservation already put it on its standard
-        # IP). The join step normalizes to the standard IP either way.
-        info(f"node '{reg.name}' will boot at {request_ip} "
-             "(installer bakes its lease statically); the cluster join "
-             "moves it to its standard mgmt IP")
+    if boot_ip:
+        info(f"node '{reg.name}' will boot at {boot_ip}")
     return 200, body
 
 
