@@ -352,7 +352,10 @@ function assessLine(r: AssessResult): string {
   return `assessed ${r.objects.length} object(s): ${failing} failing, ${r.rootCauses.length} root cause(s), ${r.transitions.length} transition(s)`;
 }
 
-function cmdAssess(opts: Opts, client: ClusterClient): number {
+// The CMDB is a record, never a gate: one restarting (or not up yet) fails no
+// unit. Nothing is written and the next run writes, as emit does; a refusal is
+// a reporter's bug and still fails.
+export function cmdAssess(opts: Opts, client: ClusterClient, io?: (timed?: Timer) => AssessIO): number {
   const val = (flag: string): string | undefined => {
     const i = opts.rest.indexOf(flag);
     return i < 0 ? undefined : opts.rest[i + 1];
@@ -367,7 +370,14 @@ function cmdAssess(opts: Opts, client: ClusterClient): number {
   const timed: Timer | undefined = opts.rest.includes("--timing")
     ? (phase, ms) => process.stderr.write(`assess: ${String(ms).padStart(7)} ms  ${phase}\n`)
     : undefined;
-  const r = assess(assessIO(opts, client, timed), { only: val("--only"), dryRun: opts.rest.includes("--dry-run"), timed }, new Date());
+  let r: AssessResult;
+  try {
+    r = assess((io ?? ((t) => assessIO(opts, client, t)))(timed), { only: val("--only"), dryRun: opts.rest.includes("--dry-run"), timed }, new Date());
+  } catch (e) {
+    if (!(e instanceof CmdbUnavailable)) throw e;
+    warn(`assess: nothing assessed, the CMDB did not answer (${e.message}) — the next run writes`);
+    return 0;
+  }
   timed?.("total", Date.now() - t0);
   if (opts.rest.includes("--json")) {
     process.stdout.write(JSON.stringify({ time: r.time, objects: r.objects, rootCauses: r.rootCauses, transitions: r.transitions }, null, 1) + "\n");

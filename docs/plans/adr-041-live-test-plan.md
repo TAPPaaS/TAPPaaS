@@ -90,7 +90,7 @@ empty `config/.cmdb-spool/`.
 - Group sub-flows opened only by what the page held (6b).
 - `impact` across `runs-on` and `depends-on` not run live: no safe real failure.
 - Flapping not produced live; the ADR-039 rules not applied, so no mail path run.
-- `health-assess.service` fails when `cmdb` is restarting: assess exits 1, unlike emit. Next run recovers.
+- ~~`health-assess.service` fails when `cmdb` is restarting: assess exits 1, unlike emit. Next run recovers.~~ Fixed 2026-10-31: a CMDB that does not answer, on the read or the write, is a warning and exit 0; a refusal still fails. Not yet deployed.
 - `assess` takes about 60 s (the gates), not the few seconds D2 says. Measurable now: `health-manager assess --dry-run --timing` prints each phase and each gate on stderr. From reading the code, not yet measured: the CMDB reads and the working out are a second or two; the rest is the gates asking the planes, every ssh a fresh handshake (no ControlMaster), one after another:
   - per guest, serially: `disk-threshold` (2 ssh: probe + `df`), `pending-reboot` (1), `site-timezone` (1 per node + 1 per guest), `cpu-impact` (1 per HA guest on a common CPU); an LXC adds a `pvesh` ssh for its node in the first two. About 4 ssh per guest, 25-35 s on ~20 guests; an unreachable guest costs the 5 s ConnectTimeout per call.
   - `storage-disks`: `storage-manager inventory` with SMART on every disk of every node, its own help calls it slow; likely 5-15 s.

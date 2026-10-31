@@ -584,7 +584,9 @@ A condition is written in ADR-041 D1's shape, one per type per object:
   ```
 - An assessment is no sighting: it writes by id, creates nothing, and neither
   holds off a CI's expiry nor brings an unseen one back. Its report is not
-  spooled: conditions are now, and the next run writes them.
+  spooled: conditions are now, and the next run writes them. A CMDB that does
+  not answer (cmdb-controller restarting) is no failure: `assess` warns, writes
+  nothing and exits 0, as `emit` does; a report the CMDB refuses still fails.
 - `health-manager report` is `assess` under the name every `cmdbSource` answers
   to (`--from <file>` takes the gates from a saved `validate --json`, `--json`
   prints the payload). `TAPPAAS_CMDB=off` writes nothing.
