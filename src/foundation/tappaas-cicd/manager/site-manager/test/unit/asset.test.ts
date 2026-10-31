@@ -150,11 +150,18 @@ const gone: PositionsDoc = {
   ],
 } as unknown as PositionsDoc;
 const rm = assetRemovalSteps(gone, "srv-07");
-check(rm.steps.map((x) => x.join(" ")).join("; ") === "cable remove srv-07:1; cable remove srv-07:2; unplace srv-07; asset remove srv-07", `cables, then the placement, then the record (${rm.steps.map((x) => x.join(" ")).join("; ")})`);
-check(rm.cables === 2 && rm.placed === "rack1 U30", "what it removes, for the preview");
-check(assetRemovalSteps(gone, "srv-08").steps.map((x) => x.join(" ")).join("; ") === "cable remove srv-08:1; asset remove srv-08", "an asset in stock: no unplace");
+check(rm.steps.map((x) => x.join(" ")).join("; ") === "cable remove srv-07:1; cable remove srv-07:2; unplace srv-07; asset remove srv-07 --with-disks", `cables, then the placement, then the record with its disks (${rm.steps.map((x) => x.join(" ")).join("; ")})`);
+check(rm.cables === 2 && rm.placed === "rack1 U30" && rm.disks === 0, "what it removes, for the preview");
+const withDisks: PositionsDoc = {
+  ...gone,
+  assets: { ...gone.assets, "dsk-01": { kind: "disk", stage: "placed", serial: "D1" }, "dsk-02": { kind: "disk", stage: "placed", serial: "D2" }, "dsk-03": { kind: "disk", stage: "stock", serial: "D3" } },
+  placements: { ...gone.placements, "dsk-01": { in: "srv-07", bay: "sda" }, "dsk-02": { in: "srv-07", bay: "sdb" } },
+} as unknown as PositionsDoc;
+const rmd = assetRemovalSteps(withDisks, "srv-07");
+check(rmd.disks === 2 && rmd.steps[rmd.steps.length - 1].join(" ") === "asset remove srv-07 --with-disks", `the disks it holds go with it: counted for the preview, --with-disks (${rmd.disks})`);
+check(assetRemovalSteps(gone, "srv-08").steps.map((x) => x.join(" ")).join("; ") === "cable remove srv-08:1; asset remove srv-08 --with-disks", "an asset in stock: no unplace");
 const playing = assetRemovalSteps(doc, "srv-01");
-check(playing.steps.map((x) => x.join(" ")).join("; ") === "unplace tappaas1; asset remove srv-01", "an asset still in a role is named as it plays");
+check(playing.steps.map((x) => x.join(" ")).join("; ") === "unplace tappaas1; asset remove srv-01 --with-disks", "an asset still in a role is named as it plays");
 check(assetRemovalSteps(gone, "srv-99").steps.length === 0, "no such asset: nothing");
 
 // 9. node add completes a known asset's record from the machine

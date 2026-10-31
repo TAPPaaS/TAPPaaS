@@ -155,7 +155,8 @@ export function allocateNodeAsset(name: string, host: string | null, asset?: str
 // node delete: the role ends (D7). fate keep: the asset keeps its placement
 // and cables under its own name, in stock or placed for its next role.
 // fate remove: the machine leaves the site — released, then its recorded
-// cables, its placement and its record removed, each by asset-manager's verb
+// cables, its placement and its record removed, with the records of the
+// disks it holds (they leave with it), each by asset-manager's verb
 // (which reports the change to the CMDB). What would happen, for the
 // preview, when `apply` is false.
 export function releaseNodeAsset(name: string, apply: boolean, fate: AssetFate = "keep", configDir = defaultConfigDir()): void {
@@ -171,7 +172,7 @@ export function releaseNodeAsset(name: string, apply: boolean, fate: AssetFate =
     else {
       const r = assetRemovalSteps(doc, a.key);
       const parts = [r.cables ? `its ${r.cables} recorded cable(s)` : "", r.placed ? `its placement in ${r.placed}` : "", "its record"].filter(Boolean);
-      info(`  then: asset ${a.key} is released from ${name} and removed: ${parts.join(", ")}`);
+      info(`  then: asset ${a.key} is released from ${name} and removed: ${parts.join(", ")}${disksWords(r.disks)}`);
     }
     return;
   }
@@ -186,12 +187,16 @@ export function releaseNodeAsset(name: string, apply: boolean, fate: AssetFate =
   }
   info(`${GN}✓${CL} asset ${a.key} released from ${name}`);
   const after = readPositions(configDir) ?? doc;
-  for (const step of assetRemovalSteps(after, a.key).steps) {
+  const r2 = assetRemovalSteps(after, a.key);
+  for (const step of r2.steps) {
     const s = assetManager(step);
     if (s.rc !== 0) {
       warn(`asset ${a.key} is not removed: asset-manager ${step.join(" ")}: ${s.out} — run the rest by hand (asset-manager asset show ${a.key})`);
       return;
     }
   }
-  info(`${GN}✓${CL} asset ${a.key} removed: its cables, placement and record`);
+  info(`${GN}✓${CL} asset ${a.key} removed: its cables, placement and record${disksWords(r2.disks)}`);
 }
+
+// The disks' records that go with a removed asset, in words.
+const disksWords = (n: number): string => (n ? ` and its ${n === 1 ? "disk's record" : `${n} disks' records`}` : "");
