@@ -48,9 +48,20 @@ buddy's peer add) offers the site's locations as a dropdown, the primary presele
 buddy, which is elsewhere), with a link to the Site page's Locations section (`/site#locations`)
 for one the site does not have yet.
 
-**Overview** — the strip (gates, pulse, last sweep, backups, release, security) and Attention:
-every FAIL and WARN with the object it names, a link to it in the console and its "Open in"
-jumps. **Site** — the site as built, in four tabs, each at its own address: Overview
+**Overview** — the site at a glance, top to bottom. **Four tiles**, two by two, each an overview of
+one area drawn from what its own page reads, its header a link to that page and its colour the worst
+open condition on the area's objects (from `health/summary`; without conditions, the worst of what
+the tile itself shows): **Site** (the site's name, its locations with the primary first, each node
+with its state, the cluster's quorum from the `quorum` gate, storage used of total over every
+pool), **Environment** (each environment with its zone, its modules' maturity and how many modules
+it holds), **Modules** (how many are running, stopped, updating — an update job running — and
+archived, the last updates of a module or the sweep, the modules whose health fails or warns) and
+**Identity** (users, groups and roles, and the identity provider, the `identity` module: its run
+state and health). **Health**: the health line (critical, warning and ok objects, the open root
+causes, what is silenced and unknown), the last sweep, backups, the release and security.
+**Alerts**: the ten open events from `operations`, critical first and the newest first within each,
+one line each (status, class and name, what is wrong, since) opening it on the Operations page with
+its Health panel; a link to the Operations page for the rest. **Site** — the site as built, in four tabs, each at its own address: Overview
 (`/site/overview`, also `/site`), Physical (`/site/physical`), Assets (`/site/assets`) and Storage
 (`/site/storage`); the earlier addresses (`/physical`, `/site/physical/<view>`) redirect to them.
 **Overview** sums the other three: the site in one line (nodes, switches, APs, racks, pools,
@@ -263,8 +274,7 @@ with source and since. **History**, folded: every period of every attribute and 
 change that touched it, the newest first, a change with its verb, actor and job. Every CI named in
 the record opens its own record in the panel; Back returns the way it came.
 
-**Entry.** `/health?select=<id>` opens on one object; a root opens with its symptoms expanded, so the
-Overview's Attention links land there. With nothing asked for the page opens on the worst root, and
+**Entry.** `/health?select=<id>` opens on one object; a root opens with its symptoms expanded. With nothing asked for the page opens on the worst root, and
 on the site when nothing is wrong. A site that has not run `assess` gets grey dots and says so.
 **Filters** (condition type, class, environment) dim what they leave out in the tree and the graph,
 and a type recolours the graph by that type; the slider replays a week of colours in the graph from
@@ -272,7 +282,7 @@ the attribute history (`health/ego/<id>?at=`). **Live:** roll-ups and colours fo
 without a reload; a new root shows in the tree and nothing moves the selection. On a phone the tree
 is a sheet and the panel a drawer.
 
-The Overview's health line (which links here) and Attention, its Backups card, the Backup page's
+The Overview's tile colours, its health line (which links here) and its Backups card, the Backup page's
 Health section, the Modules list's health badge and a module page's Health section read
 the worst condition of their objects from `health/summary` and `modules`, so every page agrees with the
 view; each falls back to `health` (validate) while the CMDB holds no conditions or does not answer.

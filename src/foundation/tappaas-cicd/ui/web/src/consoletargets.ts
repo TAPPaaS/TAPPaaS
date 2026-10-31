@@ -76,7 +76,7 @@ export const WIZARDS: WizardDef[] = [
 
 // The pages, by path; <module> is a module's name.
 export const PAGES: { path: string; title: string }[] = [
-  { path: "/", title: "the Overview" },
+  { path: "/", title: "the Overview (four tiles: Site, Environment, Modules, Identity; Health, the health line and the gates; Alerts, the ten open events that matter most)" },
   { path: "/setup", title: "the Day 1 setup wizard until the site is set up, then the Day 2 wizards" },
   { path: "/setup/day1", title: "the Day 1 setup wizard" },
   { path: "/setup/day2", title: "the Day 2 wizards" },
