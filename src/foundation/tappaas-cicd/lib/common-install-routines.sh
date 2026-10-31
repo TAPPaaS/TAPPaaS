@@ -1800,6 +1800,53 @@ function wait_for_guest_settled() {
   done
 }
 
+# The node a container runs on, empty when no node answers.
+function lxc_node_of() {
+  local vmid="$1" n node
+  for n in $(get_all_node_hostnames 2>/dev/null); do
+    node="$(ssh -n -o BatchMode=yes -o ConnectTimeout=8 "root@${n}.mgmt.internal" \
+              "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
+            | jq -r --argjson id "${vmid}" '.[] | select(.vmid == $id and .type == "lxc") | .node' 2>/dev/null)" || node=""
+    [[ -n "${node}" ]] && { printf '%s\n' "${node}"; return 0; }
+  done
+  return 0
+}
+
+# Block until a container has finished booting, asked through its node (#910): a
+# container need not run sshd, and "Connection refused" says nothing about its
+# boot. Its clock is its node's, so there is no clock to wait for. Returns at once
+# when it cannot be asked (no node knows it, no systemd in it), 1 on timeout.
+#
+# Usage: wait_for_container_settled <vmid> [timeout_seconds]
+function wait_for_container_settled() {
+  local vmid="$1" max_wait="${2:-300}" waited=0 interval=5 node out
+  node="$(lxc_node_of "${vmid}")"
+  if [[ -z "${node}" ]]; then
+    debug "  no node reports container ${vmid} — not waiting"
+    return 0
+  fi
+  while :; do
+    out="$(ssh -n -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+             -o LogLevel=ERROR "root@${node}.mgmt.internal" \
+             "pct exec ${vmid} -- systemctl is-system-running" 2>&1)" || true
+    case "${out}" in
+      *initializing*|*starting*|*"not running"*) ;;
+      *running*|*degraded*|*maintenance*|*stopping*)
+        [[ ${waited} -gt 0 ]] && debug "  container ${vmid} finished booting (${waited}s)"
+        return 0 ;;
+      *"not found"*|*"Permission denied"*|*"Host key verification failed"*)
+        debug "  container ${vmid} cannot be asked whether it has booted — not waiting"
+        return 0 ;;
+    esac
+    if [[ ${waited} -ge ${max_wait} ]]; then
+      warn "  container ${vmid} had not finished booting after ${max_wait}s (${out##*$'\n'})"
+      return 1
+    fi
+    sleep "${interval}"
+    waited=$((waited + interval))
+  done
+}
+
 # True when EVERY port in the space-separated list accepts a connection.
 # Port 22 is probed from here (it is the gate that lets us probe the rest);
 # every other port is probed on the VM itself against 127.0.0.1 in ONE ssh

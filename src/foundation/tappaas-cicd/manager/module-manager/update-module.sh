@@ -445,9 +445,15 @@ trap cleanup_update_files EXIT
 # module's guest takes no ssh ("sshAccess": false: an appliance such as Home
 # Assistant OS). The wait asks over ssh, so for such a guest it only ever heard
 # "Connection refused" and spent its whole timeout (300 s before an update,
-# 180 s after a rollback). Its ready.sh, if any, still says when it is up.
+# 180 s after a rollback). Its ready.sh, if any, still says when it is up. A
+# container is asked through its node, sshd or not (#910).
 settle_guest() {
     local module="$1" host="$2" timeout="$3"
+    if jq -e '.kind == "lxc" or ((.dependsOn // []) | index("cluster:lxc") != null)' \
+            "${CONFIG_DIR}/${module}.json" >/dev/null 2>&1; then
+        wait_for_container_settled "$(jq -r '.vmid // empty' "${CONFIG_DIR}/${module}.json")" "${timeout}"
+        return
+    fi
     if jq -e '[.sshAccess, (.config["cluster:vm"] // {}).sshAccess] | any(. == false)' \
             "${CONFIG_DIR}/${module}.json" >/dev/null 2>&1; then
         debug "  ${host} takes no ssh (sshAccess=false) — not asking whether it has booted"

@@ -208,6 +208,22 @@ settled() { local rc=0; ANSWERS=("$@"); echo 0 > "${WORK}/calls"
             wait_for_guest_settled g.mgmt.internal 20 >/dev/null 2>&1 || rc=$?
             CALLS=$(cat "${WORK}/calls"); return "${rc}"; }
 
+# #910: a container is asked through its node, and sshd has no part in it.
+lxc_node_of() { echo tappaas1; }
+csettled() { local rc=0; ANSWERS=("$@"); echo 0 > "${WORK}/calls"
+             wait_for_container_settled 631 20 >/dev/null 2>&1 || rc=$?
+             CALLS=$(cat "${WORK}/calls"); return "${rc}"; }
+csettled "running" && [[ ${CALLS} -eq 1 ]] && pass "a booted container: one ask through its node, no wait" || fail "container running (calls=${CALLS})"
+csettled "degraded" && [[ ${CALLS} -eq 1 ]] && pass "degraded counts as booted for a container too" || fail "container degraded"
+csettled "CT 631 not running" "starting" "running" && [[ ${CALLS} -eq 3 ]] \
+    && pass "a container still starting is waited for" || fail "container boot (calls=${CALLS})"
+csettled "exec: systemctl: not found" && [[ ${CALLS} -eq 1 ]] && pass "a container without systemd is not waited on" || fail "container without systemd (calls=${CALLS})"
+RCC=0; csettled "starting" || RCC=$?
+[[ ${RCC} -eq 1 ]] && pass "a container that never settles: a timeout" || fail "container timeout (rc=${RCC})"
+lxc_node_of() { :; }
+csettled "starting" && [[ ${CALLS} -eq 0 ]] && pass "no node knows the container: nothing to ask, no wait" || fail "unknown container (calls=${CALLS})"
+unset -f lxc_node_of
+
 settled "STATE running NTP yes" && [[ ${CALLS} -eq 1 ]] && pass "a settled guest with a synchronised clock: one ask, no wait" || fail "settled guest (calls=${CALLS})"
 settled "STATE running" && [[ ${CALLS} -eq 1 ]] && pass "a guest that does not report its clock is not waited on" || fail "no NTP field (calls=${CALLS})"
 # #716: booted, clock not synchronised yet — wait for it, a bounded time
