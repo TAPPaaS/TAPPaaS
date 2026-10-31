@@ -585,7 +585,7 @@ export function removeAsset(doc: PositionsDoc, name: string): Result {
   const at = currentName(name, a);
   if (placementsOf(doc)[at]) return { refused: `${at} is placed — unplace ${at} first` };
   const held = disksIn(doc, name);
-  if (held.length) return { refused: `${name} holds the disk(s) ${held.map((x) => x.key).join(", ")} — unplace or move them first` };
+  if (held.length) return { refused: `${name} holds the disk(s) ${held.map((x) => x.key).join(", ")} — --with-disks removes their records with it, --disks-to-stock unplaces them into stock first (or unplace or move them)` };
   const cables = cablesOf(doc).filter((c) => c.from.device === at || c.to.device === at);
   const e = cables[0]?.from.device === at ? cables[0].from : cables[0]?.to;
   if (cables.length) return { refused: `${at} is an end of ${cables.length} recorded cable(s) — cable remove '${e.device}:${e.port}' first` };
@@ -642,11 +642,78 @@ export function disposeAsset(doc: PositionsDoc, name: string, how: string | unde
   if (a.role) return { refused: `${name} plays ${a.role} — asset release ${name} first` };
   if (placementsOf(doc)[name]) return { refused: `${name} is placed in ${placeWhere(placementsOf(doc)[name])} — unplace ${name} first` };
   const held = disksIn(doc, name);
-  if (held.length) return { refused: `${name} holds the disk(s) ${held.map((x) => x.key).join(", ")} — unplace them (or dispose of them) first: was each wiped?` };
+  if (held.length) return { refused: `${name} holds the disk(s) ${held.map((x) => x.key).join(", ")} — --with-disks disposes of them with it (each wiped as --wiped says), --disks-to-stock unplaces them into stock first` };
   const cable = cablesOf(doc).find((c) => c.from.device === name || c.to.device === name);
   if (cable) return { refused: `${name} is an end of the recorded cable ${endText(cable.from)} — ${endText(cable.to)}: cable remove it first` };
   const disposal: Disposal = { how: how as Disposal["how"], when, ...(wiped ? { wiped: true } : {}) };
   return { doc: withDoc(doc, (d) => Object.assign(d.assets[name], { stage: "disposed", disposal })), act: "dispose", what: `asset '${name}' (${how}, ${when}${wiped ? ", disks wiped" : ""}); its record stays` };
+}
+
+// What becomes of the disks an asset holds when it is removed or disposed
+// of: they go with it, or they are unplaced into stock first (for reuse).
+export type DiskWay = "with-disks" | "to-stock";
+// A verb of several steps, each a change of its own (in order, each over the
+// one before): what the CMDB is told step by step; the file saved once.
+export type Steps = { steps: Change[] } | { refused: string };
+
+// Run the steps over doc; the first refusal refuses them all.
+function chain(doc: PositionsDoc, fns: Array<(d: PositionsDoc) => Result>): Steps {
+  const steps: Change[] = [];
+  let cur = doc;
+  for (const fn of fns) {
+    const r = fn(cur);
+    if ("refused" in r) return r;
+    steps.push(r);
+    cur = r.doc;
+  }
+  return { steps };
+}
+
+// The steps that take an asset's disks out of it: to stock (unplaced), or
+// with it (their recorded cables, then each disk's placement and record; a
+// disposal unplaces each and disposes of it, wiped as the asset says).
+function diskSteps(doc: PositionsDoc, name: string, way: DiskWay | undefined, dispose?: { how: string | undefined; wiped: boolean; when: string }): Array<(d: PositionsDoc) => Result> {
+  if (!way) return [];
+  const fns: Array<(d: PositionsDoc) => Result> = [];
+  for (const { key } of disksIn(doc, name)) {
+    if (way === "to-stock") {
+      fns.push((d) => unplaceDevice(d, key, false));
+      continue;
+    }
+    for (const c of cablesOf(doc).filter((x) => x.from.device === key || x.to.device === key)) fns.push((d) => removeCable(d, c.from.device === key ? c.from : c.to));
+    if (!dispose) {
+      fns.push((d) => removeDisk(d, key));
+      continue;
+    }
+    // Out of its asset and disposed of: one step, as the CMDB sees it.
+    fns.push((d) => {
+      const m = placementsOf(d)[key];
+      const out = unplaceDevice(d, key, false);
+      if ("refused" in out) return out;
+      const r = disposeAsset(out.doc, key, dispose.how, dispose.wiped, dispose.when);
+      if ("refused" in r) return r;
+      return { ...r, what: `disk '${key}'${m ? `, ${placeWhere(m)}` : ""} (${dispose.how}, ${dispose.when}${dispose.wiped ? ", wiped" : ""}); its record stays` };
+    });
+  }
+  return fns;
+}
+
+// asset remove <asset> --with-disks | --disks-to-stock — the record goes,
+// and the disks it holds with it or into stock first. The asset's own
+// conditions are checked before any disk is touched: one refusal, no change.
+export function removeAssetSteps(doc: PositionsDoc, name: string, way?: DiskWay): Steps {
+  const own = removeAsset({ ...doc, placements: Object.fromEntries(Object.entries(placementsOf(doc)).filter(([, m]) => m.in !== name)) }, name);
+  if ("refused" in own) return own;
+  return chain(doc, [...diskSteps(doc, name, way), (d) => removeAsset(d, name)]);
+}
+
+// asset dispose <asset> … --with-disks | --disks-to-stock — the same for a
+// disposal: its disks disposed of with it (the one --wiped answer), or in
+// stock first.
+export function disposeAssetSteps(doc: PositionsDoc, name: string, how: string | undefined, wiped: boolean, when: string, way?: DiskWay): Steps {
+  const own = disposeAsset({ ...doc, placements: Object.fromEntries(Object.entries(placementsOf(doc)).filter(([, m]) => m.in !== name)) }, name, how, wiped, when);
+  if ("refused" in own) return own;
+  return chain(doc, [...diskSteps(doc, name, way, { how, wiped, when }), (d) => disposeAsset(d, name, how, wiped, when)]);
 }
 
 // Every placement and recorded cable end named `from` is named `to`: what a

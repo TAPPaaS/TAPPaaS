@@ -74,7 +74,6 @@ import {
   addPort,
   allocateAsset,
   deleteFaceplate,
-  disposeAsset,
   faultAsset,
   modifyAsset,
   modifyFaceplate,
@@ -83,7 +82,10 @@ import {
   receiveAsset,
   recordSeen,
   releaseAsset,
-  removeAsset,
+  removeAssetSteps,
+  disposeAssetSteps,
+  DiskWay,
+  Steps,
   removePort,
   repairAsset,
   placeDevice,
@@ -109,6 +111,8 @@ const VERSION = "0.3.0";
 
 const CHECK: [string, string] = ["--check", "Say what would change, in one line; change nothing."];
 const CHECK_JSON: [string, string] = ["--json", "With --check: the whole resulting positions.json, for machines."];
+const WITH_DISKS: [string, string] = ["--with-disks", "The disks it holds go with it: their recorded cables, placements and records."];
+const DISKS_TO_STOCK: [string, string] = ["--disks-to-stock", "The disks it holds are unplaced first: they stay recorded, in stock, for reuse."];
 const TOPO: [string, string] = ["--topology F", "A `network-manager topology --json` document to check against, instead of running it."];
 const JSON_OUT: [string, string] = ["--json", "As JSON."];
 
@@ -233,7 +237,13 @@ export const HELP: HelpSpec = {
       object: { positional: "asset" },
       aliases: ["device modify"],
     },
-    { usage: "asset remove <asset> [--check]", options: [CHECK, CHECK_JSON], note: "(a record made by mistake: unplaced, in no role, no recorded cable; a disposed asset's record stays)", object: { positional: "asset" }, aliases: ["device remove"] },
+    {
+      usage: "asset remove <asset> [--with-disks | --disks-to-stock] [--check]",
+      options: [WITH_DISKS, DISKS_TO_STOCK, CHECK, CHECK_JSON],
+      note: "(a record made by mistake: unplaced, in no role, no recorded cable; a disposed asset's record stays. One that holds disks needs --with-disks or --disks-to-stock)",
+      object: { positional: "asset" },
+      aliases: ["device remove"],
+    },
     {
       usage: "asset record <port-or-mac> [--name <asset>] --kind <kind> [--port <name>] [--model <vendor/model>] [--location <location>] [--display-name <text>] [--description <text>] [--topology <file>] [--check]",
       options: [
@@ -255,9 +265,9 @@ export const HELP: HelpSpec = {
     { usage: "asset fault <asset> --note <text> [--check]", options: [["--note T", "What is wrong."], CHECK, CHECK_JSON], note: "(the faulty flag, beside its stage)", object: { positional: "asset" } },
     { usage: "asset repaired <asset> [--check]", options: [CHECK, CHECK_JSON], note: "(the faulty flag and its note cleared)", object: { positional: "asset" } },
     {
-      usage: "asset dispose <asset> --how sold|recycled|returned|lost [--wiped] [--when <date>] [--check]",
-      options: [["--how H", "sold, recycled, returned or lost."], ["--wiped", "Its disks were wiped."], ["--when D", "When, YYYY-MM-DD (default: today)."], CHECK, CHECK_JSON],
-      note: "(it leaves the site; refused while it has a role, a placement or a recorded cable; its record stays)",
+      usage: "asset dispose <asset> --how sold|recycled|returned|lost [--wiped] [--when <date>] [--with-disks | --disks-to-stock] [--check]",
+      options: [["--how H", "sold, recycled, returned or lost."], ["--wiped", "Its disks were wiped."], ["--when D", "When, YYYY-MM-DD (default: today)."], ["--with-disks", "The disks it holds are disposed of with it, wiped as --wiped says."], DISKS_TO_STOCK, CHECK, CHECK_JSON],
+      note: "(it leaves the site; refused while it has a role, a placement or a recorded cable; its record stays. One that holds disks needs --with-disks or --disks-to-stock)",
       destructive: true,
       object: { positional: "asset" },
     },
@@ -525,6 +535,45 @@ function change(store: Store, check: boolean, devices: SiteDevice[] | null | und
     store.save(r.doc);
     info(`${GN}✓${CL} ${changeLine(r, false)}`);
     if (before) reportChange(store, before, r.doc);
+    return 0;
+  });
+}
+
+// What becomes of the disks an asset holds: --with-disks or --disks-to-stock.
+function diskWay(args: string[]): DiskWay | undefined {
+  const w = args.includes("--with-disks");
+  const s = args.includes("--disks-to-stock");
+  if (w && s) die("--with-disks or --disks-to-stock, not both");
+  return w ? "with-disks" : s ? "to-stock" : undefined;
+}
+
+// changeSteps — change() for a verb of several steps: each step a line, the
+// file checked and saved once (a refusal anywhere changes nothing), and each
+// step reported to the CMDB in turn, as its single verb would.
+function changeSteps(store: Store, check: boolean, fn: (doc: PositionsDoc) => Steps): number {
+  if (!check && store.legacy) die(`${store.legacy} is still there: migration 0020 makes it config/positions.json (the next update, or scripts/run-migrations.sh) — nothing was changed`);
+  if (!check && store.load().devices) die(`config/positions.json still records devices{}: migration 0027 makes them assets{} (the next update, or scripts/run-migrations.sh) — nothing was changed`);
+  return store.withLock(() => {
+    const start = store.load();
+    const r = fn(start);
+    if ("refused" in r) return check ? refuse(r.refused) : die(r.refused);
+    const last = r.steps[r.steps.length - 1].doc;
+    const findings = checkPositions(last, readShipped(), null, siteLocs(store.configDir)).filter((f) => !f.message.startsWith("the topology could not be read"));
+    if (check) {
+      const errors = findings.filter((f) => f.severity === "error");
+      if (errors.length) return refuse(`config/positions.json would not be valid: ${errors.map((f) => f.message).join("; ")}`);
+      if (quiet) return out(last);
+      for (const c of r.steps) info(`[check] ${changeLine(c, true)}`);
+      return 0;
+    }
+    if (report(findings)) die("config/positions.json would not be valid — nothing was changed");
+    store.save(last);
+    for (const c of r.steps) info(`${GN}✓${CL} ${changeLine(c, false)}`);
+    let before = viewOf(store, start);
+    for (const c of r.steps) {
+      reportChange(store, before, c.doc);
+      before = viewOf(store, c.doc);
+    }
     return 0;
   });
 }
@@ -979,18 +1028,25 @@ export function run(argv: string[]): number {
     const [given] = positional(args, 2);
     if (!given) die("asset remove <asset>");
     const name = assetKey(store, given);
-    return change(store, check, undefined, (d) => removeAsset(d, name));
+    const way = diskWay(args);
+    return changeSteps(store, check, (d) => removeAssetSteps(d, name, way));
   }
-  if (verb === "asset receive" || verb === "asset fault" || verb === "asset repaired" || verb === "asset dispose" || verb === "asset release") {
+  if (verb === "asset dispose") {
+    const [given] = positional(args, 2);
+    if (!given) die("asset dispose <asset>");
+    const name = assetKey(store, given);
+    const way = diskWay(args);
+    const today = new Date().toISOString().slice(0, 10);
+    return changeSteps(store, check, (d) => disposeAssetSteps(d, name, opt(args, "--how"), args.includes("--wiped"), opt(args, "--when") ?? today, way));
+  }
+  if (verb === "asset receive" || verb === "asset fault" || verb === "asset repaired" || verb === "asset release") {
     const [given] = positional(args, 2);
     if (!given) die(`${verb} <asset>`);
     const name = assetKey(store, given);
-    const today = new Date().toISOString().slice(0, 10);
     return change(store, check, undefined, (d) =>
       verb === "asset receive" ? receiveAsset(d, name)
       : verb === "asset fault" ? faultAsset(d, name, opt(args, "--note"))
       : verb === "asset repaired" ? repairAsset(d, name)
-      : verb === "asset dispose" ? disposeAsset(d, name, opt(args, "--how"), args.includes("--wiped"), opt(args, "--when") ?? today)
       : releaseAsset(d, name),
     );
   }

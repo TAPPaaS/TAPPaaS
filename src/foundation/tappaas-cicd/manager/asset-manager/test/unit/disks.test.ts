@@ -10,7 +10,8 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { PositionsDoc, assetWithSerial, checkPositions, disksIn, nextTag, parseSize, placeWhere, recordedDevicesOf, roomOf, serialKey, stageOf } from "../../../../lib/ts/src/positions";
 import { serverDisks } from "../../src/main";
-import { Result, addAsset, addDisk, adoptDisks, allocateAsset, disposeAsset, modifyDisk, placeDevice, placeDisk, removeAsset, removeDisk, unplaceDevice } from "../../src/verbs";
+import { Result, Steps, addAsset, addDisk, adoptDisks, allocateAsset, disposeAsset, disposeAssetSteps, modifyDisk, placeDevice, placeDisk, removeAsset, removeAssetSteps, removeDisk, unplaceDevice } from "../../src/verbs";
+import { changeReport, cmdbView } from "../../src/cmdb";
 
 let passed = 0;
 let failed = 0;
@@ -27,7 +28,7 @@ const doc = (r: Result): PositionsDoc => {
   if ("refused" in r) throw new Error(r.refused);
   return r.doc;
 };
-const refused = (r: Result, needle: string): boolean => "refused" in r && r.refused.includes(needle);
+const refused = (r: Result | Steps, needle: string): boolean => "refused" in r && r.refused.includes(needle);
 // The errors a document has beyond the fixture's own (its faceplates are not
 // in the empty catalog used here).
 const allErrs = (d: PositionsDoc) => checkPositions(d, [], null).filter((f) => f.severity === "error").map((f) => f.message);
@@ -93,6 +94,45 @@ check(refused(disposeAsset(spare, "srv-04", "recycled", false, "2026-10-31"), "h
 const emptyish = doc(addDisk(doc0, "patchpanel1", "sda", { serial: "PP1" }));
 check(refused(removeAsset(emptyish, "patchpanel1"), "holds the disk"), "asset remove: refused while it holds a disk");
 check(refused(allocateAsset(d2, "dsk-01", "tappaas9", null), "plays no role"), "asset allocate: a disk plays no role");
+
+// ── remove and dispose with the disks it holds ────────────────────────────
+const stepsOf = (r: Steps) => {
+  if ("refused" in r) throw new Error(r.refused);
+  return r.steps;
+};
+const two = doc(addDisk(spare, "srv-04", "sdb", { serial: "SP2" }));
+const held = Object.keys(two.assets ?? {}).filter((k) => two.placements?.[k]?.in === "srv-04");
+check(held.length === 2, `the spare holds two disks (${held.join(", ")})`);
+check(refused(removeAsset(two, "srv-04"), "--with-disks") && refused(removeAsset(two, "srv-04"), "--disks-to-stock"), "asset remove: the refusal names both options");
+check(refused(removeAssetSteps(two, "srv-04"), "holds the disk"), "asset remove: without an option, still refused");
+const rw = stepsOf(removeAssetSteps(two, "srv-04", "with-disks"));
+const rwDoc = rw[rw.length - 1].doc;
+check(rw.length === 3 && rw[0].what.startsWith(`disk '${held[0]}'`) && rw[2].what === "asset 'srv-04'", `--with-disks: each disk's record, then the asset's (${rw.map((c) => c.what).join(" | ")})`);
+check(!rwDoc.assets?.["srv-04"] && held.every((k) => !rwDoc.assets?.[k] && !rwDoc.placements?.[k]), "--with-disks: the asset and its disks are gone, placements too");
+check(errs(rwDoc).length === 0, `--with-disks: the document stays valid (${errs(rwDoc).join("; ")})`);
+const rs = stepsOf(removeAssetSteps(two, "srv-04", "to-stock"));
+const rsDoc = rs[rs.length - 1].doc;
+check(rs.length === 3 && rs[0].what.startsWith(`placement of '${held[0]}'`) && rs[0].what.includes("(in stock)"), `--disks-to-stock: each disk unplaced first (${rs[0].what})`);
+check(!rsDoc.assets?.["srv-04"] && held.every((k) => rsDoc.assets?.[k]?.stage === "stock" && !rsDoc.placements?.[k]), "--disks-to-stock: the asset gone, its disks recorded, in stock");
+check(errs(rsDoc).length === 0, "--disks-to-stock: the document stays valid");
+check("steps" in removeAssetSteps(spare, "srv-04", "with-disks") && stepsOf(removeAssetSteps(doc(addAsset(doc0, "srv-05", { kind: "server" }, [], null)), "srv-05", "with-disks")).length === 1, "an option on an asset with no disks: the asset's one step");
+const racked = doc(placeDevice(two, "srv-04", { rack: Object.keys(two.racks ?? {})[0], u: 40, height: 1 }, []));
+check(refused(removeAssetSteps(racked, "srv-04", "with-disks"), "is placed"), "--with-disks: the asset's own refusal comes before any disk is touched");
+check(refused(disposeAsset(two, "srv-04", "recycled", true, "2026-10-31"), "--with-disks"), "asset dispose: the refusal names the options");
+const dw = stepsOf(disposeAssetSteps(two, "srv-04", "recycled", true, "2026-10-31", "with-disks"));
+const dwDoc = dw[dw.length - 1].doc;
+check(dw.length === 3 && dw[0].what.startsWith(`disk '${held[0]}', in srv-04`) && dw[0].what.includes("wiped") && dw[2].what.startsWith("asset 'srv-04'"), `dispose --with-disks: each disk out of it and disposed of, then the asset (${dw.map((c) => c.what).join(" | ")})`);
+check(held.every((k) => dwDoc.assets?.[k]?.stage === "disposed" && dwDoc.assets[k].disposal?.wiped === true && !dwDoc.placements?.[k]) && dwDoc.assets?.["srv-04"]?.stage === "disposed", "dispose --with-disks: the disks disposed of, wiped as --wiped says, records kept");
+check(errs(dwDoc).length === 0, "dispose --with-disks: the document stays valid");
+const ds = stepsOf(disposeAssetSteps(two, "srv-04", "sold", false, "2026-10-31", "to-stock"));
+const dsDoc = ds[ds.length - 1].doc;
+check(held.every((k) => dsDoc.assets?.[k]?.stage === "stock") && dsDoc.assets?.["srv-04"]?.stage === "disposed", "dispose --disks-to-stock: the disks in stock, the asset disposed of");
+check(refused(disposeAssetSteps(two, "srv-04", "melted", false, "2026-10-31", "with-disks"), "--how"), "dispose --with-disks: the asset's own refusal first");
+// What the CMDB is told, step by step: a disk's CI ends before its asset's.
+const v0 = cmdbView(two, [], null);
+const ended = (a: PositionsDoc, b: PositionsDoc) => (changeReport(cmdbView(a, [], null), cmdbView(b, [], null), {}).report?.objects ?? []).filter((o) => o.end).map((o) => o.class);
+check(v0.objects.some((o) => o.class === "disk"), "the spare's disks are CIs");
+check(ended(two, rw[0].doc).join() === "disk" && ended(rw[1].doc, rw[2].doc).includes("server") && !ended(rw[1].doc, rw[2].doc).includes("disk"), `--with-disks: the first step ends a disk CI, the last the asset's (${ended(rw[1].doc, rw[2].doc).join()})`);
 
 // ── the whole-document check ──────────────────────────────────────────────
 const bad1: PositionsDoc = { ...d2, placements: { ...d2.placements, "dsk-01": { rack: "rack1", u: 30, height: 1, width: "full", face: "front" } } };
