@@ -99,7 +99,7 @@ empty `config/.cmdb-spool/`.
   - no plane: `switch-ports` (actual file + jq), `mlag-pairs`, `signature-status`, `control-plane-trust`, `cve-status` (files), `cmdb` and the `sweep` source (CMDB `GET /v1/sweep`, twice), `thresholds`, `observations`, `settle`, `derive`.
   Gates unchanged (O3); first cheap wins without restructuring would be one `nodeCapacity()`, one Grafana fetch, one ping round, and ssh ControlMaster.
 - 284 of 349 objects stayed `unknown`. Fixed by plan step 2 (ADR-041 v1.3); replayed over the live objects, 0 of 424 stay grey. Not yet deployed.
-- The graph is a thin strip at a narrow width even on six roots.
+- ~~The graph is a thin strip at a narrow width even on six roots.~~ Fixed 2026-10-31: dagre put a whole rank on one line; a rank too wide for the canvas now wraps into rows, as many as fit the canvas at the largest scale, and lays out again when the canvas changes size. `ui/web/dist` not rebuilt, so not yet in the page; not looked at in a browser.
 - ~~The summary shows `0 silenced` with a condition acked while the object has another open one.~~ Fixed 2026-10-31: the console counted silenced per object, and only when its colour was all silenced; it now counts silenced conditions, the colours stay per object (console backend, `ui/src/health.ts`). Not yet deployed.
 - ~~`health.assessInterval` has no `site modify` option.~~ Fixed 2026-10-30: `site modify --set health.assessInterval=<min>` (`--healthAssessInterval`), 1-1440.
 - From the ADR-040 run, unchanged: `module-manager modify` preview says `config-only` but runs a full update; the site-manager `schedule` test on `alerts`.

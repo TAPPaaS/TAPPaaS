@@ -192,6 +192,68 @@ export function boundsOf(nodes: { position: { x: number; y: number }; data: { g:
   return { x: (left + right - width) / 2, y: (top + bottom - height) / 2, width, height };
 }
 
+// A wide rank wraps into rows. dagre puts every card of a rank on one line, so
+// an object with many neighbours lays out far wider than tall and the fit
+// shrinks it to a strip. Each rank is cut into rows of at most k cards, k the
+// one that lets the whole fit the canvas at the largest scale; a rank of k or
+// fewer keeps dagre's places, a wrapped one is centred where it stood. Returns
+// the cards that move, none when no wrap does better.
+export interface Placed { id: string; x: number; y: number; w: number; h: number }
+
+export function wrapRanks(boxes: Placed[], view: { width: number; height: number }, gapX: number, gapY: number, maxZoom = 1.25): Map<string, { x: number; y: number }> {
+  const moved = new Map<string, { x: number; y: number }>();
+  if (!boxes.length || view.width <= 0 || view.height <= 0) return moved;
+  const byRank = new Map<number, Placed[]>();
+  for (const b of boxes) {
+    const k = Math.round(b.y + b.h / 2);
+    byRank.set(k, [...(byRank.get(k) ?? []), b]);
+  }
+  const ranks = [...byRank.entries()].sort((a, b) => a[0] - b[0]).map(([, r]) => [...r].sort((a, b) => a.x - b.x));
+  const span = (r: Placed[]): number => Math.max(...r.map((b) => b.x + b.w)) - Math.min(...r.map((b) => b.x));
+  const packed = (r: Placed[]): number => r.reduce((s, b) => s + b.w, 0) + gapX * (r.length - 1);
+  const rowsOf = (r: Placed[], k: number): Placed[][] => Array.from({ length: Math.ceil(r.length / k) }, (_, i) => r.slice(i * k, i * k + k));
+  const heightOf = (r: Placed[]): number => Math.max(...r.map((b) => b.h));
+  const widest = Math.max(...ranks.map((r) => r.length));
+  const size = (k: number): { w: number; h: number } => {
+    let w = 0;
+    let h = 0;
+    for (const r of ranks) {
+      const rows = r.length > k ? rowsOf(r, k) : [r];
+      w = Math.max(w, r.length > k ? Math.max(...rows.map(packed)) : span(r));
+      h += rows.length * heightOf(r) + (rows.length - 1) * gapX;
+    }
+    return { w, h: h + gapY * (ranks.length - 1) };
+  };
+  const scale = (k: number): number => {
+    const z = size(k);
+    return Math.min(view.width / z.w, view.height / z.h, maxZoom);
+  };
+  let best = widest;
+  for (let k = widest - 1; k >= 1; k--) if (scale(k) > scale(best) * 1.05) best = k;
+  if (best === widest) return moved;
+  // Ranks top to bottom, each as tall as its rows; dagre's x where nothing wraps.
+  let y = Math.min(...boxes.map((b) => b.y));
+  for (const r of ranks) {
+    const rh = heightOf(r);
+    if (r.length <= best) {
+      for (const b of r) moved.set(b.id, { x: b.x, y: y + (rh - b.h) / 2 });
+      y += rh + gapY;
+      continue;
+    }
+    const mid = Math.min(...r.map((b) => b.x)) + span(r) / 2;
+    for (const row of rowsOf(r, best)) {
+      let x = mid - packed(row) / 2;
+      for (const b of row) {
+        moved.set(b.id, { x, y: y + (rh - b.h) / 2 });
+        x += b.w + gapX;
+      }
+      y += rh + gapX;
+    }
+    y += gapY - gapX;
+  }
+  return moved;
+}
+
 // The stream's colours over what is shown; a card never moves for one.
 function patched(n: EgoNode, by: Map<string, HealthNode>): EgoNode {
   const p = by.get(n.id);

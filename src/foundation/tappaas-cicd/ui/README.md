@@ -203,7 +203,8 @@ more object). The current root causes stand above the facets, worst first; the s
 object by name or class and says where it is. What is open is remembered in the browser.
 
 **The ego graph (centre)** is laid out by dagre: the selected object, a pill per relation type and
-its neighbours through them, what it needs above it and what needs it below. A pill of more than
+its neighbours through them, what it needs above it and what needs it below. A level too wide for
+the canvas wraps into rows, as many as let the graph fill the canvas's height. A pill of more than
 eight stands folded with what needs a look still out; a click opens it. A **+** on a neighbour opens
 one more hop from it, a **−** folds that and what was opened through it. **To the root cause** and
 **What this impacts** add the chain of the derivation in strong lines; a dashed line is `assess`'s
