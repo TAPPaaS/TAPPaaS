@@ -157,6 +157,7 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
   const [confirm, setConfirm] = useState("");
   const removal = (j: Job) => parseRemoval(phaseOutputs(j).apply);
   return (
+    <div className="step">
     <CheckStep<CheckOutcome>
       argv={checkArgv(node, how)}
       applyArgv={removeArgv(node, how, assetFor(how, asset))}
@@ -199,6 +200,7 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
       failed={(j) => (j.state === "refused" ? `The removal was not started: ${j.refused}` : j.previewPhase?.stopped ? `${node} cannot be removed: something still needs it.` : `The removal of ${node} did not finish.`)}
       summary="What the removal printed"
     />
+    </div>
   );
 }
 

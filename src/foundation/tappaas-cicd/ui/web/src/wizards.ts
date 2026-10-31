@@ -373,3 +373,11 @@ export function refusalLines(raw: string): string[] {
   }
   return [...new Set(out)];
 }
+
+// A finished preview that Apply cannot follow: the server's own verdict on a
+// dry run (src/jobs.ts previewStop). An apply-flag preview's exit 2 says
+// changes are pending, which is what Apply is for.
+export function previewRefuses(j: { exit: number | null; output: string; preview: { kind: string } }): boolean {
+  if (j.exit !== 0 && !(j.preview.kind === "apply-flag" && j.exit === 2)) return true;
+  return /^\[refused\]/m.test(j.output);
+}

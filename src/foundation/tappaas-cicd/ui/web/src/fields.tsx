@@ -235,9 +235,9 @@ export function fieldsStep(o: {
             ))}
           </ul>
         </>
-      ) : (
+      ) : o.mode === "modify" ? (
         <>No field changed in the form.</>
-      );
+      ) : null;
     },
   };
   return step;

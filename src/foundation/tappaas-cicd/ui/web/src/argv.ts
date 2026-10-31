@@ -121,3 +121,61 @@ export function confirmObject(step: ArgvStep, verb: ManifestVerb, values: Values
 // The typed confirmation's one rule, the server's too (src/jobs.ts createApply):
 // the object's name, or the object as the manifest shows it within its container.
 export const confirmMatches = (typed: string, object: string, label: string): boolean => typed !== "" && (typed === object || typed === label);
+
+// A read verb's writeWhen option (test --deep) in argv: the call is a write with no dry run.
+export function writeMarkOf(verb: ManifestVerb, argv: string[]): { flag: string; touches: string } | undefined {
+  return verb.effect === "read" ? (verb.writeWhen ?? []).find((w) => argv.includes(w.flag)) : undefined;
+}
+
+export function previewKindOf(verb: ManifestVerb, argv: string[]): ManifestVerb["preview"]["kind"] {
+  return writeMarkOf(verb, argv) ? "none" : verb.preview.kind;
+}
+
+export const isReadCall = (verb: ManifestVerb, argv: string[]): boolean => !writeMarkOf(verb, argv) && (verb.effect === "read" || verb.readWhen.some((w) => argv.includes(w)));
+export const isDestructiveCall = (verb: ManifestVerb, argv: string[]): boolean => !isReadCall(verb, argv) && (verb.destructive || verb.destructiveWhen.some((w) => argv.includes(w)));
+
+// How a step runs (flows.tsx), from how its verb previews.
+//   read   nothing changes: one Run, or at once
+//   act    a form and one button: no dry run at all, or a dry run that only
+//          says yes or no, which runs first in the same job (a refusal comes back there)
+//   check  the same dry run, but a destructive call: it runs as the step opens,
+//          and the typed name comes after its answer
+//   plan   the preview is something to read before deciding (more than this
+//          change, or the drain ahead): it runs as the step opens, Apply applies it
+export type Flow = "read" | "act" | "check" | "plan";
+
+// Every apply-flag verb's preview is a plan; these are the dry runs that are too.
+const PLAN_DRY_RUNS = new Set(["module-manager add-stack", "site-manager update", "site-manager repository sync", "network-manager merge", "network-manager distribute"]);
+
+export function stepFlow(bin: string, verb: ManifestVerb, argv: string[], override?: Flow): Flow {
+  if (override) return override;
+  if (isReadCall(verb, argv)) return "read";
+  const kind = previewKindOf(verb, argv);
+  if (kind === "none") return "act";
+  if (kind === "apply-flag" || PLAN_DRY_RUNS.has(`${bin} ${verb.verb}`)) return "plan";
+  return isDestructiveCall(verb, argv) ? "check" : "act";
+}
+
+// The options a verb's usage cannot do without: outside its [groups] and
+// (alternatives). A usage of several forms says nothing for certain.
+export function requiredOptions(verb: Pick<ManifestVerb, "usage">): string[] {
+  if (/\s\|\s/.test(verb.usage)) return [];
+  let u = verb.usage;
+  for (let prev = ""; prev !== u; ) {
+    prev = u;
+    u = u.replace(/\[[^[\]]*\]|\([^()]*\)/g, " ");
+  }
+  return u.match(/--[a-z0-9][a-z0-9-]*/g) ?? [];
+}
+
+// What the verb's form still lacks, by the name it shows there. A step with a
+// form of its own (step.render) says so itself, through step.blocked.
+export function missingFields(step: ArgvStep & { hide?: string[]; only?: string[]; labels?: Record<string, string> }, verb: ManifestVerb, values: Values, argv: string[]): string[] {
+  const { names, options } = formParts(step, verb);
+  const required = requiredOptions(verb);
+  const blank = (v: Values[string] | undefined): boolean => typeof v !== "string" || v.trim() === "";
+  return [
+    ...names.filter((p) => !p.optional && blank(values[`@${p.name}`])).map((p) => step.labels?.[`@${p.name}`] ?? p.name),
+    ...options.filter((o) => required.includes(o.flag) && !argv.includes(o.flag)).map((o) => step.labels?.[o.flag] ?? o.flag),
+  ];
+}

@@ -5,7 +5,7 @@
 
 import { ReactNode, createContext, useEffect, useMemo, useState } from "react";
 import { useVerb } from "./api";
-import { ArgvStep, Values, buildArgv, formParts, prefillValues } from "./argv";
+import { ArgvStep, Flow, Values, buildArgv, formParts, missingFields, prefillValues, writeMarkOf } from "./argv";
 import { Job, ManifestVerb } from "./types";
 
 export interface Step extends ArgvStep {
@@ -26,8 +26,11 @@ export interface Step extends ArgvStep {
   blocked?: string; // why the change cannot run yet (a name still missing): the button waits, and says this
   button?: string; // the button's words, in the wizard's own ("Declare tappaas4")
   failed?: string; // said before why it failed ("tappaas4 was not declared")
-  // The head of the Preview: what the change does (fields.tsx: the change
-  // classes of the fields being changed, in the operator's words).
+  flow?: Flow; // how it runs, where the verb's preview does not say it (argv.ts stepFlow)
+  runOnOpen?: boolean; // a read that is this stage's result: it runs as the step opens
+  previewOnOpen?: boolean; // false: a plan's preview waits for the form (it is the operator's to fill in first)
+  // Above the button: what the change does (fields.tsx: the change classes of
+  // the fields being changed, in the operator's words).
   previewNote?: (values: Values) => ReactNode;
   after?: (job: Job) => ReactNode; // shown once the step's job has finished (a config to download)
   // A bar over the apply while it runs, from the job's output so far (the
@@ -47,15 +50,6 @@ export interface Step extends ArgvStep {
 export const PrefillContext = createContext<Values | null>(null);
 
 // What Apply will run: the argv with the applying flag (or without the dry run).
-// A read verb's writeWhen option (test --deep) in argv: the call is a write with no dry run.
-export function writeMarkOf(verb: ManifestVerb, argv: string[]): { flag: string; touches: string } | undefined {
-  return verb.effect === "read" ? (verb.writeWhen ?? []).find((w) => argv.includes(w.flag)) : undefined;
-}
-
-export function previewKindOf(verb: ManifestVerb, argv: string[]): ManifestVerb["preview"]["kind"] {
-  return writeMarkOf(verb, argv) ? "none" : verb.preview.kind;
-}
-
 export function applyForm(verb: ManifestVerb | null, argv: string[]): string[] {
   if (verb?.preview.kind === "apply-flag" && !writeMarkOf(verb, argv) && !argv.includes(verb.preview.flag)) return [...argv, verb.preview.flag];
   return argv;
@@ -159,7 +153,7 @@ function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb:
 
 // A step's form values: its initial ones, then the assistant's (step.prefill)
 // merged in once the verb's manifest says which are positionals and options.
-export function useStepValues(step: Step, verb: ManifestVerb | null): [Values, (v: Values) => void] {
+export function useStepValues(step: Step, verb: ManifestVerb | null): [Values, (v: Values) => void, boolean] {
   const [values, setValues] = useState<Values>(step.initial ?? {});
   const [prefilled, setPrefilled] = useState(false);
   useEffect(() => {
@@ -168,7 +162,7 @@ export function useStepValues(step: Step, verb: ManifestVerb | null): [Values, (
     setValues((v) => ({ ...v, ...pre }));
     setPrefilled(true);
   }, [verb]);
-  return [values, setValues];
+  return [values, setValues, !step.prefill || prefilled];
 }
 
 // The change form of a step, from the verb's manifest: its own form
@@ -186,17 +180,25 @@ export function StepForm({ step, verb, values, set }: { step: Step; verb: Manife
 }
 
 // What a step's flow needs of its form: the verb's manifest (null until read),
-// the values, and the argv they make.
+// the values, the argv they make, and whether the operator has touched them.
 export interface StepFormState {
   step: Step;
   verb: ManifestVerb | null;
   values: Values;
   set: (v: Values) => void;
   argv: string[];
+  fresh: boolean; // as it opened: a preview or a check may run by itself
+  waits: string | null; // why it cannot run yet
 }
 export function useStepForm(step: Step): StepFormState {
   const verb = useVerb(step.bin, step.verb);
-  const [values, set] = useStepValues(step, verb);
+  const [values, setValues, settled] = useStepValues(step, verb);
+  const [touched, setTouched] = useState(false);
   const argv = useMemo(() => buildArgv(step, verb, values), [step, verb, values]);
-  return { step, verb, values, set, argv };
+  const lacks = verb && !step.render ? missingFields(step, verb, values, argv) : [];
+  const set = (v: Values) => {
+    setTouched(true);
+    setValues(v);
+  };
+  return { step, verb, values, set, argv, fresh: settled && !touched, waits: step.blocked ?? (lacks.length ? `fill in ${lacks.join(", ")} first` : null) };
 }

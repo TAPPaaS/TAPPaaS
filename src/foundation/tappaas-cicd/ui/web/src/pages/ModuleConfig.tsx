@@ -133,7 +133,7 @@ export function ModuleConfig({ d }: { d: ModuleDetail }) {
       {f ? (
         <>
           <p className="muted small">
-            Values in grey are the schema's defaults; the rest are configured for {name}. Click a card (or Modify) to change its fields: the preview is module-manager's own dry run, Apply writes the fields and converges the module.
+            Values in grey are the schema's defaults; the rest are configured for {name}. Click a card (or Modify) to change its fields: Apply runs module-manager's own dry run first, then writes the fields and converges the module.
           </p>
           <Graph nodes={graph.nodes} edges={graph.edges} grid={GRID} height={Math.max(380, 250 + Math.ceil(services / 4) * 225)} nodesep={36} ranksep={26} />
         </>
@@ -151,7 +151,7 @@ export function ModuleConfig({ d }: { d: ModuleDetail }) {
               name,
               mode: "modify",
               fields: open.rows.map((x) => x.field),
-              note: "One modify for every field changed: the preview checks them all before anything is written, and applies all of them or none.",
+              note: "One modify for every field changed: its dry run checks them all before anything is written, and it applies all of them or none.",
             }),
           ].map((s) => (prefill ? { ...s, prefill } : s))}
           onClose={() => {

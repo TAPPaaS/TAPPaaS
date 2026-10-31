@@ -7,9 +7,10 @@
 
 import { readFileSync } from "fs";
 import { join } from "path";
-import { buildArgv, confirmMatches, confirmObject } from "../../web/src/argv";
+import { buildArgv, confirmMatches, confirmObject, missingFields, requiredOptions, stepFlow } from "../../web/src/argv";
+import { previewStop } from "../../src/jobs";
 import { ManifestVerb } from "../../web/src/types";
-import { BUDDY_KINDS, PASSPHRASE_TEXT, RunJob, jobInApply, jobRunState, refusalLines, runFailure, SatellitePlan, SessionJob, SiteSsid, StepSpec, argOf, buddyNameProblem, sessionJob, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, broadcastText, defaultSsid, isPlaceholderSsid, needsPassphrase, passphraseOf, queuedBehind, passphraseProblem, ssidProblem, stacksOf, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
+import { BUDDY_KINDS, PASSPHRASE_TEXT, RunJob, jobInApply, jobRunState, previewRefuses, refusalLines, runFailure, SatellitePlan, SessionJob, SiteSsid, StepSpec, argOf, buddyNameProblem, sessionJob, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, broadcastText, defaultSsid, isPlaceholderSsid, needsPassphrase, passphraseOf, queuedBehind, passphraseProblem, ssidProblem, stacksOf, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -171,6 +172,43 @@ check(rp.object === "7" && rp.label === "crs-a:7", "…or the positional its ver
 // The typed name: the server's rule (src/jobs.ts createApply).
 check(confirmMatches("7", "7", "sw1:7") && confirmMatches("sw1:7", "7", "sw1:7"), "the object's name, or as the manifest shows it");
 check(!confirmMatches("", "", "") && !confirmMatches("8", "7", "sw1:7"), "nothing typed, or anything else: no");
+
+// How a step runs, from how its verb previews.
+{
+  const verb = (o: Partial<ManifestVerb>): ManifestVerb => ({ verb: "x", keys: [["x"]], usage: "x", note: null, details: null, positionals: [], options: [], open: false, effect: "write", preview: { kind: "none", touches: "" }, destructive: false, destructiveWhen: [], readWhen: [], writeWhen: [], disruptions: [], ...o });
+  const apply = { kind: "apply-flag", flag: "--apply" } as ManifestVerb["preview"];
+  const dry = { kind: "dry-run-flag", flag: "--check" } as ManifestVerb["preview"];
+  const read = { effect: "read", preview: { kind: "read" } } as Partial<ManifestVerb>;
+  check(stepFlow("m", verb({}), ["m", "x"]) === "act", "no dry run: one button");
+  check(stepFlow("m", verb({ destructive: true }), ["m", "x"]) === "act", "…a destructive one too: there is nothing to check");
+  check(stepFlow("asset-manager", verb({ preview: dry }), ["m", "x"]) === "act", "a yes-or-no dry run: one button");
+  check(stepFlow("asset-manager", verb({ preview: dry, destructive: true }), ["m", "x"]) === "check", "…destructive: the check first");
+  check(stepFlow("m", verb({ preview: apply }), ["m", "x"]) === "plan", "an apply-flag preview is a plan");
+  for (const [b, v] of [["module-manager", "add-stack"], ["site-manager", "update"], ["site-manager", "repository sync"]]) check(stepFlow(b, verb({ verb: v, preview: dry }), [b, v]) === "plan", `${b} ${v}: a plan`);
+  check(stepFlow("m", verb(read), ["m", "x"]) === "read", "a read");
+  const deep = verb({ ...read, writeWhen: [{ flag: "--deep", touches: "creates guests" }] });
+  check(stepFlow("m", deep, ["m", "x"]) === "read" && stepFlow("m", deep, ["m", "x", "--deep"]) === "act", "test is a read, test --deep a change with no dry run");
+  check(stepFlow("m", verb({ preview: apply, readWhen: ["status"] }), ["m", "x", "status"]) === "read", "a read form of a write verb");
+  check(stepFlow("m", verb({}), ["m", "x"], "plan") === "plan", "step.flow overrides");
+
+  const bashVerb = (bin: string, name: string): ManifestVerb => bash.manifests.find((m) => m.name === bin)!.verbs.find((v) => v.verb === name)!;
+  check(stepFlow("switch-manager", bashVerb("switch-manager", "reconcile"), ["switch-manager", "reconcile"]) === "plan", "switch-manager reconcile: a plan");
+  check(stepFlow("ap-manager", bashVerb("ap-manager", "ssid add"), ["ap-manager", "ssid", "add"]) === "act", "ap-manager ssid add: one button");
+
+  check(requiredOptions({ usage: "asset dispose <asset> --how sold|recycled [--wiped] [--when <date>]" }).join() === "--how", "an option outside its brackets is required");
+  check(requiredOptions({ usage: "place <d> (--rack <r> [--unit <u>] | --room <r>) [--check]" }).length === 0, "nested groups and alternatives are not");
+  check(requiredOptions({ usage: "bind <zone> --environment <env> | --unbind" }).length === 0, "a usage of several forms says nothing for certain");
+  const fault = verb({ usage: "asset fault <asset> --note <text> [--check]", positionals: [{ name: "asset", optional: false, repeatable: false }], options: [{ flag: "--note", takesValue: true, arg: "<text>", choices: null, repeatable: false, description: "" }] });
+  check(missingFields({ bin: "a" }, fault, {}, ["a"]).join() === "asset,--note", "what the form lacks");
+  check(missingFields({ bin: "a", fixed: ["srv-1"], labels: { "--note": "what is wrong" } }, fault, {}, ["a", "srv-1"]).join() === "what is wrong", "…a fixed name is there; by the form's label");
+  check(missingFields({ bin: "a", fixed: ["srv-1"], only: [] }, fault, {}, ["a", "srv-1"]).length === 0, "…an option the form does not offer is not its to ask");
+  check(missingFields({ bin: "a", fixed: ["srv-1"] }, fault, { "--note": "x" }, ["a", "srv-1", "--note", "x"]).length === 0, "…filled in: nothing");
+
+  // The browser's verdict on a finished preview is the server's.
+  for (const [exit, output, kind] of [[0, "plan", "apply-flag"], [2, "pending", "apply-flag"], [1, "", "apply-flag"], [2, "", "dry-run-flag"], [0, "[refused] in use\n", "dry-run-flag"], [0, "ok", "dry-run-flag"]] as [number, string, string][]) {
+    check(previewRefuses({ exit, output, preview: { kind } }) === (previewStop(true, exit, output, kind === "apply-flag") !== null), `verdict on exit ${exit} of ${kind} matches the server's`);
+  }
+}
 
 // What a dry run said against a change.
 {
