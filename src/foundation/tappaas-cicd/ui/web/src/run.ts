@@ -19,7 +19,7 @@ export interface JobRun {
   ok: boolean; // ended clean
   output: string;
   error: string | null; // it could not be started
-  apply: (argv: string[], confirm?: string) => Promise<void>; // one job: the dry run, then the apply on a clean one
+  apply: (argv: string[], confirm?: string, from?: CardRef) => Promise<void>; // one job: the dry run, then the apply on a clean one
   preview: (argv: string[], from?: CardRef) => Promise<void>;
   read: (argv: string[], from?: CardRef) => Promise<void>;
   applyPreview: (previewId: string, confirm?: string) => Promise<void>;
@@ -84,7 +84,7 @@ export function useJobRun({ attach: found = null, onApplied, onDone }: { attach?
     ok: state === "done",
     output: job?.output ?? "",
     error,
-    apply: (argv, confirm) => launch(() => applyNowJob(argv, confirm)),
+    apply: (argv, confirm, from) => launch(() => applyNowJob(argv, confirm, from)),
     preview: (argv, from) => launch(() => previewJob(argv, from)),
     read: (argv, from) => launch(() => readJob(argv, from)),
     applyPreview: (previewId, confirm) => launch(() => applyJob(previewId, confirm)),

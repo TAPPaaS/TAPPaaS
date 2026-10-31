@@ -19,8 +19,8 @@
 // Who may: access.ts mayWrite — the gate's installer, or the setup token while
 // setup is open; never loopback without the gate.
 //
-// From the assistant (ADR-034 D7): a proposed-job card posts its preview (or
-// read) with {conversation, proposal}; the proposal must be in the caller's
+// From the assistant (ADR-034 D7): a proposed-job card posts its job (a read,
+// a preview, or an apply straight from the card) with {conversation, proposal}; the proposal must be in the caller's
 // own conversation with the same argv. The job then carries origin
 // "assistant" and the turn that proposed it, and so does its apply. The
 // assistant itself never reaches this file: only the operator's click does.
