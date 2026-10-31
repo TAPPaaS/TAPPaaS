@@ -110,7 +110,8 @@ export function ciRefOf(d: DevNode): CiRef | null {
 // The far end of a link, seen from one device.
 const farEnd = (l: DevLink, device: string) => (l.a === device ? l.b : l.a);
 
-export function SidePanel({ t, sel, close, pick, storage, tree }: { t: Topology; sel: Sel; close: () => void; pick: (s: Sel) => void; storage?: { inv: StorageInventory; notes: Map<string, StorageNote[]> } | null; tree?: AssetTree | null }) {
+// extra: shown under the header (a drop's job in the Physical view).
+export function SidePanel({ t, sel, close, pick, storage, tree, extra }: { t: Topology; sel: Sel; close: () => void; pick: (s: Sel) => void; storage?: { inv: StorageInventory; notes: Map<string, StorageNote[]> } | null; tree?: AssetTree | null; extra?: ReactNode }) {
   const modules = useRead<ModuleSummary[]>("modules").env?.data ?? null;
   const health = useRead<Health>("health");
   const siteSsids = useRead<SiteSsid[]>("ssids", 600_000).env?.data ?? null;
@@ -680,6 +681,7 @@ export function SidePanel({ t, sel, close, pick, storage, tree }: { t: Topology;
           ×
         </button>
       </header>
+      {extra}
       <DetailsLinks targets={targets} />
       {dev ? drawing(dev, ringed) : null}
       {ci ? (

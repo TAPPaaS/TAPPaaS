@@ -31,6 +31,7 @@
     "../../web/src/physical/portspec.ts",
     "../../web/src/physical/platelayout.ts",
     "../../web/src/physical/cableroute.ts",
+    "../../web/src/physical/dragplace.ts",
     "../../web/src/assetview.ts",
     "../../web/src/diskview.ts",
     "../../web/src/details.ts"

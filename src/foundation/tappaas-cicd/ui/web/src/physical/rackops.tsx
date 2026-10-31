@@ -12,6 +12,7 @@ import { OperateButton, Step, Values } from "../operate";
 import { ManifestVerb, PositionsView, RackInfo, TopoDevice } from "../types";
 import { SiteLocation, locationOption, useSiteLocations } from "../locations";
 import { placeFieldsFor } from "../diskview";
+import { placesFor, prefillSize } from "./dragplace";
 
 const RM = "asset-manager";
 
@@ -31,16 +32,8 @@ export function firstFree(r: RackInfo, height: number, face: "front" | "rear" = 
   return null;
 }
 
-// Where a device placed nowhere can go: the recorded rooms at its location and
-// the racks in them (a rack in no room only at the primary location) — the
-// console's backend narrows the form's choices the same way.
-export function placesFor(v: PositionsView | null | undefined, device: string): { location: string | null; rooms: string[]; racks: RackInfo[] } {
-  const primary = v?.locations?.find((l) => l.primary)?.name ?? null;
-  const location = v?.unplaced.find((x) => x.device === device)?.location ?? primary;
-  const rooms = (v?.rooms ?? []).filter((r) => (r.location ?? primary) === location);
-  const names = new Set(rooms.map((r) => r.name));
-  return { location, rooms: rooms.filter((r) => r.recorded).map((r) => r.name), racks: (v?.racks ?? []).filter((r) => (r.room ? names.has(r.room) : location === primary)) };
-}
+// Where a device placed nowhere can go (dragplace.ts): the rooms and racks at its location.
+export { placesFor };
 
 // What a new placement starts from: the catalog's plate for the device, its
 // height and width, the first rack at its location and the highest units free there.
@@ -52,12 +45,12 @@ export function placePrefill(v: PositionsView | null | undefined, device: string
   if (u?.suggestion) out.faceplate = u.suggestion;
   if (r) {
     out.rack = r.name;
-    const height = u?.kind === "node" ? 2 : 1;
+    const { height } = prefillSize(u?.kind);
     out.height = String(height);
     const at = firstFree(r, height);
     if (at !== null) out.u = String(at);
   }
-  if (u?.kind === "ap") out.width = "third";
+  if (prefillSize(u?.kind).width !== "full") out.width = prefillSize(u?.kind).width;
   return out;
 }
 
@@ -288,7 +281,7 @@ export function PhysicalHowTo() {
       <ol className="small">
         <li><b>Add a room</b> the hardware stands in, at one of the site's locations.</li>
         <li><b>Add a rack</b> to the room.</li>
-        <li><b>Place</b> the devices the topology sees — nodes, switches, access points — from Unplaced: in a rack, or loose in a room.</li>
+        <li><b>Place</b> the devices the topology sees — nodes, switches, access points — from Unplaced: drag one onto a rack's units (green: free, red: taken or too few) or into a room, or use its Place…. Drag a placed device to move it.</li>
         <li><b>Record a device</b> nothing manages — a modem, an ONT, a UPS, a patch panel — then place it. A device a switch port sees is listed under its location: Record… it there, or from its Details.</li>
         <li><b>Record a cable</b> nothing sees: select the device, open its Details, then Record a cable… on the port.</li>
         <li><b>Add a faceplate</b> for a device model the catalog lacks: its units, width and ports; it is then offered by Place… and Record a device….</li>

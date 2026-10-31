@@ -699,12 +699,22 @@ span.ht-caret { cursor: default; }
 }
 
 /* The Physical view: Unplaced and How to on the left, the racks in the middle,
-   the selection's card on the right. */
+   the selection's card on the right; dragging a device onto a rack or a room. */
 .rack-left { width: 260px; flex: none; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .rack-left .rack-tray { width: auto; flex: 1 1 auto; min-height: 120px; }
 .rack-howto { flex: 0 1 auto; max-height: 45%; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
 .rack-howto header h2 { font-size: 13px; margin: 4px 0 6px; }
 .rack-left .rack-tray:only-child, .rack-left .rack-howto:only-child { max-height: none; }
+.tray-drag { cursor: grab; touch-action: none; }
+.rack-plate-drag { touch-action: none; }
+body.dragging-place, body.dragging-place * { cursor: grabbing !important; user-select: none; }
+.drop-ok { fill: rgba(22, 163, 74, 0.22); stroke: #16a34a; stroke-width: 2; }
+.drop-bad { fill: rgba(220, 38, 38, 0.18); stroke: #dc2626; stroke-width: 2; }
+.drag-ghost { position: fixed; z-index: 50; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid #94a3b8; border-radius: 6px; padding: 4px 8px; font-size: 12.5px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18); max-width: 320px; }
+.drag-ghost.drag-ok { border-left-color: #16a34a; }
+.drag-ghost.drag-bad { border-left-color: #dc2626; }
+.drop-job { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; margin: 0 0 10px; background: var(--bg); }
+.drop-job-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 4px; }
 @media (max-width: 900px) {
   .physical { flex-direction: column; height: auto; min-height: 0; }
   .physical > .canvas { flex: none; height: 70vh; min-height: 420px; }

@@ -14,7 +14,7 @@
 // Everything comes from `network-manager topology` .positions; nothing is
 // placed by hand here.
 
-import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { MutableRefObject, PointerEvent as ReactPointerEvent, ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { zoneColor } from "../colors";
 import { PlatePort, RackCable, RackInfo, PlacementInfo, PositionsView, TopoOutside, Topology } from "../types";
 import { navigate } from "../ui";
@@ -23,21 +23,15 @@ import { Sel } from "./layout";
 import { isPatchPanel, linkId, panelPortSel } from "./devicegraph";
 import { Box, Placed, nameArea, portCells } from "./platelayout";
 import { PortAt, routeCables } from "./cableroute";
+import { Drop, DropTarget, dropAt, rowOf, spanOf, unitAt } from "./dragplace";
+import type { DragState } from "./dragdrop";
 
 // Geometry: one rack unit, the rails with their numbers, a 19in and a 10in
 // interior (wider than true scale, so a 12-port plate stays legible).
 export const R = { u: 30, rail: 24, w19: 440, w10: 240, gap: 150, top: 116, margin: 24, outsideW: 230, bottom: 40, roomPad: 18, looseGap: 18, locPad: 14, roomY: 40, nowhereW: 240 };
 
 const inner = (r: RackInfo) => (r.width === "10in" ? R.w10 : R.w19);
-const COLS: Record<string, number> = { full: 1, half: 2, third: 3 };
-const span = (m: { width: string; slot: number }): [number, number] => {
-  const n = COLS[m.width] ?? 1;
-  const s = m.width === "full" ? 0 : m.slot;
-  return [s / n, (s + 1) / n];
-};
-// The row (0 = the top one) of a unit, as the rack numbers them.
-const rowOf = (r: RackInfo, unit: number) => (r.numbering === "top-down" ? unit - 1 : r.units - unit);
-const unitAt = (r: RackInfo, row: number) => (r.numbering === "top-down" ? row + 1 : r.units - row);
+const span = spanOf;
 
 export type { Box, Placed } from "./platelayout";
 
@@ -269,7 +263,7 @@ const isSel = (s: Sel | null, kind: Placed["kind"], device: string): boolean =>
 // One faceplate: its name and model on the left, its LED, its port grid with
 // each port's live state, the cabled ones underlined, the selected one ringed.
 // The rack draws every placed device with it; the side panel draws the selected one.
-export function PlateSvg({ p, on, portOn, cabled, rear, onPlate, onPort }: { p: Placed; on: boolean; portOn: (id: string) => boolean; cabled?: Set<string>; rear?: Set<string>; onPlate: () => void; onPort: (id: string) => void }) {
+export function PlateSvg({ p, on, portOn, cabled, rear, onPlate, onPort, onGrab, dragged }: { p: Placed; on: boolean; portOn: (id: string) => boolean; cabled?: Set<string>; rear?: Set<string>; onPlate: () => void; onPort: (id: string) => void; onGrab?: (e: ReactPointerEvent) => void; dragged?: boolean }) {
   const cells = portCells(p);
   const led = p.up === true ? "#2f9e44" : p.up === false ? "#d64545" : "#9aa4b2";
   const na = nameArea(p.plate);
@@ -280,7 +274,7 @@ export function PlateSvg({ p, on, portOn, cabled, rear, onPlate, onPort }: { p: 
   const tight = p.box.h < 34 || onTop;
   const dark = p.kind === "outside" || p.plate?.passive;
   return (
-    <g className="rack-plate" onClick={(e) => (e.stopPropagation(), onPlate())}>
+    <g className={onGrab ? "rack-plate rack-plate-drag" : "rack-plate"} opacity={dragged ? 0.45 : undefined} onClick={(e) => (e.stopPropagation(), onPlate())} onPointerDown={onGrab}>
       <title>{`${p.title} — ${p.sub}`}</title>
       <rect x={p.box.x} y={p.box.y} width={p.box.w} height={p.box.h} rx={3} fill={p.kind === "outside" ? "#f1f5f9" : p.plate?.passive ? "#e2e8f0" : "#1e293b"} stroke={on ? "#3b6fd4" : p.kind === "outside" ? "#94a3b8" : "#0f172a"} strokeWidth={on ? 2.5 : 1} strokeDasharray={p.kind === "outside" ? "4 3" : undefined} />
       {/* the rack ears with their screws */}
@@ -308,9 +302,43 @@ export function PlateSvg({ p, on, portOn, cabled, rear, onPlate, onPort }: { p: 
   );
 }
 
-export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v: PositionsView; sel: Sel | null; pick: (s: Sel) => void; cables: boolean; onPane: () => void }) {
+// Where a point of the drawing falls for a drop: a rack's row and the fraction
+// across its interior (its rails count as its edge), else a room's area.
+export function dropTargetAt(L: RackLayout, x: number, y: number, grab: number): DropTarget | null {
+  for (const { r, x: rx } of L.racks) {
+    const iw = inner(r);
+    if (x < rx || x > rx + iw + 2 * R.rail || y < R.top || y > R.top + r.units * R.u) continue;
+    const row = Math.min(r.units - 1, Math.floor((y - R.top) / R.u));
+    return { rack: r.name, row: row - grab, across: Math.max(0, Math.min(0.999, (x - rx - R.rail) / iw)) };
+  }
+  const room = L.rooms.find((m) => x >= m.x && x <= m.x + m.w && y >= m.y && y <= m.y + m.h);
+  return room ? { room: room.name } : null;
+}
+
+// drag: a device being dragged (dragdrop.tsx); dropRef: where a release now
+// would put it; onGrab: a press on a placed plate (an operator's drawing only).
+export function RackCanvas({ t, v, sel, pick, cables, onPane, drag, dropRef, onGrab }: { t: Topology; v: PositionsView; sel: Sel | null; pick: (s: Sel) => void; cables: boolean; onPane: () => void; drag?: DragState | null; dropRef?: MutableRefObject<Drop | null>; onGrab?: (e: ReactPointerEvent, device: string, grab: number) => void }) {
   const L = useMemo(() => layoutRacks(v, t.outside), [v, t.outside]);
   const wrap = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  // A client point in the drawing's own coordinates.
+  const toSvg = (cx: number, cy: number): { x: number; y: number } | null => {
+    const m = svgRef.current?.getScreenCTM();
+    if (!m) return null;
+    const p = new DOMPoint(cx, cy).matrixTransform(m.inverse());
+    return { x: p.x, y: p.y };
+  };
+  const drop = useMemo((): Drop | null => {
+    if (!drag || !wrap.current) return null;
+    const b = wrap.current.getBoundingClientRect();
+    if (drag.x < b.left || drag.x > b.right || drag.y < b.top || drag.y > b.bottom) return null;
+    const at = toSvg(drag.x, drag.y);
+    const target = at ? dropTargetAt(L, at.x, at.y, drag.grab) : null;
+    return target ? dropAt(v, drag.d, target) : null;
+  }, [drag, L, v]);
+  useLayoutEffect(() => {
+    if (dropRef) dropRef.current = drop;
+  }, [drop, dropRef]);
   const [scale, setScale] = useState<number | null>(null);
   // Fitted until the operator zooms: the canvas has its size only after layout.
   const zoomed = useRef(false);
@@ -365,6 +393,17 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
       portOn={(id) => (sel?.kind === "port" && sel.switch === p.device && sel.id === id) || (sel?.kind === "panelport" && sel.panel === p.device && sel.id === id) || (sel?.kind === "link" && v.cables.some((c) => linkId(c.from.device, c.to.device) === sel.id && (c.segments?.length ? c.segments : [c]).some((w) => [w.from, w.to].some((e) => e.device === p.device && e.port === id))))}
       onPlate={() => pick(selOf(p.kind, p.device))}
       onPort={(id) => pick(isPatchPanel(t, p.device) ? panelPortSel(t, p.device, id) : selOf(p.kind, p.device, id))}
+      dragged={drag?.d.device === p.device}
+      onGrab={
+        onGrab && p.kind !== "outside"
+          ? (e) => {
+              // Held by the unit under the pointer, so it keeps its place under it.
+              const at = toSvg(e.clientX, e.clientY);
+              const units = Math.max(1, Math.round((p.box.h + 2) / R.u));
+              onGrab(e, p.device, p.rack && at ? Math.max(0, Math.min(units - 1, Math.floor((at.y - p.box.y) / R.u))) : 0);
+            }
+          : undefined
+      }
     />
   );
 
@@ -375,7 +414,7 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
         <button className="btn" onClick={() => ((zoomed.current = false), fit())}>fit</button>
         <button className="btn" onClick={() => zoom(1.2)} aria-label="zoom in">+</button>
       </div>
-      <svg width={L.width * k} height={L.height * k} viewBox={`0 0 ${L.width} ${L.height}`} role="img" aria-label="the racks">
+      <svg ref={svgRef} width={L.width * k} height={L.height * k} viewBox={`0 0 ${L.width} ${L.height}`} role="img" aria-label="the racks">
         {L.locations.map((l) => (
           <g key={`loc:${l.name}`} className="rack-location">
             <rect x={l.x} y={l.y} width={l.w} height={l.h} rx={14} fill="none" stroke="#64748b" strokeWidth={l.primary ? 1.6 : 1.2} strokeDasharray={l.primary ? undefined : "10 5"} />
@@ -427,6 +466,17 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
           );
         })}
         {L.placed.map(plate)}
+        {drop && !drop.same && drop.room ? (() => {
+          const room = L.rooms.find((m) => m.name === drop.room);
+          return room ? <rect className={drop.ok ? "drop-ok" : "drop-bad"} x={room.x} y={room.y} width={room.w} height={room.h} rx={10} pointerEvents="none" /> : null;
+        })() : null}
+        {drop && !drop.same && drop.rack && drop.rows && drop.span ? (() => {
+          const at = L.racks.find((x) => x.r.name === drop.rack);
+          if (!at) return null;
+          const iw = inner(at.r);
+          const [a, b] = drop.span;
+          return <rect className={drop.ok ? "drop-ok" : "drop-bad"} x={at.x + R.rail + iw * a + 1} y={R.top + drop.rows[0] * R.u + 1} width={iw * (b - a) - 2} height={(drop.rows[1] - drop.rows[0] + 1) * R.u - 2} rx={3} pointerEvents="none" />;
+        })() : null}
         {cables
           ? drawn.map(({ c, i, d, a, b }) => {
               const st = cableStyle(c, t);

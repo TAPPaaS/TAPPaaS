@@ -6,13 +6,15 @@
 // its connections as lines, laid out automatically. Storage: the nodes, their
 // pools and disks. Click an object for its side card.
 
-import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { PointerEvent as ReactPointerEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useRead } from "../api";
 import { zoneColor } from "../colors";
 import { OperateButton } from "../operate";
 import { Sel } from "../physical/layout";
 import { DeviceGraph } from "../physical/deviceview";
-import { CABLE_KINDS, RackCanvas } from "../physical/rack";
+import { CABLE_KINDS, Placed, RackCanvas, selOf } from "../physical/rack";
+import { Drop, Dragged, draggedOf } from "../physical/dragplace";
+import { DropJob, DropJobPanel, runDrop, useDragPlace } from "../physical/dragdrop";
 import { faceplateAddSteps } from "../physical/faceplateform";
 import { AddRoomButton, PhysicalHowTo, PlaceActions, RecordDeviceButton, RecordSeenButton, rackAddSteps } from "../physical/rackops";
 import { SidePanel } from "../physical/SidePanel";
@@ -43,8 +45,9 @@ export type { PhysicalView } from "../physical/views";
 
 // The devices placed nowhere, by location, each with Place… (the catalog's
 // plate for it, the first rack's highest free units) — or, for a device a
-// switch port only sees, Record….
-function Unplaced({ t, v, pick }: { t: Topology; v: PositionsView; pick: (s: Sel) => void }) {
+// switch port only sees, Record…. An operator drags an entry onto a rack's
+// units or into a room (grab).
+function Unplaced({ t, v, pick, grab }: { t: Topology; v: PositionsView; pick: (s: Sel) => void; grab?: (e: ReactPointerEvent, device: string) => void }) {
   const operator = canOperate(useMe());
   const gone = v.findings.filter((f) => f.kind === "gone");
   const locs = v.locations?.length ? v.locations : [{ name: "", displayName: null, unplaced: v.unplaced.map((u) => u.device) }];
@@ -64,13 +67,15 @@ function Unplaced({ t, v, pick }: { t: Topology; v: PositionsView; pick: (s: Sel
                   const seen = u.seen ? t.devices?.find((d) => d.name === u.device) : undefined;
                   return (
                     <li key={u.device}>
-                      <button className="linklike" onClick={() => pick(u.kind === "node" ? { kind: "node", id: u.device } : u.kind === "switch" ? { kind: "switch", id: u.device } : u.kind === "ap" ? { kind: "ap", id: u.device } : { kind: "mount", id: u.device })}>
-                        {seen?.displayName ? `${seen.displayName} · ${u.device}` : u.device}
-                      </button>
-                      <div className="muted small">
-                        {seen?.seen ? `seen at ${seen.seen.switch} port ${seen.seen.port}, recorded nowhere` : u.kind}
-                        {u.model ? ` · ${u.model}` : ""}
-                        {u.suggestion ? ` · plate ${u.suggestion}` : ""}
+                      <div className={grab && !seen ? "tray-drag" : undefined} onPointerDown={grab && !seen ? (e) => grab(e, u.device) : undefined} title={grab && !seen ? "Drag onto a rack's units or into a room to place it" : undefined}>
+                        <button className="linklike" onClick={() => pick(u.kind === "node" ? { kind: "node", id: u.device } : u.kind === "switch" ? { kind: "switch", id: u.device } : u.kind === "ap" ? { kind: "ap", id: u.device } : { kind: "mount", id: u.device })}>
+                          {seen?.displayName ? `${seen.displayName} · ${u.device}` : u.device}
+                        </button>
+                        <div className="muted small">
+                          {seen?.seen ? `seen at ${seen.seen.switch} port ${seen.seen.port}, recorded nowhere` : u.kind}
+                          {u.model ? ` · ${u.model}` : ""}
+                          {u.suggestion ? ` · plate ${u.suggestion}` : ""}
+                        </div>
                       </div>
                       {operator ? seen ? <RecordSeenButton d={seen} /> : <PlaceActions device={u.device} v={v} /> : null}
                     </li>
@@ -126,6 +131,21 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
   }, []);
 
   const pick = useCallback((s: Sel) => setSel(s), []);
+  // A device dragged onto a rack or into a room (operators, the Physical view):
+  // its card opens with the job's state and output.
+  const [dropJob, setDropJob] = useState<DropJob | null>(null);
+  const onDrop = useCallback((d: Dragged, drop: Drop) => {
+    setSel(selOf(d.kind as Placed["kind"], d.device));
+    setDropJob({ device: d.device, what: `${d.from ? "Move" : "Place"} ${d.device}: ${drop.text}`, argv: drop.argv ?? [], id: null, error: null });
+    void runDrop(d, drop).then(setDropJob);
+  }, []);
+  const { drag, dropRef, begin } = useDragPlace(onDrop);
+  const grab = operator && racks ? (e: ReactPointerEvent, device: string, row = 0) => {
+    const d = draggedOf(racks, device);
+    if (d) begin(e, d, row);
+  } : undefined;
+  const selDevice = sel?.kind === "node" || sel?.kind === "switch" || sel?.kind === "ap" || sel?.kind === "mount" ? sel.id : sel?.kind === "port" ? sel.switch : null;
+  const dropPanel = dropJob && selDevice === dropJob.device ? <DropJobPanel job={dropJob} close={() => setDropJob(null)} /> : null;
   const bad = (t?.sources ?? []).filter((s) => !s.ok);
 
   return (
@@ -198,13 +218,13 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
           {/* Left: what is placed nowhere, and how to; middle: the racks; right: the selection's card. */}
           {(t && racks && (racks.racks.length || (racks.rooms ?? []).length)) || operator ? (
             <div className="rack-left">
-              {t && racks && (racks.racks.length || (racks.rooms ?? []).length) ? <Unplaced t={t} v={racks} pick={pick} /> : null}
+              {t && racks && (racks.racks.length || (racks.rooms ?? []).length) ? <Unplaced t={t} v={racks} pick={pick} grab={grab} /> : null}
               {operator ? <PhysicalHowTo /> : null}
             </div>
           ) : null}
           <div className="canvas">
             {t && racks && (racks.racks.length || (racks.rooms ?? []).length) ? (
-              <RackCanvas t={t} v={racks} sel={sel} pick={pick} cables={showCables} onPane={() => setSel(null)} />
+              <RackCanvas t={t} v={racks} sel={sel} pick={pick} cables={showCables} onPane={() => setSel(null)} drag={drag} dropRef={dropRef} onGrab={grab} />
             ) : t ? (
               <div className="rack-empty">
                 <p>{racks ? "No room or rack is recorded yet." : "The topology carries no positions (asset-manager did not answer)."}</p>
@@ -219,7 +239,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
               </div>
             ) : null}
           </div>
-          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} tree={tree} /> : null}
+          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} tree={tree} extra={dropPanel} /> : null}
         </div>
         </>
       ) : (
