@@ -33,7 +33,7 @@ export const MODIFY_SHORTCUTS = {
     "diskAutoGrow.enabled": "--diskAutoGrowEnabled", "diskAutoGrow.threshold": "--diskAutoGrowThreshold", "diskAutoGrow.growPercent": "--diskAutoGrowGrowPercent",
     "diskAutoGrow.minGrowGB": "--diskAutoGrowMinGrowGB", "diskAutoGrow.poolCeiling": "--diskAutoGrowPoolCeiling",
     "updateSchedule.frequency": "--updateFrequency", "updateSchedule.weekday": "--updateWeekday", "updateSchedule.hour": "--updateHour",
-    "health.assessInterval": "--healthAssessInterval",
+    "health.assessInterval": "--healthAssessInterval", "alerts.includeLines": "--alertsIncludeLines",
   },
   location: LOCATION,
   environment: ENVIRONMENT,

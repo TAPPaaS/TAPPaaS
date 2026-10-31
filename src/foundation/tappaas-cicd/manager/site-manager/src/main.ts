@@ -108,6 +108,7 @@ export const HELP: HelpSpec = {
         ["--updateWeekday <Day>", "Monday … Sunday (weekly/monthly only)"],
         ["--updateHour <0-23>", "hour of the update window"],
         ["--healthAssessInterval <min>", "health.assessInterval — minutes between health-manager assess runs, 1-1440 (default 5; ADR-041 D2)"],
+        ["--alertsIncludeLines true|false", "alerts.includeLines — alert mails carry the log lines a rule asks for (default true; ADR-039)"],
         ["--check", "say what would change, in one line; write nothing."],
         ["--json", "with --check: the whole resulting site.json, for machines."],
       ],
@@ -738,6 +739,7 @@ function cmdSite(o: Opts): void {
     setRange("--diskAutoGrowMinGrowGB", ["diskAutoGrow", "minGrowGB"], 1, Infinity);
     setRange("--diskAutoGrowPoolCeiling", ["diskAutoGrow", "poolCeiling"], 1, 100);
     setRange("--healthAssessInterval", ["health", "assessInterval"], 1, 1440);
+    setBool("--alertsIncludeLines", ["alerts", "includeLines"]);
     setNum("--locationLatitude", placeAt("latitude"), -90, 90);
     setNum("--locationLongitude", placeAt("longitude"), -180, 180);
     setStr("--locationCity", placeAt("city"));

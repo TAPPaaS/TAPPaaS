@@ -96,7 +96,7 @@ empty `config/.cmdb-spool/`.
 - The graph is a thin strip at a narrow width even on six roots.
 - The summary shows `0 silenced` with a condition acked while the object has another open one.
 - ~~`health.assessInterval` has no `site modify` option.~~ Fixed 2026-10-30: `site modify --set health.assessInterval=<min>` (`--healthAssessInterval`), 1-1440.
-- From the ADR-040 run, unchanged: `module-manager modify` preview says `config-only` but runs a full update; the site-manager `schedule` test on `alerts`.
+- From the ADR-040 run, unchanged: `module-manager modify` preview says `config-only` but runs a full update. ~~The site-manager `schedule` test on `alerts`.~~ Fixed 2026-10-31: `--alertsIncludeLines` (every in-place site field has a `site modify` option again).
 
 ## For the operator to decide
 

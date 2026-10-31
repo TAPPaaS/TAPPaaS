@@ -185,7 +185,7 @@ options below are **shortcuts**, one field each (ADR-020 D11): `--email a@b.org`
 bundle is to be forwarded — is one e-mail address (the schema refuses anything else), empty
 by default and set as a day-two step. The shortcuts (scalar, site-wide): `--channel`,
 `--displayName`, `--owner`, `--email`, `--supportEmail` (`''` clears it), `--automaticReboot`, `--snapshotRetention`, `--backupTarget`,
-`--backupOffsite`, `--primaryLocation`, `--locale`, `--keyboard`, `--networkIsp`, `--networkPublicIp`, `--ipv6`, `--requireSigned`, `--dnssec`,
+`--backupOffsite`, `--primaryLocation`, `--locale`, `--keyboard`, `--networkIsp`, `--networkPublicIp`, `--ipv6`, `--requireSigned`, `--dnssec`, `--alertsIncludeLines`,
 `--brandingLogo`, `--brandingLogoDark`, `--dnsBlocklistsLists|Zones|Allow` (comma lists, `''`
 empties one), `--diskAutoGrowEnabled|Threshold|GrowPercent|MinGrowGB|PoolCeiling`, and the
 update schedule. That is every field `site-fields.json` classes `in-place`. `name`, `version`
