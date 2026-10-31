@@ -116,6 +116,8 @@ check(humanSize(2e12) === "2.0 TB" && humanSize(8001563222016) === "8.0 TB" && h
   check(addNodeStage(f({ progress: { registration: "answered", inCluster: false, inSite: false } })) === "wait", "answered, installing: stage 3");
   check(addNodeStage(f({ jobLive: false, progress: joined })) === "storage" && addNodeStage(f({ progress: joined, pooled: true })) === "lan" && addNodeStage(f({ progress: joined, pooled: true, lan: true })) === "wan", "joined: the pools, then lan, then the WAN");
   check(STAGE_NUMBER.lan === "5a" && STAGE_NUMBER.wait === "3", "stages are numbered as the wizard shows them");
+  check(!addNodeUnderway({ job: false, progress: { registration: "answered", inCluster: false, inSite: false } }), "answered, no job, not in the cluster: an earlier install's leftover");
+  check(addNodeStage(f({ job: false, jobLive: false, progress: { registration: "answered", inCluster: false, inSite: false } })) === "declare", "…so a new add starts at stage 1");
   check(addNodeUnderway({ job: false, progress: joined }) && !addNodeUnderway({ job: false, progress: { registration: "none", inCluster: false, inSite: false } }), "underway: a job, or the records say so");
 }
 

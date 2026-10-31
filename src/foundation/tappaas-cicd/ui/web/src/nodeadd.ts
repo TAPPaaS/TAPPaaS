@@ -195,8 +195,10 @@ export interface AddNodeFacts {
 }
 
 // Applied, or the records say the node is on its way (registered, or joined).
+// An answered registration says so only of a job attached: without one it is
+// what an earlier install left, which a node delete or a failed add keeps.
 export function addNodeUnderway(f: Pick<AddNodeFacts, "job" | "progress">): boolean {
-  return f.job || (f.progress !== null && (f.progress.registration !== "none" || f.progress.inCluster === true));
+  return f.job || (f.progress !== null && (f.progress.registration === "pending" || f.progress.inCluster === true));
 }
 
 export function addNodeJoined(p: AddNodeFacts["progress"]): boolean {
