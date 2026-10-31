@@ -123,6 +123,7 @@ export class Metamodel {
       relations: [...new Set(mm.relations.map((r) => r.name))],
       dependants: [...new Set(mm.relations.filter((r) => r.dependant).map((r) => r.name))],
       classes: [...mm.classes.keys()],
+      fields: [...new Set([...mm.classes.keys()].flatMap((c) => [...mm.fields(c).keys()]))],
     };
     for (const [f, doc] of ruleDocs) {
       const wrong = checkHealthRules(doc, model);

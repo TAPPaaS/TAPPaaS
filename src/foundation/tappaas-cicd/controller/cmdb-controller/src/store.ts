@@ -332,6 +332,7 @@ export class Store {
       rules: this.mm.rules,
       relations: [...relations.values()],
       ancestors: Object.fromEntries([...this.mm.classes.keys()].map((c) => [c, this.mm.ancestors(c)])),
+      fields: [...new Set([...this.mm.classes.keys()].flatMap((c) => [...this.mm.fields(c).keys()]))].sort(),
     };
   }
 

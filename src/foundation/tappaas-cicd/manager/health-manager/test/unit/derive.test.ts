@@ -1,8 +1,8 @@
 // derive.test.ts — ADR-041 D3 over a small graph: a node down takes its guests,
 // its services and what depends on them; a redundancy group partly down
 // degrades its dependant, wholly down crosses; a warning crosses nothing,
-// unless a rule says so; a common ancestor is the root; a cable's two ends;
-// roll-ups.
+// unless a rule says so; a rule may read the dependant (HA); a common ancestor
+// is the root; a cable's two ends; roll-ups.
 
 import { CmdbItem, Condition } from "../../src/assess-model";
 import { derive } from "../../src/derive";
@@ -50,6 +50,33 @@ const rels = [
   check(at(c, site, "impact")?.status === "critical" && at(c, site, "impact")?.derived === true, "the site rolls it up, derived");
   check(/3 of \d+ critical/.test(at(c, site, "impact")?.message ?? ""), "…counted");
   check(!d.rootCauses.some((r) => r.id === site.id), "a roll-up is never a root");
+}
+
+// ── a rule reads the dependant: an HA-protected guest degrades ──
+{
+  const node = obj("machine", "tappaas3");
+  const haVm = obj("vm", "firewall", { haNode: "tappaas2" });
+  const plain = obj("vm", "scratch");
+  const fw = obj("service", "firewall:firewall");
+  const r = [rel("runs-on", haVm, node), rel("runs-on", plain, node), rel("runs-on", fw, haVm)];
+  const d = derive([node, haVm, plain, fw], src(
+    [node, [cond("operational", "critical", "node-down", { since: "2026-10-30T02:14:00.000Z" })]],
+    [haVm, [cond("operational", "critical", "guest-stopped", { since: "2026-10-30T02:15:00.000Z" })]],
+  ), r, shippedModel(), now);
+  const c = d.conditions;
+  check(at(c, haVm, "impact")?.status === "warning" && at(c, haVm, "impact")?.rootCause === node.id, "a node down: an HA-protected guest gets a warning impact");
+  check(at(c, plain, "impact")?.status === "critical" && at(c, plain, "impact")?.rootCause === node.id, "…one without HA a critical");
+  check(at(c, haVm, "operational")?.derived === true && at(c, haVm, "operational")?.rootCause === node.id, "…the HA guest's own stop is the node's failure: derived");
+  check(d.rootCauses.length === 1 && d.rootCauses[0].id === node.id, "…one root, the node");
+  check(at(c, fw, "impact") === undefined, "…a warning crosses no further");
+  const bare = derive([node, obj("vm", "firewall", { haNode: "" })], src([node, [cond("operational", "critical")]]), [rel("runs-on", obj("vm", "firewall"), node)], shippedModel(), now);
+  check(at(bare.conditions, obj("vm", "firewall"), "impact")?.status === "critical", "an empty haNode is no HA");
+  const eq = derive([node, haVm], src([node, [cond("operational", "critical")]]), [rel("runs-on", haVm, node)],
+    shippedModel([{ relation: "runs-on", source: { type: "operational", status: "critical" }, dependant: { haNode: "tappaas9" }, impact: "warning" }]), now);
+  check(at(eq.conditions, haVm, "impact")?.status === "warning", "the shipped clause matches any value set");
+  const neq = derive([node, haVm], src([node, [cond("operational", "critical")]]), [rel("runs-on", haVm, node)],
+    { ...shippedModel(), rules: shippedModel().rules.filter((x) => !x.dependant).concat([{ relation: "runs-on", source: { type: "operational", status: "critical" }, dependant: { haNode: "tappaas9" }, impact: "warning" }]) }, now);
+  check(at(neq.conditions, haVm, "impact")?.status === "critical", "a clause naming a value matches only that value");
 }
 
 // ── a failure that is not explained below ──

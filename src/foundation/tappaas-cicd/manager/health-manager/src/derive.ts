@@ -29,7 +29,7 @@
 
 import { CmdbItem, CmdbRel, Condition, RANK, RootCause, SOURCE, failing, silenced } from "./assess-model";
 import { RulesDoc } from "./rules";
-import { ConditionStatus, FOLLOWS, HealthRule } from "../../../lib/ts/src/health-rules";
+import { ConditionStatus, FOLLOWS, HealthRule, dependantMatches } from "../../../lib/ts/src/health-rules";
 
 interface Edge {
   rel: number; // the relation's index: both ends of a cable are one relation
@@ -72,9 +72,12 @@ function edgesOf(relations: CmdbRel[], model: RulesDoc): Edge[] {
   return out;
 }
 
-function ruleFor(e: Edge, type: string, status: string, model: RulesDoc): HealthRule | undefined {
+// The rule for a failure crossing e: one that reads the dependant, and matches
+// it, before one that does not.
+function ruleFor(e: Edge, type: string, status: string, model: RulesDoc, attrsOf: (id: string) => Record<string, unknown> | undefined): HealthRule | undefined {
   const isA = (cls: string, anc?: string): boolean => !anc || (model.ancestors[cls] ?? [cls]).includes(anc);
-  return model.rules.find((r) => r.relation === e.type && r.source.type === type && r.source.status === status && isA(e.fromClass, r.from) && isA(e.toClass, r.to));
+  const fits = model.rules.filter((r) => r.relation === e.type && r.source.type === type && r.source.status === status && isA(e.fromClass, r.from) && isA(e.toClass, r.to));
+  return fits.find((r) => r.dependant && dependantMatches(r, attrsOf(e.dep))) ?? fits.find((r) => !r.dependant);
 }
 
 // A redundancy group partly down: what reached the dependant, and how much of
@@ -91,7 +94,7 @@ interface Spread {
 // there. A fixpoint, because a redundancy group is crossed only once all its
 // members are down, and those may be reached in any order; a group still
 // partly down once nothing else grows gives its `warning`, which may travel on.
-function spread(seeds: Seed[], edges: Edge[], model: RulesDoc): Spread {
+function spread(seeds: Seed[], edges: Edge[], model: RulesDoc, attrsOf: (id: string) => Record<string, unknown> | undefined): Spread {
   const crossed = new Map<State, Set<State>>();
   const softer = new Map<State, Set<State>>();
   const partial = new Map<State, PartialGroup>();
@@ -118,7 +121,7 @@ function spread(seeds: Seed[], edges: Edge[], model: RulesDoc): Spread {
     for (const st of [...down]) {
       const [obj, type, status] = st.split("|");
       for (const e of byProv.get(obj) ?? []) {
-        const rule = ruleFor(e, type, status, model);
+        const rule = ruleFor(e, type, status, model, attrsOf);
         if (!rule) continue;
         let impact = rule.impact;
         let part: PartialGroup | null = null;
@@ -261,7 +264,7 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
 
   const seeds: Seed[] = [];
   for (const [obj, cs] of out) for (const cond of cs) if (failing(cond) && cond.type !== "impact") seeds.push({ obj, cond });
-  const { crossed, softer, partial } = spread(seeds, edges, model);
+  const { crossed, softer, partial } = spread(seeds, edges, model, (id) => byId.get(id)?.attributes);
   const reached = new Map(seeds.map((s) => [s, reach(stateOf(s.obj, s.cond.type, s.cond.status), crossed)]));
 
   // The same failure seen from below: reached in its own type, no less severe;
