@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted** (operator, 2026-10-30; O3, O5 and O6 still open) |
-| **Version** | 1.3 |
-| **Date** | 2026-10-30 |
+| **Status** | **Accepted** (operator, 2026-10-30; every open question closed) |
+| **Version** | 1.4 |
+| **Date** | 2026-10-31 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | #908. Amends ADR-007e (Health as a lens: the lens now reads and writes the CMDB), ADR-040 D10 and D11 (the `health` attribute becomes conditions; the Operations view becomes the Health view), ADR-039 D8 (open alerts are one source of a condition). Related: ADR-034 (console), ADR-031 (the pulse), ADR-011 (the CVE scan), ADR-017 (the update sweep's capacity checks), IT4IT 3.0.1 Event (§9.2.3.1: Type causal or symptom, Is Correlated) and the Configuration component's duty to "calculate and provide the business impact of the Event". |
-| **Changelog** | v1.3 (2026-10-30) — **plan step 2 done, sources beyond the gates:** `assess` judges every class from the CMDB's observations and asks no plane (O3's direction): ports, addresses, DNS names, proxy routes, zones and VLANs, SSIDs, software, assets, datastore GC, restore points, backup peers, shares, and a CI's lifecycle (`unseen`). What nothing can judge follows its parent (`FOLLOWS`, derived, never a root). site-manager reports a NIC's link and negotiated speed on its port. The health-manager README's *What judges which class* is the map. · v1.2 (2026-10-30) — **D5 redesigned (operator):** the one-graph-of-everything did not work in practice; the Health view becomes a containment tree, an ego graph one hop deep with plus/minus expansion, and the CI panel. · v1.1 (2026-10-30) — **critical roots only (operator):** `HealthRootCause` mails a critical root at once; warnings and the sweep's findings go to a daily digest rule (D4). · v1.0 (2026-10-30) — **Accepted** by the operator with O3, O5 and O6 open. O1: no hardcoded propagation — the rules are data, per relation type and class (D3); O2: the interval is a site setting (D2); O4: an acknowledgement on a root cause covers its symptoms (D4). Implementation starts on the plan below, on the `adr-040` branch. · v0.1 (2026-10-30) — first draft, from the operator's direction of 2026-10-30: health is stored on every CMDB object as several conditions; health-manager is split into an assessing half that writes them and an emitting half that raises events and answers questions; root causes are derived along the CMDB's relations and the console's new Health view centres on them. |
+| **Changelog** | v1.4 (2026-10-31) — **O6 closed (operator): redundancy degrades.** A partly failed redundancy group gives its dependant a `warning` impact naming the failed member; the groups are set from the start by site-manager (bonded uplinks) and switch-manager (MLAG peer links and LAG legs); a rule may read the dependant, and the shipped `runs-on` rule degrades an HA-protected guest where it fails one without HA; a pool's ZFS state stays the disk case until disks are CIs. Mails carry the root's consequence by class. · v1.3 (2026-10-30) — **plan step 2 done, sources beyond the gates:** `assess` judges every class from the CMDB's observations and asks no plane (O3's direction): ports, addresses, DNS names, proxy routes, zones and VLANs, SSIDs, software, assets, datastore GC, restore points, backup peers, shares, and a CI's lifecycle (`unseen`). What nothing can judge follows its parent (`FOLLOWS`, derived, never a root). site-manager reports a NIC's link and negotiated speed on its port. The health-manager README's *What judges which class* is the map. · v1.2 (2026-10-30) — **D5 redesigned (operator):** the one-graph-of-everything did not work in practice; the Health view becomes a containment tree, an ego graph one hop deep with plus/minus expansion, and the CI panel. · v1.1 (2026-10-30) — **critical roots only (operator):** `HealthRootCause` mails a critical root at once; warnings and the sweep's findings go to a daily digest rule (D4). · v1.0 (2026-10-30) — **Accepted** by the operator with O3, O5 and O6 open. O1: no hardcoded propagation — the rules are data, per relation type and class (D3); O2: the interval is a site setting (D2); O4: an acknowledgement on a root cause covers its symptoms (D4). Implementation starts on the plan below, on the `adr-040` branch. · v0.1 (2026-10-30) — first draft, from the operator's direction of 2026-10-30: health is stored on every CMDB object as several conditions; health-manager is split into an assessing half that writes them and an emitting half that raises events and answers questions; root causes are derived along the CMDB's relations and the console's new Health view centres on them. |
 
 Health in TAPPaaS today is a verdict computed on demand and forgotten: `health-manager validate`
 runs its gates against the live cluster, prints a table, exits 0 or 1, and the console caches the
@@ -171,7 +171,21 @@ and validates them. Two words are added to the relation types that carry depende
 **`required`** (the default for `runs-on`, `depends-on` and `allocated-to`; false for a relation
 that only informs, such as `backs-up`) and an optional **`redundancyGroup`** — relations in one
 group are satisfied while any one of them is healthy (a node with two uplinks, a service with two
-providers), as Icinga's dependencies are. `assess` walks them in two passes:
+providers), as Icinga's dependencies are. **A partly failed group degrades** (O6, v1.4): while
+some but not all members of a group are down, the dependant gets a `warning` impact that names
+the failed member as its root ("one of two uplinks down"); only when every member is down does the
+rule's own impact cross. The groups are set from the start by the reports that know the
+redundancy: site-manager on a node's bonded uplinks (ADR-019 v1.1, one group per bond, on the
+`connects` relations of its ports) and switch-manager on an MLAG pair's peer links and the two
+legs of an MLAG LAG. ZFS does the same reasoning for a pool's mirrors and raidz vdevs: a pool
+`DEGRADED` is a warning and `FAULTED` critical (D2), and a disk becomes a root of its own when
+disks are CIs (ADR-040 O4). **A rule may read the dependant** (`dependant: {attr: value}`): the
+shipped rule for `runs-on` gives a guest with `haNode` set (HA-protected, module-manager's report)
+a `warning` impact when its node fails — it is moving or has moved, and the next report changes its
+`runs-on` — where a guest without HA gets `critical`. The health state and what is mailed stay
+apart (D4): every object carries its own condition, derived or not, and only a root cause leaves
+the site, with its consequence: the count of its symptoms and, from v1.4, the impacted CIs by
+class. `assess` walks them in two passes:
 
 **Impact (downstream).** For every object with a non-derived `operational` condition that is
 `critical`, every object that depends on it gets an `impact` condition: `vm` → `runs-on` →
@@ -372,8 +386,14 @@ correlated, and its root causes.
   lists what it read, so the operator can check it. A second hop only on the operator's
   explicit follow-up question. **Decided: (b)** as described — the ego graph one hop and the
   root's history, bounded, names and conditions only, what was read listed in the answer.
-- **O6** *(open, to discuss)* Which relations get `redundancyGroup` from the start: a node's bonded uplinks (ADR-019
-  v1.1), MLAG peers, a service with two providers — or none until a site has one.
+- **O6** *(closed 2026-10-31, operator)* Which relations get `redundancyGroup` from the start: a node's bonded uplinks (ADR-019
+  v1.1), MLAG peers, a service with two providers — or none until a site has one. **Decision:** the
+  site has redundancy in three places and each is handled as D3 now says: a disk in a mirror or raidz
+  degrades its pool (ZFS's word, a warning, not an error); one leg of a bonded uplink or an MLAG pair
+  down degrades the upstream (a `warning` impact from a partly failed group, set from the start by
+  site-manager and switch-manager); a node down is an error on the guests it ran that are not HA
+  protected and a degradation on those that are. The health state is one thing and the alert another:
+  what is mailed is always the root cause, with its consequence (D4).
 
 ## Implementation plan
 
