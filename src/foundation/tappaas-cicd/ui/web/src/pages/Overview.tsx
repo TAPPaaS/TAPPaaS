@@ -124,7 +124,7 @@ export function Overview({ setupIncomplete = false }: { setupIncomplete?: boolea
             {siteT.nodes.map((n) => (
               <li key={n.name}>
                 <Dot level={lvl(n.status)} title={n.status} />
-                <Link to={`/site/assets?select=node:${encodeURIComponent(n.name)}`} className="mono">{n.name}</Link>
+                <Link to={`/site/devices?select=node:${encodeURIComponent(n.name)}`} className="mono">{n.name}</Link>
                 <span className="muted small">{[n.text, n.location].filter(Boolean).join(" · ")}</span>
               </li>
             ))}

@@ -1,14 +1,15 @@
 // views.ts — the Site page's four views of the site as built and their
-// addresses: Overview, Physical (the racks), Device and Storage. The addresses
+// addresses: Overview, Physical (the racks), Devices (the assets that are
+// physical devices, as cabled) and Storage. The addresses
 // they had as sub-views of a Physical tab still open them. Plain data: the
 // unit tests read it.
 
 export const PHYSICAL_TABS = ["overview", "rack", "device", "storage"] as const;
 export type PhysicalView = (typeof PHYSICAL_TABS)[number];
 
-export const VIEW_NAME: Record<PhysicalView, string> = { overview: "Overview", rack: "Physical", device: "Assets", storage: "Storage" };
+export const VIEW_NAME: Record<PhysicalView, string> = { overview: "Overview", rack: "Physical", device: "Devices", storage: "Storage" };
 
-export const VIEW_PATH: Record<PhysicalView, string> = { overview: "/site/overview", rack: "/site/physical", device: "/site/assets", storage: "/site/storage" };
+export const VIEW_PATH: Record<PhysicalView, string> = { overview: "/site/overview", rack: "/site/physical", device: "/site/devices", storage: "/site/storage" };
 
 // The view an address shows (/site is the Overview), or null.
 export function viewOfPath(path: string): PhysicalView | null {
@@ -21,9 +22,10 @@ export const MOVED_PATHS: Record<string, string> = {
   "/physical": "/site/physical",
   "/site/physical/overview": "/site/overview",
   "/site/physical/rack": "/site/physical",
-  "/site/physical/cabling": "/site/assets",
-  "/site/physical/device": "/site/assets",
-  "/site/device": "/site/assets",
+  "/site/physical/cabling": "/site/devices",
+  "/site/physical/device": "/site/devices",
+  "/site/device": "/site/devices",
+  "/site/assets": "/site/devices",
   "/site/physical/storage": "/site/storage",
 };
 

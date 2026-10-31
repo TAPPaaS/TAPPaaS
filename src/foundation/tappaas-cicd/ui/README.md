@@ -62,7 +62,7 @@ causes, what is silenced and unknown), the last sweep, backups, the release and 
 **Alerts**: the ten open events from `operations`, critical first and the newest first within each,
 one line each (status, class and name, what is wrong, since) opening it on the Operations page with
 its Health panel; a link to the Operations page for the rest. **Site** — the site as built, in four tabs, each at its own address: Overview
-(`/site/overview`, also `/site`), Physical (`/site/physical`), Assets (`/site/assets`) and Storage
+(`/site/overview`, also `/site`), Physical (`/site/physical`), Devices (`/site/devices`) and Storage
 (`/site/storage`); the earlier addresses (`/physical`, `/site/physical/<view>`) redirect to them.
 **Overview** sums the other three: the site in one line (nodes, switches, APs, racks, pools,
 disks, the public address) with Add node and Register joined nodes (`site-manager node
@@ -105,7 +105,7 @@ Physical view, from any view — and at its top the Details link to the device's
 where Place… (the rooms and racks at the device's own location only;
 with none there, Add a room… at it), Move to…, Change placement… and Unplace… are, besides the
 object's own changes; a machine module's page shows the same two lines with the same actions; a seen device's card shows the port it is seen at, its MAC, what LLDP and
-the lease say, its Details the Assets page where Record… is. **Assets** (`/site/assets`, formerly `/site/device`) — every physical asset (the cluster nodes, the
+the lease say, its Details the Assets page where Record… is. **Devices** (`/site/devices`, formerly `/site/assets` and `/site/device`) — a view on the assets that are physical devices (the cluster nodes, the
 switches, the access points, the machines and devices a placement or a cable record names, the devices a switch port sees (marked as seen), the internet
 and the backup buddies) as a card with its kind's icon and its name, a server's with its bay row (a
 small cell per disk in it, by bay, coloured by the disk's health), coloured by
@@ -382,7 +382,7 @@ room fields only.
 
 ## Side panels: the Details link
 
-A selection in the Physical, Assets (`/site/assets`) and Storage views, and an object in the Health
+A selection in the Physical, Devices (`/site/devices`) and Storage views, and an object in the Health
 and Operations views, opens a side panel with a condensed overview of it: its records, findings or
 conditions, where it is, what it is connected to. The panel changes nothing. At its top, **Details**
 opens the page that shows the object in full and where it is changed (`web/src/details.ts`):

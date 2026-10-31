@@ -83,7 +83,7 @@ export const PAGES: { path: string; title: string }[] = [
   { path: "/site", title: "the Site page (its Overview: the site as built, site.json, the update schedule, Update now, the release train, the repositories)" },
   { path: "/site/overview", title: "the site overview (racks, devices and storage summed up, every finding; Add node; site.json, the update schedule, Update now, the release train, the repositories)" },
   { path: "/site/physical", title: "the physical view (racks, faceplates, cables)" },
-  { path: "/site/assets", title: "the assets view (every physical asset and its connections)" },
+  { path: "/site/devices", title: "the devices view (the assets that are physical devices, as cabled)" },
   { path: "/site/storage", title: "the storage view (nodes, pools, disks, what each pool holds)" },
   { path: "/environments", title: "Environments (a card per environment with its zones and their modules; a click opens its record and verbs)" },
   { path: "/zones", title: "Network (the zones graph, each zone's fields and verbs)" },
