@@ -3,28 +3,32 @@
 // out by force around the selected device (devicegraph.ts forceLayout): the
 // selection moves to the middle, its neighbours on a ring around it, the rest
 // further out, animated from where they were. Cards can be dragged; Fit shows
-// all. A click on a card selects the device, on a line its link; the side
-// panel has the rest.
+// all. A server's card carries its bay row: a cell per disk in it, by bay,
+// coloured by the disk's health (the Assets view's tree). A click on a card
+// selects the device, on a line its link; the side panel has the rest.
 
 import { BaseEdge, Background, Controls, ControlButton, Edge, EdgeProps, Handle, Node, NodeChange, NodeProps, Position, ReactFlow, ReactFlowProvider, applyNodeChanges, useInternalNode, useReactFlow } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Topology } from "../types";
+import { AssetTree, AssetTreeDisk, Topology } from "../types";
+import { disksOf } from "../diskview";
 import { DevLabel, linkStyle, linkText } from "./devicecard";
+import { BayRow } from "./disks";
 import { DevNode, DevState, Pt, deviceGraph, deviceState, forceLayout, selectedDevice } from "./devicegraph";
 import { Sel } from "./layout";
 import { stateClass } from "./states";
 
-type DevData = { d: DevNode; s: DevState; on: boolean; w: number; pick: (s: Sel) => void };
+type DevData = { d: DevNode; s: DevState; on: boolean; w: number; disks: AssetTreeDisk[]; pick: (s: Sel) => void };
 
 const H = 36;
-const widthOf = (d: DevNode) => 58 + d.name.length * 8;
+// Its name, and its bay row: a cell per disk.
+const widthOf = (d: DevNode, disks = 0) => 58 + d.name.length * 8 + (disks ? 10 + disks * 10 : 0);
 const hidden = { opacity: 0, width: 1, height: 1, minWidth: 0, minHeight: 0, border: 0, top: "50%", left: "50%" };
 
 function DevCard({ data }: NodeProps<Node<DevData, "dev">>) {
   return (
     <div className={`card-flow gcard dev-node ${stateClass(data.s.state)}${data.on ? " gcard-on" : ""}`} style={{ width: data.w, height: H }} onClick={(e) => (e.stopPropagation(), data.pick(data.d.sel))}>
       <Handle type="target" position={Position.Top} style={hidden} />
-      <DevLabel d={data.d} s={data.s} />
+      <DevLabel d={data.d} s={data.s} bays={data.disks.length ? <BayRow disks={data.disks} compact /> : null} />
       <Handle type="source" position={Position.Bottom} style={hidden} />
     </div>
   );
@@ -54,8 +58,10 @@ function FloatEdge({ id, source, target, style, label, labelStyle, labelBgStyle 
 const nodeTypes = { dev: DevCard };
 const edgeTypes = { float: FloatEdge };
 
-function Inner({ t, sel, pick, onPane, labels }: { t: Topology; sel: Sel | null; pick: (s: Sel) => void; onPane: () => void; labels: boolean }) {
+function Inner({ t, sel, pick, onPane, labels, tree }: { t: Topology; sel: Sel | null; pick: (s: Sel) => void; onPane: () => void; labels: boolean; tree?: AssetTree | null }) {
   const g = useMemo(() => deviceGraph(t), [t]);
+  const bays = useMemo(() => new Map(g.nodes.map((d) => [d.id, disksOf(tree, d.name)])), [g, tree]);
+  const wOf = useCallback((d: DevNode) => widthOf(d, bays.get(d.id)?.length ?? 0), [bays]);
   const states = useMemo(() => new Map(g.nodes.map((d) => [d.id, deviceState(t, d)])), [g, t]);
   const rf = useReactFlow();
   // The device the layout centres on: the selected one; a link or nothing
@@ -67,11 +73,11 @@ function Inner({ t, sel, pick, onPane, labels }: { t: Topology; sel: Sel | null;
   // Where each card's middle is now.
   const pos = useRef(new Map<string, Pt>());
   const [nodes, setNodes] = useState<Node<DevData, "dev">[]>([]);
-  const data = useCallback((d: DevNode): DevData => ({ d, s: states.get(d.id)!, on: d.id === picked, w: widthOf(d), pick }), [states, picked, pick]);
+  const data = useCallback((d: DevNode): DevData => ({ d, s: states.get(d.id)!, on: d.id === picked, w: wOf(d), disks: bays.get(d.id) ?? [], pick }), [states, picked, pick, wOf, bays]);
   const place = useCallback((at: Map<string, Pt>) => g.nodes.map((d): Node<DevData, "dev"> => {
     const p = at.get(d.id) ?? { x: 0, y: 0 };
-    return { id: d.id, type: "dev", position: { x: p.x - widthOf(d) / 2, y: p.y - H / 2 }, data: data(d), width: widthOf(d), height: H };
-  }), [g, data]);
+    return { id: d.id, type: "dev", position: { x: p.x - wOf(d) / 2, y: p.y - H / 2 }, data: data(d), width: wOf(d), height: H };
+  }), [g, data, wOf]);
 
   // The selection in the middle, zoomed so the farthest card still shows;
   // without one, everything fitted.
@@ -79,7 +85,7 @@ function Inner({ t, sel, pick, onPane, labels }: { t: Topology; sel: Sel | null;
   const centre = (at: Map<string, Pt>) => {
     const el = wrap.current;
     if (!center || !el) return void rf.fitView({ padding: 0.18, duration: 350 });
-    const far = Math.max(...g.nodes.map((d) => Math.max(Math.abs(at.get(d.id)?.x ?? 0) + widthOf(d) / 2, Math.abs(at.get(d.id)?.y ?? 0) + H / 2)));
+    const far = Math.max(...g.nodes.map((d) => Math.max(Math.abs(at.get(d.id)?.x ?? 0) + wOf(d) / 2, Math.abs(at.get(d.id)?.y ?? 0) + H / 2)));
     const zoom = Math.max(0.25, Math.min(1.3, (Math.min(el.clientWidth, el.clientHeight) / 2 - 20) / far));
     void rf.setCenter(0, 0, { zoom, duration: 350 });
   };
@@ -167,7 +173,7 @@ function Inner({ t, sel, pick, onPane, labels }: { t: Topology; sel: Sel | null;
   );
 }
 
-export function DeviceGraph(props: { t: Topology; sel: Sel | null; pick: (s: Sel) => void; onPane: () => void; labels: boolean }) {
+export function DeviceGraph(props: { t: Topology; sel: Sel | null; pick: (s: Sel) => void; onPane: () => void; labels: boolean; tree?: AssetTree | null }) {
   return (
     <ReactFlowProvider>
       <Inner {...props} />

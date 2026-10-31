@@ -50,15 +50,16 @@ async function main(): Promise<void> {
 
   // ── findings on objects ─────────────────────────────────────────────
   const gates: Gate[] = [
-    { name: "storage-pools", status: "warn", detail: "", findings: [{ status: "warn", text: "tappaas2/tanka1: 85% used", subject: { kind: "pool", name: "tappaas2/tanka1" } }, { status: "pass", text: "tappaas1/tanka1: 17% used", subject: { kind: "pool", name: "tappaas1/tanka1" } }] },
-    { name: "storage-disks", status: "warn", detail: "", findings: [{ status: "warn", text: inv.findings[0].text, subject: { kind: "disk", name: "tappaas3:/dev/sdb" } }, { status: "warn", text: "tappaas3/tankc1: DEGRADED (gate)", subject: { kind: "pool", name: "tappaas3/tankc1" } }] },
+    { name: "storage-pools", status: "warn", detail: "", findings: [{ status: "warn", text: "tappaas2/tanka1: 85% used", subject: { kind: "pool", name: "tappaas2/tanka1" } }, { status: "pass", text: "tappaas1/tanka1: 17% used", subject: { kind: "pool", name: "tappaas1/tanka1" } }, { status: "warn", text: inv.findings[0].text, subject: { kind: "disk", name: "tappaas3:/dev/sdb" } }, { status: "warn", text: "tappaas3/tankc1: DEGRADED (gate)", subject: { kind: "pool", name: "tappaas3/tankc1" } }] },
+    { name: "storage-replication", status: "warn", detail: "", findings: [{ status: "warn", text: "a replication job behind", subject: { kind: "node", name: "tappaas2" } }] },
     { name: "quorum", status: "warn", detail: "", findings: [{ status: "warn", text: "not storage", subject: { kind: "node", name: "tappaas1" } }] },
   ];
   const notes = storageNotes(inv, gates);
   check((notes.get(diskKey("tappaas3", "/dev/sdb")) ?? []).length === 1, "the gate's row of the same text as the inventory's is one finding");
-  check((notes.get(poolKey("tappaas3", "tankc1")) ?? []).some((n) => n.source === "storage-disks") && (notes.get(poolKey("tappaas3", "tankc1")) ?? []).some((n) => n.source === "inventory"), "a pool shows the inventory's finding and the gate's");
+  check((notes.get(poolKey("tappaas3", "tankc1")) ?? []).some((n) => n.source === "storage-pools") && (notes.get(poolKey("tappaas3", "tankc1")) ?? []).some((n) => n.source === "inventory"), "a pool shows the inventory's finding and the gate's");
   check(stateWith("ok", notes.get(poolKey("tappaas2", "tanka1"))) === "warn" && !notes.has(poolKey("tappaas1", "tanka1")), "a storage-pools warning raises the pool's state; a pass is no finding");
   check(!notes.has("node:tappaas1"), "other gates' findings are not storage findings");
+  check((notes.get("node:tappaas2") ?? []).some((n) => n.source === "storage-replication"), "a storage-replication row on its node");
   check(notes.has(diskKey("tappaas3", "/dev/sda")), "the disk in no pool carries its finding");
 
   // ── the columns ─────────────────────────────────────────────────────

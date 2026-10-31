@@ -16,7 +16,7 @@ import { CABLE_KINDS, RackCanvas } from "../physical/rack";
 import { faceplateAddSteps } from "../physical/faceplateform";
 import { AddRoomButton, PhysicalHowTo, PlaceActions, RecordDeviceButton, RecordSeenButton, rackAddSteps } from "../physical/rackops";
 import { SidePanel } from "../physical/SidePanel";
-import { Health, PositionsView, StorageInventory, Topology } from "../types";
+import { AssetTree, Health, PositionsView, StorageInventory, Topology } from "../types";
 import { StateLegend } from "../physical/state";
 import { storageNotes } from "../physical/storage";
 import { StorageGraph } from "../physical/storageview";
@@ -104,6 +104,8 @@ function Unplaced({ t, v, pick }: { t: Topology; v: PositionsView; pick: (s: Sel
 export function Physical({ embedded, view, aside, beforeFindings }: { embedded?: boolean; view?: PhysicalView; aside?: ReactNode; beforeFindings?: ReactNode }) {
   const topo = useRead<Topology>("topology");
   const health = useRead<Health>("health");
+  // The assets with their disks: a server card's bay row, a disk's own record.
+  const tree = useRead<AssetTree>("assets/tree").env?.data ?? null;
   const [sel, setSel] = useState<Sel | null>(selFromUrl);
   const [showLabels, setShowLabels] = useState(true);
   const [showCables, setShowCables] = useState(true);
@@ -180,8 +182,8 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
             <div className="readstate readstate-warn">Not read: {inv.sources.filter((s) => !s.ok).map((s) => `${s.name} (${s.error ?? "?"})`).join("; ")}</div>
           ) : null}
           <div className="physical">
-            <div className="canvas" key={sel ? "with-card" : "alone"}>{storage ? <StorageGraph inv={storage.inv} notes={storage.notes} sel={sel} pick={pick} /> : null}</div>
-            {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} /> : null}
+            <div className="canvas" key={sel ? "with-card" : "alone"}>{storage ? <StorageGraph inv={storage.inv} notes={storage.notes} sel={sel} pick={pick} tree={tree} /> : null}</div>
+            {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} tree={tree} /> : null}
           </div>
           <div className="legend">
             <StateLegend extra="a pool's bar is its fill" />
@@ -193,7 +195,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
       ) : shown === "rack" ? (
         <>
         <div className="physical physical-rack">
-          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} /> : operator ? <PhysicalHowTo /> : null}
+          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} tree={tree} /> : operator ? <PhysicalHowTo /> : null}
           <div className="canvas">
             {t && racks && (racks.racks.length || (racks.rooms ?? []).length) ? (
               <RackCanvas t={t} v={racks} sel={sel} pick={pick} cables={showCables} onPane={() => setSel(null)} />
@@ -217,9 +219,9 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
       ) : (
         <div className="physical">
           <div className="canvas">
-            {t ? <DeviceGraph t={t} sel={sel} pick={pick} onPane={() => setSel(null)} labels={showLabels} /> : null}
+            {t ? <DeviceGraph t={t} sel={sel} pick={pick} onPane={() => setSel(null)} labels={showLabels} tree={tree} /> : null}
           </div>
-          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} /> : null}
+          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} tree={tree} /> : null}
         </div>
       )}
       {t && (shown === "rack" || shown === "device") ? (

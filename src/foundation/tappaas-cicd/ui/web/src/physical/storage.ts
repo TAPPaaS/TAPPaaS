@@ -43,11 +43,16 @@ export interface StorageNote {
   source: string; // "inventory", or the health gate that said it
 }
 
+// The health gates whose rows are storage findings (health-manager
+// validate): a pool's fill, and the replication jobs. A disk is judged on its
+// own CI (the Assets view's health), and its SMART findings are the
+// inventory's.
+export const STORAGE_GATES = ["storage-pools", "storage-replication"];
+
 // Every finding on every object: the inventory's own, and the rows of the
-// storage-pools and storage-disks gates (health-manager validate) by their
-// subjects — a pool "<node>/<pool>", a disk "<node>:<device>", a module (a
-// replication job, placed on the node the job runs from). The same text twice
-// is one finding.
+// storage gates by their subjects — a pool "<node>/<pool>", a disk
+// "<node>:<device>", a module (a replication job, placed on the node the job
+// runs from), a node. The same text twice is one finding.
 export function storageNotes(inv: StorageInventory, gates: Gate[] = []): Map<string, StorageNote[]> {
   const out = new Map<string, StorageNote[]>();
   const add = (key: string, n: StorageNote): void => {
@@ -59,7 +64,7 @@ export function storageNotes(inv: StorageInventory, gates: Gate[] = []): Map<str
     const key = f.on.kind === "disk" ? diskKey(f.on.node, f.on.name) : f.on.kind === "pool" ? poolKey(f.on.node, f.on.name) : f.on.kind === "replication" ? `repl:${f.on.node}:${f.on.name}` : nodeKey(f.on.node);
     add(key, { level: f.level, text: f.text, source: "inventory" });
   }
-  for (const g of gates.filter((x) => x.name === "storage-pools" || x.name === "storage-disks")) {
+  for (const g of gates.filter((x) => STORAGE_GATES.includes(x.name))) {
     for (const r of g.findings) {
       const level = r.status === "fail" ? "fail" : r.status === "warn" ? "warn" : null;
       if (!level || !r.subject) continue;
@@ -224,6 +229,31 @@ export function findDisk(inv: StorageInventory, node: string, device: string): {
   }
   const o = n.otherDisks.find((d) => d.device === device);
   return o ? { disk: o, pool: null, vdev: null, boot: false } : null;
+}
+
+// A pool's members as the Storage view lists them: each disk of each vdev
+// with its state (raised by its findings) and serial, a member ZFS names that
+// is not among the node's disks as missing, in the vdevs' order.
+export interface PoolMember {
+  device: string;
+  serial: string | null;
+  vdev: string;
+  state: StorageState;
+  missing: boolean;
+  text: string; // ZFS's state of it, or the disk's reasons
+}
+export function poolMembers(node: string, p: StoragePool, notes: Map<string, StorageNote[]> = new Map()): PoolMember[] {
+  return p.vdevs.flatMap((v) => [
+    ...v.disks.map((d) => ({
+      device: d.device,
+      serial: d.serial,
+      vdev: v.name,
+      state: stateWith(d.state, notes.get(diskKey(node, d.device))),
+      missing: false,
+      text: [d.zfs?.state, ...d.reasons].filter(Boolean).join(" · "),
+    })),
+    ...v.missing.map((m) => ({ device: m.name, serial: null, vdev: v.name, state: "fail" as StorageState, missing: true, text: `${m.state} — not among the node's disks` })),
+  ]);
 }
 
 // Totals per node for the overview: its pools' sizes and what is used.

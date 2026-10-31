@@ -25,7 +25,7 @@ export function ModuleIcon({ name, size = 40 }: { name: string; size?: number })
 }
 
 // An object that is no module: a tile for its class, by the same rule.
-const CLASS_LETTER: Record<string, string> = { machine: "M", vm: "V", lxc: "C", device: "D", site: "◆", environment: "E", cluster: "◎", zone: "Z", datastore: "B", "storage-pool": "P", port: "·", user: "U", group: "G" };
+const CLASS_LETTER: Record<string, string> = { machine: "M", vm: "V", lxc: "C", device: "D", site: "◆", environment: "E", cluster: "◎", zone: "Z", datastore: "B", "storage-pool": "P", port: "·", disk: "◍", user: "U", group: "G" };
 
 export function ClassIcon({ cls, size = 22 }: { cls: string; size?: number }) {
   return (

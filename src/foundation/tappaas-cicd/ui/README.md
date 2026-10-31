@@ -96,7 +96,8 @@ with none there, Add a room… at it), Move to…, Change placement… and Unpla
 object's own changes; a machine module's page shows the same two lines with the same actions; a seen device's card shows the port it is seen at, its MAC, what LLDP and
 the lease say, its Details the Assets page where Record… is. **Assets** (`/site/assets`, formerly `/site/device`) — every physical asset (the cluster nodes, the
 switches, the access points, the machines and devices a placement or a cable record names, the devices a switch port sees (marked as seen), the internet
-and the backup buddies) as a card with its kind's icon and its name and nothing else, coloured by
+and the backup buddies) as a card with its kind's icon and its name, a server's with its bay row (a
+small cell per disk in it, by bay, coloured by the disk's health), coloured by
 its state as the Storage view colours its cards (its findings' worst level; a drifting port, a
 node's uplink leg down or a buddy down are warnings; the reason on hover; one legend for both
 views); one line per pair of devices a cable joins (several cables or a LAG thicker, the internet's
@@ -110,16 +111,22 @@ the rack with its ports ringed; a rack keeps its own record in the same panel.
 A click opens the side panel: on top the device's faceplate drawn as the Physical view draws it
 (the rack catalog's plate, or a generic one from the ports the topology knows), its cabled ports
 underlined and the selected link's ports ringed, a click on a port selecting that switch port or
-that port's link; below it the device's records (a switch's ports and what hangs on them, a node's
+that port's link; under it a server's bay row (each disk by bay, coloured by its health, a link to
+the disk's page); below it the device's records (a switch's ports and what hangs on them, a node's
 memory, uplinks and guests), what it is connected to and its findings; its day-2 changes — a switch
 port's record (`switch-manager update-port`) then `switch-manager reconcile`, a node's
 `node network show / set` — are on the page its Details link opens. **Storage** (`/site/storage`, `storage-manager inventory`) — in
 columns: the cluster nodes, each node's boot device and pools (with the pool's fill bar), each
 pool's disks (a mirror's or a raidz's disks carry its label and a bracket), lines node → pool →
 disk; every card coloured by its state (ok green, warn amber, fail red, the reason on hover),
-raised by the storage-pools and storage-disks findings on it. A disk's card: model, serial, size,
-SMART, life left, temperature, sector counts, its ZFS errors and the jump to the node's Disks in
-Proxmox; a pool's: size, used, free, health, scrub, its vdevs and a pie of what it holds — one
+raised by the storage-pools and storage-replication findings on it (a disk's own health is its
+CMDB record's, on its asset). A disk an asset records carries its tag and bay on its card. A
+disk's card: model, serial, size, SMART, life left, temperature, sector counts, its ZFS errors, the
+jump to the node's Disks in Proxmox, and its asset: its tag (a link to its page), its health and
+pool as the CMDB has them, the assets it has been in, and its CMDB record; a disk no asset records
+says how to record it. A pool's: size, used, free, health, scrub, its members — each vdev with its
+disks and their state, a click opening the disk's card, a member that is gone marked missing — and
+a pie of what it holds — one
 slice per guest with its own disks there (linked to its module page), the HA mirror copies of
 other nodes' guests as one slice (expandable to the guests), datastores and shares, other
 datasets, free. **Modules** — tabs: Installed (the list with its badges, grouped by stack, foundation
@@ -294,8 +301,13 @@ recorded (last); **Disposed** apart, folded. Each asset shows its display name (
 kind, stage (ordered, stock, placed, operational, disposed), the faulty flag, the role it plays,
 vendor and model, and *CMDB differs* when the CMDB has it allocated to another role than the
 record says; its ports fold out with their connector, speed, MAC, role and where each cable goes
-(recorded or seen by the topology, a label, the patch panel ports it runs through). A filter keeps
-the rows whose name, kind, model, vendor, serial, tag, role or stage match. The header has Add a
+(recorded or seen by the topology, a label, the patch panel ports it runs through), and so do its
+disks: each disk in it by bay, a link to its own page, with its serial, size, kind, health (its
+CMDB record's condition, else the node's health word) and the pool built on it, and how many disks
+its CMDB record lists that no asset records. A disk is an asset of its own (`dsk-NN`, its by-id
+name shown): one in a server is listed under that server, one in stock under its location's Not
+placed. A filter keeps the rows whose name, kind, model, vendor, serial, tag, role or stage match,
+or a disk in it by its tag, by-id name or serial. The header has Add a
 room…, Add a rack…, Record a device… and Add a faceplate….
 
 A location, a room, a rack or a device no asset records opens beside the tree
@@ -324,6 +336,21 @@ Park…, Record a cable… or Remove the cable…, Attach to patch panel… or R
 cable, and on a patch panel's free port Attach a wire here…. `#port-<name>` in the address marks
 and scrolls to a port's row. A node's disks and pools are in the Storage view, linked from the page.
 
+**Disks.** An asset's page lists the disks in it with their bay row and, per disk, its bay, its
+page, serial, size, kind, health and pool, with Move to… (`asset-manager place <disk> --in
+<asset> [--bay]`) and Take out… (`unplace`: into stock). Record a disk… (`disk add <asset>`) records
+one by its serial; Adopt the disks the CMDB knows… (`disk adopt <asset>`) is offered when the
+asset's CMDB record lists disks with a serial no asset records, and names them. **A disk's page**
+(`/assets/dsk-NN`) shows its record (serial, model, medium and bus, size, WWN, firmware, asset tag),
+where it is (the asset it is in, its bay, its health and the pool built on it), its placements —
+every asset it has been in, from when until when, from the CMDB history of its disk records (a
+disk moved ends its record in the old asset and begins one in the new) — and its CMDB record. Its
+operations: Move to… (or Put in… from stock), Take out…, Change… (`disk modify`), Faulty… and
+Repaired…, Dispose… once it is in no asset (`asset dispose --how …`, the form asking *Was it
+wiped?*, which the disposal record keeps as `--wiped`), and Remove the record… (`disk remove`, a
+record made by mistake). A place form offers a disk's `in` and `bay` only, and a device's rack or
+room fields only.
+
 ## Side panels: the Details link
 
 A selection in the Physical, Assets (`/site/assets`) and Storage views, and an object in the Health
@@ -336,7 +363,9 @@ opens the page that shows the object in full and where it is changed (`web/src/d
 | a server, switch, access point, recorded device, patch panel | its asset's page, `/assets/<name>` |
 | a switch port, a patch panel's port | its row on the asset's page, `/assets/<name>#port-<port>` |
 | a node | its module page when it has one (`/modules/<name>`), with **Asset** beside it; else its asset's page |
-| a disk; a pool | the node's asset; the node's page |
+| a disk in the Storage view | the disk's page when an asset records it (by its serial), with **Node** beside it; else the node's asset |
+| a disk's CI | the disk's page, `/assets/dsk-NN` |
+| a pool | the node's page |
 | a link | each end that is an asset |
 | a rack, a room, a location | the Assets page with it selected |
 | a device a switch port only sees | the Assets page with it selected, where Record… is |
@@ -409,7 +438,8 @@ change is a job as ever, `health-manager ack|unack|maintenance`, taken from its 
 | `cmdb/ci/<id>`, `cmdb/ci?name=<name>[&class=<class>]` | a CI's record: `{id, class, ancestors, name, label, attributes[] {name, value, source, since}, relations[] {id, type, direction, other, source, since}, drift, events[]}`, `events` its conditions that are not ok; by name, the class (or an ancestor of it) where the name is not unique |
 | `cmdb/ci/<id>/history` | `[{at, what: attribute\|relation\|change, name, value, source, until, detail, drift}]`, the newest first, 300 at most |
 | `cmdb/ci/<id>/trace` | `[{class, name, id, relation, link}]`: the CI, what it is part of, allocated to, runs on or is a member of (eight hops at most), then `desired`, `release`, `module`, `issues` and `adr` steps, which carry a `link` and no `id` |
-| `assets/tree` | the Assets view: `{locations[], assets[], allocationsError}`; a location `{name, displayName, primary, rooms[], unplaced[], disposed[]}`, a room `{name, displayName, recorded, racks[], loose[]}` (`name` "" for the racks in no room), a rack `{name, displayName, units, items[]}`, an item `{device, asset, kind, at, seen}` (`asset` null: no asset records the device); an asset as the positions list it plus `{placedAs, where{location, room, rack, at}, ports[] {…, listed, cables[] {to, kind, source, label, via[]}}, cmdb {id, allocatedTo}, allocationDrift}`, from the topology's positions and the CMDB's `allocated-to` relations (read at most a minute old; `allocationsError` when the CMDB did not answer) |
+| `assets/tree` | the Assets view: `{locations[], assets[], allocationsError, disksError}`; a location `{name, displayName, primary, rooms[], unplaced[], disposed[]}`, a room `{name, displayName, recorded, racks[], loose[]}` (`name` "" for the racks in no room), a rack `{name, displayName, units, items[]}`, an item `{device, asset, kind, at, seen}` (`asset` null: no asset records the device); an asset as the positions list it plus `{placedAs, where{location, room, rack, at}, ports[] {…, listed, cables[] {to, kind, source, label, via[]}}, disks[], unrecordedDisks[] {name, serial, model, size, type}, asDisk, cmdb {id, allocatedTo}, allocationDrift}` — a disk `{name, displayName, serial, size, kind, stage, faulty, host, bay, ci, health, state, reason, pool {name, node, vdev}}` (`state` ok, warn, fail or unknown: its CI's worst condition, else Proxmox's health word), `asDisk` a disk asset's own — from the topology's positions, the CMDB's `allocated-to` relations, its disk CIs, the pools' `built-on` relations and the server CIs' `disks[]` (each read at most a minute old; `allocationsError`, `disksError` when the CMDB did not answer) |
+| `assets/disk/<disk>/placements` | a disk's placements: `[{asset, bay, ci, from, until}]`, the newest first, from every disk CI of its name (live or ended) and its `part-of` periods |
 | `health/stream` | server-sent events: `hello`, then `health` `{topology, relayout, generated, patches[], rollups{}, roots, counts, hasConditions}`, one read per burst of CMDB changes; `patches` the objects whose colour moved, `rollups` the tree nodes whose roll-up did; `relayout` true: an object or a relation changed, read again |
 
 `modules` and `modules/<m>` add `condition` to a module's summary (the worst of its node and the
@@ -574,7 +604,7 @@ from the laptop.
 `test.sh`: `tsc` on the backend and the unit suite (`test/unit/*.test.ts`) — the Health view over
 `test/fixtures/health-site.json` (`fake-cmdb.ts`: one node down with its guests impacted, one
 acknowledged root, one flapping condition, a guest in a window): `health` the document, the client,
-the tree and its roll-ups, the ego graph and the chains, the live feed and the routes, `healthgraph` the cards and lines a page draws (there is no DOM here); `cipanel` a CI's record from fixtures: open events, the history's order, the trace up the backbone and where it stops; `assets` the Assets view's tree (places, not placed, disposed, ports and cables, the CMDB's allocations and their drift), an asset found by its role, the history of its allocations, the filter, and where every side panel's Details link goes;
+the tree and its roll-ups, the ego graph and the chains, the live feed and the routes, `healthgraph` the cards and lines a page draws (there is no DOM here); `cipanel` a CI's record from fixtures: open events, the history's order, the trace up the backbone and where it stops; `assets` the Assets view's tree (places, not placed, disposed, ports and cables, the CMDB's allocations and their drift), an asset found by its role, the history of its allocations, the filter, and where every side panel's Details link goes; `disks` the disks in the tree (under their server by bay, in stock, their health and pool from the CMDB, what a server's CI lists that no asset records), a disk's placements, the bay row and the page's helpers, which placement fields a form offers, a disk's Details, the storage gates and a pool's members;
 the assistant
 against a fake LiteLLM streaming the recorded exchanges of `test/fixtures/litellm-exchange.json`
 (the loop, the allow-list, ADR-034 T5: asked to run a change it proposes a card and applies

@@ -91,7 +91,7 @@ export const PAGES: { path: string; title: string }[] = [
   { path: "/modules/<module>", title: "the module's page" },
   { path: "/identity", title: "Identity" },
   { path: "/assets", title: "Assets (every asset by location, room and rack, with its stage, role and ports; a room's and a rack's operations)" },
-  { path: "/assets/<asset>", title: "the asset's page (its record, role, placement, ports and cables, allocations, CMDB record; its operations)" },
+  { path: "/assets/<asset>", title: "the asset's page (its record, role, placement, ports and cables, disks by bay, allocations, CMDB record; its operations); a disk's (dsk-NN) has the asset it is in and the ones it has been in" },
   { path: "/backup", title: "Backup" },
   { path: "/activity", title: "Activity" },
 ];

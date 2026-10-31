@@ -34,6 +34,7 @@ export interface SelContext {
   firewall?: string | null; // the firewall's module
   outsideKind?: "buddy" | "satellite" | null; // an outside peer's kind
   seen?: boolean; // a mount: a device a switch port sees that nobody recorded
+  diskAsset?: string | null; // a disk: the asset that records it (by its serial)
 }
 
 /** The Details targets of a selection in the Physical, Assets or Storage
@@ -60,7 +61,8 @@ export function selDetails(sel: Sel, ctx: SelContext): DetailTarget[] {
     case "room":
       return [details(assetsSelectPath(sel.kind, sel.id))];
     case "disk":
-      return [details(assetPath(sel.node))];
+      // The disk's own page when an asset records it, the node's as the second way.
+      return ctx.diskAsset ? [details(assetPath(ctx.diskAsset)), { label: "Node", to: assetPath(sel.node) }] : [details(assetPath(sel.node))];
     case "pool":
       return nodeTargets(sel.node, ctx.modules);
     case "link":
@@ -89,6 +91,8 @@ const IDENTITY: Record<string, string> = { user: "user", group: "group", role: "
 export function ciDetails(o: CiLike): DetailTarget[] {
   const is = (c: string) => o.class === c || o.ancestors.includes(c);
   if (is("asset")) return [details(assetPath(o.name))];
+  // A disk's CI is named by its asset's tag (dsk-NN): its own page.
+  if (o.class === "disk") return [details(assetPath(o.name))];
   if (o.class === "port") {
     const owner = o.relations.find((r) => r.type === "part-of" && r.direction === "out");
     return owner ? [details(assetPath(owner.other.name, o.name))] : [];
