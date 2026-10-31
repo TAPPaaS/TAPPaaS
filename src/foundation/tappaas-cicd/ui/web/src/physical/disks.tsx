@@ -32,15 +32,17 @@ export function BayRow({ disks, compact }: { disks: AssetTreeDisk[]; compact?: b
     );
   }
   return (
-    <div className="bay-row" role="list" aria-label="bays">
-      <span className="muted small">bays</span>
-      {cells.map((c: BayCell) => (
-        <span key={c.disk} role="listitem" className="bay" title={c.title}>
-          <i className="bay-cell" style={{ background: DISK_COLOR[c.state] }} />
-          <Link to={assetPath(c.disk)}>{c.label}</Link>
-        </span>
-      ))}
-    </div>
+    <>
+      <h3>Storage bays</h3>
+      <div className="bay-row" role="list" aria-label="storage bays">
+        {cells.map((c: BayCell) => (
+          <span key={c.disk} role="listitem" className="bay" title={c.title}>
+            <i className="bay-cell" style={{ background: DISK_COLOR[c.state] }} />
+            <Link to={assetPath(c.disk)}>{c.label}</Link>
+          </span>
+        ))}
+      </div>
+    </>
   );
 }
 
