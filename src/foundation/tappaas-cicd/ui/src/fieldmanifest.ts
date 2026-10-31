@@ -319,7 +319,7 @@ export const FLAGS: Partial<Record<FieldKind, Partial<Record<FormMode, Record<st
   zone: { add: { type: "--type", typeId: "--typeId", vlantag: "--vlan", variant: "--variant", environment: "--environment", "tftp-server-name": "--tftp-server-name", "bootfile-name": "--bootfile-name" } },
   rack: { add: { displayName: "--display-name", units: "--units", width: "--width", numbering: "--numbering", room: "--room", description: "--description" } },
   room: { add: { displayName: "--display-name", description: "--description", location: "--location" } },
-  placement: { add: { rack: "--rack", u: "--u", room: "--room", height: "--height", width: "--width", slot: "--slot", face: "--face", faceplate: "--faceplate", label: "--label", description: "--description" } },
+  placement: { add: { rack: "--rack", u: "--u", room: "--room", height: "--height", width: "--width", slot: "--slot", face: "--face", faceplate: "--faceplate", label: "--label", description: "--description", in: "--in", bay: "--bay" } },
 };
 
 // The kinds whose modify verb takes `--set field=value` with its flags as

@@ -27,7 +27,7 @@ check(exitOf(at(300, 200), undefined, at(300, 600)) === 1 && exitOf(at(300, 200)
 check(exitOf(at(300, 200), "rear", at(300, 600)) === 1 && exitOf(at(300, 200), "rear", at(300, 20)) === -1, "a panel's rear wire leaves toward its other end: down to one below, up to one above");
 check(exitOf(at(300, 200), "front", at(300, 600)) === 1 && exitOf(at(300, 200), "front", at(300, 20)) === -1, "a panel's front wire leaves toward its other end: down to one below, up to one above");
 check(exitOf(row(300, 200, false), "rear", at(300, 600)) === 1 && exitOf(row(300, 200, true), "front", at(300, 20)) === -1, "a two-row panel: its upper row's wire to a port below leaves down, its lower row's to one above up");
-check(exitOf(at(300, 200), "rear", at(500, 214)) === -1 && exitOf(at(300, 200), "front", at(500, 214)) === 1, "a panel port level with its other end: the rear wire up, the front wire down");
+check(exitOf(at(300, 200), "rear", at(500, 201)) === -1 && exitOf(at(300, 200), "front", at(500, 201)) === 1, "a panel port level with its other end (within 2 px): the rear wire up, the front wire down");
 // Through a panel: switch above, panel, node below; each wire the short arc (both control points between the ends).
 const [up, down] = routeCables([
   { a: at(300, 100), b: at(310, 300), sideB: "front", device: ["sw", "pp"] },
