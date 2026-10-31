@@ -1,7 +1,7 @@
 // provision.test.ts — boot disks named before a PXE install (ADR-037 D4; #729 §3:
 // nvme0n1 and nvme1n1 swapped between boots).
 
-import { bootDiskProblems, bootDiskWarnings, isKernelDiskName, nodeLogLines, quorumAdvice } from "../../src/provision";
+import { bootDiskProblems, bootDiskWarnings, isKernelDiskName, nodeLogDots, nodeLogLines, quorumAdvice } from "../../src/provision";
 
 let passed = 0;
 let failed = 0;
@@ -52,6 +52,10 @@ check(quorumAdvice(3, false) === "" && quorumAdvice(2, true) === "" && quorumAdv
     `finished steps and the one under way, no dots, no art (${first.join("|")})`);
   check(nodeLogLines(log, shown).length === 0, "each is said once over the polls");
   check(nodeLogLines("✓ Updated Proxmox VE\n", shown).join() === "✓ Updated Proxmox VE", "a new step is said");
+  check(nodeLogDots(" - Updating Proxmox VE (Patience — a dot per package step).....") === 5, "the dots after the step's line");
+  check(nodeLogDots(" - Updating (step)....\n.....\n") === 9, "and on their own lines");
+  check(nodeLogDots(" - Refreshing apt...") === 0, "a step's own dots are not progress");
+  check(nodeLogDots(" - Updating (step)....\n ✓ Updated Proxmox VE\n") === 0, "none once the step has ended");
 }
 
 console.log(`provision: ${passed} passed, ${failed} failed`);

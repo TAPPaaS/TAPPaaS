@@ -476,6 +476,14 @@ export function nodeLogLines(raw: string, shown: Set<string>): string[] {
   return out;
 }
 
+// How many progress dots the log ends in: the step's own `...` is not one, so
+// they follow its closing bracket or stand on their own lines.
+export function nodeLogDots(raw: string): number {
+  // eslint-disable-next-line no-control-regex
+  const m = /(?:^|[\n)])([.\s]*)$/.exec(raw.replace(/\x1b\[[0-9;]*[A-Za-z]/g, ""));
+  return m ? m[1].replace(/\s/g, "").length : 0;
+}
+
 // ── the shared join pipeline ────────────────────────────────────────────
 
 function joinAndCapture(
@@ -572,6 +580,8 @@ function joinAndCapture(
     const joinDeadline = Date.now() + 30 * 60 * 1000;
     let completedAt = stdIp;
     const shownLog = new Set<string>();
+    let dotsShown = 0;
+    let dotted = false;
     for (;;) {
       // A wide tail: the success marker sits ABOVE a multi-line epilogue
       // (a 3-line window watched the epilogue forever — e2e-test finding).
@@ -584,7 +594,18 @@ function joinAndCapture(
         host = nodeIp;
         r = sshTo(nodeIp, "tail -50 /root/tappaas-install.log 2>/dev/null", 5);
       }
-      if (r.rc === 0) for (const l of nodeLogLines(r.out, shownLog)) info(`    ${l}`);
+      if (r.rc === 0) {
+        const lines = nodeLogLines(r.out, shownLog);
+        if (lines.length && dotted) { process.stdout.write("\n"); dotted = false; }
+        for (const l of lines) info(`    ${l}`);
+        // The long apt step only says dots: the new ones, on one line.
+        const dots = nodeLogDots(r.out);
+        if (dots > dotsShown) {
+          process.stdout.write(`${dotted ? "" : "    "}${".".repeat(dots - dotsShown)}`);
+          dotted = true;
+        }
+        dotsShown = dots;
+      }
       if (r.rc === 0 && /Node step complete/.test(r.out)) { completedAt = host; break; }
       if (r.rc === 0 && /✗/.test(r.out)) die(`node step FAILED on ${o.name}:\n${r.out.split("\n").slice(-8).join("\n")} — full log: ssh root@${stdIp} (or ${nodeIp}) cat /root/tappaas-install.log`);
       if (Date.now() > joinDeadline) die(`timed out waiting for the node step — check ssh root@${stdIp} tail /root/tappaas-install.log (or at ${nodeIp} if the IP never moved)`);
