@@ -3,11 +3,15 @@
 // what caused it or what it impacts, its drift against the record, its history,
 // its relations both ways, and the health verbs as jobs: ack and maintenance;
 // a module's operations are on its page, behind the Open module jump (ADR-034 D11).
+// CMDB record opens the CI's record in its place (CiPanel.tsx): attributes and
+// their sources, the full history, the trace up the backbone.
 
+import { useEffect, useState } from "react";
 import { useRead, useVerb } from "../api";
 import { OperateButton, Step } from "../operate";
 import { HealthCondition, HealthObject, HealthStatus } from "../types";
 import { Dot, Level, Link, ReadState, Section, Tag, when } from "../ui";
+import { CiPanel } from "./CiPanel";
 
 const LEVEL: Record<HealthStatus, Level> = { ok: "pass", warning: "warn", critical: "fail", unknown: "skip" };
 const hm = (title: string, verb: string, id: string, extra: Partial<Step> = {}): Step => ({ title, bin: "health-manager", verb, fixed: [id], ...extra });
@@ -63,6 +67,9 @@ export function HealthPanel({ id, close, pick, showInTree }: { id: string; close
   const o = r.env?.data;
   const out = (o?.relations ?? []).filter((x) => x.direction === "out");
   const inc = (o?.relations ?? []).filter((x) => x.direction === "in");
+  const [record, setRecord] = useState(false);
+  useEffect(() => setRecord(false), [id]);
+  if (record) return <CiPanel start={{ id }} close={close} back={{ label: "Health", go: () => setRecord(false) }} />;
   return (
     <aside className="sidepanel health-panel">
       <header>
@@ -78,7 +85,8 @@ export function HealthPanel({ id, close, pick, showInTree }: { id: string; close
           <p>
             {o.module ? <Link to={`/modules/${encodeURIComponent(o.module)}`} className="jump jump-in">Open module {o.module}</Link> : null}
             {o.class === "machine" ? <Link to={`/site/assets?select=node:${encodeURIComponent(o.name)}`} className="jump jump-in">Asset · {o.name}</Link> : null}
-            <button className="hlink" onClick={showInTree}>Show in tree</button>
+            <button className="hlink" onClick={showInTree}>Show in tree</button>{" "}
+            <button className="hlink" onClick={() => setRecord(true)}>CMDB record and trace</button>
           </p>
           <Verbs o={o} />
           <Section title="Conditions" aside={`${o.conditions.length}`}>
