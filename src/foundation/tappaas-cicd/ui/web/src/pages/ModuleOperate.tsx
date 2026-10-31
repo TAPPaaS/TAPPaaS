@@ -16,7 +16,7 @@ export function ModuleOperate({ m, onConfig }: { m: ModuleSummary; onConfig: () 
   const suspended = m.status === "suspended" || m.running === "stopped";
   if (!operator) return null;
   return (
-    <Section title="Operate — every verb runs through module-manager" aside="Change → Preview → Apply → Result">
+    <Section title="Operate — every verb runs through module-manager">
       <div className="operate">
         <div className="op">
           <OperateButton label="Update (release)" title={`Update ${name} to its release`} steps={[step(`module-manager update ${name}`, "update")]} />

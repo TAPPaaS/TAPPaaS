@@ -10,7 +10,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useJob } from "../api";
 import { Job, JobSummary } from "../types";
 import { Output } from "../jobs";
-import { JobView, Step, StepView } from "../operate";
+import { ActStep } from "../flows";
+import { JobView, Step } from "../operate";
 import { useOpenedBy } from "../opener";
 import { canOperate, useMe } from "../ui";
 import { ResumeOffer, Wizard, jobLabel, jobLive, useJobSession } from "../wizard";
@@ -33,7 +34,6 @@ export function pubkeyProblem(k: string): string | null {
 }
 
 export function EnrolWizard({ onClose, prefill }: { onClose: () => void; prefill?: Record<string, unknown> | null }) {
-  const me = useMe();
   const str = (k: string) => (typeof prefill?.[k] === "string" ? (prefill[k] as string) : "");
   const [name, setName] = useState(str("name"));
   const [pubkey, setPubkey] = useState(str("pubkey"));
@@ -65,6 +65,7 @@ export function EnrolWizard({ onClose, prefill }: { onClose: () => void; prefill
   const register: Step = useMemo(
     () => ({
       title: `network-manager wgvpn add-peer --name ${name || "<device>"}`,
+      button: `Register ${name || "the device"}`,
       bin: "network-manager",
       verb: "wgvpn",
       words: ["wgvpn", "add-peer"],
@@ -72,7 +73,7 @@ export function EnrolWizard({ onClose, prefill }: { onClose: () => void; prefill
       hide: ["@setup|add-peer|remove-peer|list|config", "@options"],
       only: [],
       blocked: problem ?? undefined,
-      note: "Registers the device as a peer of the admin VPN on the firewall and prints its WireGuard file: the tunnel address it was given, the site's DNS, and what it may reach (the management zone, and the published names). There is no dry run: the preview is the command.",
+      note: "Registers the device as a peer of the admin VPN on the firewall and prints its WireGuard file: the tunnel address it was given, the site's DNS, and what it may reach (the management zone, and the published names).",
       // The form is this wizard's own: the fields above the step.
       render: () => (
         <>
@@ -157,7 +158,7 @@ export function EnrolWizard({ onClose, prefill }: { onClose: () => void; prefill
               {followed?.state === "done" && followed.exit === 0 ? register.after?.(followed) : null}
             </>
           ) : (
-            <StepView step={register} me={me} onApplied={setJob} onDone={(ok) => setDone(ok)} />
+            <ActStep step={register} onApplied={setJob} onDone={(ok) => { setDone(ok); if (!ok) setJob(null); }} />
           )}
         </StepRow>
         <StepRow s={stages[2]} open={current === "install"}>

@@ -188,23 +188,25 @@ Stale or misleading text found on the way:
 
 ## 5. Proposed plan (in order)
 
-1. **One status line and one output pane.** Small.
+Steps 1 to 7 are done, on branch `console-flow-plan` (components in `web/src/jobs.tsx`, `run.ts`, `stepform.tsx`, `flows.tsx`, `argv.ts stepFlow`). Differences from the plan below: `node network set` previews on its button, not on open, because its preview writes the declaration; Adopt stage 4's nested `Operate` stays (step 7's last bullet, not done); the assistant's Run still needs a preview (step 10). From step 9, `jobShownIn` and AddNode's dry-run texts are already gone; `JobDetail`'s `live` is left.
+
+1. (done) **One status line and one output pane.** Small.
    - Export `JobStatusLine({ job, label })` from `jobs.tsx`: Tag (`jobLevel`), label, `jobResult`, duration, job id, `JobControl`. Use it in `JobPart`, `RemoveNode.tsx:209`, `DeclaredLine`/`DeclareStep`, `AddNode.tsx:445` and `assistant.tsx:221, 238`; the assistant gains Stop as a result.
    - Give `Output` a `live` default from `jobLive(job)` through a `JobOutput({ job, phase, fold })` wrapper: `fold: "tail"` keeps the last 4 lines, `fold: "closed"` uses `<details>`.
    - Replace the raw tails (`RemoveNode.tsx:238, 271`, `AddNode.tsx:558`) with `Output` given a `tail` prop. Delete `noderemove.ts:69` and keep a single `lastLines` in `jobs.tsx`.
    - Make `.output` wrapping one rule (`styles.css:209` vs `:270`).
-2. **`useJobRun()` hook** (`jobs.tsx` or a new `run.ts`). Medium.
+2. (done) **`useJobRun()` hook** (`jobs.tsx` or a new `run.ts`). Medium.
    - It takes `start(argv, confirm?)` via `applyNowJob` or `applyJob`, and returns `{ job, phase: "idle" | "starting" | "checking" | "applying" | "done" | "refused" | "stopped" | "failed", inApply, ok, tail, error }`.
    - It calls `useReportJob` and `onApplied`/`onDone` itself.
    - It replaces the four state machines (`operate.tsx:256-297`, `AddNode.tsx:504-522`, `RemoveNode.tsx:145-180`, `assistant.tsx:155-168`).
-3. **`ActStep`** (the AN pattern), generalised from `DeclareStep` (`AddNode.tsx:499-589`). Medium.
+3. (done) **`ActStep`** (the AN pattern), generalised from `DeclareStep` (`AddNode.tsx:499-589`). Medium.
    - Props: a form (`StepForm` from a `Step`, or children), the button label, `blocked`, `progress`, `after`, `previewNote` shown above the button, and a `collapsedLine` for the finished one-liner.
    - Behaviour: the button starts `useJobRun`; while the job runs it shows `JobStatusLine` + `Output live`; on failure, the tail + Try again with the form kept; when done, the one-liner + `<details>` output + `after`.
-4. **`CheckStep`** (the RN pattern), generalised from `RemoveStep` (`RemoveNode.tsx:135-325`). Medium.
+4. (done) **`CheckStep`** (the RN pattern), generalised from `RemoveStep` (`RemoveNode.tsx:135-325`). Medium.
    - Behaviour: it runs `previewJob` when the step opens, and again on "Check again". It shows a running line with Stop. An optional `parse(output, exit)` returns `{ state, blockers, losses, tail }`; the default is ok on exit 0, else blocked with the tail. Then `FindingList`, then children: choices, then `TypedConfirm` + an `ActStep` button that applies (`applyJob` of the check, or `applyNowJob`).
    - Move `FindingList` to `ui.tsx` (rename one of the two). Remove node then becomes `CheckStep` + `noderemove.ts` parse.
-5. **`TypedConfirm({ object, label, value, set })`**, one component with one matching rule. It replaces `operate.tsx:332-337`, `assistant.tsx:230-236` and `RemoveNode.tsx:308-311`. Small.
-6. **StepView becomes a dispatcher.** Medium to large; this is the step that reaches the ~110 OperateButtons.
+5. (done) **`TypedConfirm({ object, label, value, set })`**, one component with one matching rule. It replaces `operate.tsx:332-337`, `assistant.tsx:230-236` and `RemoveNode.tsx:308-311`. Small.
+6. (done) **StepView becomes a dispatcher.** Medium to large; this is the step that reaches the ~110 OperateButtons.
    - `previewKind === "none"` → `ActStep` (no stepper, no Preview button).
    - `read` → run on open (or keep one Run for expensive reads such as `test`).
    - destructive with a dry run → `CheckStep` + `TypedConfirm`.
@@ -212,7 +214,7 @@ Stale or misleading text found on the way:
    - `apply-flag` plans (reconciles, update, add-stack, network set/test, node reconcile) → "preview at open" + one Apply that applies that preview.
    - Keep the four pills only where a read preview remains, or drop them in favour of the status line.
    - Add an explicit override field such as `step.flow?: "act" | "check" | "plan"` for the few that need it, e.g. a module modify where `previewNote` matters.
-7. **Wizards adopt it.** Small each after 3 and 6.
+7. (done) **Wizards adopt it.** Small each after 3 and 6.
    - Adopt stage 3, Buddy stage 2, Enrol stage 2, Satellite stage 3, ResetPassword link, NodePools, AddNode stage 0, Wifi declare: these change by themselves once StepView dispatches. Correct their stage texts ("previewed, then applied").
    - Buddy `peer check` and Satellite `test` run on open.
    - Replace Adopt stage 4's nested `Operate` (`Adopt.tsx:245`) with the place form inline in the stage.

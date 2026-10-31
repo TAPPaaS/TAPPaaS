@@ -311,10 +311,3 @@ export function declaredLine(name: string, setup: { ready: boolean; step: string
   if (setup.ready) return `${name} is declared: boot it now, from the network or the USB stick${setup.port ? ` (${setup.port})` : ""}.`;
   return `${name} is declared; getting ready: ${setup.step ?? "starting"}…`;
 }
-
-// The last lines a failed job printed, without its colours or blank lines.
-export function lastLines(raw: string, n = 8): string[] {
-  // eslint-disable-next-line no-control-regex
-  const lines = raw.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").split("\n").map((l) => l.trimEnd()).filter((l) => l.trim() !== "");
-  return lines.slice(-n);
-}

@@ -2,10 +2,11 @@
 // with a public IPv4 that gives a site without one public ingress and the
 // admin-VPN relay. 1 what the operator does first (the VPS, its SSH key);
 // 2 the satellite: its address, its environment, the roles it carries, where
-// it is; 3 module-manager add satellite, previewed then applied; 4 its test.
+// it is; 3 module-manager add satellite; 4 its test, at once.
 
 import { useEffect, useMemo, useState } from "react";
 import { reloadAll, useJob, useRead } from "../api";
+import { ActStep } from "../flows";
 import { JobView, Step, StepView } from "../operate";
 import { TargetValue, TargetValues } from "../consoletargets";
 import { useOpenedBy } from "../opener";
@@ -71,21 +72,22 @@ export function SatelliteWizard({ onClose, prefill }: { onClose: () => void; pre
     const add: Step = {
       ...satelliteSpec(plan),
       title: `module-manager add satellite${plan.instance ? ` --instance ${plan.instance}` : ""}`,
+      button: "Install the satellite",
       only: [],
       note: (
         <>
-          There is no dry run: the preview is the command. Apply creates the home end of the tunnel on the firewall, provisions Debian on {plan.address} over your operator key (WireGuard, its firewall{plan.roles.includes("reverse-proxy") ? ", nginx for the ingress" : ""}{plan.roles.includes("admin-vpn") ? ", the VPN relay" : ""}), adds the firewall's peer and the edge rules, and authorizes the mothership's key so the nightly sweep patches it. A failed install removes the config it wrote.
+          Creates the home end of the tunnel on the firewall, provisions Debian on {plan.address} over your operator key (WireGuard, its firewall{plan.roles.includes("reverse-proxy") ? ", nginx for the ingress" : ""}{plan.roles.includes("admin-vpn") ? ", the VPN relay" : ""}), adds the firewall's peer and the edge rules, and authorizes the mothership's key so the nightly sweep patches it. A failed install removes the config it wrote.
         </>
       ),
     };
-    const test: Step = { title: `module-manager test ${name}`, bin: "module-manager", verb: "test", fixed: [name], hide: ["--vmid", "--zone0"], note: "The tunnel's handshake, the mothership's login, nginx and the relay rules for the roles it carries." };
+    const test: Step = { runOnOpen: true, title: `module-manager test ${name}`, bin: "module-manager", verb: "test", fixed: [name], hide: ["--vmid", "--zone0"], note: "The tunnel's handshake, the mothership's login, nginx and the relay rules for the roles it carries." };
     return { add, test };
   }, [plan]);
 
   const stages = [
     { id: "first", title: "1 · Before you start (by hand)", required: true, done: ready, detail: "A host with a stable public IPv4, your SSH key on it." },
     { id: "what", title: "2 · The satellite", required: true, done: plan !== null, detail: "Its address, its environment, the roles it carries, where it is." },
-    { id: "add", title: "3 · Install it: module-manager add satellite", required: true, done: added, detail: "Previewed, then applied." },
+    { id: "add", title: "3 · Install it: module-manager add satellite", required: true, done: added, detail: "Its tunnel, its host and the edge rules; it takes minutes, and its output shows here." },
     { id: "test", title: "4 · The result: module-manager test", required: false, done: false, detail: "Read live." },
   ];
   const current = !ready ? "first" : !plan ? "what" : !added ? "add" : "test";
@@ -175,7 +177,7 @@ export function SatelliteWizard({ onClose, prefill }: { onClose: () => void; pre
           </div>
         </StepRow>
         <StepRow s={stages[2]} open={current === "add"}>
-          {job ? <JobView id={job} label="module-manager add satellite" /> : steps ? <StepView key={JSON.stringify(plan)} step={steps.add} me={me} onDone={(ok) => ok && setAdded(true)} /> : <p className="muted small">Once the satellite is described.</p>}
+          {job ? <JobView id={job} label="module-manager add satellite" /> : steps ? <ActStep key={JSON.stringify(plan)} step={steps.add} onDone={(ok) => ok && setAdded(true)} /> : <p className="muted small">Once the satellite is described.</p>}
         </StepRow>
         <StepRow s={stages[3]} open={current === "test"}>
           {steps && added ? <StepView step={steps.test} me={me} onDone={() => undefined} /> : <p className="muted small">Once it is installed.</p>}

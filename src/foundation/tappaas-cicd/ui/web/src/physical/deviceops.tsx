@@ -69,6 +69,7 @@ export function NodeNetwork({ node }: { node: string }) {
             bin: "site-manager",
             verb: "node network set",
             fixed: [node],
+            previewOnOpen: false, // the preview writes the declaration: only once the form says what
             note: "The preview (without --apply) declares the uplink in config/<node>.json and previews the change on the node: the declaration is written, the node is not touched. Apply drains the node (HA maintenance), moves lan onto the declared ports under a 45 s rollback, confirms and brings the node back. --yes answers the manager's own prompt for the node's name.",
           },
         ]}

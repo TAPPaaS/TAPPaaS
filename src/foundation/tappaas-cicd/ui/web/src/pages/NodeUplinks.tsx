@@ -47,6 +47,7 @@ export function LanUplink({ node, onDone }: { node: string; onDone: (ok: boolean
     title: `site-manager node network set ${node}`,
     bin: "site-manager",
     verb: "node network set",
+    previewOnOpen: false, // its preview writes the declaration: on the button, not on picking a port
     fixed: [node],
     only: [],
     hide: ["--yes"],
@@ -141,6 +142,7 @@ export function WanUplink({ node, onDone }: { node: string; onDone: (ok: boolean
     title: `site-manager node network set ${node} --wan-port ${port || "<port>"}`,
     bin: "site-manager",
     verb: "node network set",
+    previewOnOpen: false, // its preview writes the declaration: on the button, not on picking a port
     fixed: [node],
     only: [],
     hide: ["--yes"],

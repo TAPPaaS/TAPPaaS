@@ -4,13 +4,14 @@
 // turns key-only, and the switch port it is cabled to; 2 that port, when it is
 // on a switch TAPPaaS programs: its record (switch-manager update-port) and the
 // reconcile that programs the switch — on a self-managed switch, what to set by
-// hand; 3 the adoption, previewed as the command, then applied; 4 the machine
+// hand; 3 the adoption, one button (it has no dry run); 4 the machine
 // placed in its room and rack (asset-manager place) or opened in the
 // physical view.
 
 import { useMemo, useState } from "react";
 import { reloadAll, useJob, useRead } from "../api";
 import { useSiteLocations } from "../locations";
+import { ActStep } from "../flows";
 import { JobView, Operate, Step, StepView } from "../operate";
 import { useOpenedBy } from "../opener";
 import { TargetValues } from "../consoletargets";
@@ -123,6 +124,7 @@ export function AdoptWizard({ onClose, prefill }: { onClose: () => void; prefill
     if (!plan.keyOnly) initial["--set"] = ["sshKeyOnly=false"];
     return {
       title: `module-manager adopt ${plan.address}`,
+      button: `Adopt ${plan.address}`,
       bin: "module-manager",
       verb: "adopt",
       fixed: [plan.address],
@@ -130,7 +132,7 @@ export function AdoptWizard({ onClose, prefill }: { onClose: () => void; prefill
       initial,
       note: (
         <>
-          Reaches the machine as root with the mothership's key (if that fails it prints the one command that authorises the key and waits for it), learns its OS and hostname, and makes it a module: a Debian host becomes a debianhost, a Proxmox node of this cluster a pvehost. Its config is written and its SSH turns {plan.keyOnly ? "key-only" : "key-only — except that password logins stay allowed (sshKeyOnly=false)"}. There is no dry run: the preview is the command.
+          Reaches the machine as root with the mothership's key (if that fails it prints the one command that authorises the key and waits for it), learns its OS and hostname, and makes it a module: a Debian host becomes a debianhost, a Proxmox node of this cluster a pvehost. Its config is written and its SSH turns {plan.keyOnly ? "key-only" : "key-only — except that password logins stay allowed (sshKeyOnly=false)"}.
         </>
       ),
     };
@@ -139,7 +141,7 @@ export function AdoptWizard({ onClose, prefill }: { onClose: () => void; prefill
   const stages = [
     { id: "machine", title: "1 · The machine", required: true, done: plan !== null, detail: "Its address and name, its zone and location, its SSH, and the switch port it is cabled to." },
     { id: "port", title: "2 · The switch port", required: false, done: plan ? (plan.port ? programmed : true) : null, detail: plan?.port ? `Port ${plan.port.port} of ${plan.port.sw} as an access port in ${plan.zone}: its record, then the switch programmed.` : "On a switch TAPPaaS programs: the port's record, then the switch; on a self-managed switch, what to set by hand." },
-    { id: "adopt", title: "3 · Adopt it", required: true, done: adopted !== null, detail: "module-manager adopt: the preview is the command; apply makes it a module." },
+    { id: "adopt", title: "3 · Adopt it", required: true, done: adopted !== null, detail: "module-manager adopt makes it a module." },
     { id: "place", title: "4 · Place it in the physical view", required: false, done: placed ? true : adopted ? false : null, detail: "Its room and rack: where the machine actually stands." },
   ];
   const current = !plan ? "machine" : plan.port && !programmed ? "port" : !adopted ? "adopt" : "place";
@@ -232,7 +234,7 @@ export function AdoptWizard({ onClose, prefill }: { onClose: () => void; prefill
           )}
         </StepRow>
         <StepRow s={stages[2]} open={current === "adopt"}>
-          {resumed && job ? <JobView id={job} label="module-manager adopt" /> : adopt && (!plan?.port || programmed) ? <StepView key={`a-${JSON.stringify(plan)}`} step={adopt} me={me} onApplied={setJob} onDone={() => undefined} /> : <p className="muted small">{plan?.port ? "Once the switch port is programmed." : "Once the machine is described."}</p>}
+          {resumed && job ? <JobView id={job} label="module-manager adopt" /> : adopt && (!plan?.port || programmed) ? <ActStep key={`a-${JSON.stringify(plan)}`} step={adopt} onApplied={setJob} /> : <p className="muted small">{plan?.port ? "Once the switch port is programmed." : "Once the machine is described."}</p>}
         </StepRow>
         <StepRow s={stages[3]} open={current === "place"}>
           {adopted ? (

@@ -5,8 +5,8 @@
 // registered repository: every module its catalogue lists, by stack where it
 // spans several (else flat, with a stack column), with its description and
 // maturity, installed (with the instances) or not, and Install for every one,
-// into an environment it is chosen for (module-manager add --environment,
-// previewed, then applied as a job).
+// into an environment it is chosen for (module-manager add --environment, a
+// job with no dry run).
 
 import { Fragment, ReactNode, useMemo, useState } from "react";
 import { useRead } from "../api";
@@ -245,7 +245,7 @@ function RepositoryTab({ r, deployed, ready, envOf, environments, defaultEnv, at
               note: (
                 <>
                   Installs {m.name} from {r.name} into the environment chosen
-                  {m.stack === "foundation" ? " (a foundation module goes in mgmt only)" : ""}: writes its config, builds and starts its guest, wires the services it depends on. There is no dry run: the preview shows the exact command. A field left empty takes the module's own value.
+                  {m.stack === "foundation" ? " (a foundation module goes in mgmt only)" : ""}: writes its config, builds and starts its guest, wires the services it depends on. A field left empty takes the module's own value.
                   {m.instances.length ? ` Installed now in: ${where}. ` : " "}
                   {m.stack === "foundation"
                     ? m.instances.length ? "Another instance needs its own name: --instance." : ""

@@ -37,8 +37,8 @@ keys set. The WiFi step lists the site's SSIDs (`ap-manager ssid list`, the `ssi
 zone, security, the access points that broadcast each and the passphrase state (set, changed and not
 pushed yet, or not set — a personal SSID without one cannot be created on the access points), and a
 "Set passphrase…" link to its Day 2 form. Day 2's WiFi form declares the SSID site-wide (`ssid add`,
-or `ssid modify`, or `ssid remove` then `add` for a new name), takes the passphrase, then previews and
-applies the reconcile; the zone card shows the zone's SSID read-only with a link to it. The same flows serve
+or `ssid modify`, or `ssid remove` then `add` for a new name), takes the passphrase, then shows the
+reconcile's delta and applies it; the zone card shows the zone's SSID read-only with a link to it. The same flows serve
 day 2: add a node, adopt a running machine (`module-manager adopt`), an environment, a stack; enrol a
 device (the wg-quick file to download). Day 2's **physical site** is a step with that state and
 its sequence: record the rooms (by location), add a rack, place the nodes and switches, record
@@ -157,7 +157,7 @@ datasets, free. **Modules** — tabs: Installed (the list with its badges, group
 first) and one per registered repository (`GET /api/v1/catalogs`: `site-manager repository list`, each
 repository's module-catalog.json and each module's own JSON; installed = a deployed instance whose
 `moduleSource` is the module's directory, with the instances named and linked; Install = `module-manager
-add <m>`, previewed then applied; a catalogue that cannot be read says why); a module's page has
+add <m>`, one button; a catalogue that cannot be read says why); a module's page has
 Overview, Config, Drift (on demand), Backup and Activity. Overview is a list of sections, composed
 by the backend (`GET /api/v1/modules/<m>/sections`) from three layers, each able to add, reorder or
 replace what the layer below put there, by section id. Generic, every module: `health`, `operate`
@@ -219,9 +219,8 @@ password reset), and no form offers them as a user. **Assets** — see [Assets](
 modify, purge (typed). **Site** — the four tabs above. Add node is a guided sequence in Setup's step rows: declare
 the node (`site-manager node add tappaasN`: its switch port or MAC, boot disks; the wizard
 always installs, adopting a hand-installed Proxmox is the CLI's `--adopt`; the form, then one
-Declare button: the dry run and the apply as one job, its status line with Stop and its output
-shown live, then one line saying where the job is; a refusal shows the last lines and Try again
-with the values kept), boot it from the
+Declare button, which starts the job at once: one line then says where the job is; a refusal
+shows the last lines and Try again with the values kept), boot it from the
 network or the USB stick by hand, the install and join watched live (`GET
 /api/v1/nodes/<name>/progress`: the provisioning registration, `node-provisioner status`, cluster
 membership, the node's `pvehost` record; every 10 s), then `node network set` and `node network test`, previewed. **Activity** — the console's jobs, the sweep's runs, the failures ledger and the last
@@ -333,12 +332,20 @@ sources that failed or were asked without `--discover`, and the findings — wha
 drift, differences from desired, unmanaged and missing objects — each object a link to its panel.
 The nightly sweep's record shows here the same way.
 
-Every change is the operate dialog (`web/src/operate.tsx`, spike §5.4): a form built from the
-verb's manifest, the exact command (copyable), Preview (the verb's own dry run, streamed), Apply
-(with no preview of its own, one job runs the dry run first and goes on only on a clean one —
-a refusal stops it there, shown as the preview; disruptions are labelled checkboxes; a
-destructive verb needs the object's name typed before Apply), Result; a flow of
-several steps runs them in order. Activity shows such a job's two phases.
+Every change is the operate dialog (`web/src/operate.tsx`, the flows in `web/src/flows.tsx`): a
+form built from the verb's manifest, the exact command (copyable), disruptions as labelled
+checkboxes, and a flow of several steps run in order. What the operator does next follows from how
+the verb previews (`stepFlow` in `web/src/argv.ts`; a step can override it with `flow`):
+
+| The verb | What the operator sees |
+|---|---|
+| **No dry run** (`module add`, `backup modify`, `ssid add`, an acknowledgement…) | The form and one button. The job's status line with Stop and its output show in place, folded to its last lines when it ends. A failure says why, shows the last lines, and Try again goes back to the form as filled in. A destructive one (`module delete`, `backup purge`) needs the object's name typed first. |
+| **A dry run that only says yes or no** (asset-manager's verbs, `site modify`, location and zone add, `module modify`) | The same one button: one job runs the dry run first and goes on only on a clean one. A refusal comes back in place, as findings in the verb's own words, with Try again. The change classes of a field form show above the button. |
+| **The same, destructive** (asset dispose and remove, `unplace`, room, rack and location delete, zone and environment delete) | The check runs as the step opens, with Stop. What stands against it is listed, with Check again; once it is clean, the typed name and one button. A form to fill in first (a required option): a Check button instead. |
+| **A plan to read** (every reconcile, `site update`, `add-stack`, `repository sync`, `node reconcile`, `node network test`) | The preview runs as the step opens, its output streamed, and one Apply under it applies that preview. A form still to fill in: a Preview button first, and a changed form is previewed again before anything can apply. `node network set` previews on the button, because its preview writes the declaration. |
+| **A read** (`show`, `test`, `peer check`) | One Run, or at once where it is a wizard stage's result (`peer check`, a satellite's `test`). `test --deep` is a change with no dry run. |
+
+Activity shows a job that ran its dry run first in its two phases.
 
 ## Assets
 

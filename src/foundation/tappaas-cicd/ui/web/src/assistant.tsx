@@ -13,12 +13,14 @@
 // drawer stays open, with a line saying what was opened.
 
 import { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
-import { applyJob, get, previewJob, readJob, useJob } from "./api";
+import { get } from "./api";
+import { confirmMatches } from "./argv";
 import { TargetValues, resolveTarget } from "./consoletargets";
 import { requestOpen } from "./opener";
-import { Command, Output, jobResult } from "./jobs";
+import { useJobRun } from "./run";
+import { Command, JobOutput, JobStatusLine } from "./jobs";
 import { AssistantStatus, Me } from "./types";
-import { Tag, canOperate, navigate, useMe } from "./ui";
+import { TypedConfirm, canOperate, navigate, useMe } from "./ui";
 
 // What is in view, sent with every question.
 export interface Focus {
@@ -152,41 +154,29 @@ async function streamChat(body: unknown, onEvent: (e: ChatEvent) => void, signal
 // ── a proposed job: Preview and Run through the job model ─────────────
 
 function ProposalCard({ p, conversation, me }: { p: Proposal; conversation: string; me: Me | null }) {
-  const [preview, setPreview] = useState<string | null>(null);
-  const [applied, setApplied] = useState<string | null>(null);
+  const previewRun = useJobRun();
+  const applyRun = useJobRun();
   const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
-  const pj = useJob(preview);
-  const aj = useJob(applied);
+  const preview = previewRun.id;
+  const applied = applyRun.id;
+  const pj = previewRun.job;
+  const aj = applyRun.job;
+  const error = applyRun.error ?? previewRun.error;
   const may = canOperate(me);
   const from = { conversation, proposal: p.id };
   const previewDone = pj !== null && pj.state === "done";
   const refusedByDryRun = previewDone && p.preview === "dry-run-flag" && pj!.exit !== 0;
   const object = pj?.object ?? "";
   const label = pj?.objectLabel ?? object;
-  const canRun = may && !applied && (p.read ? !preview : previewDone && !refusedByDryRun && (!p.destructive || (confirm !== "" && (confirm === object || confirm === label))));
+  const canRun = may && !applied && (p.read ? !preview : previewDone && !refusedByDryRun && (!p.destructive || confirmMatches(confirm, object, label)));
 
   if (dismissed) return <div className="card-proposal card-dismissed muted small">Proposal dismissed: <code className="mono">{p.argv.join(" ")}</code></div>;
 
-  const doPreview = async () => {
-    setError(null);
-    const r = await previewJob(p.argv, from);
-    if (!r.data) return setError(r.error);
-    if (r.error) setError(r.error);
-    setPreview(r.data.id);
-  };
+  const doPreview = () => previewRun.preview(p.argv, from);
   const doRun = async () => {
-    setError(null);
-    if (p.read) {
-      const r = await readJob(p.argv, from);
-      if (!r.data) return setError(r.error);
-      return setPreview(r.data.id);
-    }
-    if (!preview) return;
-    const r = await applyJob(preview, p.destructive ? confirm : undefined);
-    if (!r.data || r.status >= 400) return setError(r.error ?? `HTTP ${r.status}`);
-    setApplied(r.data.id);
+    if (p.read) return previewRun.read(p.argv, from);
+    if (preview) await applyRun.applyPreview(preview, p.destructive ? confirm : undefined);
   };
 
   return (
@@ -218,28 +208,19 @@ function ProposalCard({ p, conversation, me }: { p: Proposal; conversation: stri
       {error ? <p className="readstate readstate-fail">{error}</p> : null}
       {pj ? (
         <div className="jobview">
-          <p className="small">
-            <Tag level={pj.state === "refused" ? "fail" : pj.state !== "done" ? "skip" : pj.exit === 0 ? "pass" : "warn"} /> {p.read ? "result" : "preview"}: {jobResult(pj)}
-            <span className="muted"> · job {pj.id}</span>
-          </p>
+          <JobStatusLine job={pj} label={p.read ? "result" : "preview"} />
           {pj.refused ? <p className="readstate readstate-fail">{pj.refused}</p> : null}
-          <Output text={pj.output} live={pj.state === "running" || pj.state === "queued"} />
+          <JobOutput job={pj} />
         </div>
       ) : null}
       {refusedByDryRun ? <p className="readstate readstate-warn">The dry run refuses this change (exit {pj!.exit}): nothing to run.</p> : null}
       {p.destructive && previewDone && !applied && may ? (
-        <label className="form-row confirm">
-          <span>Type <b className="mono">{object}</b> to confirm{label !== object ? <> — <span className="mono">{label}</span></> : null}</span>
-          <input type="text" autoComplete="off" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-        </label>
+        <TypedConfirm object={object} label={label} value={confirm} set={setConfirm} />
       ) : null}
       {aj ? (
         <div className="jobview">
-          <p className="small">
-            <Tag level={aj.state === "refused" ? "fail" : aj.state !== "done" ? "skip" : aj.exit === 0 ? "pass" : "warn"} /> run: {jobResult(aj)}
-            <span className="muted"> · job {aj.id}</span>
-          </p>
-          <Output text={aj.output} live={aj.state === "running" || aj.state === "queued"} />
+          <JobStatusLine job={aj} label="run" />
+          <JobOutput job={aj} />
         </div>
       ) : null}
     </div>

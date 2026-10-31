@@ -8,7 +8,8 @@
 
 import { ReactNode } from "react";
 import { LocationInfo, RackInfo, RoomInfo, StorageInventory, TopoFinding, Topology } from "../types";
-import { Tag, navigate } from "../ui";
+import { Finding } from "../noderemove";
+import { FindingList, navigate } from "../ui";
 import { publicAddress, publicText } from "../zonegraph";
 import { STATE_COLOR, StateLegend } from "./state";
 import { VIEW_NAME, viewLink } from "./views";
@@ -210,7 +211,7 @@ export function PhysicalOverview({ t, inv, notes, storageError, aside, beforeFin
                 <Stat n={t.outside.length} label="buddies / satellite" />
                 <Stat n={cables.length} label="cables" />
               </div>
-              <FindingList rows={onDevices} empty="No finding on a device." />
+              <FindingList items={rowFindings(onDevices)} empty="No finding on a device." />
             </>
           ) : (
             <p className="muted small">reading the topology…</p>
@@ -273,25 +274,11 @@ export function PhysicalOverview({ t, inv, notes, storageError, aside, beforeFin
           <h2>Findings</h2>
           <span className="section-aside">from the topology and the storage inventory · {rows.filter((r) => r.level === "fail").length} fail · {rows.filter((r) => r.level === "warn").length} warn</span>
         </header>
-        <FindingList rows={rows} empty="No finding." />
+        <FindingList items={rowFindings(rows)} empty="No finding." />
       </section>
     </div>
   );
 }
 
 
-function FindingList({ rows, empty }: { rows: Row[]; empty: string }) {
-  if (rows.length === 0) return <p className="muted small">{empty}</p>;
-  return (
-    <ul className="findings">
-      {rows.map((r, i) => (
-        <li key={i}>
-          <Tag level={r.level} /> <b>{r.source}</b> {r.text}{" "}
-          <button className="linklike small" onClick={go(r.place)}>
-            {VIEW_NAME[r.place.view]} › {r.place.what}
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
+const rowFindings = (rows: Row[]): Finding[] => rows.map((r) => ({ level: r.level, source: r.source, text: r.text, target: { to: viewLink(r.place.view, r.place.select), label: `${VIEW_NAME[r.place.view]} › ${r.place.what}` } }));
