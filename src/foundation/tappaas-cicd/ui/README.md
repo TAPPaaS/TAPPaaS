@@ -219,6 +219,20 @@ Unack…, Maintenance…, health-manager's own, offered once its manifest declar
 the jump to the module's page where its operations are, and **Show in tree**, which opens the tree
 down to it. A panel shows status, not operations.
 
+**The CMDB record** (`web/src/pages/CiPanel.tsx`), opened by **CMDB record and trace** in the CI
+panel and in a device's side panel on the Site page (a node or machine looked up as a `machine`,
+a switch or AP as a `device`, by name): what the CMDB holds of one CI. **Open events**: its
+conditions that are not ok, the worst first, with since, source and whether acknowledged or in
+maintenance. **Trace**, up the backbone: the asset a port is part of, the CI an asset is allocated
+to, the machine a guest or a piece of software runs on, the cluster (else the environment) a node
+is a member of, to the top or eight hops; then the desired record (`config/<name>.json`), the
+release (module and version) and the module of the nearest CI on the way that records them, the
+module's open issues on the forge and the ADRs its design names. **Attributes**: each value with
+the source that reported it and since when. **Drift** against its record. **Relations** both ways,
+with source and since. **History**, folded: every period of every attribute and relation and every
+change that touched it, the newest first, a change with its verb, actor and job. Every CI named in
+the record opens its own record in the panel; Back returns the way it came.
+
 **Entry.** `/health?select=<id>` opens on one object; a root opens with its symptoms expanded, so the
 Overview's Attention links land there. With nothing asked for the page opens on the worst root, and
 on the site when nothing is wrong. A site that has not run `assess` gets grey dots and says so.
@@ -270,7 +284,7 @@ Only through the managers' `--json` (and `lib/ts`), never `pvesh` or `ssh` of it
 | security | `health-manager report security --json` | every 10 min |
 | peers | `backup-manager peers --json` | every 10 min |
 | activity | `journalctl -u update-tappaas.service -o short-iso` (7 days), `config/update-tappaas.failures` | every 5 min |
-| the health document (`health/*`, the Health view and the worst condition on the other pages) | the CMDB's API on `127.0.0.1:9098` with the token (`src/cmdb.ts`: `query`, `relations`, `classes`, `rules`, `show`, `history`) | when the change stream says something changed; every 5 min while the stream is down |
+| the health document (`health/*`, the Health view and the worst condition on the other pages) | the CMDB's API on `127.0.0.1:9098` with the token (`src/cmdb.ts`: `query`, `relations`, `classes`, `rules`, `show`, `history`; a CMDB record also `find`, each read when it is opened) | when the change stream says something changed; every 5 min while the stream is down |
 | the current root causes (`health/roots`) | `health-manager roots --json`, else the document's | when asked |
 
 A page is served from the last answer with its age; a failed refresh keeps the last good
@@ -299,6 +313,9 @@ change is a job as ever, `health-manager ack|unack|maintenance`, taken from its 
 | `health/object/<id>` | the CI panel: `{id, class, ancestors, name, label, module, view, conditions[], drift, relations[], history[], changes[], rootCauses[], impacts[]}` |
 | `health/roots` | `{roots, from: "health-manager"\|"graph", error}`, `graph` being the console's own list |
 | `health/summary` | the worst per page: `{available, generated, site, counts, roots, byType{}, attention[]}`; `available` false: keep `health` |
+| `cmdb/ci/<id>`, `cmdb/ci?name=<name>[&class=<class>]` | a CI's record: `{id, class, ancestors, name, label, attributes[] {name, value, source, since}, relations[] {id, type, direction, other, source, since}, drift, events[]}`, `events` its conditions that are not ok; by name, the class (or an ancestor of it) where the name is not unique |
+| `cmdb/ci/<id>/history` | `[{at, what: attribute\|relation\|change, name, value, source, until, detail, drift}]`, the newest first, 300 at most |
+| `cmdb/ci/<id>/trace` | `[{class, name, id, relation, link}]`: the CI, what it is part of, allocated to, runs on or is a member of (eight hops at most), then `desired`, `release`, `module`, `issues` and `adr` steps, which carry a `link` and no `id` |
 | `health/stream` | server-sent events: `hello`, then `health` `{topology, relayout, generated, patches[], rollups{}, roots, counts, hasConditions}`, one read per burst of CMDB changes; `patches` the objects whose colour moved, `rollups` the tree nodes whose roll-up did; `relayout` true: an object or a relation changed, read again |
 
 `modules` and `modules/<m>` add `condition` to a module's summary (the worst of its node and the
@@ -455,7 +472,7 @@ from the laptop.
 `test.sh`: `tsc` on the backend and the unit suite (`test/unit/*.test.ts`) — the Health view over
 `test/fixtures/health-site.json` (`fake-cmdb.ts`: one node down with its guests impacted, one
 acknowledged root, one flapping condition, a guest in a window): `health` the document, the client,
-the tree and its roll-ups, the ego graph and the chains, the live feed and the routes, `healthgraph` the cards and lines a page draws (there is no DOM here);
+the tree and its roll-ups, the ego graph and the chains, the live feed and the routes, `healthgraph` the cards and lines a page draws (there is no DOM here); `cipanel` a CI's record from fixtures: open events, the history's order, the trace up the backbone and where it stops;
 the assistant
 against a fake LiteLLM streaming the recorded exchanges of `test/fixtures/litellm-exchange.json`
 (the loop, the allow-list, ADR-034 T5: asked to run a change it proposes a card and applies

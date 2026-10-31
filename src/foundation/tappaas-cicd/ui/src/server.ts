@@ -55,6 +55,8 @@ const TYPES: Record<string, string> = {
 
 // A CMDB object's id, the only thing of a request that reaches its API.
 const OBJECT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CI_NAME = /^[^\x00-\x1f]{1,200}$/; // an object's name: a module, an asset tag, <device>:<port>
+const CLASS_NAME = /^[a-z][a-z0-9-]{0,63}$/;
 
 const JUMP_KINDS = new Set<JumpKind>(["node", "module", "switch", "port", "lag", "ap", "zone", "peer", "site", "disk", "pool"]);
 
@@ -197,6 +199,8 @@ export class ConsoleServer {
           },
         });
       }
+      case "cmdb":
+        return this.cmdbApi(a, b, parts[3], parts.length, url, res);
       case "health": {
         if (a !== undefined) return this.healthApi(a, b, parts[3], parts.length, url, res, req);
         const h = await r.health.get();
@@ -401,6 +405,31 @@ export class ConsoleServer {
     }
     if (sub === "stream" && depth === 2 && req) return this.streamHealth(req, res);
     return sendJson(res, 404, { error: "health | health/tree | health/ego/<id> | health/object/<id> | health/roots | health/summary | health/stream" });
+  }
+
+  // ── a CI's panel (ADR-040 D10) ───────────────────────────────────
+  //   GET /cmdb/ci/<id>                   attributes with source and since, relations, drift, open events
+  //   GET /cmdb/ci?name=<name>[&class=]   the same, found by name (and class, or an ancestor of it)
+  //   GET /cmdb/ci/<id>/history           every period and change, the newest first
+  //   GET /cmdb/ci/<id>/trace             up the backbone: what it runs on, its desired record, release, module
+  private async cmdbApi(sub: string | undefined, id: string | undefined, tail: string | undefined, depth: number, url: URL, res: ServerResponse): Promise<void> {
+    const r = this.reads;
+    const answer = (p: Promise<unknown>): Promise<void> =>
+      p.then(
+        (data) => sendJson(res, 200, { data, at: new Date().toISOString(), ageSeconds: 0, refreshing: false, error: null }),
+        (e: Error) => sendJson(res, 200, { data: null, at: null, ageSeconds: null, refreshing: false, error: e.message }),
+      );
+    if (sub === "ci" && depth === 2) {
+      const name = url.searchParams.get("name");
+      const cls = url.searchParams.get("class") ?? undefined;
+      if (!name || !CI_NAME.test(name) || (cls !== undefined && !CLASS_NAME.test(cls))) return sendJson(res, 400, { error: "cmdb/ci?name=<name>[&class=<class>]" });
+      return answer(r.ciRecordOf({ name, cls }));
+    }
+    if (sub === "ci" && id && (depth === 3 || (depth === 4 && (tail === "history" || tail === "trace")))) {
+      if (!OBJECT_ID.test(id)) return sendJson(res, 400, { error: "not an object id" });
+      return answer(depth === 3 ? r.ciRecordOf({ id }) : tail === "history" ? r.ciHistoryOf(id) : r.ciTraceOf(id));
+    }
+    return sendJson(res, 404, { error: "cmdb/ci/<id> | cmdb/ci?name=&class= | cmdb/ci/<id>/history | cmdb/ci/<id>/trace" });
   }
 
   // As a job's output: an event per thing that moved, and a comment now and

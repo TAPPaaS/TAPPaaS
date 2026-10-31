@@ -10,7 +10,7 @@
 // what the port says of it and Record…. From
 // the storage inventory: a disk, a pool with what it holds, a node's storage.
 
-import { ReactNode, useMemo } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useRead } from "../api";
 import { zoneColor } from "../colors";
 import { Health, RackCable, StorageInventory, TopoFinding, TopoRef, Topology } from "../types";
@@ -27,6 +27,7 @@ import { DeviceDrawing } from "./devicedrawing";
 import { stateClass } from "./states";
 import { DeviceLocationButton, LocationLink, PlacementLine, locationOption, useSiteLocations } from "../locations";
 import { PASSPHRASE_TEXT, SiteSsid, passphraseOf } from "../wizards";
+import { CiPanel, CiRef } from "../pages/CiPanel";
 
 function Findings({ list }: { list: TopoFinding[] }) {
   if (list.length === 0) return <p className="muted small">No finding on it.</p>;
@@ -95,6 +96,15 @@ function portsOf(links: DevLink[], device: string): Map<string, DevLink> {
   return m;
 }
 
+// A device's CI in the CMDB, by name: a cluster node or a machine is a
+// machine, a switch or an AP a device; anything else by its name alone. The
+// internet and a buddy have none here.
+export function ciRefOf(d: DevNode): CiRef | null {
+  if (d.kind === "isp" || d.kind === "buddy") return null;
+  const cls = d.kind === "node" || d.kind === "machine" ? "machine" : d.kind === "switch" || d.kind === "ap" ? "device" : undefined;
+  return { name: d.name, cls };
+}
+
 // The far end of a link, seen from one device.
 const farEnd = (l: DevLink, device: string) => (l.a === device ? l.b : l.a);
 
@@ -104,6 +114,9 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
   const siteSsids = useRead<SiteSsid[]>("ssids", 600_000).env?.data ?? null;
   const locations = useSiteLocations();
   const g = useMemo(() => deviceGraph(t), [t]);
+  // The CI's record in place of the panel, until closed or another selection.
+  const [record, setRecord] = useState<CiRef | null>(null);
+  useEffect(() => setRecord(null), [sel]);
   const devOf = (id: string): DevNode | undefined => g.nodes.find((n) => n.id === id);
   // A port clicked in a drawing: a switch's port is selected, a patch panel's
   // the link through it (else the free port), any other's link.
@@ -726,6 +739,8 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
   const dev = sel.kind === "link" || sel.kind === "disk" || sel.kind === "pool" || sel.kind === "rack" ? undefined : devOf(selectedDevice(g, sel) ?? "");
   const st = dev ? deviceState(t, dev) : null;
   const ringed = new Set(sel.kind === "port" || sel.kind === "panelport" ? [sel.id] : sel.kind === "lag" ? t.switches.find((x) => x.name === sel.switch)?.lags.find((x) => x.name === sel.id)?.ports ?? [] : []);
+  const ci = dev ? ciRefOf(dev) : null;
+  if (record) return <CiPanel start={record} close={close} back={{ label: dev?.name ?? "Device", go: () => setRecord(null) }} />;
   return (
     <aside className="sidepanel">
       <header>
@@ -737,6 +752,11 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
         </button>
       </header>
       {dev ? drawing(dev, ringed) : null}
+      {ci ? (
+        <p>
+          <button className="hlink" onClick={() => setRecord(ci)}>CMDB record and trace</button>
+        </p>
+      ) : null}
       {body ?? <p className="muted">Not in the current topology.</p>}
       {dev && sel.kind !== "port" && sel.kind !== "lag" && sel.kind !== "panelport" ? neighbours(dev) : null}
       {actions && operator ? (

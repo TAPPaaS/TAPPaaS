@@ -891,6 +891,43 @@ export interface HealthObject {
   impacts: { id: string; class: string; label: string; status: HealthStatus }[];
 }
 
+// GET cmdb/ci/<id> (the backend's cipanel.ts): a CI's record.
+export interface CiEnd {
+  id: string;
+  class: string;
+  name: string;
+}
+export interface CiRecord {
+  id: string;
+  class: string;
+  ancestors: string[];
+  name: string;
+  label: string;
+  attributes: { name: string; value: unknown; source: string; since: string }[];
+  relations: { id: string; type: string; direction: "in" | "out"; other: CiEnd; source: string | null; since: string | null }[];
+  drift: unknown;
+  events: { type: string; status: HealthStatus; reason: string | null; message: string | null; since: string | null; source: string | null; derived: boolean; acknowledged: boolean; maintenance: boolean }[];
+}
+// GET cmdb/ci/<id>/history: the newest first.
+export interface CiHistoryRow {
+  at: string;
+  what: "attribute" | "relation" | "change";
+  name: string;
+  value: unknown;
+  source: string | null;
+  until: string | null;
+  detail: string | null;
+  drift: boolean;
+}
+// GET cmdb/ci/<id>/trace: the CI first, then up.
+export interface CiTraceStep {
+  class: string;
+  name: string;
+  id: string | null;
+  relation: string | null;
+  link: string | null;
+}
+
 // GET modules/<m>/sections (the backend's sections.ts): a module's page as the
 // layers composed it, each section with its data.
 export type SectionFormat = "text" | "bytes" | "mib" | "percent" | "module" | "status";

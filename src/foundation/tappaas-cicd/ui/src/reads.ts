@@ -8,13 +8,14 @@
 // `list` and `show` run, read once instead of one process per zone.
 
 import { existsSync, mkdirSync, readFileSync, readdirSync } from "fs";
-import { join } from "path";
+import { dirname, join } from "path";
 import { writeJsonAtomic } from "../../lib/ts/src/config-io";
 import { WanAddress, readWanAddress, wanAddressFile } from "../../lib/ts/src/wan-address";
 import { environmentZoneIn, readZonesFile, sharedZonesIn } from "../../lib/ts/src/zones";
 import { parseJournal, parseLedger, sweepRuns, SweepRun } from "./activity";
 import { Cached, CachedMap, Entry } from "./cache";
-import { Cmdb, CmdbClassRow, CmdbError } from "./cmdb";
+import { Cmdb, CmdbClassRow, CmdbError, CmdbShow } from "./cmdb";
+import { Backbone, CiHistoryRow, CiRecord, ModuleRef, TraceStep, adrRefs, ciHistory, ciRecord, issuesUrl, walkTrace, webUrlOf } from "./cipanel";
 import { RepositoryCatalog, moduleSourceOf, repositoryCatalog } from "./catalog";
 import { ModuleFields, moduleFieldRows, moduleSchema, schemaDoc } from "./fields";
 import { composeFields } from "../../lib/ts/src/compose-fields";
@@ -845,6 +846,60 @@ export class Reads {
     const cmdb = this.cmdbClient();
     const [show, history, graph] = await Promise.all([cmdb.show(id), cmdb.history(id), this.healthGraph.get()]);
     return healthObject(show, history.attributes, history.changes, graph.value, (this.cfg.now ?? Date.now)());
+  }
+
+  // A CI's panel (ADR-040 D10): by id, or by name and class.
+  async ciRecordOf(ref: { id: string } | { name: string; cls?: string }): Promise<CiRecord> {
+    const cmdb = this.cmdbClient();
+    const show = "id" in ref ? await cmdb.show(ref.id) : await cmdb.find(ref.name, ref.cls);
+    return ciRecord(show, (this.cfg.now ?? Date.now)());
+  }
+
+  async ciHistoryOf(id: string): Promise<CiHistoryRow[]> {
+    return ciHistory(await this.cmdbClient().history(id));
+  }
+
+  // Up the backbone: the CMDB for the CIs, the repositories for the module.
+  async ciTraceOf(id: string): Promise<TraceStep[]> {
+    const cmdb = this.cmdbClient();
+    return walkTrace(await cmdb.show(id), (x) => cmdb.show(x), (b, ci) => this.moduleRefOf(b, ci));
+  }
+
+  // The module a CI is an instance of, from the repositories' catalogues: its
+  // version, its open issues on the forge, the ADRs its design names.
+  private async moduleRefOf(b: Backbone, ci: CmdbShow): Promise<ModuleRef | null> {
+    const repos = (await this.catalogs.get()).value ?? [];
+    const hit = repos.flatMap((r) => r.modules.map((m) => ({ r, m }))).find(({ m }) => (b.release ? m.name === b.release.module : m.instances.includes(ci.name)));
+    if (!hit) return b.release ? { name: b.release.module, version: null, issues: null, adrs: [] } : null;
+    const { r, m } = hit;
+    const dir = dirname(m.json);
+    const read = (f: string): string => {
+      try {
+        return readFileSync(f, "utf8");
+      } catch {
+        return "";
+      }
+    };
+    let version: string | null = null;
+    try {
+      const v = (JSON.parse(read(m.json) || "{}") as { version?: unknown }).version;
+      version = typeof v === "string" ? v : null;
+    } catch {
+      /* no version */
+    }
+    const web = webUrlOf(r.url);
+    const adrDir = r.path ? join(r.path, "docs", "ADR") : null;
+    let files: string[] = [];
+    try {
+      files = adrDir ? readdirSync(adrDir).filter((f) => f.endsWith(".md")) : [];
+    } catch {
+      /* no ADR directory in this repository */
+    }
+    const adrs = adrRefs(["DESIGN.md", "README.md"].map((f) => read(join(dir, f))).join("\n") + read(m.json)).map((name) => {
+      const file = files.find((f) => f.startsWith(name) && !/[0-9a-z]/i.test(f.charAt(name.length)));
+      return { name, link: file && web ? `${web}/src/branch/main/docs/ADR/${encodeURIComponent(file)}` : null };
+    });
+    return { name: m.name, version, issues: issuesUrl(web, m.name), adrs };
   }
 
   // health-manager roots --json; the graph's own list when the verb cannot
