@@ -347,7 +347,7 @@
         "ipv6": { "type": "boolean" },
         "code": { "type": "string" },
         "primaryLocation": { "type": "relation", "relation": "at" },
-        "version": { "type": "string", "description": "The TAPPaaS release." },
+        "version": { "type": "string", "volatile": true, "description": "The TAPPaaS release: the control plane's own build, which a refresh or an update moves on purpose. Volatile: its history is kept, a new build is never drift." },
         "rootCauses": {
           "type": "array",
           "volatile": true,

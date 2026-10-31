@@ -229,7 +229,8 @@ one — `type`, `required`, `immutable`, `description`, `enum` — plus:
   `speed` by its `kind`, D9).
 - `derived`: kept by the controller (`drift`), never reported.
 - `volatile`: the value changes by itself (`conditions`, `used`, `leaseUntil`,
-  `lastSeen`, `stage`, `state`, `quorum`): it has history like any other, and
+  `lastSeen`, `stage`, `state`, `quorum`), or moves on every refresh of the
+  control plane (the site's `version`): it has history like any other, and
   never counts as drift. On a member of an object or of an array's items (a
   condition's `lastChecked`) it means no history at all: a value that differs
   only there is rewritten in place.

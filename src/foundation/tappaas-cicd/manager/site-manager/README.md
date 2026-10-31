@@ -564,7 +564,7 @@ observation; `--json` prints it instead.
 
 | Class | Name (key) | What |
 |---|---|---|
-| `site` | the site code | `code`, `displayName`, `version` (the running TAPPaaS release), `primaryLocation` (`at`), `desired` site.json |
+| `site` | the site code | `code`, `displayName`, `version` (the running TAPPaaS release: the control plane's build, volatile, so a refresh's new build is history, not drift), `primaryLocation` (`at`), `desired` site.json |
 | `location` | its name | kind, country, city, address, timezone, latitude, longitude |
 | `cluster` | the site code (`pvecm create <site-code>`) | `quorum` |
 | `machine` | the node name | its pvehost instance: `desired`, `release` pvehost + version, `hostname`, `os`, `osVersion`, `addresses`, `clusterMember`, `storagePools`, `management`, `environment` mgmt; `member-of` the cluster, `at` its location (else the primary) |
