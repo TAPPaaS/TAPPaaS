@@ -1,90 +1,64 @@
-// RemoveNode.tsx — Day 2's "Remove a node": a Proxmox node leaves the site
-// for good. 1 which node, and how: powered off first (Proxmox removes a node
-// only once it is off), wiped first, or lost (down for good); 2 the removal —
-// site-manager node delete, whose preview lists every blocker (a guest on it,
-// a replication job touching it, an HA rule naming it, the site's PBS) and
-// the plan, and whose apply takes it out of the cluster and archives its
-// pvehost instance; the node's name typed before Apply is the confirmation
-// (--yes to the verb, which would otherwise ask on a terminal); 3 afterwards.
+// RemoveNode.tsx — Day 2's "Remove a node": a machine leaves the cluster for
+// good. 1 which node, and how: powered off first, wiped first, or down for
+// good; 2 remove it — the console checks at once (site-manager node delete
+// <node> --<how>, its dry run) and shows what still holds the node as
+// findings with where to act (noderemove.ts reads the output); once nothing
+// does, the machine's record is kept or removed (a lost machine's is
+// removed), the node's name is typed, and one button runs the removal
+// (--apply --yes --asset <choice>; the typed name is the confirmation the
+// script would otherwise ask for on a terminal); its result is shown here,
+// the output under a fold; 3 afterwards: what is true now, with links.
 
-import { useEffect, useMemo, useState } from "react";
-import { useJob, useRead } from "../api";
-import { JobView, Step, StepView } from "../operate";
-import { useOpenedBy } from "../opener";
+import { useEffect, useState } from "react";
+import { applyNowJob, previewJob, reloadAll, useJob, useRead } from "../api";
+import { JobControl, Output, phaseOutputs } from "../jobs";
+import { AssetChoice, ASSET_CHOICES, CheckOutcome, Finding, HOWS, How, RemovalOutcome, assetFor, assetTarget, checkArgv, parseCheck, parseRemoval, removeArgv, switchTarget } from "../noderemove";
+import { useOpenedBy, requestOpen } from "../opener";
 import { JobSummary, SiteRead } from "../types";
-import { Link, canOperate, useMe } from "../ui";
-import { ResumeOffer, Wizard, jobLabel, jobLive, useJobSession } from "../wizard";
-import { viewLink } from "../physical/views";
+import { Link, Tag, canOperate, useMe } from "../ui";
+import { ResumeOffer, Wizard, jobLive, useJobSession, useReportJob } from "../wizard";
 import { StepRow } from "./Setup";
 
-// What the activity is, on Day 2's card and at the top of the form.
-export const REMOVE_NODE_TEXT = "Takes a physical machine out of the cluster for good: refused while it still holds a guest, a replication job, an HA rule or the site's PBS; then it is removed from Proxmox and its node record archived. The other nodes are untouched.";
+export { HOWS } from "../noderemove";
+export type { How } from "../noderemove";
 
-export type How = "shutdown" | "erase" | "lost";
-export const HOWS: { id: How; label: string; detail: string }[] = [
-  { id: "shutdown", label: "power it off, then remove it", detail: "The usual way: Proxmox removes a node only once it is off. Its disks keep their data." },
-  { id: "erase", label: "wipe its disks, power it off, then remove it", detail: "Every ZFS pool destroyed, every disk and the boot disk wiped, its boot entry deleted: the machine keeps nothing. For a machine that leaves the building." },
-  { id: "lost", label: "it is down for good", detail: "A dead machine: the guests the cluster still places on it are lost with it (their configs are saved on the mothership first), replication jobs touching it are removed, HA rules naming it stay for a replacement under the same name." },
-];
+// What the activity is, on Day 2's card and at the top of the form.
+export const REMOVE_NODE_TEXT = "Takes a machine out of the cluster for good. The console first checks that nothing still needs it (something running on it, a copy kept on it, the site's backup server) and says where to move each; then the machine leaves the cluster, its switch ports are parked and the node is gone from the site. The other nodes are untouched.";
 
 export function RemoveNodeWizard({ onClose, node: preset }: { onClose: () => void; node?: string | null }) {
-  const me = useMe();
   const site = useRead<SiteRead>("site").env?.data;
   const nodes = (site?.nodes ?? []).map((n) => n.name);
   const [node, setNode] = useState(preset ?? "");
   const [how, setHow] = useState<How>("shutdown");
+  const [asset, setAsset] = useState<AssetChoice>("keep");
   const [job, setJob] = useState<string | null>(null);
-  const [done, setDone] = useState<boolean | null>(null);
-  // Closed while node delete ran, or within the hour after: its job is found
+  const [result, setResult] = useState<RemovalOutcome | null>(null);
+  // Closed while the removal ran, or within the hour after: its job is found
   // again (the node may be gone from the site by then: it is the job's).
   const [resumed, setResumed] = useState(false);
   const [declined, setDeclined] = useState(false);
-  const session = useJobSession("site-manager", "node delete", () => true, job === null && !declined);
-  const followed = useJob(resumed ? job : null);
-  useEffect(() => {
-    if (followed?.state === "done") setDone(followed.exit === 0);
-  }, [followed?.state]);
+  const session = useJobSession("site-manager", "node delete", (j) => j.kind === "apply", job === null && !declined);
   const restore = (j: JobSummary) => {
     setNode(j.argv[3] ?? "");
     setHow(HOWS.find((h) => j.argv.includes(`--${h.id}`))?.id ?? "shutdown");
+    const a = j.argv[j.argv.indexOf("--asset") + 1];
+    if (a === "keep" || a === "remove") setAsset(a);
     setJob(j.id);
     setResumed(true);
   };
-  const chosen = nodes.includes(node) || resumed ? node : "";
-
-  const remove: Step = useMemo(
-    () => ({
-      title: `site-manager node delete ${chosen || "<node>"} --${how}`,
-      bin: "site-manager",
-      verb: "node delete",
-      fixed: chosen ? [chosen] : [],
-      // Offered: --remove (the record deleted rather than archived). The way
-      // (--shutdown, --erase, --lost) is stage 1's choice, set below.
-      only: ["--remove"],
-      // The console's typed name before Apply is the confirmation the script
-      // would otherwise ask for on a terminal: --yes is always given, not offered.
-      initial: { [`--${how}`]: true, "--yes": true },
-      hide: ["--yes", "--shutdown", "--erase", "--lost", "--config-only"],
-      blocked: chosen ? undefined : "pick the node first",
-      note: (
-        <>
-          <p>The preview says what still holds {chosen || "the node"} — a guest, a replication job, an HA rule, the site's PBS — with what moves each, and the plan. Nothing changes until Apply, and Apply is refused while anything holds it.</p>
-          <p>Apply {how === "lost" ? "removes the dead node from the cluster" : how === "erase" ? "wipes the node's disks, powers it off and removes it from the cluster" : "powers the node off and removes it from the cluster"}: pvecm delnode, its directory under /etc/pve, its storage entries and known_hosts; then its pvehost instance is archived (listed as archived on the Modules page, its config kept under config/archived) and it leaves site.json. Tick --remove to delete that record instead, so the node disappears from the list.</p>
-        </>
-      ),
-    }),
-    [chosen, how],
-  );
+  // Once a removal runs the node is the job's: it leaves the site's list.
+  const chosen = nodes.includes(node) || resumed || job !== null ? node : "";
+  const removed = result?.removed === true;
 
   const stages = [
     { id: "node", title: "1 · The node, and how", required: true, done: chosen ? true : false, detail: "Which node leaves, and whether it is powered off first, wiped first, or already dead." },
-    { id: "remove", title: "2 · Remove it", required: true, done: done ?? (job ? null : false), detail: "The preview lists every blocker and the plan; Apply, with the node's name typed, takes it out of the cluster." },
-    { id: "after", title: "3 · Afterwards", required: false, done: done ? null : null, detail: "HA and replication re-folded, the machine taken out of the physical view." },
+    { id: "remove", title: "2 · Remove it", required: true, done: removed ? true : false, detail: "The console checks what still needs the node and says where to move it; then, with the node's name typed, it is removed." },
+    { id: "after", title: "3 · Afterwards", required: false, done: null, detail: "What is true now, and how to replace the machine." },
   ];
-  const current = !chosen ? "node" : !done ? "remove" : "after";
+  const current = !chosen ? "node" : !removed ? "remove" : "after";
 
   return (
-    <Wizard title="Remove a node" onClose={onClose} running={followed && jobLive(followed) ? [jobLabel(followed)] : []} resumes>
+    <Wizard title="Remove a node" onClose={onClose} resumes>
       {session ? <ResumeOffer what={<>A node is being removed: <b>{session.argv[3] ?? "?"}</b></>} job={session} onContinue={() => restore(session)} onDecline={() => setDeclined(true)} decline="Remove another node" /> : null}
       <p className="small">{REMOVE_NODE_TEXT}</p>
       <ol className="setup">
@@ -99,7 +73,7 @@ export function RemoveNodeWizard({ onClose, node: preset }: { onClose: () => voi
                 ))}
                 {chosen && !nodes.includes(chosen) ? <option value={chosen}>{chosen} (removed)</option> : null}
               </select>
-              <small className="muted">The site's nodes. Move what runs on it first (a module's node or HANode; the PBS with backup-manager placement): the preview in stage 2 lists what is left.</small>
+              <small className="muted">The site's nodes. Move what runs on it to another node first; the next step checks what is left and says where.</small>
             </label>
             {HOWS.map((h) => (
               <label key={h.id} className="form-check">
@@ -112,25 +86,246 @@ export function RemoveNodeWizard({ onClose, node: preset }: { onClose: () => voi
         <StepRow s={stages[1]} open={current === "remove"}>
           {!chosen ? (
             <p className="muted small">Once the node is picked.</p>
-          ) : resumed && job ? (
-            <JobView id={job} label="site-manager node delete" />
           ) : (
-            <StepView key={`${chosen}:${how}`} step={remove} me={me} onApplied={setJob} onDone={(ok) => setDone(ok)} />
+            <RemoveStep key={`${chosen}:${how}`} node={chosen} how={how} asset={asset} setAsset={setAsset} job={job} setJob={setJob} resumed={resumed} onResult={setResult} />
           )}
         </StepRow>
         <StepRow s={stages[2]} open={current === "after"}>
-          {done ? (
-            <ol>
-              <li>Run the site update (Setup › Update, or <span className="mono">site-manager update</span>) so HA and replication are folded over the nodes that remain.</li>
-              <li>Take the machine out of the physical view: <Link to={viewLink("rack")}>the rack view</Link>, where its device record is removed or the machine moved elsewhere.</li>
-              {how !== "erase" ? <li>Its disks still hold data: wipe them before the machine leaves your hands.</li> : null}
-            </ol>
-          ) : (
-            <p className="muted small">Once the node is removed.</p>
-          )}
+          {removed && result ? <Afterwards node={chosen} how={how} result={result} onClose={onClose} /> : <p className="muted small">Once the node is removed.</p>}
         </StepRow>
       </ol>
     </Wizard>
+  );
+}
+
+function FindingList({ items }: { items: Finding[] }) {
+  return (
+    <ul className="findings">
+      {items.map((f, i) => (
+        <li key={i}>
+          {f.text}
+          {f.target ? (
+            <>
+              {" "}
+              <Link to={f.target.to}>{f.target.label}</Link>
+              {f.hint ? <>: {f.hint}.</> : null}
+            </>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// Stage 2: the check runs as the stage opens; then the machine's record, the
+// typed name and the one button; then the removal's result.
+function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult }: {
+  node: string; how: How; asset: AssetChoice; setAsset: (a: AssetChoice) => void;
+  job: string | null; setJob: (id: string | null) => void; resumed: boolean; onResult: (r: RemovalOutcome | null) => void;
+}) {
+  const me = useMe();
+  const [check, setCheck] = useState<string | null>(null);
+  const [round, setRound] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState("");
+  const checkJob = useJob(check);
+  const applied = useJob(job);
+  useReportJob(jobLive(applied) ? applied : jobLive(checkJob) ? checkJob : null);
+
+  // The check, at once (and again on "Check again"); not for a removal found again.
+  useEffect(() => {
+    if (resumed || job) return;
+    let gone = false;
+    setCheck(null);
+    void previewJob(checkArgv(node, how)).then((r) => {
+      if (gone) return;
+      if (!r.data) setError(r.error ?? "the check could not be started");
+      else setCheck(r.data.id);
+    });
+    return () => {
+      gone = true;
+    };
+  }, [node, how, round]);
+
+  const outcome: CheckOutcome | null = checkJob
+    ? checkJob.state === "refused"
+      ? { state: "failed", blockers: [], losses: [], ports: [], asset: null, record: null, tail: [checkJob.refused ?? "refused"] }
+      : parseCheck(checkJob.output, node, checkJob.state === "done" ? { exit: checkJob.exit } : null)
+    : null;
+
+  // The removal: its own dry run first (one job), then the apply.
+  const phases = applied ? phaseOutputs(applied) : null;
+  const stopped = !!applied?.previewPhase?.stopped;
+  const finished = applied !== null && (applied.state === "done" || applied.state === "refused");
+  const ok = finished && applied!.state === "done" && applied!.exit === 0 && !stopped;
+  const result = applied && finished ? parseRemoval(phases?.apply ?? applied.output) : null;
+  useEffect(() => {
+    if (!finished) return;
+    onResult(ok ? result : null);
+    if (ok) reloadAll();
+  }, [finished, ok]);
+
+  const fate = assetFor(how, asset);
+  const canRemove = outcome?.state === "ok" && confirm === node && canOperate(me) && !job;
+  const doRemove = async () => {
+    setError(null);
+    const r = await applyNowJob(removeArgv(node, how, fate), node);
+    if (!r.data || r.status >= 400) return setError(r.error ?? `HTTP ${r.status}`);
+    setJob(r.data.id);
+  };
+  const retry = () => {
+    setJob(null);
+    onResult(null);
+    setConfirm("");
+    setRound((n) => n + 1);
+  };
+
+  if (job) {
+    if (!applied) return <p className="muted">starting the removal of {node}…</p>;
+    return (
+      <div className="step">
+        {!finished ? (
+          <p><Tag level="skip" /> Removing {node}{how === "erase" ? ": wiping its disks, powering it off" : how === "shutdown" ? ": powering it off" : ""}, then taking it out of the cluster. This takes a few minutes. <JobControl job={applied} /></p>
+        ) : ok && result ? (
+          <>
+            <p><Tag level="pass" /> {node} is removed.</p>
+            <ul className="findings">
+              <li>It is out of the cluster{result.record === "archived" ? "; its node record is kept, archived" : " and gone from the site's nodes"}.</li>
+              {result.parked.map((p) => (
+                <li key={`${p.sw}:${p.port}`}>Switch port {p.port} on <Link to={switchTarget(p.sw).to}>{p.sw}</Link> is parked.</li>
+              ))}
+              {result.notParked.map((p) => (
+                <li key={`${p.sw}:${p.port}`} className="readstate-warn">Switch port {p.port} on <Link to={switchTarget(p.sw).to}>{p.sw}</Link> could not be parked: park it there.</li>
+              ))}
+              {result.asset ? (
+                <li>
+                  The machine's record <Link to={assetTarget(result.asset.key).to}>{result.asset.key}</Link>{" "}
+                  {result.asset.fate === "kept" ? (result.asset.where ? `is kept, still placed in ${result.asset.where}.` : "is kept, in stock.") : "is removed, with its place and cables."}
+                </li>
+              ) : null}
+              {result.assetTrouble ? <li className="readstate-warn">{result.assetTrouble}</li> : null}
+              {result.warnings.map((w, i) => (
+                <li key={i} className="muted">{w}</li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <>
+            <p className="readstate readstate-fail">
+              {applied.state === "refused" ? `The removal was not started: ${applied.refused}` : stopped ? `${node} cannot be removed: something still needs it.` : `The removal of ${node} did not finish.`}
+            </p>
+            {result && result.tail.length ? <pre className="output">{result.tail.join("\n")}</pre> : null}
+            <div className="actions">
+              <button className="btn btn-primary" onClick={retry}>Check again</button>
+            </div>
+          </>
+        )}
+        <details className="small">
+          <summary>What the removal printed</summary>
+          <Output text={applied.output} live={jobLive(applied)} />
+        </details>
+      </div>
+    );
+  }
+
+  return (
+    <div className="step">
+      {error ? <p className="readstate readstate-fail">{error}</p> : null}
+      {!outcome || outcome.state === "running" ? (
+        <p className="muted">Checking whether {node} can be removed…</p>
+      ) : outcome.state === "ok" ? (
+        <p><Tag level="pass" /> {node} can be removed{how === "lost" ? "" : ": nothing runs on it, nothing is kept on it"}.</p>
+      ) : outcome.state === "blocked" ? (
+        <>
+          <p><Tag level="fail" /> {node} cannot be removed yet:</p>
+          <FindingList items={outcome.blockers} />
+        </>
+      ) : (
+        <>
+          <p className="readstate readstate-fail">The check did not finish.</p>
+          {outcome.tail.length ? <pre className="output">{outcome.tail.join("\n")}</pre> : null}
+        </>
+      )}
+      {outcome && outcome.losses.length ? (
+        <>
+          <p>Lost with it:</p>
+          <FindingList items={outcome.losses} />
+        </>
+      ) : null}
+      {outcome && outcome.state !== "running" && outcome.state !== "ok" ? (
+        <div className="actions">
+          <button className="btn" onClick={() => setRound((n) => n + 1)}>Check again</button>
+        </div>
+      ) : null}
+      {checkJob ? (
+        <details className="small">
+          <summary>What the check printed</summary>
+          <Output text={checkJob.output} live={jobLive(checkJob)} />
+        </details>
+      ) : null}
+      {outcome?.state === "ok" ? (
+        <div className="form">
+          {how === "lost" ? (
+            <p className="small">The machine is gone for good, so its record is removed as well, with its place in the rack and its cables. Its history stays.</p>
+          ) : outcome.asset ? (
+            <>
+              <p className="small">The machine's record, <Link to={assetTarget(outcome.asset.key).to}>{outcome.asset.key}</Link>:</p>
+              {ASSET_CHOICES.map((c) => (
+                <label key={c.id} className="form-check">
+                  <input type="radio" name="asset" checked={asset === c.id} onChange={() => setAsset(c.id)} />
+                  <span>{c.label}</span> <small className="muted">{c.detail}</small>
+                </label>
+              ))}
+            </>
+          ) : (
+            <p className="small muted">No machine record is kept for {node}: nothing to keep or remove.</p>
+          )}
+          <label className="form-row confirm">
+            <span>Type <b className="mono">{node}</b> to confirm</span>
+            <input type="text" autoComplete="off" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          </label>
+          <div className="actions">
+            <button className="btn btn-danger" disabled={!canRemove} onClick={() => void doRemove()}>Remove {node}</button>
+            {!canOperate(me) ? <span className="muted small">only an operator removes a node</span> : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// Stage 3: what is true now, and where to go from here.
+function Afterwards({ node, how, result, onClose }: { node: string; how: How; result: RemovalOutcome; onClose: () => void }) {
+  const addNode = () => {
+    onClose();
+    requestOpen("add-node", null, {});
+  };
+  return (
+    <ul className="findings">
+      <li>{node} is gone from the cluster and from <Link to="/modules">Modules</Link>{result.record === "archived" ? " (listed as archived)" : ""}.</li>
+      {result.parked.length ? (
+        <li>
+          Its switch {result.parked.length > 1 ? "ports are" : "port is"} parked:{" "}
+          {result.parked.map((p, i) => (
+            <span key={`${p.sw}:${p.port}`}>{i ? ", " : ""}port {p.port} on <Link to={switchTarget(p.sw).to}>{p.sw}</Link></span>
+          ))}
+          . Nothing plugged in there reaches the site's networks.
+        </li>
+      ) : (
+        <li className="muted">No switch port was recorded for it, so none was parked.</li>
+      )}
+      {result.asset?.fate === "kept" ? (
+        <li>The machine is <Link to={assetTarget(result.asset.key).to}>{result.asset.key}</Link>, {result.asset.where ? `still placed in ${result.asset.where}` : "in stock"}: its place and cables stay recorded, ready for its next role.</li>
+      ) : result.asset?.fate === "removed" ? (
+        <li>The machine's record {result.asset.key} is removed, with its place and cables: it has left the site. Its history stays.</li>
+      ) : null}
+      <li>
+        To replace it, <button className="btn btn-small" onClick={addNode}>Add node</button>: a machine is recognised by its serial number or a network card, and a machine kept in stock is taken from there.
+      </li>
+      <li>Run the site update (<Link to="/setup">Setup</Link> › Update) so the modules' standby copies and fail-over spread over the nodes that remain.</li>
+      {how === "shutdown" ? <li>Its disks still hold data: wipe them before the machine leaves your hands.</li> : null}
+      {how === "lost" ? <li>Restore what was lost with it from its backups, on the nodes that remain.</li> : null}
+    </ul>
   );
 }
 

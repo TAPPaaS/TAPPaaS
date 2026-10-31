@@ -5,7 +5,7 @@
 # Takes a node out of the Proxmox cluster for good: workload check → (erase) →
 # power off → pvecm delnode → its /etc/pve/nodes directory, its place in the
 # storage entries and in the cluster's known_hosts. `site-manager node delete`
-# runs this, then drops the node from site.json and archives its pvehost module.
+# runs this, then deletes the node's record and keeps or removes its asset.
 #
 # Usage:
 #   remove-node.sh [--dry-run|--execute] [--shutdown|--erase|--lost] <node>
@@ -119,8 +119,10 @@ REPL="$(peer "pvesh get /cluster/replication --output-format json" 2>/dev/null)"
 mapfile -t REPL_JOBS < <(rmn_replication_touching "$NODE" "$REPL")
 for j in "${REPL_JOBS[@]}"; do
     [[ -n "$j" ]] || continue
-    if [[ "$LOST" -eq 1 ]]; then warn "  replication job ${j} — removed with the node; site-manager update re-folds HA after the restore"
-    else block "replication job ${j} — change the module's HANode, then site-manager update re-folds it"; fi
+    # The job's id is <vmid>-<n>: the module whose guest it replicates, named.
+    m="$(rmn_module_of_vmid "${j%%-*}" "$CONFIG_DIR")"
+    if [[ "$LOST" -eq 1 ]]; then warn "  replication job ${j}${m:+ (module ${m})} — removed with the node; site-manager update re-folds HA after the restore"
+    else block "replication job ${j}${m:+ (module ${m})} — change the module's HANode, then site-manager update re-folds it"; fi
 done
 
 RULES="$(peer "pvesh get /cluster/ha/rules --output-format json" 2>/dev/null)" || RULES='[]'
