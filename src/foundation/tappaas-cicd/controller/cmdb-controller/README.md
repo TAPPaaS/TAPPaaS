@@ -176,6 +176,9 @@ only the CMDB.
    it is part of); and the first observation of a verb-made object (or of such
    a part): fields and relations appearing that never had a value. A later
    change of a filled field is drift.
+   **Words** are expected too (`reason: "words"`): a relation whose ends and
+   type stay and whose only change is `required` or `redundancyGroup`. Those
+   are words a report classifies the relation with, not an observation.
 3. Lists what differs from `config/`: `module-manager drift` for each module
    record (ADR-020's resolver and differ), **actual without desired** (an object
    of a class a record can declare, with none: `unmanaged`) and **desired
@@ -184,8 +187,8 @@ only the CMDB.
 4. Writes one `change` row, verb `sweep`, with the counts and differences as its
    body; one JSON line per difference to the journal, identifier `cmdb-sweep`
    (`kind`, `class`, `name`, `source`, `attribute`, `before`, `after`,
-   `expected`, and `reason`, `verb`, `owner` for a new one); the counts have
-   `new` beside `expected` (of which it is a part); and the report to stdout (`--json` too). Objects with
+   `expected`, and `reason`, `verb`, `owner` for a new or words one); the counts have
+   `new` and `words` beside `expected` (of which they are a part); and the report to stdout (`--json` too). Objects with
    unexplained differences are marked drifted until a change clears them.
 
 | Exit | Status | When |

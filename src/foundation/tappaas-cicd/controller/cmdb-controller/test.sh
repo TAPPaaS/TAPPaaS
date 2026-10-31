@@ -44,6 +44,8 @@
 #   - new, not drift: the ports of an asset a verb made and the fields its first
 #     observation fills are new (with the verb); an old asset's port and a later
 #     change of a filled field are drift
+#   - words, not drift: a report setting a cable's required/redundancyGroup is
+#     expected (reason words); an observed change of the cable is drift
 #
 # Needs pg_ctl/initdb/psql, node, tsc, curl and jq; without them on PATH it
 # re-enters itself under nix-shell. PostgreSQL will not run as root: as root
@@ -618,6 +620,24 @@ cmdb report --json >/dev/null <<<'{"source":"site-manager","objects":[{"class":"
 out="$(sweep)"
 check "a later change of a filled field is drift" "changed false null" \
     "$(jq -r '.differences[] | select(.name == "srv-04" and .attribute == "memory") | "\(.kind) \(.expected) \(.reason)"' <<<"${out}")"
+
+# Words, not drift: a report that sets a cable's dependency words (required,
+# redundancyGroup) changes no observation: expected, reason "words". A cable
+# whose observed attributes change with no verb behind it is drift as before.
+cmdb report --json >/dev/null <<<'{"source":"switch-manager","objects":[{"ref":"a","class":"network-device","name":"sw-w"},{"ref":"p","class":"port","name":"w1","attributes":{"asset":{"ref":"a"},"kind":"rj45"}},{"ref":"s","class":"server","name":"srv-w"},{"ref":"n","class":"port","name":"srvw-nic0","attributes":{"asset":{"ref":"s"},"kind":"rj45"}}],"relations":[{"type":"connects","from":{"ref":"p"},"to":{"ref":"n"},"attributes":{"origin":"lldp","linkSpeed":"1g"}}]}'
+sweep >/dev/null
+cmdb report --json >/dev/null <<<'{"source":"site-manager","relations":[{"type":"connects","from":{"class":"port","name":"w1"},"to":{"class":"port","name":"srvw-nic0"},"attributes":{"redundancyGroup":"tappaas1:lanbond","required":true}}]}'
+out="$(sweep)"
+check "a cable's dependency words are expected, reason words, no verb" "changed true words null" \
+    "$(jq -r '.differences[] | select(.name == "w1" and ((.attribute // "") | startswith("→connects"))) | "\(.kind) \(.expected) \(.reason) \(.verb)"' <<<"${out}")"
+check "…counted as words among the expected, not drift" "1 0" "$(jq -r '"\(.counts.words) \(.counts.drift)"' <<<"${out}")"
+check "…and the journal line says words" "true words" "$(jq -r 'select(.name == "w1" and .reason == "words") | "\(.expected) \(.reason)"' "${SW}/journal" | tail -1)"
+cmdb sweep --last >"${SW}/text" 2>&1
+grep -q "expected (words: required, redundancyGroup)" "${SW}/text" && ok "the report, for people, says words" || bad "sweep text: $(grep -A2 'w1' "${SW}/text" | head -4)"
+cmdb report --json >/dev/null <<<'{"source":"switch-manager","relations":[{"type":"connects","from":{"class":"port","name":"w1"},"to":{"class":"port","name":"srvw-nic0"},"attributes":{"origin":"lldp","linkSpeed":"100m"}}]}'
+out="$(sweep)"
+check "an observed change of the cable, the words kept, is drift" "changed false null" \
+    "$(jq -r '.differences[] | select(.name == "w1" and ((.attribute // "") | startswith("→connects"))) | "\(.kind) \(.expected) \(.reason)"' <<<"${out}")"
 
 echo "== the store's invariant =="
 _ov="$(sql "INSERT INTO attribute (object, name, value, source, validity)

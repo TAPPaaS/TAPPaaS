@@ -17,12 +17,12 @@ export interface SweepDifference {
   name: string;
   attribute: string | null;
   expected: boolean;
-  reason?: "new"; // expected because it belongs to what a verb just made
+  reason?: "new" | "words"; // expected: it belongs to what a verb just made, or only a relation's dependency words changed
 }
 
 export interface SweepRecord {
   time: string;
-  counts: { expected: number; new?: number; drift: number; desired: number; unmanaged: number; missing: number; unread: number; sourcesFailed: number };
+  counts: { expected: number; new?: number; words?: number; drift: number; desired: number; unmanaged: number; missing: number; unread: number; sourcesFailed: number };
   sources?: { source: string; ok: boolean }[];
   differences?: SweepDifference[];
 }
@@ -52,7 +52,7 @@ export function checkCmdbSweep(rec: SweepRecord | null, now: number): CheckResul
   if (rows.length > shown.length) shown.push({ status: "warn", text: `… and ${rows.length - shown.length} more — cmdb sweep --last` });
   if (c.missing || c.sourcesFailed) return { name, status: "fail", detail: `${summary} (${rec.time})`, rows: shown };
   if (c.drift || c.desired || c.unmanaged || c.unread) return { name, status: "warn", detail: `${summary} (${rec.time})`, rows: shown };
-  return { name, status: "pass", detail: `the site is what config/ says: ${c.expected} expected change(s)${c.new ? `, ${c.new} of them new` : ""} (${rec.time})` };
+  return { name, status: "pass", detail: `the site is what config/ says: ${c.expected} expected change(s)${c.new ? `, ${c.new} of them new` : ""}${c.words ? `, ${c.words} relation word(s)` : ""} (${rec.time})` };
 }
 
 /** The last record from the service. Null when none has run. */

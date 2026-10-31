@@ -6,7 +6,8 @@
 //   1. rescan: `<component> report --discover` for every cmdbSource component
 //   2. what changed since the last sweep record, each marked expected (a change
 //      report explains it, or it is new: part of what a verb made, or a
-//      verb-made object's first observation; see newness) or drift
+//      verb-made object's first observation; see newness; or it is words: a
+//      relation's dependency words changed, its ends did not) or drift
 //   3. what differs from desired: ADR-020's resolver and differ for the
 //      modules (`module-manager drift`), actual without desired, desired
 //      without actual
@@ -22,7 +23,7 @@ import { appendFileSync, existsSync, readFileSync, readdirSync, statSync } from 
 import { join } from "path";
 import { spawn } from "child_process";
 import { RescanResult, runCommand, rescan, rescanSources } from "./rescan";
-import { CONTROLLER_SOURCE, ChangeEvent, Store } from "./store";
+import { CONTROLLER_SOURCE, ChangeEvent, DEPENDENCY_WORDS, Store } from "./store";
 import { Query } from "./pg";
 
 type Obj = Record<string, unknown>;
@@ -52,7 +53,10 @@ export interface Difference {
   // part of a new object (owner: the object it is part of, "class/name"), or
   // the first observation filling a verb-made object's fields. Absent: the
   // verb's own change explains it, or nothing does.
-  reason?: "new";
+  // "words": a relation whose ends and type stay and whose only change is its
+  // dependency words (required, redundancyGroup): words a report classifies
+  // the relation with, not an observation that differs, so never drift.
+  reason?: "new" | "words";
   owner?: string;
 }
 
@@ -67,6 +71,7 @@ export const NEW_WINDOW_MS = 3600 * 1000;
 export interface SweepCounts {
   expected: number;
   new: number; // of the expected, those that are new (reason "new")
+  words: number; // of the expected, a relation's dependency words (reason "words")
   drift: number;
   desired: number;
   unmanaged: number;
@@ -103,6 +108,13 @@ export interface SweepDeps {
   journal?: (lines: string[]) => void;
   now?: () => Date;
 }
+
+/** A relation's attributes without its dependency words: what an observation
+ *  of the relation says, the words being a report's classification of it. */
+export const withoutWords = (v: unknown): unknown => {
+  if (v === null || typeof v !== "object" || Array.isArray(v)) return v;
+  return Object.fromEntries(Object.entries(v as Obj).filter(([k]) => !DEPENDENCY_WORDS.includes(k)));
+};
 
 const canon = (v: unknown): string => {
   if (Array.isArray(v)) return `[${v.map(canon).join(",")}]`;
@@ -347,6 +359,7 @@ export class Sweep {
     const counts: SweepCounts = {
       expected: differences.filter((x) => x.expected).length,
       new: differences.filter((x) => x.reason === "new").length,
+      words: differences.filter((x) => x.reason === "words").length,
       drift: differences.filter((x) => !x.expected && ["changed", "appeared", "gone"].includes(x.kind)).length,
       desired: differences.filter((x) => x.kind === "desired").length,
       unmanaged: differences.filter((x) => x.kind === "unmanaged").length,
@@ -529,6 +542,10 @@ export class Sweep {
       // part of that appearance; one a verb-made object's first observation
       // filled in is new as well.
       let partOf: Pick<Difference, "expected" | "verb" | "job" | "reason"> | null = null;
+      // The ends and the type stay, only the dependency words changed: words.
+      if (before !== undefined && after !== undefined && !byVerb && canon(withoutWords(before)) === canon(withoutWords(after))) {
+        partOf = { expected: true, verb: null, job: null, reason: "words" };
+      }
       if (before === undefined && after !== undefined && !byVerb) {
         const a = appearedExpected.get(from) ?? appearedExpected.get(to);
         if (a) partOf = { expected: true, verb: a.verb, job: a.job, reason: "new" };
