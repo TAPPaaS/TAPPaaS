@@ -5,7 +5,8 @@
 //
 //   1. rescan: `<component> report --discover` for every cmdbSource component
 //   2. what changed since the last sweep record, each marked expected (a change
-//      report explains it) or drift
+//      report explains it, or it is new: part of what a verb made, or a
+//      verb-made object's first observation; see newness) or drift
 //   3. what differs from desired: ADR-020's resolver and differ for the
 //      modules (`module-manager drift`), actual without desired, desired
 //      without actual
@@ -47,10 +48,25 @@ export interface Difference {
   expected: boolean;
   verb?: string | null; // of the change that explains it
   job?: string | null;
+  // "new": no verb wrote this, but it belongs to what a verb just made — a
+  // part of a new object (owner: the object it is part of, "class/name"), or
+  // the first observation filling a verb-made object's fields. Absent: the
+  // verb's own change explains it, or nothing does.
+  reason?: "new";
+  owner?: string;
 }
+
+// What makes something a part of its owner, for "new" (from → to: the part
+// → its owner): a port of its asset, a guest or pool on its node, a member of
+// its cluster, zone or environment, the box allocated to its node.
+export const CONTAINMENT = ["part-of", "runs-on", "member-of", "allocated-to"] as const;
+// How long after a verb made an object an observation's additions to it are
+// still its first sighting, not drift: a discovery that runs after the verb.
+export const NEW_WINDOW_MS = 3600 * 1000;
 
 export interface SweepCounts {
   expected: number;
+  new: number; // of the expected, those that are new (reason "new")
   drift: number;
   desired: number;
   unmanaged: number;
@@ -181,6 +197,109 @@ export function desiredRecords(configDir: string): { class: string; name: string
   return out;
 }
 
+/** The verb a new object traces back to: the change that made it or, for a
+ *  part of one, the change that made its owner. */
+export interface Origin {
+  verb: string | null;
+  job: string | null;
+  time: number; // ms
+}
+
+interface Known {
+  cls: string;
+  name: string;
+  created: number;
+  creator: { kind: string; verb: string | null; job: string | null; time: number } | null;
+  owners: string[];
+}
+
+/**
+ * What is new, not drift (D15): an object nobody's verb wrote is still
+ * expected when it is a part of an object a verb made — its CONTAINMENT owner,
+ * transitively (a port of the asset of a node `node add` made) — and the verb
+ * made that owner since the last sweep, or at most NEW_WINDOW_MS before the
+ * part appeared. And a verb-made object's (or such a part's) first
+ * observation, the fields it fills that never had a value, is new as well.
+ * A later change of a filled field is drift as before. Read lazily, cached.
+ */
+export function newness(
+  pg: { query: Query },
+  since: string,
+  explained: Map<string, { verb: string | null; job: string | null; time: number }>,
+): {
+  partOfNew(id: string): Promise<{ origin: Origin; owner: string } | null>;
+  firstObservation(id: string, at: number): Promise<Origin | null>;
+} {
+  const sinceMs = Date.parse(since);
+  const known = new Map<string, Promise<Known | null>>();
+  const load = async (id: string): Promise<Known | null> => {
+    const o = (await pg.query(`SELECT class, name, created FROM object WHERE id = $1`, [id])).rows[0];
+    if (!o) return null;
+    const c = (await pg.query(`SELECT kind, verb, job, time FROM change WHERE objects @> ARRAY[$1::uuid] ORDER BY time, id LIMIT 1`, [id])).rows[0];
+    const owners = (await pg.query(
+      `SELECT DISTINCT to_object FROM relation
+        WHERE from_object = $1 AND type IN (${CONTAINMENT.map((t) => `'${t}'`).join(", ")}) AND NOT isempty(validity)`,
+      [id],
+    )).rows.map((r) => String(r.to_object));
+    return {
+      cls: String(o.class),
+      name: String(o.name),
+      created: Date.parse(String(o.created)),
+      creator: c ? { kind: String(c.kind), verb: c.verb as string | null, job: c.job as string | null, time: Date.parse(String(c.time)) } : null,
+      owners,
+    };
+  };
+  const get = (id: string): Promise<Known | null> => {
+    let p = known.get(id);
+    if (!p) known.set(id, (p = load(id)));
+    return p;
+  };
+  // The owner whose verb makes this object new, and that verb.
+  const viaOwner = async (k: Known, seen: Set<string>): Promise<{ origin: Origin; owner: string } | null> => {
+    for (const ow of k.owners) {
+      const o = await origin(ow, seen);
+      if (o && (o.time > sinceMs || k.created - o.time <= NEW_WINDOW_MS)) {
+        const ok = await get(ow);
+        return { origin: o, owner: ok ? `${ok.cls}/${ok.name}` : ow };
+      }
+    }
+    return null;
+  };
+  // A verb made it, a verb explains its appearing in this window, or it is a
+  // part of such an object.
+  const origin = async (id: string, seen: Set<string>): Promise<Origin | null> => {
+    if (seen.has(id) || seen.size > 16) return null;
+    seen.add(id);
+    const k = await get(id);
+    if (!k) return null;
+    if (k.creator?.kind === "change") return { verb: k.creator.verb, job: k.creator.job, time: k.creator.time };
+    const e = explained.get(id);
+    if (e && k.created > sinceMs) return e;
+    return (await viaOwner(k, seen))?.origin ?? null;
+  };
+  return {
+    async partOfNew(id) {
+      const k = await get(id);
+      return k ? viaOwner(k, new Set([id])) : null;
+    },
+    async firstObservation(id, at) {
+      const o = await origin(id, new Set());
+      const k = await get(id);
+      if (!o || !k) return null;
+      if (at - k.created <= NEW_WINDOW_MS) return o;
+      // Its first observation is the first one that wrote fields: none before
+      // the last sweep.
+      const earlier = (await pg.query(
+        `SELECT 1 FROM attribute a JOIN change c ON c.id = a.change
+          WHERE a.object = $1 AND c.kind = 'observation' AND NOT isempty(a.validity) AND lower(a.validity) <= $2
+            AND a.name NOT IN ('drift', 'placeholder') LIMIT 1`,
+        [id, since],
+      )).rows.length;
+      return earlier ? null : o;
+    },
+  };
+}
+
 export class Sweep {
   private running = false;
 
@@ -227,6 +346,7 @@ export class Sweep {
 
     const counts: SweepCounts = {
       expected: differences.filter((x) => x.expected).length,
+      new: differences.filter((x) => x.reason === "new").length,
       drift: differences.filter((x) => !x.expected && ["changed", "appeared", "gone"].includes(x.kind)).length,
       desired: differences.filter((x) => x.kind === "desired").length,
       unmanaged: differences.filter((x) => x.kind === "unmanaged").length,
@@ -258,7 +378,17 @@ export class Sweep {
 
     (d.journal ?? journalWriter(d.log))(
       differences.map((x) =>
-        JSON.stringify({ kind: x.kind, class: x.class, name: x.name, source: x.source, attribute: x.attribute, before: x.before ?? null, after: x.after ?? null, expected: x.expected }),
+        JSON.stringify({
+          kind: x.kind,
+          class: x.class,
+          name: x.name,
+          source: x.source,
+          attribute: x.attribute,
+          before: x.before ?? null,
+          after: x.after ?? null,
+          expected: x.expected,
+          ...(x.reason ? { reason: x.reason, verb: x.verb ?? null, ...(x.owner ? { owner: x.owner } : {}) } : {}),
+        }),
       ),
     );
     d.log(`sweep ${id}: ${status} — ${JSON.stringify(counts)}`);
@@ -274,18 +404,22 @@ export class Sweep {
     const out: Difference[] = [];
     // The objects a verb reported touching in the window: what explains
     // something that has no row of its own to point at (a value that went).
-    const explained = new Map<string, { verb: string | null; job: string | null }>();
+    const explained = new Map<string, { verb: string | null; job: string | null; time: number }>();
     for (const r of (await pg.query(
-      `SELECT DISTINCT ON (x) x, c.verb, c.job FROM change c, unnest(c.objects) AS x
+      `SELECT DISTINCT ON (x) x, c.verb, c.job, c.time FROM change c, unnest(c.objects) AS x
         WHERE c.kind = 'change' AND c.time > $1 AND c.time <= $2 ORDER BY x, c.time DESC`,
       [since, until],
     )).rows) {
-      explained.set(String(r.x), { verb: r.verb as string | null, job: r.job as string | null });
+      explained.set(String(r.x), { verb: r.verb as string | null, job: r.job as string | null, time: Date.parse(String(r.time)) });
     }
     const why = (id: string): Pick<Difference, "expected" | "verb" | "job"> => {
       const e = explained.get(id);
       return e ? { expected: true, verb: e.verb, job: e.job } : { expected: false };
     };
+    const isNew = newness(pg, since, explained);
+    // The objects that appeared in this window and are expected (by their own
+    // verb or as new): what a relation of theirs that appeared is part of.
+    const appearedExpected = new Map<string, Pick<Difference, "verb" | "job">>();
 
     const objects = (await pg.query(
       `SELECT o.id, o.class, o.name, o.created, o.ended, o.seen, ${PLACEHOLDER("o")} AS placeholder FROM object o
@@ -298,6 +432,12 @@ export class Sweep {
       if (o.created !== null && Date.parse(String(o.created)) > Date.parse(since)) fresh.add(id);
       if (o.placeholder === true) continue;
       const ended = o.ended !== null;
+      let verdict: Pick<Difference, "expected" | "verb" | "job" | "reason" | "owner"> = why(id);
+      if (!ended && !verdict.expected) {
+        const part = await isNew.partOfNew(id);
+        if (part) verdict = { expected: true, verb: part.origin.verb, job: part.origin.job, reason: "new", owner: part.owner };
+      }
+      if (!ended && verdict.expected) appearedExpected.set(id, { verb: verdict.verb, job: verdict.job });
       out.push({
         kind: ended ? "gone" : "appeared",
         class: String(o.class),
@@ -307,13 +447,14 @@ export class Sweep {
         attribute: null,
         before: null,
         after: null,
-        ...why(id),
+        ...verdict,
       });
     }
 
     const attrs = (await pg.query(
       `SELECT a.object, a.name, a.value, a.source, lower(a.validity) AS "from", upper(a.validity) AS "to",
-              o.class, o.name AS oname, c.kind AS ckind, c.verb, c.job
+              o.class, o.name AS oname, c.kind AS ckind, c.verb, c.job,
+              EXISTS (SELECT 1 FROM attribute p WHERE p.object = a.object AND p.name = a.name AND NOT isempty(p.validity) AND lower(p.validity) <= $1) AS had
          FROM attribute a JOIN object o ON o.id = a.object LEFT JOIN change c ON c.id = a.change
         WHERE NOT isempty(a.validity) AND a.validity && tstzrange($1, $2, '(]') AND a.name NOT IN ('drift', 'placeholder')
         ORDER BY a.object, a.name, lower(a.validity)`,
@@ -336,6 +477,9 @@ export class Sweep {
       const after = last.to === null || Date.parse(String(last.to)) > Date.parse(until) ? last.value : undefined;
       if (canon(before) === canon(after)) continue;
       const byVerb = after !== undefined && last.ckind === "change";
+      // A field that never had a value, filled by the first observation of
+      // an object a verb made (or of a part of one): new, not drift.
+      const firstFill = before === undefined && after !== undefined && !byVerb && first.had !== true ? await isNew.firstObservation(id, Date.parse(String(first.from))) : null;
       out.push({
         kind: before === undefined ? "appeared" : after === undefined ? "gone" : "changed",
         class: cls,
@@ -345,14 +489,22 @@ export class Sweep {
         attribute: String(first.name),
         before: before ?? null,
         after: after ?? null,
-        ...(byVerb ? { expected: true, verb: last.verb as string | null, job: last.job as string | null } : after === undefined ? why(id) : { expected: false }),
+        ...(byVerb
+          ? { expected: true, verb: last.verb as string | null, job: last.job as string | null }
+          : firstFill
+            ? { expected: true, verb: firstFill.verb, job: firstFill.job, reason: "new" as const }
+            : after === undefined
+              ? why(id)
+              : { expected: false }),
       });
     }
 
     const rels = (await pg.query(
       `SELECT r.type, r.from_object, r.to_object, r.attributes, r.source, lower(r.validity) AS "from", upper(r.validity) AS "to",
               f.class AS fclass, f.name AS fname, t.class AS tclass, t.name AS tname, c.kind AS ckind, c.verb, c.job,
-              ${PLACEHOLDER("t")} AS tph
+              ${PLACEHOLDER("t")} AS tph,
+              EXISTS (SELECT 1 FROM relation p WHERE p.type = r.type AND p.from_object = r.from_object AND p.to_object = r.to_object
+                         AND NOT isempty(p.validity) AND lower(p.validity) <= $1) AS had
          FROM relation r JOIN object f ON f.id = r.from_object JOIN object t ON t.id = r.to_object LEFT JOIN change c ON c.id = r.change
         WHERE NOT isempty(r.validity) AND r.validity && tstzrange($1, $2, '(]')
         ORDER BY r.type, r.from_object, r.to_object, lower(r.validity)`,
@@ -373,6 +525,18 @@ export class Sweep {
       if (canon(before) === canon(after)) continue;
       const byVerb = after !== undefined && last.ckind === "change";
       const e = why(from).expected ? why(from) : why(to);
+      // A relation that appeared with an object that appeared as expected is
+      // part of that appearance; one a verb-made object's first observation
+      // filled in is new as well.
+      let partOf: Pick<Difference, "expected" | "verb" | "job" | "reason"> | null = null;
+      if (before === undefined && after !== undefined && !byVerb) {
+        const a = appearedExpected.get(from) ?? appearedExpected.get(to);
+        if (a) partOf = { expected: true, verb: a.verb, job: a.job, reason: "new" };
+        else if (first.had !== true) {
+          const o = await isNew.firstObservation(from, Date.parse(String(first.from)));
+          if (o) partOf = { expected: true, verb: o.verb, job: o.job, reason: "new" };
+        }
+      }
       out.push({
         kind: before === undefined ? "appeared" : after === undefined ? "gone" : "changed",
         class: String(first.fclass),
@@ -382,7 +546,7 @@ export class Sweep {
         attribute: `→${String(first.type)} ${String(first.tclass)}/${String(first.tname)}`,
         before: before ?? null,
         after: after ?? null,
-        ...(byVerb ? { expected: true, verb: last.verb as string | null, job: last.job as string | null } : after === undefined ? e : { expected: false }),
+        ...(byVerb ? { expected: true, verb: last.verb as string | null, job: last.job as string | null } : (partOf ?? (after === undefined ? e : { expected: false }))),
       });
     }
     return out;

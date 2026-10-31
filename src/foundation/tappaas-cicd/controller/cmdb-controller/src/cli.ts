@@ -122,7 +122,7 @@ function sweepText(d: Obj): string {
   const c = (d.counts ?? {}) as Record<string, number>;
   const lines = [
     `sweep ${String(d.id)} at ${String(d.time)}: ${String(d.status)}${d.since ? ` (since ${String(d.since)})` : " (the baseline: the next one lists what changed)"}`,
-    `  ${c.expected} expected, ${c.drift} drift, ${c.desired} from desired, ${c.unmanaged} unmanaged, ${c.missing} missing, ${c.unread} unread, ${c.sourcesFailed} source(s) failed`,
+    `  ${c.expected} expected (${c.new ?? 0} new), ${c.drift} drift, ${c.desired} from desired, ${c.unmanaged} unmanaged, ${c.missing} missing, ${c.unread} unread, ${c.sourcesFailed} source(s) failed`,
   ];
   for (const s of (d.sources ?? []) as Obj[]) if (!s.ok || s.fallback) lines.push(`  source ${String(s.source)}: ${s.ok ? "no --discover yet, asked plainly" : `FAILED ${String(s.error ?? `exit ${String(s.exitCode)}`)}`}`);
   let last = "";
@@ -131,7 +131,11 @@ function sweepText(d: Obj): string {
     if (head !== last) lines.push("", head);
     last = head;
     const what = x.attribute ? `${String(x.attribute)}: ${x.kind === "appeared" ? cell(x.after) : x.kind === "gone" ? cell(x.before) : `${cell(x.before)} → ${cell(x.after)}`}` : "";
-    const verdict = x.expected ? `expected${x.verb ? ` (${String(x.verb)})` : ""}` : ["changed", "appeared", "gone"].includes(String(x.kind)) ? "DRIFT" : "";
+    const verdict = x.expected
+      ? x.reason === "new"
+        ? `new${x.verb || x.owner ? ` (${[x.owner ? `of ${String(x.owner)}` : "", x.verb ? String(x.verb) : ""].filter(Boolean).join(", ")})` : ""}`
+        : `expected${x.verb ? ` (${String(x.verb)})` : ""}`
+      : ["changed", "appeared", "gone"].includes(String(x.kind)) ? "DRIFT" : "";
     lines.push(`  ${KIND_WORD[String(x.kind)] ?? String(x.kind)}${what ? ` ${what}` : ""}  [${String(x.source)}]${verdict ? ` ${verdict}` : ""}`);
   }
   return lines.join("\n");
