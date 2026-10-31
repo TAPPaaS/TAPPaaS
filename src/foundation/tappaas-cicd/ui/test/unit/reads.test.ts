@@ -210,7 +210,7 @@ async function main(): Promise<void> {
     check(site.calls.includes("identity-manager group show authentik Admins --json"), "a name with a space is one argument");
   }
 
-  // ── groups a module or Authentik declares: listed, never a reference ──
+  // ── groups and users a module or Authentik declares: listed, never a reference ──
   {
     const site = fakeSite();
     const r = new Reads({ configDir: mkdtempSync(join(tmpdir(), "iddecl-")), stateDir: mkdtempSync(join(tmpdir(), "iddecl-s-")), run: site.run, journalDays: 7, repoRoot: join(process.env.CONSOLE_FIXTURES ?? "test/fixtures", "..", "..", "..", "..", "..", "..") });
@@ -218,7 +218,10 @@ async function main(): Promise<void> {
     check(ids.group.includes("forgejo-admins") && ids["group-declared"].join() === "forgejo-admins", "the identity read: the group list has it, group-declared names it");
     const m = await r.fieldManifest("user", "lars", "modify");
     const memberOf = m.fields.find((f) => f.name === "memberOf");
-    check(memberOf?.choices?.includes("users") === true && memberOf?.choices?.includes("forgejo-admins") === false, `a user's memberOf offers the model's groups, not a declared one (${String(memberOf?.choices)})`);
+    check(memberOf?.choices?.includes("users") === true && memberOf?.choices?.includes("forgejo-admins") === false, `a user's memberOf offers the model's groups, not a declared one (${String(memberOf?.choices)})`);    check(ids.user.includes("akadmin") && ids["user-declared"].join() === "akadmin", "the identity read: the user list has Authentik's akadmin, user-declared names it");
+    const om = await r.fieldManifest("org", "rossen", "modify");
+    const owner = om.fields.find((f) => f.name === "owner");
+    check((owner?.choices ?? []).includes("lars") && !(owner?.choices ?? []).includes("akadmin"), `an org's owner offers the model's users, not a built-in (${String(owner?.choices)})`);
   }
 
   // ── a placement's choices: the rooms and racks at the device's location ──

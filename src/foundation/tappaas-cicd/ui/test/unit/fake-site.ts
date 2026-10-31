@@ -82,8 +82,10 @@ export function fakeSite(): FakeSite {
         };
         // forgejo-admins: a group a module declares (no config file).
         ids.group["forgejo-admins"] = { name: "forgejo-admins", origin: "module forgejo", declaredBy: { file: "forgejo.json", key: "identity" }, editable: false };
+        // akadmin: a user Authentik's bootstrap declares.
+        ids.user.akadmin = { name: "akadmin", origin: "Authentik built-in", declaredBy: { file: "identity.json", key: "bootstrap" }, editable: false };
         const kind = ids[args[0]];
-        if (args[1] === "list" && args[2] === "--declared") return ok(JSON.stringify([ids.group["forgejo-admins"]]));
+        if (args[1] === "list" && args[2] === "--declared") return ok(JSON.stringify(args[0] === "group" ? [ids.group["forgejo-admins"]] : args[0] === "user" ? [ids.user.akadmin] : []));
         if (args[1] === "list") return ok(JSON.stringify(Object.keys(kind)));
         if (args[1] === "show" && kind[args[2]]) return ok(JSON.stringify(kind[args[2]]));
         return { rc: 1, stdout: "", stderr: `[Error] no ${args[0]} '${args[2]}'`, ran: true };

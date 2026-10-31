@@ -56,6 +56,18 @@ The console's Admin is the `admin` role, which Authentik carries as a group name
 `group modify` / `group delete` refuse it, naming its origin. A group with a file
 is the model's, whatever its name: `authentik Admins` is adopted that way.
 
+### Authentik's own users
+
+Authentik's bootstrap creates two kinds of user TAPPaaS has no file for:
+`akadmin`, the break-glass login, and one service account per outpost,
+`ak-outpost-<hex>`. They come with the identity module, so its bootstrap
+declares them (`{ "file": "identity.json", "key": "bootstrap" }`, origin
+`Authentik built-in`). `user list` lists them beside the model's users, marked
+`(Authentik built-in)`; the outpost accounts only when Authentik answers, since
+their names are Authentik's. `user list --declared` lists only them, `user show`
+prints their origin, and `user modify` / `user delete` refuse them. A user with a
+file is the model's, whatever its name.
+
 ## Commands
 
 This manager exposes one compiled CLI (`identity-manager`) plus one bash helper
@@ -95,7 +107,8 @@ Options:
   the default.)
 - `--json` — on `list` / `show`, emit structured JSON (default is human-readable).
 - `--deep` — on `org` / `group` `list`, recurse into groups + user membership.
-- `--declared` — on `group list`, only the groups a module or Authentik declares.
+- `--declared` — on `group list`, only the groups a module or Authentik declares;
+  on `user list`, only Authentik's own users.
 - `--force` — on `add`, overwrite an existing entity; on `delete`, ignore the
   reference guard.
 - `--config-dir DIR` — the People directory to read/write (default
@@ -252,7 +265,9 @@ roles only. A group's owning organization is not reported: the metamodel has
 no relation for it yet. A group's `desired` is its file; for a module's group
 `{ "file": "<module>.json", "key": "identity" }`, for an Authentik built-in
 `{ "file": "identity.json", "key": "bootstrap" }` (see Groups of three origins), so
-the sweep calls neither unmanaged. A group nothing declares has none.
+the sweep calls neither unmanaged. A group nothing declares has none. A user's
+`desired` is its file; for `akadmin` and an outpost's account the identity
+module's bootstrap (see Authentik's own users).
 
 `reconcile` reports what it read; `reconcile --apply` and the write verbs
 report what they touched (a deleted user or group ends by its uuid, an

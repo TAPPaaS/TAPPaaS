@@ -4,8 +4,9 @@
 // groups, an organization's owner and parent), with the list beside it. A click
 // opens the object's record and its verbs. A change is staged with
 // --no-reconcile and then reconciled, so its preview is the reconcile's plan
-// against Authentik. A group a module or Authentik declares (no config file)
-// is listed with its origin as a muted tag, and has no Modify or Delete.
+// against Authentik. A group a module or Authentik declares, and Authentik's own
+// users (akadmin, an outpost's account), have no config file: they are listed
+// with their origin as a muted tag, and offer only Show.
 
 import { useMemo, useState } from "react";
 import { useRead } from "../api";
@@ -50,14 +51,14 @@ function show(v: unknown): string {
   return String(v);
 }
 
-// declared: the group's origin when a module or Authentik declares it; such a
-// group is changed where it is declared, so only Show.
+// declared: the object's origin when a module or Authentik declares it; it is
+// changed where it is declared, so only Show.
 function Verbs({ kind, name, declared }: { kind: string; name: string; declared?: string | null }) {
   return (
     <span className="toolbar">
       <OperateButton label="Show" title={`${kind} ${name}`} steps={[{ title: `identity-manager ${kind} show ${name}`, bin: "identity-manager", verb: "<kind> show", words: [kind, "show"], fixed: [name] }]} />
       {declared ? null : <OperateButton label="Modify…" title={`Modify ${kind} ${name}`} steps={() => identitySteps(kind, "modify", name)} />}
-      {kind === "user" ? <ResetPasswordButton user={name} small /> : null}
+      {kind === "user" && !declared ? <ResetPasswordButton user={name} small /> : null}
       {declared ? null : <OperateButton label="Delete…" kind="danger" title={`Delete ${kind} ${name}`} steps={identitySteps(kind, "delete", name)} />}
     </span>
   );
@@ -101,11 +102,12 @@ export function Identity() {
   // ?select=<kind>:<name> (a user's or a group's Details from the Health view) opens it.
   const [sel, setSel] = useState<string | null>(() => new URLSearchParams(window.location.search).get("select"));
   const g = useMemo(() => identityGraph(rec.env?.data ?? {}), [rec.env]);
-  // The groups a module or Authentik declares: their origin, from the records
-  // (the list's group-declared names them before the records are read).
+  // The groups a module or Authentik declares and Authentik's own users: their
+  // origin, from the records (the lists' group-declared and user-declared name
+  // them before the records are read).
   const declared = useMemo(() => {
     const m = new Map<string, string>();
-    for (const n of d["group-declared"] ?? []) m.set(`group:${n}`, "declared");
+    for (const k of ["group", "user"]) for (const n of d[`${k}-declared`] ?? []) m.set(`${k}:${n}`, "declared");
     for (const n of g.nodes) {
       const o = originOf(n.record);
       if (o) m.set(n.id, o);

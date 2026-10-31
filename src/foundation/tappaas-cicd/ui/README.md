@@ -200,7 +200,9 @@ groups, the roles of users and groups, an organization's owner and parent; `GET 
 reconcile`, previewed. A group a module or Authentik declares (`identity-manager group list --declared`:
 `forgejo-admins`, `authentik Read-only`) is listed with its origin as a muted tag (`module forgejo`,
 `Authentik built-in`) and offers Show only: it is changed where it is declared, and a user's groups
-field does not offer it. **Assets** — see [Assets](#assets) below. **Backup** — the policy of every module, peers, pulse, restore points;
+field does not offer it. Authentik's own users (`identity-manager user list --declared`: `akadmin`,
+an outpost's `ak-outpost-<hex>`) are listed the same way, `Authentik built-in`, with Show only (no
+password reset), and no form offers them as a user. **Assets** — see [Assets](#assets) below. **Backup** — the policy of every module, peers, pulse, restore points;
 modify, purge (typed). **Site** — the four tabs above. Add node is a guided sequence in Setup's step rows: declare
 the node (`site-manager node add tappaasN`: its switch port or MAC, boot disks; the wizard
 always installs, adopting a hand-installed Proxmox is the CLI's `--adopt`), boot it from the

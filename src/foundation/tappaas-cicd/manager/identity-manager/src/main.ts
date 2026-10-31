@@ -35,7 +35,7 @@ import { CmdbObject } from "../../../lib/ts/src/cmdb";
 import { reportChange, reportObservation, sendObservation } from "../../../lib/ts/src/cmdb-source";
 import { IdentityRead, SOURCE, endsOf, identityDiscovery, identityObservation, touchedBy } from "./cmdb-report";
 import { dirname } from "path";
-import { DeclaredGroup, declaredGroups } from "./declared";
+import { DeclaredGroup, declaredGroups, declaredUser, declaredUsers } from "./declared";
 import { AkSnapshot } from "./reconcile";
 
 const VERSION = "0.1.0";
@@ -97,9 +97,9 @@ export const HELP: HelpSpec = {
       options: [
         ["--json", "structured output (default is human-readable)"],
         ["--deep", "org/group only: recurse into groups + user membership"],
-        ["--declared", "group only: just the groups a module or Authentik declares (no config file), with their origin"],
+        ["--declared", "group/user only: just the groups a module or Authentik declares, or the users Authentik's bootstrap does (no config file), with their origin"],
       ],
-      note: "(group: the model's groups and, marked by their origin, the ones a module or Authentik declares)",
+      note: "(group: the model's groups and, marked by their origin, the ones a module or Authentik declares; user: the model's users and Authentik's akadmin and outpost accounts)",
     },
     {
       usage: "<kind> show <name> [--json]",
@@ -325,7 +325,7 @@ function cmdSync(opts: Opts, client: PrimitiveClient): void {
     throw e;
   }
 
-  reportObservation(identityObservation(model, readOf(snap), undefined, declaredGroups(cmdbConfigDir(opts))), cmdbConfigDir(opts));
+  reportObservation(identityObservation(model, readOf(snap), undefined, declaredGroups(cmdbConfigDir(opts)), userDeclarer(opts)), cmdbConfigDir(opts));
   const plan = computePlan(model, snap);
 
   // Preview by default; commit only with --apply (matches site/network/... managers).
@@ -553,12 +553,14 @@ function cmdEntity(kind: string, opts: Opts, client: PrimitiveClient): void {
     const model = loadPeople(opts.configDir);
     const map = entityMap(model, kind);
     const isOrg = kind === "org" || kind === "organization";
-    // A group a module or Authentik declares: listed beside the model's.
-    const extra = kind === "group" ? notInModel(opts, model) : new Map<string, DeclaredGroup>();
+    // A group a module or Authentik declares, a user the identity module's
+    // bootstrap declares: listed beside the model's.
+    const extra =
+      kind === "group" ? notInModel(opts, model) : kind === "user" ? usersNotInModel(opts, model, client, sub === "list" ? undefined : opts.rest[1]) : new Map<string, DeclaredGroup>();
     const marked = (n: string): string => (extra.has(n) ? `${n}  (${extra.get(n)!.origin})` : n);
     if (sub === "list") {
       if (opts.declared) {
-        if (kind !== "group") die(`--declared is only meaningful for 'group' list`);
+        if (kind !== "group" && kind !== "user") die(`--declared is only meaningful for 'group' and 'user' list`);
         const all = [...extra.values()].sort((a, b) => a.name.localeCompare(b.name));
         if (opts.json) info(JSON.stringify(all, null, 2));
         else if (all.length === 0) info("(no declared groups)");
@@ -608,9 +610,13 @@ function cmdEntity(kind: string, opts: Opts, client: PrimitiveClient): void {
     const name = opts.rest[1];
     if (!name) die(`${kind} ${sub}: expected <name>`);
     const { force, rest } = takeForce(opts.rest.slice(2));
-    // A declared group is changed where it is declared, not here.
-    const d = kind === "group" && sub !== "add" ? notInModel(opts, loadPeople(opts.configDir)).get(name) : undefined;
-    if (d) die(`group '${name}' is not a config group: ${d.origin} declares it (${d.declaredBy.file}, ${d.declaredBy.key}); it cannot be ${sub === "modify" ? "modified" : "deleted"} here`);
+    // A declared group or user is changed where it is declared, not here.
+    const d =
+      sub === "add" ? undefined
+      : kind === "group" ? notInModel(opts, loadPeople(opts.configDir)).get(name)
+      : kind === "user" && !loadPeople(opts.configDir).users.has(name) ? declaredUser(cmdbConfigDir(opts), name)
+      : undefined;
+    if (d) die(`${kind} '${name}' is not a config ${kind}: ${d.origin} declares it (${d.declaredBy.file}, ${d.declaredBy.key}); it cannot be ${sub === "modify" ? "modified" : "deleted"} here`);
     let deleted = false;
     try {
       if (sub === "add") {
@@ -656,6 +662,33 @@ function notInModel(opts: Opts, model: PeopleModel): Map<string, DeclaredGroup> 
   return out;
 }
 
+// The users the identity module's bootstrap declares that the model has no
+// file for: akadmin, and (for a list, when Authentik answers) its outpost
+// accounts; for one name, that name if it is one.
+function usersNotInModel(opts: Opts, model: PeopleModel, client: PrimitiveClient, name?: string): Map<string, DeclaredGroup> {
+  const root = cmdbConfigDir(opts);
+  if (name !== undefined) {
+    const d = model.users.has(name) ? undefined : declaredUser(root, name);
+    return new Map(d ? [[name, d]] : []);
+  }
+  let live: string[] = [];
+  try {
+    live = client.listUsers().map((u) => u.name);
+  } catch {
+    // Authentik unreachable: akadmin only
+  }
+  const out = new Map<string, DeclaredGroup>();
+  for (const [n, d] of declaredUsers(root, live)) if (!model.users.has(n)) out.set(n, d);
+  return out;
+}
+
+// A user the identity module's bootstrap declares, for the report's desired
+// (config/ is read only for akadmin's and an outpost's name).
+function userDeclarer(opts: Opts): (name: string) => DeclaredGroup | undefined {
+  const root = cmdbConfigDir(opts);
+  return (name) => declaredUser(root, name);
+}
+
 // ── the CMDB (ADR-040 D4) ──────────────────────────────────────────────
 
 // The verb being run, and the entity an add/modify/delete wrote: what its
@@ -682,7 +715,7 @@ function cmdReport(opts: Opts, client: PrimitiveClient): number {
     if (!(e instanceof AuthentikUnreachable)) throw e;
     warn(`Authentik unreachable (${e.message}) — reporting organizations and roles only`);
   }
-  let report = identityObservation(model, live, undefined, declaredGroups(cmdbConfigDir(opts)));
+  let report = identityObservation(model, live, undefined, declaredGroups(cmdbConfigDir(opts)), userDeclarer(opts));
   if (opts.discover && live) {
     try {
       report = identityDiscovery(report, client.discover());
@@ -713,7 +746,7 @@ function reportIdentityChange(opts: Opts, model: PeopleModel, client: PrimitiveC
       after = before ? readOf(before) : null;
     }
   }
-  const seen = identityObservation(model, after, only, declaredGroups(cmdbConfigDir(opts)));
+  const seen = identityObservation(model, after, only, declaredGroups(cmdbConfigDir(opts)), userDeclarer(opts));
   const objects: CmdbObject[] = [...(seen.objects ?? []), ...endsOf(deleted, deletedBefore ?? (before ? readOf(before) : null))];
   reportChange({ source: SOURCE, verb: changeVerb, objects, relations: seen.relations, configDir: cmdbConfigDir(opts) });
 }

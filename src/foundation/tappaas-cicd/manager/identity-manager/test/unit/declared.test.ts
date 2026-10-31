@@ -1,12 +1,13 @@
-// declared.test.ts — groups a module or Authentik declares (no config file):
-// the report gives them the declaration as their desired record, `group list`
-// and `group show` name them with their origin, `group modify/delete` refuse.
+// declared.test.ts — groups a module or Authentik declares, and the users
+// Authentik's bootstrap creates (no config file): the report gives them the
+// declaration as their desired record, `list` and `show` name them with their
+// origin, `modify/delete` refuse.
 
 import { mkdirSync, mkdtempSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { run } from "../../src/main";
-import { declaredGroups } from "../../src/declared";
+import { declaredGroups, declaredUser, declaredUsers } from "../../src/declared";
 import { FakeClient } from "./fake-client";
 import { cmdbProblems } from "../../../../lib/ts/test/cmdb-check";
 
@@ -123,6 +124,66 @@ function live(): FakeClient {
     const r = capture(() => run(args, c));
     check(r.rc !== 0 && r.out.some((l) => l.includes("not a config group") && l.includes(verb === "modify" ? "module forgejo" : "Authentik built-in")), `group ${verb} refuses a declared group, naming its origin (${r.out.join(" | ").slice(0, 200)})`);
     check(c.groups.has(verb === "modify" ? "forgejo-admins" : "authentik Read-only"), `group ${verb}: Authentik untouched`);
+  }
+}
+
+// ── Authentik's own users: akadmin and an outpost's account ─────────────
+const OUTPOST = "ak-outpost-0f3c9a2be41d4c7b8e5a6d1f2c3b4a59";
+function liveUsers(): FakeClient {
+  const c = live();
+  for (const name of ["akadmin", OUTPOST, "lars", "mallory"]) c.seedUser({ name, email: `${name}@x`, displayName: name, active: true, groups: [], roles: [] });
+  return c;
+}
+function seedUsers(): { root: string; dir: string } {
+  const s = seed();
+  writeFileSync(join(s.dir, "users", "lars.json"), JSON.stringify({ name: "lars", displayName: "Lars", primaryEmail: "lars@x", memberOf: ["users"], roles: ["user"] }, null, 2));
+  return s;
+}
+{
+  const { root } = seedUsers();
+  check(declaredUser(root, "akadmin")?.origin === "Authentik built-in" && declaredUser(root, "akadmin")?.declaredBy.key === "bootstrap", "akadmin: the identity module's bootstrap");
+  check(declaredUser(root, OUTPOST)?.declaredBy.file === "identity.json", "an outpost's account: the same");
+  check(declaredUser(root, "ak-outpost-") === undefined && declaredUser(root, "ak-outposted") === undefined && declaredUser(root, "mallory") === undefined, "other names: nothing declares them");
+  check(declaredUsers(root).size === 1 && declaredUsers(root, [OUTPOST, "mallory"]).size === 2, "declaredUsers: akadmin, and the outpost accounts Authentik names");
+  const bare = mkdtempSync(join(tmpdir(), "id-declared-bare-"));
+  check(declaredUser(bare, "akadmin") === undefined && declaredUsers(bare).size === 0, "no identity module: no built-in users");
+}
+{
+  const { dir } = seedUsers();
+  const { out, rc } = capture(() => run(["report", "--json", "--config-dir", dir], liveUsers()));
+  check(rc === 0, `report --json exits 0 (${out.join("\n").slice(0, 300)})`);
+  const r = JSON.parse(out.join("\n")) as Obj;
+  const u = (name: string): Obj | undefined => r.objects.find((o: Obj) => o.class === "user" && o.name === name);
+  check(u("akadmin")?.attributes?.desired?.file === "identity.json" && u("akadmin")?.attributes?.desired?.key === "bootstrap", "report: akadmin's desired is the identity module's bootstrap");
+  check(u(OUTPOST)?.attributes?.desired?.key === "bootstrap", "report: an outpost's account likewise");
+  check(u("lars")?.attributes?.desired?.file === "identities/users/lars.json", "report: a model user as before");
+  check(u("mallory") !== undefined && u("mallory")?.attributes?.desired === undefined, "report: a user nothing declares is unmanaged");
+  check(cmdbProblems(r).length === 0, `the metamodel takes it: ${cmdbProblems(r).join("; ")}`);
+}
+{
+  const { dir } = seedUsers();
+  const names = JSON.parse(capture(() => run(["user", "list", "--json", "--config-dir", dir], liveUsers())).out.join("\n")) as string[];
+  check(names.join(",") === [OUTPOST, "akadmin", "lars"].join(","), `user list --json: the model's and the built-ins (${names.join(",")})`);
+  const human = capture(() => run(["user", "list", "--config-dir", dir], liveUsers())).out;
+  check(human.includes("akadmin  (Authentik built-in)") && human.includes(`${OUTPOST}  (Authentik built-in)`) && human.includes("lars"), "user list: a built-in marked by its origin");
+  const off = new (class extends FakeClient {
+    listUsers(): never {
+      throw new Error("Authentik unreachable");
+    }
+  })();
+  const offNames = JSON.parse(capture(() => run(["user", "list", "--json", "--config-dir", dir], off)).out.join("\n")) as string[];
+  check(offNames.join(",") === "akadmin,lars", `user list without Authentik: akadmin still (${offNames.join(",")})`);
+  const decl = JSON.parse(capture(() => run(["user", "list", "--declared", "--json", "--config-dir", dir], liveUsers())).out.join("\n")) as Obj[];
+  check(decl.length === 2 && decl.every((d) => d.origin === "Authentik built-in"), "user list --declared --json: the built-ins with their origin");
+  const show = capture(() => run(["user", "show", OUTPOST, "--json", "--config-dir", dir], liveUsers()));
+  const rec = JSON.parse(show.out.join("\n")) as Obj;
+  check(show.rc === 0 && rec.origin === "Authentik built-in" && rec.editable === false, "user show of an outpost's account: origin, not editable");
+  for (const verb of ["modify", "delete"]) {
+    const c = liveUsers();
+    const args = verb === "modify" ? ["user", "modify", "akadmin", "--displayName", "X", "--config-dir", dir] : ["user", "delete", OUTPOST, "--config-dir", dir];
+    const r2 = capture(() => run(args, c));
+    check(r2.rc !== 0 && r2.out.some((l) => l.includes("not a config user") && l.includes("Authentik built-in")), `user ${verb} refuses a built-in (${r2.out.join(" | ").slice(0, 200)})`);
+    check(c.users.has(verb === "modify" ? "akadmin" : OUTPOST) && !c.log.some((l) => l.startsWith("delete") || l.startsWith("disable")), `user ${verb}: Authentik untouched`);
   }
 }
 

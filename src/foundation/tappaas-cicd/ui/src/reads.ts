@@ -326,13 +326,18 @@ export class Reads {
     // The field schemas a form reads (zones-fields.json, environment-fields.json).
     this.schemas = new CachedMap("schema", TTL.schema, async (n) => schemaDoc(cfg.repoRoot ?? "/home/tappaas/TAPPaaS", n), now);
     // The group list has the groups a module or Authentik declares beside the
-    // model's; "group-declared" names those (no config file: not editable, and
-    // no reference a form may offer).
+    // model's, the user list Authentik's own users (akadmin, an outpost's
+    // account); "group-declared" and "user-declared" name those (no config
+    // file: not editable, and no reference a form may offer).
     this.identity = new Cached("identity", TTL.identity, async () => {
       const out: Record<string, string[]> = {};
       await Promise.all(IDENTITY_KINDS.map(async (k) => (out[k] = await j<string[]>("identity-manager", [k, "list", "--json"]))));
-      const declared = await j<{ name?: unknown }[]>("identity-manager", ["group", "list", "--declared", "--json"]).catch(() => []);
-      out["group-declared"] = (Array.isArray(declared) ? declared : []).map((d) => d?.name).filter((n): n is string => typeof n === "string");
+      await Promise.all(
+        ["group", "user"].map(async (k) => {
+          const declared = await j<{ name?: unknown }[]>("identity-manager", [k, "list", "--declared", "--json"]).catch(() => []);
+          out[`${k}-declared`] = (Array.isArray(declared) ? declared : []).map((d) => d?.name).filter((n): n is string => typeof n === "string");
+        }),
+      );
       return out;
     }, now);
     // What each registered repository offers, and which of it is installed.
@@ -501,7 +506,7 @@ export class Reads {
       environments: (envs.value ?? []).map((e) => e.name).sort(),
       nodes,
       organizations: list("org"),
-      users: list("user"),
+      users: list("user").filter((n) => !list("user-declared").includes(n)),
       groups: list("group").filter((n) => !list("group-declared").includes(n)),
       roles: list("role"),
     };

@@ -7,7 +7,8 @@
 // their name and are reported from config/ even when it does not answer. A
 // user is a member-of the groups Authentik has them in. A group with no config
 // file that a module or Authentik itself declares (declared.ts) has that
-// declaration as its desired record: it is not unmanaged.
+// declaration as its desired record: it is not unmanaged. So has a user the
+// identity module's bootstrap declares (akadmin, an outpost's account).
 //
 // Not reported: a group's owning organization and an organization's parent —
 // the metamodel has no relation for either yet (owned-by joins an environment
@@ -37,7 +38,7 @@ export interface Only {
 }
 
 /** config/identities and what Authentik says (null: it did not answer). */
-export function identityObservation(model: PeopleModel, live: IdentityRead | null, only?: Only, declared?: Map<string, DeclaredGroup>): CmdbReport {
+export function identityObservation(model: PeopleModel, live: IdentityRead | null, only?: Only, declared?: Map<string, DeclaredGroup>, declaredUser?: (name: string) => DeclaredGroup | undefined): CmdbReport {
   const objects: CmdbObject[] = [];
   const relations: CmdbRelation[] = [];
   const want = (set: Set<string> | undefined, name: string): boolean => !only || (set?.has(name) ?? false);
@@ -88,7 +89,7 @@ export function identityObservation(model: PeopleModel, live: IdentityRead | nul
         email: u.email || cfg?.primaryEmail,
         enabled: u.active,
         displayName: u.displayName || cfg?.displayName,
-        desired: cfg ? desired("users", u.name) : undefined,
+        desired: cfg ? desired("users", u.name) : declaredUser?.(u.name)?.declaredBy,
         stage: "operational",
       }),
     });
