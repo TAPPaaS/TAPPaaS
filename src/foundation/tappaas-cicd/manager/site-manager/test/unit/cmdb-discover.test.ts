@@ -2,6 +2,9 @@
 // fixtures of pvesh, lsblk, zpool, ethtool: the ports, disks and pools; a NIC
 // with no link and a disk in no pool appear; the plain report is unchanged.
 
+// Verbs run here report changes: never to a live CMDB (test.sh sets this too).
+process.env.TAPPAAS_CMDB = "off";
+
 import { run } from "../../src/main";
 import { parseNodeDiscovery, parseCorosync, stableById } from "../../src/cmdb-discover";
 import { parseClusterProbe } from "../../src/cmdb-report";

@@ -2,6 +2,9 @@
 // helper every manager reads them through, and the rules site-manager
 // validate and the location verbs keep.
 
+// Verbs run here report changes: never to a live CMDB (test.sh sets this too).
+process.env.TAPPAAS_CMDB = "off";
+
 import { EMAIL, run } from "../../src/main";
 import { defaultSchemaDir, siteSchema } from "../../src/config";
 import { FakeSiteClient } from "./fake-client";

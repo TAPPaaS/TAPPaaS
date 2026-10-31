@@ -437,9 +437,10 @@ function changeCtx(): { verb: string; job?: string; actor?: string } {
 // Send one report; say what became of it, never throw. An allocation the
 // CMDB refuses names a node no manager has reported yet: the next report
 // (asset-manager report) sends it again.
-function deliver(r: CmdbReport, allocation: boolean): "delivered" | "spooled" | "refused" {
+function deliver(r: CmdbReport, allocation: boolean): "delivered" | "spooled" | "refused" | "off" {
   try {
-    return cmdbReport(r).delivered ? "delivered" : "spooled";
+    const o = cmdbReport(r);
+    return o.off ? "off" : o.delivered ? "delivered" : "spooled";
   } catch (e) {
     const why = e instanceof CmdbRefused ? `${e.message}${Array.isArray(e.body.problems) ? `: ${(e.body.problems as { at: string; error: string }[]).map((p) => `${p.at} ${p.error}`).join("; ")}` : ""}` : (e as Error).message;
     if (allocation) {
@@ -750,6 +751,10 @@ export function run(argv: string[]): number {
     for (const s of v.skipped) note(`not reported: ${s}`);
     const main = deliver(r.report, false);
     if (main === "refused") return 1;
+    if (main === "off") {
+      info("TAPPAAS_CMDB=off: nothing reported");
+      return 0;
+    }
     const outcome = r.allocations.map((a) => deliver(a, true));
     const n = (o: string) => outcome.filter((x) => x === o).length;
     info(

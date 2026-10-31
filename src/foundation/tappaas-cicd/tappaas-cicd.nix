@@ -662,7 +662,9 @@ in
   # What network-manager topology reads and what changes by itself: the node
   # links and run states the console's Physical view shows, and the switches'
   # actual file (ADR-040 step 4). The console's own 5-minute topology no longer
-  # asks the nodes, so the planes see the same reads, once.
+  # asks the nodes, so the planes see the same reads, once. The zones' state and
+  # the backup peers' roles are read from the CMDB too, so their owners report
+  # here as well: without them the reader falls back to the live join.
   systemd.timers.cmdb-refresh = {
     wantedBy = [ "timers.target" ];
     timerConfig = {
@@ -684,6 +686,8 @@ in
         /home/tappaas/bin/switch-manager report
         /home/tappaas/bin/ap-manager report
         /home/tappaas/bin/asset-manager report
+        /home/tappaas/bin/network-manager report
+        /home/tappaas/bin/backup-manager report
       '';
       Environment = [
         ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"

@@ -154,6 +154,23 @@ Each is a richer report from the owner unless it is listed under exceptions.
   inventory's order, which a CMDB answer does not keep: **new** `device.order` (switch-manager).
 - `asset-manager report` joins `cmdb-refresh`: it also ends the stale `allocated-to` above.
 
+### Found at the first deployment, 2026-10-31
+
+- The reader needed `network-manager report` and `backup-manager report` too (zone state, peer
+  roles) and fell back to the live join until they had run once: both join `cmdb-refresh`.
+- The store answers objects by class then name, so a server's ports (`port` < `server`) came
+  before the server and were dropped: tappaas4's nine NICs were missing, and a panel's ports read
+  back as `1, 10, 11, …`. `positionsFromCmdb` now takes the assets first and keeps ports in natural
+  order.
+- The live CMDB held test fixtures: four switches, three access points and a probe from
+  switch-manager and ap-manager test runs made before their asset-manager stub existed, and a site
+  with two locations from a site-manager unit test run by hand. `cmdbReport` ignored
+  `TAPPAAS_CMDB=off` (only the reporter above it checked), and a unit test run outside `test.sh` set
+  nothing. Both fixed; the fixtures were ended in the CMDB by hand.
+- Two NICs the CMDB knew from cables and site-manager's reads (srv-02 enp97s0, srv-03 eno1) were not
+  in positions.json, which predates D8's recording of a new node's NICs: recorded with `port add`.
+  After that, `topology --diff` on hrossen: the CMDB and the planes agree.
+
 ## Freshness
 
 The live join is as fresh as its last read. The CMDB is as fresh as its last report, and the two
@@ -162,7 +179,8 @@ at the nightly sweep. A link going down, or a guest stopping, would reach the Ph
 day late, where the console sees it within 5 minutes today.
 
 So a new unit, `cmdb-refresh`, runs `site-manager report`, `module-manager report`,
-`switch-manager report`, `ap-manager report` and `asset-manager report` every 5 minutes. D4's "no new polling" holds in
+`switch-manager report`, `ap-manager report`, `asset-manager report`, `network-manager report` (the
+zones' state) and `backup-manager report` (the peers' roles) every 5 minutes. D4's "no new polling" holds in
 substance: the console's 5-minute `topology` stops doing the same ssh per node, so the planes see
 the same load, once. The switch and asset reports read files, as `list-ports` does, and need no
 switch traffic. The stale rows in `sources` say when the unit is not doing its job.

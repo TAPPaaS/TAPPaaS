@@ -1,6 +1,9 @@
 // hold.test.ts — `repository hold` / `release` and the hold marker (#653).
 // No cluster: a temp config dir with a site.json holding one repository.
 
+// Verbs run here report changes: never to a live CMDB (test.sh sets this too).
+process.env.TAPPAAS_CMDB = "off";
+
 import { mkdtempSync, writeFileSync, existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";

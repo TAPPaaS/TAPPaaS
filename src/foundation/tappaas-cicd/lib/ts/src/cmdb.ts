@@ -79,6 +79,7 @@ export interface CmdbReport {
 
 export interface ReportOutcome {
   delivered: boolean;
+  off?: boolean; // TAPPAAS_CMDB=off: not sent, not spooled
   spooled?: string; // the spool file, when not delivered
   result?: Obj; // the service's answer, when delivered
 }
@@ -174,8 +175,11 @@ function spool(report: CmdbReport, o: CmdbOptions): string {
 }
 
 /** Report an observation or a change. Never throws for an outage: an
- *  undelivered report is spooled. A refusal throws CmdbRefused. */
+ *  undelivered report is spooled. A refusal throws CmdbRefused. With
+ *  TAPPAAS_CMDB=off nothing is sent or spooled (a test that runs a changing
+ *  verb on a host that has a CMDB, as hrossen does, must not record in it). */
 export function cmdbReport(report: CmdbReport, o: CmdbOptions = {}): ReportOutcome {
+  if ((process.env.TAPPAAS_CMDB ?? "").toLowerCase() === "off") return { delivered: false, off: true };
   // The time it happened, not the time it is delivered: a spooled report
   // carries the moment it was made.
   const stamped: CmdbReport = { ...report, time: report.time ?? new Date().toISOString() };

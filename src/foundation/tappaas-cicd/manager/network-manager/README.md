@@ -348,7 +348,8 @@ health findings are those the last `health-manager assess` stored, and `validate
 things stay read: `wan-address.json`, this manager's own record, and asset-manager's faceplate
 catalog. When the CMDB does not answer, or does not yet hold what the document needs, the live join
 runs and stderr says why. `sources` names a store whose node or switch reports are over 30 minutes
-old; `cmdb-refresh` runs those reports every 5 minutes. A node that cannot be read keeps its last
+old; `cmdb-refresh` runs the seven reports it needs (site, module, switch, ap, asset, network and
+backup) every 5 minutes. A node that cannot be read keeps its last
 `network`, where the live join shows no uplinks. The rest of this section is the join, either way.
 
 ```bash

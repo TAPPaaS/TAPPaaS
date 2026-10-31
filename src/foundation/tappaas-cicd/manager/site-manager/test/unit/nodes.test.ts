@@ -2,6 +2,9 @@
 // D6): the lib/ts helper every manager lists them through, its order, the
 // window before migration 0022, and the one writer of a node's pools.
 
+// Verbs run here report changes: never to a live CMDB (test.sh sets this too).
+process.env.TAPPAAS_CMDB = "off";
+
 import { run } from "../../src/main";
 import { FakeSiteClient } from "./fake-client";
 import { clusterNode, clusterNodeNames, clusterNodes, compareNodeNames, nodeErrors, setNodeStoragePools } from "../../../../lib/ts/src/nodes";

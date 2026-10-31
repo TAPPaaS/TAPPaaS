@@ -69,6 +69,10 @@ export function positionsFromCmdb(ans: CmdbAnswer): PositionsDoc {
   const role = new Map(rel("allocated-to").map((r) => [r.from.id, r.to.name]));
   const portAsset = new Map(rel("part-of").map((r) => [r.from.id, r.to.id]));
   const nameOf = (assetId: string): string => role.get(assetId) ?? byId.get(assetId)?.name ?? assetId;
+  // The store answers by class then name, so a server's ports ("port" < "server")
+  // come before the server: the assets go first, whatever the order, then the
+  // ports, in the natural order the record keeps them (1, 2, … 10; eno1, enp4s0).
+  const ports: CmdbAnswerObject[] = [];
   for (const o of objects) {
     const at = o.attributes;
     const text = (k: string): Obj => (typeof at[k] === "string" ? { [k]: at[k] } : {});
@@ -107,15 +111,18 @@ export function positionsFromCmdb(ans: CmdbAnswer): PositionsDoc {
       const location = out("at", o.id)?.to.name;
       if (location) a.location = location;
       doc.assets![o.name] = a;
-    } else if (o.class === "port") {
-      const owner = byId.get(portAsset.get(o.id) ?? "");
-      const a = owner ? doc.assets![owner.name] : undefined;
-      if (!a || at.kind === undefined || at.plate === true) continue;
-      const p = { name: o.name } as AssetPort & Obj;
-      for (const k of ["kind", "speed", "standard", "bands", "module", "role", "mac", "side"]) if (at[k] !== undefined) p[k] = at[k];
-      (a.ports ??= []).push(p);
-    }
+    } else if (o.class === "port") ports.push(o);
   }
+  for (const o of ports) {
+    const at = o.attributes;
+    const owner = byId.get(portAsset.get(o.id) ?? "");
+    const a = owner ? doc.assets![owner.name] : undefined;
+    if (!a || at.kind === undefined || at.plate === true) continue;
+    const p = { name: o.name } as AssetPort & Obj;
+    for (const k of ["kind", "speed", "standard", "bands", "module", "role", "mac", "side"]) if (at[k] !== undefined) p[k] = at[k];
+    (a.ports ??= []).push(p);
+  }
+  for (const a of Object.values(doc.assets!)) a.ports?.sort((x, y) => x.name.localeCompare(y.name, "en", { numeric: true }));
   for (const r of rel("placed-in").filter((x) => ASSET_CLASSES.includes(x.from.class))) {
     const m: Placement = r.to.class === "rack" ? { rack: r.to.name } : { room: r.to.name };
     Object.assign(m, r.attributes);

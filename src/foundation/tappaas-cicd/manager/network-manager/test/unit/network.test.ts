@@ -13,6 +13,9 @@
 //
 // Tiny assert harness (no test framework).
 
+// Verbs run here report changes: never to a live CMDB (test.sh sets this too).
+process.env.TAPPAAS_CMDB = "off";
+
 import { opnsenseDryRunResult, proxmoxNeedsRecheck, proxmoxStatus } from "../../src/planes";
 import { gatewayIpOf, resolveSplitHorizonTarget } from "../../src/splithorizon";
 import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "fs";

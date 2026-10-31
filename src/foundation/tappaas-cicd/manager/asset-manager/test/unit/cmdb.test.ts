@@ -15,7 +15,7 @@ import { join } from "path";
 import { Metamodel } from "../../../../controller/cmdb-controller/src/metamodel";
 import type { CmdbObject, CmdbRef, CmdbRelation, CmdbReport } from "../../../../lib/ts/src/cmdb";
 import { PositionsDoc, cablesOf, heightOf, placementsOf, stageOf, withSiteFaceplates } from "../../../../lib/ts/src/positions";
-import { SOURCE, View, changeReport, cmdbAnswer, cmdbView, fullReport, positionsFromCmdb } from "../../src/cmdb";
+import { CmdbAnswer, SOURCE, View, changeReport, cmdbAnswer, cmdbView, fullReport, positionsFromCmdb } from "../../src/cmdb";
 import { loadCatalog } from "../../src/store";
 import { addFaceplate, allocateAsset, releaseAsset, removeAsset, removePort } from "../../src/verbs";
 
@@ -244,6 +244,17 @@ function problems(r: CmdbReport, extra: Map<string, string> = new Map()): string
       .sort()
       .join(",");
   check(am(back) === am(doc0), "read back: the assets, kind, role, vendor, model, stage as derived");
+  // The store answers by class then name: every port before every server, and
+  // "10" before "2". The read-back must not depend on either.
+  const nics = { ...doc0, assets: { ...doc0.assets, "srv-02": { ...doc0.assets!["srv-02"], ports: [{ name: "eno2", kind: "rj45" as const }, { name: "eno10", kind: "rj45" as const }, { name: "eno1", kind: "rj45" as const, mac: "20:7c:14:f4:d0:8c" }] } } };
+  const sorted = (a: CmdbAnswer) => ({ ...a, objects: [...a.objects].sort((x, y) => x.class.localeCompare(y.class) || x.name.localeCompare(y.name)) });
+  const byClass = sorted(ans);
+  const stored = positionsFromCmdb(byClass);
+  const pn = (d: PositionsDoc, n: string) => (d.assets?.[n]?.ports ?? []).map((p) => p.name).join(",");
+  const srv = positionsFromCmdb(sorted(cmdbAnswer(viewOf(nics)))).assets!["srv-02"];
+  check(pn({ assets: { "srv-02": srv } } as PositionsDoc, "srv-02") === "eno1,eno2,eno10" && srv.ports?.[0].mac === "20:7c:14:f4:d0:8c", `read back: a server's ports, in natural order, although the answer lists ports before servers (${pn({ assets: { "srv-02": srv } } as PositionsDoc, "srv-02") || "none"})`);
+  const panel = Object.keys(doc0.assets ?? {}).find((n) => (doc0.assets![n].ports?.length ?? 0) > 10);
+  check(!!panel && pn(stored, panel) === pn(doc0, panel), `read back: ${panel ?? "a panel"}'s ports in natural order, not "1,10,11"`);
 }
 
 console.log(`\ncmdb: ${passed} passed, ${failed} failed`);

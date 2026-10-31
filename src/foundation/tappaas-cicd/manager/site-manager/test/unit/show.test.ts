@@ -2,6 +2,9 @@
 // location's place is what an off-site backup copy is compared with (#609), so
 // a site that records it must see it; and the location verbs (ADR-036 D1).
 
+// Verbs run here report changes: never to a live CMDB (test.sh sets this too).
+process.env.TAPPAAS_CMDB = "off";
+
 import { run } from "../../src/main";
 import { FakeSiteClient } from "./fake-client";
 import { mkdtempSync, readFileSync, writeFileSync } from "fs";

@@ -6,6 +6,9 @@
 // "(unset)" for a site that is updating perfectly well, and a modify that wrote
 // the triple back would undo a migration the ledger says is done.
 
+// Verbs run here report changes: never to a live CMDB (test.sh sets this too).
+process.env.TAPPAAS_CMDB = "off";
+
 import { mkdtempSync, writeFileSync, readFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";

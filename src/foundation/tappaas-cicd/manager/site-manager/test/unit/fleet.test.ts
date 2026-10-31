@@ -2,6 +2,9 @@
 // subprocesses: a FakeSiteClient records the delegation and scripts outcomes,
 // so this asserts the CLI's argument vectors + iteration/exit-code behaviour.
 
+// Verbs run here report changes: never to a live CMDB (test.sh sets this too).
+process.env.TAPPAAS_CMDB = "off";
+
 import { HELP, run } from "../../src/main";
 import { undocumentedOptions } from "../../../../lib/ts/src/help";
 import { FakeSiteClient } from "./fake-client";
