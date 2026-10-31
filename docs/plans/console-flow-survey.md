@@ -188,7 +188,7 @@ Stale or misleading text found on the way:
 
 ## 5. Proposed plan (in order)
 
-Steps 1 to 7 are done, on branch `console-flow-plan` (components in `web/src/jobs.tsx`, `run.ts`, `stepform.tsx`, `flows.tsx`, `argv.ts stepFlow`). Differences from the plan below: `node network set` previews on its button, not on open, because its preview writes the declaration; Adopt stage 4's nested `Operate` stays (step 7's last bullet, not done); the assistant's Run still needs a preview (step 10). From step 9, `jobShownIn` and AddNode's dry-run texts are already gone; `JobDetail`'s `live` is left.
+Steps 1 to 7 are done, on branch `console-flow-plan`, and steps 8 to 11 on `console-flow-plan-2` (components in `web/src/jobs.tsx`, `run.ts`, `stepform.tsx`, `flows.tsx`, `argv.ts stepFlow`, `wizard.tsx`). Differences from the plan below: `node network set` previews on its button, not on open, because its preview writes the declaration; Adopt stage 4's nested `Operate` stays (step 7's last bullet, not done); a card runs nothing on open, so its plans and destructive dry runs keep a Preview click (step 10); `useAddNodeSession` shares `useJobSession`'s read (`useVerbJobs`) and keeps `latestNodeAdd`, because `sessionJob` would drop a failed add whose machine is still registered; Setup's Check is one read job per module, and `GET /setup?refresh=1` is gone; the Backup keys wizard stays its own stage, not an `ActStep` (step 11).
 
 1. (done) **One status line and one output pane.** Small.
    - Export `JobStatusLine({ job, label })` from `jobs.tsx`: Tag (`jobLevel`), label, `jobResult`, duration, job id, `JobControl`. Use it in `JobPart`, `RemoveNode.tsx:209`, `DeclaredLine`/`DeclareStep`, `AddNode.tsx:445` and `assistant.tsx:221, 238`; the assistant gains Stop as a result.
@@ -218,17 +218,17 @@ Steps 1 to 7 are done, on branch `console-flow-plan` (components in `web/src/job
    - Adopt stage 3, Buddy stage 2, Enrol stage 2, Satellite stage 3, ResetPassword link, NodePools, AddNode stage 0, Wifi declare: these change by themselves once StepView dispatches. Correct their stage texts ("previewed, then applied").
    - Buddy `peer check` and Satellite `test` run on open.
    - Replace Adopt stage 4's nested `Operate` (`Adopt.tsx:245`) with the place form inline in the stage.
-8. **Wizard scaffolding.** Small.
+8. (done) **Wizard scaffolding.** Small.
    - Move `StepRow` to `wizard.tsx`.
    - Add a `DecideStep` (a form + Continue/Edit that locks the fields) for the six copies (`RemoveNode.tsx:89-96`, `Adopt.tsx:202-218`, `Buddy.tsx:110-116`, `Wifi.tsx:134-143`, `BackupKeys.tsx:88-95`, `Satellite.tsx:170-174`).
    - Build `useAddNodeSession` on `useJobSession`, and give `ResumeOffer` an optional extra action ("Done with it") so AddNode drops `AddNode.tsx:321-327`.
    - Share AddNode's `Check` (`AddNode.tsx:85-92`) as a `CheckList`.
-9. **Cleanup.** Small.
+9. (done) **Cleanup.** Small.
    - Remove the dead `jobShownIn` (`operate.tsx:47-49, 356-359`).
    - Fix AddNode's dry-run texts (`AddNode.tsx:18-20, 494-498, 545-548, 572`).
    - Make `JobDetail`'s `live` use `jobLive` (`jobs.tsx:155, 160, 167`).
-10. **Assistant card.** Medium. Use `useJobRun` + `JobStatusLine` + `TypedConfirm`. Run = `applyNowJob`, so no Preview click is required; keep Preview for `apply-flag` plans, as in step 6.
-11. **Non-job long actions.** Large (server).
+10. (done) **Assistant card.** Medium. Use `useJobRun` + `JobStatusLine` + `TypedConfirm`. Run = `applyNowJob`, so no Preview click is required; keep Preview for `apply-flag` plans, as in step 6.
+11. (done) **Non-job long actions.** Large (server).
     - Backup keys write (`BackupKeys.tsx:51-63`; a secrets endpoint that runs `backup-manager key export … --password-stdin`) and Setup "Check" (`Setup.tsx:272-279`) become streamed jobs with stdin.
     - Then they use `ActStep` and gain live output and Stop. The WiFi passphrase and the reset password are short and can stay as they are.
 
