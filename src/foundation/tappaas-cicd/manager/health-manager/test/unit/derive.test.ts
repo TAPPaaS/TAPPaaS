@@ -1,7 +1,8 @@
 // derive.test.ts — ADR-041 D3 over a small graph: a node down takes its guests,
-// its services and what depends on them; a redundancy group holds with one
-// provider; a warning crosses nothing, unless a rule says so; a common ancestor
-// is the root; a cable's two ends; roll-ups.
+// its services and what depends on them; a redundancy group partly down
+// degrades its dependant, wholly down crosses; a warning crosses nothing,
+// unless a rule says so; a common ancestor is the root; a cable's two ends;
+// roll-ups.
 
 import { CmdbItem, Condition } from "../../src/assess-model";
 import { derive } from "../../src/derive";
@@ -86,9 +87,39 @@ const rels = [
   const nic = obj("port", "nic");
   const r = [rel("connects", nic, a, group), rel("connects", nic, b, group)];
   const one = derive([node, a, b, nic], src([a, [cond("operational", "critical", "link-down")]]), r, shippedModel(), now);
-  check(at(one.conditions, nic, "impact") === undefined, "two uplinks in one group, one down: no impact");
+  const partly = at(one.conditions, nic, "impact");
+  check(partly?.status === "warning" && partly?.rootCause === a.id && partly?.derived === true, "two uplinks in one group, one down: a warning impact naming the failed member");
+  check(partly?.reason === "redundancy-degraded" && /^one of two in uplinks down: port uplink-a/.test(partly?.message ?? ""), `…saying so (${partly?.message})`);
+  check(one.rootCauses.length === 1 && one.rootCauses[0].id === a.id && one.rootCauses[0].impactedCount === 1, "…the member is the root, with the degraded dependant counted");
   const both = derive([node, a, b, nic], src([a, [cond("operational", "critical", "link-down")]], [b, [cond("operational", "critical", "link-down")]]), r, shippedModel(), now);
-  check(at(both.conditions, nic, "impact")?.status === "critical", "both down: impact");
+  check(at(both.conditions, nic, "impact")?.status === "critical", "both down: the rule's own impact");
+  check(at(both.conditions, nic, "impact")?.reason === "link-down", "…the failure's reason, not the group's");
+
+  // A bond: two cables, each with its own dependant, one group by name.
+  const sw1 = obj("port", "sw-01/5");
+  const sw2 = obj("port", "sw-02/5");
+  const eno1 = obj("port", "srv-01/eno1");
+  const eno2 = obj("port", "srv-01/eno2");
+  const bond = { redundancyGroup: "tappaas1:lanbond" };
+  const legs = [rel("connects", sw1, eno1, bond), rel("connects", sw2, eno2, bond)];
+  const ports = [sw1, sw2, eno1, eno2];
+  const leg = derive(ports, src([sw1, [cond("operational", "critical", "link-down")]]), legs, shippedModel(), now);
+  check(at(leg.conditions, eno1, "impact")?.status === "warning" && at(leg.conditions, eno1, "impact")?.rootCause === sw1.id, "a bond, one leg down: its NIC degraded, naming the switch port");
+  check(leg.rootCauses.length === 1 && leg.rootCauses[0].id === sw1.id, "…a partly failed group makes its dependant no root");
+  check(at(leg.conditions, eno2, "impact") === undefined && at(leg.conditions, sw2, "impact") === undefined, "…the other leg untouched");
+  const ends = derive(ports, src(
+    [sw1, [cond("operational", "critical", "link-down", { since: "2026-10-30T08:00:00.000Z" })]],
+    [eno1, [cond("operational", "critical", "link-down", { since: "2026-10-30T08:00:03.000Z" })]],
+  ), legs, shippedModel(), now);
+  check(ends.rootCauses.length === 1 && ends.rootCauses[0].id === sw1.id, "a bond's leg seen down from both ends: one root, the earlier");
+  check(at(ends.conditions, eno1, "operational")?.derived === true && at(ends.conditions, eno1, "operational")?.rootCause === sw1.id, "…the NIC's own link-down is the same failure: derived, so no root of its own");
+  check(at(ends.conditions, eno1, "impact")?.status === "warning", "…and the NIC is degraded, not down");
+  const gone = derive(ports, src([sw1, [cond("operational", "critical", "link-down")]], [sw2, [cond("operational", "critical", "link-down")]]), legs, shippedModel(), now);
+  check(at(gone.conditions, eno1, "impact")?.status === "critical" && at(gone.conditions, eno2, "impact")?.status === "critical", "a bond, both legs down: both NICs critical");
+  const sw = obj("machine", "sw-01");
+  const deep = derive([...ports, sw], src([sw, [cond("operational", "critical", "switch-down")]]), [...legs, rel("part-of", sw1, sw)], shippedModel([{ relation: "part-of", source: { type: "operational", status: "critical" }, impact: "critical" }]), now);
+  check(at(deep.conditions, eno1, "impact")?.status === "warning" && at(deep.conditions, eno1, "impact")?.rootCause === sw.id, "a switch down behind one leg: the NIC degraded, the switch its root");
+  check(/down: port sw-01\/5 \(machine sw-01\)/.test(at(deep.conditions, eno1, "impact")?.message ?? ""), `…the message names the member and the root (${at(deep.conditions, eno1, "impact")?.message})`);
   const s1 = obj("service", "dns:a");
   const s2 = obj("service", "dns:b");
   const dep = [rel("depends-on", vm1, s1, { redundancyGroup: "dns" }), rel("depends-on", vm1, s2, { redundancyGroup: "dns" })];

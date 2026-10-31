@@ -16,6 +16,13 @@
 //              keep their own failure: a critical is not silenced by a warning.
 //   follows    an object nothing judges takes its parent's colour (FOLLOWS):
 //              `derived`, so never a failure or a root of its own.
+//   group      relations of one `redundancyGroup` (its name, site-wide) are
+//              crossed at the rule's impact only once all of them are down;
+//              while some are, the dependant of a failed one gets a `warning`
+//              impact naming the failed member ("one of two in … down").
+//   softer     a crossing softer than its source (a group partly down, a rule
+//              that degrades) still explains the dependant's own condition of
+//              that type: the guest stopped because its node did.
 //
 // A cable has no direction, so two ports that each see the link down reach each
 // other: the one whose transition came first is the root.
@@ -25,6 +32,7 @@ import { RulesDoc } from "./rules";
 import { ConditionStatus, FOLLOWS, HealthRule } from "../../../lib/ts/src/health-rules";
 
 interface Edge {
+  rel: number; // the relation's index: both ends of a cable are one relation
   type: string;
   dep: string; // the dependant
   prov: string; // the provider
@@ -46,11 +54,12 @@ export interface Derivation {
 function edgesOf(relations: CmdbRel[], model: RulesDoc): Edge[] {
   const meta = new Map(model.relations.map((r) => [r.name, r]));
   const out: Edge[] = [];
-  for (const r of relations) {
+  relations.forEach((r, rel) => {
     const m = meta.get(r.type);
-    if (!m?.dependant) continue;
+    if (!m?.dependant) return;
     const a = r.attributes ?? {};
     const common = {
+      rel,
       type: r.type,
       fromClass: r.from.class,
       toClass: r.to.class,
@@ -59,7 +68,7 @@ function edgesOf(relations: CmdbRel[], model: RulesDoc): Edge[] {
     };
     if (m.dependant !== "to") out.push({ ...common, dep: r.from.id, prov: r.to.id });
     if (m.dependant !== "from") out.push({ ...common, dep: r.to.id, prov: r.from.id });
-  }
+  });
   return out;
 }
 
@@ -68,34 +77,75 @@ function ruleFor(e: Edge, type: string, status: string, model: RulesDoc): Health
   return model.rules.find((r) => r.relation === e.type && r.source.type === type && r.source.status === status && isA(e.fromClass, r.from) && isA(e.toClass, r.to));
 }
 
+// A redundancy group partly down: what reached the dependant, and how much of
+// the group is down.
+export interface PartialGroup { member: string; group: string; down: number; of: number }
+
+interface Spread {
+  crossed: Map<State, Set<State>>; // every crossing, at the impact it gives
+  softer: Map<State, Set<State>>; // a softer crossing, at its source's status
+  partial: Map<State, PartialGroup>; // the dependant's state a partly down group gave
+}
+
 // Every (object, type, status) a failure reaches, and the crossings that got it
 // there. A fixpoint, because a redundancy group is crossed only once all its
-// providers are down, and those may be reached in any order.
-function spread(seeds: Seed[], edges: Edge[], model: RulesDoc): Map<State, Set<State>> {
+// members are down, and those may be reached in any order; a group still
+// partly down once nothing else grows gives its `warning`, which may travel on.
+function spread(seeds: Seed[], edges: Edge[], model: RulesDoc): Spread {
   const crossed = new Map<State, Set<State>>();
+  const softer = new Map<State, Set<State>>();
+  const partial = new Map<State, PartialGroup>();
   const down = new Set<State>(seeds.map((s) => stateOf(s.obj, s.cond.type, s.cond.status)));
   const byProv = new Map<string, Edge[]>();
-  for (const e of edges) if (e.required) byProv.set(e.prov, [...(byProv.get(e.prov) ?? []), e]);
-  for (let grew = true; grew; ) {
-    grew = false;
+  const byRel = new Map<number, Edge[]>();
+  const groups = new Map<string, Set<number>>();
+  for (const e of edges) {
+    if (!e.required) continue;
+    byProv.set(e.prov, [...(byProv.get(e.prov) ?? []), e]);
+    byRel.set(e.rel, [...(byRel.get(e.rel) ?? []), e]);
+    if (e.group) groups.set(e.group, (groups.get(e.group) ?? new Set()).add(e.rel));
+  }
+  const add = (m: Map<State, Set<State>>, from: State, to: State): void => void m.set(from, (m.get(from) ?? new Set()).add(to));
+  // How much of e's group is down: a member is down when a provider of it is,
+  // other than e's dependant (what it reaches through e is no cause of e).
+  const groupDown = (e: Edge, type: string, status: string): { down: number; of: number } => {
+    const members = [...groups.get(e.group!)!];
+    const isDown = (rel: number): boolean => rel === e.rel || (byRel.get(rel) ?? []).some((x) => x.prov !== e.dep && down.has(stateOf(x.prov, type, status)));
+    return { down: members.filter(isDown).length, of: members.length };
+  };
+  const pass = (partly: boolean): boolean => {
+    let grew = false;
     for (const st of [...down]) {
       const [obj, type, status] = st.split("|");
       for (const e of byProv.get(obj) ?? []) {
         const rule = ruleFor(e, type, status, model);
         if (!rule) continue;
-        const healthy = (x: Edge): boolean => !down.has(stateOf(x.prov, type, status));
-        if (e.group && edges.some((x) => x.dep === e.dep && x.group === e.group && healthy(x))) continue;
-        const to = stateOf(e.dep, type, rule.impact);
-        if (!crossed.has(st)) crossed.set(st, new Set());
-        crossed.get(st)!.add(to);
-        if (!down.has(to)) {
-          down.add(to);
-          grew = true;
+        let impact = rule.impact;
+        let part: PartialGroup | null = null;
+        if (e.group) {
+          const g = groupDown(e, type, status);
+          if (g.down < g.of) {
+            if (!partly) continue;
+            impact = "warning";
+            part = { member: obj, group: e.group, ...g };
+          } else if (partly) continue;
         }
+        const to = stateOf(e.dep, type, impact);
+        if (crossed.get(st)?.has(to) && (!part || partial.has(to))) continue;
+        add(crossed, st, to);
+        if (part && !partial.has(to)) partial.set(to, part);
+        if (RANK[impact] < RANK[status as ConditionStatus]) add(softer, st, stateOf(e.dep, type, status));
+        if (!down.has(to)) down.add(to);
+        grew = true;
       }
     }
+    return grew;
+  };
+  for (;;) {
+    while (pass(false));
+    if (!pass(true)) break;
   }
-  return crossed;
+  return { crossed, softer, partial };
 }
 
 function reach(from: State, crossed: Map<State, Set<State>>): Set<State> {
@@ -110,6 +160,9 @@ function reach(from: State, crossed: Map<State, Set<State>>): Set<State> {
   }
   return seen;
 }
+
+const WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+const count = (n: number): string => WORDS[n] ?? String(n);
 
 const earlier = (a: Seed, b: Seed): number => Date.parse(a.cond.since) - Date.parse(b.cond.since) || a.obj.localeCompare(b.obj);
 
@@ -208,32 +261,37 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
 
   const seeds: Seed[] = [];
   for (const [obj, cs] of out) for (const cond of cs) if (failing(cond) && cond.type !== "impact") seeds.push({ obj, cond });
-  const crossed = spread(seeds, edges, model);
+  const { crossed, softer, partial } = spread(seeds, edges, model);
   const reached = new Map(seeds.map((s) => [s, reach(stateOf(s.obj, s.cond.type, s.cond.status), crossed)]));
 
-  // The same failure seen from below: reached in its own type, no less severe.
-  const reachedBy = (a: Seed, b: Seed): boolean =>
-    [...reached.get(a)!].some((st) => {
+  // The same failure seen from below: reached in its own type, no less severe;
+  // or reached softer than its source, at the source's severity.
+  const reachedBy = (a: Seed, b: Seed): boolean => {
+    const from = [stateOf(a.obj, a.cond.type, a.cond.status), ...reached.get(a)!];
+    return [...reached.get(a)!, ...from.flatMap((st) => [...(softer.get(st) ?? [])])].some((st) => {
       const [obj, type, status] = st.split("|");
       return obj === b.obj && type === b.cond.type && RANK[status as ConditionStatus] >= RANK[b.cond.status];
     });
+  };
   const dominated = (s: Seed): boolean => seeds.some((o) => o !== s && reachedBy(o, s) && !(reachedBy(s, o) && earlier(s, o) < 0));
   const roots = seeds.filter((s) => !dominated(s)).sort(earlier);
 
   // Impact: every object a root reached, naming the earliest root.
-  const impacted = new Map<string, { root: Seed; status: ConditionStatus }>();
+  const impacted = new Map<string, { root: Seed; status: ConditionStatus; state: State }>();
   const impactCount = new Map<Seed, number>();
   for (const r of roots) {
-    const objs = new Map<string, ConditionStatus>();
+    const objs = new Map<string, { status: ConditionStatus; state: State }>();
     for (const st of reached.get(r)!) {
-      const [obj, , status] = st.split("|");
-      if (obj !== r.obj && RANK[status as ConditionStatus] > RANK[objs.get(obj) ?? "ok"]) objs.set(obj, status as ConditionStatus);
+      const [obj, , s] = st.split("|");
+      const status = s as ConditionStatus;
+      const had = objs.get(obj);
+      if (obj !== r.obj && (!had || RANK[status] > RANK[had.status] || (status === had.status && partial.has(st)))) objs.set(obj, { status, state: st });
     }
     impactCount.set(r, objs.size);
-    for (const [obj, status] of objs) {
+    for (const [obj, { status, state }] of objs) {
       const had = impacted.get(obj);
-      if (!had) impacted.set(obj, { root: r, status });
-      else if (RANK[status] > RANK[had.status]) had.status = status;
+      if (!had) impacted.set(obj, { root: r, status, state });
+      else if (RANK[status] > RANK[had.status]) Object.assign(had, { status, state });
     }
   }
   for (const s of seeds) {
@@ -241,11 +299,14 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
     s.cond.derived = true;
     s.cond.rootCause = (roots.find((r) => reachedBy(r, s)) ?? roots[0]).obj;
   }
-  for (const [obj, { root, status }] of impacted) {
-    const src = byId.get(root.obj);
+  const label = (id: string): string => `${byId.get(id)?.class ?? "object"} ${byId.get(id)?.name ?? id}`;
+  for (const [obj, { root, status, state }] of impacted) {
+    const part = partial.get(state);
     out.set(obj, [...(out.get(obj) ?? []), {
-      type: "impact", status, reason: root.cond.reason,
-      message: `${src?.class ?? "object"} ${src?.name ?? root.obj}: ${root.cond.message}`,
+      type: "impact", status, reason: part ? "redundancy-degraded" : root.cond.reason,
+      message: part
+        ? `${count(part.down)} of ${count(part.of)} in ${part.group} down: ${label(part.member)}${part.member === root.obj ? "" : ` (${label(root.obj)})`}: ${root.cond.message}`
+        : `${label(root.obj)}: ${root.cond.message}`,
       since: now, lastChecked: now, source: SOURCE, derived: true, rootCause: root.obj,
       acknowledged: null, maintenance: null,
     }]);
