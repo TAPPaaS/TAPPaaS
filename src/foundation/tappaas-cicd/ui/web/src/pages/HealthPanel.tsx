@@ -90,7 +90,7 @@ export function HealthPanel({ id, close, pick, showInTree }: { id: string; close
             <button className="hlink" onClick={() => setRecord(true)}>CMDB record and trace</button>
           </p>
           <Verbs o={o} />
-          <Section title="Conditions" aside={`${o.conditions.length}`}>
+          <Section title="Conditions">
             {o.conditions.length === 0 ? <p className="muted">No condition: nothing has assessed this object.</p> : null}
             <ul className="attention">
               {[...o.conditions].sort((a, b) => Number(a.status === "ok") - Number(b.status === "ok")).map((c) => (

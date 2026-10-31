@@ -213,7 +213,7 @@ function rollUp(own: Condition[], members: Condition[][], now: string, nowMs: nu
     const n = counted.filter((c) => c.status === worst).length;
     out.set(type, {
       type, status: worst, reason: worst === "ok" ? "ok" : "roll-up",
-      message: `${n} of ${counted.length} ${worst}`,
+      message: `${n} of ${counted.length} members ${worst}`,
       since: now, lastChecked: now, source: SOURCE, derived: true, rootCause: null,
       acknowledged: had?.acknowledged ?? null, maintenance: had?.maintenance ?? null,
     });

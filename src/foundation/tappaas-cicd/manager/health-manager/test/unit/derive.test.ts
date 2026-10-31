@@ -48,7 +48,7 @@ const rels = [
   check(at(c, vm3, "impact") === undefined, "a guest on the other node is untouched");
   check(d.rootCauses.length === 1 && d.rootCauses[0].id === m2.id && d.rootCauses[0].impactedCount === 3 && d.rootCauses[0].type === "operational", "one root, with what it impacts");
   check(at(c, site, "impact")?.status === "critical" && at(c, site, "impact")?.derived === true, "the site rolls it up, derived");
-  check(/3 of \d+ critical/.test(at(c, site, "impact")?.message ?? ""), "…counted");
+  check(/3 of \d+ members critical/.test(at(c, site, "impact")?.message ?? ""), "…counted");
   check(!d.rootCauses.some((r) => r.id === site.id), "a roll-up is never a root");
 }
 
@@ -199,7 +199,7 @@ const rels = [
   const env = obj("environment", "home");
   const r = [rel("placed-in", srv, rack), rel("allocated-to", srv, m1), rel("member-of", vm1, env), rel("member-of", vm3, env)];
   const d = derive([...all, rack, srv, env], src([vm1, [cond("capacity", "warning", "disk-full")]], [vm3, [cond("capacity", "ok", "ok")]], [m1, [cond("operational", "critical")]]), r, shippedModel(), now);
-  check(at(d.conditions, env, "capacity")?.status === "warning" && at(d.conditions, env, "capacity")?.message === "1 of 2 warning", "an environment: the worst of its members, counted");
+  check(at(d.conditions, env, "capacity")?.status === "warning" && at(d.conditions, env, "capacity")?.message === "1 of 2 members warning", "an environment: the worst of its members, counted");
   check(at(d.conditions, rack, "operational")?.status === "critical", "a rack: through the box to the machine on it");
   const quiet = derive(all, src([cluster, [cond("operational", "warning", "quorum-at-risk")]], [m1, [cond("operational", "ok", "ok")]]), rels, shippedModel(), now);
   check(at(quiet.conditions, cluster, "operational")?.derived === false && at(quiet.conditions, cluster, "operational")?.reason === "quorum-at-risk", "a collection's own worse condition stands");
