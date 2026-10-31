@@ -48,7 +48,8 @@ export function RemoveNodeWizard({ onClose, node: preset }: { onClose: () => voi
   };
   // Once a removal runs the node is the job's: it leaves the site's list.
   const chosen = nodes.includes(node) || resumed || job !== null ? node : "";
-  const removed = result?.removed === true;
+  // Set only when the removal job ended clean (RemoveStep).
+  const removed = result !== null;
 
   const stages = [
     { id: "node", title: "1 · The node, and how", required: true, done: chosen ? true : false, detail: "Which node leaves, and whether it is powered off first, wiped first, or already dead." },
