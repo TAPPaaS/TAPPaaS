@@ -7,7 +7,7 @@ import { spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { GN, YW, CL, info, warn } from "../../../lib/ts/src/cli";
 import { POSITIONS_FILE, PositionsDoc } from "../../../lib/ts/src/positions";
-import { IDENTITY_SH, MachineIdentity, assetPlaying, identityFromRegistration, matchAsset, newAssetArgs, parseIdentity } from "./asset";
+import { AssetFate, IDENTITY_SH, MachineIdentity, assetPlaying, assetRemovalSteps, identityFromRegistration, matchAsset, newAssetArgs, parseIdentity } from "./asset";
 import { defaultConfigDir } from "./config";
 
 export function readPositions(configDir = defaultConfigDir()): PositionsDoc | null {
@@ -99,18 +99,46 @@ export function allocateNodeAsset(name: string, host: string | null, asset?: str
   return key;
 }
 
-// node delete: the role ends; the asset keeps its placement under its own name
-// (D7). What would happen, for the preview, when `apply` is false.
-export function releaseNodeAsset(name: string, apply: boolean): void {
-  const doc = readPositions();
+// node delete: the role ends (D7). fate keep: the asset keeps its placement
+// and cables under its own name, in stock or placed for its next role.
+// fate remove: the machine leaves the site — released, then its recorded
+// cables, its placement and its record removed, each by asset-manager's verb
+// (which reports the change to the CMDB). What would happen, for the
+// preview, when `apply` is false.
+export function releaseNodeAsset(name: string, apply: boolean, fate: AssetFate = "keep", configDir = defaultConfigDir()): void {
+  const doc = readPositions(configDir);
   const a = doc ? assetPlaying(doc, name) : null;
-  if (!a) return;
+  if (!doc || !a) {
+    if (!apply) info(`  then: no asset is recorded for ${name}: no asset record changes`);
+    return;
+  }
   const where = a.placed ? `stays placed in ${a.placed}` : "goes back to stock";
   if (!apply) {
-    info(`  then: asset ${a.key} is released from ${name} and ${where}`);
+    if (fate === "keep") info(`  then: asset ${a.key} is released from ${name} and kept: it ${where}`);
+    else {
+      const r = assetRemovalSteps(doc, a.key);
+      const parts = [r.cables ? `its ${r.cables} recorded cable(s)` : "", r.placed ? `its placement in ${r.placed}` : "", "its record"].filter(Boolean);
+      info(`  then: asset ${a.key} is released from ${name} and removed: ${parts.join(", ")}`);
+    }
     return;
   }
   const r = assetManager(["asset", "release", a.key]);
-  if (r.rc === 0) info(`${GN}✓${CL} asset ${a.key} released from ${name}; it ${where}`);
-  else warn(`asset ${a.key} still plays ${name}: ${r.out} — asset-manager asset release ${a.key}`);
+  if (r.rc !== 0) {
+    warn(`asset ${a.key} still plays ${name}: ${r.out} — asset-manager asset release ${a.key}`);
+    return;
+  }
+  if (fate === "keep") {
+    info(`${GN}✓${CL} asset ${a.key} released from ${name} and kept: it ${where}`);
+    return;
+  }
+  info(`${GN}✓${CL} asset ${a.key} released from ${name}`);
+  const after = readPositions(configDir) ?? doc;
+  for (const step of assetRemovalSteps(after, a.key).steps) {
+    const s = assetManager(step);
+    if (s.rc !== 0) {
+      warn(`asset ${a.key} is not removed: asset-manager ${step.join(" ")}: ${s.out} — run the rest by hand (asset-manager asset show ${a.key})`);
+      return;
+    }
+  }
+  info(`${GN}✓${CL} asset ${a.key} removed: its cables, placement and record`);
 }

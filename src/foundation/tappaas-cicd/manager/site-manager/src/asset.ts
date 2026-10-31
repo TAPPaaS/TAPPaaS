@@ -1,5 +1,5 @@
 // asset.ts — the asset behind a node (ADR-040 D7, D8): what node add matches
-// or creates and allocates, and what node delete releases.
+// or creates and allocates, and what node delete releases or removes.
 //
 // Two ways in, one asset. Asset first: `node add <N> --asset <a>` — the asset
 // is checked before anything is installed, and its recorded cable and MAC
@@ -166,4 +166,41 @@ export function assetPlaying(doc: PositionsDoc, role: string): { key: string; as
   if (!hit) return null;
   const m = placementsOf(doc)[role];
   return { key: hit[0], asset: hit[1], placed: m ? placeWhere(m) : null };
+}
+
+// What becomes of a removed node's asset (node delete --asset): kept — the
+// role ends and the asset goes back to stock, or stays placed for its next
+// role, its cables recorded — or removed: the machine leaves the site, so
+// once released its recorded cables, its placement and its record go too.
+// A lost node's asset is removed unless told otherwise.
+export type AssetFate = "keep" | "remove";
+export const ASSET_FATES: AssetFate[] = ["keep", "remove"];
+export function assetFate(given: string | undefined, lost: boolean): AssetFate | { refused: string } {
+  if (given === undefined) return lost ? "remove" : "keep";
+  if ((ASSET_FATES as string[]).includes(given)) return given as AssetFate;
+  return { refused: `--asset is keep or remove, not '${given}'` };
+}
+
+// The asset-manager calls that take a released asset off the site, in order:
+// a `cable remove` per recorded cable it is an end of (by its own end), its
+// `unplace`, then `asset remove`. Each is asset-manager's own verb, so each
+// change reaches the CMDB through its change report. Computed on the doc as
+// it stands; an asset still in a role is named as it plays (the release comes
+// first, nodeasset.ts).
+export function assetRemovalSteps(doc: PositionsDoc, key: string): { steps: string[][]; cables: number; placed: string | null } {
+  const a = assetsOf(doc)[key];
+  if (!a) return { steps: [], cables: 0, placed: null };
+  const me = currentName(key, a);
+  const steps: string[][] = [];
+  const seen = new Set<string>();
+  for (const c of cablesOf(doc)) {
+    const end = c.from.device === me ? c.from : c.to.device === me ? c.to : null;
+    if (!end || seen.has(end.port)) continue;
+    seen.add(end.port);
+    steps.push(["cable", "remove", `${me}:${end.port}`]);
+  }
+  const m = placementsOf(doc)[me];
+  if (m) steps.push(["unplace", me]);
+  steps.push(["asset", "remove", key]);
+  return { steps, cables: seen.size, placed: m ? placeWhere(m) : null };
 }

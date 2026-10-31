@@ -47,8 +47,8 @@ node               node list [--json]
                    node storage add <node> <pool> --disks <d,d> --layout single|mirror|raidz1|raidz2 [--wipe]
                    node usb <node> [--json]
                    node usb write <node> <device> --yes
-                   node delete <name> [--apply] [--shutdown|--erase|--lost] [--yes] [--remove]
-                               [--config-only]
+                   node delete <name> [--apply] [--shutdown|--erase|--lost] [--asset keep|remove]
+                               [--archive] [--yes] [--config-only]
                    node reconcile [--apply]
                    node qdevice add <host> [--user <u>] [--force] | remove | status
                    node network show <node> [--json]
@@ -304,8 +304,8 @@ The cluster's nodes are not listed in `site.json`: each is a `pvehost` module in
 `config/<node>.json`, with its `address`, `uplinks`, `location` and `storagePools` (the
 tankXY zpools it carries). `node list` lists them (`--json`: name, address, storagePools,
 location), in node order — by name, numbers as numbers; the first is the primary node.
-`node add` registers one (and allocates its asset, below), `node delete` archives it (and
-releases the asset), `node reconcile` registers a cluster
+`node add` registers one (and allocates its asset, below), `node delete` deletes it (and
+keeps or removes the asset, below), `node reconcile` registers a cluster
 member that has no instance yet and fills a record's empty pools from the node. Every
 manager and the bash layer list the nodes the same way (`lib/ts/src/nodes.ts`,
 `lib/cluster-nodes.sh`), and `validate` refuses a `site.json` that still carries
@@ -378,9 +378,8 @@ conflict and nothing is allocated — and when none matches a new asset is recor
 machine, and a port per NIC with its MAC, so the box is matched next time even when
 its BIOS gives no serial). Either way the asset is allocated to the node, and a placement the operator made
 under the node's name is the asset's from then on. A failure here is a warning naming the
-`asset-manager` command to run, never a failed join. `node delete` releases the asset:
-it keeps its placement, ports and cables under its own name and goes back to placed or
-stock, ready for the next role.
+`asset-manager` command to run, never a failed join. `node delete` releases the asset and
+keeps it or removes it (below).
 
 **Boot disks: two fields, blank is the default.** `--boot-disk` and `--boot-mirror`
 each take a size (`2TB`, `1.92T`, `500GB`: within 10 %), a model (`"Samsung 990"`) or
@@ -391,6 +390,37 @@ the boot pool is mirrored; `--boot-mirror none` keeps such a pair to one disk. A
 that matches nothing, or more disks than it may, makes the node's console ask. A
 kernel name (`nvme0n1`) is accepted with a warning: it is the name the installer's
 boot gives the disk, which NVMe drives do not keep between boots (#729 §3).
+
+### `node delete` — removing a node
+
+`node delete <node>` previews: the cluster module's `remove-node.sh --dry-run` lists what
+still holds the node — a guest on it (with the module and how to move it), a replication
+job touching it, an HA rule naming it, the site's PBS — and the plan; then what becomes of
+its record and its asset. `--apply` carries it out and is refused while anything holds it:
+the node leaves Proxmox (`pvecm delnode`, its `/etc/pve/nodes` directory, its storage
+entries, known_hosts), its DNS entry and reservation go, and the switch ports recorded for
+it are parked. One of three ways: `--shutdown` powers it off first (Proxmox removes a node
+only once it is off), `--erase` wipes its disks first, `--lost` is for a node that is down
+for good.
+
+Then its record, `config/<node>.json`, is **deleted**: the node is gone from the modules
+list. The CMDB keeps the machine's history — its object is ended, not erased — so nothing
+is lost for a replacement. `--archive` keeps the record archived instead, for a script that
+reads it afterwards. (`--remove`, the former opt-in to deletion, is still accepted.)
+
+Its asset is released from the node, and then, by `--asset`:
+
+- `keep` (the default): it goes back to stock, or stays placed for its next role; its
+  place in the rack, its ports and its cables stay recorded under its own name. `node add`
+  on the same box later matches it by serial or MAC.
+- `remove`: the machine leaves the site — its recorded cables, its placement and its record
+  are removed with asset-manager's verbs (`cable remove`, `unplace`, `asset remove`), each
+  reported to the CMDB, where the asset's history stays.
+
+A `--lost` node's asset is removed unless `--asset keep` is given. `--config-only` deletes
+(or archives) the record and keeps or removes the asset without touching the cluster.
+`--yes` takes the place of the typed confirmations, for the console (which has the node's
+name typed) and scripts.
 
 ### `node storage` — a node's data pools (ADR-037 D4)
 

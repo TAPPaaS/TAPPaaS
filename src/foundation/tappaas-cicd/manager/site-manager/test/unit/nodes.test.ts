@@ -150,5 +150,75 @@ function quiet(argv: string[]): { rc: number; out: string[] } {
   check(v.rc !== 0 && v.out.some((l) => l.includes("hardware, which is retired")), `validate refuses a leftover hardware (rc ${v.rc}: ${v.out.join(" | ")})`);
 }
 
+// 5. node delete: the record is deleted (--archive keeps it), and the asset is
+// kept or removed — asset-manager's verbs, in order. Fakes on PATH log their calls.
+{
+  const SITE = { name: "acme", displayName: "Acme", owner: "acme", defaultEnvironment: "acme",
+    locations: { home: { country: "DK", timezone: "Europe/Copenhagen" } }, primaryLocation: "home", repositories: [] };
+  const POS = {
+    assets: { "srv-02": { kind: "server", stage: "placed", role: "tappaas2", ports: [{ name: "1", kind: "rj45" }] } },
+    placements: { tappaas2: { rack: "rack1", u: 12, height: 1, width: "full", face: "front" } },
+    cables: [{ from: { device: "crs-a", port: "ether2" }, to: { device: "tappaas2", port: "1" }, kind: "patch" }],
+  };
+  // After asset release: the placement and cable under the asset's own name.
+  const RELEASED = {
+    assets: { "srv-02": { kind: "server", stage: "placed", ports: [{ name: "1", kind: "rj45" }] } },
+    placements: { "srv-02": POS.placements.tappaas2 },
+    cables: [{ from: { device: "crs-a", port: "ether2" }, to: { device: "srv-02", port: "1" }, kind: "patch" }],
+  };
+  const fresh = () => {
+    const d = cfg({ "site.json": SITE, "tappaas2.json": { ...PVE, address: "tappaas2.mgmt.internal", storagePools: [] }, "positions.json": POS, "released.json": RELEASED });
+    const bin = join(d, "bin");
+    mkdirSync(bin);
+    writeFileSync(join(bin, "module-manager"), `#!/usr/bin/env bash\necho "module-manager $*" >> "${d}/calls"\n`);
+    writeFileSync(join(bin, "asset-manager"),
+      `#!/usr/bin/env bash\necho "asset-manager $*" >> "${d}/calls"\n[ "$1 $2" = "asset release" ] && cp "${d}/released.json" "${d}/positions.json"\nexit 0\n`);
+    chmodSync(join(bin, "module-manager"), 0o755);
+    chmodSync(join(bin, "asset-manager"), 0o755);
+    return d;
+  };
+  const calls = (d: string) => (existsSync(join(d, "calls")) ? readFileSync(join(d, "calls"), "utf8").trim().split("\n") : []);
+  const PATH = process.env.PATH;
+  try {
+    let d = fresh();
+    process.env.PATH = `${join(d, "bin")}:${PATH}`;
+    let r = quiet(["node", "delete", "tappaas2", "--config-only", "--config-dir", d]);
+    check(r.rc === 0 && calls(d).join("; ") === "module-manager delete tappaas2 --remove --force; asset-manager asset release srv-02",
+      `the default: the record deleted, the asset released and kept (${calls(d).join("; ")} | ${r.out.join(" ")})`);
+    check(r.out.some((l) => /asset srv-02 released from tappaas2 and kept: it stays placed in rack1 U12/.test(l)), "it says where the kept asset is");
+
+    d = fresh();
+    process.env.PATH = `${join(d, "bin")}:${PATH}`;
+    r = quiet(["node", "delete", "tappaas2", "--config-only", "--archive", "--config-dir", d]);
+    check(r.rc === 0 && calls(d)[0] === "module-manager delete tappaas2 --archive --force", "--archive keeps the record archived");
+
+    d = fresh();
+    process.env.PATH = `${join(d, "bin")}:${PATH}`;
+    r = quiet(["node", "delete", "tappaas2", "--remove", "--config-only", "--config-dir", d]);
+    check(r.rc === 0 && calls(d)[0] === "module-manager delete tappaas2 --remove --force", "--remove is still accepted: the default");
+
+    d = fresh();
+    process.env.PATH = `${join(d, "bin")}:${PATH}`;
+    r = quiet(["node", "delete", "tappaas2", "--config-only", "--asset", "remove", "--config-dir", d]);
+    check(r.rc === 0 && calls(d).slice(1).join("; ") === "asset-manager asset release srv-02; asset-manager cable remove srv-02:1; asset-manager unplace srv-02; asset-manager asset remove srv-02",
+      `--asset remove: release, its cable, its placement, its record (${calls(d).join("; ")})`);
+    check(r.out.some((l) => /asset srv-02 removed: its cables, placement and record/.test(l)), "it says the asset is removed");
+
+    d = fresh();
+    process.env.PATH = `${join(d, "bin")}:${PATH}`;
+    r = quiet(["node", "delete", "--lost", "tappaas2", "--config-only", "--config-dir", d]);
+    check(r.rc === 0 && calls(d).includes("asset-manager asset remove srv-02"), `a lost node's asset is removed without being asked (${calls(d).join("; ")})`);
+
+    d = fresh();
+    process.env.PATH = `${join(d, "bin")}:${PATH}`;
+    r = quiet(["node", "delete", "tappaas2", "--config-only", "--asset", "dispose", "--config-dir", d]);
+    check(r.rc !== 0 && calls(d).length === 0 && r.out.some((l) => /keep or remove/.test(l)), "--asset is keep or remove; nothing runs otherwise");
+    r = quiet(["node", "delete", "tappaas2", "--config-only", "--archive", "--remove", "--config-dir", d]);
+    check(r.rc !== 0 && calls(d).length === 0, "--archive and --remove together are refused");
+  } finally {
+    process.env.PATH = PATH;
+  }
+}
+
 console.log(`nodes.test: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

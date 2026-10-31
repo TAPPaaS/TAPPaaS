@@ -1,9 +1,10 @@
 // asset.test.ts — the asset behind a node (ADR-040 D8): the machine's identity
 // as sysfs prints it, the match by serial then MAC, the --asset checks, the
-// cabling an asset lends node add, the new asset's tag, and the release.
+// cabling an asset lends node add, the new asset's tag, the release, and
+// what node delete does with the asset: kept, or removed.
 
 import { PositionsDoc } from "../../../../lib/ts/src/positions";
-import { assetCabling, assetPlaying, assetProblem, freeServers, identityFromRegistration, matchAsset, newAssetArgs, parseIdentity } from "../../src/asset";
+import { assetCabling, assetFate, assetPlaying, assetProblem, assetRemovalSteps, freeServers, identityFromRegistration, matchAsset, newAssetArgs, parseIdentity } from "../../src/asset";
 
 let passed = 0;
 let failed = 0;
@@ -77,6 +78,35 @@ check(bare.args.join(" ") === "asset add srv-05 --kind server --display-name tap
 const p = assetPlaying(doc, "tappaas1");
 check(!!p && p.key === "srv-01" && p.placed === "rack1 U20-U21", "the asset playing tappaas1 and where the role's placement is");
 check(assetPlaying(doc, "tappaas9") === null, "no asset plays tappaas9");
+
+// 7. node delete --asset: kept by default, removed for a lost node or on request
+check(assetFate(undefined, false) === "keep", "the asset is kept by default");
+check(assetFate(undefined, true) === "remove", "a lost node's asset is removed");
+check(assetFate("keep", true) === "keep", "a lost node's asset kept when told");
+check(assetFate("remove", false) === "remove", "remove on request");
+const badFate = assetFate("dispose", false);
+check(typeof badFate !== "string" && /keep or remove/.test(badFate.refused), "anything else is refused");
+
+// 8. removing an asset: its cables by its own end, its placement, its record
+const gone: PositionsDoc = {
+  assets: {
+    "srv-07": { kind: "server", stage: "placed", ports: [{ name: "1", kind: "rj45" }, { name: "2", kind: "rj45" }] },
+    "srv-08": { kind: "server", stage: "stock" },
+  },
+  placements: { "srv-07": { rack: "rack1", u: 30, height: 1, width: "full", face: "front" } },
+  cables: [
+    { from: { device: "crs-a", port: "ether3" }, to: { device: "srv-07", port: "1" }, kind: "patch" },
+    { from: { device: "srv-07", port: "2" }, to: { device: "pp-1", port: "4" }, kind: "patch" },
+    { from: { device: "crs-a", port: "ether4" }, to: { device: "srv-08", port: "1" }, kind: "patch" },
+  ],
+} as unknown as PositionsDoc;
+const rm = assetRemovalSteps(gone, "srv-07");
+check(rm.steps.map((x) => x.join(" ")).join("; ") === "cable remove srv-07:1; cable remove srv-07:2; unplace srv-07; asset remove srv-07", `cables, then the placement, then the record (${rm.steps.map((x) => x.join(" ")).join("; ")})`);
+check(rm.cables === 2 && rm.placed === "rack1 U30", "what it removes, for the preview");
+check(assetRemovalSteps(gone, "srv-08").steps.map((x) => x.join(" ")).join("; ") === "cable remove srv-08:1; asset remove srv-08", "an asset in stock: no unplace");
+const playing = assetRemovalSteps(doc, "srv-01");
+check(playing.steps.map((x) => x.join(" ")).join("; ") === "unplace tappaas1; asset remove srv-01", "an asset still in a role is named as it plays");
+check(assetRemovalSteps(gone, "srv-99").steps.length === 0, "no such asset: nothing");
 
 console.log(`asset: ${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

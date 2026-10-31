@@ -35,7 +35,7 @@ import { evacuateNode, evacuateExitCode } from "./evacuate";
 import { DieError, GN, RD, YW, CL, debug, die, guarded, info, infoTagged, preflightGuard, refused, warn } from "../../../lib/ts/src/cli";
 import { applyPlan, computePlan } from "./reconcile";
 import { adoptNode, provisionNode } from "./provision";
-import { assetCabling, assetProblem } from "./asset";
+import { assetCabling, assetFate, assetProblem } from "./asset";
 import { allocateNodeAsset, readPositions, releaseNodeAsset } from "./nodeasset";
 import { addNodeStorage, listNodeStorage } from "./storage";
 import { parseSwitchPort, prepareUplinkPort } from "./port";
@@ -194,16 +194,18 @@ export const HELP: HelpSpec = {
         ["<device>", "The stick, by the device name node usb <node> lists (/dev/sdb). A disk that is no USB stick, or a stick that is mounted, swap or a pool/LVM/RAID member, is refused and nothing is written."],
         ["--yes", "Required: the stick is erased. The image is /var/lib/tappaas-pxe/tappaas-usb.iso (node media prepare builds it); a new machine boots the installer from the stick once, where network boot is not an option."],
       ] },
-    { usage: "node delete <name> [--apply] [--shutdown | --erase | --lost] [--yes] [--remove] [--config-only]",
+    { usage: "node delete <name> [--apply] [--shutdown | --erase | --lost] [--asset keep|remove] [--archive] [--yes] [--config-only]",
+      hidden: ["--remove"],
       options: [
-        ["(default)", "Preview: what still holds the node (guests, replication, HA rules, the PBS) and the plan. Changes nothing."],
-        ["--apply", "Remove it from the cluster (pvecm delnode, /etc/pve/nodes/<n>, storage entries, known_hosts); then its pvehost module is archived. Refused while anything holds it; asks for the node name."],
+        ["(default)", "Preview: what still holds the node (guests, replication, HA rules, the PBS), the plan, and what becomes of its record and its asset. Changes nothing."],
+        ["--apply", "Remove it from the cluster (pvecm delnode, /etc/pve/nodes/<n>, storage entries, known_hosts, its DNS entry, its switch ports parked); then its node record is deleted and its asset released. Refused while anything holds it; asks for the node name."],
         ["--shutdown", "Power the node off first — Proxmox removes a node only once it is off. A node that is already down needs nothing."],
         ["--erase", "Before the power-off: destroy its ZFS pools and wipe their disks, wipe the boot disk's partitions and partition table, delete its boot entry. Asks for ERASE as well. Implies --shutdown."],
-        ["--lost", "The node is down for good: the guests the cluster still places on it are lost with it (their configs saved on the mothership first), replication jobs touching it are removed, HA rules naming it stay. Refused for a node that answers."],
+        ["--lost", "The node is down for good: the guests the cluster still places on it are lost with it (their configs saved on the mothership first), replication jobs touching it are removed, HA rules naming it stay. Refused for a node that answers. Its asset is removed (--asset remove) unless --asset keep is given."],
+        ["--asset keep|remove", "The machine's asset. keep (default): released from the node, back in stock or still placed for its next role, its cables recorded. remove: released, then its recorded cables, its placement and its record are removed (asset-manager's verbs): the machine leaves the site. The CMDB keeps its history either way."],
+        ["--archive", "Keep the node's record archived (listed as archived on the modules list) instead of deleting it, for a script that reads it afterwards."],
         ["--yes", "With --apply: no typed confirmation (the node name, and ERASE) — for the web console, which has the node's name typed before Apply, and for a script."],
-        ["--remove", "Delete the node's pvehost record (config/<node>.json) instead of archiving it: the node is gone from the modules list, not listed as archived."],
-        ["--config-only", "Only archive (or with --remove, delete) the node's pvehost module; the cluster is not touched."],
+        ["--config-only", "Only delete (or with --archive, archive) the node's record and release its asset; the cluster is not touched."],
       ] },
     { usage: "node reboot <name> [--apply]",
       options: [
@@ -364,7 +366,7 @@ interface Opts {
 const NOARG = new Set(["--apply", "--deep", "--force", "--json",
   "--install", "--pxe", "--provision", "--config-only", "--yes", "--no-wan", "--no-reboot", "--wipe",
   "--dry-run", "--no-git-pull", "--allow-disruption", "--shutdown", "--erase", "--unsigned", "--primary", "--check",
-  "--verbose", "--stop", "--discover"]);
+  "--verbose", "--stop", "--discover", "--lost", "--archive", "--remove"]);
 
 function parseOpts(args: string[]): Opts {
   const o: Opts = {
@@ -417,23 +419,23 @@ function parseOpts(args: string[]): Opts {
   return o;
 }
 
-// A deleted node's pvehost module instance (ADR-026 D4) goes with it: archived
-// and unregistered, never --decommission — the machine is not touched. Left
-// behind, it is a module for a node the site no longer has (#729 §3). A node
-// is a foundation (site-scoped) module, which delete refuses without --force;
-// --archive keeps it an archive, and a node still some module's Host is refused
-// even so.
-// remove: delete the record rather than archive it (module-manager delete
-// --remove): the node is gone from the modules list, not listed as archived.
-function unregisterNodeModule(name: string, configDir: string, remove = false): void {
+// A deleted node's pvehost module instance (ADR-026 D4) goes with it, never
+// --decommission — the machine is not touched. Left behind, it is a module for
+// a node the site no longer has (#729 §3). By default the record is deleted
+// (module-manager delete --remove): a removed node is gone from the modules
+// list; the CMDB keeps the machine's history (its object is ended, not
+// erased). archive: keep it, listed as archived, for a script that reads it.
+// A node is a foundation (site-scoped) module, which delete refuses without
+// --force; a node still some module's Host is refused even so.
+function unregisterNodeModule(name: string, configDir: string, archive = false): void {
   const cfg = `${configDir.replace(/\/$/, "")}/${name}.json`;
   if (!existsSync(cfg)) return;
   try {
     if (!String(JSON.parse(readFileSync(cfg, "utf8")).moduleSource ?? "").endsWith("/pvehost")) return;
   } catch { return; }
-  const r = spawnSync("module-manager", ["delete", name, remove ? "--remove" : "--archive", "--force"], { stdio: "inherit" });
-  if (r.status === 0) info(`${GN}✓${CL} its pvehost module instance is ${remove ? "deleted" : "archived"} and unregistered`);
-  else warn(`the pvehost module instance '${name}' is still registered — module-manager delete ${name}`);
+  const r = spawnSync("module-manager", ["delete", name, archive ? "--archive" : "--remove", "--force"], { stdio: "inherit" });
+  if (r.status === 0) info(`${GN}✓${CL} its node record is ${archive ? "archived" : "deleted"} and unregistered`);
+  else warn(`the node record '${name}' is still registered — module-manager delete ${name}${archive ? " --archive" : " --remove"} --force`);
 }
 
 // `node add --config-only`: the node's pvehost record, config/<name>.json,
@@ -1078,13 +1080,20 @@ function cmdNode(o: Opts, client: SiteClient): void {
     const name = o.rest[1];
     if (!name) die("node delete: expected <name>");
     const inSite = clusterNode(nodesDir, name) !== null;
-    const remove = o.boolFlags.has("--remove");
+    // --remove was the opt-in to deletion; deletion is the default now, and
+    // --remove is still accepted for scripts that give it.
+    const archive = o.boolFlags.has("--archive");
+    if (archive && o.boolFlags.has("--remove")) die("node delete: --archive keeps the record, --remove deletes it — give one");
+    if (o.boolFlags.has("--asset")) die("node delete: --asset is keep or remove");
+    const fate = assetFate(o.flags.get("--asset"), o.boolFlags.has("--lost"));
+    if (typeof fate !== "string") die(`node delete: ${fate.refused}`);
+    const record = archive ? "archived" : "deleted";
 
     if (o.boolFlags.has("--config-only")) {
       if (!inSite) die(`node '${name}' not found (site-manager node list)`);
-      unregisterNodeModule(name, nodesDir, remove);
+      unregisterNodeModule(name, nodesDir, archive);
       reportChange({ source: SOURCE, verb: `node delete ${name}`, objects: [{ class: "machine", name, end: true }], configDir: nodesDir });
-      releaseNodeAsset(name, true);
+      releaseNodeAsset(name, true, fate, nodesDir);
       return;
     }
 
@@ -1103,16 +1112,16 @@ function cmdNode(o: Opts, client: SiteClient): void {
     info(`${o.apply ? "" : "[preview] "}node delete '${name}' → ${script} ${args.join(" ")}`);
     const r = spawnSync(script, args, { stdio: "inherit" });
     const rc = r.status ?? -1;
-    if (rc !== 0) die(`remove-node.sh exited ${rc} — the node's pvehost module is unchanged`);
+    if (rc !== 0) die(`remove-node.sh exited ${rc} — the node's record and its asset are unchanged`);
     if (!o.apply) {
-      if (inSite) info(`  then: its pvehost module '${name}' is ${remove ? "deleted (--remove)" : "archived"}`);
-      releaseNodeAsset(name, false);
+      if (inSite) info(`  then: its node record '${name}' is ${record}`);
+      releaseNodeAsset(name, false, fate, nodesDir);
       return;
     }
-    unregisterNodeModule(name, nodesDir, remove);
+    unregisterNodeModule(name, nodesDir, archive);
     reportChange({ source: SOURCE, verb: `node delete ${name}`, objects: [{ class: "machine", name, end: true }], configDir: nodesDir });
-    // The role ends; the asset keeps its place under its own name (ADR-040 D7).
-    releaseNodeAsset(name, true);
+    // The role ends; the asset is kept for its next role or removed (ADR-040 D7).
+    releaseNodeAsset(name, true, fate, nodesDir);
     // A node rebuilt under this name brings a new host key: no stale pin here.
     for (const h of [name, `${name}.mgmt.internal`]) spawnSync("ssh-keygen", ["-R", h], { stdio: "ignore" });
     return;
