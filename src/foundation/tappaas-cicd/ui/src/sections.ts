@@ -47,17 +47,18 @@ export interface Section {
   source: string | null; // where it reads from
   at: string | null; // how old its read is
   error: string | null; // shown in its place
+  summary: Gauge | null; // on the title's line
   blocks: Block[];
   operations: Operation[];
   operationErrors: string[];
 }
 
-export const section = (id: string, title: string, layer: Layer, rest: Partial<Section> = {}): Section => ({ id, title, layer, generic: false, source: null, at: null, error: null, blocks: [], operations: [], operationErrors: [], ...rest });
+export const section = (id: string, title: string, layer: Layer, rest: Partial<Section> = {}): Section => ({ id, title, layer, generic: false, source: null, at: null, error: null, summary: null, blocks: [], operations: [], operationErrors: [], ...rest });
 
 export const GENERIC: Section[] = [
   section("health", "Health", "generic", { generic: true }),
   section("operate", "Operate", "generic", { generic: true }),
-  section("about", "About", "generic", { generic: true }),
+  section("about", "About the Module template", "generic", { generic: true }),
 ];
 
 // What a layer places: a section, or a move of one (no section).
@@ -134,6 +135,15 @@ export function declaredBlocks(s: DeclaredSection, doc: unknown): Block[] {
   return [{ kind: "kv", rows }];
 }
 
+// A declared summary from a verb's answer; null when the answer lacks its numbers.
+export function declaredSummary(s: DeclaredSection, doc: unknown): Gauge | null {
+  const f = s.summary;
+  if (!f) return null;
+  const value = pathIn(doc, f.value ?? "");
+  const max = pathIn(doc, f.max ?? "");
+  return typeof value === "number" && typeof max === "number" ? { label: f.label ?? "", value, max, format: fmt(f.format) } : null;
+}
+
 const fill = (args: string[] | undefined, module: string): string[] => (args ?? []).map((a) => (a === "$module" ? module : a));
 
 // A declared read as the argv it runs: only a verb a manifest declares as a
@@ -178,7 +188,7 @@ export async function moduleLayer(file: ConsoleFile, module: string, ms: Manifes
     if (e.value === null || e.value === undefined) return made({ source, error: e.error ?? "reading…" });
     const at = e.at === null ? null : new Date(e.at).toISOString();
     try {
-      return made({ source, at, blocks: declaredBlocks(s, e.value), error: null });
+      return made({ source, at, blocks: declaredBlocks(s, e.value), summary: declaredSummary(s, e.value), error: null });
     } catch (x) {
       return made({ source, at, error: (x as Error).message });
     }

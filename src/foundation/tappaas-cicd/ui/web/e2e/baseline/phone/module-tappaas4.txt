@@ -62,11 +62,6 @@
   - /url: /health
 - paragraph: Every condition on its 1 object is ok.
 - list
-- heading "Guests" [level=2]
-- text: CMDB · health-manager guests
-- paragraph: nothing runs here
-- heading "Pools" [level=2]
-- text: CMDB rpool · ONLINE 3.4 GiB of 450 GiB · 1% tanka1 · ONLINE 984 KiB of 1.8 TiB · 0%
 - heading "Ports and links" [level=2]
 - text: CMDB
 - table:
@@ -160,9 +155,14 @@
 - definition: idle
 - term: environment
 - definition: mgmt
-- heading "Memory by module" [level=2]
+- heading "Guest modules" [level=2]
+- text: CMDB · health-manager guests
+- paragraph: nothing runs here
+- heading "Memory by module 2.5 GiB of 31 GiB in use" [level=2]
 - text: health-manager guests · 09:54
 - paragraph: nothing to show
+- heading "Pools" [level=2]
+- text: CMDB rpool · ONLINE 3.4 GiB of 450 GiB · 1% tanka1 · ONLINE 984 KiB of 1.8 TiB · 0%
 - heading "Storage used by modules" [level=2]
 - text: health-manager guests · 09:54
 - paragraph: nothing to show
@@ -183,7 +183,7 @@
 - text: "fast · --deep (a read: runs at once)"
 - button "Delete…"
 - text: "--archive (default) · --remove · typed name"
-- heading "About" [level=2]
+- heading "About the Module template" [level=2]
 - term: description
 - definition: "A Proxmox VE cluster node as a module: registered, visible and tested; serves the NFS shares config/shares.json declares for it, through its server hook (ADR-029 v0.9); its OS is still patched by the cluster module (ADR-026 D4 stage 1)"
 - term: version

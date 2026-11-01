@@ -92,6 +92,7 @@ export interface DeclaredSection {
   rows?: string;
   columns?: DeclaredColumn[];
   fields?: DeclaredField[];
+  summary?: DeclaredField;
   before?: string;
   after?: string;
 }

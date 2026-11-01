@@ -55,7 +55,7 @@ function composition(): void {
 function validation(): void {
   check(schemaErrors(schema, pvehost).length === 0, "pvehost's console.json passes the schema");
   const good = parseConsole(pvehost, schema);
-  check(good.error === null && good.sections.length === 2 && good.operations.length === 2, "and is taken in whole");
+  check(good.error === null && good.sections.length === 4 && good.operations.length === 2, "and is taken in whole");
   const mixed = parseConsole({
     sections: [
       { id: "fine", title: "Fine", read: { bin: "health-manager", verb: "guests" }, render: "kv" },
@@ -153,7 +153,7 @@ function kinds(): void {
   check(ids(kindSections({ ...blank, module: row("x", "application") })) === "", "an application has no kind sections");
   check(ids(kindSections({ ...blank, module: row("x", "vm") })) === "resources backups", "a vm: resources backups");
   check(ids(kindSections({ ...blank, module: row("x", "lxc") })) === "resources backups", "an lxc: the same");
-  check(ids(kindSections({ ...blank, module: row("x", "machine") })) === "guests pools ports cluster", "a machine: guests pools ports cluster");
+  check(ids(kindSections({ ...blank, module: row("x", "machine") })) === "guests pools ports cluster", "a machine with no live numbers: guests pools ports cluster");
   check(ids(kindSections({ ...blank, module: row("x", "device") })) === "ports", "a device: ports");
   const topoAp = { accessPoints: [{ name: "ap1", uplink: { switch: "sw1", port: "9" }, ssids: [{ name: "home" }] }] };
   const ap = kindSections({ ...blank, module: row("ap1", "device"), topology: topoAp, ssids: [{ name: "home", zone: "home", security: "wpa3", accessPoints: ["ap1"] }, { name: "guest", zone: "guest", security: "open", accessPoints: ["ap2"] }] });
@@ -235,8 +235,9 @@ async function endToEnd(): Promise<void> {
   const reads = new Reads({ configDir: dir, stateDir: join(dir, "state"), run: site.run, journalDays: 7, repoRoot: REPO, cmdb: fake as unknown as Cmdb });
   const m = row("tappaas1", "machine", { node: "tappaas1" });
   const out = await reads.moduleSections(m, ms);
-  check(ids(out) === "health guests pools ports cluster memory-by-module storage-by-module operations operate about", "a pvehost instance: generic, machine, then its console.json, before Operate");
+  check(ids(out) === "health ports cluster guests memory-by-module pools storage-by-module operations operate about", "a pvehost instance: generic, machine, then its console.json with Guest modules and Pools moved beside it, before Operate");
   const mem = out.find((x) => x.id === "memory-by-module")!;
+  check(mem.summary?.label === "in use" && mem.summary.max > 0, "Memory by module carries the node's total on its title line");
   check(mem.error === null && blockOf(mem, "table")?.rows[0].module === "nextcloud", "Memory by module, read with its node's name");
   check(blockOf(out.find((x) => x.id === "storage-by-module")!, "table")?.rows[0].pool === "tanka1", "Storage used by modules");
   check(out.find((x) => x.id === "operations")?.operations.map((o) => o.verb).join() === "evacuate,node reboot", "its operations, both with manifests");

@@ -165,7 +165,7 @@
 - text: stop it and keep it stopped
 - button "Delete…"
 - text: "--archive (default) · --remove · typed name"
-- heading "About" [level=2]
+- heading "About the Module template" [level=2]
 - term: description
 - definition: "Karakeep — bookmarks and read-later: links, notes and images, each page archived and full-text searchable, tagged automatically by the site's AI stack when it has one."
 - term: version

@@ -4,6 +4,7 @@
 
 import { ReactNode } from "react";
 import { OperateButton } from "../operate";
+import { binaryBytes } from "../overview";
 import { gaugeLevel, gaugePct, valueText } from "../sectionview";
 import { ModuleSection, SectionBlock, SectionFormat } from "../types";
 import { Badge, KV, Link, Section, levelOf, since } from "../ui";
@@ -58,10 +59,16 @@ function Block({ b }: { b: SectionBlock }) {
   }
 }
 
+// A section's summary, in powers of 1024 as the Site card has a node's memory.
+const summaryText = (g: NonNullable<ModuleSection["summary"]>): string => {
+  const v = (n: number): string => (g.format === "bytes" ? binaryBytes(n) : valueText(n, g.format));
+  return `${v(g.value)} of ${v(g.max)}${g.label ? ` ${g.label}` : ""}`;
+};
+
 export function SectionView({ s }: { s: ModuleSection }) {
   const aside = [s.source, s.at ? since(s.at) : null].filter(Boolean).join(" · ");
   return (
-    <Section title={s.title} aside={aside || undefined}>
+    <Section title={<>{s.title}{s.summary ? " " : null}{s.summary ? <span className="section-summary">{summaryText(s.summary)}</span> : null}</>} aside={aside || undefined}>
       {s.error ? <div className="readstate readstate-fail">{s.error}</div> : null}
       {s.blocks.map((b, i) => <Block key={i} b={b} />)}
       {s.operations.length || s.operationErrors.length ? (

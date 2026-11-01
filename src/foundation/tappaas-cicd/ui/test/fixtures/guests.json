@@ -5,6 +5,10 @@
       "physicalMem": 66401951744,
       "usedMem": 51021017088,
       "committedMem": 45097156608,
+      "cpu": {
+        "cores": 12,
+        "threads": 24
+      },
       "guests": [
         {
           "vmid": 110,
@@ -373,6 +377,10 @@
       "physicalMem": 132572946432,
       "usedMem": 105159368704,
       "committedMem": 40567634858.666664,
+      "cpu": {
+        "cores": 16,
+        "threads": 32
+      },
       "guests": [
         {
           "vmid": 312,
@@ -807,6 +815,10 @@
       "physicalMem": 33038630912,
       "usedMem": 18827206656,
       "committedMem": 14495514624,
+      "cpu": {
+        "cores": 8,
+        "threads": 16
+      },
       "guests": [
         {
           "vmid": 811,

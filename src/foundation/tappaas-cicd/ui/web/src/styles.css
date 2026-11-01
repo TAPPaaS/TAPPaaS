@@ -219,6 +219,7 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 .page-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
 .section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-panel); padding: 14px var(--sp-16); margin: 14px 0; }
 .section-head { display: flex; align-items: baseline; gap: var(--sp-12); margin-bottom: 10px; }
+.section-summary { margin-left: var(--sp-8); color: var(--muted); font-size: 13px; font-weight: normal; }
 .section-aside { color: var(--muted); font-size: 12px; margin-left: auto; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .two > .section { margin: 0; }

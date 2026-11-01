@@ -74,7 +74,7 @@
 - text: "fast · --deep (a read: runs at once)"
 - button "Delete…"
 - text: "--archive (default) · --remove · typed name"
-- heading "About" [level=2]
+- heading "About the Module template" [level=2]
 - term: description
 - definition: "Storage for consumer modules (ADR-029): NFS shares declared in config/shares.json through storage-manager, served by the cluster nodes, mounted into consumer guests by storage:nfs. A virtual module, like cluster — nothing of its own to install."
 - term: version

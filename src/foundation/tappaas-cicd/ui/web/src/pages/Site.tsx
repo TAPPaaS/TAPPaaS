@@ -72,7 +72,7 @@ function NodeActions() {
 // Backup page, the repositories just below. The
 // site's locations are site-manager location's: the primary one (where the
 // site is, its timezone the site's) on the card, every one in its Locations
-// section with the location forms. The nodes' memory is health-manager's
+// section with the location forms. The nodes' cores and memory are health-manager's
 // (the site read carries it), their pools' use the storage inventory's; the
 // IPv6 prefix and Caddy's IPv6 address are the ipv6 read's.
 const SITE_FIELDS = ["name", "displayName", "branding", "version", "defaultEnvironment", "owner", "email", "primaryLocation", "locale", "keyboard", "network", "ipv6", "dnssec"];
@@ -193,12 +193,13 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
           {nodes.length ? (
             <table className="table compact">
               <thead>
-                <tr><th>node</th><th>memory</th><th>storage pools</th><th>location</th></tr>
+                <tr><th>node</th><th title="cores/threads">cores</th><th>memory</th><th>storage pools</th><th>location</th></tr>
               </thead>
               <tbody>
                 {nodes.map((n) => (
                   <tr key={n.name}>
                     <td className="mono"><Link to={`/site/devices?select=node:${encodeURIComponent(n.name)}`}>{n.name}</Link></td>
+                    <td className="mono">{n.cpu ? `${n.cpu.cores}/${n.cpu.threads}` : <span className="muted">not read</span>}</td>
                     <td className="mono">{n.memory ? memText(n.memory.used, n.memory.total) : <span className="muted">not read</span>}</td>
                     <td className="mono"><Pools pools={n.storagePools ?? []} inv={inv?.nodes.find((x) => x.name === n.name)} /></td>
                     <td>{n.location ?? <span className="muted">{primary ? primary.name : "the primary"}</span>}</td>

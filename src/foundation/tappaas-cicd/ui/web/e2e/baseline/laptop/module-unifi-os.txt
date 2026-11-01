@@ -159,7 +159,7 @@
 - text: stop it and keep it stopped
 - button "Delete…"
 - text: "--archive (default) · --remove · typed name"
-- heading "About" [level=2]
+- heading "About the Module template" [level=2]
 - term: description
 - definition: "UniFi OS Server — self-hosted UniFi OS (Network etc.) on Debian 13; the management plane that adopts UniFi switches and APs (ADR-008 Stage 5, #339)"
 - term: version

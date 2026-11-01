@@ -152,7 +152,7 @@
 - text: stop it and keep it stopped
 - button "Delete…"
 - text: "--archive (default) · --remove · typed name"
-- heading "About" [level=2]
+- heading "About the Module template" [level=2]
 - term: description
 - definition: "lazysite — the site owner's public website: Markdown pages in a Forgejo repository, served as HTML, with no build step or database."
 - term: version

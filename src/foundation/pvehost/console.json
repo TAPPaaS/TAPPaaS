@@ -8,6 +8,7 @@
       "read": { "bin": "health-manager", "verb": "guests", "args": ["$module"] },
       "render": "table",
       "rows": "guests",
+      "summary": { "value": "usedMem", "max": "physicalMem", "format": "bytes", "label": "in use" },
       "columns": [
         { "path": "module", "label": "module", "format": "module" },
         { "path": "name", "label": "guest" },
@@ -34,7 +35,9 @@
         { "path": "size", "label": "size", "format": "bytes" },
         { "path": "replica", "label": "replica" }
       ]
-    }
+    },
+    { "id": "guests", "before": "memory-by-module" },
+    { "id": "pools", "before": "storage-by-module" }
   ],
   "operations": [
     {

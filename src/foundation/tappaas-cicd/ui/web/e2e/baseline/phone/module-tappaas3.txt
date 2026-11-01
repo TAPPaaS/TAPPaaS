@@ -65,61 +65,10 @@
     - text: WARN operational tappaas3 tappaas3 every leg reaches the same switch (USW-Pro-XG-10-PoE) — redundant ports, not redundant switches · since 31/10/2026 16:50
     - link "Health":
       - /url: /health?select=2df905fc-99ad-4ce9-8f70-e3989f9a308a
-- heading "Guests" [level=2]
-- text: CMDB · health-manager guests
-- table:
-  - rowgroup:
-    - row "guest kind id state declared used HA":
-      - columnheader "guest"
-      - columnheader "kind"
-      - columnheader "id"
-      - columnheader "state"
-      - columnheader "declared"
-      - columnheader "used"
-      - columnheader "HA"
-  - rowgroup:
-    - row "unifi-os vm 811 running 5.0 GiB 2.0 GiB —":
-      - cell "unifi-os":
-        - link "unifi-os":
-          - /url: /modules/unifi-os
-      - cell "vm"
-      - cell "811"
-      - cell "running"
-      - cell "5.0 GiB"
-      - cell "2.0 GiB"
-      - cell "—"
-    - row "nomad vm 370 running 4.0 GiB 1.2 GiB —":
-      - cell "nomad":
-        - link "nomad":
-          - /url: /modules/nomad
-      - cell "vm"
-      - cell "370"
-      - cell "running"
-      - cell "4.0 GiB"
-      - cell "1.2 GiB"
-      - cell "—"
-    - row "karakeep vm 371 running 3.0 GiB 990 MiB —":
-      - cell "karakeep":
-        - link "karakeep":
-          - /url: /modules/karakeep
-      - cell "vm"
-      - cell "371"
-      - cell "running"
-      - cell "3.0 GiB"
-      - cell "990 MiB"
-      - cell "—"
-    - row "vaultwarden vm 610 running 1.5 GiB 291 MiB HA":
-      - cell "vaultwarden":
-        - link "vaultwarden":
-          - /url: /modules/vaultwarden
-      - cell "vm"
-      - cell "610"
-      - cell "running"
-      - cell "1.5 GiB"
-      - cell "291 MiB"
-      - cell "HA"
-- heading "Pools" [level=2]
-- text: CMDB tanka1 · ONLINE 461 GiB of 923 GiB · 50% tankc1 · DEGRADED 436 GiB of 4.4 TiB · 10%
+- heading "Processor" [level=2]
+- text: health-manager guests
+- term: cores/threads
+- definition: 8/16
 - heading "Ports and links" [level=2]
 - text: CMDB
 - table:
@@ -173,7 +122,60 @@
 - definition: backup
 - term: environment
 - definition: mgmt
-- heading "Memory by module" [level=2]
+- heading "Guest modules" [level=2]
+- text: CMDB · health-manager guests
+- table:
+  - rowgroup:
+    - row "guest kind id state declared used HA":
+      - columnheader "guest"
+      - columnheader "kind"
+      - columnheader "id"
+      - columnheader "state"
+      - columnheader "declared"
+      - columnheader "used"
+      - columnheader "HA"
+  - rowgroup:
+    - row "unifi-os vm 811 running 5.0 GiB 2.0 GiB —":
+      - cell "unifi-os":
+        - link "unifi-os":
+          - /url: /modules/unifi-os
+      - cell "vm"
+      - cell "811"
+      - cell "running"
+      - cell "5.0 GiB"
+      - cell "2.0 GiB"
+      - cell "—"
+    - row "nomad vm 370 running 4.0 GiB 1.2 GiB —":
+      - cell "nomad":
+        - link "nomad":
+          - /url: /modules/nomad
+      - cell "vm"
+      - cell "370"
+      - cell "running"
+      - cell "4.0 GiB"
+      - cell "1.2 GiB"
+      - cell "—"
+    - row "karakeep vm 371 running 3.0 GiB 990 MiB —":
+      - cell "karakeep":
+        - link "karakeep":
+          - /url: /modules/karakeep
+      - cell "vm"
+      - cell "371"
+      - cell "running"
+      - cell "3.0 GiB"
+      - cell "990 MiB"
+      - cell "—"
+    - row "vaultwarden vm 610 running 1.5 GiB 291 MiB HA":
+      - cell "vaultwarden":
+        - link "vaultwarden":
+          - /url: /modules/vaultwarden
+      - cell "vm"
+      - cell "610"
+      - cell "running"
+      - cell "1.5 GiB"
+      - cell "291 MiB"
+      - cell "HA"
+- heading "Memory by module 18 GiB of 31 GiB in use" [level=2]
 - text: health-manager guests · 09:54
 - table:
   - rowgroup:
@@ -231,6 +233,8 @@
       - cell "291 MiB"
       - cell "yes"
       - cell "1.1 GiB"
+- heading "Pools" [level=2]
+- text: CMDB tanka1 · ONLINE 461 GiB of 923 GiB · 50% tankc1 · DEGRADED 436 GiB of 4.4 TiB · 10%
 - heading "Storage used by modules" [level=2]
 - text: health-manager guests · 09:54
 - table:
@@ -471,7 +475,7 @@
 - text: "fast · --deep (a read: runs at once)"
 - button "Delete…"
 - text: "--archive (default) · --remove · typed name"
-- heading "About" [level=2]
+- heading "About the Module template" [level=2]
 - term: description
 - definition: "A Proxmox VE cluster node as a module: registered, visible and tested; serves the NFS shares config/shares.json declares for it, through its server hook (ADR-029 v0.9); its OS is still patched by the cluster module (ADR-026 D4 stage 1)"
 - term: version

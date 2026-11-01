@@ -126,7 +126,7 @@ export interface SiteRead {
   wan?: WanAddress | null;
   // site-manager node list --json: the cluster's nodes, their pvehost instances.
   // Each with its memory (health-manager guests: used and physical bytes), null when the read did not reach it.
-  nodes: { name: string; address?: string; storagePools?: string[]; location?: string; memory?: { used: number; total: number } | null }[] | null;
+  nodes: { name: string; address?: string; storagePools?: string[]; location?: string; memory?: { used: number; total: number } | null; cpu?: { cores: number; threads: number } | null }[] | null;
   repositories: { name: string; branch?: string; url?: string }[] | null;
   running: string | null; // the TAPPaaS version the checkout runs; site.version is the one installed from
   lastSweep: { start_time?: string; end_time?: string; total?: number; succeeded?: number; failed?: number; ok?: boolean; reboot?: string; failed_modules?: string[] } | null;
@@ -976,6 +976,7 @@ export interface ModuleSection {
   source: string | null;
   at: string | null;
   error: string | null;
+  summary?: { label: string; value: number; max: number; format?: SectionFormat } | null;
   blocks: SectionBlock[];
   operations: SectionOperation[];
   operationErrors: string[];

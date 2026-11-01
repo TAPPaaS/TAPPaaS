@@ -1139,15 +1139,15 @@ export class Reads {
       runJson<Record<string, unknown>>(run, "site-manager", ["site", "show", "--json"]),
       runJson<unknown[]>(run, "site-manager", ["node", "list", "--json"]).catch(() => null),
       runJson<unknown[]>(run, "site-manager", ["repository", "list", "--json"]).catch(() => null),
-      // Each node's memory (health-manager guests --json: used and physical);
-      // a node the read did not reach, or a failed read, is no memory.
+      // Each node's memory and processors (health-manager guests --json); a
+      // node the read did not reach, or a failed read, has neither.
       this.guests.get().then((g) => g.value ?? []),
     ]);
     const nodes = listed === null ? null : listed.map((n) => {
       if (!n || typeof n !== "object") return n;
       const live = guests.find((g) => g.node === (n as { name?: unknown }).name);
       const memory = live && typeof live.usedMem === "number" && typeof live.physicalMem === "number" ? { used: live.usedMem, total: live.physicalMem } : null;
-      return { ...(n as Record<string, unknown>), memory };
+      return { ...(n as Record<string, unknown>), memory, cpu: live?.cpu ?? null };
     });
     // The TAPPaaS version the site runs, from its checkout (ADR-028 D13):
     // site.json's `version` is only the release it was installed from.

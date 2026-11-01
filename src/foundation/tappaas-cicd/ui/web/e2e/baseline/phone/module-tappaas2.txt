@@ -62,7 +62,62 @@
   - /url: /health
 - paragraph: Every condition on its 1 object is ok.
 - list
-- heading "Guests" [level=2]
+- heading "Processor" [level=2]
+- text: health-manager guests
+- term: cores/threads
+- definition: 16/32
+- heading "Ports and links" [level=2]
+- text: CMDB
+- table:
+  - rowgroup:
+    - row "port kind speed link role connects to":
+      - columnheader "port"
+      - columnheader "kind"
+      - columnheader "speed"
+      - columnheader "link"
+      - columnheader "role"
+      - columnheader "connects to"
+  - rowgroup:
+    - row "enp97s0 rj45 10g up — sw-01:2, patchpanel1:9":
+      - cell "enp97s0"
+      - cell "rj45"
+      - cell "10g"
+      - cell "up"
+      - cell "—"
+      - cell "sw-01:2, patchpanel1:9"
+    - row "enp98s0 rj45 10g down — —":
+      - cell "enp98s0"
+      - cell "rj45"
+      - cell "10g"
+      - cell "down"
+      - cell "—"
+      - cell "—"
+    - row "wlp99s0 wifi — down — —":
+      - cell "wlp99s0"
+      - cell "wifi"
+      - cell "—"
+      - cell "down"
+      - cell "—"
+      - cell "—"
+- heading "Cluster membership" [level=2]
+- text: CMDB · network-manager topology
+- term: member
+- definition: "yes"
+- term: cluster
+- definition: rossen
+- term: quorum
+- definition: "yes"
+- term: other members
+- definition: tappaas1, tappaas3, tappaas4
+- term: corosync links
+- definition: "1"
+- term: disconnected links
+- definition: "0"
+- term: HA
+- definition: idle
+- term: environment
+- definition: mgmt
+- heading "Guest modules" [level=2]
 - text: CMDB · health-manager guests
 - table:
   - rowgroup:
@@ -165,60 +220,7 @@
       - cell "1.0 GiB"
       - cell "315 MiB"
       - cell "—"
-- heading "Pools" [level=2]
-- text: CMDB tanka1 · ONLINE 327 GiB of 1.8 TiB · 18%
-- heading "Ports and links" [level=2]
-- text: CMDB
-- table:
-  - rowgroup:
-    - row "port kind speed link role connects to":
-      - columnheader "port"
-      - columnheader "kind"
-      - columnheader "speed"
-      - columnheader "link"
-      - columnheader "role"
-      - columnheader "connects to"
-  - rowgroup:
-    - row "enp97s0 rj45 10g up — sw-01:2, patchpanel1:9":
-      - cell "enp97s0"
-      - cell "rj45"
-      - cell "10g"
-      - cell "up"
-      - cell "—"
-      - cell "sw-01:2, patchpanel1:9"
-    - row "enp98s0 rj45 10g down — —":
-      - cell "enp98s0"
-      - cell "rj45"
-      - cell "10g"
-      - cell "down"
-      - cell "—"
-      - cell "—"
-    - row "wlp99s0 wifi — down — —":
-      - cell "wlp99s0"
-      - cell "wifi"
-      - cell "—"
-      - cell "down"
-      - cell "—"
-      - cell "—"
-- heading "Cluster membership" [level=2]
-- text: CMDB · network-manager topology
-- term: member
-- definition: "yes"
-- term: cluster
-- definition: rossen
-- term: quorum
-- definition: "yes"
-- term: other members
-- definition: tappaas1, tappaas3, tappaas4
-- term: corosync links
-- definition: "1"
-- term: disconnected links
-- definition: "0"
-- term: HA
-- definition: idle
-- term: environment
-- definition: mgmt
-- heading "Memory by module" [level=2]
+- heading "Memory by module 98 GiB of 123 GiB in use" [level=2]
 - text: health-manager guests · 09:54
 - table:
   - rowgroup:
@@ -331,6 +333,8 @@
       - cell "315 MiB"
       - cell "yes"
       - cell "642 MiB"
+- heading "Pools" [level=2]
+- text: CMDB tanka1 · ONLINE 327 GiB of 1.8 TiB · 18%
 - heading "Storage used by modules" [level=2]
 - text: health-manager guests · 09:54
 - table:
@@ -651,7 +655,7 @@
 - text: "fast · --deep (a read: runs at once)"
 - button "Delete…"
 - text: "--archive (default) · --remove · typed name"
-- heading "About" [level=2]
+- heading "About the Module template" [level=2]
 - term: description
 - definition: "A Proxmox VE cluster node as a module: registered, visible and tested; serves the NFS shares config/shares.json declares for it, through its server hook (ADR-029 v0.9); its OS is still patched by the cluster module (ADR-026 D4 stage 1)"
 - term: version

@@ -196,7 +196,7 @@ function About({ d }: { d: ModuleDetail }) {
   const positions = useRead<Topology>(machine ? "topology" : null).env?.data?.positions;
   const operator = canOperate(useMe());
   return (
-    <Section title="About">
+    <Section title="About the Module template">
       <KV
         rows={[
           ["description", show(show_.description)],

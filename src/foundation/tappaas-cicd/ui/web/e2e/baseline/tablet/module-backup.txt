@@ -80,7 +80,7 @@
 - text: "fast · --deep (a read: runs at once)"
 - button "Delete…"
 - text: "--archive (default) · --remove · typed name"
-- heading "About" [level=2]
+- heading "About the Module template" [level=2]
 - term: description
 - definition: TAPPaaS Proxmox Backup Server configuration
 - term: version

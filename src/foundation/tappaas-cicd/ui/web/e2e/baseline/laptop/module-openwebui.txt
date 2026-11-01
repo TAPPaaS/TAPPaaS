@@ -165,7 +165,7 @@
 - text: stop it and keep it stopped
 - button "Delete…"
 - text: "--archive (default) · --remove · typed name"
-- heading "About" [level=2]
+- heading "About the Module template" [level=2]
 - term: description
 - definition: Open WebUI chat interface — private AI chat for your users, with conversation history and RAG, through the LiteLLM gateway.
 - term: version

@@ -79,6 +79,7 @@
         "rows": { "$ref": "#/$defs/path", "description": "Where the rows are in the answer. Without it the answer itself: an array for a table, an object for kv." },
         "columns": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/column" }, "description": "table: its columns." },
         "fields": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/field" }, "description": "gauges: each gauge. kv: each row; without it, the answer's plain values." },
+        "summary": { "$ref": "#/$defs/field", "description": "A figure of the answer on the title's line: value of max, then label. Names no rows: the paths start at the answer." },
         "before": { "$ref": "#/$defs/id", "description": "Move this section before that one." },
         "after": { "$ref": "#/$defs/id", "description": "Move this section after that one." }
       },
@@ -100,7 +101,7 @@
       "else": {
         "description": "No render: this entry only moves a section the page already has.",
         "anyOf": [{ "required": ["before"] }, { "required": ["after"] }],
-        "properties": { "title": false, "read": false, "rows": false, "columns": false, "fields": false }
+        "properties": { "title": false, "read": false, "rows": false, "columns": false, "fields": false, "summary": false }
       }
     },
     "operation": {

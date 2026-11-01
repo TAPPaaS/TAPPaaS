@@ -173,13 +173,14 @@ replace what the layer below put there, by section id. Generic, every module: `h
 (update, reconcile, test, snapshot, suspend/resume, delete with the typed name), `about`. Kind, built
 into the console (`src/kindsections.ts`): a vm or lxc has `resources` (memory declared, allocated and
 used as the balloon reports it, disks and their pools, node and HA state, snapshots) and `backups`; a
-machine `guests` (what runs on it, with memory and run state), `pools` (fill and health), `ports`
+machine `processor` (cores/threads, when health-manager read them), `guests` (Guest modules: what runs on it, with memory and run state), `pools` (fill and health), `ports`
 (ports and links), `cluster` (membership); a device `ports` (what each connects) and, for an access
 point, `radios` (radios and SSIDs). Module, declared: a module's `console.json` beside its module JSON
 (`src/consolefile.ts`, `schemas/console-fields.json`). Its `sections[]` each name an `id`, a `title`, a
 `read` (`{bin, verb, args[]}`, `$module` for the module's name, run with `--json` through the cached
 runner) and a `render`: `kv`, `table` with `columns[]`, `gauges` with `fields[]` naming the JSON paths;
-`rows` says where the rows are in the answer. An entry with an id the page already has replaces that
+`rows` says where the rows are in the answer; `summary` (`value`, `max`, `format`, `label`) puts a figure of the
+answer on the title's line. An entry with an id the page already has replaces that
 section, a new id goes before Operate, and `before`/`after` move either; an entry with only those moves
 a section. Its `operations[]` name verbs that carry a manifest, shown through the operate dialog.
 A declared read runs only if the bin's manifest declares it as a read, so a module's file never names

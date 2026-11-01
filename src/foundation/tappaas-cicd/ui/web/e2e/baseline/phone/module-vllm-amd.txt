@@ -139,7 +139,7 @@
 - text: stop it and keep it stopped
 - button "Delete…"
 - text: "--archive (default) · --remove · typed name"
-- heading "About" [level=2]
+- heading "About the Module template" [level=2]
 - term: description
 - definition: vLLM AMD ROCm inference — Ryzen AI MAX+ 395 (tappaas2)
 - term: version

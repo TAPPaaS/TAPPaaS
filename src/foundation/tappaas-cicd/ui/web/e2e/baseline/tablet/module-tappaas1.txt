@@ -66,7 +66,78 @@
   - /url: /health
 - paragraph: Every condition on its 1 object is ok.
 - list
-- heading "Guests" [level=2]
+- heading "Processor" [level=2]
+- text: health-manager guests
+- term: cores/threads
+- definition: 12/24
+- heading "Ports and links" [level=2]
+- text: CMDB
+- table:
+  - rowgroup:
+    - row "port kind speed link role connects to":
+      - columnheader "port"
+      - columnheader "kind"
+      - columnheader "speed"
+      - columnheader "link"
+      - columnheader "role"
+      - columnheader "connects to"
+  - rowgroup:
+    - row "enx4a1760044203 rj45 — down — —":
+      - cell "enx4a1760044203"
+      - cell "rj45"
+      - cell "—"
+      - cell "down"
+      - cell "—"
+      - cell "—"
+    - row "nic0 rj45 2.5g down — —":
+      - cell "nic0"
+      - cell "rj45"
+      - cell "2.5g"
+      - cell "down"
+      - cell "—"
+      - cell "—"
+    - row "nic2 sfp 10g up — sw-02:sfp-sfpplus1":
+      - cell "nic2"
+      - cell "sfp"
+      - cell "10g"
+      - cell "up"
+      - cell "—"
+      - cell "sw-02:sfp-sfpplus1"
+    - row "nic3 sfp 10g up — sw-03:sfp-sfpplus1":
+      - cell "nic3"
+      - cell "sfp"
+      - cell "10g"
+      - cell "up"
+      - cell "—"
+      - cell "sw-03:sfp-sfpplus1"
+    - row "nic4 rj45 10g up — —":
+      - cell "nic4"
+      - cell "rj45"
+      - cell "10g"
+      - cell "up"
+      - cell "—"
+      - cell "—"
+- heading "Cluster membership" [level=2]
+- text: CMDB · network-manager topology
+- term: member
+- definition: "yes"
+- term: cluster
+- definition: rossen
+- term: quorum
+- definition: "yes"
+- term: other members
+- definition: tappaas2, tappaas3, tappaas4
+- term: corosync links
+- definition: "1"
+- term: disconnected links
+- definition: "0"
+- term: HA
+- definition: active
+- term: roles
+- definition: firewall, mothership
+- term: environment
+- definition: mgmt
+- heading "Guest modules" [level=2]
 - text: CMDB · health-manager guests
 - table:
   - rowgroup:
@@ -169,76 +240,7 @@
       - cell "2.0 GiB"
       - cell "1.0 GiB"
       - cell "—"
-- heading "Pools" [level=2]
-- text: CMDB tanka1 · ONLINE 431 GiB of 3.5 TiB · 12% tankb1 · ONLINE 2.2 MiB of 10.8 TiB · 0%
-- heading "Ports and links" [level=2]
-- text: CMDB
-- table:
-  - rowgroup:
-    - row "port kind speed link role connects to":
-      - columnheader "port"
-      - columnheader "kind"
-      - columnheader "speed"
-      - columnheader "link"
-      - columnheader "role"
-      - columnheader "connects to"
-  - rowgroup:
-    - row "enx4a1760044203 rj45 — down — —":
-      - cell "enx4a1760044203"
-      - cell "rj45"
-      - cell "—"
-      - cell "down"
-      - cell "—"
-      - cell "—"
-    - row "nic0 rj45 2.5g down — —":
-      - cell "nic0"
-      - cell "rj45"
-      - cell "2.5g"
-      - cell "down"
-      - cell "—"
-      - cell "—"
-    - row "nic2 sfp 10g up — sw-02:sfp-sfpplus1":
-      - cell "nic2"
-      - cell "sfp"
-      - cell "10g"
-      - cell "up"
-      - cell "—"
-      - cell "sw-02:sfp-sfpplus1"
-    - row "nic3 sfp 10g up — sw-03:sfp-sfpplus1":
-      - cell "nic3"
-      - cell "sfp"
-      - cell "10g"
-      - cell "up"
-      - cell "—"
-      - cell "sw-03:sfp-sfpplus1"
-    - row "nic4 rj45 10g up — —":
-      - cell "nic4"
-      - cell "rj45"
-      - cell "10g"
-      - cell "up"
-      - cell "—"
-      - cell "—"
-- heading "Cluster membership" [level=2]
-- text: CMDB · network-manager topology
-- term: member
-- definition: "yes"
-- term: cluster
-- definition: rossen
-- term: quorum
-- definition: "yes"
-- term: other members
-- definition: tappaas2, tappaas3, tappaas4
-- term: corosync links
-- definition: "1"
-- term: disconnected links
-- definition: "0"
-- term: HA
-- definition: active
-- term: roles
-- definition: firewall, mothership
-- term: environment
-- definition: mgmt
-- heading "Memory by module" [level=2]
+- heading "Memory by module 48 GiB of 62 GiB in use" [level=2]
 - text: health-manager guests · 09:54
 - table:
   - rowgroup:
@@ -340,6 +342,8 @@
       - cell "496 MiB"
       - cell "yes"
       - cell "1.4 GiB"
+- heading "Pools" [level=2]
+- text: CMDB tanka1 · ONLINE 431 GiB of 3.5 TiB · 12% tankb1 · ONLINE 2.2 MiB of 10.8 TiB · 0%
 - heading "Storage used by modules" [level=2]
 - text: health-manager guests · 09:54
 - table:
@@ -608,7 +612,7 @@
 - text: "fast · --deep (a read: runs at once)"
 - button "Delete…"
 - text: "--archive (default) · --remove · typed name"
-- heading "About" [level=2]
+- heading "About the Module template" [level=2]
 - term: description
 - definition: "A Proxmox VE cluster node as a module: registered, visible and tested; serves the NFS shares config/shares.json declares for it, through its server hook (ADR-029 v0.9); its OS is still patched by the cluster module (ADR-026 D4 stage 1)"
 - term: version

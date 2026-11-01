@@ -1,5 +1,5 @@
 // kindsections.ts — the sections a module has by its kind (ADR-034 D11): a vm or
-// lxc its Resources and Backups, a machine its Guests, Pools, Ports and links
+// lxc its Resources and Backups, a machine its Processor, Guests, Pools, Ports and links
 // and Cluster membership, a device its Ports and, for an access point, its
 // radios and SSIDs. Each reads the CMDB first; `health-manager guests` gives the
 // live numbers; the topology and the storage inventory stand in when the CMDB
@@ -41,6 +41,7 @@ export interface NodeLive {
   physicalMem: number;
   usedMem: number;
   committedMem: number;
+  cpu?: { cores: number; threads: number } | null;
   guests: GuestLive[];
   volumes: VolumeLive[];
 }
@@ -169,6 +170,15 @@ function backups(i: KindInput): Section {
 
 // ── a machine ────────────────────────────────────────────────────────
 
+function processor(i: KindInput): Section[] {
+  const cpu = (i.live ?? []).find((n) => n.node === i.module.name)?.cpu;
+  if (!cpu) return [];
+  return [section("processor", "Processor", "kind", {
+    source: "health-manager guests",
+    blocks: [{ kind: "kv", rows: [{ label: "cores/threads", value: `${cpu.cores}/${cpu.threads}` }] }],
+  })];
+}
+
 function guestsOf(i: KindInput): Section {
   const name = i.module.name;
   const live = (i.live ?? []).find((n) => n.node === name)?.guests ?? [];
@@ -185,7 +195,7 @@ function guestsOf(i: KindInput): Section {
     put(String(g.vmid), { module: g.module ?? g.name, kind: g.type === "qemu" ? "vm" : g.type, vmid: g.vmid, state: g.status, declared: g.declaredMem, used: g.measured ? g.usedMem : null, ha: g.ha ? "HA" : "" });
   }
   const sorted = [...rows.values()].sort((a, b) => Number(b.declared ?? 0) - Number(a.declared ?? 0));
-  return section("guests", "Guests", "kind", {
+  return section("guests", "Guest modules", "kind", {
     source: sourceOf(i, "health-manager guests"),
     blocks: [...notes(i, true), {
       kind: "table",
@@ -347,7 +357,7 @@ export function kindSections(i: KindInput): Section[] {
     case "lxc":
       return [resources(i), backups(i)];
     case "machine":
-      return [guestsOf(i), pools(i), nodePorts(i), cluster(i)];
+      return [...processor(i), guestsOf(i), pools(i), nodePorts(i), cluster(i)];
     case "device":
       return [devicePorts(i), ...(isAccessPoint(i) ? [radios(i)] : [])];
     default:
