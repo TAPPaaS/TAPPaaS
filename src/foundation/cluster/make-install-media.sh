@@ -462,9 +462,10 @@ scan_ssh() {
       for i in {1..254}; do
         ( exec 3<>"/dev/tcp/${a}.${b}.$(( c + k )).${i}/22" && echo "${a}.${b}.$(( c + k )).${i}" ) 2>/dev/null &
       done
-      sleep 3
+      _r=0; sleep 3 || _r=130
       kill $(jobs -p) 2>/dev/null || true
-    ) 2>/dev/null
+      exit "$_r"
+    ) 2>/dev/null || exit 130   # Ctrl-C stops here, not after the remaining blocks
   done
 }
 
