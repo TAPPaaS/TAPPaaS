@@ -38,7 +38,7 @@
 <text x='926' y='84' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='end'>Export SVG · Open in UniFi · Open in OPNsense</text>
 <rect x='236' y='126' width='150' height='50' rx='25' fill='#eef0f3' stroke='#d0d4da' stroke-width='1' opacity='1'/>
 <text x='311' y='148' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>Internet · ISP</text>
-<text x='311' y='164' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='middle'>80.248.138.190 · 2a0x::/56</text>
+<text x='311' y='164' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='middle'>203.0.113.190 · 2a0x::/56</text>
 <rect x='476' y='116' width='196' height='470' rx='6' fill='#fff' stroke='#9aa4b2' stroke-width='1.5' opacity='1'/>
 <text x='574.0' y='136' font-size='12' fill='#1f2328' font-weight='600' text-anchor='middle'>USW Pro XG 10 PoE</text>
 <text x='574.0' y='150' font-size='10' fill='#6b7280' font-weight='normal' text-anchor='middle'>unifi · auto via unifi-os</text>

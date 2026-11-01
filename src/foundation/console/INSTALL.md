@@ -53,9 +53,9 @@ Caddy to `mgmt` and the admin VPN only, behind the Authentik gate, with its own 
 | | hrossen |
 |---|---|
 | domain | `hrossen.dk` (environment `mgmt`, `dnsMode` `per-service`) |
-| WAN addresses | `80.248.138.190`, `2a13:e740:292:978c::aba` |
+| WAN addresses | `203.0.113.190`, `2001:db8:2:978c::aba` |
 | mgmt, its gateway (the site's resolver) | `10.0.0.0/24`, `10.0.0.1` |
-| DMZ gateway (Caddy, split-horizon answer) | `10.6.0.1`, `2a13:e747:a210:8261:98:34ff:fe69:901a` |
+| DMZ gateway (Caddy, split-horizon answer) | `10.6.0.1`, `2001:db8:3:8261:98:34ff:fe69:901a` |
 | admin overlay | `10.255.1.0/24` |
 
 ### 1. The service on the mothership

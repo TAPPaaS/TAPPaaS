@@ -72,7 +72,7 @@
 <text x='794' y='228' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>3 servers · 1 switch · 1 access point · 1 firewall</text>
 <text x='794' y='248' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>Off-site copy: rasmus (Hareskov) — not yet pulled</text>
 <text x='794' y='268' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>Release 2.2.2 · updates nightly · 2 restarts pending</text>
-<text x='794' y='288' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>Operator: lars@hrossen.dk</text>
+<text x='794' y='288' font-size='12' fill='#1f2328' font-weight='normal' text-anchor='start'>Operator: operator@example.org</text>
 <text x='794' y='322' font-size='12' fill='#3b6fd4' font-weight='normal' text-anchor='start'>Open the physical view (read-only) →</text>
 <rect x='780' y='378' width='296' height='194' rx='6' fill='#ffffff' stroke='#d0d4da' stroke-width='1' opacity='1'/>
 <text x='794' y='400' font-size='12' fill='#6b7280' font-weight='600' text-anchor='start'>What you can do here</text>
