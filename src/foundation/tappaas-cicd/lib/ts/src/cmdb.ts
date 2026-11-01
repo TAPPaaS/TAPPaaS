@@ -16,7 +16,7 @@
 import { spawnSync } from "child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "fs";
 import { join } from "path";
-import { defaultConfigDir } from "./config-io";
+import { defaultConfigDir, simulating } from "./config-io";
 
 type Obj = Record<string, unknown>;
 
@@ -90,6 +90,11 @@ export function spoolDir(o: CmdbOptions = {}): string {
 
 /** One API call. Throws CmdbUnavailable or CmdbRefused; returns data. */
 export function cmdbRequest(method: "GET" | "POST", path: string, body?: unknown, o: CmdbOptions = {}): unknown {
+  // TAPPAAS_SIMULATE=1: a POST that records is not sent (query and relations only read).
+  if (simulating() && method === "POST" && path !== "/v1/query" && path !== "/v1/relations") {
+    console.error(`[simulate] cmdb POST ${path}`);
+    return {};
+  }
   const url = o.url ?? process.env.CMDB_URL;
   const args = ["-sS", "--max-time", String(o.timeoutSeconds ?? 60), "-X", method, "-w", "\n%{http_code}"];
   if (url) {
@@ -177,9 +182,14 @@ function spool(report: CmdbReport, o: CmdbOptions): string {
 /** Report an observation or a change. Never throws for an outage: an
  *  undelivered report is spooled. A refusal throws CmdbRefused. With
  *  TAPPAAS_CMDB=off nothing is sent or spooled (a test that runs a changing
- *  verb on a host that has a CMDB, as hrossen does, must not record in it). */
+ *  verb on a host that has a CMDB, as hrossen does, must not record in it), and
+ *  with TAPPAAS_SIMULATE=1 neither. */
 export function cmdbReport(report: CmdbReport, o: CmdbOptions = {}): ReportOutcome {
   if ((process.env.TAPPAAS_CMDB ?? "").toLowerCase() === "off") return { delivered: false, off: true };
+  if (simulating()) {
+    console.error(`[simulate] cmdb report ${report.kind ?? "observation"} from ${report.source}`);
+    return { delivered: false, off: true };
+  }
   // The time it happened, not the time it is delivered: a spooled report
   // carries the moment it was made.
   const stamped: CmdbReport = { ...report, time: report.time ?? new Date().toISOString() };

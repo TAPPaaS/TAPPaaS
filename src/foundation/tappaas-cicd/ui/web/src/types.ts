@@ -594,6 +594,7 @@ export interface JobSummary {
   // An apply asked without a preview of its own: the dry run it ran first, how
   // much of the output is the dry run's, and why it stopped there (no apply ran).
   previewPhase?: { ran: string[]; exit: number | null; durationMs: number | null; outputLength: number; stopped: string | null };
+  simulated?: boolean; // TAPPAAS_SIMULATE=1: the preview ran in the apply's place
 }
 export interface Job extends JobSummary {
   output: string;

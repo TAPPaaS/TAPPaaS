@@ -567,6 +567,17 @@ else
     skip "lib/test-common-install-routines.sh not found"
 fi
 
+info "${BOLD}Test 9f2: TAPPAAS_SIMULATE gate of the bash lib${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-simulate.sh" ]]; then
+    if "${SCRIPT_DIR}/lib/test-simulate.sh" >/dev/null 2>&1; then
+        pass "simulate gate: mutators logged and skipped, reads run"
+    else
+        fail "simulate gate test failed (run lib/test-simulate.sh)"
+    fi
+else
+    skip "lib/test-simulate.sh not found"
+fi
+
 # update-module.sh wires cleanup into the success path (prune_snapshots calls
 # snapshot-vm.sh --cleanup); guard against the wiring silently disappearing.
 if grep -q 'snapshot-vm.sh.*--cleanup' /home/tappaas/bin/update-module.sh; then

@@ -416,6 +416,10 @@ in
           + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
           + ":/run/current-system/sw/bin")
       ];
+      # The operator's switches, set without a rebuild ("-": usually absent).
+      # TAPPAAS_SIMULATE=1, on test systems only: jobs show the real plan and
+      # change nothing (ui/README.md, "Simulate mode").
+      EnvironmentFile = "-/etc/tappaas/console.env";
       ProtectSystem = "strict";
       # The console's own files: Activity (jobs.jsonl) and the health document
       # it hands to `network-manager topology`.

@@ -1,0 +1,33 @@
+# simulate-mutators.txt — the commands TAPPAAS_SIMULATE=1 does not run. The one
+# list: lib/ts/src/exec.ts (mutators) and common-install-routines.sh both read it.
+#
+# Format: <command> <verb>...   # why
+# A verb is the command's first word that is not an option. `*` is any verb.
+# What is not listed runs, so `pvesh get`, `qm status`, `zfs list`, `zpool list`,
+# `systemctl is-active` give a preview its real answers. A command found behind
+# sudo, env, timeout, `bash -c` or ssh counts the same.
+pvesh set create delete                                        # Proxmox API writes; `get` and `ls` read
+qm start stop shutdown reboot reset suspend resume             # guest power state
+qm destroy create set clone template                           # guest existence and config
+qm migrate remote-migrate                                      # moves a guest
+qm snapshot rollback delsnapshot                               # guest snapshots
+qm importdisk disk resize move-disk move_disk unlink           # guest disks
+pct start stop shutdown reboot suspend resume                  # container power state
+pct destroy create set clone template restore                  # container existence and config
+pct migrate remote-migrate                                     # moves a container
+pct snapshot rollback delsnapshot                              # container snapshots
+pct resize move-volume mount unmount push                      # container volumes and files
+nixos-rebuild *                                                # activates a system, also behind `ssh <guest>`
+zfs create destroy set snapshot rollback                       # dataset writes
+zfs rename clone promote inherit receive recv                  # dataset writes
+zpool create destroy add remove attach detach replace split    # pool layout; `list` and `status` read
+zpool import export online offline clear labelclear            # pool state
+zpool scrub trim initialize set upgrade                        # pool work and properties
+pvesm add remove set alloc free                                # storage definitions and volumes; `status` reads
+vzdump *                                                       # writes a backup
+ha-manager add remove set migrate relocate crm-command rules   # HA resources; `status` and `config` read
+systemctl start stop restart try-restart reload                # unit state; `is-active`, `show`, `status` read
+systemctl reload-or-restart enable disable mask unmask         # unit state and boot links
+systemctl daemon-reload reboot poweroff halt kill              # the manager and the machine
+reboot *                                                       # the machine
+poweroff *                                                     # the machine

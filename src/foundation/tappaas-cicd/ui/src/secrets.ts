@@ -17,6 +17,8 @@
 
 import { chmodSync, existsSync, readFileSync, renameSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
+import { simulating } from "../../lib/ts/src/exec";
+import { SIMULATE_NO_SECRET } from "./run";
 
 export type SecretName = "acme-dns" | "unifi" | "wlan" | "backup-keys" | "user-password";
 
@@ -191,6 +193,7 @@ export function secretStatus(home: string, name: SecretName): SecretStatus {
 export function writeSecret(home: string, name: SecretName, fields: Record<string, unknown>): { ok: true; keys: string[]; file: string } | { ok: false; error: string } {
   const spec = SECRETS[name];
   if (spec.command || spec.file === null) return { ok: false, error: `${name} is set through its owner's verb (secretCommand), not written here` };
+  if (simulating()) return { ok: false, error: SIMULATE_NO_SECRET };
   const f = join(home, spec.file);
   let current = new Map<string, string>();
   try {
