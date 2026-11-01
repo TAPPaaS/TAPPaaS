@@ -325,7 +325,8 @@ if [[ -n "${n_ref}" && -n "${n_mig}" && "${n_ref}" -lt "${n_mig}" && "${n_mig}" 
 else
     ck "the runner sits after the refresh and before the hand-over" ok "refresh ${n_ref}, migrate ${n_mig}, hand-over ${n_hand}"
 fi
-grep -q 'echo migrate > "\${CONFIG_DIR}/.update-stage"' "${P}" \
+# The marker goes through tappaas_config_write (the TAPPAAS_SIMULATE gate), a redirect before it.
+grep -Eq 'echo migrate (\| tappaas_config_write|>) "\$\{CONFIG_DIR\}/\.update-stage"' "${P}" \
     && ck "the stage marker says 'migrate' while it runs" ok ok \
     || ck "the stage marker says 'migrate' while it runs" ok missing
 N="${CICD}/scripts/notify-update-failure.sh"

@@ -132,7 +132,7 @@ SYSTEM="${REPO}/.interface-design/system.md"
 ALLOW="${REPO}/.interface-design/allow.txt"
 [[ -f "${SYSTEM}" ]] && ok "system.md exists" || bad "system.md is missing"
 [[ -f "${ALLOW}" ]] && ok "allow.txt exists" || bad "allow.txt is missing"
-head -1 "${SYSTEM}" | grep -q 'src/foundation/tappaas-cicd/ui/web' && ok "system.md says it covers the console only" || bad "system.md's first line does not name ui/web"
+head -1 "${SYSTEM}" | grep -c 'src/foundation/tappaas-cicd/ui/web' >/dev/null && ok "system.md says it covers the console only" || bad "system.md's first line does not name ui/web"
 
 found="$(audit_tree "${WEB}" "${ALLOW}")"
 if [[ -z "${found}" ]]; then
