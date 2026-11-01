@@ -101,32 +101,32 @@
       - columnheader "storage pools"
       - columnheader "location"
   - rowgroup:
-    - row "tappaas1 51 GB / 66 GB root pve-root (21 GB / 100 GB) tanka1 (463 GB / 3.9 TB) tankb1 (2.3 MB / 12 TB) knudanchersvej95":
+    - row "tappaas1 48 GiB / 62 GiB root pve-root (21 GB / 100 GB) tanka1 (463 GB / 3.9 TB) tankb1 (2.3 MB / 12 TB) knudanchersvej95":
       - cell "tappaas1":
         - link "tappaas1":
           - /url: /site/devices?select=node:tappaas1
-      - cell "51 GB / 66 GB"
+      - cell "48 GiB / 62 GiB"
       - cell "root pve-root (21 GB / 100 GB) tanka1 (463 GB / 3.9 TB) tankb1 (2.3 MB / 12 TB)"
       - cell "knudanchersvej95"
-    - row "tappaas2 105 GB / 133 GB root pve-root (34 GB / 100 GB) tanka1 (351 GB / 2.0 TB) knudanchersvej95":
+    - row "tappaas2 98 GiB / 123 GiB root pve-root (34 GB / 100 GB) tanka1 (351 GB / 2.0 TB) knudanchersvej95":
       - cell "tappaas2":
         - link "tappaas2":
           - /url: /site/devices?select=node:tappaas2
-      - cell "105 GB / 133 GB"
+      - cell "98 GiB / 123 GiB"
       - cell "root pve-root (34 GB / 100 GB) tanka1 (351 GB / 2.0 TB)"
       - cell "knudanchersvej95"
-    - row "tappaas3 19 GB / 33 GB root pve-root (12 GB / 60 GB) tanka1 (495 GB / 991 GB) tankc1 (468 GB / 4.9 TB) knudanchersvej95":
+    - row "tappaas3 18 GiB / 31 GiB root pve-root (12 GB / 60 GB) tanka1 (495 GB / 991 GB) tankc1 (468 GB / 4.9 TB) knudanchersvej95":
       - cell "tappaas3":
         - link "tappaas3":
           - /url: /site/devices?select=node:tappaas3
-      - cell "19 GB / 33 GB"
+      - cell "18 GiB / 31 GiB"
       - cell "root pve-root (12 GB / 60 GB) tanka1 (495 GB / 991 GB) tankc1 (468 GB / 4.9 TB)"
       - cell "knudanchersvej95"
-    - row "tappaas4 2.7 GB / 34 GB rpool (3.6 GB / 483 GB) tanka1 (1.0 MB / 1.9 TB) knudanchersvej95":
+    - row "tappaas4 2.5 GiB / 31 GiB rpool (3.6 GB / 483 GB) tanka1 (1.0 MB / 1.9 TB) knudanchersvej95":
       - cell "tappaas4":
         - link "tappaas4":
           - /url: /site/devices?select=node:tappaas4
-      - cell "2.7 GB / 34 GB"
+      - cell "2.5 GiB / 31 GiB"
       - cell "rpool (3.6 GB / 483 GB) tanka1 (1.0 MB / 1.9 TB)"
       - cell "knudanchersvej95"
 - heading "Settings" [level=3]

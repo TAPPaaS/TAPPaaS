@@ -235,6 +235,19 @@ export function topAlerts(ops: Operations | null | undefined, max = 10): Alerts 
 }
 
 /** Bytes as the tile shows them: 1.2 TB. */
+// Memory is counted in powers of 1024, as the machines and their vendors do:
+// "64 GiB" installed, not the 68.7 GB that bytes() would say of storage.
+export function binaryBytes(n: number): string {
+  const units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
+  let i = 0;
+  let v = n;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v >= 10 || i === 0 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
+}
+
 export function bytes(n: number): string {
   const units = ["B", "KB", "MB", "GB", "TB", "PB"];
   let i = 0;

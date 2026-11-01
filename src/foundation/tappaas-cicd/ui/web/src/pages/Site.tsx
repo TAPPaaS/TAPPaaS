@@ -15,7 +15,7 @@ import { OperateButton, Step } from "../operate";
 import { fieldsStep } from "../fields";
 import { SiteRead, StorageInventory } from "../types";
 import { Ipv6Read } from "../zonenet";
-import { bytes } from "../overview";
+import { binaryBytes, bytes } from "../overview";
 import { ReactNode, useEffect } from "react";
 import { KV, Link, ReadState, Section, navigate, since, useHash } from "../ui";
 import { locationAnchor } from "../locations";
@@ -106,6 +106,8 @@ const siteModify = (title: string, fields: string[], note: string) => () => [fie
 
 // "51 GB / 66 GB", breaking only at the slash on a narrow column.
 const useText = (used: number, total: number): string => `${bytes(used).replace(" ", "\u00a0")} / ${bytes(total).replace(" ", "\u00a0")}`;
+// Memory in powers of 1024: a node with 64 GiB installed says so.
+const memText = (used: number, total: number): string => `${binaryBytes(used).replace(" ", "\u00a0")} / ${binaryBytes(total).replace(" ", "\u00a0")}`;
 
 // A node's pools as the card lists them, one a line: its root first, then its
 // pvehost record's, each with its use when the storage inventory has it.
@@ -197,7 +199,7 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
                 {nodes.map((n) => (
                   <tr key={n.name}>
                     <td className="mono"><Link to={`/site/devices?select=node:${encodeURIComponent(n.name)}`}>{n.name}</Link></td>
-                    <td className="mono">{n.memory ? useText(n.memory.used, n.memory.total) : <span className="muted">not read</span>}</td>
+                    <td className="mono">{n.memory ? memText(n.memory.used, n.memory.total) : <span className="muted">not read</span>}</td>
                     <td className="mono"><Pools pools={n.storagePools ?? []} inv={inv?.nodes.find((x) => x.name === n.name)} /></td>
                     <td>{n.location ?? <span className="muted">{primary ? primary.name : "the primary"}</span>}</td>
                   </tr>
