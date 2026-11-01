@@ -131,12 +131,16 @@ export interface ReadsConfig {
 // `ipv6` and `network.wan.ipv6`, and for a dynamic WAN the prefix the
 // firewall holds now (`ipv6-manager wan --json`, over ssh). No prefix (IPv6
 // off, the WAN takes none, or the firewall holds none or did not answer) is
-// an answer, with why.
+// an answer, with why. Beside it the WAN's own IPv6 address: the one the
+// internet reaches Caddy at (IPV6.md, "Reaching Caddy from the internet"),
+// the public AAAA of every published name. A static WAN's is site.json's,
+// a dynamic WAN's the firewall's answer, else what wan-address.json held.
 export interface Ipv6Read {
   on: boolean;
   mode: string; // dynamic | static | none
   prefix: string | null;
   source: "delegated" | "site.json" | null;
+  address: string | null; // the WAN's IPv6 address: Caddy's, no mask
   error?: string;
 }
 
@@ -1130,11 +1134,20 @@ export class Reads {
 
   private async loadSite(): Promise<Record<string, unknown>> {
     const run = this.cfg.run;
-    const [site, nodes, repositories] = await Promise.all([
+    const [site, listed, repositories, guests] = await Promise.all([
       runJson<Record<string, unknown>>(run, "site-manager", ["site", "show", "--json"]),
       runJson<unknown[]>(run, "site-manager", ["node", "list", "--json"]).catch(() => null),
       runJson<unknown[]>(run, "site-manager", ["repository", "list", "--json"]).catch(() => null),
+      // Each node's memory (health-manager guests --json: used and physical);
+      // a node the read did not reach, or a failed read, is no memory.
+      this.guests.get().then((g) => g.value ?? []),
     ]);
+    const nodes = listed === null ? null : listed.map((n) => {
+      if (!n || typeof n !== "object") return n;
+      const live = guests.find((g) => g.node === (n as { name?: unknown }).name);
+      const memory = live && typeof live.usedMem === "number" && typeof live.physicalMem === "number" ? { used: live.usedMem, total: live.physicalMem } : null;
+      return { ...(n as Record<string, unknown>), memory };
+    });
     // A missing or unreadable record is no address, not a failed site read.
     let wan: WanAddress | null = null;
     try {
@@ -1146,21 +1159,26 @@ export class Reads {
   }
 
   private async loadIpv6(): Promise<Ipv6Read> {
-    const site = ((await this.site.get()).value?.site ?? {}) as { ipv6?: unknown; network?: { wan?: { ipv6?: { mode?: string; prefix?: string } } } };
+    const siteRead = (await this.site.get()).value;
+    const site = (siteRead?.site ?? {}) as { ipv6?: unknown; network?: { wan?: { ipv6?: { mode?: string; prefix?: string; address?: string } } } };
     const wan = site.network?.wan?.ipv6 ?? {};
     const mode = wan.mode ?? "dynamic";
-    if (site.ipv6 !== true || mode === "none") return { on: site.ipv6 === true, mode, prefix: null, source: null };
-    if (mode === "static") return { on: true, mode, prefix: wan.prefix || null, source: wan.prefix ? "site.json" : null };
+    // The address the last network update recorded (wan-address.json), when the firewall is not asked or does not answer.
+    const held = ((siteRead?.wan as WanAddress | null | undefined)?.ipv6 ?? [])[0] ?? null;
+    if (site.ipv6 !== true || mode === "none") return { on: site.ipv6 === true, mode, prefix: null, source: null, address: null };
+    if (mode === "static") return { on: true, mode, prefix: wan.prefix || null, source: wan.prefix ? "site.json" : null, address: (wan.address ?? "").split("/")[0] || held };
     const r = await this.cfg.run("ipv6-manager", ["wan", "--json"], 90_000);
     if (!r.ran || r.rc !== 0) {
       const why = (r.stderr || r.stdout).trim().split("\n").pop() || `exit ${r.rc}`;
-      return { on: true, mode, prefix: null, source: null, error: `ipv6-manager wan: ${why}` };
+      return { on: true, mode, prefix: null, source: null, address: held, error: `ipv6-manager wan: ${why}` };
     }
     try {
-      const prefix = String((JSON.parse(r.stdout) as { prefix?: unknown }).prefix ?? "").trim();
-      return { on: true, mode, prefix: prefix || null, source: prefix ? "delegated" : null, ...(prefix ? {} : { error: "the firewall holds no delegated prefix" }) };
+      const d = JSON.parse(r.stdout) as { prefix?: unknown; address?: unknown };
+      const prefix = String(d.prefix ?? "").trim();
+      const address = String(d.address ?? "").trim().split("/")[0] || held;
+      return { on: true, mode, prefix: prefix || null, source: prefix ? "delegated" : null, address, ...(prefix ? {} : { error: "the firewall holds no delegated prefix" }) };
     } catch {
-      return { on: true, mode, prefix: null, source: null, error: "ipv6-manager wan: not JSON" };
+      return { on: true, mode, prefix: null, source: null, address: held, error: "ipv6-manager wan: not JSON" };
     }
   }
 

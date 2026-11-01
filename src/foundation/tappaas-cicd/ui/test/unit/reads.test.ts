@@ -145,6 +145,11 @@ async function main(): Promise<void> {
   const st = await reads.site.get();
   check((st.value?.site as { name?: string }).name === "rossen" && (st.value?.lastSweep as { ok?: boolean }).ok === true, "site: site show and the last sweep");
   check((st.value?.wan as { ipv4?: string } | null)?.ipv4 === "8.8.4.4", "site: the address the WAN held at the last network update");
+  {
+    const nodes = st.value?.nodes as { name: string; memory: { used: number; total: number } | null }[];
+    const t1 = nodes.find((n) => n.name === "tappaas1");
+    check(t1?.memory?.total === 68719476736 && t1.memory.used === 34359738368, "site: each node's memory, used and physical, from health-manager guests");
+  }
 
   // ── the site's IPv6 prefix: the firewall is asked only when IPv6 is on and the WAN dynamic ──
   {
@@ -159,12 +164,14 @@ async function main(): Promise<void> {
     const held = { rc: 0, stdout: JSON.stringify({ wanif: "vtnet1", prefix: "2001:db8:1:4500::/56", address: "2001:db8:1:4500::1" }) };
     let r = await v6({ name: "rossen", ipv6: true }, held);
     check(r.value?.on === true && r.value.prefix === "2001:db8:1:4500::/56" && r.value.source === "delegated", "ipv6: the delegated prefix the firewall holds");
+    check(r.value?.address === "2001:db8:1:4500::1", "…and the WAN's address, where the internet reaches Caddy");
     check(ran.includes("ipv6-manager wan --json"), "…read through ipv6-manager wan --json");
     ran.length = 0;
     r = await v6({ name: "rossen" }, held);
-    check(r.value?.on === false && r.value.prefix === null && !ran.some((c) => c.startsWith("ipv6-manager")), "ipv6 off: no prefix, the firewall not asked");
-    r = await v6({ ipv6: true, network: { wan: { ipv6: { mode: "static", prefix: "2001:db8:6648::/48" } } } }, held);
+    check(r.value?.on === false && r.value.prefix === null && r.value.address === null && !ran.some((c) => c.startsWith("ipv6-manager")), "ipv6 off: no prefix, no address, the firewall not asked");
+    r = await v6({ ipv6: true, network: { wan: { ipv6: { mode: "static", prefix: "2001:db8:6648::/48", address: "2001:db8:6648:1::2/64" } } } }, held);
     check(r.value?.prefix === "2001:db8:6648::/48" && r.value.source === "site.json" && !ran.some((c) => c.startsWith("ipv6-manager")), "a static WAN: the prefix site.json routes");
+    check(r.value?.address === "2001:db8:6648:1::2", "…and its address without the mask");
     r = await v6({ ipv6: true }, { rc: 1, stdout: "" });
     check(r.error === null && r.value?.prefix === null && /connect refused/.test(r.value?.error ?? ""), "the firewall not answering: no prefix, and why (an answer, not a failed read)");
     r = await v6({ ipv6: true }, { rc: 0, stdout: JSON.stringify({ prefix: "" }) });

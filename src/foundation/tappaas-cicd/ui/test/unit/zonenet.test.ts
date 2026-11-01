@@ -38,7 +38,7 @@ check(round("2001:db8:0:1:1:1:1:1") === "2001:db8:0:1:1:1:1:1", "one zero group 
 check(round("2001:0DB8:0000::0001") === "2001:db8::1", "leading zeros and capitals");
 
 // zoneV6: "-" (null) when the site has IPv6 off, the zone has no index, or no prefix is learned.
-const on = { on: true, mode: "dynamic", prefix: "2001:db8:1:4500::/56", source: "delegated" as const };
+const on = { on: true, mode: "dynamic", prefix: "2001:db8:1:4500::/56", source: "delegated" as const, address: null };
 check(zoneV6({ ipv6Subnet: 32 }, on) === "2001:db8:1:4520::/64", "a zone with an index on a site with a prefix");
 check(zoneV6({ ipv6Subnet: 32 }, { ...on, on: false }) === null, "IPv6 off: none");
 check(zoneV6({}, on) === null, "no ipv6Subnet: none");
