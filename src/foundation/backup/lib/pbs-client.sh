@@ -46,6 +46,7 @@ fi
 if ! grep -q "${image_location}" "$f" 2>/dev/null; then
     printf '%s\n' "${stanza}" >> "$f"
 fi
+export DEBIAN_FRONTEND=noninteractive
 apt update
 apt install -y proxmox-backup-client
 echo "  proxmox-backup-client installed"

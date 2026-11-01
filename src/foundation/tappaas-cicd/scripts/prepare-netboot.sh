@@ -79,7 +79,7 @@ info "installer ISO: ${ISO_URL}"
 PREPARED="/root/${ISO_NAME%.iso}-tappaas-netboot.iso"
 _ssh "[ -f /root/${ISO_NAME} ] || wget -q -O /root/${ISO_NAME} '${ISO_URL}'" \
   || die "ISO download failed on ${NODE}"
-_ssh "command -v proxmox-auto-install-assistant >/dev/null || apt-get install -y proxmox-auto-install-assistant >/dev/null" \
+_ssh "command -v proxmox-auto-install-assistant >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y proxmox-auto-install-assistant >/dev/null" \
   || die "cannot install proxmox-auto-install-assistant on ${NODE}"
 info "preparing the answer-fetching ISO (answer URL http://${CICD_IP}:8090/answer)..."
 _ssh "proxmox-auto-install-assistant prepare-iso /root/${ISO_NAME} \
