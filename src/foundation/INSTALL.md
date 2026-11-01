@@ -40,41 +40,48 @@ then continue with [Step 2](#step-2--bootstrap-minimal-tappaas-on-the-first-node
 
 ### Option A — preconfigured install media (recommended)
 
-Build a USB stick
-that installs Proxmox **unattended**: the boot disk is chosen on the target
+One script builds a USB stick
+that installs Proxmox **unattended**, writes it, and starts the TAPPaaS install when the
+node is up. The boot disk is chosen on the target
 itself from its real disks — the smallest SSD or NVMe disk, or both when the
 smallest two are the same model and size (a mirrored ZFS boot pool) — and
-everything else is answered at build time (email, locale, root password) with
-TAPPaaS defaults for the rest. The build runs on **your laptop** — no Proxmox needed and **no
-repo checkout needed**: the script is self-contained (on Linux it fetches the
-Proxmox assistant automatically; **on macOS it re-runs itself in a Debian
-container, so Docker Desktop must be installed and running**).
+everything else is answered at build time, with TAPPaaS defaults for the rest. It runs
+on **your laptop, Mac or Linux** — no Proxmox and **no repo checkout needed**: on Linux it
+fetches the Proxmox assistant itself, **on macOS the build runs in a Debian container, so
+Docker Desktop must be installed and running**.
 
 **First, download the stock Proxmox VE ISO** from the official site —
 <https://www.proxmox.com/en/downloads/proxmox-virtual-environment> (or fetch it
-directly from the mirror as shown). Then fetch the build script and run it from
+directly from the mirror as shown). Then fetch the script and run it from
 the directory holding the ISO:
 
 ```bash
 # 1. Download the stock Proxmox VE 9.2 ISO (~1.5 GB)
 curl -fSLO "https://enterprise.proxmox.com/iso/proxmox-ve_9.2-1.iso"
 
-# 2. Fetch the TAPPaaS build script
+# 2. Fetch the TAPPaaS script
 curl -fsSL "https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/main/src/foundation/cluster/make-install-media.sh" \
      -o make-install-media.sh && chmod +x make-install-media.sh
 
-# 3. Build the preconfigured install ISO
-./make-install-media.sh --iso proxmox-ve_9.2-1.iso \
-       --fqdn tappaas1.mgmt.internal
-# prompts for email / country / keyboard / timezone / root password,
-# VALIDATES the answer, writes proxmox-ve_9.2-1-tappaas-auto.iso
-
-# 4. Write it to a USB stick (find the device with: diskutil list / lsblk)
-dd if=proxmox-ve_9.2-1-tappaas-auto.iso of=/dev/<usb> bs=4M status=progress
+# 3. Build, write and install
+./make-install-media.sh
 ```
 
-On macOS, run `diskutil unmountDisk /dev/diskN` first, then `sudo dd` to `/dev/rdiskN`:
-the plain `/dev/diskN` works too, but much slower.
+It asks for your email and a root password. Country, keyboard, timezone and hostname
+default to this machine's settings: press Enter to take them. It validates the answers,
+writes `proxmox-ve_9.2-1-tappaas-auto.iso`, and asks what next:
+
+- **Write it to a USB stick:** it lists the USB sticks in this machine and erases the one
+  you pick, after you confirm, then reads the stick back. It asks for your password
+  (`sudo`) for the write.
+- **Network-boot the target from this machine:** see Option C.
+
+It then offers to start the TAPPaaS install on the node over ssh, and asks the branch, the
+site code, the organisation and the domain of [Step 2](#step-2--bootstrap-minimal-tappaas-on-the-first-node)
+up front. Say yes and it waits for the node, finds it on your network and runs Step 2 for
+you, so skip that step's commands. To find it the node must be on the same network as
+this machine; otherwise give its address with `--node <address>`. Run it again later with
+`--use proxmox-ve_9.2-1-tappaas-auto.iso` to skip the build.
 
 (If you already have — or prefer — a full checkout:
 `git clone https://codeberg.org/TAPPaaS/TAPPaaS.git` and run
@@ -88,7 +95,8 @@ is hands-off and WIPES the boot disk(s) it picks. To pick another, pass
 or a serial; a second `--disk` mirrors it, `--disk ask` asks on the target's
 console — which it also does when the field matches no disk.
 ⚠ The stick embeds the root password — treat the media like a credential
-and rewrite it after use.
+and rewrite it after use. `proxmox-ve_9.2-1-tappaas-auto.key` beside the image logs in to
+the node as root: keep it as safe.
 
 > **Disk standard:** the PVE system goes on a **ZFS boot pool** (one disk, or a
 > mirrored pair), which also carries the guests until the node has a data pool
@@ -118,7 +126,14 @@ On the installer screens:
 ### Option C — PXE / network-boot the first node (advanced; no USB stick)
 
 When the target can't boot from USB, or you want to reinstall it repeatedly,
-netboot it from your Mac. This stands up a **temporary PXE service** on the Mac —
+netboot it from your laptop. **`make-install-media.sh` does all of this for you:** pick
+*Network-boot the target from this machine* after the build, then pick **Network / PXE
+(IPv4)** in the target's one-time UEFI boot menu. It needs `dnsmasq`
+(`brew install dnsmasq`, or `apt install dnsmasq`), and the laptop wired to the target's
+network. It stops the service once the target has fetched the installer. By hand, on a
+Mac, the steps are below.
+
+This stands up a **temporary PXE service** on the Mac —
 `dnsmasq` in **proxy-DHCP + TFTP** mode (it does *not* hand out IP leases; your
 existing router keeps doing DHCP), which chainloads **iPXE**, which then pulls the
 same preconfigured installer as Option A over HTTP. It reuses the exact netboot
