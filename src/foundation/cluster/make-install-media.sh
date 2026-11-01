@@ -58,9 +58,12 @@ set -euo pipefail
 
 ORIG_ARGS=("$@")
 
-RD="\033[01;31m"; GN="\033[1;92m"; YW="\033[33m"; CL="\033[m"
+RD="\033[01;31m"; GN="\033[1;92m"; YW="\033[33m"; CY="\033[1;96m"; MG="\033[1;95m"; CL="\033[m"
+# What the operator answers, and what the operator must go and do, stand out from the rest.
+IN="$(printf '%b' "${CY}[Input]${CL}")"
 info()  { echo -e "${GN}[Info]${CL} $*"; }
 warn()  { echo -e "${YW}[Warning]${CL} $*"; }
+action() { echo -e "${MG}[Action]${CL} $*"; }
 die()   { echo -e "${RD}[Error]${CL} $*" >&2; exit 1; }
 debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
@@ -190,8 +193,8 @@ paia_fetch() {
 
 prompt() {
   local v d="${2:-}"
-  if [[ -n "$d" ]]; then read -r -p "  $1 [$d]: " v; printf '%s' "${v:-$d}"
-  else read -r -p "  $1: " v; printf '%s' "$v"; fi
+  if [[ -n "$d" ]]; then read -r -p "${IN} $1 [$d]: " v; printf '%s' "${v:-$d}"
+  else read -r -p "${IN} $1: " v; printf '%s' "$v"; fi
 }
 
 # >>> after-the-build
@@ -269,7 +272,7 @@ sticks_read() {
 
 # sudo_ask <what for> — says whose password this is: not the node's root password.
 sudo_ask() {
-  sudo -v -p "  Your login password on THIS computer (sudo, not the node's root password), to $1: "
+  sudo -v -p "${IN} Your login password on THIS computer (sudo, not the node's root password), to $1: "
 }
 
 # stick_write <device> <iso> — erase, write, read back.
@@ -312,27 +315,27 @@ write_usb() {
   while :; do
     lines="$(sticks_read)"
     if [[ -z "$lines" ]]; then
-      read -r -p "  No USB stick found. Plug one in and press Enter (q to stop): " pick
+      read -r -p "${IN} No USB stick found. Plug one in and press Enter (q to stop): " pick
       [[ "$pick" != q ]] || return 1
       continue
     fi
-    echo "  USB sticks in this machine:"
+    info "USB sticks in this machine:"
     i=0
     while IFS='|' read -r d bytes name note no; do
       i=$(( i + 1 ))
       (( bytes >= size )) || no="${no:-too small for the image}"
-      printf '    %d) %s  %s GB  %s%s%s\n' "$i" "$d" "$(( bytes / 1000000000 ))" "$name" "${note:+  (${note})}" "${no:+  — not offered: ${no}}"
+      info "  ${i}) ${d}  $(( bytes / 1000000000 )) GB  ${name}${note:+  (${note})}${no:+  — not offered: ${no}}"
     done <<<"$lines"
-    read -r -p "  Which stick is erased? [number, r to rescan, q to stop]: " pick
+    read -r -p "${IN} Which stick is erased? [number, r to rescan, q to stop]: " pick
     [[ "$pick" != q ]] || return 1
     [[ "$pick" =~ ^[0-9]+$ ]] && (( pick >= 1 && pick <= i )) || continue
     IFS='|' read -r d bytes name note no <<<"$(sed -n "${pick}p" <<<"$lines")"
     (( bytes >= size )) || no="${no:-too small for the image}"
     if [[ -n "$no" ]]; then warn "${d}: ${no}"; continue; fi
-    read -r -p "  ERASE ${d} (${name}, $(( bytes / 1000000000 )) GB)? Type yes: " pick
+    read -r -p "${IN} ERASE ${d} (${name}, $(( bytes / 1000000000 )) GB)? Type yes: " pick
     [[ "$pick" == yes ]] || continue
     stick_write "$d" "$iso"
-    info "${GN}✓ The stick is ready.${CL} Boot the target from it, the NIC to your upstream router connected."
+    action "The stick is ready. Boot the target from it, with only the NIC to your upstream router connected."
     return 0
   done
 }
@@ -392,7 +395,7 @@ pxe_serve() {
   [[ -n "$dns" ]] || die "dnsmasq is needed for the network boot (brew install dnsmasq, or apt install dnsmasq)."
   command -v python3 >/dev/null 2>&1 || die "python3 is needed for the network boot."
   net_info "$PXE_IFACE"
-  read -r -p "  Interface wired to the target's network [${NET_IF}]: " pick
+  read -r -p "${IN} Interface wired to the target's network [${NET_IF}]: " pick
   [[ -z "$pick" ]] || net_info "$pick"
   info "serving on ${NET_IF} (${NET_IP}/${NET_PREFIX})"
   pxe_stage "$iso"
@@ -429,7 +432,7 @@ EOF
   sudo "$dns" --conf-file="${PXE_RUN}/dnsmasq.conf" || die "dnsmasq did not start: see ${PXE_RUN}/dnsmasq.log"
   [[ "$(uname -s)" != Darwin ]] || info "  macOS firewall: allow dnsmasq and python3 when it asks, or the target gets no answer."
   warn "Until the target has fetched it, anyone on this network can fetch the installer, and the root password in it."
-  info "${GN}✓ Network boot is on.${CL} Pick Network / PXE (IPv4) in the target's one-time UEFI boot menu."
+  action "Network boot is on. Pick Network / PXE (IPv4) in the target's one-time UEFI boot menu."
 }
 
 # ssh into the node with the key built into the image. Nothing else can log in
@@ -460,8 +463,7 @@ scan_ssh() {
 
 wait_for_node() {
   local ip
-  info "waiting for the installed node to come up on this network: this takes 10-15 minutes. Ctrl-C to stop;"
-  info "  later: $(basename "$0") --use '${OUT}' --node <address>"
+  info "waiting for the installed node to come up on this network: this takes 10-15 minutes. Ctrl-C to stop."
   while :; do
     if [[ -n "$PXE_RUN" ]] && grep -q 'GET /initrd' pxe-http.log 2>/dev/null; then
       # Past this the target needs only the transfer running; left on, its next
@@ -489,7 +491,7 @@ start_install() {
 # The three names the bootstrap takes, asked before the wait so it runs unattended.
 ask_install() {
   local yn
-  read -r -p "  Start the TAPPaaS install over ssh when the node is up? [Y/n]: " yn
+  read -r -p "${IN} Start the TAPPaaS install over ssh when the node is up? [Y/n]: " yn
   [[ "$yn" != [nN]* ]] || return 1
   [[ -n "$BRANCH"    ]] || BRANCH="$(prompt 'Branch (stable, or main for the newest work)' stable)"
   [[ -n "$SITE_CODE" ]] || SITE_CODE="$(prompt 'Site code (lowercase, at most 15 characters)')"
@@ -508,12 +510,12 @@ after_build() {
     return 0
   fi
   echo ""
-  echo "  What next?"
-  echo "    1) Write ${OUT} to a USB stick"
-  echo "    2) Network-boot the target from this machine"
-  echo "    3) The target is already booted from this image: go on to the install"
-  echo "    4) Stop here"
-  read -r -p "  Choice [1]: " c
+  info "What next?"
+  info "  1) Write ${OUT} to a USB stick"
+  info "  2) Network-boot the target from this machine"
+  info "  3) The target is already booted from this image: go on to the install"
+  info "  4) Stop here"
+  read -r -p "${IN} Choice [1]: " c
   case "${c:-1}" in
     1|2|3) ;;
     *) warn "The ISO embeds the root password — treat the media like a credential, and delete it after the install."; return 0 ;;
@@ -535,7 +537,7 @@ after_build() {
     start_install
     info "${INSTALL_KEY} logs in to the node as root: keep it safe, or delete it and the node's line for it in /root/.ssh/authorized_keys."
   elif [[ -n "$PXE_RUN" ]]; then
-    read -r -p "  Press Enter when the target has rebooted into Proxmox, to end the network boot: " c
+    read -r -p "${IN} Press Enter when the target has rebooted into Proxmox, to end the network boot: " c
   fi
   warn "The ISO embeds the root password — treat the media like a credential, and delete it after the install."
 }
@@ -546,6 +548,17 @@ trap 'pxe_stop; [[ -z "$EXIT_WORK" ]] || rm -rf "$EXIT_WORK"' EXIT
 trap 'exit 130' INT TERM
 
 # ── This machine: the ISO, the questions, the key ─────────────────────
+if [[ -z "${TAPPAAS_MEDIA_CONTAINER:-}" && -t 0 ]]; then
+  info "This installs TAPPaaS on a first node, in these steps:"
+  if [[ -z "$USE" ]]; then
+    info "  1. A few questions, then the Proxmox install image is built (some minutes)."
+  else
+    info "  1. The install image is built already: ${USE}"
+  fi
+  info "  2. You choose: write the image to a USB stick, or network-boot the target from here."
+  info "  3. You boot the target. It installs Proxmox unattended and WIPES its boot disk."
+  info "  4. This script finds the node on your network and starts the TAPPaaS install on it."
+fi
 if [[ -n "$USE" ]]; then
   [[ -f "$USE" ]] || die "--use: no such image: ${USE}"
   OUT="$USE"
@@ -607,8 +620,8 @@ keyboard_of() {
 if [[ -n "$PASSWORD_FILE" ]]; then
   PASSWORD="$(<"$PASSWORD_FILE")"
 else
-  read -r -s -p "  Root password: " PASSWORD; echo ""
-  read -r -s -p "  Root password (again): " PASSWORD2; echo ""
+  read -r -s -p "${IN} Root password: " PASSWORD; echo ""
+  read -r -s -p "${IN} Root password (again): " PASSWORD2; echo ""
   [[ "$PASSWORD" == "$PASSWORD2" ]] || die "Passwords do not match."
 fi
 [[ ${#PASSWORD} -ge 8 ]] || die "Root password must be at least 8 characters."
