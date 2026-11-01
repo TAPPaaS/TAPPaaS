@@ -383,7 +383,7 @@ build_cicd() {
       echo -e "      Import its config in WireGuard: scp root@${node}:${peer} .   (it holds a private key: delete it on the node after)"
     fi
     echo -e "    It asks for the setup token. To read it, on the node (ssh root@${node}):"
-    echo -e "      ${BL}ssh -i /root/tappaas/tappaas-cicd.key tappaas@tappaas-cicd.mgmt.internal cat config/console-setup-token${CL}"
+    echo -e "      ${BL}ssh -i /root/tappaas/tappaas-cicd.key -o StrictHostKeyChecking=accept-new tappaas@tappaas-cicd.mgmt.internal cat config/console-setup-token${CL}"
   } > "${CONSOLE_NOTE}"
   rm -f "${peer}.tmp"
   [[ "${CHAINED}" == 1 ]] || cat "${CONSOLE_NOTE}"
