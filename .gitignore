@@ -32,3 +32,6 @@ src/foundation/tappaas-cicd/ui/web/e2e/out/
 src/foundation/tappaas-cicd/ui/web/e2e/test-results/
 src/foundation/tappaas-cicd/ui/web/e2e/baseline/*/*.png
 src/foundation/tappaas-cicd/ui/web/e2e/baseline/STAMP
+
+# npm installs are reproduced from package-lock.json (nix via npmDepsHash)
+src/foundation/tappaas-cicd/ui/web/node_modules/
