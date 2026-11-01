@@ -363,7 +363,7 @@ pxe_stage() {
   [[ ! -e pxe ]] || die "./pxe exists: move it away, this step makes and removes its own."
   mkdir -p pxe; chmod 700 pxe
   PXE_STAGED=1
-  info "staging the netboot files..."
+  info "staging the netboot files, about 5 minutes. Do not boot the target yet..."
   if command -v xorriso >/dev/null 2>&1 && command -v cpio >/dev/null 2>&1 && [[ "$(uname -s)" != Darwin ]]; then
     bash -c "$PXE_STAGE" stage "$iso"
   else
