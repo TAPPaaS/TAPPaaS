@@ -271,9 +271,10 @@ reconcile_repo_checkout() {
     cur="$(git -C "${path}" remote get-url origin 2>/dev/null || true)"
 
     # site.json is the declaration; a checkout parked on another branch is a
-    # config inconsistency. Say so — it is about to be corrected silently.
+    # config inconsistency. Say so — it is about to be corrected silently. Not when
+    # the operator asked for the move (REPO_SYNC_ASKED, repository modify --branch).
     on_branch="$(git -C "${path}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-    if [ -n "${on_branch}" ] && [ "${on_branch}" != "${branch}" ]; then
+    if [ -n "${on_branch}" ] && [ "${on_branch}" != "${branch}" ] && [ "${REPO_SYNC_ASKED:-0}" != 1 ]; then
         warn "  repo-sync: ${path} is on '${on_branch}' but site.json declares '${branch}' — switching"
     fi
 
@@ -357,7 +358,8 @@ reconcile_repo_checkout() {
     local rc=0
     # Ensure the target branch exists locally and tracks the (possibly new) origin.
     if git -C "${path}" show-ref --verify --quiet "refs/heads/${branch}"; then
-        git -C "${path}" checkout "${branch}" || { warn "  repo-sync: checkout ${branch} failed"; rc=1; }
+        # -q: git's "behind origin" is only true until the fast-forward below.
+        git -C "${path}" checkout -q "${branch}" || { warn "  repo-sync: checkout ${branch} failed"; rc=1; }
     else
         git -C "${path}" checkout -B "${branch}" "${target}" \
             || { warn "  repo-sync: checkout --track ${branch} failed"; rc=1; }

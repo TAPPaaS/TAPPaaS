@@ -891,12 +891,13 @@ cmd_modify() {
         info "  Checking out branch '${new_branch}'..."
         local allow_discard=0 rc=0
         if [[ "${force}" == "true" ]]; then allow_discard=1; fi
-        reconcile_repo_checkout "${current_path}" "${current_url}" "${new_branch}" "${allow_discard}" "${name}" || rc=$?
+        REPO_SYNC_ASKED=1 reconcile_repo_checkout "${current_path}" "${current_url}" "${new_branch}" "${allow_discard}" "${name}" || rc=$?
         if [[ ${rc} -eq 3 ]]; then
             die "Refused: the tip of '${new_branch}' is not a verified release (ADR-033, listed above). The checkout is unchanged."
         elif [[ ${rc} -ne 0 ]]; then
             die "Failed to switch ${current_path} to '${new_branch}'"
         fi
+        info "  ${GN}✓${CL} On branch '${new_branch}' at $(git -C "${current_path}" rev-parse --short HEAD), level with origin/${new_branch}"
 
         # Update config
         info "\n${BOLD}Step 3: Update configuration${CL}"
