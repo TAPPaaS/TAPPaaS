@@ -629,6 +629,13 @@ main() {
         drop_guest_build "${vmname}"
     fi
 
+    # ── Step 5d: The instance's end in the CMDB (ADR-040 D7) ─────────
+    # Here, not in `module-manager delete`: test teardowns and --reinstall call
+    # this script directly. While the config can still say what the instance
+    # was. The CMDB is a record: it never stops the delete.
+    module-manager report --end "${module}" --config-dir "${CONFIG_DIR}" >/dev/null 2>&1 \
+        || warn "  could not report the end of '${module}' to the CMDB"
+
     # ── Step 6: Archive (keep config) or Remove (delete config) ──────
     local config_orig="${CONFIG_DIR}/${module}.json.orig"
 

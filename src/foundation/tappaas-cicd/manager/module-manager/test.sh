@@ -523,6 +523,24 @@ else
     bad "delete: app module wrongly hit the foundation gate"
 fi
 
+# The end reaches the CMDB from the script itself, for a direct call too, while
+# the config can still say what the instance was (ADR-040 D7).
+printf '#!/usr/bin/env bash\necho "$* config=$([[ -f "%s/cfg/emod.json" ]] && echo yes || echo no)" >> "%s/mm.calls"\nexit 1\n' "${DWORK}" "${DWORK}" > "${DWORK}/sbin/module-manager"
+chmod +x "${DWORK}/sbin/module-manager"
+printf '%s\n' '{"stack":"ai","kind":"vm","vmname":"emod"}' > "${DWORK}/cfg/emod.json"
+del_e="$( PATH="${DWORK}/sbin:${PATH}" bash "$DSTUB" emod --force 2>&1 )"; del_e_rc=$?
+if [[ "$(cat "${DWORK}/mm.calls" 2>/dev/null)" == "report --end emod --config-dir ${DWORK}/cfg config=yes" ]]; then
+    ok "delete: a direct call reports the instance's end, before the config goes"
+else
+    bad "delete: no end reported: $(cat "${DWORK}/mm.calls" 2>/dev/null)"
+fi
+if [[ $del_e_rc -eq 0 && ! -e "${DWORK}/cfg/emod.json" ]] && echo "$del_e" | grep -q "could not report the end"; then
+    ok "delete: a CMDB that does not answer never stops the delete"
+else
+    bad "delete: a failed report stopped the delete (rc=${del_e_rc})"
+fi
+rm -f "${DWORK}/sbin/module-manager" "${DWORK}/mm.calls"
+
 # A machine (ADR-026) is only ever UNREGISTERED: its module's delete.sh is not
 # run. The satellite's delete.sh is a decommission (the OPNsense peer, tunnel and
 # edge rules go) — only `--decommission` may reach it (ADR-010 §8.4.5).

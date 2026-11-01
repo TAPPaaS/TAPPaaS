@@ -189,6 +189,34 @@ function spooled(cfg: string): Obj[] {
   check(end?.end === true && end?.attributes?.vmid === 200, "an archived instance ends, by its key");
 }
 
+// ── report --end: what delete-module.sh sends, while the config is there ──
+// A guest ends alone (its software with it, in the store); an application's
+// node stays, so the app and its services end by their key on that node.
+{
+  const cfg = fixture();
+  const saved = { ...process.env };
+  process.env.TAPPAAS_CMDB = "";
+  process.env.CMDB_SOCKET = join(cfg, "no.sock");
+  try {
+    const c = new FakeModuleClient();
+    capture(() => run(["report", "--end", "identity", "--config-dir", cfg], c));
+    capture(() => run(["report", "--end", "backup", "--config-dir", cfg], c));
+  } finally {
+    for (const k of ["TAPPAAS_CMDB", "CMDB_SOCKET"]) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  }
+  const [vm, app] = spooled(cfg);
+  for (const x of [vm, app]) check(cmdbProblems(x).length === 0, `the metamodel takes the ${x?.verb} end: ${cmdbProblems(x).join("; ")}`);
+  check(vm?.kind === "change" && vm?.verb === "delete identity", `a change with its verb (${vm?.verb})`);
+  check(vm?.objects?.length === 1 && vm.objects[0].class === "vm" && vm.objects[0].end === true && vm.objects[0].attributes?.vmid === 140, "a guest ends by its key");
+  const ends = (app?.objects ?? []).filter((o: Obj) => o.end === true);
+  check(ends.map((o: Obj) => `${o.class}/${o.name}`).sort().join(" ") === "app/backup service/backup:vm", `an application ends with its services (${ends.map((o: Obj) => `${o.class}/${o.name}`).join(" ")})`);
+  check(ends.every((o: Obj) => o.attributes?.onNode !== undefined), "…each by its key, the name on its node");
+  check(!(app?.objects ?? []).some((o: Obj) => o.class === "machine" && o.end === true), "its node stays");
+}
+
 // ── update carries what it applied to the guest ────────────────────────
 // The update leaves config/tappaas-cicd.json as it was and halves the guest's
 // memory: the change names the vm with the fields read back from its config,
