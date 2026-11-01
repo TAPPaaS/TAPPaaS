@@ -482,8 +482,13 @@ wait_for_node() {
 
 start_install() {
   local cmd
-  cmd="export LC_ALL=C.UTF-8; curl -fsSL '${INSTALL_REPO}${BRANCH}/src/foundation/install.sh' -o install.sh && chmod +x install.sh && ./install.sh '${INSTALL_REPO}' '${BRANCH}' --name '${SITE_CODE}'${ORG:+ --organization '${ORG}'} --domain '${DOMAIN}'"
+  # A fresh Proxmox has no tmux, and without it install.sh dies with this session.
+  # apt update fails on the enterprise repository the install has not replaced yet;
+  # Debian's own still serves tmux.
+  cmd="export LC_ALL=C.UTF-8; command -v tmux >/dev/null || { apt-get update -qq >/dev/null 2>&1; apt-get install -y -qq tmux >/dev/null 2>&1; }; curl -fsSL '${INSTALL_REPO}${BRANCH}/src/foundation/install.sh' -o install.sh && chmod +x install.sh && ./install.sh '${INSTALL_REPO}' '${BRANCH}' --name '${SITE_CODE}'${ORG:+ --organization '${ORG}'} --domain '${DOMAIN}'"
   info "starting the TAPPaaS install on ${NODE_IP}"
+  # A sleeping laptop would drop the session.
+  if command -v caffeinate >/dev/null 2>&1; then caffeinate -i -w $$ & fi
   node_ssh -t "root@${NODE_IP}" "$cmd" \
     || warn "the session ended: the install goes on in tmux. Back to it: ssh -i ${INSTALL_KEY} root@${NODE_IP} -t tmux attach -t tappaas-install"
 }
