@@ -113,7 +113,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 1 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 6 | 1 | 2 |
-| 4 | G4.6 Community module extension points | H | M | – | 4 | 1 |
+| 4 | ✅ G4.6 Community module extension points | H | M | – | 7 | – |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 29 | 2 | 5 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
@@ -334,7 +334,7 @@ The project's own machinery (CI runners, #415, moved to G7.1 with the Woodpecker
 | #486 | ADR-015 community-health files | L | L | |
 | #359 | legal/processor ADR | M | L | |
 
-### G4.6 Community module extension points — Ease H · Risk M · done for 2.4: 7 · open: 0
+### ✅ G4.6 Community module extension points — Ease H · Risk M · done for 2.4: 7
 
 What a Community module needs from the platform so it does not carry its own copy (from @AndreasJe's hosting module, 2026-10-28): one place for its secrets (#902), containers watched and logged like VMs (#901, #903), its own validated fields (#899) and its own alert rules (#904). The last two get an ADR each first.
 
