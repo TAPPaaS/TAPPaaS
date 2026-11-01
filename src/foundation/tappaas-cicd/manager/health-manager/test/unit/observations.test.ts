@@ -91,7 +91,7 @@ const days = (d: number): string => new Date(NOW.getTime() + d * 86_400_000).toI
   const lost = obj("dns-name", "c.x", { target: "10.0.0.99", public: false });
   const down = obj("dns-name", "d.x", { target: "10.0.0.6", public: false });
   const old = obj("dns-name", "e.x", { target: "10.0.0.7", public: false });
-  const pub = obj("dns-name", "f.example", { target: "2a13::1", public: true });
+  const pub = obj("dns-name", "f.example", { target: "2001:db8::1", public: true });
   const cname = obj("dns-name", "g.x", { target: "n1.mgmt.internal", public: false });
   const noCname = obj("dns-name", "h.x", { target: "nope.mgmt.internal", public: false });
   const r = run([addr, m, none, fine, lost, down, old, pub, cname, noCname], [], [obj("vm", "gone", { addresses: ["10.0.0.7"] })]);

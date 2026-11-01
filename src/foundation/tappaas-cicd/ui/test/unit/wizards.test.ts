@@ -103,7 +103,7 @@ check(satelliteProblems({ ...sat, country: "Finland" }).country !== undefined, "
 const idAdd: ManifestVerb = { ...mmAdd, verb: "<kind> add", keys: [["user", "add"]], positionals: [{ name: "name", optional: false, repeatable: false }, { name: "field", optional: true, repeatable: false }], options: [{ flag: "--force", takesValue: false, arg: null, choices: null, repeatable: false, description: "" }, { flag: "--no-reconcile", takesValue: false, arg: null, choices: null, repeatable: false, description: "" }], open: true };
 const idRec: ManifestVerb = { ...mmAdd, verb: "reconcile", keys: [["reconcile"]], positionals: [], options: [{ flag: "--apply", takesValue: false, arg: null, choices: null, repeatable: false, description: "" }], open: false, preview: { kind: "apply-flag", flag: "--apply" } };
 const user = identitySpecs("user", "add");
-const fields = ["--displayName", "Ann Rossen", "--email", "ann@rossen.dk", "--state", "active", "--groups", "users", "--roles", "user"];
+const fields = ["--displayName", "Ann Rossen", "--email", "ann@example.org", "--state", "active", "--groups", "users", "--roles", "user"];
 check(JSON.stringify(buildArgv(user.change, idAdd, { ...user.change.initial, "@name": "ann", "@fields": fields })) === JSON.stringify(["identity-manager", "user", "add", "ann", "--no-reconcile", ...fields]), "user add <name> --no-reconcile, then the field form's flags");
 check(JSON.stringify(buildArgv(user.reconcile, idRec, {})) === JSON.stringify(["identity-manager", "reconcile"]), "…then reconcile: its preview is the plan against Authentik");
 check(JSON.stringify(identitySpecs("group", "modify", "users").change.fixed) === '["users"]', "a modify names its object");

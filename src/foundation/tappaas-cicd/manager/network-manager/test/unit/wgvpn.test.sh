@@ -60,12 +60,12 @@ echo "== wgvpn: the client config (#856) =="
 av_first_host 10.6.0.0 >/dev/null 2>&1 && bad "a network without a prefix length was accepted" || ok "a network without a prefix length is refused"
 
 # ── a site with IPv6 (hrossen) ──
-cfg="$(av_client_config 10.255.1.2/32 80.248.138.190:51821 2>"${TMP}/err")"
+cfg="$(av_client_config 10.255.1.2/32 203.0.113.190:51821 2>"${TMP}/err")"
 [[ "$(line DNS "${cfg}")" == 10.0.0.1 ]] && ok "DNS = the mgmt gateway (10.0.0.1)" || bad "DNS line: '$(line DNS "${cfg}")'"
-want="10.0.0.0/24, 10.6.0.1/32, 2a13:e747:a210:8261:98:34ff:fe69:901a/128"
+want="10.0.0.0/24, 10.6.0.1/32, 2001:db8:3:8261:98:34ff:fe69:901a/128"
 [[ "$(line AllowedIPs "${cfg}")" == "${want}" ]] && ok "AllowedIPs = mgmt, the DMZ gateway /32 and its global IPv6 /128" \
     || bad "AllowedIPs: '$(line AllowedIPs "${cfg}")' (want '${want}')"
-[[ "$(line Address "${cfg}")" == 10.255.1.2/32 && "$(line Endpoint "${cfg}")" == 80.248.138.190:51821 ]] \
+[[ "$(line Address "${cfg}")" == 10.255.1.2/32 && "$(line Endpoint "${cfg}")" == 203.0.113.190:51821 ]] \
     && ok "the peer's own Address and Endpoint are kept" || bad "Address/Endpoint changed"
 [[ "$(line PublicKey "${cfg}")" == "Ov1AdZIdxOnGZa3FyZ4HpUAqfb6lP+A1qBd2nzWcMQ0=" ]] && ok "PublicKey is the admin server's" || bad "PublicKey"
 grep -q '^# tappaas-admin client config v2' <<<"${cfg}" && ok "the config says its version (v2)" || bad "no version line"

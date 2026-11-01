@@ -18,12 +18,12 @@ function check(cond: boolean, name: string): void {
 const NEW = "fe80::47:ff:fe00:168";
 const OLD = "fe80::ff:fe91:2291";
 const HEALTHY: Wan6 = {
-  wanif: "vtnet1", recorded: NEW, route: NEW, gateway: NEW, prefix: "2a13:e747:a210:4500::/56",
-  address: "2a13:e740:292:978c::545", rtsold: true, routerAnswers: true,
+  wanif: "vtnet1", recorded: NEW, route: NEW, gateway: NEW, prefix: "2001:db8:3:4500::/56",
+  address: "2001:db8:2:978c::545", rtsold: true, routerAnswers: true,
 };
 const STALE: Wan6 = {
-  wanif: "vtnet1", recorded: OLD, route: "", gateway: OLD, prefix: "2a13:e747:a210:8200::/56",
-  address: "2a13:e740:292:978c::aba", rtsold: true, routerAnswers: false,
+  wanif: "vtnet1", recorded: OLD, route: "", gateway: OLD, prefix: "2001:db8:3:8200::/56",
+  address: "2001:db8:2:978c::aba", rtsold: true, routerAnswers: false,
 };
 
 // ── off ──

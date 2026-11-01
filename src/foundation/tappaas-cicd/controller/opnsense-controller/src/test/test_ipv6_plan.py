@@ -30,10 +30,10 @@ ZONES = {
 }
 IFACES = {"mgmt": "lan", "rossen": "opt1", "home": "opt8", "iotCams": "opt5", "guest": "opt9"}
 ZONE_IFACES = {"opt1", "opt8", "opt5", "opt9"}
-DELEGATED = "2a13:e747:a210:8200::/56"
+DELEGATED = "2001:db8:3:8200::/56"
 STATIC_SITE = {"ipv6": True, "network": {"wan": {"ipv6": {
-    "mode": "static", "address": "2a13:e740:2e4:56c0::2/64",
-    "gateway": "2a13:e740:2e4:56c0::1", "prefix": "2a13:e747:6648::/48"}}}}
+    "mode": "static", "address": "2001:db8:4:56c0::2/64",
+    "gateway": "2001:db8:4:56c0::1", "prefix": "2001:db8:5::/48"}}}}
 
 
 def _v6(iface):
@@ -44,11 +44,11 @@ def _v6(iface):
 
 class TestAddressing(unittest.TestCase):
     def test_zone_network_in_a_56(self):
-        self.assertEqual(str(zone_network(DELEGATED, 0x31)), "2a13:e747:a210:8231::/64")
-        self.assertEqual(str(zone_network(DELEGATED, 0x10)), "2a13:e747:a210:8210::/64")
+        self.assertEqual(str(zone_network(DELEGATED, 0x31)), "2001:db8:3:8231::/64")
+        self.assertEqual(str(zone_network(DELEGATED, 0x10)), "2001:db8:3:8210::/64")
 
     def test_zone_network_in_a_48_uses_its_first_56(self):
-        self.assertEqual(str(zone_network("2a13:e747:6648::/48", 0x10)), "2a13:e747:6648:10::/64")
+        self.assertEqual(str(zone_network("2001:db8:5::/48", 0x10)), "2001:db8:5:10::/64")
 
     def test_the_wan_defaults_to_dynamic_56(self):
         w = wan_v6({"ipv6": True})
@@ -71,10 +71,10 @@ class TestDesired(unittest.TestCase):
     def test_static_puts_the_firewall_on_1_of_each_zone(self):
         d = desired_state(STATIC_SITE, ZONES, IFACES, None)
         self.assertEqual(dict(d.zones["opt8"].config),
-                         {"ipaddrv6": "2a13:e747:6648:31::1", "subnetv6": "64"})
+                         {"ipaddrv6": "2001:db8:5:31::1", "subnetv6": "64"})
 
     def test_a_prefix_smaller_than_56_gives_no_zone_ipv6(self):
-        d = desired_state({"ipv6": True}, ZONES, IFACES, "2a13:e747:a210:8200::/60")
+        d = desired_state({"ipv6": True}, ZONES, IFACES, "2001:db8:3:8200::/60")
         self.assertEqual(d.zones, {})
         self.assertTrue(any("smaller than /56" in p for p in d.problems))
 
@@ -175,10 +175,10 @@ class TestPlan(unittest.TestCase):
     def test_static_wan_sets_address_and_gateway(self):
         d = desired_state(STATIC_SITE, ZONES, IFACES, None)
         wan = next(a for a in plan(d, self._cur(), ZONE_IFACES, []) if a.kind == "wan")
-        self.assertEqual(wan.detail["set"]["ipaddrv6"], "2a13:e740:2e4:56c0::2")
+        self.assertEqual(wan.detail["set"]["ipaddrv6"], "2001:db8:4:56c0::2")
         self.assertEqual(wan.detail["set"]["subnetv6"], "64")
         self.assertEqual(wan.detail["set"]["gatewayv6"], STATIC_GATEWAY_NAME)
-        self.assertEqual(wan.detail["gateway"], "2a13:e740:2e4:56c0::1")
+        self.assertEqual(wan.detail["gateway"], "2001:db8:4:56c0::1")
 
     def test_interfaces_outside_the_zones_are_never_touched(self):
         d = desired_state({"ipv6": False}, ZONES, IFACES, DELEGATED)
