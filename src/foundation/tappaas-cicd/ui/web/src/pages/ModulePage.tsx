@@ -155,9 +155,9 @@ function HealthSection({ d }: { d: ModuleDetail }) {
       <Section title="Health — the conditions of this module's objects" aside={<Link to="/health">the Health view</Link>}>
         {c.issues.length === 0 ? <p className="muted">Every condition on its {c.objects} object{c.objects === 1 ? "" : "s"} is ok.</p> : null}
         <ul className="attention">
-          {c.issues.map((i) => (
-            <li key={`${i.object}-${i.type}`} className={`att att-${levelOf(i.status)}`}>
-              <Tag level={levelOf(i.status)} />
+          {[...c.issues].sort((a, b) => Number(!!a.acknowledged) - Number(!!b.acknowledged)).map((i) => (
+            <li key={`${i.object}-${i.type}`} className={`att att-${levelOf(i.status)}${i.acknowledged ? " att-ack" : ""}`}>
+              {i.acknowledged ? <span className="tag tag-ack" title="acknowledged">{levelOf(i.status).toUpperCase()}</span> : <Tag level={levelOf(i.status)} />}
               <span className="att-gate">{i.type}</span>
               <span className="att-text"><b>{i.label}</b> {i.message ?? i.reason ?? ""}{i.since ? <span className="muted small"> · since {when(i.since)}</span> : null}{i.acknowledged ? <span className="muted small"> · acknowledged</span> : null}{i.maintenance ? <span className="muted small"> · maintenance</span> : null}</span>
               <span className="att-where"><Link to={`/health?select=${encodeURIComponent(i.object)}`} className="jump jump-in">Health</Link></span>

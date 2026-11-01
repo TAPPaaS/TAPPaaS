@@ -39,6 +39,7 @@ Each status is a strong colour for marks (a dot, a left border), a `-bg` for tin
 | warn | needs attention, running | `--warn` | `--warn-bg` | `--warn-ink` |
 | fail | broken, refused | `--fail` | `--fail-bg` | `--fail-ink` |
 | skip | unknown, not checked | `--skip` | none | none |
+| ack | acknowledged: silenced, still shown, last in its list | `--ack` | `--ack-bg` | `--ack-ink` |
 | info | neutral note, selection tint | `--accent` | `--info-bg` | `--info-ink` |
 
 ### Supporting colours

@@ -67,7 +67,7 @@ export function Link({ to, children, className }: { to: string; children: ReactN
 }
 
 // ── status ────────────────────────────────────────────────────────────
-export type Level = "fail" | "warn" | "pass" | "skip" | "unknown" | "info";
+export type Level = "fail" | "warn" | "pass" | "skip" | "unknown" | "info" | "ack"; // ack: acknowledged, yellow
 
 export function levelOf(s: string | null | undefined): Level {
   switch (s) {

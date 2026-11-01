@@ -127,10 +127,10 @@ function Row({ n, depth, trail, m, selected, select, filters }: { n: TreeNode; d
 function RootList({ roots, selected, choose }: { roots: HealthRoot[]; selected: string | null; choose: (id: string) => void }) {
   return (
     <ul className="health-roots">
-      {roots.map((r) => (
+      {[...roots].sort((a, b) => Number(a.acknowledged) - Number(b.acknowledged)).map((r) => (
         <li key={r.id}>
           <button className={`hroot${selected === r.id ? " hroot-on" : ""}${r.acknowledged ? " hroot-ack" : ""}`} onClick={() => choose(r.id)}>
-            <span className="hroot-head"><Dot level={LEVEL[r.status]} title={r.status} /> <b>{r.label}</b> <span className="muted small">{r.class}</span></span>
+            <span className="hroot-head"><Dot level={r.acknowledged ? "ack" : LEVEL[r.status]} title={r.acknowledged ? `${r.status}, acknowledged` : r.status} /> <b>{r.label}</b> <span className="muted small">{r.class}</span></span>
             <span className="small">{r.message ?? r.reason ?? r.type}</span>
             <span className="muted small">
               {r.impactedCount} impacted{r.environments.length ? ` · ${r.environments.join(", ")}` : ""}{r.since ? ` · ${when(r.since)}` : ""}{r.acknowledged ? " · acknowledged" : ""}{r.flapping ? " · flapping" : ""}

@@ -16,6 +16,8 @@
   --pass-bg: #ebf7ee;
   --warn-bg: #fdf3e2;
   --fail-bg: #fdecec;
+  --ack: #ca8a04;
+  --ack-bg: #fefce8;
   --info-bg: #eef3fd;
   /* The 4 px spacing scale, the radii */
   --sp-4: 4px;
@@ -85,6 +87,7 @@
   --pass-ink: #1e6b30;
   --warn-ink: #92400e;
   --fail-ink: #a12a2a;
+  --ack-ink: #713f12;
   --info-ink: #2d4f9a;
   /* Drawing palette: data, not chrome (zones, cables, ports, racks, charts) */
   --blue-50: #eff6ff;
@@ -229,6 +232,7 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 .dot-pass { background: var(--pass); }
 .dot-warn { background: var(--warn); }
 .dot-fail { background: var(--fail); }
+.dot-ack { background: var(--ack); }
 .badge { display: inline-block; font-size: 11.5px; padding: 1px var(--sp-8); border-radius: 10px; background: var(--chip); color: var(--gray-700); margin-right: var(--sp-4); white-space: nowrap; }
 .badge-pass { background: var(--pass-bg); color: var(--pass-ink); }
 .badge-warn { background: var(--warn-bg); color: var(--warn-ink); }
@@ -238,6 +242,7 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 .tag-pass { background: var(--pass); }
 .tag-warn { background: var(--warn); }
 .tag-fail { background: var(--fail); }
+.tag-ack { background: var(--ack); }
 
 /* overview */
 .strip { display: grid; grid-template-columns: repeat(6, minmax(150px, 1fr)); gap: 10px; margin: 10px 0 var(--sp-4); }
@@ -252,6 +257,7 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 .attention { list-style: none; margin: 0; padding: 0; }
 .att { display: grid; grid-template-columns: 44px 130px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: var(--sp-8) 6px; border-top: 1px solid var(--line); }
 .att:first-child { border-top: 0; }
+.att-ack { background: var(--ack-bg); } /* acknowledged: yellow, and last in its list */
 /* A narrower window (a 14-inch laptop): the text and the links each get a
    row of their own, instead of the text squeezed beside the links. */
 @media (max-width: var(--bp-xl)) {
@@ -753,7 +759,7 @@ span.ht-caret { cursor: default; }
 .hroot { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; font: inherit; background: var(--white); border: 1px solid var(--line); border-radius: var(--radius-control); padding: 7px 9px; margin-bottom: 6px; cursor: pointer; }
 .hroot:hover { border-color: var(--slate-400); }
 .hroot-on { outline: 2px solid var(--accent); outline-offset: 1px; }
-.hroot-ack { opacity: .7; }
+.hroot-ack { background: var(--ack-bg); border-color: var(--ack); }
 .hroot-head { display: flex; align-items: center; gap: 6px; }
 .hlink { font: inherit; background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; }
 .hlink:hover { text-decoration: underline; }
@@ -764,7 +770,7 @@ span.ht-caret { cursor: default; }
 .gcard.hc-warning, .hl.hc-warning { background: var(--warn-bg); border-color: var(--warn); border-left: 4px solid var(--warn); }
 .gcard.hc-unknown, .hl.hc-unknown { background: var(--gray-100); border-color: var(--line-card); border-left: 4px solid var(--skip); }
 .gcard.hc-ok, .hl.hc-ok { background: var(--white); border-left: 4px solid var(--pass); }
-.gcard.hc-ack, .hl.hc-ack { background-image: repeating-linear-gradient(45deg, var(--slate-500-a16) 0 6px, transparent 6px 12px); }
+.gcard.hc-ack, .hl.hc-ack { background: var(--ack-bg); border-color: var(--ack); border-left-color: var(--ack); } /* acknowledged: yellow, whatever its status */
 .gcard.hc-maint, .hl.hc-maint { background-image: radial-gradient(var(--slate-500-a32) 1.2px, transparent 1.3px); background-size: 8px 8px; border-style: dotted; }
 .gcard.hc-dim { opacity: .28; }
 .gcard.hc-root { box-shadow: 0 0 0 3px var(--fail-a42); }

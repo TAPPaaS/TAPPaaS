@@ -31,11 +31,15 @@ function Pick({ id, label, status, pick }: { id: string; label: string; status?:
   );
 }
 
+// The order of a list of conditions: what needs a look, then what is
+// acknowledged (yellow), then what is ok.
+const conditionOrder = (c: { status: string; acknowledged?: boolean }): number => (c.status === "ok" ? 2 : c.acknowledged ? 1 : 0);
+
 function ConditionRow({ o, c, canAck, canUnack }: { o: HealthObject; c: HealthCondition; canAck: boolean; canUnack: boolean }) {
   const silenced = c.acknowledged || c.maintenance;
   return (
-    <li className={`att att-${LEVEL[c.status]}`}>
-      <Tag level={c.status} />
+    <li className={`att att-${LEVEL[c.status]}${c.acknowledged ? " att-ack" : ""}`}>
+      {c.acknowledged ? <span className="tag tag-ack" title="acknowledged">{c.status.toUpperCase()}</span> : <Tag level={c.status} />}
       <span className="att-gate">{c.type}</span>
       <span className="att-text">
         {c.message ?? c.reason ?? c.status}
@@ -49,7 +53,7 @@ function ConditionRow({ o, c, canAck, canUnack }: { o: HealthObject; c: HealthCo
         {c.window ? <span className="muted small"> · maintenance{c.window.until ? ` until ${when(c.window.until)}` : ""}{c.window.note ? `: ${c.window.note}` : ""}</span> : null}
       </span>
       {c.status !== "ok" && !c.derived && !silenced ? (
-        <OperateButton label="Ack…" disabled={!canAck} hint={canAck ? undefined : "health-manager on this site has no ack verb"} title={`Acknowledge ${c.type} on ${o.label}`} steps={[hm(`health-manager ack ${o.label} --type ${c.type}`, "ack", o.id, { initial: { "--type": c.type }, hide: ["--type"], kinds: { "--until": "future-date" }, placeholders: { "--note": WHY, "--until": "when the condition recovers" }, labels: { "--note": "note", "--until": "until", "--sticky": "keep it when the status changes (a warning turning critical); it still ends when the condition recovers. Without it, the next status change ends it." }, descriptions: { "--note": "Required.", "--until": UNTIL, "--sticky": "keep it through status changes, until the condition is ok; without this the next status change ends it" }, note: "The condition keeps its status but stops counting for validate, mails and the Overview. On a root cause it covers the symptoms too." })]} />
+        <OperateButton label="Ack…" disabled={!canAck} hint={canAck ? undefined : "health-manager on this site has no ack verb"} title={`Acknowledge ${c.type} on ${o.label}`} steps={[hm(`health-manager ack ${o.label} --type ${c.type}`, "ack", o.id, { initial: { "--type": c.type }, hide: ["--type"], kinds: { "--until": "future-date" }, placeholders: { "--note": WHY, "--until": "when the condition recovers" }, labels: { "--note": "note", "--until": "until", "--sticky": "keep it when the status changes (a warning turning critical); it still ends when the condition recovers. Without it, the next status change ends it." }, descriptions: { "--note": "Required.", "--until": UNTIL }, note: "The condition keeps its status but stops counting for validate, mails and the Overview. On a root cause it covers the symptoms too." })]} />
       ) : null}
       {c.ack ? <OperateButton label="Unack…" disabled={!canUnack} hint={canUnack ? undefined : "health-manager on this site has no unack verb"} title={`Remove the acknowledgement of ${c.type} on ${o.label}`} steps={[hm(`health-manager unack ${o.label} --type ${c.type}`, "unack", o.id, { initial: { "--type": c.type }, hide: ["--type"] })]} /> : null}
     </li>
@@ -98,7 +102,7 @@ export function HealthPanel({ id, close, pick, showInTree }: { id: string; close
           <Section title="Conditions">
             {o.conditions.length === 0 ? <p className="muted">No condition: nothing has assessed this object.</p> : null}
             <ul className="attention">
-              {[...o.conditions].sort((a, b) => Number(a.status === "ok") - Number(b.status === "ok")).map((c) => (
+              {[...o.conditions].sort((a, b) => conditionOrder(a) - conditionOrder(b)).map((c) => (
                 <ConditionRow key={c.type} o={o} c={c} canAck={!!ack} canUnack={!!unack} />
               ))}
             </ul>

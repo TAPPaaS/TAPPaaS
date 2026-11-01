@@ -328,7 +328,7 @@ export function Health() {
       </div>
       <div className="legend">
         <span className="hl hc-critical">critical</span><span className="hl hc-warning">warning</span><span className="hl hc-unknown">unknown</span><span className="hl hc-ok">ok</span>
-        <span className="hl hc-critical hc-ack">acknowledged</span><span className="hl hc-warning hc-maint">maintenance</span>
+        <span className="hl hc-ack">acknowledged</span><span className="hl hc-warning hc-maint">maintenance</span>
         <span className="muted">↯ flapping · a ring: a root cause · + one more hop · − fold · a pill: a relation type · a number in the tree: objects that need a look</span>
       </div>
     </div>
