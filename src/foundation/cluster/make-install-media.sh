@@ -377,15 +377,19 @@ pxe_stage() {
 PXE_RUN="" PXE_STAGED="" SCAN_PID=""
 pxe_stop_dns() {
   [[ -n "$PXE_RUN" && -f "${PXE_RUN}/dnsmasq.pid" ]] || return 0
-  sudo kill "$(cat "${PXE_RUN}/dnsmasq.pid")" 2>/dev/null || true
-  sudo rm -f "${PXE_RUN}/dnsmasq.pid"
+  local i
+  : >"${PXE_RUN}/stop"
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    [[ -f "${PXE_RUN}/dnsmasq.pid" ]] || return 0
+    sleep 0.5
+  done
 }
 PXE_HTTP=""
 pxe_stop() {
   pxe_stop_dns
   [[ -z "$PXE_HTTP" ]] || kill "$PXE_HTTP" 2>/dev/null || true
   PXE_HTTP=""
-  [[ -z "$PXE_RUN" ]] || sudo rm -rf "$PXE_RUN"
+  [[ -z "$PXE_RUN" ]] || rm -rf "$PXE_RUN"
   PXE_RUN=""
   # The initrd carries the root password.
   [[ -z "$PXE_STAGED" ]] || rm -rf pxe
@@ -436,7 +440,12 @@ EOF
   PXE_HTTP=$!
   info "starting the network boot service..."
   sudo_ask "start it"
-  sudo "$dns" --conf-file="${PXE_RUN}/dnsmasq.conf" || die "dnsmasq did not start: see ${PXE_RUN}/dnsmasq.log"
+  # The wait for the node outlasts sudo's few minutes, so a root helper ends dnsmasq:
+  # asked to by the stop file, or when this script is gone. No second password.
+  sudo sh -c '"$1" --conf-file="$2/dnsmasq.conf" || exit 1
+    ( while [ ! -e "$2/stop" ] && kill -0 "$3" 2>/dev/null; do sleep 1; done
+      kill "$(cat "$2/dnsmasq.pid")"; rm -f "$2/dnsmasq.pid" ) </dev/null >/dev/null 2>&1 &' \
+    sh "$dns" "$PXE_RUN" "$$" || die "dnsmasq did not start: see ${PXE_RUN}/dnsmasq.log"
   [[ "$(uname -s)" != Darwin ]] || info "  macOS firewall: allow dnsmasq and python3 when it asks, or the target gets no answer."
   warn "Until the target has fetched it, anyone on this network can fetch the installer, and the root password in it."
   action "Network boot is on. Pick Network / PXE (IPv4) in the target's one-time UEFI boot menu."
