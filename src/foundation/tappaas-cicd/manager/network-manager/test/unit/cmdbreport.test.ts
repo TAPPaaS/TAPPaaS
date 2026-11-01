@@ -11,7 +11,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { CmdbObject, CmdbReport } from "../../../../lib/ts/src/cmdb";
 import { pruneRefused } from "../../../../lib/ts/src/cmdb-reporter";
-import { DiscoverDoc, buildNetworkDiscover, buildNetworkReport, collectDiscover, collectNetSources, routeModule } from "../../src/cmdbreport";
+import { DiscoverDoc, NetSources, buildNetworkDiscover, buildNetworkReport, collectDiscover, collectNetSources, endUnseen, routeModule } from "../../src/cmdbreport";
 import { loadZones } from "../../src/zones";
 
 let passed = 0;
@@ -121,6 +121,47 @@ console.log("== report --discover: the firewall attribute is the same on every p
 }
 
 console.log("== delivery: a refusal drops what it names ==");
+console.log("== network-manager report: ends what the sources stopped showing ==");
+{
+  const live = [
+    { class: "dns-name", name: "tappaas1.mgmt.internal", attributes: { public: false } }, // still a host entry
+    { class: "dns-name", name: "gone.mgmt.internal", attributes: { public: false } },
+    { class: "dns-name", name: "gone.example.org", attributes: { public: true } },
+    { class: "dns-name", name: "override.example.org", attributes: { fqdn: "override.example.org" } }, // no `public`: discover's
+    { class: "dns-name", name: "kept.mgmt.internal", recorded: true, attributes: { public: false } },
+    { class: "address", name: "10.0.0.20", attributes: { ip: "10.0.0.20", reservation: "aa:bb:cc:00:00:20" } }, // still reserved
+    { class: "address", name: "10.0.0.50", attributes: { ip: "10.0.0.50", leaseUntil: "2026-01-01T00:00:00.000Z" } }, // still leased
+    { class: "address", name: "10.0.0.91", attributes: { ip: "10.0.0.91", reservation: "aa:bb:cc:00:00:91" } },
+    { class: "address", name: "10.0.0.92", attributes: { ip: "10.0.0.92", leaseUntil: "2026-01-01T00:00:00.000Z" } },
+    { class: "address", name: "10.0.0.93", attributes: { ip: "10.0.0.93" } }, // a host entry without a MAC
+    { class: "address", name: "10.0.0.94", attributes: { ip: "10.0.0.94", reservation: "aa:bb:cc:00:00:94", leaseUntil: "2026-01-01T00:00:00.000Z" } },
+    { class: "address", name: "10.0.0.95", attributes: {} }, // nothing of this report's
+  ];
+  const query = (q: { class?: string }) => live.filter((o) => o.class === q.class);
+  const ended = (src: NetSources): string[] => {
+    const b = buildNetworkReport(src);
+    endUnseen(b, src, query, {});
+    return b.report().objects!.filter((o) => o.end).map((o) => `${o.class}:${o.name}`).sort();
+  };
+  const hostNames = ["dns-name:gone.mgmt.internal"];
+  const leaseOnly = ["address:10.0.0.92"];
+  check(
+    JSON.stringify(ended(s)) === JSON.stringify(["address:10.0.0.91", "address:10.0.0.92", "address:10.0.0.93", "address:10.0.0.94", "dns-name:gone.example.org", ...hostNames]),
+    "every read answered: what is gone is ended, and only that",
+  );
+  check(!ended(s).some((n) => /tappaas1|10\.0\.0\.20|10\.0\.0\.50/.test(n)), "nothing the batch has is ended");
+  check(!ended(s).some((n) => /override|kept|10\.0\.0\.95/.test(n)), "no `public`, no `ip` or recorded by an operator: not ended");
+  check(JSON.stringify(ended({ ...s, hosts: null })) === JSON.stringify([...leaseOnly, "dns-name:gone.example.org"]), "no host read: nothing host-derived ends, a lease's address still does");
+  check(JSON.stringify(ended({ ...s, leases: null })) === JSON.stringify(["address:10.0.0.91", "dns-name:gone.example.org", ...hostNames]), "no lease read: a reservation's address and the names end, what a lease may hold does not");
+  check(JSON.stringify(ended({ ...s, caddy: null })).includes("gone.example.org") === false, "no Caddy read: no public name ends");
+  const b = buildNetworkReport(s);
+  const before = b.objects.length;
+  endUnseen(b, s, () => { throw new Error("cmdb-controller is not running"); }, {});
+  check(b.objects.length === before, "a CMDB that cannot be read ends nothing and leaves the batch as it was");
+  endUnseen(b, s, query, { TAPPAAS_CMDB: "off" });
+  check(b.objects.length === before, "TAPPAAS_CMDB=off does not read it");
+}
+
 const refused: CmdbReport = {
   source: "t",
   objects: [{ ref: "a", class: "zone", name: "a" }, { ref: "b", class: "address", name: "b", attributes: { x: { ref: "a" } } }, { ref: "c", class: "zone", name: "c" }],
@@ -155,6 +196,7 @@ if (MAIN) {
     check(rep.status === 0 && doc !== null, "report --json exits 0 with JSON on stdout when the firewall does not answer");
     check(doc !== null && doc.objects!.filter((o) => o.class === "zone").length === 3 && !doc.objects!.some((o) => o.class === "address"), "…the zones, and nothing of the firewall's");
     check(/dns-manager leases.*left out/.test(String(rep.stderr)), "…and names what it left out on stderr");
+    check(String(rep.stderr).split("\n").filter((l) => /nothing ended/.test(l)).length === 1, "…and says on one line that an unreadable CMDB ended nothing");
     const disc = nm("report", "--json", "--discover");
     check(disc.status === 0 && Array.isArray(JSON.parse(String(disc.stdout))), "report --json --discover prints an array, the plain report only when the firewall does not answer");
     const en = nm("enable", "guest");

@@ -85,7 +85,7 @@ import { HealthDoc, Topology, buildTopology, collectSources, renderTopology } fr
 import { diffTopology, readTopologyFromCmdb, renderDiff } from "./topology-cmdb";
 import { stream } from "../../../lib/ts/src/exec";
 import { CmdbBatch, printOrSend, printOrSendAll, reportChange, sendReport } from "../../../lib/ts/src/cmdb-reporter";
-import { SOURCE as CMDB_SOURCE, buildNetworkDiscover, buildNetworkReport, collectDiscover, collectNetSources, putPeer, putZone } from "./cmdbreport";
+import { SOURCE as CMDB_SOURCE, buildNetworkDiscover, buildNetworkReport, collectDiscover, collectNetSources, endUnseen, putPeer, putZone } from "./cmdbreport";
 
 // The admin VPN's bash tool, linked onto PATH by install.sh (overridable for tests).
 const WGVPN_BIN = process.env.NM_WGVPN_BIN ?? "network-manager-wgvpn";
@@ -1538,6 +1538,7 @@ function cmdReport(opts: Opts): number {
   const s = collectNetSources(zones, opts.configDir);
   for (const e of s.errors) process.stderr.write(`[Warning] report: ${e.source}: ${e.error} — left out\n`);
   const plain = buildNetworkReport(s);
+  endUnseen(plain, s);
   if (!opts.discover) return printOrSend(plain, opts.json);
   const d = collectDiscover();
   if (d.error) process.stderr.write(`[Warning] report: opnsense-firewall discover: ${d.error} — left out\n`);

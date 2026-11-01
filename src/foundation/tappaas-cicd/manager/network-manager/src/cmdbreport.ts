@@ -8,6 +8,7 @@
 
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
+import { CmdbQuery, cmdbQuery } from "../../../lib/ts/src/cmdb";
 import { CmdbBatch, ipv4In, ipv4Offset } from "../../../lib/ts/src/cmdb-reporter";
 import { ExecResult, captureResult } from "../../../lib/ts/src/exec";
 import { zoneEnvironments } from "./serves";
@@ -215,6 +216,52 @@ export function buildNetworkReport(s: NetSources): CmdbBatch {
   if (s.caddy) putRoutes(b, s, s.caddy);
   for (const p of s.peers ?? []) putPeer(b, p);
   return b;
+}
+
+/** Whether every source that can have written this live object answered. A
+ *  report writes only what it sees and the CMDB's expiry never ends a CI, so
+ *  endUnseen ends what the sources stopped showing, and a source that did not
+ *  answer must end nothing of its kind. An internal dns-name is a host entry's,
+ *  a public one Caddy's. An address with a reservation is a host entry's, with
+ *  only a leaseUntil a lease's; with both, or neither (a host entry without a
+ *  MAC, a lease without an expiry), it can be either's and needs both reads.
+ *  What this report does not write (no `public`, no `ip`) or an operator
+ *  recorded is not ended. */
+function sourcesAnswered(s: NetSources, o: Record<string, unknown>): boolean {
+  if (o.recorded === true) return false;
+  const a = (o.attributes ?? {}) as Record<string, unknown>;
+  if (o.class === "dns-name") {
+    if (a.public === false) return s.hosts !== null;
+    return a.public === true && s.caddy !== null;
+  }
+  if (typeof a.ip !== "string") return false;
+  const reserved = typeof a.reservation === "string";
+  const leased = typeof a.leaseUntil === "string";
+  return (s.hosts !== null || (leased && !reserved)) && (s.leases !== null || (reserved && !leased));
+}
+
+/** End the live dns-names and addresses the batch no longer has. Only this
+ *  report writes those two classes. A CMDB that cannot be read ends nothing and
+ *  the report goes out as it is; the next run ends what this one could not. */
+export function endUnseen(
+  b: CmdbBatch,
+  s: NetSources,
+  query: (q: CmdbQuery) => Record<string, unknown>[] = cmdbQuery,
+  env: Record<string, string | undefined> = process.env,
+): void {
+  if ((env.TAPPAAS_CMDB ?? "").toLowerCase() === "off") return;
+  let live: Record<string, unknown>[];
+  try {
+    live = ["dns-name", "address"].flatMap((c) => query({ class: c, includeEnded: false }));
+  } catch (e) {
+    process.stderr.write(`[Warning] report: the CMDB could not be read, nothing ended: ${(e as Error).message.split("\n")[0]}\n`);
+    return;
+  }
+  for (const o of live) {
+    const cls = String(o.class);
+    const name = String(o.name);
+    if (!b.has(`${cls}:${name}`) && sourcesAnswered(s, o)) b.end(cls, name);
+  }
 }
 
 // ── report --discover (ADR-040 D15) ───────────────────────────────────

@@ -474,6 +474,17 @@ A source that does not answer is named on stderr and its part left out. A
 reference the CMDB cannot resolve (an environment or service nobody has
 reported yet) is dropped from the batch and the rest sent.
 
+A report writes only what it sees and the CMDB's expiry never ends a CI, so the
+report also ends the live `dns-name` and `address` objects its sources no longer
+show (`--json` prints those with `end: true`). Only this report writes the two
+classes. A source that did not answer ends nothing of its kind: an internal name
+needs the host entries, a public name the Caddy read, an address with a
+reservation the host entries, one with only a `leaseUntil` the leases, and one
+with both or neither (a host entry without a MAC is the usual case) both reads.
+A name with no `public`, an object with no `ip` and an operator's recorded object
+are not ended. A CMDB that cannot be read ends nothing, says so on stderr, and the
+report goes out as before; `TAPPAAS_CMDB=off` does not read it.
+
 Changes: `add`, `delete`, `enable`/`disable`/`manual`, `bind`, `modify`,
 `set-ssid`, `merge`, `retire --apply`, `reconcile --apply` and `wgvpn
 add-peer`/`remove-peer` report the zones (or peer) they touched as a change,
