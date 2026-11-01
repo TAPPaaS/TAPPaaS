@@ -1,0 +1,37 @@
+# The console's raw values the design system tolerates, read by
+# src/foundation/tappaas-cicd/scripts/test/test-console-design.sh.
+# Line: <file under ui/web/src> <kind> <value> <max> # <reason>
+# <max> caps the raw uses of that value in that file: it may fall, never rise.
+# Lower it when a page is restyled onto the scale; add no value to this file
+# for new work, use a token.
+
+# Pre-scale spacing: values the stylesheet had before the 4 px scale existed.
+# Rounding any of them moves a layout, which step 3 of the GUI plan ruled out.
+styles.css spacing 1px 10 # hairline padding on badges and pills, below the scale
+styles.css spacing 2px 30 # hairline gaps in tight rows and lists, below the scale
+styles.css spacing 3px 8 # pre-scale, between 2 and 4
+styles.css spacing 5px 8 # pre-scale control padding, moves control height if rounded
+styles.css spacing 6px 66 # pre-scale half step, the commonest off-scale value
+styles.css spacing 7px 7 # pre-scale table and nav row padding
+styles.css spacing 9px 3 # pre-scale pill padding
+styles.css spacing 10px 66 # pre-scale half step between 8 and 12
+styles.css spacing 14px 24 # pre-scale section and page rhythm
+styles.css spacing 18px 11 # pre-scale nav and list indent
+styles.css spacing 20px 4 # pre-scale page and modal padding
+styles.css spacing 28px 1 # the phone page's bottom padding
+styles.css spacing 40px 2 # the page's bottom padding, the empty rack's padding
+styles.css spacing 440px 1 # the drawer's width, kept clear beside the main column
+
+# Radii tied to a shape, not to the control or panel scale.
+styles.css radius 1px 1 # the VLAN cell, a drawn mark
+styles.css radius 2px 4 # swatches and bay cells, drawn marks
+styles.css radius 3px 2 # the small LAG and drift tags
+styles.css radius 5px 1 # the 22 px device badge
+styles.css radius 9px 1 # half of an 18 px count pill
+styles.css radius 10px 6 # half of a 20 px pill
+styles.css radius 11px 1 # half of a 22 px chip
+styles.css radius 12px 6 # jump pills, the stepper, the phone's sheets
+styles.css radius 18px 1 # a health group's rounded card
+
+# Computed in code.
+pages/HealthTree.tsx style paddingLeft 1 # the tree's indent grows with depth
