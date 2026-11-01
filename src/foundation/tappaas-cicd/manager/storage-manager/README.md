@@ -47,6 +47,8 @@ changes nothing and stores nothing. Per cluster node (the `pvehost` instances, `
 
 - **boot** — the disk that holds `/` and the EFI partition: model, serial, size,
   type, life left, temperature, SMART health;
+- **root** — the filesystem on `/`: `rpool` with the pool's figures on a ZFS root
+  (it stays under pools), or its device, `pve-root` (ext4), with `df`'s on an LVM one;
 - **pools** — every ZFS pool on the node and every pool its record declares
   (`storagePools`) (a declared pool that is not imported is listed, and fails): size, how much
   is used and free, fragmentation, compression, health, the last scrub;

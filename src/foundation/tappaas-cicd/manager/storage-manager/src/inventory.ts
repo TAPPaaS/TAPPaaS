@@ -11,7 +11,8 @@
 //                             storagePools each declares (lib/ts nodes.ts)
 //   per node, one ssh probe   (lib/ts cluster.ts nodeStorageProbe) disks/list,
 //                             SMART per disk, zpool list/status, zfs list,
-//                             lsblk, replication state, exported pools, PBS
+//                             lsblk, the root filesystem (findmnt, df),
+//                             replication state, exported pools, PBS
 //   pvesh /cluster/resources  which node each guest runs on
 //   pvesh /cluster/replication  each job's guest, source, target, schedule
 //   module-manager list       the module name behind a vmid
@@ -163,10 +164,20 @@ export interface Replication {
   reasons: string[];
 }
 
+// The filesystem / is on: a ZFS pool (also in the node's pools) or a plain one
+// (Proxmox's LVM root, ext4).
+export interface RootFs {
+  fs: string; // zfs | ext4 | xfs | …
+  name: string; // rpool | pve-root
+  source: string; // the pool, or the device: /dev/mapper/pve-root
+  usable: { total: number; used: number; avail: number; pct: number } | null;
+}
+
 export interface InvNode {
   name: string;
   reachable: boolean;
   boot: Disk[]; // the disk(s) holding / and /boot/efi
+  root: RootFs | null; // null: not read
   pools: Pool[];
   otherDisks: Disk[]; // in no imported pool and not the boot device
   replication: Replication[]; // jobs sourced on this node
@@ -369,6 +380,38 @@ export function bootDevices(doc: Record<string, unknown> | null): string[] {
   return devs.filter((d) => d.type === "disk" && holds(d)).map((d) => d.name);
 }
 
+export interface RootRead {
+  source: string;
+  fs: string;
+  usable: RootFs["usable"];
+}
+
+// `findmnt -no SOURCE,FSTYPE /` then `df -B1 --output=size,used,avail /` (header
+// and one row). pct as df's Use%: of what the user can write, the root-reserved
+// blocks left out.
+export function parseRootRead(text: string): RootRead | null {
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const m = /^(\S+?)(?:\[\S*\])?\s+(\S+)$/.exec(lines[0] ?? "");
+  if (!m) return null;
+  const f = (lines[2] ?? "").split(/\s+/).map(num);
+  const [total, used, avail] = f;
+  const usable =
+    f.length === 3 && total !== null && used !== null && avail !== null
+      ? { total, used, avail, pct: used + avail > 0 ? Math.round((1000 * used) / (used + avail)) / 10 : 0 }
+      : null;
+  return { source: m[1], fs: m[2], usable };
+}
+
+// A node's root: the pool's own figures when / is on ZFS (df sees one dataset,
+// not the pool); with no read, a pool named rpool still says what it is.
+export function rootOf(read: RootRead | null, pools: Pool[]): RootFs | null {
+  if (read && read.fs !== "zfs") return { fs: read.fs, name: read.source.replace(/^.*\//, ""), source: read.source, usable: read.usable };
+  const name = read ? read.source.split("/")[0] : "rpool";
+  const pool = pools.find((p) => p.name === name);
+  if (!read && !pool) return null;
+  return { fs: "zfs", name, source: name, usable: pool?.usable ?? null };
+}
+
 // `__replicate_<job>_<epoch>__` → the job and the time.
 export function replicateSnapshot(snap: string): { job: string; at: string } | null {
   const m = /^__replicate_(\d+-\d+)_(\d+)__$/.exec(snap);
@@ -535,7 +578,7 @@ export function buildInventory(src: InvSources, now: Date = new Date()): Invento
     const ns = src.nodes[sn.name];
     const sec = ns?.sections ?? null;
     if (!sec) {
-      nodes.push({ name: sn.name, reachable: false, boot: [], pools: [], otherDisks: [], replication: [], state: "warn", reasons: ["did not answer"] });
+      nodes.push({ name: sn.name, reachable: false, boot: [], root: null, pools: [], otherDisks: [], replication: [], state: "warn", reasons: ["did not answer"] });
       findings.push({ level: "warn", cause: "health", on: { kind: "node", node: sn.name, name: sn.name }, text: `${sn.name} did not answer — its storage is not known` });
       continue;
     }
@@ -627,6 +670,7 @@ function buildNode(sn: { name: string; storagePools: string[] }, sec: Record<str
   // A ZFS-root node boots from its rpool.
   const rpool = pools.find((p) => p.name === "rpool");
   if (rpool) for (const d of rpool.vdevs.flatMap((v) => v.disks)) if (!boot.includes(d)) boot.push(d);
+  const root = rootOf(sec.root && sec.root.rc === 0 ? parseRootRead(sec.root.out) : null, pools);
 
   // Disks in no imported pool: a pool on them that is not imported says so.
   const exported = sec.exported && sec.exported.rc === 0 ? parseZpoolStatus(sec.exported.out) : [];
@@ -648,7 +692,7 @@ function buildNode(sn: { name: string; storagePools: string[] }, sec: Record<str
   for (const d of [...boot, ...otherDisks]) if (d.state !== "ok") reasons.push(`${d.device} ${d.state}`);
   for (const j of replication) if (j.state !== "ok") reasons.push(`replication ${j.id} ${j.state}`);
   const state = worst(...pools.map((p) => p.state), ...boot.map((d) => d.state), ...otherDisks.map((d) => d.state), ...replication.map((j) => j.state));
-  return { name, reachable: true, boot, pools, otherDisks, replication, state, reasons };
+  return { name, reachable: true, boot, root, pools, otherDisks, replication, state, reasons };
 }
 
 const vdevState = (h: string | null): State => (h === "ONLINE" || h === "AVAIL" ? "ok" : h === "DEGRADED" ? "warn" : "fail");
@@ -980,6 +1024,7 @@ export function renderInventory(inv: Inventory): string[] {
       continue;
     }
     for (const d of n.boot) out.push(line(`  boot  ${diskLine(d)}`, d.state));
+    if (n.root) out.push(`  root  ${n.root.name} (${n.root.fs})${n.root.usable ? `, ${gb(n.root.usable.used)} of ${gb(n.root.usable.total)}, ${n.root.usable.pct.toFixed(0)}% used` : ""}`);
     for (const p of n.pools) {
       const u = p.usable;
       const facts = [

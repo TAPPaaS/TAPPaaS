@@ -9,7 +9,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { ClusterGuest, ProbeSection, parseProbeSections } from "../../../../lib/ts/src/cluster";
+import { ClusterGuest, ProbeSection, nodeStorageProbe, parseProbeSections } from "../../../../lib/ts/src/cluster";
 import {
   Disk,
   InvSources,
@@ -18,6 +18,7 @@ import {
   buildInventory,
   collectSources,
   judgeDisk,
+  parseRootRead,
   parseScan,
   parseSmart,
   parseZpoolStatus,
@@ -95,6 +96,37 @@ for (const variant of ["suffix", "kernel"]) {
   const vi = buildInventory(v, NOW).nodes.find((n) => n.name === "tappaas3")!;
   check(vi.pools.every((p) => p.vdevs.every((x) => x.missing.length === 0 && x.disks.length === 1)) && vi.otherDisks.length === 1, `a member is matched by ${variant === "suffix" ? "the by-id link ZFS uses" : "its kernel path"}`);
 }
+
+// ── the root filesystem ───────────────────────────────────────────────
+const DF = "     1B-blocks        Used       Avail\n";
+check(nodeStorageProbe("tappaas1", false).includes("findmnt -no SOURCE,FSTYPE /") && parseProbeSections("@@section root\nx\n@@rc 0\n").root.out === "x", "the probe reads the root filesystem");
+const lvm = node("tappaas1").root!;
+check(lvm.fs === "ext4" && lvm.name === "pve-root" && lvm.source === "/dev/mapper/pve-root", "an LVM root: ext4 on pve-root");
+check(lvm.usable!.total === 100e9 && lvm.usable!.used === 21e9 && lvm.usable!.avail === 74e9 && lvm.usable!.pct === 22.1, "an LVM root's use is df's, pct of what can be written");
+check(!node("tappaas1").pools.some((p) => p.name === lvm.name), "an LVM root is no pool");
+check(renderInventory(inv).some((l) => l.startsWith("  root  pve-root (ext4), ")), "the text view prints the root");
+check(parseRootRead(`/dev/sda2[/@] btrfs\n${DF}10 4 6`)?.source === "/dev/sda2", "a subvolume's [path] is not part of the source");
+check(parseRootRead("/dev/sda2 ext4")?.usable === null && parseRootRead("") === null, "a cut-off read: no use, or nothing");
+
+// tappaas2 as a ZFS-root node: rpool's own figures, and rpool once in the pools.
+function zfsRoot(section: ProbeSection | undefined): Inventory {
+  const v = hrossen();
+  const t2 = v.nodes.tappaas2.sections!;
+  const row = (name: string): string => [name, "filesystem", "4000000000", "96000000000", "96000", "-", "0", "0", "-", "/", "on", "1.50"].join("\t");
+  t2["zpool-list"] = { rc: 0, out: `${t2["zpool-list"].out}\nrpool\t100000000000\t4000000000\t96000000000\t1\t4\t1.00\tONLINE` };
+  t2.zfs = { rc: 0, out: `${t2.zfs.out}\n${row("rpool")}` };
+  if (section) t2.root = section;
+  else delete t2.root;
+  return buildInventory(v, NOW);
+}
+const onRpool = zfsRoot({ rc: 0, out: `rpool/ROOT/pve-1 zfs\n${DF}99000000000 3000000000 96000000000` }).nodes.find((n) => n.name === "tappaas2")!;
+check(onRpool.root?.fs === "zfs" && onRpool.root.name === "rpool" && onRpool.root.source === "rpool", "a ZFS root: the pool, not the dataset");
+check(onRpool.root?.usable?.total === 100e9 && onRpool.root.usable.used === 4e9 && onRpool.root.usable.pct === 4, "a ZFS root's use is the pool's usable figures, not df's");
+check(onRpool.pools.filter((p) => p.name === "rpool").length === 1, "rpool stays in the pools, once");
+check(zfsRoot(undefined).nodes.find((n) => n.name === "tappaas2")!.root?.name === "rpool", "no root read: a node's rpool is its root");
+const unread = hrossen();
+unread.nodes.tappaas1.sections!.root = { rc: 1, out: "" };
+check(buildInventory(unread, NOW).nodes.find((n) => n.name === "tappaas1")!.root === null, "no root read and no rpool: no record");
 
 // ── tappaas3 tankc1: the failing disk ─────────────────────────────────
 const c1 = pool("tappaas3", "tankc1");

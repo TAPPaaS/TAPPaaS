@@ -232,7 +232,8 @@ export function queryGuestConfs(node: string, vmids: number[]): Map<number, stri
 //                 a by-id link is not stable for NVMe — exact error counts, scan)
 //   zfs           zfs list -Hp every filesystem, volume and snapshot
 //   lsblk         lsblk -J (which disk holds / and /boot/efi)
-//   replication   pvesh /nodes/<n>/replication (the jobs sourced here, state)
+//   root          findmnt + df of / (what the root filesystem is, its use)
+//   replication  pvesh /nodes/<n>/replication (the jobs sourced here, state)
 //   exported      zpool import (pools on the node's disks not imported)
 //   pbs           proxmox-backup-manager datastore list (where PBS runs)
 export function nodeStorageProbe(node: string, smart: boolean): string {
@@ -246,6 +247,8 @@ export function nodeStorageProbe(node: string, smart: boolean): string {
     "sec zpool-status zpool status -L -P -p",
     "sec zfs zfs list -Hp -t filesystem,volume,snapshot -o name,type,used,avail,refer,volsize,refquota,usedsnap,origin,mountpoint,compression,compressratio",
     "sec lsblk lsblk -J -b -p -o NAME,TYPE,SIZE,MOUNTPOINTS",
+    "rootfs() { findmnt -no SOURCE,FSTYPE / && df -B1 --output=size,used,avail /; }",
+    "sec root rootfs",
     `sec replication pvesh get /nodes/${node}/replication --output-format json`,
     "sec exported zpool import",
     "pbs() { command -v proxmox-backup-manager >/dev/null || { echo '[]'; return 0; }; proxmox-backup-manager datastore list --output-format json; }",
