@@ -189,6 +189,25 @@ echo "== compare"
 rm -rf -- "${OUT}/diff"
 COMPARED=0
 node "${E2E}/compare.ts" --shots "${OUT}/shots" --baseline "${BASELINE}" --out "${OUT}" --allow "${ALLOW}" || COMPARED=$?
+# A route that differs is captured once more, alone and serially: a graph that
+# drew late under the parallel load comes back the same, a real change stays.
+if [[ "${COMPARED}" != 0 && "${CAPTURED}" == 0 ]]; then
+    AGAIN="$(sed -n '/^## Changed routes/,/^## Route/p' "${OUT}/report.md" | sed -nE 's/^- \*\*([^*]+)\*\*.*/\1/p' | paste -sd, -)"
+    if [[ -n "${AGAIN}" ]]; then
+        echo "== recapture ${AGAIN} (serially)"
+        serve "${UI}" "${OUT}/web-dist"
+        if E2E_WORKERS=1 capture "${UI}" "${OUT}/recapture" "${AGAIN}" "${VPS[@]}"; then
+            stop
+            cp -R "${OUT}/recapture/." "${OUT}/shots/"
+            rm -rf -- "${OUT}/diff"
+            COMPARED=0
+            node "${E2E}/compare.ts" --shots "${OUT}/shots" --baseline "${BASELINE}" --out "${OUT}" --allow "${ALLOW}" || COMPARED=$?
+            printf '\nRecaptured alone after a first difference: %s.\n' "${AGAIN}" >>"${OUT}/report.md"
+        else
+            stop
+        fi
+    fi
+fi
 if [[ "${FLOWS}" == 1 ]]; then
     printf '\n## Flows\n\n%s: %s (flows.log)\n' "$([[ "${FLOWED}" == 0 ]] && echo ok || echo FAILED)" "${FLOWS_LINE:-no result}" >>"${OUT}/report.md"
     [[ "${FLOWED}" == 0 ]] || grep -E '^ +✘' "${OUT}/flows.log" | sed 's/^ */- /' >>"${OUT}/report.md" || true
