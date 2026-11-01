@@ -48,7 +48,7 @@ import { defaultNodeCandidates, queryClusterGuests, reachableNodes as clusterRea
 import { moduleScope } from "../../../lib/ts/src/scope";
 import { CmdbObject, CmdbRelation } from "../../../lib/ts/src/cmdb";
 import { reportChange, sendObservation } from "../../../lib/ts/src/cmdb-source";
-import { SOURCE as REPORT_SOURCE, moduleChangeObjects, moduleObservation, moduleStamps } from "./cmdb-report";
+import { SOURCE as REPORT_SOURCE, moduleChangeObjects, moduleEndObjects, moduleObservation, moduleStamps } from "./cmdb-report";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
 import {
@@ -282,12 +282,13 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "report [--json] [--discover]",
+      usage: "report [--json] [--discover] [--end <module>]",
       name: "report",
       note: "(ADR-040: send every installed instance, its services, dependencies and the control plane's components to the CMDB)",
       options: [
         ["--json", "Print the report instead of sending it."],
         ["--discover", "Accepted for the sweep (D15): what this plane holds is all report sends."],
+        ["--end MODULE", "Report the end of this instance instead: delete-module.sh, once its guest is gone."],
       ],
     },
     {
@@ -326,6 +327,8 @@ function usage(): void {
 interface Opts {
   configDir: string;
   json: boolean;
+  // `report --end <module>`: the instance whose end to report.
+  end?: string;
   diff: boolean;
   apply: boolean;
   // `drift --service <provider:service>`: ONE coordinate. Distinct from the
@@ -428,6 +431,8 @@ function parseOpts(args: string[]): Opts {
       o.snapRestore = parseIntStrict(next(), "--restore");
     } else if (a === "--discover") {
       // D15: the sweep asks every source; this plane has no deeper read.
+    } else if (a === "--end") {
+      o.end = next();
     } else if (a === "--json") {
       o.json = true;
     } else if (a === "--diff") {
@@ -1509,6 +1514,12 @@ function cmdSnapshot(opts: Opts, client: ModuleClient): number {
 // `report`: the instances config/ has, refined by the live cluster where it
 // answers (a guest's node, whether it runs).
 function cmdReport(opts: Opts, client: ModuleClient): number {
+  if (opts.end) {
+    const was = listModules(opts.configDir).find((m) => m.name === opts.end);
+    if (!was) die(`report --end: no module '${opts.end}'`);
+    reportChange({ source: REPORT_SOURCE, verb: `delete ${opts.end}`, ...moduleEndObjects(opts.configDir, was), configDir: opts.configDir });
+    return 0;
+  }
   return sendObservation(moduleObservation(opts.configDir, client.clusterResources()), opts.json, opts.configDir, info);
 }
 

@@ -6,7 +6,7 @@
 // dependsOn.
 //
 // An archived instance is not reported: it is no CI any more; the delete that
-// archived it reported its end (D7).
+// archived it reported its end (D7): delete-module.sh, through `report --end`.
 
 import { existsSync, readdirSync, statSync } from "fs";
 import { join } from "path";
@@ -173,6 +173,20 @@ export function moduleObservation(configDir: string, guests: RunningGuest[]): Cm
   return { source: SOURCE, kind: "observation", objects: b.objects, relations: b.relations };
 }
 
+/** The end of an instance. A node's: its software ends with it (the store). An
+ *  application's: the app and its services, which run on a node that stays, by
+ *  their key, the name on that node. */
+export function moduleEndObjects(configDir: string, was: ModuleConfig): { objects: CmdbObject[]; relations: CmdbRelation[] } {
+  const cls = nodeClassOf(was.kind);
+  if (cls) return { objects: [{ class: cls, name: was.name, attributes: compact({ vmid: cls === "vm" || cls === "lxc" ? was.vmid ?? undefined : undefined }), end: true }], relations: [] };
+  if (was.kind !== "application") return { objects: [], relations: [] };
+  const host = listModules(configDir).filter((m) => m.status !== "archived" && m.name === was.node);
+  const b = build(configDir, [was, ...host], []);
+  const ended = (o: CmdbObject): boolean => (o.class === "app" && o.name === was.name) || (o.class === "service" && o.attributes?.provider === was.name);
+  const objects = b.objects.map((o) => (ended(o) ? { ...o, attributes: { onNode: o.attributes?.onNode }, end: true } : o));
+  return { objects, relations: [] };
+}
+
 /** The CIs of one instance — its node or app, its services and provides — as
  *  a verb leaves it; an archived or removed one ends. `confs` (by vmid) are
  *  the guest configs as the verb applied them: a vm's or lxc's cores, memory,
@@ -187,10 +201,7 @@ export function moduleChangeObjects(
   const now = listModules(configDir).find((m) => m.name === name) ?? null;
   if (!now || now.status === "archived") {
     const was = now ?? before;
-    if (!was) return { objects: [], relations: [] };
-    const cls = nodeClassOf(was.kind) ?? (was.kind === "application" ? "app" : null);
-    if (!cls || cls === "app") return { objects: [], relations: [] }; // an app is keyed by its node: its end is its node's
-    return { objects: [{ class: cls, name, attributes: compact({ vmid: cls === "vm" || cls === "lxc" ? was.vmid ?? undefined : undefined }), end: true }], relations: [] };
+    return was ? moduleEndObjects(configDir, was) : { objects: [], relations: [] };
   }
   // The instance and the node it names, so an app's host is in the batch.
   const mods = listModules(configDir).filter((m) => m.status !== "archived" && (m.name === name || m.name === now.node));

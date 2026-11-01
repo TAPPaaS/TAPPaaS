@@ -282,8 +282,24 @@ JSON
 check "a query no longer lists it" "0" "$(cmdb query vm --json | jq 'length')"
 check "…with --all it is there, retired" "retired" "$(cmdb query vm --all --json | jq -r '.[0].attributes.stage')"
 check "its runs-on ended with it" "0" "$(cmdb show vm/nextcloud --json | jq '.relations | length')"
+out="$(cmdb report --json <<<'{"source":"module-manager","kind":"change","objects":[{"class":"vm","name":"never-reported","end":true}]}')" \
+    && ok "the end of what is not there is nothing, not a refusal" || bad "an end of nothing was refused: ${out}"
+check "…and makes nothing" "0" "$(cmdb query vm --all --json | jq '[.[] | select(.name == "never-reported")] | length')"
 NEW_VM="$(cmdb report --json <<<'{"source":"module-manager","kind":"change","objects":[{"class":"vm","name":"nextcloud","attributes":{"vmid":200,"onNode":"tappaas1"}}]}' | jq -r '.result.objects[0].id')"
 [[ -n "${NEW_VM}" && "${NEW_VM}" != "null" && "${NEW_VM}" != "${OLD_VM}" ]] && ok "the same name again is a new CI" || bad "nextcloud again: ${NEW_VM} (old ${OLD_VM})"
+
+echo "== the software of an ended node ends with it =="
+cmdb report --json >/dev/null <<<'{"source":"module-manager","kind":"change","objects":[
+  {"ref":"h","class":"vm","name":"host-gone","attributes":{"vmid":700,"onNode":"tappaas1"}},
+  {"class":"service","name":"m:web","attributes":{"onNode":{"ref":"h"},"stage":"operational"}},
+  {"class":"app","name":"m-app","attributes":{"onNode":{"ref":"h"}}},
+  {"ref":"k","class":"vm","name":"host-kept","attributes":{"vmid":701,"onNode":"tappaas1"}},
+  {"class":"service","name":"m:web","attributes":{"onNode":{"ref":"k"}}}]}'
+cmdb report --json >/dev/null <<<'{"source":"module-manager","kind":"change","objects":[{"class":"vm","name":"host-gone","attributes":{"vmid":700},"end":true}]}'
+check "its service and app are gone" "0" "$(cmdb query app --where name=m-app --json | jq 'length')"
+check "…retired" "retired" "$(cmdb query service --all --json | jq -r '[.[] | select(.name == "m:web" and .ended != null)][0].attributes.stage')"
+check "the same service on another node stays" "1" "$(cmdb query service --json | jq '[.[] | select(.name == "m:web")] | length')"
+check "the machine a guest ran on stays, a vm is not software" "1" "$(cmdb query machine --where name=tappaas1 --json | jq 'length')"
 
 echo "== the listeners =="
 check "loopback without the token: 401" "401" "$(curl -s -o /dev/null -w '%{http_code}' "http://${CMDB_LISTEN}/v1/health")"

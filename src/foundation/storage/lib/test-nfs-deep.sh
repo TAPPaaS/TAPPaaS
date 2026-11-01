@@ -40,6 +40,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NODE="${1:?usage: test-nfs-deep.sh <node-instance>}"
 set --
 . /home/tappaas/bin/common-install-routines.sh
+. "${HERE}/../../tappaas-cicd/lib/cmdb-report.sh"
 . "${HERE}/nfs-lib.sh"
 . "${HERE}/nfs-guest.sh"
 
@@ -159,7 +160,7 @@ teardown() {
     # Restore: the config files as they were, and by force whatever is still there.
     # Only the suite's own share comes out by force: the rest of shares.json is the
     # site's, and another session may have changed it while the suite ran.
-    jq -e --arg s "${SHARE}" '.nfs.shares[$s]' "${CFG}/shares.json" >/dev/null 2>&1 && shares_edit "del(.nfs.shares[\"${SHARE}\"])"
+    jq -e --arg s "${SHARE}" '.nfs.shares[$s]' "${CFG}/shares.json" >/dev/null 2>&1 && { shares_edit "del(.nfs.shares[\"${SHARE}\"])"; cmdb_end "nfs deep test" "share/${SHARE}"; }
     [[ "${HAD_SHARES}" -eq 0 && -f "${CFG}/shares.json" && "$(jq '.nfs.shares // {} | length' "${CFG}/shares.json")" -eq 0 ]] && rm -f "${CFG}/shares.json"
     for n in "${!TOUCHED[@]}"; do
         cp -p "${WORK}/${n}.json.orig" "${CFG}/${n}.json"
@@ -360,6 +361,7 @@ fi
 # ── 11 gone after migration ───────────────────────────────────────────
 step "11 gone — the migrated share is undeclared"
 shares_edit "del(.nfs.shares[\"${SHARE}\"])"
+cmdb_end "nfs deep test" "share/${SHARE}"
 storage-manager nfs converge --server "${HOLDER}" > "${WORK}/node11.log" 2>&1
 NFS_NO_REVERSE=1 "${SVC}/update-service.sh" "${FIX}" > "${WORK}/svc11.log" 2>&1 \
     && fail "the service errors for a share that vanished under a mount" \

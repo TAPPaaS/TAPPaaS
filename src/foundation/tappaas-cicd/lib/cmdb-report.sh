@@ -15,6 +15,10 @@
 #   cmdb_send_reports           a JSON array of reports on stdin, each sent
 #                               with cmdb_report. Never fails the caller.
 #                               TAPPAAS_CMDB=off sends nothing.
+#   cmdb_end <verb> <class>/<name>...
+#                               reports the end of objects a verb did not end:
+#                               a test's fixture taken out of config/ by hand.
+#                               Never fails the caller.
 #   cmdb_report_count           "<objects> objects, <relations> relations" of
 #                               the array on stdin
 
@@ -44,6 +48,14 @@ cmdb_send_reports() {
         printf '%s' "${r}" | cmdb_report
     done < <(jq -c '.[] | select(((.objects // []) | length) + ((.relations // []) | length) > 0)' <<<"${reports}")
     return 0
+}
+
+cmdb_end() {
+    local verb="$1"; shift
+    jq -cn --argjson head "$(cmdb_change_head "${verb}")" '$ARGS.positional | [$head + {
+        source: "cmdb-end",
+        objects: map(split("/") | {class: .[0], name: .[1], end: true})
+    }]' --args "$@" | cmdb_send_reports
 }
 
 cmdb_report_count() {
