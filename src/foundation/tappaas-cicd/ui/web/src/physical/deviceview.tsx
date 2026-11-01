@@ -78,6 +78,9 @@ function Inner({ t, sel, pick, onPane, labels, tree }: { t: Topology; sel: Sel |
     const p = at.get(d.id) ?? { x: 0, y: 0 };
     return { id: d.id, type: "dev", position: { x: p.x - wOf(d) / 2, y: p.y - H / 2 }, data: data(d), width: wOf(d), height: H };
   }), [g, data, wOf]);
+  // The latest: a frame of the move below may come after the disks did.
+  const placeNow = useRef(place);
+  placeNow.current = place;
 
   // The selection in the middle, zoomed so the farthest card still shows;
   // without one, everything fitted.
@@ -105,7 +108,7 @@ function Inner({ t, sel, pick, onPane, labels, tree }: { t: Topology; sel: Sel |
         return [id, { x: f.x + (p.x - f.x) * k, y: f.y + (p.y - f.y) * k }];
       }));
       pos.current = at;
-      setNodes(place(at));
+      setNodes(placeNow.current(at));
       if (k < 1) frame = requestAnimationFrame(step);
       // (the first picture is centred once React Flow has its size: onInit)
       else if (rf.viewportInitialized) requestAnimationFrame(() => centre(at));
@@ -115,7 +118,13 @@ function Inner({ t, sel, pick, onPane, labels, tree }: { t: Topology; sel: Sel |
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [g, center]);
   // The selection's highlight and the states: the cards stay where they are.
-  useEffect(() => setNodes((ns) => ns.map((n) => ({ ...n, data: data(n.data.d) }))), [data]);
+  // A card's width comes with its disks (the assets read, which may come after
+  // the layout): it stays centred on its point.
+  useEffect(() => setNodes((ns) => ns.map((n) => {
+    const p = pos.current.get(n.id);
+    const w = wOf(n.data.d);
+    return { ...n, data: data(n.data.d), width: w, position: p ? { x: p.x - w / 2, y: p.y - H / 2 } : n.position };
+  })), [data, wOf]);
 
   const onNodesChange = useCallback((ch: NodeChange<Node<DevData, "dev">>[]) => {
     setNodes((ns) => {

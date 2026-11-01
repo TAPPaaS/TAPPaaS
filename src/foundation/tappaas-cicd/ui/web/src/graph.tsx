@@ -4,8 +4,8 @@
 // hand; each card gives its own size.
 
 import dagre from "@dagrejs/dagre";
-import { BaseEdge, Background, Controls, Edge, EdgeProps, Handle, MarkerType, Node, NodeProps, Position, ReactFlow, getBezierPath } from "@xyflow/react";
-import { ReactNode, useMemo } from "react";
+import { BaseEdge, Background, Controls, Edge, EdgeProps, Handle, MarkerType, Node, NodeProps, Position, ReactFlow, getBezierPath, useReactFlow, useStore } from "@xyflow/react";
+import { ReactNode, useEffect, useMemo } from "react";
 import { Route, columnPositions, routeEdges } from "./columns";
 
 export interface GNode {
@@ -125,14 +125,19 @@ export function layout(nodes: GNode[], edges: GEdge[], rankdir: "TB" | "LR", nod
   const routes = columns && fixed ? routeEdges(nodes, fixed, live) : null;
   if (!fixed) dagre.layout(g);
   const vertical = rankdir === "TB";
+  // Each card is the size it says (`.gcard` is border-box), so React Flow is
+  // told its measure up front. A node handed over again without `measured`
+  // (a new layout, a colour patch) has its handles' bounds dropped, and a card
+  // whose size did not change is not measured again: its lines were never drawn.
+  const measured = (n: GNode) => ({ width: n.w, height: n.h });
   return {
     // A parent before its children, as React Flow needs them.
     nodes: [...top, ...nodes.filter((n) => n.parent)].map((n) => {
-      if (n.parent) return { id: n.id, type: "box", position: n.at ?? { x: 0, y: 0 }, parentId: n.parent, extent: "parent" as const, data: { g: n, vertical } };
+      if (n.parent) return { id: n.id, type: "box", position: n.at ?? { x: 0, y: 0 }, parentId: n.parent, extent: "parent" as const, data: { g: n, vertical }, measured: measured(n) };
       const at = fixed?.get(n.id);
-      if (at || fixed) return { id: n.id, type: "box", position: at ?? { x: 0, y: 0 }, data: { g: n, vertical } };
+      if (at || fixed) return { id: n.id, type: "box", position: at ?? { x: 0, y: 0 }, data: { g: n, vertical }, measured: measured(n) };
       const p = g.node(n.id) as { x: number; y: number };
-      return { id: n.id, type: "box", position: { x: p.x - n.w / 2, y: p.y - n.h / 2 }, data: { g: n, vertical } };
+      return { id: n.id, type: "box", position: { x: p.x - n.w / 2, y: p.y - n.h / 2 }, data: { g: n, vertical }, measured: measured(n) };
     }),
     edges: live.map((e, i) => ({
       id: e.id ?? `e${i}-${e.source}-${e.target}`,
@@ -150,6 +155,20 @@ export function layout(nodes: GNode[], edges: GEdge[], rankdir: "TB" | "LR", nod
   };
 }
 
+// Fitted again when the layout or the pane's size changes: `fitView` alone
+// fits once, at whatever size the pane had then (on a phone the page widens
+// after the first paint), so the picture depended on which came first.
+const FIT = { padding: 0.08 };
+function Refit({ flow }: { flow: unknown }) {
+  const { fitView } = useReactFlow();
+  const width = useStore((s) => s.width);
+  const height = useStore((s) => s.height);
+  useEffect(() => {
+    if (width > 0 && height > 0) void fitView(FIT);
+  }, [flow, width, height, fitView]);
+  return null;
+}
+
 export function Graph({ nodes, edges, rankdir = "TB", height = 520, nodesep = 30, ranksep = 60, grid }: { nodes: GNode[]; edges: GEdge[]; rankdir?: "TB" | "LR"; height?: number | string; nodesep?: number; ranksep?: number; grid?: TreeGrid }) {
   const flow = useMemo(() => layout(nodes, edges, rankdir, nodesep, ranksep, grid), [nodes, edges, rankdir, nodesep, ranksep, grid]);
   return (
@@ -160,7 +179,7 @@ export function Graph({ nodes, edges, rankdir = "TB", height = 520, nodesep = 30
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
-        fitViewOptions={{ padding: 0.08 }}
+        fitViewOptions={FIT}
         minZoom={0.2}
         maxZoom={1.5}
         nodesDraggable={false}
@@ -172,6 +191,7 @@ export function Graph({ nodes, edges, rankdir = "TB", height = 520, nodesep = 30
       >
         <Background gap={24} color="var(--gray-200)" />
         <Controls showInteractive={false} />
+        <Refit flow={flow} />
       </ReactFlow>
     </div>
   );
