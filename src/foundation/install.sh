@@ -228,7 +228,7 @@ fi
 echo -e "\n${GN}=== [5/5] Platform (NixOS template + tappaas-cicd) ===${CL}"
 fetch "${REPO}${BRANCH}/src/foundation/cluster/install-platform.sh" ~/tappaas/install-platform.sh 755
 dom_arg=(); [ -n "$DOMAIN" ] && dom_arg=(--domain "$DOMAIN")
-~/tappaas/install-platform.sh --repo "$REPO" --branch "$BRANCH" --name "$SITE_CODE" --organization "$ORG" "${dom_arg[@]}" ${NONINT_ARG} \
+~/tappaas/install-platform.sh --repo "$REPO" --branch "$BRANCH" --name "$SITE_CODE" --organization "$ORG" "${dom_arg[@]}" --chained ${NONINT_ARG} \
   || { msg_error "install-platform.sh did not complete — re-run ~/tappaas/install-platform.sh --branch ${BRANCH} --name ${SITE_CODE} --organization ${ORG} --domain <yourdomain>."; exit 1; }
 
 # ── Done ───────────────────────────────────────────────────────────────
@@ -241,11 +241,8 @@ echo -e "${CL}"
 echo -e "  Site code: ${BL}${SITE_CODE}${CL}  (Proxmox cluster = site.json .name)"
 echo -e "  Organization / default environment: ${BL}${ORG}${CL}  (site.json .defaultEnvironment)"
 echo ""
-echo -e "  ${BOLD}Next steps (from tappaas-cicd — ssh tappaas@tappaas-cicd):${CL}"
-echo -e "  1. Additional nodes: install PVE, re-run this installer on each (auto-joins),"
-echo -e "     then ${BL}site-manager update${CL} to configure HA + replication."
-echo -e "  2. Physical switch(es): ${BL}setup-switches.sh${CL}"
-echo -e "  3. TLS certificates:    ${BL}acme-setup.sh${CL}"
-echo -e "  4. Rest of foundation:  ${BL}rest-of-foundation.sh${CL}"
-echo -e "       installs backup / identity / logging, then creates the ${BL}${ORG}${CL} organization."
+cat ~/tappaas/console-next-steps.txt 2>/dev/null \
+  || echo -e "  Continue on the mothership: ${BL}ssh tappaas@tappaas-cicd${CL}, then ${BL}rest-of-foundation.sh${CL}"
+echo ""
+echo -e "  The same steps from the command line, and more nodes: see INSTALL.md."
 echo ""

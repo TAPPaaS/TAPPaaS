@@ -33,6 +33,7 @@ FW_KEY="${HOME}/.ssh/tappaas-fw"
 CONSOLE_PORT=9097
 NAT_DESC="TAPPaaS: console (install LAN, until identity)"
 ALLOW_FILE="${CONFIG_DIR}/console-setup-allow"
+URL_FILE="${CONFIG_DIR}/console-setup-url"
 PEER_NAME="install"
 PEER_CONF="${CONFIG_DIR}/admin-vpn/install-peer.conf"
 
@@ -111,6 +112,7 @@ open_lan() {
         return 0
     fi
     printf '%s\n' "${net}" > "${ALLOW_FILE}"
+    printf 'http://%s:%s/\n' "${wan_ip}" "${CONSOLE_PORT}" > "${URL_FILE}"
     systemctl restart tappaas-console.service 2>/dev/null \
         || warn "  install LAN: the console was not restarted — it accepts ${net} after its next start"
     info "  ${GN}✓${CL} install LAN: http://${wan_ip}:${CONSOLE_PORT}/ from ${net} only, with the setup token, until identity is installed"
@@ -135,6 +137,7 @@ cmd_close() {
         nat-manager delete-rule --no-ssl-verify --uuid "${u}" --no-apply >/dev/null 2>&1 || warn "  could not remove the install-LAN forward ${u}"
     done
     [[ -n "${uuids}" ]] && { nat-manager apply --no-ssl-verify >/dev/null 2>&1 || true; info "  ${GN}✓${CL} install-LAN forward to the console removed"; }
+    rm -f "${URL_FILE}"
     if [[ -f "${ALLOW_FILE}" ]]; then
         rm -f "${ALLOW_FILE}"
         systemctl restart tappaas-console.service 2>/dev/null || true

@@ -56,7 +56,7 @@ BRANCH="main"
 DOMAIN=""
 ORGNAME=""        # site code (--name) — forwarded to the cicd install.sh
 ORG=""            # default org/environment (--organization) — forwarded to cicd
-SKIP_TEMPLATE=0 SKIP_CICD=0 INTERACTIVE=1 MANUAL_CICD=0
+SKIP_TEMPLATE=0 SKIP_CICD=0 INTERACTIVE=1 MANUAL_CICD=0 CHAINED=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo)            REPO="${2:-}"; shift 2 ;;
@@ -67,6 +67,7 @@ while [[ $# -gt 0 ]]; do
     --skip-template)   SKIP_TEMPLATE=1; shift ;;
     --skip-cicd)       SKIP_CICD=1; shift ;;
     --manual-cicd)     MANUAL_CICD=1; shift ;;
+    --chained)         CHAINED=1; shift ;;   # foundation/install.sh ends with the console note
     --non-interactive) INTERACTIVE=0; shift ;;
     -h|--help)         usage; exit 0 ;;
     *) error "Unknown argument: $1"; usage; exit 2 ;;
@@ -90,6 +91,7 @@ if [[ "$SKIP_CICD" != "1" ]]; then
 fi
 
 readonly TAPPAAS_DIR="/root/tappaas"
+readonly CONSOLE_NOTE="${TAPPAAS_DIR}/console-next-steps.txt"
 readonly CREATE_VM="${TAPPAAS_DIR}/Create-TAPPaaS-VM.sh"
 [[ -x "$CREATE_VM" ]] || die "Create-TAPPaaS-VM.sh not found at ${CREATE_VM} (run the node bootstrap first)."
 mkdir -p "$TAPPAAS_DIR"
@@ -365,17 +367,26 @@ build_cicd() {
   info "${GN}✓${CL} tappaas-cicd is installed and owns the platform (reachable at ${BL}${CICD_IP}${CL})."
 
   # B.5 — the way to the console for whoever ran this (ADR-037 D3): the install
-  #        peer's VPN config, copied here — where the operator already is.
-  local peer="/root/tappaas-admin-vpn.conf"
-  if cicd_ssh 'cat /home/tappaas/config/admin-vpn/install-peer.conf' 2>/dev/null > "${peer}.tmp" && [[ -s "${peer}.tmp" ]]; then
-    install -m 0600 "${peer}.tmp" "${peer}"
-    info "Continue the install in the console. Import the admin VPN config into WireGuard:"
-    info "    scp root@$(hostname -I 2>/dev/null | awk '{print $1}'):${peer} .   (it holds a private key — delete it here after)"
-    info "  then open ${BL}http://${CICD_IP}:9097/${CL} and give the setup token (ssh tappaas@${CICD_IP} cat ~/config/console-setup-token)."
-  fi
+  #        peer's VPN config, copied here — where the operator already is. The
+  #        orchestrator shows the note at its very end.
+  local peer="/root/tappaas-admin-vpn.conf" lan url node
+  node="$(ip -4 -o addr show wan 2>/dev/null | awk '{split($4, a, "/"); print a[1]; exit}')"
+  [[ -n "${node}" ]] || node="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  lan="$(cicd_ssh 'cat /home/tappaas/config/console-setup-allow 2>/dev/null' 2>/dev/null || true)"
+  url="$(cicd_ssh 'cat /home/tappaas/config/console-setup-url 2>/dev/null' 2>/dev/null || true)"
+  {
+    echo -e "  ${BOLD}Continue in the console${CL}: it takes you through the rest of the install."
+    [[ -n "${url}" ]] && echo -e "    From this network (${lan}):  ${BL}${url}${CL}"
+    if cicd_ssh 'cat /home/tappaas/config/admin-vpn/install-peer.conf' 2>/dev/null > "${peer}.tmp" && [[ -s "${peer}.tmp" ]]; then
+      install -m 0600 "${peer}.tmp" "${peer}"
+      echo -e "    Over the admin VPN:  ${BL}http://${CICD_IP}:9097/${CL}"
+      echo -e "      Import its config in WireGuard: scp root@${node}:${peer} .   (it holds a private key: delete it on the node after)"
+    fi
+    echo -e "    It asks for the setup token. To read it, on the node (ssh root@${node}):"
+    echo -e "      ${BL}ssh -i /root/tappaas/tappaas-cicd.key tappaas@tappaas-cicd.mgmt.internal cat config/console-setup-token${CL}"
+  } > "${CONSOLE_NOTE}"
   rm -f "${peer}.tmp"
-  local lan; lan="$(cicd_ssh 'cat /home/tappaas/config/console-setup-allow 2>/dev/null' 2>/dev/null || true)"
-  [[ -n "${lan}" ]] && info "  From ${lan} (this install LAN) also without the VPN: ${BL}http://<the firewall's WAN address>:9097/${CL}"
+  [[ "${CHAINED}" == 1 ]] || cat "${CONSOLE_NOTE}"
 }
 
 # ── Run ──────────────────────────────────────────────────────────────
