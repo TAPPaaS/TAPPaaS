@@ -38,6 +38,7 @@ readonly FIX="${SCRIPT_DIR}/fixtures"
 # shellcheck source=../lib/common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh 2>/dev/null \
     || . "${SCRIPT_DIR}/../lib/common-install-routines.sh"
+. "${SCRIPT_DIR}/../lib/cmdb-report.sh"
 
 # ── parameters ───────────────────────────────────────────────────────
 readonly VAR="zcnode"                       # environment + dedicated-zone name
@@ -89,7 +90,7 @@ cleanup() {
         /home/tappaas/bin/delete-module.sh "${MODULE}-${VAR}" --force >/dev/null 2>&1 \
             || warn "  delete-module ${MODULE}-${VAR} returned non-zero — check VM ${VMID} on ${DEST_NODE}"
     fi
-    [[ -f "${ENV_FILE}" ]] && { rm -f "${ENV_FILE}"; info "Removed environment '${VAR}'"; }
+    [[ -f "${ENV_FILE}" ]] && { rm -f "${ENV_FILE}"; cmdb_end "variant test cleanup" "environment/${VAR}"; info "Removed environment '${VAR}'"; }
     if jq -e --arg z "${VAR}" 'has($z)' "${ZONES_FILE}" >/dev/null 2>&1; then
         info "Removing dedicated zone '${VAR}' (via network-manager)…"
         network-manager zone delete "${VAR}" >/dev/null 2>&1 \

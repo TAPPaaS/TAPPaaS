@@ -40,6 +40,7 @@ set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/dns-sample.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/../tappaas-cicd/lib/cmdb-report.sh"
 readonly SCRIPT_DIR
 readonly FIXTURES_DIR="${SCRIPT_DIR}/test-fixtures"
 readonly CONFIG_DIR="/home/tappaas/config"
@@ -1152,6 +1153,7 @@ cleanup_deep() {
             | .mgmt["access-to"] = ((.mgmt["access-to"] // []) - [$za, $zb, $zc, $zi])' \
             "${CONFIG_DIR}/zones.json" > "${tmp}" \
             && mv "${tmp}" "${CONFIG_DIR}/zones.json"
+        cmdb_end "network test teardown" "zone/${TFW_A_ZONE}" "zone/${TFW_B_ZONE}" "zone/${TFW_C_ZONE}" "zone/${TFW_IOT_ZONE}"
         info "Deactivated and removed test zones ${TFW_A_ZONE}/${TFW_B_ZONE}/${TFW_C_ZONE}/${TFW_IOT_ZONE} from deployed zones.json"
     fi
     # Restore the firewall VM net0 trunks now that the test zones are gone, so the
@@ -1183,6 +1185,8 @@ cleanup_deep() {
 # every call is guarded (|| true / capture rc) because the suite runs set -e.
 deep_test_adr008_providers() {
     local T D AF z out rc
+    # An isolated CONFIG_DIR, but the managers would report to the live CMDB.
+    local -x TAPPAAS_CMDB=off
     T="$(mktemp -d)"
     D="${T}/switch-configuration-desired.json"
     AF="${T}/switch-configuration-actual.json"

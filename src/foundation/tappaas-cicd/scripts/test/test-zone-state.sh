@@ -22,6 +22,9 @@ if ! command -v network-manager >/dev/null 2>&1; then
     exit 0
 fi
 
+# Fixture zones: nothing of this reaches the live CMDB.
+export TAPPAAS_CMDB=off
+
 PASS=0
 FAIL=0
 WORK="$(mktemp -d)"

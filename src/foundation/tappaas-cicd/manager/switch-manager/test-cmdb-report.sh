@@ -117,6 +117,11 @@ ck "confirm (every port): each recorded port's VLANs" '6' \
     ck "cmdb_send_reports: a refused report does not stop the next; empty ones are not sent" '2' "$(wc -l < "${TMP}/lib.jsonl" | tr -d ' ')"
     echo '[{"source":"t","objects":[{"class":"zone","name":"c"}]}]' | TAPPAAS_CMDB=off cmdb_send_reports
     ck "TAPPAAS_CMDB=off sends nothing" '2' "$(wc -l < "${TMP}/lib.jsonl" | tr -d ' ')"
+    TAPPAAS_ACTOR=op cmdb_end "test teardown" zone/swdeepA share/nfsdeeptest
+    ck "cmdb_end: one change, every object ended" '{"kind":"change","verb":"test teardown","actor":"op","source":"cmdb-end","objects":[{"class":"zone","name":"swdeepA","end":true},{"class":"share","name":"nfsdeeptest","end":true}]}' \
+       "$(tail -1 "${TMP}/lib.jsonl")"
+    TAPPAAS_CMDB=off cmdb_end "test teardown" zone/z
+    ck "…and TAPPAAS_CMDB=off sends nothing" '3' "$(wc -l < "${TMP}/lib.jsonl" | tr -d ' ')"
     echo "${PASS} ${FAIL}" > "${TMP}/sub.counts"
 )
 read -r PASS FAIL < "${TMP}/sub.counts"
