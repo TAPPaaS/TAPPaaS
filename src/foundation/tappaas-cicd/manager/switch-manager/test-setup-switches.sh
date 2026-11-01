@@ -82,15 +82,38 @@ ck "print_inventory shows vlans"     "yes" "$(grep -q 'trunk 200,310' <<<"$inv" 
 # --non-interactive skips cleanly.
 ( SWITCH_MANAGER="${STUB_SM}" "${SUT}" --non-interactive >/dev/null 2>&1 ); ck "--non-interactive rc 0" "0" "$?"
 
-# pty driver with explicit creds + actual files
+# pty driver with explicit creds + actual files. Someone answers here: the inputs
+# are the operator, so TAPPAAS_NONINTERACTIVE from the test run does not apply.
+# The timeout is the check that a question nobody answers cannot loop. Its rc in
+# PTY_RC: the sourced script left set -e on.
 run_pty() { # run_pty <inputs> <cred-file> <actual-file>
-    : > "${SMLOG}"; : > "${IMLOG}"
-    printf '%b' "$1" | SWITCH_MANAGER="${STUB_SM}" INSTALL_MODULE="${STUB_IM}" \
+    : > "${SMLOG}"; : > "${IMLOG}"; PTY_RC=0
+    printf '%b' "$1" | TAPPAAS_NONINTERACTIVE=0 SWITCH_MANAGER="${STUB_SM}" INSTALL_MODULE="${STUB_IM}" \
         UNIFI_CRED="$2" ACTUAL="$3" \
-        script -qec "${SUT}" /dev/null >/dev/null 2>&1 || true
+        timeout -k 5 60 script -qec "${SUT}" /dev/null >/dev/null 2>&1 || PTY_RC=$?
 }
 
 if command -v script >/dev/null 2>&1; then
+    # A terminal and nobody at it (TAPPAAS_NONINTERACTIVE=1): skips like no terminal,
+    # never reaches a prompt, touches nothing.
+    : > "${SMLOG}"; rc=0
+    out="$(TAPPAAS_NONINTERACTIVE=1 SWITCH_MANAGER="${STUB_SM}" UNIFI_CRED="${NOCRED}" ACTUAL="${ACTFILE}" \
+        timeout -k 5 60 script -qec "${SUT}" /dev/null </dev/null 2>&1)" || rc=$?
+    ck "nobody there: rc 0"                "0" "${rc}"
+    ck "nobody there: says it skipped"     "yes" "$(grep -q 'Switch setup skipped' <<<"${out}" && echo yes || echo no)"
+    ck "nobody there: no switch change"    "0" "$(wc -l < "${SMLOG}" | tr -d ' ')"
+
+    # Input runs out at the menu: the script ends and names its flag, no re-prompting
+    # for ever (a ten-hour loop, 2026-10-31) and no reconcile on a half-finished walk.
+    rc=0
+    out="$(printf '' | TAPPAAS_NONINTERACTIVE=0 SWITCH_MANAGER="${STUB_SM}" UNIFI_CRED="${NOCRED}" ACTUAL="${ACTFILE}" \
+        timeout -k 5 60 script -qec "${SUT}" /dev/null 2>&1)" || rc=$?
+    ck "no answer: rc 1, not the timeout"  "1" "${rc}"
+    ck "no answer: names its flag"         "yes" "$(grep -q -- '--non-interactive' <<<"${out}" && echo yes || echo no)"
+    run_pty '2\nnetgear\n' "${NOCRED}" "${ACTFILE}"
+    ck "no answer midway: rc 1"            "1" "${PTY_RC}"
+    ck "no answer midway: no reconcile"    "0" "$(grep -c -- '^reconcile' "${SMLOG}")"
+
     # Other brand → manual (free-text vendor; no controller menu). Final reconcile --apply.
     run_pty '2\nnetgear\nnsw\n\n\nn\n' "${NOCRED}" "${ACTFILE}"
     ck "other→manual add-switch"           "1" "$(grep -c -- 'add-switch nsw --vendor netgear --managed manual' "${SMLOG}")"

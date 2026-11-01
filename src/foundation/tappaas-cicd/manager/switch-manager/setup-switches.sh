@@ -51,17 +51,27 @@ INTERACTIVE=1
 
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 
+# A question nobody can answer ends the script. ask runs inside $(...), where die
+# would only leave that subshell, and `case "$(ask_choice 3)"` or a `||` hides the
+# failure from set -e: so the script's own shell is told (main's TERM trap).
+_nobody_answers() {
+    error "setup-switches asks questions and nobody can answer here — run it from a terminal, or pass --non-interactive to skip it"
+    kill -TERM "$$"
+    exit 1
+}
+
 ask() {
     local p="$1" d="${2:-}" a
-    no_one_to_ask && die "setup-switches asks questions and nobody can answer here — run it from a terminal"
-    read -r -p "${p}" a < /dev/tty || true; echo "${a:-$d}"
+    no_one_to_ask && _nobody_answers
+    read -r -p "${p}" a < /dev/tty || _nobody_answers
+    echo "${a:-$d}"
 }
 
 # Prompt for a menu choice in 1..<max>; re-prompt on anything else (no silent exit).
 ask_choice() {
     local max="$1" c
     while true; do
-        c="$(ask "  choice (1-${max}): ")"
+        c="$(ask "  choice (1-${max}): ")" || exit 1
         if [[ "${c}" =~ ^[0-9]+$ ]] && (( c >= 1 && c <= max )); then echo "${c}"; return 0; fi
         warn "  please enter a number 1-${max} (or Ctrl-C to exit)" >&2
     done
@@ -340,7 +350,8 @@ main() {
     done
     command -v "${SWITCH_MANAGER}" >/dev/null 2>&1 || [[ -x "${SWITCH_MANAGER}" ]] \
         || die "switch-manager not found (run this on the cicd mothership)"
-    if [[ "${INTERACTIVE}" == "0" || ! -t 0 ]]; then
+    trap 'exit 1' TERM
+    if [[ "${INTERACTIVE}" == "0" || ! -t 0 ]] || no_one_to_ask; then
         info "Switch setup skipped (non-interactive). Configure switches later with:"
         info "  ${BL:-}setup-switches.sh${CL:-}"
         return 0

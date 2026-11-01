@@ -149,13 +149,20 @@ link_component_executables() {
 # run_component_test_scripts <component-dir>
 #
 # Run every co-located test-*.sh in <component-dir>; return non-zero if any
-# fails (the standard bash-component test.sh body).
+# fails (the standard bash-component test.sh body). A script gets
+# TAPPAAS_COMPONENT_TEST_TIMEOUT seconds (default 1200): a hang is a failure, not
+# a suite that never ends.
 run_component_test_scripts() {
-    local dir="$1" rc=0 t
+    local dir="$1" rc=0 t t_rc limit="${TAPPAAS_COMPONENT_TEST_TIMEOUT:-1200}"
     shopt -s nullglob
     for t in "${dir}"/test-*.sh; do
         echo "== $(basename "${t}") =="
-        bash "${t}" || rc=1
+        t_rc=0
+        timeout -k 30 "${limit}" bash "${t}" || t_rc=$?
+        if [ "${t_rc}" = 124 ] || [ "${t_rc}" = 137 ]; then
+            echo "FAIL: $(basename "${t}") did not finish in ${limit}s"
+        fi
+        [ "${t_rc}" = 0 ] || rc=1
     done
     return "${rc}"
 }
