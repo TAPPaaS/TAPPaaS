@@ -26,7 +26,7 @@ let
       src = ./web;
       filter = path: _type: !(builtins.elem (baseNameOf (toString path)) [ "node_modules" "dist" ]);
     };
-    npmDepsHash = "sha256-AVYt0aWEGMp9ec2VOxfiP2iV7eBeszagCVfz7VoABHk=";
+    npmDepsHash = "sha256-INu7BvppHtGgbWTUM7ggIJENx+Ryvs1CIFEp8z0VEOU=";
     nodejs = pkgs.nodejs_22;
     installPhase = ''
       runHook preInstall
