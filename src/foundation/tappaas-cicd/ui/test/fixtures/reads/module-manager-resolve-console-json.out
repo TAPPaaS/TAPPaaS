@@ -1,0 +1,236 @@
+{
+  "module": "console",
+  "dependsOn": [
+    "network:proxy",
+    "network:rules",
+    "identity:accessControl"
+  ],
+  "integratesWith": [
+    "litellm:models"
+  ],
+  "fields": {
+    "aliasType": {
+      "value": "host",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "dependsOn": {
+      "value": "[\"network:proxy\",\"network:rules\",\"identity:accessControl\"]",
+      "defaulted": false,
+      "literal": "[\"network:proxy\",\"network:rules\",\"identity:accessControl\"]",
+      "notTracking": false
+    },
+    "description": {
+      "value": "The TAPPaaS console (ADR-034): the site's web UI. The service runs on the mothership (tappaas-console.service, built from tappaas-cicd/ui); this module is its published face — the route through Caddy and the Authentik gate — and, when the AI stack is installed, the assistant's LiteLLM key. It installs nothing of its own.",
+      "defaulted": false,
+      "literal": "The TAPPaaS console (ADR-034): the site's web UI. The service runs on the mothership (tappaas-console.service, built from tappaas-cicd/ui); this module is its published face — the route through Caddy and the Authentik gate — and, when the AI stack is installed, the assistant's LiteLLM key. It installs nothing of its own.",
+      "notTracking": false
+    },
+    "displayName": {
+      "value": "TAPPaaS console",
+      "defaulted": false,
+      "literal": "TAPPaaS console",
+      "notTracking": false
+    },
+    "environment": {
+      "value": "mgmt",
+      "defaulted": false,
+      "literal": "mgmt",
+      "notTracking": true
+    },
+    "firewallType": {
+      "value": "opnsense",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "gateGroups": {
+      "value": "[\"installer\"]",
+      "defaulted": false,
+      "literal": "[\"installer\"]",
+      "notTracking": false
+    },
+    "installTime": {
+      "value": "20261018-16:29:53",
+      "defaulted": false,
+      "literal": "20261018-16:29:53",
+      "notTracking": true
+    },
+    "integratesWith": {
+      "value": "[\"litellm:models\"]",
+      "defaulted": false,
+      "literal": "[\"litellm:models\"]",
+      "notTracking": false
+    },
+    "kind": {
+      "value": "application",
+      "defaulted": false,
+      "literal": "application",
+      "notTracking": false
+    },
+    "maintainer": {
+      "value": "@TAPPaaS",
+      "defaulted": false,
+      "literal": "@TAPPaaS",
+      "notTracking": false
+    },
+    "management": {
+      "value": "managed",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "moduleSource": {
+      "value": "/home/tappaas/TAPPaaS/src/foundation/console",
+      "defaulted": false,
+      "literal": "/home/tappaas/TAPPaaS/src/foundation/console",
+      "notTracking": true
+    },
+    "node": {
+      "value": "tappaas1",
+      "defaulted": false,
+      "literal": "tappaas1",
+      "notTracking": true
+    },
+    "pauseOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pausePriority": {
+      "value": "50",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "portSync": {
+      "value": "on",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "provides": {
+      "value": "[]",
+      "defaulted": false,
+      "literal": "[]",
+      "notTracking": false
+    },
+    "proxyAllowedZones": {
+      "value": "[\"mgmt\",\"admin\"]",
+      "defaulted": false,
+      "literal": "[\"mgmt\",\"admin\"]",
+      "notTracking": false
+    },
+    "proxyDomain": {
+      "value": "console.hrossen.dk",
+      "defaulted": false,
+      "literal": "console.hrossen.dk",
+      "notTracking": true
+    },
+    "proxyPort": {
+      "value": "9097",
+      "defaulted": false,
+      "literal": "9097",
+      "notTracking": false
+    },
+    "proxyPreserveHost": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "proxyUpstreamHttp1": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "proxyUpstreamTls": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "rebootOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "releaseDate": {
+      "value": "2026-10-17",
+      "defaulted": false,
+      "literal": "2026-10-17",
+      "notTracking": false
+    },
+    "source": {
+      "value": "official",
+      "defaulted": false,
+      "literal": "official",
+      "notTracking": false
+    },
+    "sshKeyOnly": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "stack": {
+      "value": "foundation",
+      "defaulted": false,
+      "literal": "foundation",
+      "notTracking": false
+    },
+    "status": {
+      "value": "Development",
+      "defaulted": false,
+      "literal": "Development",
+      "notTracking": false
+    },
+    "suspended": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "suspendedNoUpdate": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "updateTime": {
+      "value": "20261101-02:12:51",
+      "defaulted": false,
+      "literal": "20261101-02:12:51",
+      "notTracking": true
+    },
+    "version": {
+      "value": "0.1.0",
+      "defaulted": false,
+      "literal": "0.1.0",
+      "notTracking": false
+    },
+    "vmname": {
+      "value": "tappaas-cicd",
+      "defaulted": false,
+      "literal": "tappaas-cicd",
+      "notTracking": false
+    },
+    "zone0": {
+      "value": "mgmt",
+      "defaulted": false,
+      "literal": "mgmt",
+      "notTracking": false
+    },
+    "zone1": {
+      "value": "mgmt",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    }
+  },
+  "origAvailable": true
+}

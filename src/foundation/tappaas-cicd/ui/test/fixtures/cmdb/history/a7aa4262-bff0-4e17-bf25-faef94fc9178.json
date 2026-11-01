@@ -1,0 +1,995 @@
+{
+ "id": "a7aa4262-bff0-4e17-bf25-faef94fc9178",
+ "class": "vm",
+ "name": "lazysite",
+ "created": "2026-10-30T08:47:45.445Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "nics",
+   "value": [
+    {
+     "mac": "02:2f:0c:55:05:69",
+     "tag": 610,
+     "name": "net0",
+     "model": "virtio",
+     "bridge": "lan"
+    }
+   ],
+   "source": "site-manager",
+   "change": 30,
+   "from": "2026-10-30T08:49:32.595Z",
+   "to": null
+  },
+  {
+   "name": "health",
+   "value": {
+    "time": "2026-10-30T08:50:40.553Z",
+    "check": "guest-memory",
+    "status": "warning"
+   },
+   "source": "health-manager",
+   "change": 38,
+   "from": "2026-10-30T08:50:40.567Z",
+   "to": "2026-10-30T08:51:13.574Z"
+  },
+  {
+   "name": "health",
+   "value": {
+    "time": "2026-10-30T08:51:13.561Z",
+    "check": "guest-memory",
+    "status": "warning"
+   },
+   "source": "health-manager",
+   "change": 62,
+   "from": "2026-10-30T08:51:13.574Z",
+   "to": "2026-10-30T08:53:59.496Z"
+  },
+  {
+   "name": "health",
+   "value": {
+    "time": "2026-10-30T08:53:59.480Z",
+    "check": "guest-memory",
+    "status": "warning"
+   },
+   "source": "health-manager",
+   "change": 74,
+   "from": "2026-10-30T08:53:59.496Z",
+   "to": "2026-10-30T08:56:44.034Z"
+  },
+  {
+   "name": "health",
+   "value": {
+    "time": "2026-10-30T08:56:44.020Z",
+    "check": "guest-memory",
+    "status": "warning"
+   },
+   "source": "health-manager",
+   "change": 100,
+   "from": "2026-10-30T08:56:44.034Z",
+   "to": "2026-10-30T09:01:17.223Z"
+  },
+  {
+   "name": "health",
+   "value": {
+    "time": "2026-10-30T09:01:17.208Z",
+    "check": "guest-memory",
+    "status": "warning"
+   },
+   "source": "health-manager",
+   "change": 112,
+   "from": "2026-10-30T09:01:17.223Z",
+   "to": "2026-10-30T09:02:18.503Z"
+  },
+  {
+   "name": "health",
+   "value": {
+    "time": "2026-10-30T09:02:18.489Z",
+    "check": "guest-memory",
+    "status": "warning"
+   },
+   "source": "health-manager",
+   "change": 116,
+   "from": "2026-10-30T09:02:18.503Z",
+   "to": "2026-10-30T09:04:04.197Z"
+  },
+  {
+   "name": "health",
+   "value": {
+    "time": "2026-10-30T09:04:04.183Z",
+    "check": "guest-memory",
+    "status": "warning"
+   },
+   "source": "health-manager",
+   "change": 141,
+   "from": "2026-10-30T09:04:04.197Z",
+   "to": "2026-10-30T09:40:01.527Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:58:22.945Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "guest-memory-short",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "lazysite 1.0G 1.0G 0.8G 81% of declared, gap 0.2G",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:58:22.945Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:58:22.945Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:58:22.945Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 143,
+   "from": "2026-10-30T09:40:04.146Z",
+   "to": "2026-10-30T10:01:08.831Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-30T09:59:39.559Z",
+    "source": "sweep",
+    "desired": {
+     "file": "lazysite.json"
+    },
+    "attributes": {
+     "health": {
+      "now": null,
+      "was": {
+       "time": "2026-10-30T09:02:18.489Z",
+       "check": "guest-memory",
+       "status": "warning"
+      }
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 212,
+   "from": "2026-10-30T09:59:39.559Z",
+   "to": "2026-10-30T16:35:55.163Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:03:57.945Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-30T10:01:08.831Z",
+     "reason": "sweep-gone",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "vm/lazysite: drift: gone health",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:03:57.945Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "guest-memory-short",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "lazysite 1.0G 1.0G 0.8G 81% of declared, gap 0.2G",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:03:57.945Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:03:57.945Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:03:57.945Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 214,
+   "from": "2026-10-30T10:01:08.831Z",
+   "to": "2026-10-30T10:06:43.603Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:06:43.603Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-30T10:06:43.603Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:06:43.603Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "guest-memory-short",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "lazysite 1.0G 1.0G 0.8G 81% of declared, gap 0.2G",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:06:43.603Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:06:43.603Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:06:43.603Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 258,
+   "from": "2026-10-30T10:06:43.603Z",
+   "to": "2026-10-30T10:07:04.671Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T14:10:03.149Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-30T10:07:04.671Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:07:04.671Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "guest-memory-short",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "lazysite 1.0G 1.0G 0.8G 81% of declared, gap 0.2G",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T14:10:03.149Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T14:10:03.149Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T14:10:03.149Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 259,
+   "from": "2026-10-30T10:07:04.671Z",
+   "to": "2026-10-30T14:15:00.202Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T08:21:51.484Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-30T10:07:04.671Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:07:04.671Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T14:15:00.202Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T08:21:51.484Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T08:21:51.484Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T08:21:51.484Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 357,
+   "from": "2026-10-30T14:15:00.202Z",
+   "to": "2026-10-31T08:25:03.232Z"
+  },
+  {
+   "name": "maturity",
+   "value": "Development",
+   "source": "site-manager",
+   "change": 1330,
+   "from": "2026-10-31T07:24:25.263Z",
+   "to": null
+  },
+  {
+   "name": "state",
+   "value": "running",
+   "source": "site-manager",
+   "change": 1330,
+   "from": "2026-10-31T07:24:25.263Z",
+   "to": null
+  },
+  {
+   "name": "zone",
+   "value": "dmz",
+   "source": "site-manager",
+   "change": 1330,
+   "from": "2026-10-31T07:24:25.263Z",
+   "to": null
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T08:23:56.058Z",
+    "source": "sweep",
+    "desired": {
+     "file": "lazysite.json"
+    },
+    "attributes": {
+     "zone": {
+      "now": "dmz",
+      "was": null
+     },
+     "maturity": {
+      "now": "Development",
+      "was": null
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 1730,
+   "from": "2026-10-31T08:23:56.058Z",
+   "to": "2026-10-31T19:37:41.897Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T08:25:03.232Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "vm/lazysite: drift: appeared maturity; vm/lazysite: drift: appeared zone",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T14:15:00.202Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1733,
+   "from": "2026-10-31T08:25:03.232Z",
+   "to": "2026-10-31T09:55:09.015Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T09:55:09.015Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:55:09.015Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T14:15:00.202Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 2343,
+   "from": "2026-10-31T09:55:09.015Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 177,
+   "type": "depends-on",
+   "direction": "out",
+   "other": {
+    "id": "a0744357-5768-4dc1-bd83-4abca98d3596",
+    "class": "service",
+    "name": "network:rules"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 178,
+   "type": "depends-on",
+   "direction": "out",
+   "other": {
+    "id": "05b54d2a-5333-4616-92a8-232989876355",
+    "class": "service",
+    "name": "forgejo:repo"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 174,
+   "type": "depends-on",
+   "direction": "out",
+   "other": {
+    "id": "fc39fc51-1a56-4551-8566-53e2eaf17862",
+    "class": "service",
+    "name": "cluster:vm"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 176,
+   "type": "depends-on",
+   "direction": "out",
+   "other": {
+    "id": "ee9a7b62-e204-4565-8084-48a003b5b83d",
+    "class": "service",
+    "name": "network:proxy"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 175,
+   "type": "depends-on",
+   "direction": "out",
+   "other": {
+    "id": "b35b1a55-2887-453f-acb5-88c367f31d90",
+    "class": "service",
+    "name": "templates:nixos"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 20,
+   "type": "member-of",
+   "direction": "out",
+   "other": {
+    "id": "9a883fd4-b028-4492-b870-4e8a16b7393c",
+    "class": "environment",
+    "name": "rossen"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 21,
+   "type": "runs-on",
+   "direction": "out",
+   "other": {
+    "id": "95727e8e-df12-468f-a03b-8b685140e223",
+    "class": "machine",
+    "name": "tappaas2"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 30,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:49:32.595Z",
+   "drift": false
+  },
+  {
+   "id": 38,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:50:40.567Z",
+   "drift": false
+  },
+  {
+   "id": 62,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:51:13.574Z",
+   "drift": false
+  },
+  {
+   "id": 74,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:53:59.496Z",
+   "drift": false
+  },
+  {
+   "id": 100,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:56:44.034Z",
+   "drift": false
+  },
+  {
+   "id": 112,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T09:01:17.223Z",
+   "drift": false
+  },
+  {
+   "id": 116,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T09:02:18.503Z",
+   "drift": false
+  },
+  {
+   "id": 141,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T09:04:04.197Z",
+   "drift": false
+  },
+  {
+   "id": 143,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T09:40:04.146Z",
+   "drift": false
+  },
+  {
+   "id": 212,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-30T09:59:39.559Z",
+   "drift": true
+  },
+  {
+   "id": 214,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T10:01:08.831Z",
+   "drift": false
+  },
+  {
+   "id": 258,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T10:06:43.603Z",
+   "drift": false
+  },
+  {
+   "id": 259,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T10:07:04.671Z",
+   "drift": false
+  },
+  {
+   "id": 357,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T14:15:00.202Z",
+   "drift": false
+  },
+  {
+   "id": 501,
+   "kind": "change",
+   "source": "module-manager",
+   "job": null,
+   "verb": "update lazysite",
+   "actor": "tappaas",
+   "time": "2026-10-30T16:35:55.163Z",
+   "drift": false
+  },
+  {
+   "id": 1330,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:24:25.263Z",
+   "drift": true
+  },
+  {
+   "id": 1730,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-31T08:23:56.058Z",
+   "drift": true
+  },
+  {
+   "id": 1733,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T08:25:03.232Z",
+   "drift": false
+  },
+  {
+   "id": 2343,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:55:09.015Z",
+   "drift": false
+  },
+  {
+   "id": 6202,
+   "kind": "change",
+   "source": "module-manager",
+   "job": null,
+   "verb": "update lazysite",
+   "actor": "tappaas",
+   "time": "2026-10-31T19:37:41.897Z",
+   "drift": false
+  }
+ ]
+}

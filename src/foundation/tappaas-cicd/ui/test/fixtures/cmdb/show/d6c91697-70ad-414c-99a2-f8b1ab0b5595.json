@@ -1,0 +1,27 @@
+{
+  "id": "d6c91697-70ad-414c-99a2-f8b1ab0b5595",
+  "class": "node",
+  "ancestors": [
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "ap-stub",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T19:35:22.818Z",
+  "ended": null,
+  "lastSeen": null,
+  "seen": {},
+  "at": null,
+  "attributes": {
+    "placeholder": {
+      "value": true,
+      "source": "asset-manager",
+      "since": "2026-10-30T19:35:22.818Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

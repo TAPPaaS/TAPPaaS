@@ -1,0 +1,551 @@
+{
+ "id": "89b7c866-8cdc-45bc-887e-54bccf2302b9",
+ "class": "location",
+ "name": "hareskov",
+ "created": "2026-10-30T08:47:49.432Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "1 of 1 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T08:21:51.484Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-30T10:07:04.671Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "1 of 1 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:07:04.671Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 286,
+   "from": "2026-10-30T12:52:18.899Z",
+   "to": "2026-10-31T08:25:03.232Z"
+  },
+  {
+   "name": "city",
+   "value": "V\u00e6rl\u00f8se",
+   "source": "site-manager",
+   "change": 831,
+   "from": "2026-10-30T20:08:06.995Z",
+   "to": "2026-10-30T20:08:08.704Z"
+  },
+  {
+   "name": "city",
+   "value": "Hareskov",
+   "source": "site-manager",
+   "change": 847,
+   "from": "2026-10-30T20:08:08.704Z",
+   "to": "2026-10-30T20:08:09.227Z"
+  },
+  {
+   "name": "timezone",
+   "value": "Europe/Copenhagen",
+   "source": "site-manager",
+   "change": 851,
+   "from": "2026-10-30T20:08:09.140Z",
+   "to": null
+  },
+  {
+   "name": "city",
+   "value": "Hiller\u00f8d",
+   "source": "site-manager",
+   "change": 853,
+   "from": "2026-10-30T20:08:09.227Z",
+   "to": "2026-10-30T20:08:40.686Z"
+  },
+  {
+   "name": "city",
+   "value": "Hareskov",
+   "source": "site-manager",
+   "change": 869,
+   "from": "2026-10-30T20:08:40.686Z",
+   "to": "2026-10-30T20:08:41.215Z"
+  },
+  {
+   "name": "city",
+   "value": "V\u00e6rl\u00f8se",
+   "source": "site-manager",
+   "change": 875,
+   "from": "2026-10-30T20:08:41.215Z",
+   "to": "2026-10-30T20:08:42.965Z"
+  },
+  {
+   "name": "city",
+   "value": "Hareskov",
+   "source": "site-manager",
+   "change": 891,
+   "from": "2026-10-30T20:08:42.965Z",
+   "to": "2026-10-30T20:08:43.485Z"
+  },
+  {
+   "name": "city",
+   "value": "Hiller\u00f8d",
+   "source": "site-manager",
+   "change": 897,
+   "from": "2026-10-30T20:08:43.485Z",
+   "to": "2026-10-30T20:13:23.633Z"
+  },
+  {
+   "name": "city",
+   "value": "Hareskov",
+   "source": "site-manager",
+   "change": 901,
+   "from": "2026-10-30T20:13:23.633Z",
+   "to": "2026-10-30T20:13:24.215Z"
+  },
+  {
+   "name": "city",
+   "value": "V\u00e6rl\u00f8se",
+   "source": "site-manager",
+   "change": 908,
+   "from": "2026-10-30T20:13:24.215Z",
+   "to": "2026-10-30T20:18:21.850Z"
+  },
+  {
+   "name": "city",
+   "value": "Hareskov",
+   "source": "site-manager",
+   "change": 911,
+   "from": "2026-10-30T20:18:21.850Z",
+   "to": "2026-10-30T20:18:22.395Z"
+  },
+  {
+   "name": "city",
+   "value": "V\u00e6rl\u00f8se",
+   "source": "site-manager",
+   "change": 918,
+   "from": "2026-10-30T20:18:22.395Z",
+   "to": "2026-10-30T20:18:28.805Z"
+  },
+  {
+   "name": "city",
+   "value": "Hareskov",
+   "source": "site-manager",
+   "change": 934,
+   "from": "2026-10-30T20:18:28.805Z",
+   "to": "2026-10-30T20:18:29.368Z"
+  },
+  {
+   "name": "city",
+   "value": "Hiller\u00f8d",
+   "source": "site-manager",
+   "change": 940,
+   "from": "2026-10-30T20:18:29.368Z",
+   "to": "2026-10-31T00:00:32.049Z"
+  },
+  {
+   "name": "city",
+   "value": "Hareskov",
+   "source": "site-manager",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": null
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T00:00:32.049Z",
+    "source": "site-manager",
+    "desired": null,
+    "attributes": {
+     "city": {
+      "now": "Hareskov",
+      "was": "Hiller\u00f8d"
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "1 of 1 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T08:25:03.232Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "1 of 1 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1733,
+   "from": "2026-10-31T08:25:03.232Z",
+   "to": "2026-10-31T09:55:09.015Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "1 of 1 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:55:09.015Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T09:55:09.015Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": true,
+     "message": "1 of 1 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:55:09.015Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 2343,
+   "from": "2026-10-31T09:55:09.015Z",
+   "to": "2026-10-31T10:00:11.396Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "1 of 1 warning",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T09:55:09.015Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "1 of 1 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:55:09.015Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 2378,
+   "from": "2026-10-31T10:00:11.396Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 332,
+   "type": "at",
+   "direction": "in",
+   "other": {
+    "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+    "class": "backup-peer",
+    "name": "rasmus"
+   },
+   "attributes": {},
+   "source": "backup-manager",
+   "change": 6,
+   "from": "2026-10-30T08:47:53.826Z",
+   "to": null
+  },
+  {
+   "id": 591,
+   "type": "at",
+   "direction": "in",
+   "other": {
+    "id": "70cbf684-afaf-48d5-a47c-98f601213c89",
+    "class": "site",
+    "name": "t"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 852,
+   "from": "2026-10-30T20:08:09.184Z",
+   "to": "2026-10-30T20:08:09.272Z"
+  },
+  {
+   "id": 594,
+   "type": "at",
+   "direction": "in",
+   "other": {
+    "id": "70cbf684-afaf-48d5-a47c-98f601213c89",
+    "class": "site",
+    "name": "t"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 896,
+   "from": "2026-10-30T20:08:43.442Z",
+   "to": "2026-10-30T20:08:43.527Z"
+  },
+  {
+   "id": 597,
+   "type": "at",
+   "direction": "in",
+   "other": {
+    "id": "70cbf684-afaf-48d5-a47c-98f601213c89",
+    "class": "site",
+    "name": "t"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 939,
+   "from": "2026-10-30T20:18:29.322Z",
+   "to": "2026-10-30T20:18:29.414Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 847,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "location add hetzner-fsn1",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:08:08.704Z",
+   "drift": false
+  },
+  {
+   "id": 851,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "location modify hareskov",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:08:09.140Z",
+   "drift": false
+  },
+  {
+   "id": 852,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "site modify",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:08:09.184Z",
+   "drift": false
+  },
+  {
+   "id": 853,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "site modify",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:08:09.227Z",
+   "drift": false
+  },
+  {
+   "id": 869,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "location modify hareskov",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:08:40.686Z",
+   "drift": false
+  },
+  {
+   "id": 875,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "location modify hareskov",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:08:41.215Z",
+   "drift": false
+  },
+  {
+   "id": 891,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "location add hetzner-fsn1",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:08:42.965Z",
+   "drift": false
+  },
+  {
+   "id": 896,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "site modify",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:08:43.442Z",
+   "drift": false
+  },
+  {
+   "id": 897,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "site modify",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:08:43.485Z",
+   "drift": false
+  },
+  {
+   "id": 901,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "location modify hareskov",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:13:23.633Z",
+   "drift": false
+  },
+  {
+   "id": 908,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "location modify hareskov",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:13:24.215Z",
+   "drift": false
+  },
+  {
+   "id": 911,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "location modify hareskov",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:18:21.850Z",
+   "drift": false
+  },
+  {
+   "id": 918,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "location modify hareskov",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:18:22.395Z",
+   "drift": false
+  },
+  {
+   "id": 934,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "location add hetzner-fsn1",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:18:28.805Z",
+   "drift": false
+  },
+  {
+   "id": 939,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "site modify",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:18:29.322Z",
+   "drift": false
+  },
+  {
+   "id": 940,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "site modify",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:18:29.368Z",
+   "drift": false
+  },
+  {
+   "id": 1046,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T00:00:32.049Z",
+   "drift": true
+  },
+  {
+   "id": 1733,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T08:25:03.232Z",
+   "drift": false
+  },
+  {
+   "id": 2343,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:55:09.015Z",
+   "drift": false
+  },
+  {
+   "id": 2378,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T10:00:11.396Z",
+   "drift": false
+  }
+ ]
+}

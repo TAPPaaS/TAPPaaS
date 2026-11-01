@@ -1,0 +1,153 @@
+{
+  "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+  "class": "vm",
+  "ancestors": [
+    "vm",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "test-deb-vlannode",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-31T21:02:22.031Z",
+  "ended": "2026-11-01T08:26:58.915Z",
+  "lastSeen": "2026-11-01T08:26:58.915Z",
+  "seen": {
+    "operator": "2026-11-01T08:26:58.915Z",
+    "site-manager": "2026-10-31T21:07:21.027Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T21:05:02.585Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-11-01T00:04:45.410Z",
+          "reason": "sweep-missing",
+          "source": "health-manager",
+          "status": "critical",
+          "derived": false,
+          "message": "vm/test-deb-vlannode: desired without actual",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-31T21:05:02.585Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T21:10:08.334Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T21:05:02.585Z",
+          "reason": "reboot-pending",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": false,
+          "message": "test-deb-vlannodethe OS asks for a reboot",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T21:05:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-11-01T00:04:45.410Z"
+    },
+    "cores": {
+      "value": 1,
+      "source": "site-manager",
+      "since": "2026-10-31T21:02:22.031Z"
+    },
+    "description": {
+      "value": "Test: Debian image on srv VLAN on a different node (tappaas3)",
+      "source": "site-manager",
+      "since": "2026-10-31T21:02:22.031Z"
+    },
+    "desired": {
+      "value": {
+        "file": "test-deb-vlannode.json"
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T21:02:22.031Z"
+    },
+    "disks": {
+      "value": [
+        {
+          "size": "4M",
+          "storage": "tanka1"
+        },
+        {
+          "size": "4G",
+          "storage": "tanka1"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T21:02:22.031Z"
+    },
+    "memory": {
+      "value": 1024,
+      "source": "site-manager",
+      "since": "2026-10-31T21:02:22.031Z"
+    },
+    "release": {
+      "value": {
+        "module": "test-vm-creation",
+        "version": "0.5.0"
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T21:02:22.031Z"
+    },
+    "stack": {
+      "value": "test",
+      "source": "site-manager",
+      "since": "2026-10-31T21:02:22.031Z"
+    },
+    "stage": {
+      "value": "retired",
+      "source": "operator",
+      "since": "2026-11-01T08:26:58.915Z"
+    },
+    "state": {
+      "value": "running",
+      "source": "site-manager",
+      "since": "2026-10-31T21:02:22.031Z"
+    },
+    "vmid": {
+      "value": 902,
+      "source": "site-manager",
+      "since": "2026-10-31T21:02:22.031Z"
+    },
+    "zone": {
+      "value": "rossen",
+      "source": "site-manager",
+      "since": "2026-10-31T21:02:22.031Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

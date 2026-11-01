@@ -102,7 +102,7 @@ check(field(eadd, "ownerOrg")?.default === "rossen" && field(eadd, "displayName"
 check(placeholderOf(field(eadd, "displayName")!, typedVars({ "@env": "acme" })) === "default Acme" && placeholderOf(field(eadd, "zone")!, typedVars({ "@env": "acme" })) === "default acme", "…filled from the name as it is typed: default Acme, default acme");
 
 // ── identity ────────────────────────────────────────────────────────────
-const user = buildManifest({ kind: "user", name: "lars", mode: "modify", defs: flattenSchema(schema("user-fields.json")), record: { name: "lars", displayName: "lars", primaryEmail: "lars@hrossen.dk", state: "active", memberOf: ["users", "installer"], roles: ["admin"] }, refs, vars: {} });
+const user = buildManifest({ kind: "user", name: "lars", mode: "modify", defs: flattenSchema(schema("user-fields.json")), record: { name: "lars", displayName: "lars", primaryEmail: "operator@example.org", state: "active", memberOf: ["users", "installer"], roles: ["admin"] }, refs, vars: {} });
 check(field(user, "memberOf")?.typeText === "groups" && field(user, "memberOf")?.arg === "--set" && field(user, "memberOf")?.choices?.includes("authentik Admins") === true, "user: memberOf is a list of groups, passed as --set");
 check(field(user, "primaryEmail")?.arg === "--set" && field(user, "roles")?.typeText === "roles" && field(user, "state")?.default === "active", "…primaryEmail as --set; roles; state's default");
 const group = buildManifest({ kind: "group", name: "users", mode: "modify", defs: flattenSchema(schema("group-fields.json")), record: { name: "users", displayName: "Users", ownerOrg: "rossen", roles: ["user"] }, refs, vars: {} });

@@ -1,0 +1,578 @@
+{
+  "manifest": 1,
+  "name": "storage-manager",
+  "version": "0.1.0",
+  "tagline": "TAPPaaS storage control plane — NFS shares in config/shares.json (ADR-029)",
+  "common": [],
+  "verbs": [
+    {
+      "verb": "validate",
+      "keys": [
+        [
+          "validate"
+        ]
+      ],
+      "usage": "validate",
+      "note": "(config/shares.json, against the deployed instances)",
+      "details": null,
+      "positionals": [],
+      "options": [],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "inventory",
+      "keys": [
+        [
+          "inventory"
+        ]
+      ],
+      "usage": "inventory [--json] [--node <n>] [--no-smart]",
+      "note": null,
+      "details": "The site's storage, read live and stored nowhere: per node its boot device, its ZFS pools with\ntheir vdevs and disks, what each pool holds (the guests' own volumes, the HA mirror copies of\nguests running on another node, the backup datastore, NFS shares) and its free space, and the\nreplication jobs. Every disk, pool and job carries a state — ok, warn or fail — and why.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "inventory: the document as JSON."
+        },
+        {
+          "flag": "--node",
+          "takesValue": true,
+          "arg": "<n>",
+          "choices": null,
+          "repeatable": false,
+          "description": "inventory: only this node."
+        },
+        {
+          "flag": "--no-smart",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "inventory: skip the SMART reads (slow); the document says so."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "report",
+      "keys": [
+        [
+          "report"
+        ]
+      ],
+      "usage": "report [--json] [--no-smart] [--discover]",
+      "note": null,
+      "details": "Sends the storage to the CMDB (cmdb-controller) as one observation: each ZFS pool `inventory` reads\n(storage-pool on its machine: size, used, health) and each share of\nconfig/shares.json (its export path and grants). `inventory` sends its pools as it reads them.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "report: print it instead of sending it."
+        },
+        {
+          "flag": "--no-smart",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "report: skip the SMART reads of the inventory it makes."
+        },
+        {
+          "flag": "--discover",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "report: accepted for the CMDB's sweep (ADR-040 D15); the report is already its full depth (disks and layouts are proxmox-controller's)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "nfs show",
+      "keys": [
+        [
+          "nfs",
+          "show"
+        ]
+      ],
+      "usage": "nfs show [<share>] [--server <instance>] [--json]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "share",
+          "optional": true,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--server",
+          "takesValue": true,
+          "arg": "<instance>",
+          "choices": null,
+          "repeatable": false,
+          "description": "nfs show: only the shares on this server."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "nfs show: the declarations as JSON."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "nfs share add",
+      "keys": [
+        [
+          "nfs",
+          "share",
+          "add"
+        ]
+      ],
+      "usage": "nfs share add <name> --server <instance> (--pool <p> [--quota <q>] --backup true|false [--backup-exclude a,b] [--prop k=v]... | --path <p> [--version v] [--v3-ports mountd,nlockmgr,statd]) [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--server",
+          "takesValue": true,
+          "arg": "<instance>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The module instance that carries the share."
+        },
+        {
+          "flag": "--pool",
+          "takesValue": true,
+          "arg": "<p>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A managed Host's ZFS pool."
+        },
+        {
+          "flag": "--quota",
+          "takesValue": true,
+          "arg": "<q>",
+          "choices": null,
+          "repeatable": false,
+          "description": "ZFS quota (e.g. 4T)."
+        },
+        {
+          "flag": "--backup",
+          "takesValue": true,
+          "arg": "true|false",
+          "choices": [
+            "true",
+            "false"
+          ],
+          "repeatable": false,
+          "description": "true|false — required for a managed share (ADR-029 D9)."
+        },
+        {
+          "flag": "--backup-exclude",
+          "takesValue": true,
+          "arg": "a",
+          "choices": null,
+          "repeatable": false,
+          "description": "Patterns relative to the share root, comma-separated."
+        },
+        {
+          "flag": "--prop",
+          "takesValue": true,
+          "arg": "k=v",
+          "choices": null,
+          "repeatable": true,
+          "description": "ZFS property: recordsize, compression, atime (repeatable)."
+        },
+        {
+          "flag": "--path",
+          "takesValue": true,
+          "arg": "<p>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A registered, unmanaged server's exported path."
+        },
+        {
+          "flag": "--version",
+          "takesValue": true,
+          "arg": "v",
+          "choices": null,
+          "repeatable": false,
+          "description": "4.2 (default), 4.1, 4.0 or 3 — a registered server's NFS version."
+        },
+        {
+          "flag": "--v3-ports",
+          "takesValue": true,
+          "arg": "mountd",
+          "choices": null,
+          "repeatable": false,
+          "description": "mountd,nlockmgr,statd — required with --version 3."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Show the result; change nothing."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "nfs share modify",
+      "keys": [
+        [
+          "nfs",
+          "share",
+          "modify"
+        ]
+      ],
+      "usage": "nfs share modify <name> --set <field>=<value>... [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--set",
+          "takesValue": true,
+          "arg": "<field>=<value>",
+          "choices": null,
+          "repeatable": true,
+          "description": "quota, backup.enabled, backup.exclude, properties.<k> (repeatable)."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Show the result; change nothing."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "nfs share delete",
+      "keys": [
+        [
+          "nfs",
+          "share",
+          "delete"
+        ]
+      ],
+      "usage": "nfs share delete <name> [--check]",
+      "note": "(unshared; data kept)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Show the result; change nothing."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "nfs share purge",
+      "keys": [
+        [
+          "nfs",
+          "share",
+          "purge"
+        ]
+      ],
+      "usage": "nfs share purge <name> --server <instance> --yes",
+      "note": "(destroys an orphan's dataset)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--server",
+          "takesValue": true,
+          "arg": "<instance>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The server holding the orphan."
+        },
+        {
+          "flag": "--yes",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Confirm: the data is destroyed."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "deletes the share's data on its server"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--yes",
+          "consequence": "Confirm: the data is destroyed."
+        }
+      ]
+    },
+    {
+      "verb": "nfs grant",
+      "keys": [
+        [
+          "nfs",
+          "grant"
+        ]
+      ],
+      "usage": "nfs grant <share> <consumer> ro|rw [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "share",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "consumer",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "ro|rw",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Show the result; change nothing."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "nfs revoke",
+      "keys": [
+        [
+          "nfs",
+          "revoke"
+        ]
+      ],
+      "usage": "nfs revoke <share> <consumer> [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "share",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "consumer",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Show the result; change nothing."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "nfs converge",
+      "keys": [
+        [
+          "nfs",
+          "converge"
+        ]
+      ],
+      "usage": "nfs converge [<share> [--notify]] [--server <instance>]",
+      "note": "(re-apply the declarations)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "share",
+          "optional": true,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--notify",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "nfs converge <share>: also run its consumers' storage:nfs update (a migration, with their consent)."
+        },
+        {
+          "flag": "--server",
+          "takesValue": true,
+          "arg": "<instance>",
+          "choices": null,
+          "repeatable": false,
+          "description": "nfs converge: one server's shares."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "makes the NFS servers and their clients match config/shares.json"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    }
+  ]
+}

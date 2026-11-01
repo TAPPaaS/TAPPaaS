@@ -1,0 +1,1763 @@
+{
+  "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+  "class": "vm",
+  "ancestors": [
+    "vm",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "identity",
+  "displayName": "Identity",
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T08:47:45.445Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.004Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.173Z",
+    "health-manager": "2026-10-30T09:04:04.197Z",
+    "module-manager": "2026-11-01T08:52:20.004Z",
+    "identity-manager": "2026-11-01T08:32:07.698Z"
+  },
+  "at": null,
+  "attributes": {
+    "authentik": {
+      "value": {
+        "flows": [
+          {
+            "name": "Welcome to authentik!",
+            "slug": "default-authentication-flow",
+            "designation": "authentication"
+          },
+          {
+            "name": "default-authenticator-static-setup",
+            "slug": "default-authenticator-static-setup",
+            "designation": "stage_configuration"
+          },
+          {
+            "name": "default-authenticator-totp-setup",
+            "slug": "default-authenticator-totp-setup",
+            "designation": "stage_configuration"
+          },
+          {
+            "name": "default-authenticator-webauthn-setup",
+            "slug": "default-authenticator-webauthn-setup",
+            "designation": "stage_configuration"
+          },
+          {
+            "name": "Logout",
+            "slug": "default-invalidation-flow",
+            "designation": "invalidation"
+          },
+          {
+            "name": "Change Password",
+            "slug": "default-password-change",
+            "designation": "stage_configuration"
+          },
+          {
+            "name": "Authorize Application",
+            "slug": "default-provider-authorization-explicit-consent",
+            "designation": "authorization"
+          },
+          {
+            "name": "Authorize Application",
+            "slug": "default-provider-authorization-implicit-consent",
+            "designation": "authorization"
+          },
+          {
+            "name": "Logged out of application",
+            "slug": "default-provider-invalidation-flow",
+            "designation": "invalidation"
+          },
+          {
+            "name": "Request access",
+            "slug": "default-request",
+            "designation": "stage_configuration"
+          },
+          {
+            "name": "Welcome to authentik!",
+            "slug": "default-source-authentication",
+            "designation": "authentication"
+          },
+          {
+            "name": "Welcome to authentik! Please select a username.",
+            "slug": "default-source-enrollment",
+            "designation": "enrollment"
+          },
+          {
+            "name": "Pre-Authentication",
+            "slug": "default-source-pre-authentication",
+            "designation": "stage_configuration"
+          },
+          {
+            "name": "User settings",
+            "slug": "default-user-settings-flow",
+            "designation": "stage_configuration"
+          },
+          {
+            "name": "default-oobe-setup",
+            "slug": "initial-setup",
+            "designation": "stage_configuration"
+          },
+          {
+            "name": "TAPPaaS Password Recovery",
+            "slug": "tappaas-recovery",
+            "designation": "recovery"
+          }
+        ],
+        "outposts": [
+          {
+            "name": "authentik Embedded Outpost",
+            "type": "proxy",
+            "providers": [
+              "identity",
+              "console",
+              "nomad",
+              "woodpecker"
+            ]
+          }
+        ],
+        "providers": [
+          {
+            "name": "identity",
+            "type": "Proxy Provider",
+            "flows": {
+              "invalidation": "default-provider-invalidation-flow",
+              "authorization": "default-provider-authorization-implicit-consent"
+            },
+            "application": "identity"
+          },
+          {
+            "name": "console",
+            "type": "Proxy Provider",
+            "flows": {
+              "invalidation": "default-provider-invalidation-flow",
+              "authorization": "default-provider-authorization-implicit-consent"
+            },
+            "application": "console"
+          },
+          {
+            "name": "forgejo",
+            "type": "OAuth2/OpenID Provider",
+            "flows": {
+              "invalidation": "default-provider-invalidation-flow",
+              "authorization": "default-provider-authorization-implicit-consent"
+            },
+            "application": "forgejo"
+          },
+          {
+            "name": "immich",
+            "type": "OAuth2/OpenID Provider",
+            "flows": {
+              "invalidation": "default-provider-invalidation-flow",
+              "authorization": "default-provider-authorization-implicit-consent"
+            },
+            "application": "immich"
+          },
+          {
+            "name": "karakeep",
+            "type": "OAuth2/OpenID Provider",
+            "flows": {
+              "invalidation": "default-provider-invalidation-flow",
+              "authorization": "default-provider-authorization-implicit-consent"
+            },
+            "application": "karakeep"
+          },
+          {
+            "name": "litellm",
+            "type": "OAuth2/OpenID Provider",
+            "flows": {
+              "invalidation": "default-provider-invalidation-flow",
+              "authorization": "default-provider-authorization-implicit-consent"
+            },
+            "application": "litellm"
+          },
+          {
+            "name": "nextcloud",
+            "type": "OAuth2/OpenID Provider",
+            "flows": {
+              "invalidation": "default-provider-invalidation-flow",
+              "authorization": "default-provider-authorization-implicit-consent"
+            },
+            "application": "nextcloud"
+          },
+          {
+            "name": "nomad",
+            "type": "Proxy Provider",
+            "flows": {
+              "invalidation": "default-provider-invalidation-flow",
+              "authorization": "default-provider-authorization-implicit-consent"
+            },
+            "application": "nomad"
+          },
+          {
+            "name": "openwebui",
+            "type": "OAuth2/OpenID Provider",
+            "flows": {
+              "invalidation": "default-provider-invalidation-flow",
+              "authorization": "default-provider-authorization-implicit-consent"
+            },
+            "application": "openwebui"
+          },
+          {
+            "name": "jellyfin",
+            "type": "OAuth2/OpenID Provider",
+            "flows": {
+              "invalidation": "default-provider-invalidation-flow",
+              "authorization": "default-provider-authorization-implicit-consent"
+            },
+            "application": "jellyfin"
+          },
+          {
+            "name": "woodpecker",
+            "type": "Proxy Provider",
+            "flows": {
+              "invalidation": "default-provider-invalidation-flow",
+              "authorization": "default-provider-authorization-implicit-consent"
+            },
+            "application": "woodpecker"
+          }
+        ],
+        "applications": [
+          {
+            "name": "Forgejo",
+            "slug": "forgejo",
+            "group": "",
+            "provider": "forgejo"
+          },
+          {
+            "name": "Identity",
+            "slug": "identity",
+            "group": "",
+            "provider": "identity"
+          },
+          {
+            "name": "Immich",
+            "slug": "immich",
+            "group": "",
+            "provider": "immich"
+          },
+          {
+            "name": "Jellyfin",
+            "slug": "jellyfin",
+            "group": "",
+            "provider": "jellyfin"
+          },
+          {
+            "name": "Karakeep",
+            "slug": "karakeep",
+            "group": "",
+            "provider": "karakeep"
+          },
+          {
+            "name": "LiteLLM",
+            "slug": "litellm",
+            "group": "",
+            "provider": "litellm"
+          },
+          {
+            "name": "Nextcloud",
+            "slug": "nextcloud",
+            "group": "",
+            "provider": "nextcloud"
+          },
+          {
+            "name": "Open WebUI",
+            "slug": "openwebui",
+            "group": "",
+            "provider": "openwebui"
+          },
+          {
+            "name": "Project N.O.M.A.D.",
+            "slug": "nomad",
+            "group": "",
+            "provider": "nomad"
+          },
+          {
+            "name": "TAPPaaS console",
+            "slug": "console",
+            "group": "",
+            "provider": "console"
+          },
+          {
+            "name": "Woodpecker CI",
+            "slug": "woodpecker",
+            "group": "",
+            "provider": "woodpecker"
+          }
+        ]
+      },
+      "source": "identity-manager",
+      "since": "2026-11-01T07:46:12.852Z"
+    },
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-11-01T08:05:02.583Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:05:02.583Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-30T14:15:00.202Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "security",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "cve-act",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": false,
+          "message": "authentik-server, authentik-worker (identity): 9 fixable",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "identity: its CPU offers no AVX-512 now — x86-64-v3 takes nothing it uses",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "backup",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "newest restore point 0 day(s) old",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-11-01T08:05:02.583Z"
+    },
+    "cores": {
+      "value": 2,
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "description": {
+      "value": "Authentik SSO identity provider for TAPPaaS",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "desired": {
+      "value": {
+        "file": "identity.json"
+      },
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "disks": {
+      "value": [
+        {
+          "size": "528K",
+          "storage": "tanka1"
+        },
+        {
+          "size": "32G",
+          "storage": "tanka1"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "displayName": {
+      "value": "Identity",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "drift": {
+      "value": {
+        "since": "2026-11-01T07:46:12.852Z",
+        "source": "sweep",
+        "desired": {
+          "file": "identity.json"
+        },
+        "attributes": {
+          "authentik": {
+            "now": {
+              "flows": [
+                {
+                  "name": "Welcome to authentik!",
+                  "slug": "default-authentication-flow",
+                  "designation": "authentication"
+                },
+                {
+                  "name": "default-authenticator-static-setup",
+                  "slug": "default-authenticator-static-setup",
+                  "designation": "stage_configuration"
+                },
+                {
+                  "name": "default-authenticator-totp-setup",
+                  "slug": "default-authenticator-totp-setup",
+                  "designation": "stage_configuration"
+                },
+                {
+                  "name": "default-authenticator-webauthn-setup",
+                  "slug": "default-authenticator-webauthn-setup",
+                  "designation": "stage_configuration"
+                },
+                {
+                  "name": "Logout",
+                  "slug": "default-invalidation-flow",
+                  "designation": "invalidation"
+                },
+                {
+                  "name": "Change Password",
+                  "slug": "default-password-change",
+                  "designation": "stage_configuration"
+                },
+                {
+                  "name": "Authorize Application",
+                  "slug": "default-provider-authorization-explicit-consent",
+                  "designation": "authorization"
+                },
+                {
+                  "name": "Authorize Application",
+                  "slug": "default-provider-authorization-implicit-consent",
+                  "designation": "authorization"
+                },
+                {
+                  "name": "Logged out of application",
+                  "slug": "default-provider-invalidation-flow",
+                  "designation": "invalidation"
+                },
+                {
+                  "name": "Request access",
+                  "slug": "default-request",
+                  "designation": "stage_configuration"
+                },
+                {
+                  "name": "Welcome to authentik!",
+                  "slug": "default-source-authentication",
+                  "designation": "authentication"
+                },
+                {
+                  "name": "Welcome to authentik! Please select a username.",
+                  "slug": "default-source-enrollment",
+                  "designation": "enrollment"
+                },
+                {
+                  "name": "Pre-Authentication",
+                  "slug": "default-source-pre-authentication",
+                  "designation": "stage_configuration"
+                },
+                {
+                  "name": "User settings",
+                  "slug": "default-user-settings-flow",
+                  "designation": "stage_configuration"
+                },
+                {
+                  "name": "default-oobe-setup",
+                  "slug": "initial-setup",
+                  "designation": "stage_configuration"
+                },
+                {
+                  "name": "TAPPaaS Password Recovery",
+                  "slug": "tappaas-recovery",
+                  "designation": "recovery"
+                }
+              ],
+              "outposts": [
+                {
+                  "name": "authentik Embedded Outpost",
+                  "type": "proxy",
+                  "providers": [
+                    "identity",
+                    "console",
+                    "nomad",
+                    "woodpecker"
+                  ]
+                }
+              ],
+              "providers": [
+                {
+                  "name": "identity",
+                  "type": "Proxy Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "identity"
+                },
+                {
+                  "name": "console",
+                  "type": "Proxy Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "console"
+                },
+                {
+                  "name": "forgejo",
+                  "type": "OAuth2/OpenID Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "forgejo"
+                },
+                {
+                  "name": "immich",
+                  "type": "OAuth2/OpenID Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "immich"
+                },
+                {
+                  "name": "karakeep",
+                  "type": "OAuth2/OpenID Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "karakeep"
+                },
+                {
+                  "name": "litellm",
+                  "type": "OAuth2/OpenID Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "litellm"
+                },
+                {
+                  "name": "nextcloud",
+                  "type": "OAuth2/OpenID Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "nextcloud"
+                },
+                {
+                  "name": "nomad",
+                  "type": "Proxy Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "nomad"
+                },
+                {
+                  "name": "openwebui",
+                  "type": "OAuth2/OpenID Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "openwebui"
+                },
+                {
+                  "name": "jellyfin",
+                  "type": "OAuth2/OpenID Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "jellyfin"
+                },
+                {
+                  "name": "woodpecker",
+                  "type": "Proxy Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "woodpecker"
+                }
+              ],
+              "applications": [
+                {
+                  "name": "Forgejo",
+                  "slug": "forgejo",
+                  "group": "",
+                  "provider": "forgejo"
+                },
+                {
+                  "name": "Identity",
+                  "slug": "identity",
+                  "group": "",
+                  "provider": "identity"
+                },
+                {
+                  "name": "Immich",
+                  "slug": "immich",
+                  "group": "",
+                  "provider": "immich"
+                },
+                {
+                  "name": "Jellyfin",
+                  "slug": "jellyfin",
+                  "group": "",
+                  "provider": "jellyfin"
+                },
+                {
+                  "name": "Karakeep",
+                  "slug": "karakeep",
+                  "group": "",
+                  "provider": "karakeep"
+                },
+                {
+                  "name": "LiteLLM",
+                  "slug": "litellm",
+                  "group": "",
+                  "provider": "litellm"
+                },
+                {
+                  "name": "Nextcloud",
+                  "slug": "nextcloud",
+                  "group": "",
+                  "provider": "nextcloud"
+                },
+                {
+                  "name": "Open WebUI",
+                  "slug": "openwebui",
+                  "group": "",
+                  "provider": "openwebui"
+                },
+                {
+                  "name": "Project N.O.M.A.D.",
+                  "slug": "nomad",
+                  "group": "",
+                  "provider": "nomad"
+                },
+                {
+                  "name": "TAPPaaS console",
+                  "slug": "console",
+                  "group": "",
+                  "provider": "console"
+                },
+                {
+                  "name": "Woodpecker CI",
+                  "slug": "woodpecker",
+                  "group": "",
+                  "provider": "woodpecker"
+                }
+              ]
+            },
+            "was": {
+              "flows": [
+                {
+                  "name": "Welcome to authentik!",
+                  "slug": "default-authentication-flow",
+                  "designation": "authentication"
+                },
+                {
+                  "name": "default-authenticator-static-setup",
+                  "slug": "default-authenticator-static-setup",
+                  "designation": "stage_configuration"
+                },
+                {
+                  "name": "default-authenticator-totp-setup",
+                  "slug": "default-authenticator-totp-setup",
+                  "designation": "stage_configuration"
+                },
+                {
+                  "name": "default-authenticator-webauthn-setup",
+                  "slug": "default-authenticator-webauthn-setup",
+                  "designation": "stage_configuration"
+                },
+                {
+                  "name": "Logout",
+                  "slug": "default-invalidation-flow",
+                  "designation": "invalidation"
+                },
+                {
+                  "name": "Change Password",
+                  "slug": "default-password-change",
+                  "designation": "stage_configuration"
+                },
+                {
+                  "name": "Authorize Application",
+                  "slug": "default-provider-authorization-explicit-consent",
+                  "designation": "authorization"
+                },
+                {
+                  "name": "Authorize Application",
+                  "slug": "default-provider-authorization-implicit-consent",
+                  "designation": "authorization"
+                },
+                {
+                  "name": "Logged out of application",
+                  "slug": "default-provider-invalidation-flow",
+                  "designation": "invalidation"
+                },
+                {
+                  "name": "Request access",
+                  "slug": "default-request",
+                  "designation": "stage_configuration"
+                },
+                {
+                  "name": "Welcome to authentik!",
+                  "slug": "default-source-authentication",
+                  "designation": "authentication"
+                },
+                {
+                  "name": "Welcome to authentik! Please select a username.",
+                  "slug": "default-source-enrollment",
+                  "designation": "enrollment"
+                },
+                {
+                  "name": "Pre-Authentication",
+                  "slug": "default-source-pre-authentication",
+                  "designation": "stage_configuration"
+                },
+                {
+                  "name": "User settings",
+                  "slug": "default-user-settings-flow",
+                  "designation": "stage_configuration"
+                },
+                {
+                  "name": "default-oobe-setup",
+                  "slug": "initial-setup",
+                  "designation": "stage_configuration"
+                },
+                {
+                  "name": "TAPPaaS Password Recovery",
+                  "slug": "tappaas-recovery",
+                  "designation": "recovery"
+                }
+              ],
+              "outposts": [
+                {
+                  "name": "authentik Embedded Outpost",
+                  "type": "proxy",
+                  "providers": [
+                    "console",
+                    "nomad",
+                    "woodpecker",
+                    "logging",
+                    "identity"
+                  ]
+                }
+              ],
+              "providers": [
+                {
+                  "name": "console",
+                  "type": "Proxy Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "console"
+                },
+                {
+                  "name": "forgejo",
+                  "type": "OAuth2/OpenID Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "forgejo"
+                },
+                {
+                  "name": "immich",
+                  "type": "OAuth2/OpenID Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "immich"
+                },
+                {
+                  "name": "karakeep",
+                  "type": "OAuth2/OpenID Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "karakeep"
+                },
+                {
+                  "name": "litellm",
+                  "type": "OAuth2/OpenID Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "litellm"
+                },
+                {
+                  "name": "nextcloud",
+                  "type": "OAuth2/OpenID Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "nextcloud"
+                },
+                {
+                  "name": "nomad",
+                  "type": "Proxy Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "nomad"
+                },
+                {
+                  "name": "openwebui",
+                  "type": "OAuth2/OpenID Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "openwebui"
+                },
+                {
+                  "name": "jellyfin",
+                  "type": "OAuth2/OpenID Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "jellyfin"
+                },
+                {
+                  "name": "woodpecker",
+                  "type": "Proxy Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "woodpecker"
+                },
+                {
+                  "name": "logging",
+                  "type": "Proxy Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "logging"
+                },
+                {
+                  "name": "identity",
+                  "type": "Proxy Provider",
+                  "flows": {
+                    "invalidation": "default-provider-invalidation-flow",
+                    "authorization": "default-provider-authorization-implicit-consent"
+                  },
+                  "application": "identity"
+                }
+              ],
+              "applications": [
+                {
+                  "name": "Forgejo",
+                  "slug": "forgejo",
+                  "group": "",
+                  "provider": "forgejo"
+                },
+                {
+                  "name": "Identity",
+                  "slug": "identity",
+                  "group": "",
+                  "provider": "identity"
+                },
+                {
+                  "name": "Immich",
+                  "slug": "immich",
+                  "group": "",
+                  "provider": "immich"
+                },
+                {
+                  "name": "Jellyfin",
+                  "slug": "jellyfin",
+                  "group": "",
+                  "provider": "jellyfin"
+                },
+                {
+                  "name": "Karakeep",
+                  "slug": "karakeep",
+                  "group": "",
+                  "provider": "karakeep"
+                },
+                {
+                  "name": "LiteLLM",
+                  "slug": "litellm",
+                  "group": "",
+                  "provider": "litellm"
+                },
+                {
+                  "name": "logging",
+                  "slug": "logging",
+                  "group": "",
+                  "provider": "logging"
+                },
+                {
+                  "name": "Nextcloud",
+                  "slug": "nextcloud",
+                  "group": "",
+                  "provider": "nextcloud"
+                },
+                {
+                  "name": "Open WebUI",
+                  "slug": "openwebui",
+                  "group": "",
+                  "provider": "openwebui"
+                },
+                {
+                  "name": "Project N.O.M.A.D.",
+                  "slug": "nomad",
+                  "group": "",
+                  "provider": "nomad"
+                },
+                {
+                  "name": "TAPPaaS console",
+                  "slug": "console",
+                  "group": "",
+                  "provider": "console"
+                },
+                {
+                  "name": "Woodpecker CI",
+                  "slug": "woodpecker",
+                  "group": "",
+                  "provider": "woodpecker"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "source": "cmdb-controller",
+      "since": "2026-11-01T07:48:03.360Z"
+    },
+    "haPolicy": {
+      "value": "started",
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "maturity": {
+      "value": "Production",
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    },
+    "memory": {
+      "value": 4096,
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "nics": {
+      "value": [
+        {
+          "mac": "02:07:e6:f7:74:47",
+          "name": "net0",
+          "model": "virtio",
+          "bridge": "lan"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    "release": {
+      "value": {
+        "module": "identity",
+        "version": "0.5.2"
+      },
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "stack": {
+      "value": "foundation",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "stage": {
+      "value": "operational",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "state": {
+      "value": "running",
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    },
+    "vmid": {
+      "value": 140,
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "zone": {
+      "value": "mgmt",
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    }
+  },
+  "drift": {
+    "since": "2026-11-01T07:46:12.852Z",
+    "source": "sweep",
+    "desired": {
+      "file": "identity.json"
+    },
+    "attributes": {
+      "authentik": {
+        "now": {
+          "flows": [
+            {
+              "name": "Welcome to authentik!",
+              "slug": "default-authentication-flow",
+              "designation": "authentication"
+            },
+            {
+              "name": "default-authenticator-static-setup",
+              "slug": "default-authenticator-static-setup",
+              "designation": "stage_configuration"
+            },
+            {
+              "name": "default-authenticator-totp-setup",
+              "slug": "default-authenticator-totp-setup",
+              "designation": "stage_configuration"
+            },
+            {
+              "name": "default-authenticator-webauthn-setup",
+              "slug": "default-authenticator-webauthn-setup",
+              "designation": "stage_configuration"
+            },
+            {
+              "name": "Logout",
+              "slug": "default-invalidation-flow",
+              "designation": "invalidation"
+            },
+            {
+              "name": "Change Password",
+              "slug": "default-password-change",
+              "designation": "stage_configuration"
+            },
+            {
+              "name": "Authorize Application",
+              "slug": "default-provider-authorization-explicit-consent",
+              "designation": "authorization"
+            },
+            {
+              "name": "Authorize Application",
+              "slug": "default-provider-authorization-implicit-consent",
+              "designation": "authorization"
+            },
+            {
+              "name": "Logged out of application",
+              "slug": "default-provider-invalidation-flow",
+              "designation": "invalidation"
+            },
+            {
+              "name": "Request access",
+              "slug": "default-request",
+              "designation": "stage_configuration"
+            },
+            {
+              "name": "Welcome to authentik!",
+              "slug": "default-source-authentication",
+              "designation": "authentication"
+            },
+            {
+              "name": "Welcome to authentik! Please select a username.",
+              "slug": "default-source-enrollment",
+              "designation": "enrollment"
+            },
+            {
+              "name": "Pre-Authentication",
+              "slug": "default-source-pre-authentication",
+              "designation": "stage_configuration"
+            },
+            {
+              "name": "User settings",
+              "slug": "default-user-settings-flow",
+              "designation": "stage_configuration"
+            },
+            {
+              "name": "default-oobe-setup",
+              "slug": "initial-setup",
+              "designation": "stage_configuration"
+            },
+            {
+              "name": "TAPPaaS Password Recovery",
+              "slug": "tappaas-recovery",
+              "designation": "recovery"
+            }
+          ],
+          "outposts": [
+            {
+              "name": "authentik Embedded Outpost",
+              "type": "proxy",
+              "providers": [
+                "identity",
+                "console",
+                "nomad",
+                "woodpecker"
+              ]
+            }
+          ],
+          "providers": [
+            {
+              "name": "identity",
+              "type": "Proxy Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "identity"
+            },
+            {
+              "name": "console",
+              "type": "Proxy Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "console"
+            },
+            {
+              "name": "forgejo",
+              "type": "OAuth2/OpenID Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "forgejo"
+            },
+            {
+              "name": "immich",
+              "type": "OAuth2/OpenID Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "immich"
+            },
+            {
+              "name": "karakeep",
+              "type": "OAuth2/OpenID Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "karakeep"
+            },
+            {
+              "name": "litellm",
+              "type": "OAuth2/OpenID Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "litellm"
+            },
+            {
+              "name": "nextcloud",
+              "type": "OAuth2/OpenID Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "nextcloud"
+            },
+            {
+              "name": "nomad",
+              "type": "Proxy Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "nomad"
+            },
+            {
+              "name": "openwebui",
+              "type": "OAuth2/OpenID Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "openwebui"
+            },
+            {
+              "name": "jellyfin",
+              "type": "OAuth2/OpenID Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "jellyfin"
+            },
+            {
+              "name": "woodpecker",
+              "type": "Proxy Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "woodpecker"
+            }
+          ],
+          "applications": [
+            {
+              "name": "Forgejo",
+              "slug": "forgejo",
+              "group": "",
+              "provider": "forgejo"
+            },
+            {
+              "name": "Identity",
+              "slug": "identity",
+              "group": "",
+              "provider": "identity"
+            },
+            {
+              "name": "Immich",
+              "slug": "immich",
+              "group": "",
+              "provider": "immich"
+            },
+            {
+              "name": "Jellyfin",
+              "slug": "jellyfin",
+              "group": "",
+              "provider": "jellyfin"
+            },
+            {
+              "name": "Karakeep",
+              "slug": "karakeep",
+              "group": "",
+              "provider": "karakeep"
+            },
+            {
+              "name": "LiteLLM",
+              "slug": "litellm",
+              "group": "",
+              "provider": "litellm"
+            },
+            {
+              "name": "Nextcloud",
+              "slug": "nextcloud",
+              "group": "",
+              "provider": "nextcloud"
+            },
+            {
+              "name": "Open WebUI",
+              "slug": "openwebui",
+              "group": "",
+              "provider": "openwebui"
+            },
+            {
+              "name": "Project N.O.M.A.D.",
+              "slug": "nomad",
+              "group": "",
+              "provider": "nomad"
+            },
+            {
+              "name": "TAPPaaS console",
+              "slug": "console",
+              "group": "",
+              "provider": "console"
+            },
+            {
+              "name": "Woodpecker CI",
+              "slug": "woodpecker",
+              "group": "",
+              "provider": "woodpecker"
+            }
+          ]
+        },
+        "was": {
+          "flows": [
+            {
+              "name": "Welcome to authentik!",
+              "slug": "default-authentication-flow",
+              "designation": "authentication"
+            },
+            {
+              "name": "default-authenticator-static-setup",
+              "slug": "default-authenticator-static-setup",
+              "designation": "stage_configuration"
+            },
+            {
+              "name": "default-authenticator-totp-setup",
+              "slug": "default-authenticator-totp-setup",
+              "designation": "stage_configuration"
+            },
+            {
+              "name": "default-authenticator-webauthn-setup",
+              "slug": "default-authenticator-webauthn-setup",
+              "designation": "stage_configuration"
+            },
+            {
+              "name": "Logout",
+              "slug": "default-invalidation-flow",
+              "designation": "invalidation"
+            },
+            {
+              "name": "Change Password",
+              "slug": "default-password-change",
+              "designation": "stage_configuration"
+            },
+            {
+              "name": "Authorize Application",
+              "slug": "default-provider-authorization-explicit-consent",
+              "designation": "authorization"
+            },
+            {
+              "name": "Authorize Application",
+              "slug": "default-provider-authorization-implicit-consent",
+              "designation": "authorization"
+            },
+            {
+              "name": "Logged out of application",
+              "slug": "default-provider-invalidation-flow",
+              "designation": "invalidation"
+            },
+            {
+              "name": "Request access",
+              "slug": "default-request",
+              "designation": "stage_configuration"
+            },
+            {
+              "name": "Welcome to authentik!",
+              "slug": "default-source-authentication",
+              "designation": "authentication"
+            },
+            {
+              "name": "Welcome to authentik! Please select a username.",
+              "slug": "default-source-enrollment",
+              "designation": "enrollment"
+            },
+            {
+              "name": "Pre-Authentication",
+              "slug": "default-source-pre-authentication",
+              "designation": "stage_configuration"
+            },
+            {
+              "name": "User settings",
+              "slug": "default-user-settings-flow",
+              "designation": "stage_configuration"
+            },
+            {
+              "name": "default-oobe-setup",
+              "slug": "initial-setup",
+              "designation": "stage_configuration"
+            },
+            {
+              "name": "TAPPaaS Password Recovery",
+              "slug": "tappaas-recovery",
+              "designation": "recovery"
+            }
+          ],
+          "outposts": [
+            {
+              "name": "authentik Embedded Outpost",
+              "type": "proxy",
+              "providers": [
+                "console",
+                "nomad",
+                "woodpecker",
+                "logging",
+                "identity"
+              ]
+            }
+          ],
+          "providers": [
+            {
+              "name": "console",
+              "type": "Proxy Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "console"
+            },
+            {
+              "name": "forgejo",
+              "type": "OAuth2/OpenID Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "forgejo"
+            },
+            {
+              "name": "immich",
+              "type": "OAuth2/OpenID Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "immich"
+            },
+            {
+              "name": "karakeep",
+              "type": "OAuth2/OpenID Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "karakeep"
+            },
+            {
+              "name": "litellm",
+              "type": "OAuth2/OpenID Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "litellm"
+            },
+            {
+              "name": "nextcloud",
+              "type": "OAuth2/OpenID Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "nextcloud"
+            },
+            {
+              "name": "nomad",
+              "type": "Proxy Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "nomad"
+            },
+            {
+              "name": "openwebui",
+              "type": "OAuth2/OpenID Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "openwebui"
+            },
+            {
+              "name": "jellyfin",
+              "type": "OAuth2/OpenID Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "jellyfin"
+            },
+            {
+              "name": "woodpecker",
+              "type": "Proxy Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "woodpecker"
+            },
+            {
+              "name": "logging",
+              "type": "Proxy Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "logging"
+            },
+            {
+              "name": "identity",
+              "type": "Proxy Provider",
+              "flows": {
+                "invalidation": "default-provider-invalidation-flow",
+                "authorization": "default-provider-authorization-implicit-consent"
+              },
+              "application": "identity"
+            }
+          ],
+          "applications": [
+            {
+              "name": "Forgejo",
+              "slug": "forgejo",
+              "group": "",
+              "provider": "forgejo"
+            },
+            {
+              "name": "Identity",
+              "slug": "identity",
+              "group": "",
+              "provider": "identity"
+            },
+            {
+              "name": "Immich",
+              "slug": "immich",
+              "group": "",
+              "provider": "immich"
+            },
+            {
+              "name": "Jellyfin",
+              "slug": "jellyfin",
+              "group": "",
+              "provider": "jellyfin"
+            },
+            {
+              "name": "Karakeep",
+              "slug": "karakeep",
+              "group": "",
+              "provider": "karakeep"
+            },
+            {
+              "name": "LiteLLM",
+              "slug": "litellm",
+              "group": "",
+              "provider": "litellm"
+            },
+            {
+              "name": "logging",
+              "slug": "logging",
+              "group": "",
+              "provider": "logging"
+            },
+            {
+              "name": "Nextcloud",
+              "slug": "nextcloud",
+              "group": "",
+              "provider": "nextcloud"
+            },
+            {
+              "name": "Open WebUI",
+              "slug": "openwebui",
+              "group": "",
+              "provider": "openwebui"
+            },
+            {
+              "name": "Project N.O.M.A.D.",
+              "slug": "nomad",
+              "group": "",
+              "provider": "nomad"
+            },
+            {
+              "name": "TAPPaaS console",
+              "slug": "console",
+              "group": "",
+              "provider": "console"
+            },
+            {
+              "name": "Woodpecker CI",
+              "slug": "woodpecker",
+              "group": "",
+              "provider": "woodpecker"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "relations": [
+    {
+      "id": 311,
+      "type": "backs-up",
+      "direction": "in",
+      "other": {
+        "id": "e5d0d704-4a8a-4cb0-a2eb-84ad8f6dc8f8",
+        "class": "datastore",
+        "name": "tappaas_backup"
+      },
+      "attributes": {},
+      "source": "backup-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:53.826Z"
+    },
+    {
+      "id": 152,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "39c19eed-d1ab-44dd-a45f-15d0bc214ba7",
+        "class": "service",
+        "name": "backup:vm"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 150,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "b6a3d15e-cb28-4fc3-a91b-5de5425d9484",
+        "class": "service",
+        "name": "cluster:ha"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 149,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "fc39fc51-1a56-4551-8566-53e2eaf17862",
+        "class": "service",
+        "name": "cluster:vm"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 153,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "ee9a7b62-e204-4565-8084-48a003b5b83d",
+        "class": "service",
+        "name": "network:proxy"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 151,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "b35b1a55-2887-453f-acb5-88c367f31d90",
+        "class": "service",
+        "name": "templates:nixos"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 11,
+      "type": "member-of",
+      "direction": "out",
+      "other": {
+        "id": "bb8a818c-90a8-47f1-a71d-f33c0f6d8b0f",
+        "class": "environment",
+        "name": "mgmt"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 107,
+      "type": "provides",
+      "direction": "out",
+      "other": {
+        "id": "1166d505-20b9-48bf-aaa8-d41b4ba82f87",
+        "class": "service",
+        "name": "identity:accessControl"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 108,
+      "type": "provides",
+      "direction": "out",
+      "other": {
+        "id": "9d7c7ae6-0a26-4da8-a496-ed1e821312ae",
+        "class": "service",
+        "name": "identity:identity"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 62,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "1166d505-20b9-48bf-aaa8-d41b4ba82f87",
+        "class": "service",
+        "name": "identity:accessControl"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 63,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "9d7c7ae6-0a26-4da8-a496-ed1e821312ae",
+        "class": "service",
+        "name": "identity:identity"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 12,
+      "type": "runs-on",
+      "direction": "out",
+      "other": {
+        "id": "c11c3e17-fe34-4bd7-bed6-6f8b259469c8",
+        "class": "machine",
+        "name": "tappaas1"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    }
+  ]
+}

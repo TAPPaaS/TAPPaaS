@@ -1,0 +1,186 @@
+{
+  "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+  "class": "device",
+  "ancestors": [
+    "device",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "USW Pro XG 10 PoE",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T08:49:11.011Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.200Z",
+  "seen": {
+    "switch-manager": "2026-11-01T08:52:20.200Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T09:55:09.015Z",
+          "reason": "vlan-undeclared",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": false,
+          "message": "USW Pro XG 10 PoE: VLAN 298 in no zone",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T09:55:09.015Z"
+    },
+    "controller": {
+      "value": "unifi-controller",
+      "source": "switch-manager",
+      "since": "2026-10-30T08:49:11.217Z"
+    },
+    "controllerAddress": {
+      "value": "https://unifi-os.mgmt.internal:11443",
+      "source": "switch-manager",
+      "since": "2026-10-31T07:24:26.280Z"
+    },
+    "desired": {
+      "value": {
+        "key": "USW Pro XG 10 PoE",
+        "file": "switch-configuration-desired.json"
+      },
+      "source": "switch-manager",
+      "since": "2026-10-30T08:49:11.217Z"
+    },
+    "deviceType": {
+      "value": "switch",
+      "source": "switch-manager",
+      "since": "2026-10-31T07:24:26.280Z"
+    },
+    "lags": {
+      "value": [
+        {
+          "live": [
+            11,
+            12
+          ],
+          "name": "crs-uplink",
+          "ports": [
+            "11",
+            "12"
+          ],
+          "formed": true,
+          "mlagId": null,
+          "switch": "USW Pro XG 10 PoE"
+        }
+      ],
+      "source": "switch-manager",
+      "since": "2026-10-31T07:24:26.280Z"
+    },
+    "managed": {
+      "value": "auto",
+      "source": "switch-manager",
+      "since": "2026-10-31T07:24:26.280Z"
+    },
+    "managementAddress": {
+      "value": "10.0.0.201",
+      "source": "switch-manager",
+      "since": "2026-10-30T08:49:11.217Z"
+    },
+    "model": {
+      "value": "USWED77",
+      "source": "switch-manager",
+      "since": "2026-10-30T08:49:11.217Z"
+    },
+    "order": {
+      "value": 0,
+      "source": "switch-manager",
+      "since": "2026-10-31T07:24:26.280Z"
+    },
+    "vendor": {
+      "value": "unifi",
+      "source": "switch-manager",
+      "since": "2026-10-31T07:24:26.280Z"
+    },
+    "vlans": {
+      "value": [
+        {
+          "tag": 100,
+          "declared": true
+        },
+        {
+          "tag": 200,
+          "declared": true
+        },
+        {
+          "tag": 298,
+          "declared": false
+        },
+        {
+          "tag": 299,
+          "declared": true
+        },
+        {
+          "tag": 310,
+          "declared": true
+        },
+        {
+          "tag": 410,
+          "declared": true
+        },
+        {
+          "tag": 420,
+          "declared": true
+        },
+        {
+          "tag": 430,
+          "declared": true
+        },
+        {
+          "tag": 510,
+          "declared": true
+        },
+        {
+          "tag": 610,
+          "declared": true
+        }
+      ],
+      "source": "switch-manager",
+      "since": "2026-10-30T08:50:56.767Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 607,
+      "type": "allocated-to",
+      "direction": "in",
+      "other": {
+        "id": "370b3fc9-0163-4d22-a8ea-54769c666337",
+        "class": "network-device",
+        "name": "sw-01"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T00:02:55.622Z"
+    }
+  ]
+}

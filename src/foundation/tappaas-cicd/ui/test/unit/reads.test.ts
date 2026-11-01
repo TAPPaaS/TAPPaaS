@@ -156,9 +156,9 @@ async function main(): Promise<void> {
         if (bin === "ipv6-manager") return { ...wan, stderr: wan.rc ? "ERROR: ssh: connect refused" : "", ran: true };
         return { rc: 1, stdout: "", stderr: "", ran: true };
       } }).ipv6.get();
-    const held = { rc: 0, stdout: JSON.stringify({ wanif: "vtnet1", prefix: "2a13:e747:a210:4500::/56", address: "2a13:e747:a210:4500::1" }) };
+    const held = { rc: 0, stdout: JSON.stringify({ wanif: "vtnet1", prefix: "2001:db8:1:4500::/56", address: "2001:db8:1:4500::1" }) };
     let r = await v6({ name: "rossen", ipv6: true }, held);
-    check(r.value?.on === true && r.value.prefix === "2a13:e747:a210:4500::/56" && r.value.source === "delegated", "ipv6: the delegated prefix the firewall holds");
+    check(r.value?.on === true && r.value.prefix === "2001:db8:1:4500::/56" && r.value.source === "delegated", "ipv6: the delegated prefix the firewall holds");
     check(ran.includes("ipv6-manager wan --json"), "…read through ipv6-manager wan --json");
     ran.length = 0;
     r = await v6({ name: "rossen" }, held);

@@ -1,0 +1,430 @@
+{
+  "id": "740ea0f1-a609-4d01-9199-2f70312b0028",
+  "class": "passive-device",
+  "ancestors": [
+    "passive-device",
+    "asset",
+    "resource",
+    "object"
+  ],
+  "name": "patchpanel1",
+  "displayName": null,
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-30T08:49:10.799Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.621Z",
+  "seen": {
+    "asset-manager": "2026-11-01T08:52:20.621Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T07:25:02.913Z"
+    },
+    "deviceType": {
+      "value": "patch-panel",
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    "faulty": {
+      "value": false,
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    "stage": {
+      "value": "operational",
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 456,
+      "type": "allocated-to",
+      "direction": "out",
+      "other": {
+        "id": "47441f14-1d50-4cf9-89e2-3610fe921631",
+        "class": "node",
+        "name": "patchpanel1"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.981Z"
+    },
+    {
+      "id": 370,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "3de6e86c-bd52-410f-b5bb-2c7d0a621084",
+        "class": "port",
+        "name": "1"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 379,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "098e7bd4-3e37-4534-85a4-f88836fbe79c",
+        "class": "port",
+        "name": "10"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 380,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "5c66c343-eeb2-4c0b-9e53-8f30cae9dc73",
+        "class": "port",
+        "name": "11"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 381,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "f5381215-dbca-4a45-b1c8-e7b5a91099df",
+        "class": "port",
+        "name": "12"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 382,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "3fb4420a-387d-4964-8c81-457384085f41",
+        "class": "port",
+        "name": "13"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 383,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "c7ec409d-5cb3-436b-84e5-4f7e48a7fef3",
+        "class": "port",
+        "name": "14"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 384,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "74bb57c6-dad4-41df-b630-b6acde0ebd0b",
+        "class": "port",
+        "name": "15"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 385,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "066ec8ea-c728-468a-93cc-51021fd0ffa8",
+        "class": "port",
+        "name": "16"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 386,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "c5696f8e-259c-464f-b5b7-62e47cb92233",
+        "class": "port",
+        "name": "17"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 387,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "db084c01-2a08-4320-b15b-23f79ce57639",
+        "class": "port",
+        "name": "18"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 388,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "466b633f-5e1b-4f39-ab5c-5ad1645a6a09",
+        "class": "port",
+        "name": "19"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 371,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "350778f4-a5ae-4534-a844-856b1373fe7c",
+        "class": "port",
+        "name": "2"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 389,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "03c55115-d5da-4753-8254-175744ba7359",
+        "class": "port",
+        "name": "20"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 390,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "de687b20-3257-4ef0-b742-5fedf2b59cd2",
+        "class": "port",
+        "name": "21"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 391,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "8a8803d4-aff9-4a6a-9686-c92c074db45c",
+        "class": "port",
+        "name": "22"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 392,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "7ce299d8-6de8-4bc7-bd6b-ea01bd67ef2c",
+        "class": "port",
+        "name": "23"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 393,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "b6a68b4b-4b40-4bb9-804d-ba1fe354f60c",
+        "class": "port",
+        "name": "24"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 372,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "54586083-cf42-4ab9-ac3d-4517c6cfde40",
+        "class": "port",
+        "name": "3"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 373,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "12b6156e-82e7-48f6-b72d-7ece13eba7ac",
+        "class": "port",
+        "name": "4"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 374,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "30565e27-2fb5-4e3c-9ad7-fef07d1a4a05",
+        "class": "port",
+        "name": "5"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 375,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "a8a1b8a6-757f-4102-8883-318cc837e014",
+        "class": "port",
+        "name": "6"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 376,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "5a2c694d-c8bb-40b8-9878-e07154cf4db7",
+        "class": "port",
+        "name": "7"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 377,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "69058e60-f868-404c-aed5-3259d7de9aba",
+        "class": "port",
+        "name": "8"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 378,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "2767c08b-0ed8-4350-b66d-24a05199af85",
+        "class": "port",
+        "name": "9"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 443,
+      "type": "placed-in",
+      "direction": "out",
+      "other": {
+        "id": "73a0f756-f569-4eaa-8508-bec8ac7ac791",
+        "class": "rack",
+        "name": "rack1"
+      },
+      "attributes": {
+        "u": 20,
+        "face": "front",
+        "slot": 0,
+        "width": "full",
+        "height": 1
+      },
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    }
+  ]
+}

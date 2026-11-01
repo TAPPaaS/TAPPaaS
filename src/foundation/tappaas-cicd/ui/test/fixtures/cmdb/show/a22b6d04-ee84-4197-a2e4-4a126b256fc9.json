@@ -1,0 +1,153 @@
+{
+  "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+  "class": "vm",
+  "ancestors": [
+    "vm",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "test-deb-n3noha",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-31T20:57:22.071Z",
+  "ended": "2026-11-01T08:26:58.915Z",
+  "lastSeen": "2026-11-01T08:26:58.915Z",
+  "seen": {
+    "operator": "2026-11-01T08:26:58.915Z",
+    "site-manager": "2026-10-31T21:07:21.027Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T21:00:02.583Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-11-01T00:04:45.410Z",
+          "reason": "sweep-missing",
+          "source": "health-manager",
+          "status": "critical",
+          "derived": false,
+          "message": "vm/test-deb-n3noha: desired without actual",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-31T21:00:02.583Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T21:10:08.334Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T21:00:02.583Z",
+          "reason": "reboot-pending",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": false,
+          "message": "test-deb-n3noha the OS asks for a reboot",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T21:05:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-11-01T00:04:45.410Z"
+    },
+    "cores": {
+      "value": 1,
+      "source": "site-manager",
+      "since": "2026-10-31T20:57:22.071Z"
+    },
+    "description": {
+      "value": "Test: Debian on tappaas3 with no HANode (no cluster:ha in dependsOn)",
+      "source": "site-manager",
+      "since": "2026-10-31T20:57:22.071Z"
+    },
+    "desired": {
+      "value": {
+        "file": "test-deb-n3noha.json"
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T20:57:22.071Z"
+    },
+    "disks": {
+      "value": [
+        {
+          "size": "4M",
+          "storage": "tanka1"
+        },
+        {
+          "size": "4G",
+          "storage": "tanka1"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T20:57:22.071Z"
+    },
+    "memory": {
+      "value": 1024,
+      "source": "site-manager",
+      "since": "2026-10-31T20:57:22.071Z"
+    },
+    "release": {
+      "value": {
+        "module": "test-vm-creation",
+        "version": "0.5"
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T20:57:22.071Z"
+    },
+    "stack": {
+      "value": "test",
+      "source": "site-manager",
+      "since": "2026-10-31T20:57:22.071Z"
+    },
+    "stage": {
+      "value": "retired",
+      "source": "operator",
+      "since": "2026-11-01T08:26:58.915Z"
+    },
+    "state": {
+      "value": "running",
+      "source": "site-manager",
+      "since": "2026-10-31T20:57:22.071Z"
+    },
+    "vmid": {
+      "value": 904,
+      "source": "site-manager",
+      "since": "2026-10-31T20:57:22.071Z"
+    },
+    "zone": {
+      "value": "mgmt",
+      "source": "site-manager",
+      "since": "2026-10-31T20:57:22.071Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

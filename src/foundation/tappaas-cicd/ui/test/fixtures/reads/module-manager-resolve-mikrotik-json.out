@@ -1,0 +1,158 @@
+{
+  "module": "mikrotik",
+  "dependsOn": [],
+  "integratesWith": [],
+  "fields": {
+    "controllers": {
+      "value": "[{\"name\":\"mikrotik-controller\",\"path\":\"controller/mikrotik-controller\",\"plugsInto\":[\"switch-manager\"]}]",
+      "defaulted": false,
+      "literal": "[{\"name\":\"mikrotik-controller\",\"path\":\"controller/mikrotik-controller\",\"plugsInto\":[\"switch-manager\"]}]",
+      "notTracking": false
+    },
+    "dependsOn": {
+      "value": "[]",
+      "defaulted": false,
+      "literal": "[]",
+      "notTracking": false
+    },
+    "description": {
+      "value": "MikroTik RouterOS switches (CRS3xx/CRS5xx, RouterOS 7) managed by TAPPaaS: brings mikrotik-controller (Ansible, community.routeros) for switch-manager — VLAN trunks and access ports, parking, LACP aggregates and MLAG pairs. Installs nothing on any machine; each switch is added with setup-credentials.sh.",
+      "defaulted": false,
+      "literal": "MikroTik RouterOS switches (CRS3xx/CRS5xx, RouterOS 7) managed by TAPPaaS: brings mikrotik-controller (Ansible, community.routeros) for switch-manager — VLAN trunks and access ports, parking, LACP aggregates and MLAG pairs. Installs nothing on any machine; each switch is added with setup-credentials.sh.",
+      "notTracking": false
+    },
+    "environment": {
+      "value": "rossen",
+      "defaulted": false,
+      "literal": "rossen",
+      "notTracking": true
+    },
+    "installTime": {
+      "value": "20261021-09:57:17",
+      "defaulted": false,
+      "literal": "20261021-09:57:17",
+      "notTracking": true
+    },
+    "kind": {
+      "value": "application",
+      "defaulted": false,
+      "literal": "application",
+      "notTracking": false
+    },
+    "maintainer": {
+      "value": "@larsrossen",
+      "defaulted": false,
+      "literal": "@larsrossen",
+      "notTracking": false
+    },
+    "management": {
+      "value": "managed",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "moduleSource": {
+      "value": "/home/tappaas/Community/src/larsrossen/network/mikrotik",
+      "defaulted": false,
+      "literal": "/home/tappaas/Community/src/larsrossen/network/mikrotik",
+      "notTracking": true
+    },
+    "pauseOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pausePriority": {
+      "value": "50",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "portSync": {
+      "value": "on",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "provides": {
+      "value": "[]",
+      "defaulted": false,
+      "literal": "[]",
+      "notTracking": false
+    },
+    "rebootOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "releaseDate": {
+      "value": "2026-10-20",
+      "defaulted": false,
+      "literal": "2026-10-20",
+      "notTracking": false
+    },
+    "source": {
+      "value": "official",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "sshKeyOnly": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "stack": {
+      "value": "misc",
+      "defaulted": false,
+      "literal": "misc",
+      "notTracking": false
+    },
+    "status": {
+      "value": "Development",
+      "defaulted": false,
+      "literal": "Development",
+      "notTracking": false
+    },
+    "suspended": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "suspendedNoUpdate": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "updateTime": {
+      "value": "20261101-02:23:54",
+      "defaulted": false,
+      "literal": "20261101-02:23:54",
+      "notTracking": true
+    },
+    "version": {
+      "value": "0.1.0",
+      "defaulted": false,
+      "literal": "0.1.0",
+      "notTracking": false
+    },
+    "zone0": {
+      "value": "rossen",
+      "defaulted": false,
+      "literal": "rossen",
+      "notTracking": true
+    },
+    "zone1": {
+      "value": "mgmt",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    }
+  },
+  "origAvailable": true
+}

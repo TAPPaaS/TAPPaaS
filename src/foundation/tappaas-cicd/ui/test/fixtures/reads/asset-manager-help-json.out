@@ -1,0 +1,3350 @@
+{
+  "manifest": 1,
+  "name": "asset-manager",
+  "version": "0.3.0",
+  "tagline": "where the site's hardware is — rooms in the site's locations, racks, placements and the cables nothing can see, in config/positions.json",
+  "common": [],
+  "verbs": [
+    {
+      "verb": "validate",
+      "keys": [
+        [
+          "validate"
+        ]
+      ],
+      "usage": "validate [--topology <file>] [--json]",
+      "note": "(config/positions.json against the topology, the site's locations and the catalog)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--topology",
+          "takesValue": true,
+          "arg": "<file>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A `network-manager topology --json` document to check against, instead of running it."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "The findings as JSON."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "rack list",
+      "keys": [
+        [
+          "rack",
+          "list"
+        ]
+      ],
+      "usage": "rack list [--json]",
+      "note": null,
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "As JSON."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "rack show",
+      "keys": [
+        [
+          "rack",
+          "show"
+        ]
+      ],
+      "usage": "rack show <rack> [--json]",
+      "note": "(the rack and what is placed in it)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "rack",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "As JSON."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "rack add",
+      "keys": [
+        [
+          "rack",
+          "add"
+        ]
+      ],
+      "usage": "rack add <rack> [--units <n>] [--width 19in|10in] [--numbering bottom-up|top-down] [--display-name <text>] [--room <text>] [--description <text>] [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "rack",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--units",
+          "takesValue": true,
+          "arg": "<n>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Its height in rack units (default 42)."
+        },
+        {
+          "flag": "--width",
+          "takesValue": true,
+          "arg": "19in|10in",
+          "choices": [
+            "19in",
+            "10in"
+          ],
+          "repeatable": false,
+          "description": "19in (default) or 10in."
+        },
+        {
+          "flag": "--numbering",
+          "takesValue": true,
+          "arg": "bottom-up|top-down",
+          "choices": [
+            "bottom-up",
+            "top-down"
+          ],
+          "repeatable": false,
+          "description": "bottom-up (default: U1 at the bottom) or top-down."
+        },
+        {
+          "flag": "--display-name",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The name shown on its frame."
+        },
+        {
+          "flag": "--room",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The room it stands in (a room record's name; text until the room is recorded)."
+        },
+        {
+          "flag": "--description",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "What it is for."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "rack modify",
+      "keys": [
+        [
+          "rack",
+          "modify"
+        ]
+      ],
+      "usage": "rack modify <rack> [--set <field>=<value>]... [--unset <field>]... [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "rack",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--set",
+          "takesValue": true,
+          "arg": "<field>=<value>",
+          "choices": null,
+          "repeatable": true,
+          "description": "displayName, units, width, numbering, room, description (repeatable)."
+        },
+        {
+          "flag": "--unset",
+          "takesValue": true,
+          "arg": "<field>",
+          "choices": null,
+          "repeatable": true,
+          "description": "Clear a text field: displayName, room, description (repeatable)."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "rack delete",
+      "keys": [
+        [
+          "rack",
+          "delete"
+        ]
+      ],
+      "usage": "rack delete <rack> [--check]",
+      "note": "(an empty rack only)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "rack",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "room list",
+      "keys": [
+        [
+          "room",
+          "list"
+        ]
+      ],
+      "usage": "room list [--json]",
+      "note": "(the rooms, their racks and the devices loose in them)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "As JSON."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "room show",
+      "keys": [
+        [
+          "room",
+          "show"
+        ]
+      ],
+      "usage": "room show <room> [--json]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "room",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "As JSON."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "room",
+        "within": []
+      }
+    },
+    {
+      "verb": "room add",
+      "keys": [
+        [
+          "room",
+          "add"
+        ]
+      ],
+      "usage": "room add <room> [--location <location>] [--display-name <text>] [--description <text>] [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "room",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--location",
+          "takesValue": true,
+          "arg": "<location>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The location it is in (site-manager location list); unset, the primary location."
+        },
+        {
+          "flag": "--display-name",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The name shown."
+        },
+        {
+          "flag": "--description",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "What it is."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "room modify",
+      "keys": [
+        [
+          "room",
+          "modify"
+        ]
+      ],
+      "usage": "room modify <room> [--set <field>=<value>]... [--unset <field>]... [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "room",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--set",
+          "takesValue": true,
+          "arg": "<field>=<value>",
+          "choices": null,
+          "repeatable": true,
+          "description": "displayName, description, location (repeatable)."
+        },
+        {
+          "flag": "--unset",
+          "takesValue": true,
+          "arg": "<field>",
+          "choices": null,
+          "repeatable": true,
+          "description": "Clear one of them; location back to the primary (repeatable)."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "room",
+        "within": []
+      }
+    },
+    {
+      "verb": "room delete",
+      "keys": [
+        [
+          "room",
+          "delete"
+        ]
+      ],
+      "usage": "room delete <room> [--check]",
+      "note": "(an empty room only)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "room",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "room",
+        "within": []
+      }
+    },
+    {
+      "verb": "place list",
+      "keys": [
+        [
+          "place",
+          "list"
+        ],
+        [
+          "mount",
+          "list"
+        ]
+      ],
+      "usage": "place list [--rack <rack>] [--json]",
+      "note": null,
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--rack",
+          "takesValue": true,
+          "arg": "<rack>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Only this rack's."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "As JSON."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "place show",
+      "keys": [
+        [
+          "place",
+          "show"
+        ],
+        [
+          "mount",
+          "show"
+        ]
+      ],
+      "usage": "place show <device> [--json]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "device",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "As JSON."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "place",
+      "keys": [
+        [
+          "place"
+        ],
+        [
+          "mount",
+          "add"
+        ]
+      ],
+      "usage": "place <device> (--rack <rack> --u <n> | --room <room> | --in <asset> [--bay <bay>]) [--height <n>] [--width full|half|third] [--slot <n>] [--face front|rear] [--faceplate <vendor/model>] [--label <text>] [--description <text>] [--topology <file>] [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "device",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--rack",
+          "takesValue": true,
+          "arg": "<rack>",
+          "choices": null,
+          "repeatable": false,
+          "description": "In this rack."
+        },
+        {
+          "flag": "--u",
+          "takesValue": true,
+          "arg": "<n>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The lowest rack unit it takes, as the rack numbers them."
+        },
+        {
+          "flag": "--room",
+          "takesValue": true,
+          "arg": "<room>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Loose in this room, in no rack (no --rack, no --u): its plate gives its size."
+        },
+        {
+          "flag": "--in",
+          "takesValue": true,
+          "arg": "<asset>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A disk only: into this asset (a server), out of stock or out of the asset it was in — the move."
+        },
+        {
+          "flag": "--bay",
+          "takesValue": true,
+          "arg": "<bay>",
+          "choices": null,
+          "repeatable": false,
+          "description": "With --in: the bay, as the asset labels it (default: the one it had there, else its by-id name)."
+        },
+        {
+          "flag": "--height",
+          "takesValue": true,
+          "arg": "<n>",
+          "choices": null,
+          "repeatable": false,
+          "description": "In a rack: the units it takes (default: its faceplate's, else 1)."
+        },
+        {
+          "flag": "--width",
+          "takesValue": true,
+          "arg": "full|half|third",
+          "choices": [
+            "full",
+            "half",
+            "third"
+          ],
+          "repeatable": false,
+          "description": "In a rack: full (default), half or third of its width."
+        },
+        {
+          "flag": "--slot",
+          "takesValue": true,
+          "arg": "<n>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A half or third: its column, 0 at the left."
+        },
+        {
+          "flag": "--face",
+          "takesValue": true,
+          "arg": "front|rear",
+          "choices": [
+            "front",
+            "rear"
+          ],
+          "repeatable": false,
+          "description": "In a rack: front (default) or rear."
+        },
+        {
+          "flag": "--faceplate",
+          "takesValue": true,
+          "arg": "<vendor/model>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The catalog's plate (faceplates list); unset, the catalog's suggestion for its model."
+        },
+        {
+          "flag": "--label",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The label on the device."
+        },
+        {
+          "flag": "--description",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A note on where it stands."
+        },
+        {
+          "flag": "--topology",
+          "takesValue": true,
+          "arg": "<file>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A `network-manager topology --json` document to check against, instead of running it."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "device",
+        "within": []
+      }
+    },
+    {
+      "verb": "place modify",
+      "keys": [
+        [
+          "place",
+          "modify"
+        ],
+        [
+          "mount",
+          "modify"
+        ]
+      ],
+      "usage": "place modify <device> [--set <field>=<value>]... [--unset <field>]... [--topology <file>] [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "device",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--set",
+          "takesValue": true,
+          "arg": "<field>=<value>",
+          "choices": null,
+          "repeatable": true,
+          "description": "rack, u, room, height, width, slot, face, faceplate, label, description (repeatable). A move is rack and u, or room (loose in it)."
+        },
+        {
+          "flag": "--unset",
+          "takesValue": true,
+          "arg": "<field>",
+          "choices": null,
+          "repeatable": true,
+          "description": "Clear faceplate (back to the catalog's suggestion), label or description (repeatable)."
+        },
+        {
+          "flag": "--topology",
+          "takesValue": true,
+          "arg": "<file>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A `network-manager topology --json` document to check against, instead of running it."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "device",
+        "within": []
+      }
+    },
+    {
+      "verb": "unplace",
+      "keys": [
+        [
+          "unplace"
+        ],
+        [
+          "mount",
+          "remove"
+        ]
+      ],
+      "usage": "unplace <device> [--check]",
+      "note": "(the device leaves its rack or room, a disk its asset, into stock; nothing else changes)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "device",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "device",
+        "within": []
+      }
+    },
+    {
+      "verb": "cable list",
+      "keys": [
+        [
+          "cable",
+          "list"
+        ]
+      ],
+      "usage": "cable list [--json]",
+      "note": "(the recorded cables; the topology adds the ones it sees)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "As JSON."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "cable add",
+      "keys": [
+        [
+          "cable",
+          "add"
+        ]
+      ],
+      "usage": "cable add --from <device:port> --to <device:port> [--kind patch|uplink|power] [--label <text>] [--link-speed <speed>] [--from-faceplate <vendor/model>] [--to-faceplate <vendor/model>] [--from-side front|rear] [--to-side front|rear] [--topology <file>] [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--from",
+          "takesValue": true,
+          "arg": "<device:port>",
+          "choices": null,
+          "repeatable": false,
+          "description": "One end: a device and its port, as its faceplate or the topology names it."
+        },
+        {
+          "flag": "--to",
+          "takesValue": true,
+          "arg": "<device:port>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The other end."
+        },
+        {
+          "flag": "--kind",
+          "takesValue": true,
+          "arg": "patch|uplink|power",
+          "choices": [
+            "patch",
+            "uplink",
+            "power"
+          ],
+          "repeatable": false,
+          "description": "patch (default), uplink or power."
+        },
+        {
+          "flag": "--label",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The label on the cable."
+        },
+        {
+          "flag": "--link-speed",
+          "takesValue": true,
+          "arg": "<speed>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The link speed seen on it (100m, 1g, 2.5g, 10g): the connection's, where a port's speed is its maximum."
+        },
+        {
+          "flag": "--from-faceplate",
+          "takesValue": true,
+          "arg": "<vendor/model>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A device only this cable places (the ISP's modem): its faceplate."
+        },
+        {
+          "flag": "--to-faceplate",
+          "takesValue": true,
+          "arg": "<vendor/model>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The same, for the other end."
+        },
+        {
+          "flag": "--from-side",
+          "takesValue": true,
+          "arg": "front|rear",
+          "choices": [
+            "front",
+            "rear"
+          ],
+          "repeatable": false,
+          "description": "A patch panel's port: front (default) or rear."
+        },
+        {
+          "flag": "--to-side",
+          "takesValue": true,
+          "arg": "front|rear",
+          "choices": [
+            "front",
+            "rear"
+          ],
+          "repeatable": false,
+          "description": "The same, for the other end."
+        },
+        {
+          "flag": "--topology",
+          "takesValue": true,
+          "arg": "<file>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A `network-manager topology --json` document to check against, instead of running it."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "cable remove",
+      "keys": [
+        [
+          "cable",
+          "remove"
+        ]
+      ],
+      "usage": "cable remove <device:port> [--side front|rear] [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "device:port",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--side",
+          "takesValue": true,
+          "arg": "front|rear",
+          "choices": [
+            "front",
+            "rear"
+          ],
+          "repeatable": false,
+          "description": "On a patch panel's port: the front (default) or the rear cable."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "device:port",
+        "within": []
+      }
+    },
+    {
+      "verb": "asset list",
+      "keys": [
+        [
+          "asset",
+          "list"
+        ],
+        [
+          "device",
+          "list"
+        ]
+      ],
+      "usage": "asset list [--stage <stage>] [--kind <kind>] [--json]",
+      "note": "(every asset, its stage, role and where it is)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--stage",
+          "takesValue": true,
+          "arg": "<stage>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Only these: ordered, stock, placed, operational, disposed."
+        },
+        {
+          "flag": "--kind",
+          "takesValue": true,
+          "arg": "<kind>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Only this kind."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "As JSON."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "asset show",
+      "keys": [
+        [
+          "asset",
+          "show"
+        ],
+        [
+          "device",
+          "show"
+        ]
+      ],
+      "usage": "asset show <asset> [--json]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "asset",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "As JSON."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "asset",
+        "within": []
+      }
+    },
+    {
+      "verb": "asset add",
+      "keys": [
+        [
+          "asset",
+          "add"
+        ],
+        [
+          "device",
+          "add"
+        ]
+      ],
+      "usage": "asset add [<asset>] --kind server|switch|access-point|modem|ont|ups|patch-panel|pdu|other [--vendor <text>] [--model <vendor/model>] [--serial <text>] [--asset-tag <text>] [--stage ordered|stock] [--ports <n> | --port <name>[:<kind>[:<speed>]]...] [--location <location>] [--display-name <text>] [--description <text>] [--supplier <text>] [--order-ref <text>] [--purchase-date <date>] [--warranty-until <date>] [--ownership owned|rented] [--notes <text>] [--topology <file>] [--check]",
+      "note": "(a physical thing, by its name, else the next free tag of its kind: srv-NN, sw-NN, ap-NN, dev-NN)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "asset",
+          "optional": true,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--kind",
+          "takesValue": true,
+          "arg": "server|switch|access-point|modem|ont|ups|patch-panel|pdu|other",
+          "choices": [
+            "server",
+            "switch",
+            "access-point",
+            "modem",
+            "ont",
+            "ups",
+            "patch-panel",
+            "pdu",
+            "other"
+          ],
+          "repeatable": false,
+          "description": "server, switch, access-point, modem, ont, ups, patch-panel, pdu or other."
+        },
+        {
+          "flag": "--vendor",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Who made it."
+        },
+        {
+          "flag": "--model",
+          "takesValue": true,
+          "arg": "<vendor/model>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Its plate in the catalog (faceplates list) — its ports come from it — or the model's name."
+        },
+        {
+          "flag": "--serial",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Its serial number: unique, the key a controller reports it by."
+        },
+        {
+          "flag": "--asset-tag",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The site's own tag on the case."
+        },
+        {
+          "flag": "--stage",
+          "takesValue": true,
+          "arg": "ordered|stock",
+          "choices": [
+            "ordered",
+            "stock"
+          ],
+          "repeatable": false,
+          "description": "ordered (bought, not here yet) or stock (default)."
+        },
+        {
+          "flag": "--ports",
+          "takesValue": true,
+          "arg": "<n>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Its ports, named 1 to N, rj45 at 1g (a patch panel)."
+        },
+        {
+          "flag": "--port",
+          "takesValue": true,
+          "arg": "<name>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A port: <name>[:<kind>[:<speed>]] — a kind rj45 (default, 1g), sfp, wifi, usb-a, usb-c (repeatable): WAN, eth1:rj45:2.5g, sfp1:sfp:10g."
+        },
+        {
+          "flag": "--location",
+          "takesValue": true,
+          "arg": "<location>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The location it is at (site-manager location list); unset, the primary location."
+        },
+        {
+          "flag": "--display-name",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The name shown."
+        },
+        {
+          "flag": "--description",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "What it is, where it comes from."
+        },
+        {
+          "flag": "--supplier",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Bought from."
+        },
+        {
+          "flag": "--order-ref",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The order or invoice reference."
+        },
+        {
+          "flag": "--purchase-date",
+          "takesValue": true,
+          "arg": "<date>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Bought on, YYYY-MM-DD."
+        },
+        {
+          "flag": "--warranty-until",
+          "takesValue": true,
+          "arg": "<date>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Its warranty ends, YYYY-MM-DD."
+        },
+        {
+          "flag": "--ownership",
+          "takesValue": true,
+          "arg": "owned|rented",
+          "choices": [
+            "owned",
+            "rented"
+          ],
+          "repeatable": false,
+          "description": "owned or rented."
+        },
+        {
+          "flag": "--notes",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Anything else about the purchase."
+        },
+        {
+          "flag": "--topology",
+          "takesValue": true,
+          "arg": "<file>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A `network-manager topology --json` document to check against, instead of running it."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "asset modify",
+      "keys": [
+        [
+          "asset",
+          "modify"
+        ],
+        [
+          "device",
+          "modify"
+        ]
+      ],
+      "usage": "asset modify <asset> [--set <field>=<value>]... [--unset <field>]... [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "asset",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--set",
+          "takesValue": true,
+          "arg": "<field>=<value>",
+          "choices": null,
+          "repeatable": true,
+          "description": "kind, vendor, model, serial, assetTag, displayName, description, location, ports (a count or a comma list), mac (its first port's), faultNote, procurement.supplier|orderRef|purchaseDate|warrantyUntil|ownership|notes (repeatable)."
+        },
+        {
+          "flag": "--unset",
+          "takesValue": true,
+          "arg": "<field>",
+          "choices": null,
+          "repeatable": true,
+          "description": "Clear one of them (repeatable)."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "asset",
+        "within": []
+      }
+    },
+    {
+      "verb": "asset remove",
+      "keys": [
+        [
+          "asset",
+          "remove"
+        ],
+        [
+          "device",
+          "remove"
+        ]
+      ],
+      "usage": "asset remove <asset> [--with-disks | --disks-to-stock] [--check]",
+      "note": "(a record made by mistake: unplaced, in no role, no recorded cable; a disposed asset's record stays. One that holds disks needs --with-disks or --disks-to-stock)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "asset",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--with-disks",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "The disks it holds go with it: their recorded cables, placements and records."
+        },
+        {
+          "flag": "--disks-to-stock",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "The disks it holds are unplaced first: they stay recorded, in stock, for reuse."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "asset",
+        "within": []
+      }
+    },
+    {
+      "verb": "asset record",
+      "keys": [
+        [
+          "asset",
+          "record"
+        ],
+        [
+          "device",
+          "record"
+        ]
+      ],
+      "usage": "asset record <port-or-mac> [--name <asset>] --kind <kind> [--port <name>] [--model <vendor/model>] [--location <location>] [--display-name <text>] [--description <text>] [--topology <file>] [--check]",
+      "note": "(<switch>:<port> or the MAC it is seen by: a device a switch port sees and nobody recorded becomes an asset playing itself, its MAC on its port, with the port's cable)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "port-or-mac",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--name",
+          "takesValue": true,
+          "arg": "<asset>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The name it is recorded under (default: the next free tag of its kind)."
+        },
+        {
+          "flag": "--kind",
+          "takesValue": true,
+          "arg": "<kind>",
+          "choices": null,
+          "repeatable": false,
+          "description": "server, switch, access-point, modem, ont, ups, patch-panel, pdu or other."
+        },
+        {
+          "flag": "--port",
+          "takesValue": true,
+          "arg": "<name>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Its port the cable reaches (default: what LLDP says, else its model's first, else 1)."
+        },
+        {
+          "flag": "--model",
+          "takesValue": true,
+          "arg": "<vendor/model>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Its plate in the catalog (faceplates list)."
+        },
+        {
+          "flag": "--location",
+          "takesValue": true,
+          "arg": "<location>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The location it is at (default: the switch's)."
+        },
+        {
+          "flag": "--display-name",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The name shown (default: what LLDP or the lease calls it)."
+        },
+        {
+          "flag": "--description",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "What it is."
+        },
+        {
+          "flag": "--topology",
+          "takesValue": true,
+          "arg": "<file>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A `network-manager topology --json` document to check against, instead of running it."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "port-or-mac",
+        "within": []
+      }
+    },
+    {
+      "verb": "asset receive",
+      "keys": [
+        [
+          "asset",
+          "receive"
+        ]
+      ],
+      "usage": "asset receive <asset> [--check]",
+      "note": "(what was ordered has come: ordered → stock)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "asset",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "asset",
+        "within": []
+      }
+    },
+    {
+      "verb": "asset fault",
+      "keys": [
+        [
+          "asset",
+          "fault"
+        ]
+      ],
+      "usage": "asset fault <asset> --note <text> [--check]",
+      "note": "(the faulty flag, beside its stage)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "asset",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--note",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "What is wrong."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "asset",
+        "within": []
+      }
+    },
+    {
+      "verb": "asset repaired",
+      "keys": [
+        [
+          "asset",
+          "repaired"
+        ]
+      ],
+      "usage": "asset repaired <asset> [--check]",
+      "note": "(the faulty flag and its note cleared)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "asset",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "asset",
+        "within": []
+      }
+    },
+    {
+      "verb": "asset dispose",
+      "keys": [
+        [
+          "asset",
+          "dispose"
+        ]
+      ],
+      "usage": "asset dispose <asset> --how sold|recycled|returned|lost [--wiped] [--when <date>] [--with-disks | --disks-to-stock] [--check]",
+      "note": "(it leaves the site; refused while it has a role, a placement or a recorded cable; its record stays. One that holds disks needs --with-disks or --disks-to-stock)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "asset",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--how",
+          "takesValue": true,
+          "arg": "sold|recycled|returned|lost",
+          "choices": [
+            "sold",
+            "recycled",
+            "returned",
+            "lost"
+          ],
+          "repeatable": false,
+          "description": "sold, recycled, returned or lost."
+        },
+        {
+          "flag": "--wiped",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Its disks were wiped."
+        },
+        {
+          "flag": "--when",
+          "takesValue": true,
+          "arg": "<date>",
+          "choices": null,
+          "repeatable": false,
+          "description": "When, YYYY-MM-DD (default: today)."
+        },
+        {
+          "flag": "--with-disks",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "The disks it holds are disposed of with it, wiped as --wiped says."
+        },
+        {
+          "flag": "--disks-to-stock",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "The disks it holds are unplaced first: they stay recorded, in stock, for reuse."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "asset",
+        "within": []
+      }
+    },
+    {
+      "verb": "asset allocate",
+      "keys": [
+        [
+          "asset",
+          "allocate"
+        ]
+      ],
+      "usage": "asset allocate <asset> --role <name> [--topology <file>] [--check]",
+      "note": "(its placement and recorded cables follow it under the role's name)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "asset",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--role",
+          "takesValue": true,
+          "arg": "<name>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The topology's name for what it plays: a node or machine (a server), a switch, an access point, or a device nothing manages."
+        },
+        {
+          "flag": "--topology",
+          "takesValue": true,
+          "arg": "<file>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A `network-manager topology --json` document to check against, instead of running it."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "asset",
+        "within": []
+      }
+    },
+    {
+      "verb": "asset release",
+      "keys": [
+        [
+          "asset",
+          "release"
+        ]
+      ],
+      "usage": "asset release <asset> [--check]",
+      "note": "(the role ends; its placement and cables stay with the asset, under its own name)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "asset",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "asset",
+        "within": []
+      }
+    },
+    {
+      "verb": "port add",
+      "keys": [
+        [
+          "port",
+          "add"
+        ]
+      ],
+      "usage": "port add <asset> <port> --kind rj45|sfp|wifi|usb-a|usb-c [--speed <speed>] [--standard wifi5|wifi6|wifi7] [--bands <list>] [--module dac|sr|lr|rj45] [--role lan|wan|bmc] [--mac <mac>] [--side front|rear] [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "asset",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "port",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--kind",
+          "takesValue": true,
+          "arg": "rj45|sfp|wifi|usb-a|usb-c",
+          "choices": [
+            "rj45",
+            "sfp",
+            "wifi",
+            "usb-a",
+            "usb-c"
+          ],
+          "repeatable": false,
+          "description": "Its connector: rj45, sfp, wifi, usb-a, usb-c."
+        },
+        {
+          "flag": "--speed",
+          "takesValue": true,
+          "arg": "<speed>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Its maximum: rj45 1g (default), 2.5g, 10g; sfp 1g, 10g, 25g; usb usb2, usb3."
+        },
+        {
+          "flag": "--standard",
+          "takesValue": true,
+          "arg": "wifi5|wifi6|wifi7",
+          "choices": [
+            "wifi5",
+            "wifi6",
+            "wifi7"
+          ],
+          "repeatable": false,
+          "description": "A wifi port's: wifi5, wifi6, wifi7."
+        },
+        {
+          "flag": "--bands",
+          "takesValue": true,
+          "arg": "<list>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A wifi port's bands, a comma list of 2.4, 5, 6."
+        },
+        {
+          "flag": "--module",
+          "takesValue": true,
+          "arg": "dac|sr|lr|rj45",
+          "choices": [
+            "dac",
+            "sr",
+            "lr",
+            "rj45"
+          ],
+          "repeatable": false,
+          "description": "What an sfp cage holds: dac, sr, lr, rj45."
+        },
+        {
+          "flag": "--role",
+          "takesValue": true,
+          "arg": "lan|wan|bmc",
+          "choices": [
+            "lan",
+            "wan",
+            "bmc"
+          ],
+          "repeatable": false,
+          "description": "What the node uses it for: lan, wan, bmc."
+        },
+        {
+          "flag": "--mac",
+          "takesValue": true,
+          "arg": "<mac>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Its MAC: unique across every port."
+        },
+        {
+          "flag": "--side",
+          "takesValue": true,
+          "arg": "front|rear",
+          "choices": [
+            "front",
+            "rear"
+          ],
+          "repeatable": false,
+          "description": "A patch panel's port on one side only: front or rear."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "port",
+        "within": [
+          "asset"
+        ]
+      }
+    },
+    {
+      "verb": "port modify",
+      "keys": [
+        [
+          "port",
+          "modify"
+        ]
+      ],
+      "usage": "port modify <asset> <port> [--set <field>=<value>]... [--unset <field>]... [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "asset",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "port",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--set",
+          "takesValue": true,
+          "arg": "<field>=<value>",
+          "choices": null,
+          "repeatable": true,
+          "description": "kind, speed, standard, bands, module, role, mac, side (repeatable); a port of its model's plate takes an entry of its own."
+        },
+        {
+          "flag": "--unset",
+          "takesValue": true,
+          "arg": "<field>",
+          "choices": null,
+          "repeatable": true,
+          "description": "Clear one but kind (repeatable)."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "port",
+        "within": [
+          "asset"
+        ]
+      }
+    },
+    {
+      "verb": "port remove",
+      "keys": [
+        [
+          "port",
+          "remove"
+        ]
+      ],
+      "usage": "port remove <asset> <port> [--check]",
+      "note": "(a port of its own no recorded cable uses; one over its plate's goes back to the plate's)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "asset",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "port",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "port",
+        "within": [
+          "asset"
+        ]
+      }
+    },
+    {
+      "verb": "disk list",
+      "keys": [
+        [
+          "disk",
+          "list"
+        ]
+      ],
+      "usage": "disk list [<asset>] [--json]",
+      "note": "(the disks, each in the asset and bay it is in, or in stock)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "asset",
+          "optional": true,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "As JSON."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "asset",
+        "within": []
+      }
+    },
+    {
+      "verb": "disk add",
+      "keys": [
+        [
+          "disk",
+          "add"
+        ]
+      ],
+      "usage": "disk add <asset> <name> --serial <serial> [--model <text>] [--vendor <text>] [--wwn <wwn>] [--size <size>] [--kind nvme|ssd|hdd|usb] [--bus <bus>] [--firmware <text>] [--bay <bay>] [--description <text>] [--check]",
+      "note": "(a disk in <asset>, recorded as the next dsk-NN with <name> — its by-id name — shown; a serial an asset records already is refused)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "asset",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--serial",
+          "takesValue": true,
+          "arg": "<serial>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Its serial: what knows it again, unique across every asset (case, spaces and dashes do not count)."
+        },
+        {
+          "flag": "--model",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Its model."
+        },
+        {
+          "flag": "--vendor",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Who made it."
+        },
+        {
+          "flag": "--wwn",
+          "takesValue": true,
+          "arg": "<wwn>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Its World Wide Name."
+        },
+        {
+          "flag": "--size",
+          "takesValue": true,
+          "arg": "<size>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Bytes, or a number with K, M, G, T (1000s) or KiB, MiB, GiB, TiB (1024s): 960G, 4TB."
+        },
+        {
+          "flag": "--kind",
+          "takesValue": true,
+          "arg": "nvme|ssd|hdd|usb",
+          "choices": [
+            "nvme",
+            "ssd",
+            "hdd",
+            "usb"
+          ],
+          "repeatable": false,
+          "description": "nvme, ssd, hdd or usb."
+        },
+        {
+          "flag": "--bus",
+          "takesValue": true,
+          "arg": "<bus>",
+          "choices": null,
+          "repeatable": false,
+          "description": "sata, sas, nvme, usb, …"
+        },
+        {
+          "flag": "--firmware",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Its firmware version."
+        },
+        {
+          "flag": "--bay",
+          "takesValue": true,
+          "arg": "<bay>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The bay it is in, as the asset labels it (default: its name)."
+        },
+        {
+          "flag": "--description",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Anything else."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "name",
+        "within": [
+          "asset"
+        ]
+      }
+    },
+    {
+      "verb": "disk modify",
+      "keys": [
+        [
+          "disk",
+          "modify"
+        ]
+      ],
+      "usage": "disk modify <disk> [--set <field>=<value>]... [--unset <field>]... [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "disk",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--set",
+          "takesValue": true,
+          "arg": "<field>=<value>",
+          "choices": null,
+          "repeatable": true,
+          "description": "displayName, description, vendor, model, serial, assetTag, wwn, size, kind, bus, firmware, bay (repeatable); where it is: place <disk> --in <asset>."
+        },
+        {
+          "flag": "--unset",
+          "takesValue": true,
+          "arg": "<field>",
+          "choices": null,
+          "repeatable": true,
+          "description": "Clear one but serial (repeatable)."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "disk",
+        "within": []
+      }
+    },
+    {
+      "verb": "disk remove",
+      "keys": [
+        [
+          "disk",
+          "remove"
+        ]
+      ],
+      "usage": "disk remove <disk> [--check]",
+      "note": "(a record made by mistake, with its placement; a disposed disk's record stays)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "disk",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "disk",
+        "within": []
+      }
+    },
+    {
+      "verb": "disk adopt",
+      "keys": [
+        [
+          "disk",
+          "adopt"
+        ]
+      ],
+      "usage": "disk adopt [<asset>] [--check]",
+      "note": "(every disk the CMDB's server CI lists — site-manager report --discover — that no asset records, by serial, recorded in that server; the recorded ones are skipped)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "asset",
+          "optional": true,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "asset",
+        "within": []
+      }
+    },
+    {
+      "verb": "cable split",
+      "keys": [
+        [
+          "cable",
+          "split"
+        ]
+      ],
+      "usage": "cable split <device:port> --via <panel:port> [--topology <file>] [--check]",
+      "note": "(the link on that port, seen or recorded, becomes two recorded segments)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "device:port",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--via",
+          "takesValue": true,
+          "arg": "<panel:port>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The patch panel port the link runs through: the device's port to its front, its rear to the far end."
+        },
+        {
+          "flag": "--topology",
+          "takesValue": true,
+          "arg": "<file>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A `network-manager topology --json` document to check against, instead of running it."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "device:port",
+        "within": []
+      }
+    },
+    {
+      "verb": "cable join",
+      "keys": [
+        [
+          "cable",
+          "join"
+        ]
+      ],
+      "usage": "cable join <device:port> [--check]",
+      "note": "(undo a split: a panel port, or a device end of one of its segments)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "device:port",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [],
+      "object": {
+        "positional": "device:port",
+        "within": []
+      }
+    },
+    {
+      "verb": "faceplates list",
+      "keys": [
+        [
+          "faceplates",
+          "list"
+        ]
+      ],
+      "usage": "faceplates list [--json]",
+      "note": "(the shipped catalog and the site's own plates, marked site)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "As JSON."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "faceplates show",
+      "keys": [
+        [
+          "faceplates",
+          "show"
+        ]
+      ],
+      "usage": "faceplates show <vendor/model> [--device <name>] [--topology <file>] [--file] [--json]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "vendor/model",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--device",
+          "takesValue": true,
+          "arg": "<name>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Fill a generic plate from this device's ports, with their live state."
+        },
+        {
+          "flag": "--topology",
+          "takesValue": true,
+          "arg": "<file>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A `network-manager topology --json` document to check against, instead of running it."
+        },
+        {
+          "flag": "--file",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "The plate as a catalog file, faceplates/<vendor>/<model>.json: how a site's plate goes upstream."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "As JSON."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "faceplate add",
+      "keys": [
+        [
+          "faceplate",
+          "add"
+        ]
+      ],
+      "usage": "faceplate add <vendor/model> --units <n> --ports <spec> [--width full|half|third] [--kind server|switch|ap|patch-panel|pdu|modem|other] [--passive] [--match <model>]... [--vendor <text>] [--display-name <text>] [--description <text>] [--check]",
+      "note": "(a plate the shipped catalog lacks, in config/positions.json; a shipped key is replaced by the site's plate)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "vendor/model",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--units",
+          "takesValue": true,
+          "arg": "<n>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Its height in rack units."
+        },
+        {
+          "flag": "--ports",
+          "takesValue": true,
+          "arg": "<spec>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Its ports: groups side by side (a comma between, a gap on the plate), rows within a group (a slash between), items within a row (a plus between): [<n>x]<kind>[@<rows>][:<name>], a kind rj45, sfp+, sfp28, poe, console, power or gap. 24xrj45 · 8xrj45, 2xsfp+ · 8xsfp+/8xsfp+ · 16xsfp+@2 (odd over even) · rj45:WAN+gap+4xrj45:LAN {n}. A group may end in its place in percent of the width: [3-66]."
+        },
+        {
+          "flag": "--width",
+          "takesValue": true,
+          "arg": "full|half|third",
+          "choices": [
+            "full",
+            "half",
+            "third"
+          ],
+          "repeatable": false,
+          "description": "full (default), half or third of the rack's width."
+        },
+        {
+          "flag": "--kind",
+          "takesValue": true,
+          "arg": "server|switch|ap|patch-panel|pdu|modem|other",
+          "choices": [
+            "server",
+            "switch",
+            "ap",
+            "patch-panel",
+            "pdu",
+            "modem",
+            "other"
+          ],
+          "repeatable": false,
+          "description": "What it is (default other): server, switch, ap, patch-panel, pdu, modem, other."
+        },
+        {
+          "flag": "--passive",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Nothing sees it (a patch panel, a PDU): placed without a topology device."
+        },
+        {
+          "flag": "--match",
+          "takesValue": true,
+          "arg": "<model>",
+          "choices": null,
+          "repeatable": true,
+          "description": "A model or name an inventory reports it by: the plate is then suggested for it (repeatable)."
+        },
+        {
+          "flag": "--vendor",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The vendor as drawn (default: the key's)."
+        },
+        {
+          "flag": "--display-name",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The model as drawn (default: the key's)."
+        },
+        {
+          "flag": "--description",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "What it is."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "faceplate modify",
+      "keys": [
+        [
+          "faceplate",
+          "modify"
+        ]
+      ],
+      "usage": "faceplate modify <vendor/model> [--set <field>=<value>]... [--unset <field>]... [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "vendor/model",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--set",
+          "takesValue": true,
+          "arg": "<field>=<value>",
+          "choices": null,
+          "repeatable": true,
+          "description": "units, width, ports, kind, passive, match (a comma list), vendor, displayName, description (repeatable)."
+        },
+        {
+          "flag": "--unset",
+          "takesValue": true,
+          "arg": "<field>",
+          "choices": null,
+          "repeatable": true,
+          "description": "Clear match, vendor, displayName or description (repeatable)."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "faceplate delete",
+      "keys": [
+        [
+          "faceplate",
+          "delete"
+        ]
+      ],
+      "usage": "faceplate delete <vendor/model> [--check]",
+      "note": "(a site plate nothing uses; one that replaced a shipped plate gives way to it)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "vendor/model",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Say what would change, in one line; change nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --check: the whole resulting positions.json, for machines."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "export",
+      "keys": [
+        [
+          "export"
+        ]
+      ],
+      "usage": "export --json [--cmdb]",
+      "note": null,
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "The document and the whole catalog, for network-manager topology."
+        },
+        {
+          "flag": "--cmdb",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Instead of the document: its objects and relations as the CMDB would answer them (ADR-040), with the catalog."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "report",
+      "keys": [
+        [
+          "report"
+        ]
+      ],
+      "usage": "report [--json]",
+      "note": "(everything config/positions.json records, to cmdb-controller; spooled when it does not answer)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the reports instead of sending them."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "the CMDB's record of the rooms, racks, assets, ports, placements, cables and allocations"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [
+        "--json"
+      ],
+      "writeWhen": [],
+      "disruptions": []
+    }
+  ]
+}

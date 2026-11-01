@@ -1,0 +1,287 @@
+{
+  "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+  "class": "lxc",
+  "ancestors": [
+    "lxc",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "vllm-amd",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T08:47:45.445Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.004Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.173Z",
+    "health-manager": "2026-10-30T09:04:04.197Z",
+    "module-manager": "2026-11-01T08:52:20.004Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T09:55:09.015Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T09:55:09.015Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "security",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "cve-act",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": false,
+          "message": "vllm (vllm-amd): 7 fixable",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "backup",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "newest restore point 0 day(s) old",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T09:55:09.015Z"
+    },
+    "cores": {
+      "value": 24,
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "description": {
+      "value": "vLLM AMD ROCm inference — Ryzen AI MAX+ 395 (tappaas2)",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "desired": {
+      "value": {
+        "file": "vllm-amd.json"
+      },
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "maturity": {
+      "value": "Development",
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    },
+    "memory": {
+      "value": 47104,
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "nics": {
+      "value": [
+        {
+          "mac": "02:c5:ec:06:cd:22",
+          "tag": 200,
+          "name": "eth0",
+          "bridge": "lan"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    "release": {
+      "value": {
+        "module": "vllm-amd",
+        "version": "0.8.1"
+      },
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "rootfs": {
+      "value": "tanka1:subvol-312-disk-0",
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "stack": {
+      "value": "ai",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "stage": {
+      "value": "operational",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "state": {
+      "value": "running",
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    },
+    "vmid": {
+      "value": 312,
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "zone": {
+      "value": "rossen",
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 316,
+      "type": "backs-up",
+      "direction": "in",
+      "other": {
+        "id": "e5d0d704-4a8a-4cb0-a2eb-84ad8f6dc8f8",
+        "class": "datastore",
+        "name": "tappaas_backup"
+      },
+      "attributes": {},
+      "source": "backup-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:53.826Z"
+    },
+    {
+      "id": 233,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "39c19eed-d1ab-44dd-a45f-15d0bc214ba7",
+        "class": "service",
+        "name": "backup:vm"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 232,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "bb6e1fc2-ed12-4b03-a3de-42e8f0b803eb",
+        "class": "service",
+        "name": "cluster:lxc"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 43,
+      "type": "member-of",
+      "direction": "out",
+      "other": {
+        "id": "9a883fd4-b028-4492-b870-4e8a16b7393c",
+        "class": "environment",
+        "name": "rossen"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 122,
+      "type": "provides",
+      "direction": "out",
+      "other": {
+        "id": "62001128-8619-4da4-bceb-40165e5e9022",
+        "class": "service",
+        "name": "vllm-amd:inference"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 44,
+      "type": "runs-on",
+      "direction": "out",
+      "other": {
+        "id": "95727e8e-df12-468f-a03b-8b685140e223",
+        "class": "machine",
+        "name": "tappaas2"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 77,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "62001128-8619-4da4-bceb-40165e5e9022",
+        "class": "service",
+        "name": "vllm-amd:inference"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    }
+  ]
+}

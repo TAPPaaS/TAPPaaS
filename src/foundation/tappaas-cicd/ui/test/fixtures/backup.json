@@ -17,6 +17,23 @@
     "membershipSource": "job"
   },
   {
+    "module": "console",
+    "environment": "mgmt",
+    "enabled": true,
+    "retention": "7y",
+    "residency": "eu-only",
+    "schedule": "daily",
+    "scheduleBucket": "daily",
+    "target": "backup.mgmt.internal",
+    "offsite": null,
+    "exclude": [],
+    "optedIn": false,
+    "archived": false,
+    "inPbsJob": false,
+    "jobBucket": null,
+    "membershipSource": "job"
+  },
+  {
     "module": "coturn",
     "environment": "rossen",
     "enabled": true,
@@ -136,6 +153,40 @@
     "membershipSource": "job"
   },
   {
+    "module": "karakeep",
+    "environment": "rossen",
+    "enabled": true,
+    "retention": "7y",
+    "residency": "eu-only",
+    "schedule": "daily",
+    "scheduleBucket": "daily",
+    "target": "backup.mgmt.internal",
+    "offsite": null,
+    "exclude": [],
+    "optedIn": true,
+    "archived": false,
+    "inPbsJob": true,
+    "jobBucket": "daily",
+    "membershipSource": "job"
+  },
+  {
+    "module": "lazysite",
+    "environment": "rossen",
+    "enabled": true,
+    "retention": "7y",
+    "residency": "eu-only",
+    "schedule": "daily",
+    "scheduleBucket": "daily",
+    "target": "backup.mgmt.internal",
+    "offsite": null,
+    "exclude": [],
+    "optedIn": false,
+    "archived": false,
+    "inPbsJob": false,
+    "jobBucket": null,
+    "membershipSource": "job"
+  },
+  {
     "module": "litellm",
     "environment": "rossen",
     "enabled": true,
@@ -167,6 +218,23 @@
     "archived": false,
     "inPbsJob": true,
     "jobBucket": "daily",
+    "membershipSource": "job"
+  },
+  {
+    "module": "mikrotik",
+    "environment": "rossen",
+    "enabled": true,
+    "retention": "7y",
+    "residency": "eu-only",
+    "schedule": "daily",
+    "scheduleBucket": "daily",
+    "target": "backup.mgmt.internal",
+    "offsite": null,
+    "exclude": [],
+    "optedIn": false,
+    "archived": false,
+    "inPbsJob": false,
+    "jobBucket": null,
     "membershipSource": "job"
   },
   {
@@ -346,6 +414,25 @@
     "membershipSource": "job"
   },
   {
+    "module": "tappaas4",
+    "environment": "mgmt",
+    "enabled": true,
+    "retention": "7y",
+    "residency": "eu-only",
+    "schedule": "daily",
+    "scheduleBucket": "daily",
+    "target": "backup.mgmt.internal",
+    "offsite": null,
+    "exclude": [
+      "/root/*.iso"
+    ],
+    "optedIn": false,
+    "archived": false,
+    "inPbsJob": false,
+    "jobBucket": null,
+    "membershipSource": "job"
+  },
+  {
     "module": "templates",
     "environment": "mgmt",
     "enabled": true,
@@ -398,6 +485,23 @@
   },
   {
     "module": "vllm-amd",
+    "environment": "rossen",
+    "enabled": true,
+    "retention": "7y",
+    "residency": "eu-only",
+    "schedule": "daily",
+    "scheduleBucket": "daily",
+    "target": "backup.mgmt.internal",
+    "offsite": null,
+    "exclude": [],
+    "optedIn": true,
+    "archived": false,
+    "inPbsJob": true,
+    "jobBucket": "daily",
+    "membershipSource": "job"
+  },
+  {
+    "module": "woodpecker",
     "environment": "rossen",
     "enabled": true,
     "retention": "7y",

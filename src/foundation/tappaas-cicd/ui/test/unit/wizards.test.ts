@@ -12,12 +12,12 @@ import { previewStop } from "../../src/jobs";
 import { ManifestVerb } from "../../web/src/types";
 import { BUDDY_KINDS, PASSPHRASE_TEXT, RunJob, jobInApply, jobRunState, previewRefuses, refusalLines, runFailure, SatellitePlan, SessionJob, SiteSsid, StepSpec, argOf, buddyNameProblem, sessionJob, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, broadcastText, defaultSsid, isPlaceholderSsid, needsPassphrase, passphraseOf, queuedBehind, passphraseProblem, ssidProblem, stacksOf, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
 import { check, done } from "./check";
-import { FIX } from "./fake-site";
+import { FIX, pinned } from "./fake-site";
 
 const json = <T>(f: string): T => JSON.parse(readFileSync(join(FIX, f), "utf8")) as T;
 const zonesDoc = json<Record<string, Omit<ZoneIn, "name">>>("wizards/zones.json");
 const zones: ZoneIn[] = Object.entries(zonesDoc).map(([name, z]) => ({ name, ...z }));
-const ssids = json<SiteSsid[]>("ssids.json");
+const ssids = pinned<SiteSsid[]>("ssids.json");
 const bash = JSON.parse(readFileSync(join(FIX, "..", "..", "manifest", "bash-verbs.json"), "utf8")) as { manifests: { name: string; verbs: ManifestVerb[] }[] };
 const verbOf = (bin: string, verb: string): ManifestVerb => bash.manifests.find((m) => m.name === bin)!.verbs.find((v) => v.verb === verb)!;
 const argv = (s: StepSpec, v: ManifestVerb): string => JSON.stringify(buildArgv(s, v, s.initial));

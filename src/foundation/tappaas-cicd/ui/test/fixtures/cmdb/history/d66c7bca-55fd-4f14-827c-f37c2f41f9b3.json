@@ -1,0 +1,242 @@
+{
+ "id": "d66c7bca-55fd-4f14-827c-f37c2f41f9b3",
+ "class": "vm",
+ "name": "tvbase-zcnode",
+ "created": "2026-10-31T21:27:21.211Z",
+ "ended": "2026-11-01T08:26:58.915Z",
+ "attributes": [
+  {
+   "name": "cores",
+   "value": 1,
+   "source": "site-manager",
+   "change": 6903,
+   "from": "2026-10-31T21:27:21.211Z",
+   "to": null
+  },
+  {
+   "name": "description",
+   "value": "ADR-005 variant test fixture: short-named Debian VM on mgmt (alias-safe under #300)",
+   "source": "site-manager",
+   "change": 6903,
+   "from": "2026-10-31T21:27:21.211Z",
+   "to": null
+  },
+  {
+   "name": "desired",
+   "value": {
+    "file": "tvbase-zcnode.json"
+   },
+   "source": "site-manager",
+   "change": 6903,
+   "from": "2026-10-31T21:27:21.211Z",
+   "to": null
+  },
+  {
+   "name": "disks",
+   "value": [
+    {
+     "size": "4M",
+     "storage": "tanka1"
+    },
+    {
+     "size": "4G",
+     "storage": "tanka1"
+    }
+   ],
+   "source": "site-manager",
+   "change": 6903,
+   "from": "2026-10-31T21:27:21.211Z",
+   "to": null
+  },
+  {
+   "name": "memory",
+   "value": 1024,
+   "source": "site-manager",
+   "change": 6903,
+   "from": "2026-10-31T21:27:21.211Z",
+   "to": null
+  },
+  {
+   "name": "release",
+   "value": {
+    "module": "fixtures",
+    "version": "0.5"
+   },
+   "source": "site-manager",
+   "change": 6903,
+   "from": "2026-10-31T21:27:21.211Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "operational",
+   "source": "site-manager",
+   "change": 6903,
+   "from": "2026-10-31T21:27:21.211Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "name": "state",
+   "value": "running",
+   "source": "site-manager",
+   "change": 6903,
+   "from": "2026-10-31T21:27:21.211Z",
+   "to": null
+  },
+  {
+   "name": "vmid",
+   "value": 8950,
+   "source": "site-manager",
+   "change": 6903,
+   "from": "2026-10-31T21:27:21.211Z",
+   "to": null
+  },
+  {
+   "name": "zone",
+   "value": "zcnode",
+   "source": "site-manager",
+   "change": 6903,
+   "from": "2026-10-31T21:27:21.211Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T21:30:01.924Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T00:01:26.213Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 6941,
+   "from": "2026-10-31T21:30:01.924Z",
+   "to": "2026-11-01T00:04:45.410Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T21:30:01.924Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:25:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T00:04:45.410Z",
+     "reason": "sweep-missing",
+     "source": "health-manager",
+     "status": "critical",
+     "derived": false,
+     "message": "vm/tvbase-zcnode: desired without actual",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:25:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 7907,
+   "from": "2026-11-01T00:04:45.410Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "retired",
+   "source": "operator",
+   "change": 11047,
+   "from": "2026-11-01T08:26:58.915Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 734,
+   "type": "member-of",
+   "direction": "out",
+   "other": {
+    "id": "fb9ed212-f2c4-4618-9944-a73f3293a977",
+    "class": "environment",
+    "name": "zcnode"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 6903,
+   "from": "2026-10-31T21:27:21.211Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 735,
+   "type": "runs-on",
+   "direction": "out",
+   "other": {
+    "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+    "class": "machine",
+    "name": "tappaas3"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 6903,
+   "from": "2026-10-31T21:27:21.211Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 6903,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T21:27:21.211Z",
+   "drift": false
+  },
+  {
+   "id": 6941,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T21:30:01.924Z",
+   "drift": false
+  },
+  {
+   "id": 7907,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T00:04:45.410Z",
+   "drift": false
+  },
+  {
+   "id": 11047,
+   "kind": "change",
+   "source": "operator",
+   "job": null,
+   "verb": "retire deep-test leftovers",
+   "actor": null,
+   "time": "2026-11-01T08:26:58.915Z",
+   "drift": false
+  }
+ ]
+}

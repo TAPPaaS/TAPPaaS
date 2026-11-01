@@ -1,0 +1,600 @@
+{
+  "module": "console",
+  "fields": [
+    {
+      "field": "address",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "aliases",
+      "coordinate": "network:rules",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "aliasType",
+      "coordinate": "network:rules",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "host"
+    },
+    {
+      "field": "appVersion",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": null
+    },
+    {
+      "field": "assistantModel",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "bootDisks",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "config",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "controllers",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "dependsOn",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": "[\"network:proxy\",\"network:rules\",\"identity:accessControl\"]"
+    },
+    {
+      "field": "description",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "The TAPPaaS console (ADR-034): the site's web UI. The service runs on the mothership (tappaas-console.service, built from tappaas-cicd/ui); this module is its published face — the route through Caddy and the Authentik gate — and, when the AI stack is installed, the assistant's LiteLLM key. It installs nothing of its own."
+    },
+    {
+      "field": "displayName",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "TAPPaaS console"
+    },
+    {
+      "field": "egress",
+      "coordinate": "network:rules",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "environment",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "mgmt"
+    },
+    {
+      "field": "firewallType",
+      "coordinate": "network:rules",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "opnsense"
+    },
+    {
+      "field": "gateGroups",
+      "coordinate": "identity:accessControl",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "[\"installer\"]"
+    },
+    {
+      "field": "host",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "icon",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "ingress",
+      "coordinate": "network:rules",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "installTime",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "20261018-16:29:53"
+    },
+    {
+      "field": "integratesWith",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": "[\"litellm:models\"]"
+    },
+    {
+      "field": "kind",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "application"
+    },
+    {
+      "field": "location",
+      "coordinate": "",
+      "class": "refused",
+      "apply": null,
+      "settable": false,
+      "reason": "'console' is a application, not a machine — a guest is where its node is",
+      "value": null
+    },
+    {
+      "field": "maintainer",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "@TAPPaaS"
+    },
+    {
+      "field": "management",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "managed"
+    },
+    {
+      "field": "managers",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "moduleSource",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "/home/tappaas/TAPPaaS/src/foundation/console"
+    },
+    {
+      "field": "name",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "os",
+      "coordinate": "",
+      "class": "refused",
+      "apply": null,
+      "settable": false,
+      "reason": "schemas/fields.json declares no change class for it — what changing it costs is unknown; declare one before it can be set",
+      "value": null
+    },
+    {
+      "field": "pauseOk",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "false"
+    },
+    {
+      "field": "pausePriority",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "50"
+    },
+    {
+      "field": "physicalLocation",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": null
+    },
+    {
+      "field": "ports",
+      "coordinate": "network:rules",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "portSync",
+      "coordinate": "",
+      "class": "refused",
+      "apply": null,
+      "settable": false,
+      "reason": "schemas/fields.json declares no change class for it — what changing it costs is unknown; declare one before it can be set",
+      "value": "on"
+    },
+    {
+      "field": "provider",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "provides",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": "[]"
+    },
+    {
+      "field": "proxyAccess",
+      "coordinate": "network:proxy",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "proxyAllowedZones",
+      "coordinate": "network:proxy",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "[\"mgmt\",\"admin\"]"
+    },
+    {
+      "field": "proxyDomain",
+      "coordinate": "network:proxy",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "console.hrossen.dk"
+    },
+    {
+      "field": "proxyPort",
+      "coordinate": "network:proxy",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "9097"
+    },
+    {
+      "field": "proxyPreserveHost",
+      "coordinate": "network:proxy",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "false"
+    },
+    {
+      "field": "proxyRoutes",
+      "coordinate": "network:proxy",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "proxyTls",
+      "coordinate": "network:proxy",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "proxyUpstreamHttp1",
+      "coordinate": "network:proxy",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "false"
+    },
+    {
+      "field": "proxyUpstreamTls",
+      "coordinate": "network:proxy",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "false"
+    },
+    {
+      "field": "publicDomain",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "rebootOk",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "false"
+    },
+    {
+      "field": "releaseDate",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "2026-10-17"
+    },
+    {
+      "field": "roles",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "source",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "official"
+    },
+    {
+      "field": "sshAllow",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "sshKeyOnly",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "true"
+    },
+    {
+      "field": "sshPort",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "stack",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "foundation"
+    },
+    {
+      "field": "status",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "Development"
+    },
+    {
+      "field": "storagePools",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "suspended",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "false"
+    },
+    {
+      "field": "suspendedNoUpdate",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "false"
+    },
+    {
+      "field": "tier",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": null
+    },
+    {
+      "field": "updateTime",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "20261101-02:12:51"
+    },
+    {
+      "field": "uplinks",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "variant",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": null
+    },
+    {
+      "field": "version",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "0.1.0"
+    },
+    {
+      "field": "vpn",
+      "coordinate": "",
+      "class": "refused",
+      "apply": null,
+      "settable": false,
+      "reason": "schemas/fields.json declares no change class for it — what changing it costs is unknown; declare one before it can be set",
+      "value": null
+    },
+    {
+      "field": "woodpeckerAdmins",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "zone0",
+      "coordinate": "",
+      "class": "refused",
+      "apply": null,
+      "settable": false,
+      "reason": "schemas/fields.json declares no change class for it — what changing it costs is unknown; declare one before it can be set",
+      "value": "mgmt"
+    },
+    {
+      "field": "zone1",
+      "coordinate": "",
+      "class": "refused",
+      "apply": null,
+      "settable": false,
+      "reason": "schemas/fields.json declares no change class for it — what changing it costs is unknown; declare one before it can be set",
+      "value": "mgmt"
+    }
+  ],
+  "warnings": []
+}

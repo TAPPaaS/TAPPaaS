@@ -1,0 +1,19 @@
+{
+  "description": "TAPPaaS Proxmox Cluster - provides VM, LXC and HA services",
+  "version": "0.8.0",
+  "releaseDate": "2026-07-31",
+  "installTime": "20260731-22:21:33",
+  "updateTime": "20261101-02:04:19",
+  "maintainer": "@TAPPaaS",
+  "status": "Production",
+  "kind": "application",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/foundation/cluster",
+  "environment": "mgmt",
+  "dependsOn": [],
+  "provides": [
+    "vm",
+    "lxc",
+    "ha"
+  ],
+  "stack": "foundation"
+}

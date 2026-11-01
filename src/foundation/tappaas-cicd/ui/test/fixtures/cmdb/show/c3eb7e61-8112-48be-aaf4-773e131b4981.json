@@ -1,0 +1,341 @@
+{
+  "id": "c3eb7e61-8112-48be-aaf4-773e131b4981",
+  "class": "network-device",
+  "ancestors": [
+    "network-device",
+    "asset",
+    "resource",
+    "object"
+  ],
+  "name": "crs-b",
+  "displayName": null,
+  "physical": true,
+  "recorded": false,
+  "created": "2026-10-30T12:58:06.772Z",
+  "ended": null,
+  "lastSeen": "2026-10-30T12:58:06.874Z",
+  "seen": {
+    "switch-manager": "2026-10-30T12:58:06.874Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "drift",
+          "since": "2026-10-31T00:04:27.092Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T00:04:27.092Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T07:25:02.913Z"
+    },
+    "deviceType": {
+      "value": "switch",
+      "source": "switch-manager",
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    "drift": {
+      "value": {
+        "since": "2026-10-30T12:58:06.962Z",
+        "source": "sweep",
+        "desired": null,
+        "attributes": {
+          "→allocated-to device/crs-b": {
+            "now": null,
+            "was": {}
+          }
+        }
+      },
+      "source": "cmdb-controller",
+      "since": "2026-10-30T14:34:19.677Z"
+    },
+    "model": {
+      "value": "CRS317-1G-16S+",
+      "source": "switch-manager",
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    "ports": {
+      "value": 17,
+      "source": "switch-manager",
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    "vendor": {
+      "value": "mikrotik",
+      "source": "switch-manager",
+      "since": "2026-10-30T12:58:06.772Z"
+    }
+  },
+  "drift": {
+    "since": "2026-10-30T12:58:06.962Z",
+    "source": "sweep",
+    "desired": null,
+    "attributes": {
+      "→allocated-to device/crs-b": {
+        "now": null,
+        "was": {}
+      }
+    }
+  },
+  "relations": [
+    {
+      "id": 524,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "ecfddd0a-d50b-4af3-ae63-16103d42c5d3",
+        "class": "port",
+        "name": "ether1"
+      },
+      "attributes": {},
+      "source": "switch-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    {
+      "id": 525,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "954dbe60-b3f7-458b-9284-6980bc37b21c",
+        "class": "port",
+        "name": "sfp-sfpplus1"
+      },
+      "attributes": {},
+      "source": "switch-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    {
+      "id": 534,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "26a2e8a8-fdd0-40ff-b403-e2229322d1da",
+        "class": "port",
+        "name": "sfp-sfpplus10"
+      },
+      "attributes": {},
+      "source": "switch-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    {
+      "id": 535,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "37943e8f-5089-4e9f-a90a-45b3a2248d20",
+        "class": "port",
+        "name": "sfp-sfpplus11"
+      },
+      "attributes": {},
+      "source": "switch-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    {
+      "id": 536,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "25a32b7a-32a1-49bd-9d8f-eecb51b6a6cd",
+        "class": "port",
+        "name": "sfp-sfpplus12"
+      },
+      "attributes": {},
+      "source": "switch-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    {
+      "id": 537,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "06fa1e78-844d-4d7b-962a-5d92a4d0f542",
+        "class": "port",
+        "name": "sfp-sfpplus13"
+      },
+      "attributes": {},
+      "source": "switch-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    {
+      "id": 538,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "5bad295b-311e-42ff-9d72-0e1869971ce5",
+        "class": "port",
+        "name": "sfp-sfpplus14"
+      },
+      "attributes": {},
+      "source": "switch-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    {
+      "id": 539,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "fae741c6-e4e3-46b4-bf4a-1913bd825fe4",
+        "class": "port",
+        "name": "sfp-sfpplus15"
+      },
+      "attributes": {},
+      "source": "switch-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    {
+      "id": 540,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "58745c41-a33d-4580-ae09-d9ad9be3c68f",
+        "class": "port",
+        "name": "sfp-sfpplus16"
+      },
+      "attributes": {},
+      "source": "switch-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    {
+      "id": 526,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "a0347d44-70f4-4905-bece-a11023c70675",
+        "class": "port",
+        "name": "sfp-sfpplus2"
+      },
+      "attributes": {},
+      "source": "switch-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    {
+      "id": 527,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "27113725-0ae0-4a8d-b6b1-1ee6a5102360",
+        "class": "port",
+        "name": "sfp-sfpplus3"
+      },
+      "attributes": {},
+      "source": "switch-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    {
+      "id": 528,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "dd0dc0eb-6f00-4266-9e57-830f4752649a",
+        "class": "port",
+        "name": "sfp-sfpplus4"
+      },
+      "attributes": {},
+      "source": "switch-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    {
+      "id": 529,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "d29c165f-bf56-4de5-b295-d24e2a05610e",
+        "class": "port",
+        "name": "sfp-sfpplus5"
+      },
+      "attributes": {},
+      "source": "switch-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    {
+      "id": 530,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "fb365efc-bebd-45bb-891a-f695b54b60d4",
+        "class": "port",
+        "name": "sfp-sfpplus6"
+      },
+      "attributes": {},
+      "source": "switch-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    {
+      "id": 531,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "f60a237e-8abf-4a1b-9833-9ecf23ca64f4",
+        "class": "port",
+        "name": "sfp-sfpplus7"
+      },
+      "attributes": {},
+      "source": "switch-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    {
+      "id": 532,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "07146453-585c-4447-89db-e8b2508deae0",
+        "class": "port",
+        "name": "sfp-sfpplus8"
+      },
+      "attributes": {},
+      "source": "switch-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:06.772Z"
+    },
+    {
+      "id": 533,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "fe7c1eb1-fc5e-4014-9bd9-858f9c438eba",
+        "class": "port",
+        "name": "sfp-sfpplus9"
+      },
+      "attributes": {},
+      "source": "switch-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:06.772Z"
+    }
+  ]
+}

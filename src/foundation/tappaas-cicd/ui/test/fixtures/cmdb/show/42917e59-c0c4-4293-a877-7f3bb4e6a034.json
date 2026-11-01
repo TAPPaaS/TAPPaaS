@@ -1,0 +1,163 @@
+{
+  "id": "42917e59-c0c4-4293-a877-7f3bb4e6a034",
+  "class": "storage-pool",
+  "ancestors": [
+    "storage-pool",
+    "storage-element",
+    "ci",
+    "object"
+  ],
+  "name": "rpool",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-31T15:47:18.648Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:19.173Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.173Z",
+    "storage-manager": "2026-11-01T08:52:04.274Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T15:50:00.658Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "rpool: zfs ONLINE",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-11-01T08:05:02.583Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "flapping": false,
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:05:02.583Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-31T15:50:00.658Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "rpool: 1% used",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-11-01T08:46:23.848Z"
+    },
+    "drift": {
+      "value": {
+        "since": "2026-10-31T21:42:28.779Z",
+        "source": "sweep",
+        "desired": null,
+        "attributes": {
+          "size": {
+            "now": 482811392000,
+            "was": 482811711488
+          }
+        }
+      },
+      "source": "cmdb-controller",
+      "since": "2026-11-01T07:48:03.360Z"
+    },
+    "size": {
+      "value": 482811392000,
+      "source": "storage-manager",
+      "since": "2026-11-01T01:05:43.385Z"
+    },
+    "type": {
+      "value": "zfs",
+      "source": "site-manager",
+      "since": "2026-10-31T15:47:18.648Z"
+    },
+    "used": {
+      "value": 3619385344,
+      "source": "site-manager",
+      "since": "2026-11-01T08:52:19.173Z"
+    },
+    "vdevs": {
+      "value": [
+        {
+          "name": "disk",
+          "state": "ONLINE",
+          "members": [
+            {
+              "state": "ONLINE",
+              "device": "/dev/sda3",
+              "serial": "S6PYNL0Y209497N"
+            }
+          ]
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T15:47:18.648Z"
+    },
+    "zfsState": {
+      "value": "ONLINE",
+      "source": "site-manager",
+      "since": "2026-10-31T15:47:18.648Z"
+    }
+  },
+  "drift": {
+    "since": "2026-10-31T21:42:28.779Z",
+    "source": "sweep",
+    "desired": null,
+    "attributes": {
+      "size": {
+        "now": 482811392000,
+        "was": 482811711488
+      }
+    }
+  },
+  "relations": [
+    {
+      "id": 658,
+      "type": "built-on",
+      "direction": "out",
+      "other": {
+        "id": "217e1b9d-68a6-4120-a170-13cda77e6b32",
+        "class": "disk",
+        "name": "dsk-11"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-31T15:52:19.076Z"
+    },
+    {
+      "id": 640,
+      "type": "runs-on",
+      "direction": "out",
+      "other": {
+        "id": "434b8354-7cf8-4354-afa4-596852eac5cd",
+        "class": "machine",
+        "name": "tappaas4"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-31T15:47:18.648Z"
+    }
+  ]
+}

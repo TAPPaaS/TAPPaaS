@@ -1,0 +1,357 @@
+{
+  "module": "network",
+  "dependsOn": [
+    "cluster:vm",
+    "cluster:ha",
+    "network:proxy"
+  ],
+  "integratesWith": [
+    "backup:vm",
+    "logging:logs"
+  ],
+  "fields": {
+    "HANode": {
+      "value": "tappaas3",
+      "defaulted": false,
+      "literal": "tappaas3",
+      "notTracking": true
+    },
+    "autoInstall": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "bios": {
+      "value": "ovmf",
+      "defaulted": false,
+      "literal": "ovmf",
+      "notTracking": false
+    },
+    "bridge0": {
+      "value": "lan",
+      "defaulted": false,
+      "literal": "lan",
+      "notTracking": false
+    },
+    "bridge1": {
+      "value": "wan",
+      "defaulted": false,
+      "literal": "wan",
+      "notTracking": false
+    },
+    "cloudInit": {
+      "value": "false",
+      "defaulted": false,
+      "literal": "false",
+      "notTracking": false
+    },
+    "cores": {
+      "value": "4",
+      "defaulted": false,
+      "literal": "4",
+      "notTracking": false
+    },
+    "cputype": {
+      "value": "x86-64-v3",
+      "defaulted": false,
+      "literal": "x86-64-v3",
+      "notTracking": true
+    },
+    "dependsOn": {
+      "value": "[\"cluster:vm\",\"cluster:ha\",\"network:proxy\"]",
+      "defaulted": false,
+      "literal": "[\"cluster:vm\",\"cluster:ha\",\"network:proxy\"]",
+      "notTracking": false
+    },
+    "description": {
+      "value": "The TAPPaaS Network VM (OPNsense): routing, DNS, DHCP, NAT, firewall rules, reverse proxy",
+      "defaulted": false,
+      "literal": "The TAPPaaS Network VM (OPNsense): routing, DNS, DHCP, NAT, firewall rules, reverse proxy",
+      "notTracking": false
+    },
+    "diskAutoGrow": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "diskSize": {
+      "value": "32G",
+      "defaulted": false,
+      "literal": "32G",
+      "notTracking": false
+    },
+    "environment": {
+      "value": "mgmt",
+      "defaulted": false,
+      "literal": "mgmt",
+      "notTracking": false
+    },
+    "haCpu": {
+      "value": "common",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "image": {
+      "value": "tappaas-firewall.qcow2.zst",
+      "defaulted": false,
+      "literal": "tappaas-firewall.qcow2.zst",
+      "notTracking": false
+    },
+    "imageLocation": {
+      "value": "https://github.com/TAPPaaS/TAPPaaS/releases/download/opnsense-firewall-v1.1/",
+      "defaulted": false,
+      "literal": "https://github.com/TAPPaaS/TAPPaaS/releases/download/opnsense-firewall-v1.1/",
+      "notTracking": false
+    },
+    "imageSha256": {
+      "value": "a5e7c09aae5aab9e5b49f71defd61b642c4d3497fb716ea11ec9610b5d658c97",
+      "defaulted": false,
+      "literal": "a5e7c09aae5aab9e5b49f71defd61b642c4d3497fb716ea11ec9610b5d658c97",
+      "notTracking": false
+    },
+    "imageType": {
+      "value": "img",
+      "defaulted": false,
+      "literal": "img",
+      "notTracking": false
+    },
+    "ingress": {
+      "value": "[{\"from\":\"internet\",\"ports\":[80,443],\"description\":\"Caddy reverse-proxy entry — public HTTPS for proxyAllowedZones=['internet'] services\"}]",
+      "defaulted": false,
+      "literal": "[{\"from\":\"internet\",\"ports\":[80,443],\"description\":\"Caddy reverse-proxy entry — public HTTPS for proxyAllowedZones=['internet'] services\"}]",
+      "notTracking": false
+    },
+    "installTime": {
+      "value": "20260731-22:21:34",
+      "defaulted": false,
+      "literal": "20260731-22:21:34",
+      "notTracking": true
+    },
+    "integratesWith": {
+      "value": "[\"backup:vm\",\"logging:logs\"]",
+      "defaulted": false,
+      "literal": "[\"backup:vm\",\"logging:logs\"]",
+      "notTracking": false
+    },
+    "kind": {
+      "value": "vm",
+      "defaulted": false,
+      "literal": "vm",
+      "notTracking": false
+    },
+    "management": {
+      "value": "managed",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "memory": {
+      "value": "8192",
+      "defaulted": false,
+      "literal": "8192",
+      "notTracking": false
+    },
+    "moduleSource": {
+      "value": "/home/tappaas/TAPPaaS/src/foundation/network",
+      "defaulted": false,
+      "literal": "/home/tappaas/TAPPaaS/src/foundation/network",
+      "notTracking": true
+    },
+    "node": {
+      "value": "tappaas1",
+      "defaulted": false,
+      "literal": "tappaas1",
+      "notTracking": true
+    },
+    "ostype": {
+      "value": "other",
+      "defaulted": false,
+      "literal": "other",
+      "notTracking": false
+    },
+    "pauseOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pausePriority": {
+      "value": "50",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "portSync": {
+      "value": "on",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "ports": {
+      "value": "[{\"port\":80,\"protocol\":\"TCP\",\"description\":\"Caddy HTTP (ACME challenges + redirect to HTTPS)\"},{\"port\":443,\"protocol\":\"TCP\",\"description\":\"Caddy HTTPS (reverse-proxy entry for all published services)\"}]",
+      "defaulted": false,
+      "literal": "[{\"port\":80,\"protocol\":\"TCP\",\"description\":\"Caddy HTTP (ACME challenges + redirect to HTTPS)\"},{\"port\":443,\"protocol\":\"TCP\",\"description\":\"Caddy HTTPS (reverse-proxy entry for all published services)\"}]",
+      "notTracking": false
+    },
+    "provides": {
+      "value": "[\"proxy\",\"rules\",\"discovery\",\"dns\",\"nat\",\"snat\"]",
+      "defaulted": false,
+      "literal": "[\"proxy\",\"rules\",\"discovery\",\"dns\",\"nat\",\"snat\"]",
+      "notTracking": false
+    },
+    "proxyAllowedZones": {
+      "value": "[\"mgmt\"]",
+      "defaulted": false,
+      "literal": "[\"mgmt\"]",
+      "notTracking": false
+    },
+    "proxyPort": {
+      "value": "8443",
+      "defaulted": false,
+      "literal": "8443",
+      "notTracking": false
+    },
+    "proxyPreserveHost": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "proxyUpstreamHttp1": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "proxyUpstreamTls": {
+      "value": "true",
+      "defaulted": false,
+      "literal": "true",
+      "notTracking": false
+    },
+    "rebootOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "releaseDate": {
+      "value": "2026-07-31",
+      "defaulted": false,
+      "literal": "2026-07-31",
+      "notTracking": true
+    },
+    "replicationSchedule": {
+      "value": "*/15",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "source": {
+      "value": "official",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "sshAccess": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "sshKeyOnly": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "stack": {
+      "value": "foundation",
+      "defaulted": false,
+      "literal": "foundation",
+      "notTracking": false
+    },
+    "status": {
+      "value": "Production",
+      "defaulted": false,
+      "literal": "Production",
+      "notTracking": false
+    },
+    "storage": {
+      "value": "tanka1",
+      "defaulted": false,
+      "literal": "tanka1",
+      "notTracking": false
+    },
+    "suspended": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "suspendedNoUpdate": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "trunks0": {
+      "value": "ALL",
+      "defaulted": false,
+      "literal": "ALL",
+      "notTracking": false
+    },
+    "trunks1": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "updateTime": {
+      "value": "20261101-02:07:47",
+      "defaulted": false,
+      "literal": "20261101-02:07:47",
+      "notTracking": true
+    },
+    "version": {
+      "value": "1.0.0",
+      "defaulted": false,
+      "literal": "1.0.0",
+      "notTracking": false
+    },
+    "vmid": {
+      "value": "110",
+      "defaulted": false,
+      "literal": "110",
+      "notTracking": false
+    },
+    "vmname": {
+      "value": "network",
+      "defaulted": false,
+      "literal": "network",
+      "notTracking": false
+    },
+    "vmtag": {
+      "value": "TAPPaaS,Foundation",
+      "defaulted": false,
+      "literal": "TAPPaaS,Foundation",
+      "notTracking": false
+    },
+    "zone0": {
+      "value": "mgmt",
+      "defaulted": false,
+      "literal": "mgmt",
+      "notTracking": true
+    },
+    "zone1": {
+      "value": "mgmt",
+      "defaulted": false,
+      "literal": "mgmt",
+      "notTracking": false
+    }
+  },
+  "origAvailable": true
+}

@@ -1,0 +1,1392 @@
+{
+ "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+ "class": "vm",
+ "name": "tappaas-cicd",
+ "created": "2026-10-30T08:47:45.445Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:20:12.904Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "sweep-desired",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "vm/tappaas-cicd: differs from desired cluster:vm.memory",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:20:12.904Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T14:15:00.202Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:20:12.904Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:20:12.904Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "reboot-pending",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "tappaas-cicd booted 26.05.20261008.7c8764b, next boot 26.05.20261025.1f607aa",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:20:12.904Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1080,
+   "from": "2026-10-31T00:04:27.092Z",
+   "to": "2026-10-31T07:25:02.913Z"
+  },
+  {
+   "name": "maturity",
+   "value": "Production",
+   "source": "module-manager",
+   "change": 1329,
+   "from": "2026-10-31T07:24:00.413Z",
+   "to": null
+  },
+  {
+   "name": "zone",
+   "value": "mgmt",
+   "source": "module-manager",
+   "change": 1329,
+   "from": "2026-10-31T07:24:00.413Z",
+   "to": null
+  },
+  {
+   "name": "state",
+   "value": "running",
+   "source": "site-manager",
+   "change": 1330,
+   "from": "2026-10-31T07:24:25.263Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T15:00:06.206Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "sweep-desired",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "vm/tappaas-cicd: differs from desired cluster:vm.memory",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T15:00:06.206Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T14:15:00.202Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T15:00:06.206Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T15:00:06.206Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "reboot-pending",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "tappaas-cicd booted 26.05.20261008.7c8764b, next boot 26.05.20261025.1f607aa",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T15:00:06.206Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "newest restore point 0 day(s) old",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T15:00:06.206Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1355,
+   "from": "2026-10-31T07:25:02.913Z",
+   "to": "2026-10-31T15:05:02.578Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T08:23:56.058Z",
+    "source": "sweep",
+    "desired": {
+     "file": "tappaas-cicd.json"
+    },
+    "attributes": {
+     "cluster:vm.memory": {
+      "now": "16384",
+      "was": "8192"
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 1730,
+   "from": "2026-10-31T08:23:56.058Z",
+   "to": "2026-10-31T09:50:25.452Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T09:53:59.172Z",
+    "source": "sweep",
+    "desired": {
+     "file": "tappaas-cicd.json"
+    },
+    "attributes": {
+     "cluster:vm.memory": {
+      "now": "16384",
+      "was": "8192"
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 2340,
+   "from": "2026-10-31T09:53:59.172Z",
+   "to": "2026-10-31T10:58:43.650Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T11:00:40.204Z",
+    "source": "sweep",
+    "desired": {
+     "file": "tappaas-cicd.json"
+    },
+    "attributes": {
+     "cluster:vm.memory": {
+      "now": "16384",
+      "was": "8192"
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 2840,
+   "from": "2026-10-31T11:00:40.204Z",
+   "to": "2026-10-31T11:04:35.355Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T11:00:40.204Z",
+    "source": "sweep",
+    "desired": {
+     "file": "tappaas-cicd.json"
+    },
+    "attributes": {
+     "cluster:vm.memory": {
+      "now": "16384",
+      "was": "8192"
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 2903,
+   "from": "2026-10-31T11:04:35.355Z",
+   "to": "2026-10-31T11:37:24.096Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T11:39:34.958Z",
+    "source": "sweep",
+    "desired": {
+     "file": "tappaas-cicd.json"
+    },
+    "attributes": {
+     "cluster:vm.memory": {
+      "now": "16384",
+      "was": "8192"
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 3174,
+   "from": "2026-10-31T11:39:34.958Z",
+   "to": "2026-10-31T11:42:59.043Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T11:39:34.958Z",
+    "source": "sweep",
+    "desired": {
+     "file": "tappaas-cicd.json"
+    },
+    "attributes": {
+     "cluster:vm.memory": {
+      "now": "16384",
+      "was": "8192"
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 3239,
+   "from": "2026-10-31T11:42:59.043Z",
+   "to": "2026-10-31T15:07:09.761Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T15:07:57.586Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "sweep-desired",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "vm/tappaas-cicd: differs from desired cluster:vm.memory",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T15:07:57.586Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T14:15:00.202Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T15:07:57.586Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T15:07:57.586Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T15:05:02.578Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas-cicd: its CPU offers no AVX-512 now \u2014 x86-64-v3 takes nothing it uses",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T15:07:57.586Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "newest restore point 0 day(s) old",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T15:07:57.586Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 4352,
+   "from": "2026-10-31T15:05:02.578Z",
+   "to": "2026-10-31T15:10:19.541Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T11:39:34.958Z",
+    "source": "site-manager",
+    "desired": {
+     "file": "tappaas-cicd.json"
+    },
+    "attributes": {
+     "memory": {
+      "now": 8192,
+      "was": 16384
+     },
+     "cluster:vm.memory": {
+      "now": "16384",
+      "was": "8192"
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 4354,
+   "from": "2026-10-31T15:07:09.761Z",
+   "to": "2026-10-31T15:07:27.789Z"
+  },
+  {
+   "name": "memory",
+   "value": 8192,
+   "source": "site-manager",
+   "change": 4354,
+   "from": "2026-10-31T15:07:09.761Z",
+   "to": null
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T15:09:23.777Z",
+    "source": "sweep",
+    "desired": {
+     "file": "tappaas-cicd.json"
+    },
+    "attributes": {
+     "memory": {
+      "now": 8192,
+      "was": 16384
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 4416,
+   "from": "2026-10-31T15:09:23.777Z",
+   "to": "2026-10-31T16:33:27.018Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:30:07.088Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T15:10:19.541Z",
+     "reason": "sweep-changed",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "vm/tappaas-cicd: drift: changed memory",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:30:07.088Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T14:15:00.202Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:30:07.088Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:30:07.088Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T15:05:02.578Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas-cicd: its CPU offers no AVX-512 now \u2014 x86-64-v3 takes nothing it uses",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:30:07.088Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "newest restore point 0 day(s) old",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:30:07.088Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 4418,
+   "from": "2026-10-31T15:10:19.541Z",
+   "to": "2026-10-31T16:34:44.702Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:34:44.702Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T15:10:19.541Z",
+     "reason": "sweep-changed",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "vm/tappaas-cicd: drift: changed memory",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:34:44.702Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T14:15:00.202Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:34:44.702Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:34:44.702Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T16:34:44.702Z",
+     "reason": "reboot-pending",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "tappaas-cicd booted 26.05.20261025.1f607aa, next boot 26.05.20261025.1f607aa",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:34:44.702Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "newest restore point 0 day(s) old",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:34:44.702Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 4995,
+   "from": "2026-10-31T16:34:44.702Z",
+   "to": "2026-10-31T16:35:02.578Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:35:02.578Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T15:10:19.541Z",
+     "reason": "sweep-changed",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "vm/tappaas-cicd: drift: changed memory",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:35:02.578Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T14:15:00.202Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:35:02.578Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:35:02.578Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T16:35:02.578Z",
+     "reason": "reboot-pending",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "tappaas-cicd booted 26.05.20261025.1f607aa, next boot 26.05.20261025.1f607aa",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:35:02.578Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "newest restore point 0 day(s) old",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:35:02.578Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 4996,
+   "from": "2026-10-31T16:35:02.578Z",
+   "to": "2026-10-31T16:38:56.892Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:38:56.892Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T16:38:56.892Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:38:56.892Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T14:15:00.202Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:38:56.892Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:38:56.892Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T16:35:02.578Z",
+     "reason": "reboot-pending",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "tappaas-cicd booted 26.05.20261025.1f607aa, next boot 26.05.20261025.1f607aa",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:38:56.892Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "newest restore point 0 day(s) old",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:38:56.892Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 5062,
+   "from": "2026-10-31T16:38:56.892Z",
+   "to": "2026-10-31T16:40:02.581Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T16:40:02.581Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T16:40:02.581Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T14:15:00.202Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T16:35:02.578Z",
+     "reason": "reboot-pending",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "tappaas-cicd booted 26.05.20261025.1f607aa, next boot 26.05.20261025.1f607aa",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "newest restore point 0 day(s) old",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 5087,
+   "from": "2026-10-31T16:40:02.581Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 36,
+   "type": "member-of",
+   "direction": "out",
+   "other": {
+    "id": "bb8a818c-90a8-47f1-a71d-f33c0f6d8b0f",
+    "class": "environment",
+    "name": "mgmt"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 84,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "a0e4b194-ea92-42c0-b0a1-715007a5c007",
+    "class": "manager",
+    "name": "health-manager"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 94,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "9fdc10d6-5acd-43ad-be3c-2121a39d08fe",
+    "class": "controller",
+    "name": "cmdb-controller"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 78,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "0019ef59-4d2a-4046-bada-53a354f4a1a2",
+    "class": "manager",
+    "name": "module-manager"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 80,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "3ba9eff5-f1ee-4270-802c-5b3ab5693ea3",
+    "class": "manager",
+    "name": "network-manager"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 81,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "084cc578-4943-480c-bf7c-4506612275e0",
+    "class": "manager",
+    "name": "environment-manager"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 90,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "142b5831-3cd8-4a31-a2e4-a5ec29d11261",
+    "class": "controller",
+    "name": "authentik-controller"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 91,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "d66c5e81-a145-436e-8cd2-40e6d339748e",
+    "class": "controller",
+    "name": "node-provisioner"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 92,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "33db8c6f-5ba5-4964-933d-bc800a9e973a",
+    "class": "controller",
+    "name": "opnsense-controller"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 79,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "05e75fd6-7d94-4910-9c95-179c42389caf",
+    "class": "manager",
+    "name": "site-manager"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 82,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "3e22e490-90a6-41f1-9977-812cf4a1eaf9",
+    "class": "manager",
+    "name": "identity-manager"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 85,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "df841a6d-2ef7-466e-b88b-db7994ac4821",
+    "class": "manager",
+    "name": "storage-manager"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 86,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "3b75456e-ce4e-4601-982a-46a16a57dbab",
+    "class": "manager",
+    "name": "asset-manager"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 87,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "7e55b0c5-3f06-4c25-862f-77bdecf56156",
+    "class": "manager",
+    "name": "ap-manager"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 88,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "a7ce61ac-7630-49dd-bb50-fa9b934c4149",
+    "class": "manager",
+    "name": "switch-manager"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 89,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "323919db-8912-4551-8f43-0f35e48004ab",
+    "class": "controller",
+    "name": "pbs-controller"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 37,
+   "type": "runs-on",
+   "direction": "out",
+   "other": {
+    "id": "c11c3e17-fe34-4bd7-bed6-6f8b259469c8",
+    "class": "machine",
+    "name": "tappaas1"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 93,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "78198731-a10d-4cbc-94c8-996c34e19ee3",
+    "class": "controller",
+    "name": "proxmox-controller"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 83,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "cefdd86a-eacf-471e-87e6-3f89ed48d855",
+    "class": "manager",
+    "name": "backup-manager"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 310,
+   "type": "backs-up",
+   "direction": "in",
+   "other": {
+    "id": "e5d0d704-4a8a-4cb0-a2eb-84ad8f6dc8f8",
+    "class": "datastore",
+    "name": "tappaas_backup"
+   },
+   "attributes": {},
+   "source": "backup-manager",
+   "change": 6,
+   "from": "2026-10-30T08:47:53.826Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 1355,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:25:02.913Z",
+   "drift": false
+  },
+  {
+   "id": 1730,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-31T08:23:56.058Z",
+   "drift": true
+  },
+  {
+   "id": 2238,
+   "kind": "change",
+   "source": "module-manager",
+   "job": null,
+   "verb": "update tappaas-cicd",
+   "actor": "tappaas",
+   "time": "2026-10-31T09:50:25.452Z",
+   "drift": false
+  },
+  {
+   "id": 2340,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-31T09:53:59.172Z",
+   "drift": true
+  },
+  {
+   "id": 2799,
+   "kind": "change",
+   "source": "module-manager",
+   "job": null,
+   "verb": "update tappaas-cicd",
+   "actor": "tappaas",
+   "time": "2026-10-31T10:58:43.650Z",
+   "drift": false
+  },
+  {
+   "id": 2840,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-31T11:00:40.204Z",
+   "drift": true
+  },
+  {
+   "id": 2903,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-31T11:04:35.355Z",
+   "drift": true
+  },
+  {
+   "id": 3110,
+   "kind": "change",
+   "source": "module-manager",
+   "job": null,
+   "verb": "update tappaas-cicd",
+   "actor": "tappaas",
+   "time": "2026-10-31T11:37:24.096Z",
+   "drift": false
+  },
+  {
+   "id": 3174,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-31T11:39:34.958Z",
+   "drift": true
+  },
+  {
+   "id": 3239,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-31T11:42:59.043Z",
+   "drift": true
+  },
+  {
+   "id": 4352,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T15:05:02.578Z",
+   "drift": false
+  },
+  {
+   "id": 4354,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T15:07:09.761Z",
+   "drift": true
+  },
+  {
+   "id": 4380,
+   "kind": "change",
+   "source": "module-manager",
+   "job": null,
+   "verb": "update tappaas-cicd",
+   "actor": "tappaas",
+   "time": "2026-10-31T15:07:27.789Z",
+   "drift": false
+  },
+  {
+   "id": 4416,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-31T15:09:23.777Z",
+   "drift": true
+  },
+  {
+   "id": 4418,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T15:10:19.541Z",
+   "drift": false
+  },
+  {
+   "id": 4952,
+   "kind": "change",
+   "source": "module-manager",
+   "job": null,
+   "verb": "update tappaas-cicd",
+   "actor": "tappaas",
+   "time": "2026-10-31T16:33:27.018Z",
+   "drift": false
+  },
+  {
+   "id": 4995,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T16:34:44.702Z",
+   "drift": false
+  },
+  {
+   "id": 4996,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T16:35:02.578Z",
+   "drift": false
+  },
+  {
+   "id": 5062,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T16:38:56.892Z",
+   "drift": false
+  },
+  {
+   "id": 5087,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T16:40:02.581Z",
+   "drift": false
+  }
+ ]
+}

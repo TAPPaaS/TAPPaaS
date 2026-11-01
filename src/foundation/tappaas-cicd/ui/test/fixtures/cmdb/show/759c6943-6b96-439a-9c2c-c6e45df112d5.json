@@ -1,0 +1,27 @@
+{
+  "id": "759c6943-6b96-439a-9c2c-c6e45df112d5",
+  "class": "node",
+  "ancestors": [
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "mtA",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T19:34:08.251Z",
+  "ended": null,
+  "lastSeen": null,
+  "seen": {},
+  "at": null,
+  "attributes": {
+    "placeholder": {
+      "value": true,
+      "source": "asset-manager",
+      "since": "2026-10-30T19:34:08.251Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

@@ -1,0 +1,74 @@
+{
+  "description": "LiteLLM AI gateway — one OpenAI-compatible API, with per-user keys and usage tracking, in front of local (vLLM) and remote models.",
+  "version": "0.7.3",
+  "releaseDate": "2026-07-02",
+  "installTime": "20260816-16:40:12",
+  "updateTime": "20261101-02:23:27",
+  "maintainer": "@ErikDaniel007",
+  "status": "Development",
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/ai/litellm",
+  "environment": "rossen",
+  "vmname": "litellm",
+  "vmid": 310,
+  "vmtag": "TAPPaaS,App,AI",
+  "node": "tappaas2",
+  "zone0": "rossen",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy",
+    "network:rules",
+    "identity:identity"
+  ],
+  "integratesWith": [
+    "vllm-amd:inference",
+    "logging:logs"
+  ],
+  "provides": [
+    "models"
+  ],
+  "appVersion": "1.103.3",
+  "displayName": "LiteLLM",
+  "stack": "ai",
+  "config": {
+    "backup:vm": {
+      "backup": {
+        "enabled": true,
+        "exclude": [],
+        "retention": "7y"
+      }
+    },
+    "cluster:vm": {
+      "cores": 4,
+      "memory": 6144,
+      "diskSize": "32G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "identity:identity": {
+      "identity": {
+        "configureService": "litellm-integrations.service",
+        "launchPath": "/sso/key/generate",
+        "oidcRedirectPaths": [
+          "/sso/callback"
+        ],
+        "scopes": [
+          "openid",
+          "email",
+          "profile"
+        ],
+        "secretsEnv": "/etc/secrets/litellm-oidc.env"
+      }
+    },
+    "network:proxy": {
+      "proxyPort": 4000,
+      "proxyAllowedZones": [
+        "internet"
+      ]
+    }
+  }
+}

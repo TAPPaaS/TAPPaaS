@@ -1,13 +1,22 @@
 {
  "version": 1,
- "generated": "2026-10-17T18:55:11.656Z",
+ "generated": "2026-11-01T08:51:36.811Z",
  "site": {
   "name": "rossen",
-  "displayName": "rossen",
+  "displayName": "Rossen Production Cluster",
   "wan": {
    "publicIp": "auto",
+   "discovered": {
+    "ipv4": "203.0.113.190",
+    "prefix": 24,
+    "ipv6": [
+     "2001:db8:2:978c::efd"
+    ],
+    "private": false,
+    "observed": "2026-11-01T02:07:27+01:00"
+   },
    "ipv6": true,
-   "isp": null,
+   "isp": "Netnørden",
    "zone": "wan",
    "vlan": 100,
    "handoff": {
@@ -79,8 +88,8 @@
        "speed": "10G",
        "up": true,
        "peer": {
-        "switch": "USW Pro XG 10 PoE",
-        "port": "12",
+        "switch": "crs-a",
+        "port": "sfp-sfpplus1",
         "known": true,
         "via": "lldp"
        }
@@ -91,8 +100,8 @@
        "speed": "10G",
        "up": true,
        "peer": {
-        "switch": "USW Pro XG 10 PoE",
-        "port": "11",
+        "switch": "crs-b",
+        "port": "sfp-sfpplus1",
         "known": true,
         "via": "lldp"
        }
@@ -149,7 +158,7 @@
      "zone": "mgmt",
      "environment": "mgmt",
      "stack": "foundation",
-     "maturity": "Development",
+     "maturity": "Production",
      "state": "running"
     },
     {
@@ -159,7 +168,7 @@
      "zone": "mgmt",
      "environment": "mgmt",
      "stack": "foundation",
-     "maturity": "Development",
+     "maturity": "Production",
      "state": "running"
     },
     {
@@ -169,7 +178,7 @@
      "zone": "rossen",
      "environment": "rossen",
      "stack": "collaboration",
-     "maturity": "Testing",
+     "maturity": "Production",
      "state": "running"
     },
     {
@@ -203,121 +212,23 @@
      "state": "running"
     },
     {
-     "module": "nomad",
-     "vmid": 370,
-     "kind": "vm",
-     "zone": "dmz",
-     "environment": "rossen",
-     "stack": "home",
-     "maturity": "Development",
-     "state": "running"
-    },
-    {
-     "module": "vaultwarden",
-     "vmid": 610,
-     "kind": "vm",
-     "zone": "dmz",
-     "environment": "rossen",
-     "stack": "security",
-     "maturity": "Development",
-     "state": "running"
-    }
-   ]
-  },
-  {
-   "name": "tappaas3",
-   "kind": "cluster-member",
-   "storagePools": [
-    "tanka1",
-    "tankc1"
-   ],
-   "roles": [
-    "backup"
-   ],
-   "ha": {
-    "lrm": "idle"
-   },
-   "corosync": {
-    "links": 1,
-    "disconnected": 0
-   },
-   "lldpd": "active",
-   "uplinks": [
-    {
-     "name": "lan",
-     "mode": "single",
-     "bond": null,
-     "mtu": 1500,
-     "declared": {
-      "mode": "single",
-      "ports": [
-       "c8:ff:bf:05:0d:30"
-      ]
-     },
-     "legs": [
-      {
-       "nic": "eno1",
-       "mac": "c8:ff:bf:05:0d:30",
-       "speed": "2.5G",
-       "up": true,
-       "peer": {
-        "switch": "USW Pro XG 10 PoE",
-        "port": "3",
-        "known": true,
-        "via": "lldp"
-       }
-      }
-     ]
-    },
-    {
-     "name": "wan",
-     "mode": "single",
-     "bond": null,
-     "mtu": 1500,
-     "declared": {
-      "mode": null,
-      "ports": [
-       "c8:ff:bf:05:0d:31"
-      ]
-     },
-     "legs": [
-      {
-       "nic": "enp3s0",
-       "mac": "c8:ff:bf:05:0d:31",
-       "speed": "2.5G",
-       "up": true,
-       "peer": {
-        "switch": "USW Pro XG 10 PoE",
-        "port": "7",
-        "known": true,
-        "via": "lldp"
-       }
-      }
-     ]
-    }
-   ],
-   "guests": [
-    {
-     "module": "unifi-os",
-     "vmid": 811,
-     "kind": "vm",
-     "zone": "mgmt",
-     "environment": "rossen",
-     "stack": null,
-     "maturity": "Development",
-     "state": "running"
-    },
-    {
-     "module": "backup",
+     "module": "console",
      "vmid": null,
      "kind": "application",
      "zone": "mgmt",
      "environment": "mgmt",
      "stack": "foundation",
-     "maturity": "Testing",
+     "maturity": "Development",
      "state": "-"
     }
-   ]
+   ],
+   "location": "knudanchersvej95",
+   "placement": {
+    "room": "basement",
+    "rack": "rack1",
+    "u": 1
+   },
+   "source": "cluster"
   },
   {
    "name": "tappaas2",
@@ -432,8 +343,232 @@
      "stack": "devops",
      "maturity": "Testing",
      "state": "running"
+    },
+    {
+     "module": "woodpecker",
+     "vmid": 351,
+     "kind": "vm",
+     "zone": "rossen",
+     "environment": "rossen",
+     "stack": "devops",
+     "maturity": "Testing",
+     "state": "running"
+    },
+    {
+     "module": "lazysite",
+     "vmid": 380,
+     "kind": "vm",
+     "zone": "dmz",
+     "environment": "rossen",
+     "stack": "collaboration",
+     "maturity": "Development",
+     "state": "running"
     }
-   ]
+   ],
+   "location": "knudanchersvej95",
+   "placement": {
+    "room": "basement",
+    "rack": "rack1",
+    "u": 13
+   },
+   "source": "cluster"
+  },
+  {
+   "name": "tappaas3",
+   "kind": "cluster-member",
+   "storagePools": [
+    "tanka1",
+    "tankc1"
+   ],
+   "roles": [
+    "backup"
+   ],
+   "ha": {
+    "lrm": "active"
+   },
+   "corosync": {
+    "links": 1,
+    "disconnected": 0
+   },
+   "lldpd": "active",
+   "uplinks": [
+    {
+     "name": "lan",
+     "mode": "active-backup",
+     "bond": "lanbond",
+     "mtu": 1500,
+     "declared": {
+      "mode": "active-backup",
+      "ports": [
+       "c8:ff:bf:05:0d:30",
+       "00:e0:4c:68:00:d1"
+      ]
+     },
+     "legs": [
+      {
+       "nic": "eno1",
+       "mac": "c8:ff:bf:05:0d:30",
+       "speed": "2.5G",
+       "up": true,
+       "peer": {
+        "switch": "USW Pro XG 10 PoE",
+        "port": "3",
+        "known": true,
+        "via": "lldp"
+       }
+      },
+      {
+       "nic": "usblan0",
+       "mac": "00:e0:4c:68:00:d1",
+       "speed": "2.5G",
+       "up": true,
+       "peer": {
+        "switch": "USW Pro XG 10 PoE",
+        "port": "4",
+        "known": true,
+        "via": "lldp"
+       }
+      }
+     ]
+    },
+    {
+     "name": "wan",
+     "mode": "single",
+     "bond": null,
+     "mtu": 1500,
+     "declared": {
+      "mode": null,
+      "ports": [
+       "c8:ff:bf:05:0d:31"
+      ]
+     },
+     "legs": [
+      {
+       "nic": "enp3s0",
+       "mac": "c8:ff:bf:05:0d:31",
+       "speed": "2.5G",
+       "up": true,
+       "peer": {
+        "switch": "USW Pro XG 10 PoE",
+        "port": "7",
+        "known": true,
+        "via": "lldp"
+       }
+      }
+     ]
+    }
+   ],
+   "guests": [
+    {
+     "module": "nomad",
+     "vmid": 370,
+     "kind": "vm",
+     "zone": "dmz",
+     "environment": "rossen",
+     "stack": "home",
+     "maturity": "Development",
+     "state": "running"
+    },
+    {
+     "module": "karakeep",
+     "vmid": 371,
+     "kind": "vm",
+     "zone": "rossen",
+     "environment": "rossen",
+     "stack": "home",
+     "maturity": "Development",
+     "state": "running"
+    },
+    {
+     "module": "vaultwarden",
+     "vmid": 610,
+     "kind": "vm",
+     "zone": "dmz",
+     "environment": "rossen",
+     "stack": "security",
+     "maturity": "Development",
+     "state": "running"
+    },
+    {
+     "module": "unifi-os",
+     "vmid": 811,
+     "kind": "vm",
+     "zone": "mgmt",
+     "environment": "rossen",
+     "stack": "misc",
+     "maturity": "Development",
+     "state": "running"
+    },
+    {
+     "module": "backup",
+     "vmid": null,
+     "kind": "application",
+     "zone": "mgmt",
+     "environment": "mgmt",
+     "stack": "foundation",
+     "maturity": "Testing",
+     "state": "-"
+    }
+   ],
+   "location": "knudanchersvej95",
+   "placement": {
+    "room": "basement",
+    "rack": "rack1",
+    "u": 13
+   },
+   "source": "cluster"
+  },
+  {
+   "name": "tappaas4",
+   "kind": "cluster-member",
+   "storagePools": [
+    "tanka1"
+   ],
+   "roles": [],
+   "ha": {
+    "lrm": "idle"
+   },
+   "corosync": {
+    "links": 1,
+    "disconnected": 0
+   },
+   "lldpd": "active",
+   "uplinks": [
+    {
+     "name": "lan",
+     "mode": "single",
+     "bond": null,
+     "mtu": 1500,
+     "declared": {
+      "mode": "single",
+      "ports": [
+       "20:7c:14:f4:d0:87"
+      ]
+     },
+     "legs": [
+      {
+       "nic": "enp4s0",
+       "mac": "20:7c:14:f4:d0:87",
+       "speed": "2.5G",
+       "up": true,
+       "peer": {
+        "switch": "USW Pro XG 10 PoE",
+        "port": "1",
+        "known": true,
+        "via": "lldp"
+       }
+      }
+     ]
+    }
+   ],
+   "guests": [],
+   "location": "knudanchersvej95",
+   "placement": {
+    "room": "basement",
+    "rack": "rack1",
+    "u": 19
+   },
+   "source": "cluster"
   }
  ],
  "switches": [
@@ -449,14 +584,12 @@
    "ports": [
     {
      "port": "1",
-     "role": "unmanaged",
-     "type": null,
+     "role": "node-lan",
+     "type": "node",
      "mode": "trunk",
      "native": 0,
      "tagged": [
-      100,
       200,
-      298,
       299,
       310,
       410,
@@ -466,7 +599,6 @@
       610
      ],
      "zones": [
-      "wan",
       "rossen",
       "test",
       "home",
@@ -476,13 +608,37 @@
       "guest",
       "dmz"
      ],
-     "target": null,
+     "target": {
+      "kind": "node",
+      "name": "tappaas4",
+      "port": "enp4s0"
+     },
      "description": null,
      "lag": null,
-     "drift": "unmanaged",
+     "lagLead": null,
+     "parked": false,
+     "link": "up",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
      "add": [],
      "remove": [],
-     "seen": null
+     "seen": {
+      "node": "tappaas4",
+      "nic": "enp4s0"
+     },
+     "neighbors": [
+      {
+       "mac": "20:7c:14:f4:d0:87",
+       "lease": {
+        "address": "10.0.0.13",
+        "hostname": null
+       }
+      }
+     ]
     },
     {
      "port": "2",
@@ -517,13 +673,93 @@
      },
      "description": null,
      "lag": null,
+     "lagLead": null,
+     "parked": false,
+     "link": "up",
      "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
      "add": [],
      "remove": [],
      "seen": {
       "node": "tappaas2",
       "nic": "enp97s0"
-     }
+     },
+     "neighbors": [
+      {
+       "mac": "02:1b:46:99:54:74",
+       "lease": {
+        "address": "10.2.0.76",
+        "hostname": "litellm"
+       }
+      },
+      {
+       "mac": "02:2c:fc:7b:cb:47",
+       "lease": {
+        "address": "10.2.0.227",
+        "hostname": "nextcloud-hpb"
+       }
+      },
+      {
+       "mac": "02:2f:0c:55:05:69",
+       "lease": {
+        "address": "10.6.0.145",
+        "hostname": "lazysite"
+       }
+      },
+      {
+       "mac": "02:44:ca:67:51:3f",
+       "lease": {
+        "address": "10.2.0.225",
+        "hostname": "euro-office"
+       }
+      },
+      {
+       "mac": "02:81:88:35:6f:47",
+       "lease": {
+        "address": "10.2.99.55",
+        "hostname": "deconz-test"
+       }
+      },
+      {
+       "mac": "02:c5:ec:06:cd:22",
+       "lease": {
+        "address": "10.2.0.199",
+        "hostname": "vllm-amd"
+       }
+      },
+      {
+       "mac": "02:c6:d4:0e:c2:60",
+       "lease": {
+        "address": "10.2.0.164",
+        "hostname": "forgejo"
+       }
+      },
+      {
+       "mac": "02:cd:07:87:2c:a5",
+       "lease": {
+        "address": "10.2.0.163",
+        "hostname": "openwebui"
+       }
+      },
+      {
+       "mac": "02:f5:a6:26:bc:89",
+       "lease": {
+        "address": "10.2.0.237",
+        "hostname": "woodpecker"
+       }
+      },
+      {
+       "mac": "38:05:25:33:b5:f7",
+       "lease": {
+        "address": "10.0.0.11",
+        "hostname": null
+       }
+      }
+     ]
     },
     {
      "port": "3",
@@ -558,24 +794,67 @@
      },
      "description": null,
      "lag": null,
+     "lagLead": null,
+     "parked": false,
+     "link": "up",
      "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
      "add": [],
      "remove": [],
      "seen": {
       "node": "tappaas3",
       "nic": "eno1"
-     }
+     },
+     "neighbors": [
+      {
+       "mac": "02:22:05:c8:12:b9",
+       "lease": {
+        "address": "10.6.0.152",
+        "hostname": "nomad"
+       }
+      },
+      {
+       "mac": "02:37:78:a9:80:47",
+       "lease": {
+        "address": "10.2.0.131",
+        "hostname": "karakeep"
+       }
+      },
+      {
+       "mac": "02:67:7a:fe:dc:b7",
+       "lease": {
+        "address": "10.0.0.110",
+        "hostname": "unifi-os"
+       }
+      },
+      {
+       "mac": "02:98:07:05:29:50",
+       "lease": {
+        "address": "10.6.0.174",
+        "hostname": "vaultwarden"
+       }
+      },
+      {
+       "mac": "c8:ff:bf:05:0d:30",
+       "lease": {
+        "address": "10.0.0.12",
+        "hostname": null
+       }
+      }
+     ]
     },
     {
      "port": "4",
-     "role": "unmanaged",
-     "type": null,
+     "role": "node-lan",
+     "type": "node",
      "mode": "trunk",
      "native": 0,
      "tagged": [
-      100,
       200,
-      298,
       299,
       310,
       410,
@@ -585,7 +864,6 @@
       610
      ],
      "zones": [
-      "wan",
       "rossen",
       "test",
       "home",
@@ -595,13 +873,29 @@
       "guest",
       "dmz"
      ],
-     "target": null,
+     "target": {
+      "kind": "node",
+      "name": "tappaas3",
+      "port": "usblan0"
+     },
      "description": null,
      "lag": null,
-     "drift": "unmanaged",
+     "lagLead": null,
+     "parked": false,
+     "link": "up",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
      "add": [],
      "remove": [],
-     "seen": null
+     "seen": {
+      "node": "tappaas3",
+      "nic": "usblan0"
+     },
+     "neighbors": []
     },
     {
      "port": "5",
@@ -628,10 +922,27 @@
      },
      "description": "WAN modem (ISP hand-off)",
      "lag": null,
+     "lagLead": null,
+     "parked": false,
+     "link": "up",
      "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
      "add": [],
      "remove": [],
-     "seen": null
+     "seen": null,
+     "neighbors": [
+      {
+       "mac": "02:47:00:00:01:68",
+       "lease": {
+        "address": "198.18.2.1",
+        "hostname": null
+       }
+      }
+     ]
     },
     {
      "port": "6",
@@ -658,13 +969,30 @@
      },
      "description": "tappaas1 WAN NIC",
      "lag": null,
+     "lagLead": null,
+     "parked": false,
+     "link": "up",
      "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
      "add": [],
      "remove": [],
      "seen": {
       "node": "tappaas1",
       "nic": "nic4"
-     }
+     },
+     "neighbors": [
+      {
+       "mac": "02:fd:8f:e2:58:cb",
+       "lease": {
+        "address": "203.0.113.190",
+        "hostname": "network"
+       }
+      }
+     ]
     },
     {
      "port": "7",
@@ -691,50 +1019,57 @@
      },
      "description": "tappaas3 WAN NIC",
      "lag": null,
+     "lagLead": null,
+     "parked": false,
+     "link": "up",
      "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
      "add": [],
      "remove": [],
      "seen": {
       "node": "tappaas3",
       "nic": "enp3s0"
-     }
+     },
+     "neighbors": [
+      {
+       "mac": "c8:ff:bf:05:0d:31",
+       "lease": {
+        "address": null,
+        "hostname": null
+       }
+      }
+     ]
     },
     {
      "port": "8",
-     "role": "unmanaged",
+     "role": "parked",
      "type": null,
-     "mode": "trunk",
-     "native": 0,
-     "tagged": [
-      100,
-      200,
-      298,
-      299,
-      310,
-      410,
-      420,
-      430,
-      510,
-      610
-     ],
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
      "zones": [
-      "wan",
-      "rossen",
-      "test",
-      "home",
-      "iotLocal",
-      "iotCloud",
-      "iotCams",
-      "guest",
-      "dmz"
+      "iotLocal"
      ],
      "target": null,
      "description": null,
      "lag": null,
-     "drift": "unmanaged",
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
      "add": [],
      "remove": [],
-     "seen": null
+     "seen": null,
+     "neighbors": []
     },
     {
      "port": "9",
@@ -769,52 +1104,59 @@
      },
      "description": null,
      "lag": null,
+     "lagLead": null,
+     "parked": false,
+     "link": "up",
      "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
      "add": [],
      "remove": [],
-     "seen": null
+     "seen": null,
+     "neighbors": [
+      {
+       "mac": "74:83:c2:d0:d0:dd",
+       "lldp": {
+        "name": null,
+        "port": "74:83:C2:D0:D0:DD"
+       }
+      }
+     ]
     },
     {
      "port": "10",
-     "role": "unmanaged",
+     "role": "parked",
      "type": null,
-     "mode": "trunk",
-     "native": 0,
-     "tagged": [
-      100,
-      200,
-      298,
-      299,
-      310,
-      410,
-      420,
-      430,
-      510,
-      610
-     ],
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
      "zones": [
-      "wan",
-      "rossen",
-      "test",
-      "home",
-      "iotLocal",
-      "iotCloud",
-      "iotCams",
-      "guest",
-      "dmz"
+      "iotLocal"
      ],
      "target": null,
      "description": null,
      "lag": null,
-     "drift": "unmanaged",
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
      "add": [],
      "remove": [],
-     "seen": null
+     "seen": null,
+     "neighbors": []
     },
     {
      "port": "11",
-     "role": "node-lan",
-     "type": "node",
+     "role": "switch",
+     "type": "switch",
      "mode": "trunk",
      "native": 0,
      "tagged": [
@@ -838,22 +1180,176 @@
       "dmz"
      ],
      "target": {
-      "kind": "node",
-      "name": "tappaas1",
-      "port": "nic3"
+      "kind": "switch",
+      "name": "crs-a",
+      "port": "sfp-sfpplus14"
      },
      "description": null,
-     "lag": "tappaas1-lan",
+     "lag": "crs-uplink",
+     "lagLead": null,
+     "parked": false,
+     "link": "up",
      "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
      "add": [],
      "remove": [],
-     "seen": {
-      "node": "tappaas1",
-      "nic": "nic3"
-     }
+     "seen": null,
+     "neighbors": [
+      {
+       "mac": "04:f4:1c:00:25:60",
+       "lldp": {
+        "name": null,
+        "port": "sfp-sfpplus14"
+       }
+      }
+     ]
     },
     {
      "port": "12",
+     "role": "switch",
+     "type": "switch",
+     "mode": "trunk",
+     "native": 0,
+     "tagged": [
+      200,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "rossen",
+      "test",
+      "home",
+      "iotLocal",
+      "iotCloud",
+      "iotCams",
+      "guest",
+      "dmz"
+     ],
+     "target": {
+      "kind": "switch",
+      "name": "crs-b",
+      "port": "sfp-sfpplus14"
+     },
+     "description": null,
+     "lag": "crs-uplink",
+     "lagLead": "11",
+     "parked": false,
+     "link": "up",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": [
+      {
+       "mac": "d0:ea:11:74:99:30",
+       "lldp": {
+        "name": null,
+        "port": "sfp-sfpplus14"
+       }
+      }
+     ]
+    }
+   ],
+   "lags": [
+    {
+     "name": "crs-uplink",
+     "ports": [
+      "11",
+      "12"
+     ],
+     "formed": true,
+     "live": [
+      "11",
+      "12"
+     ],
+     "switches": [
+      "USW Pro XG 10 PoE"
+     ],
+     "mlagId": null,
+     "pair": null,
+     "members": [
+      {
+       "switch": "USW Pro XG 10 PoE",
+       "port": "11",
+       "active": true,
+       "why": null
+      },
+      {
+       "switch": "USW Pro XG 10 PoE",
+       "port": "12",
+       "active": true,
+       "why": null
+      }
+     ],
+     "missing": [],
+     "node": null,
+     "bond": null,
+     "peer": {
+      "kind": "pair",
+      "name": "crs-a+crs-b"
+     }
+    }
+   ],
+   "mlagPair": null,
+   "location": "knudanchersvej95",
+   "placement": {
+    "room": "basement",
+    "rack": "rack1",
+    "u": 23
+   },
+   "source": "switch-configuration"
+  },
+  {
+   "name": "crs-a",
+   "lldpName": null,
+   "vendor": "mikrotik",
+   "model": "CRS317-1G-16S+",
+   "managementIp": "10.0.0.21",
+   "managed": "auto",
+   "controller": null,
+   "controllerAddress": null,
+   "ports": [
+    {
+     "port": "ether1",
+     "role": "unmanaged",
+     "type": null,
+     "mode": "access",
+     "native": 0,
+     "tagged": [],
+     "zones": [],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": false,
+     "link": "down",
+     "drift": "unmanaged",
+     "status": "unmanaged",
+     "disabled": true,
+     "peerLink": false,
+     "bridged": false,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus1",
      "role": "node-lan",
      "type": "node",
      "mode": "trunk",
@@ -885,31 +1381,1473 @@
      },
      "description": null,
      "lag": "tappaas1-lan",
+     "lagLead": null,
+     "parked": false,
+     "link": "up",
      "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": 10,
      "add": [],
      "remove": [],
      "seen": {
       "node": "tappaas1",
       "nic": "nic2"
-     }
+     },
+     "neighbors": [
+      {
+       "mac": "00:07:43:38:aa:f0"
+      },
+      {
+       "mac": "00:07:43:38:aa:f7",
+       "lldp": {
+        "name": null,
+        "port": null
+       }
+      },
+      {
+       "mac": "02:05:9b:1f:2b:01"
+      },
+      {
+       "mac": "02:07:e6:f7:74:47"
+      },
+      {
+       "mac": "02:5d:b7:01:7a:8b"
+      },
+      {
+       "mac": "02:67:b6:d8:83:e5"
+      },
+      {
+       "mac": "02:79:7c:40:fc:c1"
+      },
+      {
+       "mac": "02:7f:5e:c2:1a:ad"
+      },
+      {
+       "mac": "02:98:34:69:90:1a"
+      },
+      {
+       "mac": "02:c8:41:33:f4:0d"
+      },
+      {
+       "mac": "02:e1:97:56:29:e5"
+      }
+     ]
+    },
+    {
+     "port": "sfp-sfpplus2",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus3",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus4",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus5",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus6",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus7",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus8",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus9",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus10",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus11",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus12",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus13",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus14",
+     "role": "switch",
+     "type": "switch",
+     "mode": "trunk",
+     "native": 0,
+     "tagged": [
+      200,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "rossen",
+      "test",
+      "home",
+      "iotLocal",
+      "iotCloud",
+      "iotCams",
+      "guest",
+      "dmz"
+     ],
+     "target": {
+      "kind": "switch",
+      "name": "USW Pro XG 10 PoE",
+      "port": "11"
+     },
+     "description": null,
+     "lag": "usw-uplink",
+     "lagLead": null,
+     "parked": false,
+     "link": "up",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": 11,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": [
+      {
+       "mac": "02:19:b3:fa:9c:de"
+      },
+      {
+       "mac": "02:1b:46:99:54:74"
+      },
+      {
+       "mac": "02:22:05:c8:12:b9"
+      },
+      {
+       "mac": "02:2c:fc:7b:cb:47"
+      },
+      {
+       "mac": "02:2f:0c:55:05:69"
+      },
+      {
+       "mac": "02:37:78:a9:80:47"
+      },
+      {
+       "mac": "02:44:ca:67:51:3f"
+      },
+      {
+       "mac": "02:4d:dd:19:91:c9"
+      },
+      {
+       "mac": "02:56:b5:4b:15:ff"
+      },
+      {
+       "mac": "02:65:f0:03:03:88"
+      },
+      {
+       "mac": "02:67:7a:fe:dc:b7"
+      },
+      {
+       "mac": "02:77:40:78:7b:ab"
+      },
+      {
+       "mac": "02:81:88:35:6f:47"
+      },
+      {
+       "mac": "02:87:ba:76:90:be"
+      },
+      {
+       "mac": "02:98:07:05:29:50"
+      },
+      {
+       "mac": "02:b6:3f:17:f8:a3"
+      },
+      {
+       "mac": "02:c5:ec:06:cd:22"
+      },
+      {
+       "mac": "02:c6:d4:0e:c2:60"
+      },
+      {
+       "mac": "02:cd:07:87:2c:a5"
+      },
+      {
+       "mac": "02:d6:13:d7:2a:4b"
+      },
+      {
+       "mac": "02:d9:d8:67:9f:18"
+      },
+      {
+       "mac": "02:e2:45:2e:0f:d1"
+      },
+      {
+       "mac": "02:f5:a6:26:bc:89"
+      },
+      {
+       "mac": "14:13:0b:37:69:50"
+      },
+      {
+       "mac": "20:7c:14:f4:d0:87"
+      },
+      {
+       "mac": "38:05:25:33:b5:f7"
+      },
+      {
+       "mac": "74:83:c2:d0:d0:dd"
+      },
+      {
+       "mac": "a8:9c:6c:b0:8d:76"
+      },
+      {
+       "mac": "a8:9c:6c:b0:8d:77",
+       "lldp": {
+        "name": "USW-Pro-XG-10-PoE",
+        "port": "SFP_ 1"
+       }
+      },
+      {
+       "mac": "c8:ff:bf:05:0d:30"
+      }
+     ]
+    },
+    {
+     "port": "sfp-sfpplus15",
+     "role": "peer-link",
+     "type": null,
+     "mode": "trunk",
+     "native": 0,
+     "tagged": [
+      1,
+      200,
+      298,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "rossen",
+      "test",
+      "home",
+      "iotLocal",
+      "iotCloud",
+      "iotCams",
+      "guest",
+      "dmz"
+     ],
+     "target": {
+      "kind": "switch",
+      "name": "crs-b",
+      "port": "peer-link"
+     },
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": false,
+     "link": "up",
+     "drift": "unmanaged",
+     "status": "peer-link",
+     "disabled": true,
+     "peerLink": true,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": [
+      {
+       "mac": "d0:ea:11:74:99:3f",
+       "lldp": {
+        "name": "crs-b",
+        "port": "bridge/peer-link/sfp-sfpplus16"
+       }
+      },
+      {
+       "mac": "d0:ea:11:74:99:40"
+      }
+     ]
+    },
+    {
+     "port": "sfp-sfpplus16",
+     "role": "peer-link",
+     "type": null,
+     "mode": "trunk",
+     "native": 0,
+     "tagged": [
+      1,
+      200,
+      298,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "rossen",
+      "test",
+      "home",
+      "iotLocal",
+      "iotCloud",
+      "iotCams",
+      "guest",
+      "dmz"
+     ],
+     "target": {
+      "kind": "switch",
+      "name": "crs-b",
+      "port": "peer-link"
+     },
+     "description": null,
+     "lag": null,
+     "lagLead": "sfp-sfpplus15",
+     "parked": false,
+     "link": "up",
+     "drift": "unmanaged",
+     "status": "peer-link",
+     "disabled": true,
+     "peerLink": true,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": [
+      {
+       "mac": "d0:ea:11:74:99:3e",
+       "lldp": {
+        "name": "crs-b",
+        "port": "bridge/peer-link/sfp-sfpplus15"
+       }
+      }
+     ]
+    }
+   ],
+   "lags": [],
+   "mlagPair": "crs-a+crs-b",
+   "location": "knudanchersvej95",
+   "placement": {
+    "room": "basement",
+    "rack": "rack1",
+    "u": 24
+   },
+   "source": "switch-configuration"
+  },
+  {
+   "name": "crs-b",
+   "lldpName": null,
+   "vendor": "mikrotik",
+   "model": "CRS317-1G-16S+",
+   "managementIp": "10.0.0.22",
+   "managed": "auto",
+   "controller": null,
+   "controllerAddress": null,
+   "ports": [
+    {
+     "port": "ether1",
+     "role": "unmanaged",
+     "type": null,
+     "mode": "access",
+     "native": 0,
+     "tagged": [],
+     "zones": [],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": false,
+     "link": "down",
+     "drift": "unmanaged",
+     "status": "unmanaged",
+     "disabled": true,
+     "peerLink": false,
+     "bridged": false,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus1",
+     "role": "node-lan",
+     "type": "node",
+     "mode": "trunk",
+     "native": 0,
+     "tagged": [
+      200,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "rossen",
+      "test",
+      "home",
+      "iotLocal",
+      "iotCloud",
+      "iotCams",
+      "guest",
+      "dmz"
+     ],
+     "target": {
+      "kind": "node",
+      "name": "tappaas1",
+      "port": "nic3"
+     },
+     "description": null,
+     "lag": "tappaas1-lan",
+     "lagLead": null,
+     "parked": false,
+     "link": "up",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": 10,
+     "add": [],
+     "remove": [],
+     "seen": {
+      "node": "tappaas1",
+      "nic": "nic3"
+     },
+     "neighbors": [
+      {
+       "mac": "00:07:43:38:aa:f0"
+      },
+      {
+       "mac": "00:07:43:38:aa:f8"
+      },
+      {
+       "mac": "00:07:43:38:aa:ff",
+       "lldp": {
+        "name": null,
+        "port": null
+       }
+      },
+      {
+       "mac": "02:05:9b:1f:2b:01"
+      },
+      {
+       "mac": "02:07:e6:f7:74:47"
+      },
+      {
+       "mac": "02:67:b6:d8:83:e5"
+      },
+      {
+       "mac": "02:79:7c:40:fc:c1"
+      },
+      {
+       "mac": "02:98:34:69:90:1a"
+      },
+      {
+       "mac": "02:c8:41:33:f4:0d"
+      },
+      {
+       "mac": "02:e1:97:56:29:e5"
+      }
+     ]
+    },
+    {
+     "port": "sfp-sfpplus2",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus3",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus4",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus5",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus6",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus7",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus8",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus9",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus10",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus11",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus12",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus13",
+     "role": "parked",
+     "type": null,
+     "mode": "access",
+     "native": 410,
+     "tagged": [],
+     "zones": [
+      "iotLocal"
+     ],
+     "target": null,
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": true,
+     "link": "down",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": []
+    },
+    {
+     "port": "sfp-sfpplus14",
+     "role": "switch",
+     "type": "switch",
+     "mode": "trunk",
+     "native": 0,
+     "tagged": [
+      200,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "rossen",
+      "test",
+      "home",
+      "iotLocal",
+      "iotCloud",
+      "iotCams",
+      "guest",
+      "dmz"
+     ],
+     "target": {
+      "kind": "switch",
+      "name": "USW Pro XG 10 PoE",
+      "port": "12"
+     },
+     "description": null,
+     "lag": "usw-uplink",
+     "lagLead": null,
+     "parked": false,
+     "link": "up",
+     "drift": "in-sync",
+     "status": "in-sync",
+     "disabled": false,
+     "peerLink": false,
+     "bridged": false,
+     "mlagId": 11,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": [
+      {
+       "mac": "02:19:b3:fa:9c:de"
+      },
+      {
+       "mac": "02:1b:46:99:54:74"
+      },
+      {
+       "mac": "02:22:05:c8:12:b9"
+      },
+      {
+       "mac": "02:2c:fc:7b:cb:47"
+      },
+      {
+       "mac": "02:2f:0c:55:05:69"
+      },
+      {
+       "mac": "02:37:78:a9:80:47"
+      },
+      {
+       "mac": "02:44:ca:67:51:3f"
+      },
+      {
+       "mac": "02:4d:dd:19:91:c9"
+      },
+      {
+       "mac": "02:56:b5:4b:15:ff"
+      },
+      {
+       "mac": "02:65:f0:03:03:88"
+      },
+      {
+       "mac": "02:67:7a:fe:dc:b7"
+      },
+      {
+       "mac": "02:77:40:78:7b:ab"
+      },
+      {
+       "mac": "02:81:88:35:6f:47"
+      },
+      {
+       "mac": "02:87:ba:76:90:be"
+      },
+      {
+       "mac": "02:98:07:05:29:50"
+      },
+      {
+       "mac": "02:b6:3f:17:f8:a3"
+      },
+      {
+       "mac": "02:c5:ec:06:cd:22"
+      },
+      {
+       "mac": "02:c6:d4:0e:c2:60"
+      },
+      {
+       "mac": "02:cd:07:87:2c:a5"
+      },
+      {
+       "mac": "02:d6:13:d7:2a:4b"
+      },
+      {
+       "mac": "02:d9:d8:67:9f:18"
+      },
+      {
+       "mac": "02:e2:45:2e:0f:d1"
+      },
+      {
+       "mac": "02:f5:a6:26:bc:89"
+      },
+      {
+       "mac": "14:13:0b:37:69:50"
+      },
+      {
+       "mac": "20:7c:14:f4:d0:87"
+      },
+      {
+       "mac": "38:05:25:33:b5:f7"
+      },
+      {
+       "mac": "74:83:c2:d0:d0:dd"
+      },
+      {
+       "mac": "a8:9c:6c:b0:8d:76"
+      },
+      {
+       "mac": "a8:9c:6c:b0:8d:77",
+       "lldp": {
+        "name": "USW-Pro-XG-10-PoE",
+        "port": "SFP_ 2"
+       }
+      },
+      {
+       "mac": "c8:ff:bf:05:0d:30"
+      }
+     ]
+    },
+    {
+     "port": "sfp-sfpplus15",
+     "role": "peer-link",
+     "type": null,
+     "mode": "trunk",
+     "native": 0,
+     "tagged": [
+      1,
+      200,
+      298,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "rossen",
+      "test",
+      "home",
+      "iotLocal",
+      "iotCloud",
+      "iotCams",
+      "guest",
+      "dmz"
+     ],
+     "target": {
+      "kind": "switch",
+      "name": "crs-a",
+      "port": "peer-link"
+     },
+     "description": null,
+     "lag": null,
+     "lagLead": null,
+     "parked": false,
+     "link": "up",
+     "drift": "unmanaged",
+     "status": "peer-link",
+     "disabled": true,
+     "peerLink": true,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": [
+      {
+       "mac": "04:f4:1c:00:25:6f",
+       "lldp": {
+        "name": "crs-a",
+        "port": "bridge/peer-link/sfp-sfpplus16"
+       }
+      },
+      {
+       "mac": "04:f4:1c:00:25:70"
+      }
+     ]
+    },
+    {
+     "port": "sfp-sfpplus16",
+     "role": "peer-link",
+     "type": null,
+     "mode": "trunk",
+     "native": 0,
+     "tagged": [
+      1,
+      200,
+      298,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "zones": [
+      "rossen",
+      "test",
+      "home",
+      "iotLocal",
+      "iotCloud",
+      "iotCams",
+      "guest",
+      "dmz"
+     ],
+     "target": {
+      "kind": "switch",
+      "name": "crs-a",
+      "port": "peer-link"
+     },
+     "description": null,
+     "lag": null,
+     "lagLead": "sfp-sfpplus15",
+     "parked": false,
+     "link": "up",
+     "drift": "unmanaged",
+     "status": "peer-link",
+     "disabled": true,
+     "peerLink": true,
+     "bridged": true,
+     "mlagId": null,
+     "add": [],
+     "remove": [],
+     "seen": null,
+     "neighbors": [
+      {
+       "mac": "04:f4:1c:00:25:6e",
+       "lldp": {
+        "name": "crs-a",
+        "port": "bridge/peer-link/sfp-sfpplus15"
+       }
+      }
+     ]
+    }
+   ],
+   "lags": [],
+   "mlagPair": "crs-a+crs-b",
+   "location": "knudanchersvej95",
+   "placement": {
+    "room": "basement",
+    "rack": "rack1",
+    "u": 25
+   },
+   "source": "switch-configuration"
+  }
+ ],
+ "mlagPairs": [
+  {
+   "name": "crs-a+crs-b",
+   "switches": [
+    "crs-a",
+    "crs-b"
+   ],
+   "peerLink": [
+    {
+     "switch": "crs-a",
+     "port": "peer-link",
+     "members": [
+      "sfp-sfpplus15",
+      "sfp-sfpplus16"
+     ]
+    },
+    {
+     "switch": "crs-b",
+     "port": "peer-link",
+     "members": [
+      "sfp-sfpplus15",
+      "sfp-sfpplus16"
+     ]
     }
    ],
    "lags": [
     {
      "name": "tappaas1-lan",
      "ports": [
-      "11",
-      "12"
+      "crs-a:sfp-sfpplus1",
+      "crs-b:sfp-sfpplus1"
      ],
      "formed": true,
      "live": [
-      "11",
-      "12"
+      "crs-a:sfp-sfpplus1",
+      "crs-b:sfp-sfpplus1"
      ],
+     "switches": [
+      "crs-a",
+      "crs-b"
+     ],
+     "mlagId": 10,
+     "pair": "crs-a+crs-b",
+     "members": [
+      {
+       "switch": "crs-a",
+       "port": "sfp-sfpplus1",
+       "active": true,
+       "why": null
+      },
+      {
+       "switch": "crs-b",
+       "port": "sfp-sfpplus1",
+       "active": true,
+       "why": null
+      }
+     ],
+     "missing": [],
      "node": "tappaas1",
-     "bond": "lanbond"
+     "bond": "lanbond",
+     "peer": null
+    },
+    {
+     "name": "usw-uplink",
+     "ports": [
+      "crs-a:sfp-sfpplus14",
+      "crs-b:sfp-sfpplus14"
+     ],
+     "formed": true,
+     "live": [
+      "crs-a:sfp-sfpplus14",
+      "crs-b:sfp-sfpplus14"
+     ],
+     "switches": [
+      "crs-a",
+      "crs-b"
+     ],
+     "mlagId": 11,
+     "pair": "crs-a+crs-b",
+     "members": [
+      {
+       "switch": "crs-a",
+       "port": "sfp-sfpplus14",
+       "active": true,
+       "why": null
+      },
+      {
+       "switch": "crs-b",
+       "port": "sfp-sfpplus14",
+       "active": true,
+       "why": null
+      }
+     ],
+     "missing": [],
+     "node": null,
+     "bond": null,
+     "peer": {
+      "kind": "switch",
+      "name": "USW Pro XG 10 PoE"
+     }
     }
-   ]
+   ],
+   "live": "switch-manager mlag-pair list"
   }
  ],
  "accessPoints": [
@@ -922,10 +2860,140 @@
     "switch": "USW Pro XG 10 PoE",
     "port": "9"
    },
-   "ssids": []
+   "ssids": [
+    {
+     "name": "rossen-home",
+     "zone": "home",
+     "vlan": 310,
+     "security": "wpa2-personal",
+     "enabled": true
+    },
+    {
+     "name": "rossen-guest",
+     "zone": "guest",
+     "vlan": 510,
+     "security": "wpa2-personal",
+     "enabled": true
+    }
+   ],
+   "location": "knudanchersvej95",
+   "placement": {
+    "room": "stue",
+    "rack": null,
+    "u": null
+   },
+   "source": "switch-configuration"
   }
  ],
  "zones": [
+  {
+   "name": "admin",
+   "vlan": 0,
+   "state": "Manual",
+   "type": "Overlay",
+   "tier": null,
+   "bridge": "wireguard",
+   "ip": "10.255.1.0/24",
+   "environments": []
+  },
+  {
+   "name": "buddy",
+   "vlan": 0,
+   "state": "Manual",
+   "type": "Overlay",
+   "tier": null,
+   "bridge": "wireguard",
+   "ip": "10.255.2.0/24",
+   "environments": []
+  },
+  {
+   "name": "dmz",
+   "vlan": 610,
+   "state": "Mandatory",
+   "type": "DMZ",
+   "tier": 4,
+   "bridge": "lan",
+   "ip": "10.6.0.0/24",
+   "environments": []
+  },
+  {
+   "name": "edge",
+   "vlan": 0,
+   "state": "Manual",
+   "type": "Overlay",
+   "tier": null,
+   "bridge": "lan",
+   "ip": "10.255.0.0/31",
+   "environments": []
+  },
+  {
+   "name": "guest",
+   "vlan": 510,
+   "state": "Active",
+   "type": "Guest",
+   "tier": 3,
+   "bridge": "lan",
+   "ip": "10.5.10.0/24",
+   "environments": []
+  },
+  {
+   "name": "home",
+   "vlan": 310,
+   "state": "Active",
+   "type": "Client",
+   "tier": 2,
+   "bridge": "lan",
+   "ip": "10.3.10.0/24",
+   "environments": [
+    "rossen"
+   ]
+  },
+  {
+   "name": "iotCams",
+   "vlan": 430,
+   "state": "Active",
+   "type": "IoT",
+   "tier": 6,
+   "bridge": "lan",
+   "ip": "10.4.30.0/24",
+   "environments": [
+    "rossen"
+   ]
+  },
+  {
+   "name": "iotCloud",
+   "vlan": 420,
+   "state": "Active",
+   "type": "IoT",
+   "tier": 3,
+   "bridge": "lan",
+   "ip": "10.4.20.0/24",
+   "environments": [
+    "rossen"
+   ]
+  },
+  {
+   "name": "iotLocal",
+   "vlan": 410,
+   "state": "Active",
+   "type": "IoT",
+   "tier": 6,
+   "bridge": "lan",
+   "ip": "10.4.10.0/24",
+   "environments": [
+    "rossen"
+   ]
+  },
+  {
+   "name": "iotUntrust",
+   "vlan": 440,
+   "state": "Disabled",
+   "type": "IoT",
+   "tier": 3,
+   "bridge": "lan",
+   "ip": "10.4.40.0/24",
+   "environments": []
+  },
   {
    "name": "mgmt",
    "vlan": 0,
@@ -949,26 +3017,6 @@
    "environments": []
   },
   {
-   "name": "edge",
-   "vlan": 0,
-   "state": "Manual",
-   "type": "Overlay",
-   "tier": null,
-   "bridge": "lan",
-   "ip": "10.255.0.0/31",
-   "environments": []
-  },
-  {
-   "name": "admin",
-   "vlan": 0,
-   "state": "Manual",
-   "type": "Overlay",
-   "tier": null,
-   "bridge": "wireguard",
-   "ip": "10.255.1.0/24",
-   "environments": []
-  },
-  {
    "name": "rossen",
    "vlan": 200,
    "state": "Active",
@@ -981,92 +3029,16 @@
    ]
   },
   {
-   "name": "work",
-   "vlan": 320,
-   "state": "Inactive",
-   "type": "Client",
-   "tier": null,
-   "bridge": "lan",
-   "ip": "10.3.20.0/24",
-   "environments": []
-  },
-  {
-   "name": "iotLocal",
-   "vlan": 410,
+   "name": "test",
+   "vlan": 299,
    "state": "Active",
-   "type": "IoT",
-   "tier": 6,
+   "type": "Service",
+   "tier": 1,
    "bridge": "lan",
-   "ip": "10.4.10.0/24",
+   "ip": "10.2.99.0/24",
    "environments": [
-    "rossen"
+    "test"
    ]
-  },
-  {
-   "name": "iotCloud",
-   "vlan": 420,
-   "state": "Active",
-   "type": "IoT",
-   "tier": 3,
-   "bridge": "lan",
-   "ip": "10.4.20.0/24",
-   "environments": [
-    "rossen"
-   ]
-  },
-  {
-   "name": "iotCams",
-   "vlan": 430,
-   "state": "Active",
-   "type": "IoT",
-   "tier": 6,
-   "bridge": "lan",
-   "ip": "10.4.30.0/24",
-   "environments": [
-    "rossen"
-   ]
-  },
-  {
-   "name": "iotUntrust",
-   "vlan": 440,
-   "state": "Disabled",
-   "type": "IoT",
-   "tier": 3,
-   "bridge": "lan",
-   "ip": "10.4.40.0/24",
-   "environments": []
-  },
-  {
-   "name": "dmz",
-   "vlan": 610,
-   "state": "Mandatory",
-   "type": "DMZ",
-   "tier": 4,
-   "bridge": "lan",
-   "ip": "10.6.0.0/24",
-   "environments": []
-  },
-  {
-   "name": "home",
-   "vlan": 310,
-   "state": "Active",
-   "type": "Client",
-   "tier": 2,
-   "bridge": "lan",
-   "ip": "10.3.10.0/24",
-   "environments": [
-    "rossen"
-   ]
-  },
-  {
-   "name": "guest",
-   "vlan": 510,
-   "state": "Active",
-   "type": "Guest",
-   "tier": 3,
-   "bridge": "lan",
-   "ip": "10.5.10.0/24",
-   "environments": []
   },
   {
    "name": "wan",
@@ -1079,26 +3051,14 @@
    "environments": []
   },
   {
-   "name": "buddy",
-   "vlan": 0,
-   "state": "Manual",
-   "type": "Overlay",
+   "name": "work",
+   "vlan": 320,
+   "state": "Inactive",
+   "type": "Client",
    "tier": null,
-   "bridge": "wireguard",
-   "ip": "10.255.2.0/24",
-   "environments": []
-  },
-  {
-   "name": "test",
-   "vlan": 299,
-   "state": "Active",
-   "type": "Service",
-   "tier": 1,
    "bridge": "lan",
-   "ip": "10.2.99.0/24",
-   "environments": [
-    "test"
-   ]
+   "ip": "10.3.20.0/24",
+   "environments": []
   }
  ],
  "outside": [
@@ -1107,373 +3067,4713 @@
    "name": "rasmus",
    "role": "remote",
    "location": "Hareskov, DK",
+   "at": "hareskov",
    "tunnel": "serve 10.255.2.0/30 :51830",
    "address": null,
-   "state": "down"
+   "state": null
   }
  ],
- "findings": [
+ "devices": [
   {
-   "gate": "guest-memory",
-   "level": "warn",
-   "text": "tappaas-cicd 16.0G 13.7G 12.9G 80% of declared, gap 0.8G",
-   "on": {
-    "kind": "module",
-    "name": "tappaas-cicd"
-   },
-   "refs": [
+   "name": "ISP modem",
+   "kind": "modem",
+   "vendor": null,
+   "model": "generic/isp-modem",
+   "recorded": true,
+   "ports": [
+    "WAN",
+    "LAN 1",
+    "LAN 2",
+    "LAN 3",
+    "LAN 4"
+   ],
+   "asset": "ISP modem",
+   "portSpecs": [
     {
-     "kind": "node",
-     "name": "tappaas1"
-    }
-   ]
-  },
-  {
-   "gate": "guest-memory",
-   "level": "warn",
-   "text": "litellm 6.0G 5.3G 4.9G 82% of declared, gap 0.4G",
-   "on": {
-    "kind": "module",
-    "name": "litellm"
-   },
-   "refs": [
-    {
-     "kind": "node",
-     "name": "tappaas2"
-    }
-   ]
-  },
-  {
-   "gate": "guest-memory",
-   "level": "fail",
-   "text": "openwebui 4.0G 3.9G 3.7G 92% of declared, gap 0.3G",
-   "on": {
-    "kind": "module",
-    "name": "openwebui"
-   },
-   "refs": [
-    {
-     "kind": "node",
-     "name": "tappaas2"
-    }
-   ]
-  },
-  {
-   "gate": "guest-memory",
-   "level": "warn",
-   "text": "forgejo 2.0G 1.8G 1.6G 82% of declared, gap 0.2G",
-   "on": {
-    "kind": "module",
-    "name": "forgejo"
-   },
-   "refs": [
-    {
-     "kind": "node",
-     "name": "tappaas2"
-    }
-   ]
-  },
-  {
-   "gate": "guest-memory",
-   "level": "warn",
-   "text": "identity 4.0G 3.5G 3.4G 85% of declared, gap 0.1G",
-   "on": {
-    "kind": "module",
-    "name": "identity"
-   },
-   "refs": [
-    {
-     "kind": "node",
-     "name": "tappaas1"
-    }
-   ]
-  },
-  {
-   "gate": "guest-memory",
-   "level": "fail",
-   "text": "logging 2.0G 1.9G 1.8G 90% of declared, gap 0.1G",
-   "on": {
-    "kind": "module",
-    "name": "logging"
-   },
-   "refs": [
-    {
-     "kind": "node",
-     "name": "tappaas1"
-    }
-   ]
-  },
-  {
-   "gate": "guest-memory",
-   "level": "fail",
-   "text": "immich 8.0G 7.6G 7.6G 95% of declared, gap 0.0G",
-   "on": {
-    "kind": "module",
-    "name": "immich"
-   },
-   "refs": [
-    {
-     "kind": "node",
-     "name": "tappaas1"
-    }
-   ]
-  },
-  {
-   "gate": "guest-memory",
-   "level": "warn",
-   "text": "coturn 2.0G 1.4G 1.6G 80% of declared, gap 0.0G",
-   "on": {
-    "kind": "module",
-    "name": "coturn"
-   },
-   "refs": [
-    {
-     "kind": "node",
-     "name": "tappaas1"
-    }
-   ]
-  },
-  {
-   "gate": "guest-memory",
-   "level": "warn",
-   "text": "vaultwarden 1.5G 1.2G 1.3G 90% of declared, gap 0.0G",
-   "on": {
-    "kind": "module",
-    "name": "vaultwarden"
-   },
-   "refs": [
-    {
-     "kind": "node",
-     "name": "tappaas1"
-    }
-   ]
-  },
-  {
-   "gate": "pending-reboot",
-   "level": "warn",
-   "text": "tappaas-cicd booted 26.05.20261008.7c8764b, next boot 26.05.20261008.7c8764b",
-   "on": {
-    "kind": "module",
-    "name": "tappaas-cicd"
-   },
-   "refs": [
-    {
-     "kind": "node",
-     "name": "tappaas1"
-    }
-   ]
-  },
-  {
-   "gate": "pending-reboot",
-   "level": "warn",
-   "text": "unifi-os the OS asks for a reboot",
-   "on": {
-    "kind": "module",
-    "name": "unifi-os"
-   },
-   "refs": [
-    {
-     "kind": "node",
-     "name": "tappaas3"
-    }
-   ]
-  },
-  {
-   "gate": "lan-uplink",
-   "level": "warn",
-   "text": "tappaas1 the switch asks for the slow LACP rate: a leg that fails with its link still up is noticed only after ~90s (link loss is noticed at once)",
-   "on": {
-    "kind": "node",
-    "name": "tappaas1"
-   },
-   "refs": [
-    {
-     "kind": "lag",
-     "name": "tappaas1-lan",
-     "switch": "USW Pro XG 10 PoE"
+     "name": "WAN",
+     "kind": "rj45",
+     "speed": "1g"
     },
     {
-     "kind": "port",
-     "name": "12",
-     "switch": "USW Pro XG 10 PoE"
+     "name": "LAN 1",
+     "kind": "rj45",
+     "speed": "1g"
     },
     {
-     "kind": "port",
+     "name": "LAN 2",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "LAN 3",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "LAN 4",
+     "kind": "rj45",
+     "speed": "1g"
+    }
+   ],
+   "displayName": null,
+   "description": null,
+   "location": "knudanchersvej95",
+   "placement": {
+    "room": "basement",
+    "rack": "rack1",
+    "u": 12
+   },
+   "source": "recorded"
+  },
+  {
+   "name": "patchpanel1",
+   "kind": "patch-panel",
+   "vendor": null,
+   "model": null,
+   "recorded": true,
+   "ports": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
+    "16",
+    "17",
+    "18",
+    "19",
+    "20",
+    "21",
+    "22",
+    "23",
+    "24"
+   ],
+   "asset": "patchpanel1",
+   "portSpecs": [
+    {
+     "name": "1",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "2",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "3",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "4",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "5",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "6",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "7",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "8",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "9",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "10",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
      "name": "11",
-     "switch": "USW Pro XG 10 PoE"
-    }
-   ]
-  },
-  {
-   "gate": "lan-uplink",
-   "level": "warn",
-   "text": "tappaas1 every leg reaches the same switch (USW-Pro-XG-10-PoE) — redundant ports, not redundant switches",
-   "on": {
-    "kind": "node",
-    "name": "tappaas1"
-   },
-   "refs": [
-    {
-     "kind": "lag",
-     "name": "tappaas1-lan",
-     "switch": "USW Pro XG 10 PoE"
+     "kind": "rj45",
+     "speed": "1g"
     },
     {
-     "kind": "port",
      "name": "12",
-     "switch": "USW Pro XG 10 PoE"
+     "kind": "rj45",
+     "speed": "1g"
     },
     {
-     "kind": "port",
+     "name": "13",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "14",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "15",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "16",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "17",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "18",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "19",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "20",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "21",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "22",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "23",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "24",
+     "kind": "rj45",
+     "speed": "1g"
+    }
+   ],
+   "displayName": null,
+   "description": null,
+   "location": "knudanchersvej95",
+   "placement": {
+    "room": "basement",
+    "rack": "rack1",
+    "u": 20
+   },
+   "source": "recorded"
+  },
+  {
+   "name": "patchpanel 2",
+   "kind": "patch-panel",
+   "vendor": null,
+   "model": null,
+   "recorded": true,
+   "ports": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
+    "16",
+    "17",
+    "18",
+    "19",
+    "20",
+    "21",
+    "22",
+    "23",
+    "24"
+   ],
+   "asset": "patchpanel 2",
+   "portSpecs": [
+    {
+     "name": "1",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "2",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "3",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "4",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "5",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "6",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "7",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "8",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "9",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "10",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
      "name": "11",
-     "switch": "USW Pro XG 10 PoE"
-    }
-   ]
-  },
-  {
-   "gate": "pulse",
-   "level": "warn",
-   "text": "pulled-by-rasmus DOWN",
-   "on": {
-    "kind": "peer",
-    "name": "rasmus"
-   },
-   "refs": []
-  },
-  {
-   "gate": "cve-status",
-   "level": "warn",
-   "text": "diyhue (deconz-test) ACT: 7 critical/high fixable",
-   "on": {
-    "kind": "module",
-    "name": "deconz-test"
-   },
-   "refs": [
+     "kind": "rj45",
+     "speed": "1g"
+    },
     {
-     "kind": "node",
-     "name": "tappaas2"
-    }
-   ]
-  },
-  {
-   "gate": "cve-status",
-   "level": "warn",
-   "text": "authentik-server, authentik-… ACT: 1 critical/high fixable",
-   "on": {
-    "kind": "module",
-    "name": "identity"
-   },
-   "refs": [
+     "name": "12",
+     "kind": "rj45",
+     "speed": "1g"
+    },
     {
-     "kind": "node",
-     "name": "tappaas1"
-    }
-   ]
-  },
-  {
-   "gate": "cve-status",
-   "level": "warn",
-   "text": "nomad_admin (nomad) ACT: 98 critical/high fixable",
-   "on": {
-    "kind": "module",
-    "name": "nomad"
-   },
-   "refs": [
+     "name": "13",
+     "kind": "rj45",
+     "speed": "1g"
+    },
     {
-     "kind": "node",
-     "name": "tappaas1"
-    }
-   ]
-  },
-  {
-   "gate": "cve-status",
-   "level": "warn",
-   "text": "nomad_mysql (nomad) ACT: 89 critical/high fixable",
-   "on": {
-    "kind": "module",
-    "name": "nomad"
-   },
-   "refs": [
+     "name": "14",
+     "kind": "rj45",
+     "speed": "1g"
+    },
     {
-     "kind": "node",
-     "name": "tappaas1"
-    }
-   ]
-  },
-  {
-   "gate": "cve-status",
-   "level": "warn",
-   "text": "nomad_redis (nomad) ACT: 1 critical/high fixable",
-   "on": {
-    "kind": "module",
-    "name": "nomad"
-   },
-   "refs": [
+     "name": "15",
+     "kind": "rj45",
+     "speed": "1g"
+    },
     {
-     "kind": "node",
-     "name": "tappaas1"
-    }
-   ]
-  },
-  {
-   "gate": "cve-status",
-   "level": "warn",
-   "text": "openwebui (openwebui) ACT: 11 critical/high fixable",
-   "on": {
-    "kind": "module",
-    "name": "openwebui"
-   },
-   "refs": [
+     "name": "16",
+     "kind": "rj45",
+     "speed": "1g"
+    },
     {
-     "kind": "node",
-     "name": "tappaas2"
+     "name": "17",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "18",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "19",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "20",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "21",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "22",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "23",
+     "kind": "rj45",
+     "speed": "1g"
+    },
+    {
+     "name": "24",
+     "kind": "rj45",
+     "speed": "1g"
     }
-   ]
+   ],
+   "displayName": null,
+   "description": null,
+   "location": "knudanchersvej95",
+   "placement": {
+    "room": "basement",
+    "rack": "rack1",
+    "u": 22
+   },
+   "source": "recorded"
   }
  ],
+ "positions": {
+  "assets": [
+   {
+    "name": "ISP modem",
+    "kind": "modem",
+    "displayName": null,
+    "vendor": null,
+    "model": "generic/isp-modem",
+    "serial": null,
+    "assetTag": null,
+    "stage": "operational",
+    "faulty": false,
+    "faultNote": null,
+    "role": "ISP modem",
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [
+     {
+      "name": "WAN",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "LAN 1",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "LAN 2",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "LAN 3",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "LAN 4",
+      "kind": "rj45",
+      "speed": "1g"
+     }
+    ]
+   },
+   {
+    "name": "ap-01",
+    "kind": "access-point",
+    "displayName": "Nano HD",
+    "vendor": "unifi",
+    "model": "U7NHD",
+    "serial": null,
+    "assetTag": null,
+    "stage": "operational",
+    "faulty": false,
+    "faultNote": null,
+    "role": "Nano HD",
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": []
+   },
+   {
+    "name": "sw-01",
+    "kind": "switch",
+    "displayName": "USW Pro XG 10 PoE",
+    "vendor": "unifi",
+    "model": "USWED77",
+    "serial": null,
+    "assetTag": null,
+    "stage": "operational",
+    "faulty": false,
+    "faultNote": null,
+    "role": "USW Pro XG 10 PoE",
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": []
+   },
+   {
+    "name": "sw-02",
+    "kind": "switch",
+    "displayName": "crs-a",
+    "vendor": "mikrotik",
+    "model": "CRS317-1G-16S+",
+    "serial": null,
+    "assetTag": null,
+    "stage": "operational",
+    "faulty": false,
+    "faultNote": null,
+    "role": "crs-a",
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": []
+   },
+   {
+    "name": "sw-03",
+    "kind": "switch",
+    "displayName": "crs-b",
+    "vendor": "mikrotik",
+    "model": "CRS317-1G-16S+",
+    "serial": null,
+    "assetTag": null,
+    "stage": "operational",
+    "faulty": false,
+    "faultNote": null,
+    "role": "crs-b",
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": []
+   },
+   {
+    "name": "patchpanel1",
+    "kind": "patch-panel",
+    "displayName": null,
+    "vendor": null,
+    "model": null,
+    "serial": null,
+    "assetTag": null,
+    "stage": "operational",
+    "faulty": false,
+    "faultNote": null,
+    "role": "patchpanel1",
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [
+     {
+      "name": "1",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "2",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "3",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "4",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "5",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "6",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "7",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "8",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "9",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "10",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "11",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "12",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "13",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "14",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "15",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "16",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "17",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "18",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "19",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "20",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "21",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "22",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "23",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "24",
+      "kind": "rj45",
+      "speed": "1g"
+     }
+    ]
+   },
+   {
+    "name": "patchpanel 2",
+    "kind": "patch-panel",
+    "displayName": null,
+    "vendor": null,
+    "model": null,
+    "serial": null,
+    "assetTag": null,
+    "stage": "operational",
+    "faulty": false,
+    "faultNote": null,
+    "role": "patchpanel 2",
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [
+     {
+      "name": "1",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "2",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "3",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "4",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "5",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "6",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "7",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "8",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "9",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "10",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "11",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "12",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "13",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "14",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "15",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "16",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "17",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "18",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "19",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "20",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "21",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "22",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "23",
+      "kind": "rj45",
+      "speed": "1g"
+     },
+     {
+      "name": "24",
+      "kind": "rj45",
+      "speed": "1g"
+     }
+    ]
+   },
+   {
+    "name": "srv-01",
+    "kind": "server",
+    "displayName": "tappaas1",
+    "vendor": null,
+    "model": null,
+    "serial": null,
+    "assetTag": null,
+    "stage": "operational",
+    "faulty": false,
+    "faultNote": null,
+    "role": "tappaas1",
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": []
+   },
+   {
+    "name": "srv-02",
+    "kind": "server",
+    "displayName": "tappaas2",
+    "vendor": null,
+    "model": null,
+    "serial": null,
+    "assetTag": null,
+    "stage": "operational",
+    "faulty": false,
+    "faultNote": null,
+    "role": "tappaas2",
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [
+     {
+      "name": "enp97s0",
+      "kind": "rj45",
+      "speed": "10g",
+      "mac": "38:05:25:33:b5:f7"
+     }
+    ]
+   },
+   {
+    "name": "srv-03",
+    "kind": "server",
+    "displayName": "tappaas3",
+    "vendor": null,
+    "model": null,
+    "serial": null,
+    "assetTag": null,
+    "stage": "operational",
+    "faulty": false,
+    "faultNote": null,
+    "role": "tappaas3",
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [
+     {
+      "name": "eno1",
+      "kind": "rj45",
+      "speed": "2.5g",
+      "mac": "c8:ff:bf:05:0d:30"
+     }
+    ]
+   },
+   {
+    "name": "srv-04",
+    "kind": "server",
+    "displayName": "tappaas4",
+    "vendor": null,
+    "model": "QDNV01",
+    "serial": null,
+    "assetTag": null,
+    "stage": "operational",
+    "faulty": false,
+    "faultNote": null,
+    "role": "tappaas4",
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [
+     {
+      "name": "eno1",
+      "kind": "rj45",
+      "speed": "1g",
+      "mac": "20:7c:14:f4:d0:8c"
+     },
+     {
+      "name": "eno2",
+      "kind": "rj45",
+      "speed": "1g",
+      "mac": "20:7c:14:f4:d0:8d"
+     },
+     {
+      "name": "eno3",
+      "kind": "rj45",
+      "speed": "1g",
+      "mac": "20:7c:14:f4:d0:8e"
+     },
+     {
+      "name": "eno4",
+      "kind": "rj45",
+      "speed": "1g",
+      "mac": "20:7c:14:f4:d0:8f"
+     },
+     {
+      "name": "enp4s0",
+      "kind": "rj45",
+      "speed": "1g",
+      "mac": "20:7c:14:f4:d0:87"
+     },
+     {
+      "name": "enp5s0",
+      "kind": "rj45",
+      "speed": "1g",
+      "mac": "20:7c:14:f4:d0:88"
+     },
+     {
+      "name": "enp6s0",
+      "kind": "rj45",
+      "speed": "1g",
+      "mac": "20:7c:14:f4:d0:89"
+     },
+     {
+      "name": "enp7s0",
+      "kind": "rj45",
+      "speed": "1g",
+      "mac": "20:7c:14:f4:d0:8a"
+     },
+     {
+      "name": "enp8s0",
+      "kind": "rj45",
+      "speed": "1g",
+      "mac": "20:7c:14:f4:d0:8b"
+     }
+    ]
+   },
+   {
+    "name": "dsk-01",
+    "kind": "disk",
+    "displayName": "nvme-WD_BLACK_SN7100_1TB_260923802321",
+    "vendor": null,
+    "model": "WD_BLACK SN7100 1TB",
+    "serial": "260923802321",
+    "assetTag": null,
+    "stage": "placed",
+    "faulty": false,
+    "faultNote": null,
+    "role": null,
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [],
+    "in": {
+     "asset": "srv-01",
+     "bay": "nvme-WD_BLACK_SN7100_1TB_260923802321"
+    },
+    "disk": {
+     "kind": "nvme",
+     "size": 1000204886016,
+     "bus": "nvme"
+    }
+   },
+   {
+    "name": "dsk-02",
+    "kind": "disk",
+    "displayName": "nvme-Samsung_SSD_990_PRO_4TB_S7DPNU0YA10709Z",
+    "vendor": null,
+    "model": "Samsung SSD 990 PRO 4TB",
+    "serial": "S7DPNU0YA10709Z",
+    "assetTag": null,
+    "stage": "placed",
+    "faulty": false,
+    "faultNote": null,
+    "role": null,
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [],
+    "in": {
+     "asset": "srv-01",
+     "bay": "nvme-Samsung_SSD_990_PRO_4TB_S7DPNU0YA10709Z"
+    },
+    "disk": {
+     "kind": "nvme",
+     "size": 4000787030016,
+     "bus": "nvme"
+    }
+   },
+   {
+    "name": "dsk-03",
+    "kind": "disk",
+    "displayName": "nvme-Samsung_SSD_990_PRO_with_Heatsink_4TB_S7DSNJ0YB04294X",
+    "vendor": null,
+    "model": "Samsung SSD 990 PRO with Heatsink 4TB",
+    "serial": "S7DSNJ0YB04294X",
+    "assetTag": null,
+    "stage": "placed",
+    "faulty": false,
+    "faultNote": null,
+    "role": null,
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [],
+    "in": {
+     "asset": "srv-01",
+     "bay": "nvme-Samsung_SSD_990_PRO_with_Heatsink_4TB_S7DSNJ0YB04294X"
+    },
+    "disk": {
+     "kind": "nvme",
+     "size": 4000787030016,
+     "bus": "nvme"
+    }
+   },
+   {
+    "name": "dsk-04",
+    "kind": "disk",
+    "displayName": "ata-ST12000VN0008-3MH101_ZZ30MJL6",
+    "vendor": null,
+    "model": "ST12000VN0008-3MH101",
+    "serial": "ZZ30MJL6",
+    "assetTag": null,
+    "stage": "placed",
+    "faulty": false,
+    "faultNote": null,
+    "role": null,
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [],
+    "in": {
+     "asset": "srv-01",
+     "bay": "ata-ST12000VN0008-3MH101_ZZ30MJL6"
+    },
+    "disk": {
+     "kind": "hdd",
+     "size": 12000138625024,
+     "bus": "sata"
+    }
+   },
+   {
+    "name": "dsk-05",
+    "kind": "disk",
+    "displayName": "nvme-SanDisk_SSD_Plus_500GB_A3N_25414A800205",
+    "vendor": null,
+    "model": "SanDisk SSD Plus 500GB A3N",
+    "serial": "25414A800205",
+    "assetTag": null,
+    "stage": "placed",
+    "faulty": false,
+    "faultNote": null,
+    "role": null,
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [],
+    "in": {
+     "asset": "srv-02",
+     "bay": "nvme-SanDisk_SSD_Plus_500GB_A3N_25414A800205"
+    },
+    "disk": {
+     "kind": "nvme",
+     "size": 500107862016,
+     "bus": "nvme"
+    }
+   },
+   {
+    "name": "dsk-06",
+    "kind": "disk",
+    "displayName": "nvme-KINGSTON_OM8TAP42048K1-A00_50026B73842AD86F",
+    "vendor": null,
+    "model": "KINGSTON OM8TAP42048K1-A00",
+    "serial": "50026B73842AD86F",
+    "assetTag": null,
+    "stage": "placed",
+    "faulty": false,
+    "faultNote": null,
+    "role": null,
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [],
+    "in": {
+     "asset": "srv-02",
+     "bay": "nvme-KINGSTON_OM8TAP42048K1-A00_50026B73842AD86F"
+    },
+    "disk": {
+     "kind": "nvme",
+     "size": 2048408248320,
+     "bus": "nvme"
+    }
+   },
+   {
+    "name": "dsk-07",
+    "kind": "disk",
+    "displayName": "nvme-ASint_AS806_1TB_8061TBFDHY25F220056",
+    "vendor": null,
+    "model": "ASint AS806 1TB",
+    "serial": "8061TBFDHY25F220056",
+    "assetTag": null,
+    "stage": "placed",
+    "faulty": false,
+    "faultNote": null,
+    "role": null,
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [],
+    "in": {
+     "asset": "srv-03",
+     "bay": "nvme-ASint_AS806_1TB_8061TBFDHY25F220056"
+    },
+    "disk": {
+     "kind": "nvme",
+     "size": 1024209543168,
+     "bus": "nvme"
+    }
+   },
+   {
+    "name": "dsk-08",
+    "kind": "disk",
+    "displayName": "ata-ST8000AS0002-1NA17Z_Z840DMA1",
+    "vendor": null,
+    "model": "ST8000AS0002-1NA17Z",
+    "serial": "Z840DMA1",
+    "assetTag": null,
+    "stage": "placed",
+    "faulty": false,
+    "faultNote": null,
+    "role": null,
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [],
+    "in": {
+     "asset": "srv-03",
+     "bay": "ata-ST8000AS0002-1NA17Z_Z840DMA1"
+    },
+    "disk": {
+     "kind": "hdd",
+     "size": 8001563222016,
+     "bus": "sata"
+    }
+   },
+   {
+    "name": "dsk-09",
+    "kind": "disk",
+    "displayName": "ata-HGST_HDN726050ALE614_NAHW317X",
+    "vendor": null,
+    "model": "HGST_HDN726050ALE614",
+    "serial": "NAHW317X",
+    "assetTag": null,
+    "stage": "placed",
+    "faulty": false,
+    "faultNote": null,
+    "role": null,
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [],
+    "in": {
+     "asset": "srv-03",
+     "bay": "ata-HGST_HDN726050ALE614_NAHW317X"
+    },
+    "disk": {
+     "kind": "hdd",
+     "size": 5000981078016,
+     "bus": "sata"
+    }
+   },
+   {
+    "name": "dsk-10",
+    "kind": "disk",
+    "displayName": "ata-MTFDDAK256MAM-1K12_13180938FDB1",
+    "vendor": null,
+    "model": "MTFDDAK256MAM-1K12",
+    "serial": "13180938FDB1",
+    "assetTag": null,
+    "stage": "placed",
+    "faulty": false,
+    "faultNote": null,
+    "role": null,
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [],
+    "in": {
+     "asset": "srv-03",
+     "bay": "ata-MTFDDAK256MAM-1K12_13180938FDB1"
+    },
+    "disk": {
+     "kind": "ssd",
+     "size": 256060514304,
+     "bus": "sata"
+    }
+   },
+   {
+    "name": "dsk-11",
+    "kind": "disk",
+    "displayName": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N",
+    "vendor": null,
+    "model": "Samsung SSD 870 EVO 500GB",
+    "serial": "S6PYNL0Y209497N",
+    "assetTag": null,
+    "stage": "placed",
+    "faulty": false,
+    "faultNote": null,
+    "role": null,
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [],
+    "in": {
+     "asset": "srv-04",
+     "bay": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N"
+    },
+    "disk": {
+     "kind": "ssd",
+     "size": 500107862016,
+     "bus": "sata",
+     "wwn": "0x5002538f55208720"
+    }
+   },
+   {
+    "name": "dsk-12",
+    "kind": "disk",
+    "displayName": "nvme-Samsung_SSD_990_PRO_2TB_S7DNNU0X545837K",
+    "vendor": null,
+    "model": "Samsung SSD 990 PRO 2TB",
+    "serial": "S7DNNU0X545837K",
+    "assetTag": null,
+    "stage": "placed",
+    "faulty": false,
+    "faultNote": null,
+    "role": null,
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [],
+    "in": {
+     "asset": "srv-04",
+     "bay": "nvme-Samsung_SSD_990_PRO_2TB_S7DNNU0X545837K"
+    },
+    "disk": {
+     "kind": "nvme",
+     "size": 2000398934016,
+     "bus": "nvme",
+     "wwn": "eui.0025384541a2503d"
+    }
+   },
+   {
+    "name": "dsk-13",
+    "kind": "disk",
+    "displayName": "nvme-Samsung_SSD_990_PRO_2TB_S7HENJ0Y412736V",
+    "vendor": null,
+    "model": "Samsung SSD 990 PRO 2TB",
+    "serial": "S7HENJ0Y412736V",
+    "assetTag": null,
+    "stage": "placed",
+    "faulty": false,
+    "faultNote": null,
+    "role": null,
+    "location": "knudanchersvej95",
+    "placed": true,
+    "ports": [],
+    "in": {
+     "asset": "srv-04",
+     "bay": "nvme-Samsung_SSD_990_PRO_2TB_S7HENJ0Y412736V"
+    },
+    "disk": {
+     "kind": "nvme",
+     "size": 2000398934016,
+     "bus": "nvme",
+     "wwn": "eui.002538445140830c"
+    }
+   }
+  ],
+  "locations": [
+   {
+    "name": "knudanchersvej95",
+    "displayName": "KnudAnchersVej95",
+    "kind": "site",
+    "primary": true,
+    "place": {
+     "country": "DK",
+     "city": "Rodovre",
+     "address": "Knud Anchers Vej 95"
+    },
+    "rooms": [
+     "basement",
+     "diningroom",
+     "stue"
+    ],
+    "unplaced": []
+   },
+   {
+    "name": "hareskov",
+    "displayName": "Rasmus",
+    "kind": "remote",
+    "primary": false,
+    "place": {
+     "country": "DK",
+     "city": "Hareskov",
+     "address": null
+    },
+    "rooms": [],
+    "unplaced": []
+   }
+  ],
+  "racks": [
+   {
+    "name": "rack1",
+    "displayName": null,
+    "units": 37,
+    "width": "19in",
+    "numbering": "bottom-up",
+    "room": "basement",
+    "description": "primary TAPPaaS rack",
+    "location": "knudanchersvej95",
+    "placements": [
+     {
+      "device": "crs-b",
+      "kind": "switch",
+      "rack": "rack1",
+      "u": 25,
+      "height": 1,
+      "width": "full",
+      "slot": 0,
+      "face": "front",
+      "label": null,
+      "description": "placeholder position, set by the operator",
+      "faceplate": "mikrotik/crs317-1g-16s",
+      "suggested": false,
+      "plate": {
+       "key": "mikrotik/crs317-1g-16s",
+       "vendor": "MikroTik",
+       "model": "CRS317-1G-16S+",
+       "kind": "switch",
+       "units": 1,
+       "width": "full",
+       "passive": false,
+       "rows": [
+        [
+         {
+          "id": "sfp-sfpplus1",
+          "name": "sfp-sfpplus1",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": true,
+          "disabled": false,
+          "lag": "tappaas1-lan",
+          "zones": [
+           "rossen",
+           "test",
+           "home",
+           "iotLocal",
+           "iotCloud",
+           "iotCams",
+           "guest",
+           "dmz"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus2",
+          "name": "sfp-sfpplus2",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus3",
+          "name": "sfp-sfpplus3",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus4",
+          "name": "sfp-sfpplus4",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus5",
+          "name": "sfp-sfpplus5",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus6",
+          "name": "sfp-sfpplus6",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus7",
+          "name": "sfp-sfpplus7",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus8",
+          "name": "sfp-sfpplus8",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus9",
+          "name": "sfp-sfpplus9",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus10",
+          "name": "sfp-sfpplus10",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus11",
+          "name": "sfp-sfpplus11",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus12",
+          "name": "sfp-sfpplus12",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus13",
+          "name": "sfp-sfpplus13",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus14",
+          "name": "sfp-sfpplus14",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": true,
+          "disabled": false,
+          "lag": "usw-uplink",
+          "zones": [
+           "rossen",
+           "test",
+           "home",
+           "iotLocal",
+           "iotCloud",
+           "iotCams",
+           "guest",
+           "dmz"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus15",
+          "name": "sfp-sfpplus15",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": true,
+          "disabled": true,
+          "lag": null,
+          "zones": [
+           "rossen",
+           "test",
+           "home",
+           "iotLocal",
+           "iotCloud",
+           "iotCams",
+           "guest",
+           "dmz"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus16",
+          "name": "sfp-sfpplus16",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": true,
+          "disabled": true,
+          "lag": null,
+          "zones": [
+           "rossen",
+           "test",
+           "home",
+           "iotLocal",
+           "iotCloud",
+           "iotCams",
+           "guest",
+           "dmz"
+          ]
+         },
+         null,
+         {
+          "id": "ether1",
+          "name": "ether1",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": false,
+          "disabled": true,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "console",
+          "name": "console",
+          "kind": "console",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         }
+        ]
+       ],
+       "blocks": [
+        {
+         "from": 0.02,
+         "to": 0.6,
+         "rows": [
+          [
+           {
+            "id": "sfp-sfpplus1",
+            "name": "sfp-sfpplus1",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": true,
+            "disabled": false,
+            "lag": "tappaas1-lan",
+            "zones": [
+             "rossen",
+             "test",
+             "home",
+             "iotLocal",
+             "iotCloud",
+             "iotCams",
+             "guest",
+             "dmz"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus2",
+            "name": "sfp-sfpplus2",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus3",
+            "name": "sfp-sfpplus3",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus4",
+            "name": "sfp-sfpplus4",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus5",
+            "name": "sfp-sfpplus5",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus6",
+            "name": "sfp-sfpplus6",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus7",
+            "name": "sfp-sfpplus7",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus8",
+            "name": "sfp-sfpplus8",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus9",
+            "name": "sfp-sfpplus9",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus10",
+            "name": "sfp-sfpplus10",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus11",
+            "name": "sfp-sfpplus11",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus12",
+            "name": "sfp-sfpplus12",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus13",
+            "name": "sfp-sfpplus13",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus14",
+            "name": "sfp-sfpplus14",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": true,
+            "disabled": false,
+            "lag": "usw-uplink",
+            "zones": [
+             "rossen",
+             "test",
+             "home",
+             "iotLocal",
+             "iotCloud",
+             "iotCams",
+             "guest",
+             "dmz"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus15",
+            "name": "sfp-sfpplus15",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": true,
+            "disabled": true,
+            "lag": null,
+            "zones": [
+             "rossen",
+             "test",
+             "home",
+             "iotLocal",
+             "iotCloud",
+             "iotCams",
+             "guest",
+             "dmz"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus16",
+            "name": "sfp-sfpplus16",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": true,
+            "disabled": true,
+            "lag": null,
+            "zones": [
+             "rossen",
+             "test",
+             "home",
+             "iotLocal",
+             "iotCloud",
+             "iotCams",
+             "guest",
+             "dmz"
+            ]
+           }
+          ]
+         ]
+        },
+        {
+         "from": 0.61,
+         "to": 0.67,
+         "rows": [
+          [
+           {
+            "id": "ether1",
+            "name": "ether1",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": false,
+            "disabled": true,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "console",
+            "name": "console",
+            "kind": "console",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           }
+          ]
+         ]
+        }
+       ],
+       "labels": [
+        {
+         "text": "MikroTik",
+         "at": "left"
+        },
+        {
+         "text": "CRS317",
+         "at": "right"
+        }
+       ]
+      },
+      "up": true,
+      "asset": "sw-03"
+     },
+     {
+      "device": "crs-a",
+      "kind": "switch",
+      "rack": "rack1",
+      "u": 24,
+      "height": 1,
+      "width": "full",
+      "slot": 0,
+      "face": "front",
+      "label": null,
+      "description": "placeholder position, set by the operator",
+      "faceplate": "mikrotik/crs317-1g-16s",
+      "suggested": false,
+      "plate": {
+       "key": "mikrotik/crs317-1g-16s",
+       "vendor": "MikroTik",
+       "model": "CRS317-1G-16S+",
+       "kind": "switch",
+       "units": 1,
+       "width": "full",
+       "passive": false,
+       "rows": [
+        [
+         {
+          "id": "sfp-sfpplus1",
+          "name": "sfp-sfpplus1",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": true,
+          "disabled": false,
+          "lag": "tappaas1-lan",
+          "zones": [
+           "rossen",
+           "test",
+           "home",
+           "iotLocal",
+           "iotCloud",
+           "iotCams",
+           "guest",
+           "dmz"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus2",
+          "name": "sfp-sfpplus2",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus3",
+          "name": "sfp-sfpplus3",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus4",
+          "name": "sfp-sfpplus4",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus5",
+          "name": "sfp-sfpplus5",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus6",
+          "name": "sfp-sfpplus6",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus7",
+          "name": "sfp-sfpplus7",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus8",
+          "name": "sfp-sfpplus8",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus9",
+          "name": "sfp-sfpplus9",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus10",
+          "name": "sfp-sfpplus10",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus11",
+          "name": "sfp-sfpplus11",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus12",
+          "name": "sfp-sfpplus12",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus13",
+          "name": "sfp-sfpplus13",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus14",
+          "name": "sfp-sfpplus14",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": true,
+          "disabled": false,
+          "lag": "usw-uplink",
+          "zones": [
+           "rossen",
+           "test",
+           "home",
+           "iotLocal",
+           "iotCloud",
+           "iotCams",
+           "guest",
+           "dmz"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus15",
+          "name": "sfp-sfpplus15",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": true,
+          "disabled": true,
+          "lag": null,
+          "zones": [
+           "rossen",
+           "test",
+           "home",
+           "iotLocal",
+           "iotCloud",
+           "iotCams",
+           "guest",
+           "dmz"
+          ]
+         },
+         {
+          "id": "sfp-sfpplus16",
+          "name": "sfp-sfpplus16",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": true,
+          "disabled": true,
+          "lag": null,
+          "zones": [
+           "rossen",
+           "test",
+           "home",
+           "iotLocal",
+           "iotCloud",
+           "iotCams",
+           "guest",
+           "dmz"
+          ]
+         },
+         null,
+         {
+          "id": "ether1",
+          "name": "ether1",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": false,
+          "disabled": true,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "console",
+          "name": "console",
+          "kind": "console",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         }
+        ]
+       ],
+       "blocks": [
+        {
+         "from": 0.02,
+         "to": 0.6,
+         "rows": [
+          [
+           {
+            "id": "sfp-sfpplus1",
+            "name": "sfp-sfpplus1",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": true,
+            "disabled": false,
+            "lag": "tappaas1-lan",
+            "zones": [
+             "rossen",
+             "test",
+             "home",
+             "iotLocal",
+             "iotCloud",
+             "iotCams",
+             "guest",
+             "dmz"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus2",
+            "name": "sfp-sfpplus2",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus3",
+            "name": "sfp-sfpplus3",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus4",
+            "name": "sfp-sfpplus4",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus5",
+            "name": "sfp-sfpplus5",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus6",
+            "name": "sfp-sfpplus6",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus7",
+            "name": "sfp-sfpplus7",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus8",
+            "name": "sfp-sfpplus8",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus9",
+            "name": "sfp-sfpplus9",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus10",
+            "name": "sfp-sfpplus10",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus11",
+            "name": "sfp-sfpplus11",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus12",
+            "name": "sfp-sfpplus12",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus13",
+            "name": "sfp-sfpplus13",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus14",
+            "name": "sfp-sfpplus14",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": true,
+            "disabled": false,
+            "lag": "usw-uplink",
+            "zones": [
+             "rossen",
+             "test",
+             "home",
+             "iotLocal",
+             "iotCloud",
+             "iotCams",
+             "guest",
+             "dmz"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus15",
+            "name": "sfp-sfpplus15",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": true,
+            "disabled": true,
+            "lag": null,
+            "zones": [
+             "rossen",
+             "test",
+             "home",
+             "iotLocal",
+             "iotCloud",
+             "iotCams",
+             "guest",
+             "dmz"
+            ]
+           },
+           {
+            "id": "sfp-sfpplus16",
+            "name": "sfp-sfpplus16",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": true,
+            "disabled": true,
+            "lag": null,
+            "zones": [
+             "rossen",
+             "test",
+             "home",
+             "iotLocal",
+             "iotCloud",
+             "iotCams",
+             "guest",
+             "dmz"
+            ]
+           }
+          ]
+         ]
+        },
+        {
+         "from": 0.61,
+         "to": 0.67,
+         "rows": [
+          [
+           {
+            "id": "ether1",
+            "name": "ether1",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": false,
+            "disabled": true,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "console",
+            "name": "console",
+            "kind": "console",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           }
+          ]
+         ]
+        }
+       ],
+       "labels": [
+        {
+         "text": "MikroTik",
+         "at": "left"
+        },
+        {
+         "text": "CRS317",
+         "at": "right"
+        }
+       ]
+      },
+      "up": true,
+      "asset": "sw-02"
+     },
+     {
+      "device": "USW Pro XG 10 PoE",
+      "kind": "switch",
+      "rack": "rack1",
+      "u": 23,
+      "height": 1,
+      "width": "full",
+      "slot": 0,
+      "face": "front",
+      "label": null,
+      "description": "placeholder position, set by the operator",
+      "faceplate": "unifi/usw-pro-xg-10-poe",
+      "suggested": false,
+      "plate": {
+       "key": "unifi/usw-pro-xg-10-poe",
+       "vendor": "UniFi",
+       "model": "USW Pro XG 10 PoE",
+       "kind": "switch",
+       "units": 1,
+       "width": "full",
+       "passive": false,
+       "rows": [
+        [
+         {
+          "id": "1",
+          "name": "Port 1",
+          "kind": "poe",
+          "speed": "10g",
+          "up": true,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "rossen",
+           "test",
+           "home",
+           "iotLocal",
+           "iotCloud",
+           "iotCams",
+           "guest",
+           "dmz"
+          ]
+         },
+         {
+          "id": "2",
+          "name": "Port 2",
+          "kind": "poe",
+          "speed": "10g",
+          "up": true,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "rossen",
+           "test",
+           "home",
+           "iotLocal",
+           "iotCloud",
+           "iotCams",
+           "guest",
+           "dmz"
+          ]
+         },
+         {
+          "id": "3",
+          "name": "Port 3",
+          "kind": "poe",
+          "speed": "10g",
+          "up": true,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "rossen",
+           "test",
+           "home",
+           "iotLocal",
+           "iotCloud",
+           "iotCams",
+           "guest",
+           "dmz"
+          ]
+         },
+         {
+          "id": "4",
+          "name": "Port 4",
+          "kind": "poe",
+          "speed": "10g",
+          "up": true,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "rossen",
+           "test",
+           "home",
+           "iotLocal",
+           "iotCloud",
+           "iotCams",
+           "guest",
+           "dmz"
+          ]
+         },
+         {
+          "id": "5",
+          "name": "Port 5",
+          "kind": "poe",
+          "speed": "10g",
+          "up": true,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "wan"
+          ]
+         },
+         {
+          "id": "6",
+          "name": "Port 6",
+          "kind": "poe",
+          "speed": "10g",
+          "up": true,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "wan"
+          ]
+         },
+         {
+          "id": "7",
+          "name": "Port 7",
+          "kind": "poe",
+          "speed": "10g",
+          "up": true,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "wan"
+          ]
+         },
+         {
+          "id": "8",
+          "name": "Port 8",
+          "kind": "poe",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "9",
+          "name": "Port 9",
+          "kind": "poe",
+          "speed": "10g",
+          "up": true,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "rossen",
+           "test",
+           "home",
+           "iotLocal",
+           "iotCloud",
+           "iotCams",
+           "guest",
+           "dmz"
+          ]
+         },
+         {
+          "id": "10",
+          "name": "Port 10",
+          "kind": "poe",
+          "speed": "10g",
+          "up": false,
+          "disabled": false,
+          "lag": null,
+          "zones": [
+           "iotLocal"
+          ]
+         },
+         {
+          "id": "11",
+          "name": "Port 11",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": true,
+          "disabled": false,
+          "lag": "crs-uplink",
+          "zones": [
+           "rossen",
+           "test",
+           "home",
+           "iotLocal",
+           "iotCloud",
+           "iotCams",
+           "guest",
+           "dmz"
+          ]
+         },
+         {
+          "id": "12",
+          "name": "Port 12",
+          "kind": "sfp+",
+          "speed": "10g",
+          "up": true,
+          "disabled": false,
+          "lag": "crs-uplink",
+          "zones": [
+           "rossen",
+           "test",
+           "home",
+           "iotLocal",
+           "iotCloud",
+           "iotCams",
+           "guest",
+           "dmz"
+          ]
+         }
+        ]
+       ],
+       "blocks": [
+        {
+         "from": 0.51,
+         "to": 0.98,
+         "rows": [
+          [
+           {
+            "id": "1",
+            "name": "Port 1",
+            "kind": "poe",
+            "speed": "10g",
+            "up": true,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "rossen",
+             "test",
+             "home",
+             "iotLocal",
+             "iotCloud",
+             "iotCams",
+             "guest",
+             "dmz"
+            ]
+           },
+           {
+            "id": "2",
+            "name": "Port 2",
+            "kind": "poe",
+            "speed": "10g",
+            "up": true,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "rossen",
+             "test",
+             "home",
+             "iotLocal",
+             "iotCloud",
+             "iotCams",
+             "guest",
+             "dmz"
+            ]
+           },
+           {
+            "id": "3",
+            "name": "Port 3",
+            "kind": "poe",
+            "speed": "10g",
+            "up": true,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "rossen",
+             "test",
+             "home",
+             "iotLocal",
+             "iotCloud",
+             "iotCams",
+             "guest",
+             "dmz"
+            ]
+           },
+           {
+            "id": "4",
+            "name": "Port 4",
+            "kind": "poe",
+            "speed": "10g",
+            "up": true,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "rossen",
+             "test",
+             "home",
+             "iotLocal",
+             "iotCloud",
+             "iotCams",
+             "guest",
+             "dmz"
+            ]
+           },
+           {
+            "id": "5",
+            "name": "Port 5",
+            "kind": "poe",
+            "speed": "10g",
+            "up": true,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "wan"
+            ]
+           },
+           {
+            "id": "6",
+            "name": "Port 6",
+            "kind": "poe",
+            "speed": "10g",
+            "up": true,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "wan"
+            ]
+           },
+           {
+            "id": "7",
+            "name": "Port 7",
+            "kind": "poe",
+            "speed": "10g",
+            "up": true,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "wan"
+            ]
+           },
+           {
+            "id": "8",
+            "name": "Port 8",
+            "kind": "poe",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "9",
+            "name": "Port 9",
+            "kind": "poe",
+            "speed": "10g",
+            "up": true,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "rossen",
+             "test",
+             "home",
+             "iotLocal",
+             "iotCloud",
+             "iotCams",
+             "guest",
+             "dmz"
+            ]
+           },
+           {
+            "id": "10",
+            "name": "Port 10",
+            "kind": "poe",
+            "speed": "10g",
+            "up": false,
+            "disabled": false,
+            "lag": null,
+            "zones": [
+             "iotLocal"
+            ]
+           },
+           {
+            "id": "11",
+            "name": "Port 11",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": true,
+            "disabled": false,
+            "lag": "crs-uplink",
+            "zones": [
+             "rossen",
+             "test",
+             "home",
+             "iotLocal",
+             "iotCloud",
+             "iotCams",
+             "guest",
+             "dmz"
+            ]
+           },
+           {
+            "id": "12",
+            "name": "Port 12",
+            "kind": "sfp+",
+            "speed": "10g",
+            "up": true,
+            "disabled": false,
+            "lag": "crs-uplink",
+            "zones": [
+             "rossen",
+             "test",
+             "home",
+             "iotLocal",
+             "iotCloud",
+             "iotCams",
+             "guest",
+             "dmz"
+            ]
+           }
+          ]
+         ]
+        }
+       ],
+       "labels": [
+        {
+         "text": "UniFi",
+         "at": "left"
+        },
+        {
+         "text": "Pro XG 10 PoE",
+         "at": "right"
+        }
+       ]
+      },
+      "up": true,
+      "asset": "sw-01"
+     },
+     {
+      "device": "patchpanel 2",
+      "kind": "device",
+      "recorded": "patch-panel",
+      "rack": "rack1",
+      "u": 22,
+      "height": 1,
+      "width": "full",
+      "slot": 0,
+      "face": "front",
+      "label": null,
+      "description": null,
+      "faceplate": "generic/patch-panel-24",
+      "suggested": false,
+      "plate": {
+       "key": "generic/patch-panel-24",
+       "vendor": "Generic",
+       "model": "24-port patch panel",
+       "kind": "patch-panel",
+       "units": 1,
+       "width": "full",
+       "passive": true,
+       "rows": [
+        [
+         {
+          "id": "1",
+          "name": "1",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "2",
+          "name": "2",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "3",
+          "name": "3",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "4",
+          "name": "4",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "5",
+          "name": "5",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "6",
+          "name": "6",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "7",
+          "name": "7",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "8",
+          "name": "8",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "9",
+          "name": "9",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "10",
+          "name": "10",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "11",
+          "name": "11",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "12",
+          "name": "12",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "13",
+          "name": "13",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "14",
+          "name": "14",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "15",
+          "name": "15",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "16",
+          "name": "16",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "17",
+          "name": "17",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "18",
+          "name": "18",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "19",
+          "name": "19",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "20",
+          "name": "20",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "21",
+          "name": "21",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "22",
+          "name": "22",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "23",
+          "name": "23",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "24",
+          "name": "24",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         }
+        ]
+       ],
+       "blocks": [
+        {
+         "from": 0.02,
+         "to": 0.98,
+         "rows": [
+          [
+           {
+            "id": "1",
+            "name": "1",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "2",
+            "name": "2",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "3",
+            "name": "3",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "4",
+            "name": "4",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "5",
+            "name": "5",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "6",
+            "name": "6",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "7",
+            "name": "7",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "8",
+            "name": "8",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "9",
+            "name": "9",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "10",
+            "name": "10",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "11",
+            "name": "11",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "12",
+            "name": "12",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "13",
+            "name": "13",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "14",
+            "name": "14",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "15",
+            "name": "15",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "16",
+            "name": "16",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "17",
+            "name": "17",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "18",
+            "name": "18",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "19",
+            "name": "19",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "20",
+            "name": "20",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "21",
+            "name": "21",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "22",
+            "name": "22",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "23",
+            "name": "23",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "24",
+            "name": "24",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           }
+          ]
+         ]
+        }
+       ],
+       "labels": []
+      },
+      "up": null,
+      "asset": "patchpanel 2"
+     },
+     {
+      "device": "patchpanel1",
+      "kind": "device",
+      "recorded": "patch-panel",
+      "rack": "rack1",
+      "u": 20,
+      "height": 1,
+      "width": "full",
+      "slot": 0,
+      "face": "front",
+      "label": null,
+      "description": null,
+      "faceplate": "recorded/patch-panel",
+      "suggested": false,
+      "plate": {
+       "key": "recorded/patch-panel",
+       "vendor": "Generic",
+       "model": "24-port patch panel",
+       "kind": "patch-panel",
+       "units": 1,
+       "width": "full",
+       "passive": true,
+       "rows": [
+        [
+         {
+          "id": "1",
+          "name": "1",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "2",
+          "name": "2",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "3",
+          "name": "3",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "4",
+          "name": "4",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "5",
+          "name": "5",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "6",
+          "name": "6",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "7",
+          "name": "7",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "8",
+          "name": "8",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "9",
+          "name": "9",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "10",
+          "name": "10",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "11",
+          "name": "11",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "12",
+          "name": "12",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "13",
+          "name": "13",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "14",
+          "name": "14",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "15",
+          "name": "15",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "16",
+          "name": "16",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "17",
+          "name": "17",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "18",
+          "name": "18",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "19",
+          "name": "19",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "20",
+          "name": "20",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "21",
+          "name": "21",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "22",
+          "name": "22",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "23",
+          "name": "23",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "24",
+          "name": "24",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         }
+        ]
+       ],
+       "blocks": [
+        {
+         "from": 0.02,
+         "to": 0.98,
+         "rows": [
+          [
+           {
+            "id": "1",
+            "name": "1",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "2",
+            "name": "2",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "3",
+            "name": "3",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "4",
+            "name": "4",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "5",
+            "name": "5",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "6",
+            "name": "6",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "7",
+            "name": "7",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "8",
+            "name": "8",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "9",
+            "name": "9",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "10",
+            "name": "10",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "11",
+            "name": "11",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "12",
+            "name": "12",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "13",
+            "name": "13",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "14",
+            "name": "14",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "15",
+            "name": "15",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "16",
+            "name": "16",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "17",
+            "name": "17",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "18",
+            "name": "18",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "19",
+            "name": "19",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "20",
+            "name": "20",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "21",
+            "name": "21",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "22",
+            "name": "22",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "23",
+            "name": "23",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           },
+           {
+            "id": "24",
+            "name": "24",
+            "kind": "rj45",
+            "speed": "1g",
+            "up": null,
+            "disabled": false,
+            "lag": null,
+            "zones": []
+           }
+          ]
+         ]
+        }
+       ],
+       "labels": []
+      },
+      "up": null,
+      "asset": "patchpanel1"
+     },
+     {
+      "device": "tappaas4",
+      "kind": "node",
+      "rack": "rack1",
+      "u": 19,
+      "height": 1,
+      "width": "full",
+      "slot": 0,
+      "face": "front",
+      "label": null,
+      "description": null,
+      "faceplate": "generic/server-1u",
+      "suggested": false,
+      "plate": {
+       "key": "generic/server-1u",
+       "vendor": "Generic",
+       "model": "1U server",
+       "kind": "server",
+       "units": 1,
+       "width": "full",
+       "passive": false,
+       "rows": [
+        [
+         {
+          "id": "eno1",
+          "name": "eno1",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "eno2",
+          "name": "eno2",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "eno3",
+          "name": "eno3",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "eno4",
+          "name": "eno4",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "enp4s0",
+          "name": "enp4s0",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": true,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "enp5s0",
+          "name": "enp5s0",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "enp6s0",
+          "name": "enp6s0",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "enp7s0",
+          "name": "enp7s0",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "enp8s0",
+          "name": "enp8s0",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         }
+        ]
+       ],
+       "labels": []
+      },
+      "up": true,
+      "asset": "srv-04"
+     },
+     {
+      "device": "tappaas2",
+      "kind": "node",
+      "rack": "rack1",
+      "u": 13,
+      "height": 6,
+      "width": "third",
+      "slot": 0,
+      "face": "front",
+      "label": null,
+      "description": "placeholder position, set by the operator",
+      "faceplate": "generic/server-2u",
+      "suggested": false,
+      "plate": {
+       "key": "generic/server-2u",
+       "vendor": "Generic",
+       "model": "2U server",
+       "kind": "server",
+       "units": 2,
+       "width": "full",
+       "passive": false,
+       "rows": [
+        [
+         {
+          "id": "enp97s0",
+          "name": "enp97s0",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": true,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         }
+        ]
+       ],
+       "labels": []
+      },
+      "up": true,
+      "asset": "srv-02"
+     },
+     {
+      "device": "tappaas3",
+      "kind": "node",
+      "rack": "rack1",
+      "u": 13,
+      "height": 6,
+      "width": "third",
+      "slot": 2,
+      "face": "front",
+      "label": null,
+      "description": "placeholder position, set by the operator",
+      "faceplate": "generic/server-2u",
+      "suggested": false,
+      "plate": {
+       "key": "generic/server-2u",
+       "vendor": "Generic",
+       "model": "2U server",
+       "kind": "server",
+       "units": 2,
+       "width": "full",
+       "passive": false,
+       "rows": [
+        [
+         {
+          "id": "eno1",
+          "name": "eno1",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": true,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "enp3s0",
+          "name": "enp3s0",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": true,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "usblan0",
+          "name": "usblan0",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": true,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         }
+        ]
+       ],
+       "labels": []
+      },
+      "up": true,
+      "asset": "srv-03"
+     },
+     {
+      "device": "ISP modem",
+      "kind": "device",
+      "recorded": "modem",
+      "rack": "rack1",
+      "u": 12,
+      "height": 1,
+      "width": "third",
+      "slot": 0,
+      "face": "front",
+      "label": null,
+      "description": null,
+      "faceplate": "generic/isp-modem",
+      "suggested": false,
+      "plate": {
+       "key": "generic/isp-modem",
+       "vendor": "Generic",
+       "model": "ISP modem",
+       "kind": "modem",
+       "units": 1,
+       "width": "half",
+       "passive": true,
+       "rows": [
+        [
+         {
+          "id": "WAN",
+          "name": "WAN",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         null,
+         {
+          "id": "LAN 1",
+          "name": "LAN 1",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "LAN 2",
+          "name": "LAN 2",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "LAN 3",
+          "name": "LAN 3",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         },
+         {
+          "id": "LAN 4",
+          "name": "LAN 4",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": null,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         }
+        ]
+       ],
+       "labels": []
+      },
+      "up": null,
+      "asset": "ISP modem"
+     },
+     {
+      "device": "tappaas1",
+      "kind": "node",
+      "rack": "rack1",
+      "u": 1,
+      "height": 11,
+      "width": "half",
+      "slot": 0,
+      "face": "front",
+      "label": null,
+      "description": "placeholder position, set by the operator",
+      "faceplate": "generic/server-2u",
+      "suggested": false,
+      "plate": {
+       "key": "generic/server-2u",
+       "vendor": "Generic",
+       "model": "2U server",
+       "kind": "server",
+       "units": 2,
+       "width": "full",
+       "passive": false,
+       "rows": [
+        [
+         {
+          "id": "nic2",
+          "name": "nic2",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": true,
+          "disabled": false,
+          "lag": "lanbond",
+          "zones": []
+         },
+         {
+          "id": "nic3",
+          "name": "nic3",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": true,
+          "disabled": false,
+          "lag": "lanbond",
+          "zones": []
+         },
+         {
+          "id": "nic4",
+          "name": "nic4",
+          "kind": "rj45",
+          "speed": "1g",
+          "up": true,
+          "disabled": false,
+          "lag": null,
+          "zones": []
+         }
+        ]
+       ],
+       "labels": []
+      },
+      "up": true,
+      "asset": "srv-01"
+     }
+    ]
+   }
+  ],
+  "rooms": [
+   {
+    "name": "basement",
+    "displayName": "Basement",
+    "description": null,
+    "location": "knudanchersvej95",
+    "recorded": true,
+    "racks": [
+     "rack1"
+    ],
+    "loose": []
+   },
+   {
+    "name": "diningroom",
+    "displayName": "DiningRoom",
+    "description": null,
+    "location": "knudanchersvej95",
+    "recorded": true,
+    "racks": [],
+    "loose": []
+   },
+   {
+    "name": "stue",
+    "displayName": "LivingRoom",
+    "description": null,
+    "location": "knudanchersvej95",
+    "recorded": true,
+    "racks": [],
+    "loose": [
+     {
+      "device": "Nano HD",
+      "kind": "ap",
+      "rack": "",
+      "room": "stue",
+      "u": 0,
+      "height": 1,
+      "width": "full",
+      "slot": 0,
+      "face": "front",
+      "label": null,
+      "description": null,
+      "faceplate": "recorded/access-point",
+      "suggested": false,
+      "plate": {
+       "key": "recorded/access-point",
+       "vendor": "Generic",
+       "model": "Nano HD",
+       "kind": "ap",
+       "units": 1,
+       "width": "full",
+       "passive": true,
+       "rows": [],
+       "labels": []
+      },
+      "up": true,
+      "asset": "ap-01"
+     }
+    ]
+   }
+  ],
+  "unplaced": [],
+  "cables": [
+   {
+    "from": {
+     "device": "USW Pro XG 10 PoE",
+     "port": "1"
+    },
+    "to": {
+     "device": "tappaas4",
+     "port": "enp4s0"
+    },
+    "kind": "lan",
+    "source": "topology",
+    "zones": [
+     "rossen",
+     "test",
+     "home",
+     "iotLocal",
+     "iotCloud",
+     "iotCams",
+     "guest",
+     "dmz"
+    ],
+    "lag": null,
+    "up": true,
+    "label": null
+   },
+   {
+    "from": {
+     "device": "USW Pro XG 10 PoE",
+     "port": "4"
+    },
+    "to": {
+     "device": "tappaas3",
+     "port": "usblan0"
+    },
+    "kind": "lan",
+    "source": "topology",
+    "zones": [
+     "rossen",
+     "test",
+     "home",
+     "iotLocal",
+     "iotCloud",
+     "iotCams",
+     "guest",
+     "dmz"
+    ],
+    "lag": null,
+    "up": true,
+    "label": null
+   },
+   {
+    "from": {
+     "device": "USW Pro XG 10 PoE",
+     "port": "6"
+    },
+    "to": {
+     "device": "tappaas1",
+     "port": "nic4"
+    },
+    "kind": "wan",
+    "source": "topology",
+    "zones": [
+     "wan"
+    ],
+    "lag": null,
+    "up": true,
+    "label": null
+   },
+   {
+    "from": {
+     "device": "USW Pro XG 10 PoE",
+     "port": "7"
+    },
+    "to": {
+     "device": "tappaas3",
+     "port": "enp3s0"
+    },
+    "kind": "wan",
+    "source": "topology",
+    "zones": [
+     "wan"
+    ],
+    "lag": null,
+    "up": true,
+    "label": null
+   },
+   {
+    "from": {
+     "device": "USW Pro XG 10 PoE",
+     "port": "9"
+    },
+    "to": {
+     "device": "Nano HD",
+     "port": "uplink"
+    },
+    "kind": "ap",
+    "source": "topology",
+    "zones": [
+     "rossen",
+     "test",
+     "home",
+     "iotLocal",
+     "iotCloud",
+     "iotCams",
+     "guest",
+     "dmz"
+    ],
+    "lag": null,
+    "up": true,
+    "label": null
+   },
+   {
+    "from": {
+     "device": "USW Pro XG 10 PoE",
+     "port": "11"
+    },
+    "to": {
+     "device": "crs-a",
+     "port": "sfp-sfpplus14"
+    },
+    "kind": "uplink",
+    "source": "topology",
+    "zones": [
+     "rossen",
+     "test",
+     "home",
+     "iotLocal",
+     "iotCloud",
+     "iotCams",
+     "guest",
+     "dmz"
+    ],
+    "lag": "crs-uplink",
+    "up": true,
+    "label": null
+   },
+   {
+    "from": {
+     "device": "USW Pro XG 10 PoE",
+     "port": "12"
+    },
+    "to": {
+     "device": "crs-b",
+     "port": "sfp-sfpplus14"
+    },
+    "kind": "uplink",
+    "source": "topology",
+    "zones": [
+     "rossen",
+     "test",
+     "home",
+     "iotLocal",
+     "iotCloud",
+     "iotCams",
+     "guest",
+     "dmz"
+    ],
+    "lag": "crs-uplink",
+    "up": true,
+    "label": null
+   },
+   {
+    "from": {
+     "device": "crs-a",
+     "port": "sfp-sfpplus1"
+    },
+    "to": {
+     "device": "tappaas1",
+     "port": "nic2"
+    },
+    "kind": "lan",
+    "source": "topology",
+    "zones": [
+     "rossen",
+     "test",
+     "home",
+     "iotLocal",
+     "iotCloud",
+     "iotCams",
+     "guest",
+     "dmz"
+    ],
+    "lag": "tappaas1-lan",
+    "up": true,
+    "label": null
+   },
+   {
+    "from": {
+     "device": "crs-a",
+     "port": "sfp-sfpplus15"
+    },
+    "to": {
+     "device": "crs-b",
+     "port": "peer-link"
+    },
+    "kind": "peer-link",
+    "source": "topology",
+    "zones": [
+     "rossen",
+     "test",
+     "home",
+     "iotLocal",
+     "iotCloud",
+     "iotCams",
+     "guest",
+     "dmz"
+    ],
+    "lag": null,
+    "up": true,
+    "label": null
+   },
+   {
+    "from": {
+     "device": "crs-a",
+     "port": "sfp-sfpplus16"
+    },
+    "to": {
+     "device": "crs-b",
+     "port": "peer-link"
+    },
+    "kind": "peer-link",
+    "source": "topology",
+    "zones": [
+     "rossen",
+     "test",
+     "home",
+     "iotLocal",
+     "iotCloud",
+     "iotCams",
+     "guest",
+     "dmz"
+    ],
+    "lag": null,
+    "up": true,
+    "label": null
+   },
+   {
+    "from": {
+     "device": "crs-b",
+     "port": "sfp-sfpplus1"
+    },
+    "to": {
+     "device": "tappaas1",
+     "port": "nic3"
+    },
+    "kind": "lan",
+    "source": "topology",
+    "zones": [
+     "rossen",
+     "test",
+     "home",
+     "iotLocal",
+     "iotCloud",
+     "iotCams",
+     "guest",
+     "dmz"
+    ],
+    "lag": "tappaas1-lan",
+    "up": true,
+    "label": null
+   },
+   {
+    "from": {
+     "device": "crs-b",
+     "port": "sfp-sfpplus15"
+    },
+    "to": {
+     "device": "crs-a",
+     "port": "peer-link"
+    },
+    "kind": "peer-link",
+    "source": "topology",
+    "zones": [
+     "rossen",
+     "test",
+     "home",
+     "iotLocal",
+     "iotCloud",
+     "iotCams",
+     "guest",
+     "dmz"
+    ],
+    "lag": null,
+    "up": true,
+    "label": null
+   },
+   {
+    "from": {
+     "device": "crs-b",
+     "port": "sfp-sfpplus16"
+    },
+    "to": {
+     "device": "crs-a",
+     "port": "peer-link"
+    },
+    "kind": "peer-link",
+    "source": "topology",
+    "zones": [
+     "rossen",
+     "test",
+     "home",
+     "iotLocal",
+     "iotCloud",
+     "iotCams",
+     "guest",
+     "dmz"
+    ],
+    "lag": null,
+    "up": true,
+    "label": null
+   },
+   {
+    "from": {
+     "device": "USW Pro XG 10 PoE",
+     "port": "5"
+    },
+    "to": {
+     "device": "ISP modem",
+     "port": "LAN 1"
+    },
+    "kind": "uplink",
+    "source": "recorded",
+    "zones": [
+     "wan"
+    ],
+    "lag": null,
+    "up": true,
+    "label": "ISP hand-off"
+   },
+   {
+    "from": {
+     "device": "USW Pro XG 10 PoE",
+     "port": "2"
+    },
+    "to": {
+     "device": "tappaas2",
+     "port": "enp97s0"
+    },
+    "kind": "lan",
+    "source": "topology",
+    "zones": [
+     "rossen",
+     "test",
+     "home",
+     "iotLocal",
+     "iotCloud",
+     "iotCams",
+     "guest",
+     "dmz"
+    ],
+    "lag": null,
+    "up": true,
+    "label": null,
+    "segments": [
+     {
+      "from": {
+       "device": "USW Pro XG 10 PoE",
+       "port": "2"
+      },
+      "to": {
+       "device": "patchpanel1",
+       "port": "9",
+       "side": "front"
+      }
+     },
+     {
+      "from": {
+       "device": "patchpanel1",
+       "port": "9",
+       "side": "rear"
+      },
+      "to": {
+       "device": "tappaas2",
+       "port": "enp97s0"
+      }
+     }
+    ],
+    "via": [
+     {
+      "device": "patchpanel1",
+      "port": "9"
+     }
+    ]
+   },
+   {
+    "from": {
+     "device": "USW Pro XG 10 PoE",
+     "port": "3"
+    },
+    "to": {
+     "device": "tappaas3",
+     "port": "eno1"
+    },
+    "kind": "lan",
+    "source": "topology",
+    "zones": [
+     "rossen",
+     "test",
+     "home",
+     "iotLocal",
+     "iotCloud",
+     "iotCams",
+     "guest",
+     "dmz"
+    ],
+    "lag": null,
+    "up": true,
+    "label": null,
+    "segments": [
+     {
+      "from": {
+       "device": "USW Pro XG 10 PoE",
+       "port": "3"
+      },
+      "to": {
+       "device": "patchpanel1",
+       "port": "6",
+       "side": "front"
+      }
+     },
+     {
+      "from": {
+       "device": "patchpanel1",
+       "port": "6",
+       "side": "rear"
+      },
+      "to": {
+       "device": "tappaas3",
+       "port": "eno1"
+      }
+     }
+    ],
+    "via": [
+     {
+      "device": "patchpanel1",
+      "port": "6"
+     }
+    ]
+   }
+  ],
+  "outside": [],
+  "findings": []
+ },
+ "findings": [],
  "sources": [
   {
-   "name": "site.json",
+   "name": "cmdb",
    "ok": true
   },
   {
-   "name": "site-manager node list",
+   "name": "asset-manager export",
    "ok": true
   },
   {
-   "name": "site-manager node network show",
-   "ok": true
-  },
-  {
-   "name": "switch-manager list",
-   "ok": true
-  },
-  {
-   "name": "switch-manager list-ports",
-   "ok": true
-  },
-  {
-   "name": "switch-manager lag list",
-   "ok": true
-  },
-  {
-   "name": "ap-manager list",
-   "ok": true
-  },
-  {
-   "name": "zones.json",
-   "ok": true
-  },
-  {
-   "name": "module-manager module list",
-   "ok": true
-  },
-  {
-   "name": "backup-manager peers",
-   "ok": true
-  },
-  {
-   "name": "health-manager validate",
+   "name": "wan-address.json",
    "ok": true
   }
  ]

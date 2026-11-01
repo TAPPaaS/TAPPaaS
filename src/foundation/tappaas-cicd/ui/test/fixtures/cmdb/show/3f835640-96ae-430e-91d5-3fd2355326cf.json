@@ -1,0 +1,142 @@
+{
+  "id": "3f835640-96ae-430e-91d5-3fd2355326cf",
+  "class": "room",
+  "ancestors": [
+    "room",
+    "place",
+    "object"
+  ],
+  "name": "basement",
+  "displayName": "Basement",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-30T08:49:10.799Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.621Z",
+  "seen": {
+    "asset-manager": "2026-11-01T08:52:20.621Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "roll-up",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": true,
+          "message": "2 of 4 warning",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-30T12:59:36.103Z",
+          "reason": "roll-up",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": true,
+          "message": "7 of 9 warning",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "4 of 4 ok",
+          "rootCause": null,
+          "lastChecked": "2026-10-30T09:40:04.146Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "security",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "4 of 4 ok",
+          "rootCause": null,
+          "lastChecked": "2026-10-30T09:40:04.146Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "4 of 4 ok",
+          "rootCause": null,
+          "lastChecked": "2026-10-30T09:40:04.146Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "backup",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "4 of 4 ok",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T07:25:02.913Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T07:30:02.146Z"
+    },
+    "displayName": {
+      "value": "Basement",
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 338,
+      "type": "at",
+      "direction": "out",
+      "other": {
+        "id": "eb8b5e14-af28-46e3-8bf3-fb8de068683b",
+        "class": "location",
+        "name": "knudanchersvej95"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 340,
+      "type": "placed-in",
+      "direction": "in",
+      "other": {
+        "id": "73a0f756-f569-4eaa-8508-bec8ac7ac791",
+        "class": "rack",
+        "name": "rack1"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    }
+  ]
+}

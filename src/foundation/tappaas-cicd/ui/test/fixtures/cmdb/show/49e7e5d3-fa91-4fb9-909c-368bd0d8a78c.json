@@ -1,0 +1,27 @@
+{
+  "id": "49e7e5d3-fa91-4fb9-909c-368bd0d8a78c",
+  "class": "node",
+  "ancestors": [
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "core",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T19:32:50.025Z",
+  "ended": null,
+  "lastSeen": null,
+  "seen": {},
+  "at": null,
+  "attributes": {
+    "placeholder": {
+      "value": true,
+      "source": "asset-manager",
+      "since": "2026-10-30T19:32:50.025Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

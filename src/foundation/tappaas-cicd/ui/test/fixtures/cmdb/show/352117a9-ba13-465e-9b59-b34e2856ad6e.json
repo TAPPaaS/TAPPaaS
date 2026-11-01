@@ -1,0 +1,158 @@
+{
+  "id": "352117a9-ba13-465e-9b59-b34e2856ad6e",
+  "class": "vm",
+  "ancestors": [
+    "vm",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "test-nixos",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-31T21:07:21.027Z",
+  "ended": "2026-11-01T08:26:58.915Z",
+  "lastSeen": "2026-11-01T08:26:58.915Z",
+  "seen": {
+    "operator": "2026-11-01T08:26:58.915Z",
+    "site-manager": "2026-10-31T21:07:21.027Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T21:10:08.334Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-11-01T00:04:45.410Z",
+          "reason": "sweep-missing",
+          "source": "health-manager",
+          "status": "critical",
+          "derived": false,
+          "message": "vm/test-nixos: desired without actual",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-31T21:10:08.334Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T21:10:08.334Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T21:10:08.334Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "test-nixos: not measured (no answer from test-nixos.mgmt.internal) — x86-64-v3 drops AVX-512",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T21:10:08.334Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-11-01T00:04:45.410Z"
+    },
+    "cores": {
+      "value": 2,
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "description": {
+      "value": "Test: NixOS clone on mgmt zone with HA failover to tappaas3",
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "desired": {
+      "value": {
+        "file": "test-nixos.json"
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "disks": {
+      "value": [
+        {
+          "size": "1M",
+          "storage": "tanka1"
+        },
+        {
+          "size": "24G",
+          "storage": "tanka1"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "haPolicy": {
+      "value": "started",
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "memory": {
+      "value": 2048,
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "release": {
+      "value": {
+        "module": "test-vm-creation",
+        "version": "0.5"
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "stack": {
+      "value": "test",
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "stage": {
+      "value": "retired",
+      "source": "operator",
+      "since": "2026-11-01T08:26:58.915Z"
+    },
+    "state": {
+      "value": "running",
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "vmid": {
+      "value": 911,
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "zone": {
+      "value": "mgmt",
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

@@ -1,0 +1,3103 @@
+{
+  "manifest": 1,
+  "name": "site-manager",
+  "version": "0.1.0",
+  "tagline": "TAPPaaS Site manager: the site, its nodes, its repositories and its updates",
+  "common": [
+    {
+      "flag": "--config-dir",
+      "takesValue": true,
+      "arg": "DIR",
+      "choices": null,
+      "repeatable": false,
+      "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+    },
+    {
+      "flag": "--json",
+      "takesValue": false,
+      "arg": null,
+      "choices": null,
+      "repeatable": false,
+      "description": "Machine-readable output for list/show."
+    }
+  ],
+  "verbs": [
+    {
+      "verb": "site show",
+      "keys": [
+        [
+          "site",
+          "show"
+        ]
+      ],
+      "usage": "site show [--json]",
+      "note": null,
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "site modify",
+      "keys": [
+        [
+          "site",
+          "modify"
+        ]
+      ],
+      "usage": "site modify <field options> [--check [--json]]",
+      "note": null,
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "say what would change, in one line; write nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "with --check: the whole resulting site.json, for machines."
+        },
+        {
+          "flag": "--set",
+          "takesValue": true,
+          "arg": "<field>=<value>",
+          "choices": null,
+          "repeatable": false,
+          "description": "set any field site-fields.json classes in-place, by its name (dotted inside an object: backup.target, updateSchedule.hour); repeat it. The options below are shortcuts, one field each (ADR-020 D11)."
+        },
+        {
+          "flag": "--unset",
+          "takesValue": true,
+          "arg": "<field",
+          "choices": null,
+          "repeatable": false,
+          "description": "remove optional fields (supportEmail, branding.logo, …); a required field and the update schedule cannot be removed."
+        },
+        {
+          "flag": "--channel",
+          "takesValue": true,
+          "arg": "<c>",
+          "choices": null,
+          "repeatable": false,
+          "description": "release channel: unstable | staging | production. Checks EVERY registered repository against the branch it declares for that channel in its channels.json, warns where they disagree or where none is declared, and proposes the fix; moving towards production needs --force."
+        },
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "authorize a channel move towards production — older code, and migrations do not run backwards."
+        },
+        {
+          "flag": "--displayName",
+          "takesValue": true,
+          "arg": "<s>",
+          "choices": null,
+          "repeatable": false,
+          "description": "display name"
+        },
+        {
+          "flag": "--owner",
+          "takesValue": true,
+          "arg": "<org>",
+          "choices": null,
+          "repeatable": false,
+          "description": "owning organization"
+        },
+        {
+          "flag": "--email",
+          "takesValue": true,
+          "arg": "<addr>",
+          "choices": null,
+          "repeatable": false,
+          "description": "admin email"
+        },
+        {
+          "flag": "--supportEmail",
+          "takesValue": true,
+          "arg": "<addr>",
+          "choices": null,
+          "repeatable": false,
+          "description": "where an alert's support bundle is to be forwarded (#883): one e-mail address; empty by default, \"\" clears it"
+        },
+        {
+          "flag": "--automaticReboot",
+          "takesValue": true,
+          "arg": "true|false",
+          "choices": [
+            "true",
+            "false"
+          ],
+          "repeatable": false,
+          "description": "allow update reboots"
+        },
+        {
+          "flag": "--ipv6",
+          "takesValue": true,
+          "arg": "true|false",
+          "choices": [
+            "true",
+            "false"
+          ],
+          "repeatable": false,
+          "description": "the site supports IPv6: OPNsense's 'Allow IPv6', applied by the next network update (default false)"
+        },
+        {
+          "flag": "--requireSigned",
+          "takesValue": true,
+          "arg": "true|false",
+          "choices": [
+            "true",
+            "false"
+          ],
+          "repeatable": false,
+          "description": "refuse to update a staging/production repository that signs no releases (ADR-033 D9; default false). A repository that lists signing keys is verified either way; one that declares no channels (no channels.json) is unstable, and moves unverified with a warning."
+        },
+        {
+          "flag": "--snapshotRetention",
+          "takesValue": true,
+          "arg": "<n>",
+          "choices": null,
+          "repeatable": false,
+          "description": "VM snapshots kept per module"
+        },
+        {
+          "flag": "--backupTarget",
+          "takesValue": true,
+          "arg": "<s>",
+          "choices": null,
+          "repeatable": false,
+          "description": "backup.target"
+        },
+        {
+          "flag": "--backupOffsite",
+          "takesValue": true,
+          "arg": "<s>",
+          "choices": null,
+          "repeatable": false,
+          "description": "backup.offsite"
+        },
+        {
+          "flag": "--backupDefaultSchedule",
+          "takesValue": true,
+          "arg": "<s>",
+          "choices": null,
+          "repeatable": false,
+          "description": "backup.defaultSchedule: daily | weekly | monthly | HH:MM"
+        },
+        {
+          "flag": "--backupDefaultRetention",
+          "takesValue": true,
+          "arg": "<s>",
+          "choices": null,
+          "repeatable": false,
+          "description": "backup.defaultRetention, e.g. 90d"
+        },
+        {
+          "flag": "--primaryLocation",
+          "takesValue": true,
+          "arg": "<name>",
+          "choices": null,
+          "repeatable": false,
+          "description": "the location the site is at: one of the site's locations (location list), with a timezone — the site's"
+        },
+        {
+          "flag": "--locale",
+          "takesValue": true,
+          "arg": "<l>",
+          "choices": null,
+          "repeatable": false,
+          "description": "the site's POSIX locale, e.g. en_US"
+        },
+        {
+          "flag": "--keyboard",
+          "takesValue": true,
+          "arg": "<kb>",
+          "choices": null,
+          "repeatable": false,
+          "description": "the console keyboard layout every OS family is set from, e.g. dk"
+        },
+        {
+          "flag": "--brandingLogo",
+          "takesValue": true,
+          "arg": "<path>",
+          "choices": null,
+          "repeatable": false,
+          "description": "branding.logo — the sign-in page's logo (svg, png, jpg, webp), relative to the config dir; applied by the identity update"
+        },
+        {
+          "flag": "--brandingLogoDark",
+          "takesValue": true,
+          "arg": "<path>",
+          "choices": null,
+          "repeatable": false,
+          "description": "branding.logoDark — its dark-theme variant, same file type"
+        },
+        {
+          "flag": "--dnssec",
+          "takesValue": true,
+          "arg": "true|false",
+          "choices": [
+            "true",
+            "false"
+          ],
+          "repeatable": false,
+          "description": "the firewall's resolver validates DNSSEC (default true); applied by the next network update"
+        },
+        {
+          "flag": "--dnsBlocklistsLists",
+          "takesValue": true,
+          "arg": "<a,b>",
+          "choices": null,
+          "repeatable": false,
+          "description": "dnsBlocklists.lists — OPNsense blocklist codes (atf, hgz011, oisd1, ag, …); '' blocks nothing. Applied by the next network update"
+        },
+        {
+          "flag": "--dnsBlocklistsZones",
+          "takesValue": true,
+          "arg": "<a,b>",
+          "choices": null,
+          "repeatable": false,
+          "description": "dnsBlocklists.zones — the zones whose clients are filtered; '' filters every client"
+        },
+        {
+          "flag": "--dnsBlocklistsAllow",
+          "takesValue": true,
+          "arg": "<a,b>",
+          "choices": null,
+          "repeatable": false,
+          "description": "dnsBlocklists.allow — domains never blocked"
+        },
+        {
+          "flag": "--diskAutoGrowEnabled",
+          "takesValue": true,
+          "arg": "true|false",
+          "choices": [
+            "true",
+            "false"
+          ],
+          "repeatable": false,
+          "description": "diskAutoGrow.enabled — grow a VM's disk when its / fills up, at every module update"
+        },
+        {
+          "flag": "--diskAutoGrowThreshold",
+          "takesValue": true,
+          "arg": "<pct>",
+          "choices": null,
+          "repeatable": false,
+          "description": "diskAutoGrow.threshold — grow at or over this % full (default 80)"
+        },
+        {
+          "flag": "--diskAutoGrowGrowPercent",
+          "takesValue": true,
+          "arg": "<pct>",
+          "choices": null,
+          "repeatable": false,
+          "description": "diskAutoGrow.growPercent — grow by this % of the disk (default 50)"
+        },
+        {
+          "flag": "--diskAutoGrowMinGrowGB",
+          "takesValue": true,
+          "arg": "<gb>",
+          "choices": null,
+          "repeatable": false,
+          "description": "diskAutoGrow.minGrowGB — and by at least this many GB (default 5)"
+        },
+        {
+          "flag": "--diskAutoGrowPoolCeiling",
+          "takesValue": true,
+          "arg": "<pct>",
+          "choices": null,
+          "repeatable": false,
+          "description": "diskAutoGrow.poolCeiling — only while the pool stays at or under this % used (default 80)"
+        },
+        {
+          "flag": "--networkIsp",
+          "takesValue": true,
+          "arg": "<s>",
+          "choices": null,
+          "repeatable": false,
+          "description": "network.isp"
+        },
+        {
+          "flag": "--networkPublicIp",
+          "takesValue": true,
+          "arg": "<ip>",
+          "choices": null,
+          "repeatable": false,
+          "description": "network.publicIp (or auto)"
+        },
+        {
+          "flag": "--updateFrequency",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "daily | weekly | monthly | none"
+        },
+        {
+          "flag": "--updateWeekday",
+          "takesValue": true,
+          "arg": "<Day>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Monday … Sunday (weekly/monthly only)"
+        },
+        {
+          "flag": "--updateHour",
+          "takesValue": true,
+          "arg": "<0-23>",
+          "choices": null,
+          "repeatable": false,
+          "description": "hour of the update window"
+        },
+        {
+          "flag": "--healthAssessInterval",
+          "takesValue": true,
+          "arg": "<min>",
+          "choices": null,
+          "repeatable": false,
+          "description": "health.assessInterval — minutes between health-manager assess runs, 1-1440 (default 5; ADR-041 D2)"
+        },
+        {
+          "flag": "--alertsIncludeLines",
+          "takesValue": true,
+          "arg": "true|false",
+          "choices": [
+            "true",
+            "false"
+          ],
+          "repeatable": false,
+          "description": "alerts.includeLines — alert mails carry the log lines a rule asks for (default true; ADR-039)"
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "authorize a channel move towards production — older code, and migrations do not run backwards."
+        }
+      ]
+    },
+    {
+      "verb": "location list",
+      "keys": [
+        [
+          "location",
+          "list"
+        ]
+      ],
+      "usage": "location list [--json]",
+      "note": "(the site's places; * marks the primary one)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "location show",
+      "keys": [
+        [
+          "location",
+          "show"
+        ]
+      ],
+      "usage": "location show <name> [--json]",
+      "note": "(its place, and what names it)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "location add",
+      "keys": [
+        [
+          "location",
+          "add"
+        ]
+      ],
+      "usage": "location add <name> --country <CC> [--displayName <s>] [--kind site|remote] [--city <c>] [--address <a>] [--timezone <tz>] [--latitude <deg>] [--longitude <deg>] [--primary] [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--country",
+          "takesValue": true,
+          "arg": "<CC>",
+          "choices": null,
+          "repeatable": false,
+          "description": "ISO 3166-1 alpha-2 country code (required)."
+        },
+        {
+          "flag": "--displayName",
+          "takesValue": true,
+          "arg": "<s>",
+          "choices": null,
+          "repeatable": false,
+          "description": "the name shown (default: the name)."
+        },
+        {
+          "flag": "--kind",
+          "takesValue": true,
+          "arg": "site|remote",
+          "choices": [
+            "site",
+            "remote"
+          ],
+          "repeatable": false,
+          "description": "site (default): a place of this site's own equipment — its building, a provider's data centre. remote: another site's, a backup buddy's."
+        },
+        {
+          "flag": "--city",
+          "takesValue": true,
+          "arg": "<c>",
+          "choices": null,
+          "repeatable": false,
+          "description": "the city — lets an off-site copy in the same country show it is elsewhere."
+        },
+        {
+          "flag": "--address",
+          "takesValue": true,
+          "arg": "<a>",
+          "choices": null,
+          "repeatable": false,
+          "description": "the street address, or the provider and data centre — for an off-site copy in the same city."
+        },
+        {
+          "flag": "--timezone",
+          "takesValue": true,
+          "arg": "<tz>",
+          "choices": null,
+          "repeatable": false,
+          "description": "IANA timezone; required for the primary location, whose timezone is the site's."
+        },
+        {
+          "flag": "--latitude",
+          "takesValue": true,
+          "arg": "<deg>",
+          "choices": null,
+          "repeatable": false,
+          "description": "decimal degrees, north positive (read by modules that need a position)."
+        },
+        {
+          "flag": "--longitude",
+          "takesValue": true,
+          "arg": "<deg>",
+          "choices": null,
+          "repeatable": false,
+          "description": "decimal degrees, east positive."
+        },
+        {
+          "flag": "--primary",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "make it the primary location: the site is here, and every node and guest takes its timezone. The site's first own location is primary without it."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "say what would change, in one line; write nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "with --check: the whole resulting site.json, for machines."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "location modify",
+      "keys": [
+        [
+          "location",
+          "modify"
+        ]
+      ],
+      "usage": "location modify <name> [--set <field>=<value>]... [--displayName <s>] [--kind site|remote] [--country <CC>] [--city <c>] [--address <a>] [--timezone <tz>] [--latitude <deg>] [--longitude <deg>] [--unset <f,g>] [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--set",
+          "takesValue": true,
+          "arg": "<field>=<value>",
+          "choices": null,
+          "repeatable": true,
+          "description": "set a field by its name (displayName, kind, country, city, address, timezone, latitude, longitude); repeat it. The options below are shortcuts, one field each (ADR-020 D11)."
+        },
+        {
+          "flag": "--displayName",
+          "takesValue": true,
+          "arg": "<s>",
+          "choices": null,
+          "repeatable": false,
+          "description": "the name shown; '' (or --unset) clears this and the other optional fields."
+        },
+        {
+          "flag": "--kind",
+          "takesValue": true,
+          "arg": "site|remote",
+          "choices": [
+            "site",
+            "remote"
+          ],
+          "repeatable": false,
+          "description": "site: this site's own equipment is there; remote: another site's place."
+        },
+        {
+          "flag": "--country",
+          "takesValue": true,
+          "arg": "<CC>",
+          "choices": null,
+          "repeatable": false,
+          "description": "ISO 3166-1 alpha-2 country code."
+        },
+        {
+          "flag": "--city",
+          "takesValue": true,
+          "arg": "<c>",
+          "choices": null,
+          "repeatable": false,
+          "description": "the city."
+        },
+        {
+          "flag": "--address",
+          "takesValue": true,
+          "arg": "<a>",
+          "choices": null,
+          "repeatable": false,
+          "description": "the street address, or the provider and data centre."
+        },
+        {
+          "flag": "--timezone",
+          "takesValue": true,
+          "arg": "<tz>",
+          "choices": null,
+          "repeatable": false,
+          "description": "IANA timezone; on the primary location it is the site's — every node and guest is set to it at the next update."
+        },
+        {
+          "flag": "--latitude",
+          "takesValue": true,
+          "arg": "<deg>",
+          "choices": null,
+          "repeatable": false,
+          "description": "decimal degrees, north positive."
+        },
+        {
+          "flag": "--longitude",
+          "takesValue": true,
+          "arg": "<deg>",
+          "choices": null,
+          "repeatable": false,
+          "description": "decimal degrees, east positive."
+        },
+        {
+          "flag": "--unset",
+          "takesValue": true,
+          "arg": "<f,g>",
+          "choices": null,
+          "repeatable": false,
+          "description": "clear these optional fields: displayName, kind, city, address, timezone, latitude, longitude. The country stays, and so does the primary location's timezone."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "say what would change, in one line; write nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "with --check: the whole resulting site.json, for machines."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "location delete",
+      "keys": [
+        [
+          "location",
+          "delete"
+        ]
+      ],
+      "usage": "location delete <name> [--check]",
+      "note": "(refused for the primary location and for one a peer, room or device names)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "say whether it can go, in one line; write nothing."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "with --check: the whole resulting site.json, for machines."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "node list",
+      "keys": [
+        [
+          "node",
+          "list"
+        ]
+      ],
+      "usage": "node list [--json]",
+      "note": "(the cluster's nodes: their pvehost instances, with their storage pools)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "node add",
+      "keys": [
+        [
+          "node",
+          "add"
+        ]
+      ],
+      "usage": "node add <N> [--adopt <ipv4>] [--asset <a>] [--switch-port <sw>:<p>] [--mac <m>] [--boot-disk <d>] [--boot-mirror <d>] [--boot-filesystem zfs|ext4] [--wan-port <if>|--no-wan] [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--ttl <s>] [--no-reboot] [--config-only [--storage-pools <a,b>]] [--yes]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "N",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--adopt",
+          "takesValue": true,
+          "arg": "<ipv4>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Do not install: join a Proxmox installed by hand, reached as root over ssh at <ipv4> with the cicd key authorized; it moves to the node's management address in the join. The install options (--switch-port, --mac, --boot-*, --ttl) do not apply."
+        },
+        {
+          "flag": "--asset",
+          "takesValue": true,
+          "arg": "<a>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The asset the machine is (asset-manager asset list: a server in stock or placed, in no role): checked before anything is installed, and its recorded cable and MAC stand in for --switch-port and --mac. Blank: once the node has joined, its serial and MACs are matched against the free server assets, and an asset is created (srv-NN) when none matches (ADR-040 D8)."
+        },
+        {
+          "flag": "--switch-port",
+          "takesValue": true,
+          "arg": "<sw>:<p>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The switch and port the machine is cabled to. On a switch TAPPaaS manages, the port is set up as a trunk port, and the machine's MAC is learned there when it boots the installer (blank MAC). On a switch TAPPaaS does not program, configure the port by hand as a trunk port that also carries all the VLAN tagged traffic, and give --mac (blank: the first machine that asks gets the answer)."
+        },
+        {
+          "flag": "--mac",
+          "takesValue": true,
+          "arg": "<m>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The MAC of the cabled card (aa:bb:cc:dd:ee:ff), from the machine's label, its BIOS or its BMC. Blank: learned on --switch-port; with no switch port either, the first machine that asks for an install answer while the boot window is open gets it (a cluster node never does) — keep --ttl short then."
+        },
+        {
+          "flag": "--boot-disk",
+          "takesValue": true,
+          "arg": "<d>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The disk to install Proxmox on (wiped), can be the model name or size if it is unique. Blank: the smallest SSD or NVMe disk, and both when the smallest two are alike (mirrored). ask: chosen on the node's console."
+        },
+        {
+          "flag": "--boot-mirror",
+          "takesValue": true,
+          "arg": "<d>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A second disk to mirror the boot pool onto, named like --boot-disk. Blank: a mirror only when --boot-disk finds two disks alike. none: one disk."
+        },
+        {
+          "flag": "--boot-filesystem",
+          "takesValue": true,
+          "arg": "zfs|ext4",
+          "choices": [
+            "zfs",
+            "ext4"
+          ],
+          "repeatable": false,
+          "description": "The boot disk's filesystem; zfs (default) lets the boot pool carry the guests on a node with no data disk (ADR-037 D1), ext4 only with data disks."
+        },
+        {
+          "flag": "--wan-port",
+          "takesValue": true,
+          "arg": "<if>|--no-wan",
+          "choices": null,
+          "repeatable": false,
+          "description": "the node's WAN interface."
+        },
+        {
+          "flag": "--no-wan",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "the node has no WAN port."
+        },
+        {
+          "flag": "--lan-ports",
+          "takesValue": true,
+          "arg": "<a,b>",
+          "choices": null,
+          "repeatable": false,
+          "description": "the node's lan port(s); two or more bond under lan as lanbond. Default: auto-detected, one port."
+        },
+        {
+          "flag": "--lan-mode",
+          "takesValue": true,
+          "arg": "<m>",
+          "choices": null,
+          "repeatable": false,
+          "description": "active-backup (default for 2+ ports: any switches, any speeds) or lacp (equal speeds; the switch side one LAG)."
+        },
+        {
+          "flag": "--lan-primary",
+          "takesValue": true,
+          "arg": "<if>",
+          "choices": null,
+          "repeatable": false,
+          "description": "active-backup: the port that carries traffic when up (default: the fastest)."
+        },
+        {
+          "flag": "--ttl",
+          "takesValue": true,
+          "arg": "<s>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Seconds the boot window stays open (default 7200)."
+        },
+        {
+          "flag": "--no-reboot",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Do not reboot the node after its first update. By default it reboots into the kernel that update installed, before it takes guests, when the cluster keeps quorum without it."
+        },
+        {
+          "flag": "--config-only",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Only write the node's pvehost record, config/<N>.json (no machine contact)."
+        },
+        {
+          "flag": "--storage-pools",
+          "takesValue": true,
+          "arg": "<a,b>",
+          "choices": null,
+          "repeatable": false,
+          "description": "with --config-only: the pools to record. A node that joins records the zpools found on it; new pools are node storage add."
+        },
+        {
+          "flag": "--yes",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Do not ask for the node's lan ports after the install: one port, auto-detected (also when --wan-port or --no-wan is given)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "joins a node: installs it on a ZFS boot pool (network boot or the USB stick), adds it to the cluster and registers it as a pvehost instance; its data pools are node storage add"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--yes",
+          "consequence": "Do not ask for the node's lan ports after the install: one port, auto-detected (also when --wan-port or --no-wan is given)."
+        }
+      ]
+    },
+    {
+      "verb": "node storage",
+      "keys": [
+        [
+          "node",
+          "storage"
+        ]
+      ],
+      "usage": "node storage <node> [--json]",
+      "note": "(the node's pools, and its disks in no pool — by serial, size, type and model)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "node",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "node storage add",
+      "keys": [
+        [
+          "node",
+          "storage",
+          "add"
+        ]
+      ],
+      "usage": "node storage add <node> <pool> --disks <d,d> --layout single|mirror|raidz1|raidz2 [--wipe]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "node",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "pool",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--disks",
+          "takesValue": true,
+          "arg": "<d,d>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The disks, by serial or /dev/disk/by-id name, as node storage <node> lists them. A kernel name (nvme0n1) is refused: it can change between boots. The boot disk and a disk in a live pool are always refused."
+        },
+        {
+          "flag": "--layout",
+          "takesValue": true,
+          "arg": "single|mirror|raidz1|raidz2",
+          "choices": [
+            "single",
+            "mirror",
+            "raidz1",
+            "raidz2"
+          ],
+          "repeatable": false,
+          "description": "single (1 disk, no redundancy), mirror (2 or more), raidz1 (3 or more, one disk may fail), raidz2 (4 or more, two may fail)."
+        },
+        {
+          "flag": "--wipe",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Erase disks that carry data or an old pool's label. Without it such a disk is a refusal and nothing is erased."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "builds a ZFS data pool on the node's disks and registers it as the node's storage"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "node media",
+      "keys": [
+        [
+          "node",
+          "media"
+        ]
+      ],
+      "usage": "node media [--json]",
+      "note": "(the boot medium on the mothership: whether the netboot assets are staged and current with this version, the installer stick image, and what node media prepare would run)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "node media prepare",
+      "keys": [
+        [
+          "node",
+          "media",
+          "prepare"
+        ]
+      ],
+      "usage": "node media prepare [--force]",
+      "note": null,
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Stage it all again, for a new Proxmox version."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "stages the netboot assets and builds the installer stick image on the mothership"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "Stage it all again, for a new Proxmox version."
+        }
+      ]
+    },
+    {
+      "verb": "node usb",
+      "keys": [
+        [
+          "node",
+          "usb"
+        ]
+      ],
+      "usage": "node usb <node> [--json]",
+      "note": "(the USB sticks plugged into the node — device, size, vendor, model, serial; whether one is in use or is the backup key stick)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "node",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "node usb write",
+      "keys": [
+        [
+          "node",
+          "usb",
+          "write"
+        ]
+      ],
+      "usage": "node usb write <node> <device> --yes",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "node",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "device",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--yes",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Required: the stick is erased. The image is /var/lib/tappaas-pxe/tappaas-usb.iso (node media prepare builds it); a new machine boots the installer from the stick once, where network boot is not an option."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "writes the TAPPaaS installer stick image to a USB stick in the node, erasing it"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--yes",
+          "consequence": "Required: the stick is erased. The image is /var/lib/tappaas-pxe/tappaas-usb.iso (node media prepare builds it); a new machine boots the installer from the stick once, where network boot is not an option."
+        }
+      ]
+    },
+    {
+      "verb": "node delete",
+      "keys": [
+        [
+          "node",
+          "delete"
+        ]
+      ],
+      "usage": "node delete <name> [--apply] [--shutdown | --erase | --lost] [--asset keep|remove] [--archive] [--yes] [--config-only]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--apply",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Remove it from the cluster (pvecm delnode, /etc/pve/nodes/<n>, storage entries, known_hosts, its DNS entry, its switch ports parked); then its node record is deleted and its asset released. Refused while anything holds it; asks for the node name."
+        },
+        {
+          "flag": "--shutdown",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Power the node off first — Proxmox removes a node only once it is off. A node that is already down needs nothing."
+        },
+        {
+          "flag": "--erase",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Before the power-off: destroy its ZFS pools and wipe their disks, wipe the boot disk's partitions and partition table, delete its boot entry. Asks for ERASE as well. Implies --shutdown."
+        },
+        {
+          "flag": "--lost",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "The node is down for good: the guests the cluster still places on it are lost with it (their configs saved on the mothership first), replication jobs touching it are removed, HA rules naming it stay. Refused for a node that answers. Its asset is removed (--asset remove) unless --asset keep is given."
+        },
+        {
+          "flag": "--asset",
+          "takesValue": true,
+          "arg": "keep|remove",
+          "choices": [
+            "keep",
+            "remove"
+          ],
+          "repeatable": false,
+          "description": "The machine's asset. keep (default): released from the node, back in stock or still placed for its next role, its cables recorded. remove: released, then its recorded cables, its placement and its record are removed with the records of the disks it holds (asset-manager's verbs): the machine leaves the site with its disks. The CMDB keeps its history either way."
+        },
+        {
+          "flag": "--archive",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Keep the node's record archived (listed as archived on the modules list) instead of deleting it, for a script that reads it afterwards."
+        },
+        {
+          "flag": "--yes",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "With --apply: no typed confirmation (the node name, and ERASE) — for the web console, which has the node's name typed before Apply, and for a script."
+        },
+        {
+          "flag": "--config-only",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Only delete (or with --archive, archive) the node's record and release its asset; the cluster is not touched."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "apply-flag",
+        "flag": "--apply"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--yes",
+          "consequence": "With --apply: no typed confirmation (the node name, and ERASE) — for the web console, which has the node's name typed before Apply, and for a script."
+        }
+      ]
+    },
+    {
+      "verb": "node reboot",
+      "keys": [
+        [
+          "node",
+          "reboot"
+        ]
+      ],
+      "usage": "node reboot <name> [--apply]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--apply",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Perform the controlled reboot (drain HA services, reboot, rejoin, fail back)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "apply-flag",
+        "flag": "--apply"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "node qdevice add",
+      "keys": [
+        [
+          "node",
+          "qdevice",
+          "add"
+        ]
+      ],
+      "usage": "node qdevice add <host> [--user <u>] [--force] | remove [--user <u>] | status",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "host",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--user",
+          "takesValue": true,
+          "arg": "<u>",
+          "choices": null,
+          "repeatable": false,
+          "description": "How the mothership logs in to the QDevice's host (default tappaas, with sudo; root works too)."
+        },
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Also on an odd number of nodes, which Proxmox does not support."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "adds or removes the cluster's quorum device"
+      },
+      "destructive": false,
+      "destructiveWhen": [
+        "remove"
+      ],
+      "readWhen": [
+        "status"
+      ],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "Also on an odd number of nodes, which Proxmox does not support."
+        }
+      ]
+    },
+    {
+      "verb": "node network show",
+      "keys": [
+        [
+          "node",
+          "network",
+          "show"
+        ]
+      ],
+      "usage": "node network show <node> [--json]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "node",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "The declaration, the probe and the findings as JSON."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "node network set",
+      "keys": [
+        [
+          "node",
+          "network",
+          "set"
+        ]
+      ],
+      "usage": "node network set <node> [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--mtu <n>] [--switch-port <sw>:<p>] [--no-wan | --wan-port <p> [--wan-switch-port <sw>:<p>]] [--switch-wait <s>] [--config-only] [--apply] [--yes]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "node",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--lan-ports",
+          "takesValue": true,
+          "arg": "<a,b>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Ports by name or MAC. One port, or two or more bonded as lanbond."
+        },
+        {
+          "flag": "--lan-mode",
+          "takesValue": true,
+          "arg": "<m>",
+          "choices": null,
+          "repeatable": false,
+          "description": "active-backup (default: any switches, any speeds — 10G + 1G) or lacp (equal speeds; the switch side one LAG: one switch or a stack/MLAG pair)."
+        },
+        {
+          "flag": "--lan-primary",
+          "takesValue": true,
+          "arg": "<if>",
+          "choices": null,
+          "repeatable": false,
+          "description": "active-backup: the port that carries traffic when up (default: the fastest)."
+        },
+        {
+          "flag": "--mtu",
+          "takesValue": true,
+          "arg": "<n>",
+          "choices": null,
+          "repeatable": false,
+          "description": "MTU on the bond and the lan bridge (the switch ports must match)."
+        },
+        {
+          "flag": "--switch-port",
+          "takesValue": true,
+          "arg": "<sw>:<p>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The switch port a lan port being added is cabled to: made the node's trunk on the switch before the node changes (on a switch TAPPaaS programs; on another, set it by hand)."
+        },
+        {
+          "flag": "--no-wan",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "The wan bridge gives up its port, so it can join the lan bond (e.g. a 1G wan port as lan's backup leg). The node can then no longer carry the firewall's WAN; refused while a guest uses the wan bridge."
+        },
+        {
+          "flag": "--wan-port",
+          "takesValue": true,
+          "arg": "<p>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The wan bridge carries <p> (by name or MAC): the reverse of --no-wan, so the firewall's WAN role can move to this node (#849). Not one of the lan ports. Moving the firewall's failover there also takes the network module's HANode and the switch port as an access port in the WAN VLAN (cluster README)."
+        },
+        {
+          "flag": "--wan-switch-port",
+          "takesValue": true,
+          "arg": "<sw>:<p>",
+          "choices": null,
+          "repeatable": false,
+          "description": "With --wan-port: the switch port the WAN cable reaches, made an access port in the WAN zone before the node changes."
+        },
+        {
+          "flag": "--switch-wait",
+          "takesValue": true,
+          "arg": "<s>",
+          "choices": null,
+          "repeatable": false,
+          "description": "With --apply: wait up to <s> seconds (30–1800, default 30) for the change to verify, to configure the switch side meanwhile — e.g. the LAG for lacp, once the node speaks it. Needs the drained node's HA watchdog released."
+        },
+        {
+          "flag": "--config-only",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Declare only, without contacting the node (ports by MAC)."
+        },
+        {
+          "flag": "--apply",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Converge: drain the node (HA maintenance), carry lan on the declared ports under a 45s rollback, confirm from the mothership, bring the node back. One node at a time."
+        },
+        {
+          "flag": "--yes",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Do not ask for the node name."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "apply-flag",
+        "flag": "--apply"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--yes",
+          "consequence": "Do not ask for the node name."
+        }
+      ]
+    },
+    {
+      "verb": "node network test",
+      "keys": [
+        [
+          "node",
+          "network",
+          "test"
+        ]
+      ],
+      "usage": "node network test <node> [--apply] [--yes]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "node",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--apply",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Drain the node, then take each lan leg down for 10s in turn: mgmt and corosync must stay up. A timer on the node restores the leg after 30s whatever happens."
+        },
+        {
+          "flag": "--yes",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Do not ask for the node name."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "apply-flag",
+        "flag": "--apply"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--yes",
+          "consequence": "Do not ask for the node name."
+        }
+      ]
+    },
+    {
+      "verb": "node reconcile",
+      "keys": [
+        [
+          "node",
+          "reconcile"
+        ]
+      ],
+      "usage": "node reconcile [--apply]",
+      "note": null,
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--apply",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Register nodes that joined the cluster (default is preview)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "apply-flag",
+        "flag": "--apply"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "repository list",
+      "keys": [
+        [
+          "repository",
+          "list"
+        ]
+      ],
+      "usage": "repository list [--json]",
+      "note": "(alias: repo)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "repository add",
+      "keys": [
+        [
+          "repository",
+          "add"
+        ]
+      ],
+      "usage": "repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>] [--signer <fp>]... [--unsigned]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "url",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--branch",
+          "takesValue": true,
+          "arg": "<b>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Branch to check out (default stable)."
+        },
+        {
+          "flag": "--managed",
+          "takesValue": true,
+          "arg": "full|tracked",
+          "choices": [
+            "full",
+            "tracked"
+          ],
+          "repeatable": false,
+          "description": "full: carries modules, its catalog is validated; tracked: registered without catalog requirements. The sweep pulls both."
+        },
+        {
+          "flag": "--catalog",
+          "takesValue": true,
+          "arg": "<p>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Path of the module catalog inside the repository."
+        },
+        {
+          "flag": "--signer",
+          "takesValue": true,
+          "arg": "<fp>",
+          "choices": null,
+          "repeatable": true,
+          "description": "ADR-033 D5: the fingerprint of a key the repository's owners sign releases with (ssh-keygen -l), from them, out of band. Once per key. Required on a staging/production branch: its current release must be signed by one of them. Recorded as the entry's trust."
+        },
+        {
+          "flag": "--unsigned",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Add a staging/production branch without signer fingerprints: a repository that signs nothing, or one trusted from the revision cloned now (D9)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "clones the repository into ~/<name> and registers it in site.json"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "repository introduce",
+      "keys": [
+        [
+          "repository",
+          "introduce"
+        ]
+      ],
+      "usage": "repository introduce <name> [--signer <fp>]...",
+      "note": "(ADR-033 D5: check the checkout against its signers' fingerprints and record it)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--signer",
+          "takesValue": true,
+          "arg": "<fp>",
+          "choices": null,
+          "repeatable": true,
+          "description": "A key the owners sign with, from them (once per key). The current release must be signed by one of them; written to site.json once it holds. Without it: the fingerprints already in site.json."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": ""
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "repository modify",
+      "keys": [
+        [
+          "repository",
+          "modify"
+        ]
+      ],
+      "usage": "repository modify <name> [--url <u>] [--branch <b>]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--url",
+          "takesValue": true,
+          "arg": "<u>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Re-point the repo at a new forge/URL in place (e.g. github.com→codeberg.org)."
+        },
+        {
+          "flag": "--branch",
+          "takesValue": true,
+          "arg": "<b>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Switch the checked-out branch."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "changes the repository's URL or branch in site.json (a new URL re-clones it)"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "evacuate",
+      "keys": [
+        [
+          "evacuate"
+        ]
+      ],
+      "usage": "evacuate <node> [--force]",
+      "note": "(clear a node for maintenance, via module-manager per module)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "node",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "authorize an OFFLINE move for guests that cannot migrate live"
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "migrates every guest off the node"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "authorize an OFFLINE move for guests that cannot migrate live"
+        }
+      ]
+    },
+    {
+      "verb": "repository delete",
+      "keys": [
+        [
+          "repository",
+          "delete"
+        ]
+      ],
+      "usage": "repository delete <name> [--force]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Forward to repository.sh remove --force."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "unregisters the repository and removes its clone"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "Forward to repository.sh remove --force."
+        }
+      ]
+    },
+    {
+      "verb": "repository stash",
+      "keys": [
+        [
+          "repository",
+          "stash"
+        ]
+      ],
+      "usage": "repository stash [list [<name>] | show <name> <sha> | restore <name> <sha> | discard <name> <sha>]",
+      "note": "(the local changes a sync set aside — listed with their age, inspectable, restorable, discardable)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "show",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "sha",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Confirm a discard. Dropping a stash entry cannot be undone, so `discard` refuses without it."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "restores or discards a stash the update kept"
+      },
+      "destructive": false,
+      "destructiveWhen": [
+        "discard"
+      ],
+      "readWhen": [
+        "list",
+        "show"
+      ],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "Confirm a discard. Dropping a stash entry cannot be undone, so `discard` refuses without it."
+        }
+      ]
+    },
+    {
+      "verb": "repository reconcile",
+      "keys": [
+        [
+          "repository",
+          "reconcile"
+        ]
+      ],
+      "usage": "repository reconcile [--apply]",
+      "note": "(presence and branch; how far behind origin is reported, and `sync` closes it)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--apply",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Commit (default is preview)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "apply-flag",
+        "flag": "--apply"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "repository sync",
+      "keys": [
+        [
+          "repository",
+          "sync"
+        ]
+      ],
+      "usage": "repository sync <name> [--dry-run]",
+      "note": "(one repository to its branch tip, without the sweep; deploys no module)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--dry-run",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Report the commits, any pending migration and the installed modules it would move; change nothing."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--dry-run"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "repository hold",
+      "keys": [
+        [
+          "repository",
+          "hold"
+        ]
+      ],
+      "usage": "repository hold <name> --reason <text> [--until <30m|12h|7d|ISO date>]",
+      "note": "(the scheduled sweep skips this repository's pull until the hold expires)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--reason",
+          "takesValue": true,
+          "arg": "<text>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Why the pull is held (shown in every sweep log)."
+        },
+        {
+          "flag": "--until",
+          "takesValue": true,
+          "arg": "<30m|12h|7d|ISO date>",
+          "choices": null,
+          "repeatable": false,
+          "description": "When the hold expires (default 24h); the next sweep then pulls again."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "holds the repository at its current commit in site.json: the update leaves it"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "repository release",
+      "keys": [
+        [
+          "repository",
+          "release"
+        ]
+      ],
+      "usage": "repository release <name>",
+      "note": "(end a hold now)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "ends the hold in site.json"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "add",
+      "keys": [
+        [
+          "add"
+        ]
+      ],
+      "usage": "add --name <site-code> [--organization <org>] [create-site options]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "create-site",
+          "optional": true,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--name",
+          "takesValue": true,
+          "arg": "<site-code>",
+          "choices": null,
+          "repeatable": false,
+          "description": "REQUIRED. Site code = the Proxmox cluster name."
+        },
+        {
+          "flag": "--organization",
+          "takesValue": true,
+          "arg": "<org>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Default organization/environment/zone (default: --name)."
+        },
+        {
+          "flag": "--domain",
+          "takesValue": true,
+          "arg": "<d>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Public domain (per environment; not written to site.json)."
+        },
+        {
+          "flag": "--branch",
+          "takesValue": true,
+          "arg": "<b>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Git branch to track (default: stable)."
+        },
+        {
+          "flag": "--upstream-git",
+          "takesValue": true,
+          "arg": "<url>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Module-catalog git repo (default: codeberg.org/TAPPaaS/TAPPaaS)."
+        },
+        {
+          "flag": "--email",
+          "takesValue": true,
+          "arg": "<addr>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Admin email (default: Proxmox root@pam / existing)."
+        },
+        {
+          "flag": "--primary-node",
+          "takesValue": true,
+          "arg": "<fqdn>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Node to discover the cluster from (default: tappaas1)."
+        },
+        {
+          "flag": "--schedule",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Update frequency: monthly|weekly|daily|none (default: daily)."
+        },
+        {
+          "flag": "--weekday",
+          "takesValue": true,
+          "arg": "<Day>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Weekday for weekly/monthly updates (default: Tuesday)."
+        },
+        {
+          "flag": "--hour",
+          "takesValue": true,
+          "arg": "<H>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Hour of day 0-23 (default: 2)."
+        },
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Overwrite an existing site.json."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "creates config/site.json from the running cluster"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "Overwrite an existing site.json."
+        }
+      ]
+    },
+    {
+      "verb": "validate",
+      "keys": [
+        [
+          "validate"
+        ]
+      ],
+      "usage": "validate [FILE] [--schema-dir PATH]",
+      "note": null,
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--schema-dir",
+          "takesValue": true,
+          "arg": "PATH",
+          "choices": null,
+          "repeatable": false,
+          "description": "Directory holding site-fields.json (default: derived)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "reconcile",
+      "keys": [
+        [
+          "reconcile"
+        ]
+      ],
+      "usage": "reconcile [--apply] [--deep]",
+      "note": null,
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--apply",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Commit (default is preview)."
+        },
+        {
+          "flag": "--deep",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Cascade people → network → (every) environment."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "apply-flag",
+        "flag": "--apply"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "update",
+      "keys": [
+        [
+          "update"
+        ]
+      ],
+      "usage": "update [--dry-run] [--force] [--allow-disruption] [--no-git-pull] | update --stop",
+      "note": "(run the whole-site update sweep NOW — packages update-tappaas)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--dry-run",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Preview the update plan; change nothing."
+        },
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Update every module even when its pre-update test failed fatally, or its status is archived/external. Never reboots anything."
+        },
+        {
+          "flag": "--allow-disruption",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Open the downtime window for this run: a module with rebootOk may be rebooted or migrated offline, the others keep their disruptive changes deferred. Never overrides rebootOk:false — that is `module-manager module update <m> --allow-disruption`."
+        },
+        {
+          "flag": "--no-git-pull",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Update whatever is checked out; skip pulling each repository (test local, not-yet-pushed changes)."
+        },
+        {
+          "flag": "--stop",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Stop the running update gracefully: the module in progress finishes, the rest are skipped (the next update takes them), and the run is recorded as interrupted. Ctrl-C only stops following a run; `sudo systemctl stop update-tappaas.service` stops it at once, without rolling back the module in progress."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--dry-run"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "Update every module even when its pre-update test failed fatally, or its status is archived/external. Never reboots anything."
+        },
+        {
+          "flag": "--allow-disruption",
+          "consequence": "Open the downtime window for this run: a module with rebootOk may be rebooted or migrated offline, the others keep their disruptive changes deferred. Never overrides rebootOk:false — that is `module-manager module update <m> --allow-disruption`."
+        }
+      ]
+    },
+    {
+      "verb": "report",
+      "keys": [
+        [
+          "report"
+        ]
+      ],
+      "usage": "report [--json] [--discover]",
+      "note": "(ADR-040: send the site, its locations, the cluster, its nodes and guests to the CMDB, and each lan uplink leg's cable with its bond as redundancyGroup)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the report instead of sending it; with uplink legs the switch inventory places, an array: the site's report, then one per leg."
+        },
+        {
+          "flag": "--discover",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Full depth (D15), one more read per node: every NIC and disk, ZFS layouts, storages, PCI devices, guests' NICs, corosync links."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "test",
+      "keys": [
+        [
+          "test"
+        ]
+      ],
+      "usage": "test [--deep] [--verbose]",
+      "note": "(run every deployed module's tests, from every repository; one line per module, each module's output in ~/logs/site-test-<time>/)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--deep",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Forward --deep to each module test (heavy / regression suite; creates real VMs)."
+        },
+        {
+          "flag": "--verbose",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print every module test's whole output as it runs, instead of one line per module."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output for list/show."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [
+        {
+          "flag": "--deep",
+          "touches": "runs the deep suite: creates and removes zztest guests"
+        }
+      ],
+      "disruptions": []
+    }
+  ]
+}

@@ -1,0 +1,142 @@
+{
+  "id": "ffcae78f-b85c-434a-a1aa-b3cf547c326f",
+  "class": "storage-pool",
+  "ancestors": [
+    "storage-pool",
+    "storage-element",
+    "ci",
+    "object"
+  ],
+  "name": "rpool",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T19:48:31.009Z",
+  "ended": null,
+  "lastSeen": "2026-10-31T10:27:27.925Z",
+  "seen": {
+    "site-manager": "2026-10-31T10:27:23.029Z",
+    "storage-manager": "2026-10-31T10:27:27.925Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-30T19:50:00.102Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "rpool: zfs ONLINE",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-11-01T07:35:02.582Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "flapping": false,
+          "rootCause": null,
+          "lastChecked": "2026-11-01T07:35:02.582Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-30T19:50:00.102Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "rpool: 1% used",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-11-01T08:36:23.484Z"
+    },
+    "drift": {
+      "value": {
+        "since": "2026-10-30T23:01:04.966Z",
+        "source": "sweep",
+        "desired": null,
+        "attributes": {
+          "size": {
+            "now": 482811711488,
+            "was": 482811707392
+          },
+          "→runs-on machine/tappaas4": {
+            "now": {},
+            "was": null
+          }
+        }
+      },
+      "source": "cmdb-controller",
+      "since": "2026-10-31T08:23:56.058Z"
+    },
+    "size": {
+      "value": 482811711488,
+      "source": "storage-manager",
+      "since": "2026-10-31T05:15:57.368Z"
+    },
+    "type": {
+      "value": "zfs",
+      "source": "storage-manager",
+      "since": "2026-10-30T19:48:31.009Z"
+    },
+    "used": {
+      "value": 3605757952,
+      "source": "storage-manager",
+      "since": "2026-10-31T10:27:27.925Z"
+    },
+    "vdevs": {
+      "value": [
+        {
+          "name": "disk",
+          "state": "ONLINE",
+          "members": [
+            {
+              "state": "ONLINE",
+              "device": "/dev/sda3",
+              "serial": "S6PYNL0Y209497N"
+            }
+          ]
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T00:00:32.049Z"
+    },
+    "zfsState": {
+      "value": "ONLINE",
+      "source": "storage-manager",
+      "since": "2026-10-30T19:48:31.009Z"
+    }
+  },
+  "drift": {
+    "since": "2026-10-30T23:01:04.966Z",
+    "source": "sweep",
+    "desired": null,
+    "attributes": {
+      "size": {
+        "now": 482811711488,
+        "was": 482811707392
+      },
+      "→runs-on machine/tappaas4": {
+        "now": {},
+        "was": null
+      }
+    }
+  },
+  "relations": []
+}

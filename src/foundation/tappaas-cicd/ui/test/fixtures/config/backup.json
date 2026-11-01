@@ -1,0 +1,32 @@
+{
+  "description": "TAPPaaS Proxmox Backup Server configuration",
+  "version": "1.0.0",
+  "releaseDate": "2026-08-09",
+  "installTime": "20260809-20:54:17",
+  "updateTime": "20261101-02:08:49",
+  "status": "Testing",
+  "kind": "application",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/foundation/backup",
+  "environment": "mgmt",
+  "vmtag": "TAPPaaS,Foundation",
+  "node": "tappaas3",
+  "storage": "tankc1",
+  "placementState": "node",
+  "pbsStorageName": "tappaas_backup",
+  "pbsUrl": "backup.mgmt.internal",
+  "backup": {
+    "enabled": true,
+    "exclude": [],
+    "retention": "7y"
+  },
+  "imageType": "apt",
+  "image": "pbs",
+  "imageLocation": "http://download.proxmox.com/debian/pbs",
+  "zone0": "mgmt",
+  "dependsOn": [],
+  "provides": [
+    "vm",
+    "filesystem"
+  ],
+  "stack": "foundation"
+}

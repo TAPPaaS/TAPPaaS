@@ -1,0 +1,69 @@
+{
+  "id": "55940bab-fd23-4c10-b483-e51aed96f695",
+  "class": "network-device",
+  "ancestors": [
+    "network-device",
+    "asset",
+    "resource",
+    "object"
+  ],
+  "name": "sw-07",
+  "displayName": "mtB",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-30T19:34:15.316Z",
+  "ended": "2026-10-31T07:32:01.329Z",
+  "lastSeen": "2026-10-31T07:32:01.329Z",
+  "seen": {
+    "asset-manager": "2026-10-31T07:32:01.329Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T07:30:02.146Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T07:25:02.913Z"
+    },
+    "deviceType": {
+      "value": "switch",
+      "source": "asset-manager",
+      "since": "2026-10-30T19:34:15.316Z"
+    },
+    "displayName": {
+      "value": "mtB",
+      "source": "asset-manager",
+      "since": "2026-10-30T19:34:15.316Z"
+    },
+    "faulty": {
+      "value": false,
+      "source": "asset-manager",
+      "since": "2026-10-30T19:34:15.316Z"
+    },
+    "stage": {
+      "value": "disposed",
+      "source": "asset-manager",
+      "since": "2026-10-31T07:32:01.329Z"
+    },
+    "vendor": {
+      "value": "mtk",
+      "source": "asset-manager",
+      "since": "2026-10-30T19:34:15.316Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

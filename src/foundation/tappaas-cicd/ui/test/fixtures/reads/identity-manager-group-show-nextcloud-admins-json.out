@@ -1,0 +1,9 @@
+{
+  "name": "nextcloud-admins",
+  "origin": "module nextcloud",
+  "declaredBy": {
+    "file": "nextcloud.json",
+    "key": "identity"
+  },
+  "editable": false
+}

@@ -1,0 +1,1278 @@
+{
+  "manifest": 1,
+  "name": "health-manager",
+  "version": "0.1.0",
+  "tagline": "TAPPaaS cluster health manager (read-only)",
+  "common": [
+    {
+      "flag": "--config-dir",
+      "takesValue": true,
+      "arg": "DIR",
+      "choices": null,
+      "repeatable": false,
+      "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+    }
+  ],
+  "verbs": [
+    {
+      "verb": "validate",
+      "keys": [
+        [
+          "validate"
+        ]
+      ],
+      "usage": "validate [--live] [--threshold PCT] [--memory-threshold PCT] [--json] [--config-dir DIR]",
+      "note": null,
+      "details": "Reads the conditions the last assess wrote (ADR-041): the gates' table, and exit 1 on any critical\ncondition that is neither derived, acknowledged nor in maintenance. With no recent assess, or a\nthreshold given, it assesses first; with no CMDB it runs the gates itself.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--live",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Run assess first: the planes as they are now, not as of the last run."
+        },
+        {
+          "flag": "--threshold",
+          "takesValue": true,
+          "arg": "PCT",
+          "choices": null,
+          "repeatable": false,
+          "description": "Disk-usage threshold percent (default 80)."
+        },
+        {
+          "flag": "--memory-threshold",
+          "takesValue": true,
+          "arg": "PCT",
+          "choices": null,
+          "repeatable": false,
+          "description": "Committed-memory percent of a node's physical RAM before the gate fails (default 100)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print every gate as JSON: status, detail and its findings, each with the module, node, pool, disk or peer it is about."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "capacity",
+      "keys": [
+        [
+          "capacity"
+        ]
+      ],
+      "usage": "capacity [--install <instance> | --room-for <module> | --drain <node>] [--memory-threshold PCT] [--json] [--config-dir DIR]",
+      "note": null,
+      "details": "What each node commits once the update has converged every guest: a VM at its configured memory, a container at its highest use of the last week plus 25% (at least 512 MB, at most its limit). Growth that does not fit under the threshold is held: named, and the update keeps that module at its current memory; everything else goes ahead. A node already over that nothing grows, and growth that fits, warn. Exit 1 only when the module being installed would take its node to the threshold. The update sweep's and install-module's pre-flight.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--install",
+          "takesValue": true,
+          "arg": "<instance>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Count this deployed config's memory as new on its node (install-module, before the guest exists)."
+        },
+        {
+          "flag": "--room-for",
+          "takesValue": true,
+          "arg": "<module>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Instead: would starting this suspended module fit on its node, and which pauseOk modules there — lowest pausePriority first — would make it fit (#891). Exit 1 when even that does not."
+        },
+        {
+          "flag": "--drain",
+          "takesValue": true,
+          "arg": "<node>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Instead: would this node's HA guests fit on the other nodes for its reboot, and which pauseOk modules would make them fit. Exit 1 when even that does not."
+        },
+        {
+          "flag": "--memory-threshold",
+          "takesValue": true,
+          "arg": "PCT",
+          "choices": null,
+          "repeatable": false,
+          "description": "Percent of a node's RAM the projected commitment must stay under (default 100)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the result as JSON, with `held`: the modules whose growth does not fit (module, node, from, to in bytes)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "guests",
+      "keys": [
+        [
+          "guests"
+        ]
+      ],
+      "usage": "guests [<node>] [--json] [--config-dir DIR]",
+      "note": null,
+      "details": "Each guest's memory, declared and used as the balloon reports it, and the ZFS volumes behind it, by module. One node, or every node.",
+      "positionals": [
+        {
+          "name": "node",
+          "optional": true,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the node's document, or { nodes: [...] } for every node."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "update-os",
+      "keys": [
+        [
+          "update-os"
+        ]
+      ],
+      "usage": "update-os <name> <vmid> <node>",
+      "note": null,
+      "details": "Patches the VM's OS (NixOS rebuild / apt) through update-os.sh; may reboot it.",
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "vmid",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "node",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "patches the guest's OS packages and reboots it if they need it"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "scan security",
+      "keys": [
+        [
+          "scan",
+          "security"
+        ]
+      ],
+      "usage": "scan security [--if-new-sweep] [--notify]",
+      "note": null,
+      "details": "Inventories every target — the mothership, each module's VM or container, the containers\nrunning inside them (by registry digest), the nodes and the firewall — and matches each\nagainst its layer's CVE source (ADR-011 v0.3). Read-only on every target. Writes\n~/config/sbom/site.cdx.json (CycloneDX) and ~/config/sbom/cve-status.json; the previous\nstatus is kept as cve-status.previous.json. Runs after every sweep (tappaas-security-scan).",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--if-new-sweep",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Scan only when a sweep has written a result since the last scan (the unit's mode)."
+        },
+        {
+          "flag": "--notify",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Mail the site owner when a fixable CVE or a failed scan is new since the last scan."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "runs the security scan and writes config/sbom"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "scan nix-list",
+      "keys": [
+        [
+          "scan",
+          "nix-list"
+        ]
+      ],
+      "usage": "scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update] [--no-vex]",
+      "note": null,
+      "details": "Matches a package list against the CVE database as if it ran (#788): the release train's\n`tappaas-train preview` uses it for the packages the NEXT nixpkgs pin would bring, which\nnothing runs yet. Same CPE rule, matcher and VEX as `scan security`; writes nothing.\nPrints {\"findings\": [{id, severity, pkg, installed, fixed, purl}], \"suppressed\": [...], \"error\": \"\"}:\n`suppressed` holds what a VEX statement decided.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--components",
+          "takesValue": true,
+          "arg": "<file>",
+          "choices": null,
+          "repeatable": false,
+          "description": "JSON array of {name, version} — the packages to match (required)."
+        },
+        {
+          "flag": "--nixpkgs",
+          "takesValue": true,
+          "arg": "<path>",
+          "choices": null,
+          "repeatable": false,
+          "description": "The nixpkgs whose CPE vendors to use: the pin being previewed (default: the installed one)."
+        },
+        {
+          "flag": "--no-db-update",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Match against the grype database as it is, without refreshing it first."
+        },
+        {
+          "flag": "--no-vex",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Apply no VEX statement (by default the ones `scan security` applies: <module>-vex.json)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "scans a component list"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "scan images",
+      "keys": [
+        [
+          "scan",
+          "images"
+        ]
+      ],
+      "usage": "scan images --refs <file> [--no-db-update] [--no-vex]",
+      "note": null,
+      "details": "Scans container images by registry reference, none of which has to run here (#788): the\nrelease preview compares a past release's images with the next one's. trivy fetches each\nimage (layers are cached). Same VEX as `scan security`. Writes nothing. Prints\n{\"<ref>\": {\"findings\": [...], \"suppressed\": [...], \"error\": \"\"}}.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--refs",
+          "takesValue": true,
+          "arg": "<file>",
+          "choices": null,
+          "repeatable": false,
+          "description": "JSON array of image references (`<image>:<tag>` or `<image>@sha256:…`) (required)."
+        },
+        {
+          "flag": "--no-db-update",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Match against the trivy database as it is, without refreshing it first."
+        },
+        {
+          "flag": "--no-vex",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Apply no VEX statement (by default the ones `scan security` applies)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "scans container images"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "report",
+      "keys": [
+        [
+          "report"
+        ]
+      ],
+      "usage": "report [--json] [--from <file>] [--discover]",
+      "note": null,
+      "details": "`assess` under the name every cmdbSource answers to.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the report instead of sending it."
+        },
+        {
+          "flag": "--from",
+          "takesValue": true,
+          "arg": "<file>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Take the gates from this `validate --json` output instead of running them."
+        },
+        {
+          "flag": "--discover",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Accepted for the CMDB's sweep (ADR-040 D15); the report is already its full depth."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "assess",
+      "keys": [
+        [
+          "assess"
+        ]
+      ],
+      "usage": "assess [--only <ci>] [--json] [--dry-run] [--timing] [--threshold PCT] [--memory-threshold PCT] [--config-dir DIR]",
+      "note": null,
+      "details": "Gathers what the gates, Grafana's open alerts, the last sweep, thresholds over the CMDB's\nobservations and the CVE scan say, derives impact and root causes along the relations, and\nwrites conditions on every object in one report. The only writer of conditions. Each failure\nstands until the source that raised it has looked again.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--only",
+          "takesValue": true,
+          "arg": "<ci>",
+          "choices": null,
+          "repeatable": false,
+          "description": "One object, by id or name: alerts, sweep, thresholds and the scan speak for it and no gate runs; impact and root causes are worked out again. The alert receiver's call."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the objects' conditions, the root causes and the transitions."
+        },
+        {
+          "flag": "--dry-run",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Work it all out and write nothing."
+        },
+        {
+          "flag": "--timing",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print each phase's duration on stderr as it ends: the CMDB reads, every gate, the alerts, sweep and scan, the working out and the write."
+        },
+        {
+          "flag": "--threshold",
+          "takesValue": true,
+          "arg": "PCT",
+          "choices": null,
+          "repeatable": false,
+          "description": "Disk-usage threshold percent (default 80)."
+        },
+        {
+          "flag": "--memory-threshold",
+          "takesValue": true,
+          "arg": "PCT",
+          "choices": null,
+          "repeatable": false,
+          "description": "Committed-memory percent of a node's physical RAM (default 100)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "rules list|check",
+      "keys": [
+        [
+          "rules",
+          "list"
+        ],
+        [
+          "rules",
+          "check"
+        ]
+      ],
+      "usage": "rules list|check [--file F] [--json]",
+      "note": null,
+      "details": "The correlation rules of metamodel/health-rules.json (ADR-041 D3). check exits 1 on a rule it cannot place.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--file",
+          "takesValue": true,
+          "arg": "F",
+          "choices": null,
+          "repeatable": false,
+          "description": "check: this candidate file instead of the rules in use."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the rules, or the problems."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "report security",
+      "keys": [
+        [
+          "report",
+          "security"
+        ]
+      ],
+      "usage": "report security [--all] [--json]",
+      "note": null,
+      "details": "Prints the last scan: per target its coverage, counts and verdict — ACT, SCAN FAILED,\ntriage (Nix), watch — then what to act on.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--all",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "List every finding to act on, not the first ten per target."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print cve-status.json as it is."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "reboot",
+      "keys": [
+        [
+          "reboot"
+        ]
+      ],
+      "usage": "reboot <module>",
+      "note": null,
+      "details": "Reboots the module's VM (or restarts its container) and waits until the module can serve —\nthe reboot update-os takes after a rebuild, on demand, without updating. For a guest validate\nreports as pending-reboot.",
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "reboots the module's guest"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "alerts",
+      "keys": [
+        [
+          "alerts"
+        ]
+      ],
+      "usage": "alerts [--module M] [--host H] [--node N] [--json]",
+      "note": null,
+      "details": "The site's alerts (ADR-039): open — state alerts firing now, from Grafana on the logging VM;\nrecent — event alerts of the last 24 hours, from the mothership's alert receiver. Each is\nplaced on the module, machine or node it is about. The heartbeat is never listed.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--module",
+          "takesValue": true,
+          "arg": "M",
+          "choices": null,
+          "repeatable": false,
+          "description": "Only what is about this module: its rules' alerts and its instances' hosts."
+        },
+        {
+          "flag": "--host",
+          "takesValue": true,
+          "arg": "H",
+          "choices": null,
+          "repeatable": false,
+          "description": "Only alerts on this host (a vmname)."
+        },
+        {
+          "flag": "--node",
+          "takesValue": true,
+          "arg": "N",
+          "choices": null,
+          "repeatable": false,
+          "description": "Only alerts on this node (a pvehost instance)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the alerts as JSON, each with the object it is about."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "emit",
+      "keys": [
+        [
+          "emit"
+        ]
+      ],
+      "usage": "emit [--since <time>] [--json]",
+      "note": null,
+      "details": "One event per condition transition since the last run (ADR-041 D4), as a JSON line in the\njournal, identifier tappaas-health; the ack, maintenance and rootcause events beside them.\nTracks flapping, and ends acks and maintenance windows when they expire. Runs after every\nassess (health-assess.timer). The cursor is config/.health-emit-cursor.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--since",
+          "takesValue": true,
+          "arg": "<time>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Tell every transition after this time again, whatever the cursor says (mails too). An ISO time, or back from now: 30m, 2h, 7d."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the events as a JSON array as well."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "writes health events to the journal"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "ack",
+      "keys": [
+        [
+          "ack"
+        ]
+      ],
+      "usage": "ack <ci> [--type <t>] --note <n> [--until <time>] [--sticky]",
+      "note": null,
+      "details": "The condition keeps its status and stops counting for validate, mails and the Overview. On a\nroot cause its impact conditions are silenced with it, while the root's ack holds.",
+      "positionals": [
+        {
+          "name": "ci",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--type",
+          "takesValue": true,
+          "arg": "<t>",
+          "choices": null,
+          "repeatable": false,
+          "description": "This condition only (default: every one that is not ok)."
+        },
+        {
+          "flag": "--note",
+          "takesValue": true,
+          "arg": "<n>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Why (required)."
+        },
+        {
+          "flag": "--until",
+          "takesValue": true,
+          "arg": "<time>",
+          "choices": null,
+          "repeatable": false,
+          "description": "When it ends (default: when the condition recovers). An ISO time, or from now: 30m, 2h, 7d."
+        },
+        {
+          "flag": "--sticky",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Keep it through status changes, until the condition is ok; without this the next status change ends it."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "acknowledges conditions in the CMDB"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "unack",
+      "keys": [
+        [
+          "unack"
+        ]
+      ],
+      "usage": "unack <ci> [--type <t>]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "ci",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--type",
+          "takesValue": true,
+          "arg": "<t>",
+          "choices": null,
+          "repeatable": false,
+          "description": "This condition only (default: all of the object's)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "ends acknowledgements in the CMDB"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "maintenance",
+      "keys": [
+        [
+          "maintenance"
+        ]
+      ],
+      "usage": "maintenance <ci> --until <time> --note <n>",
+      "note": null,
+      "details": "Transitions on the object are recorded and told, never mailed or counted.",
+      "positionals": [
+        {
+          "name": "ci",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--until",
+          "takesValue": true,
+          "arg": "<time>",
+          "choices": null,
+          "repeatable": false,
+          "description": "When the window ends (required). An ISO time, or from now: 30m, 2h, 7d."
+        },
+        {
+          "flag": "--note",
+          "takesValue": true,
+          "arg": "<n>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Why (required)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "opens a maintenance window in the CMDB"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "maintenance end",
+      "keys": [
+        [
+          "maintenance",
+          "end"
+        ]
+      ],
+      "usage": "maintenance end <ci>",
+      "note": null,
+      "details": "The work is done: the window closes early.",
+      "positionals": [
+        {
+          "name": "ci",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "ends a maintenance window"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "maintenance cancel",
+      "keys": [
+        [
+          "maintenance",
+          "cancel"
+        ]
+      ],
+      "usage": "maintenance cancel <ci>",
+      "note": null,
+      "details": "The work did not happen: the window is withdrawn.",
+      "positionals": [
+        {
+          "name": "ci",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "cancels a maintenance window"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "show",
+      "keys": [
+        [
+          "show"
+        ]
+      ],
+      "usage": "show <ci> [--json]",
+      "note": null,
+      "details": "An object's conditions, since when, its root cause or what it impacts, and its acks. <ci> is an id, a name or <class>/<name>.",
+      "positionals": [
+        {
+          "name": "ci",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the object's conditions, root causes and impacts as JSON."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "list",
+      "keys": [
+        [
+          "list"
+        ]
+      ],
+      "usage": "list [--type <t>] [--status <s>] [--class <c>] [--root-causes] [--json]",
+      "note": null,
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--type",
+          "takesValue": true,
+          "arg": "<t>",
+          "choices": null,
+          "repeatable": false,
+          "description": "This condition type."
+        },
+        {
+          "flag": "--status",
+          "takesValue": true,
+          "arg": "<s>",
+          "choices": null,
+          "repeatable": false,
+          "description": "This status (default: everything that is not ok)."
+        },
+        {
+          "flag": "--class",
+          "takesValue": true,
+          "arg": "<c>",
+          "choices": null,
+          "repeatable": false,
+          "description": "This class and its subclasses."
+        },
+        {
+          "flag": "--root-causes",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Only the root causes' conditions."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the rows as JSON."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "roots",
+      "keys": [
+        [
+          "roots"
+        ]
+      ],
+      "usage": "roots [--json]",
+      "note": null,
+      "details": "The current root causes (the site object's rootCauses), most impact first, each with what it impacts.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the root causes as JSON."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "history",
+      "keys": [
+        [
+          "history"
+        ]
+      ],
+      "usage": "history <ci> [--since <time>] [--json]",
+      "note": null,
+      "details": "An object's condition transitions, from the CMDB's attribute history.",
+      "positionals": [
+        {
+          "name": "ci",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--since",
+          "takesValue": true,
+          "arg": "<time>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Only what came after. An ISO time, or back from now: 30m, 2h, 7d."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the transitions as JSON."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    }
+  ]
+}

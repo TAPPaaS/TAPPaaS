@@ -1,0 +1,27 @@
+{
+  "id": "de3f8d31-76ba-47c6-bbe2-7fda6d6bc221",
+  "class": "node",
+  "ancestors": [
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "s4",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T19:33:34.113Z",
+  "ended": null,
+  "lastSeen": null,
+  "seen": {},
+  "at": null,
+  "attributes": {
+    "placeholder": {
+      "value": true,
+      "source": "asset-manager",
+      "since": "2026-10-30T19:33:34.113Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

@@ -1,0 +1,124 @@
+{
+  "id": "6348879f-cd95-4292-90be-a280b2312731",
+  "class": "vm",
+  "ancestors": [
+    "vm",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "test-fw-iot",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-31T20:27:22.087Z",
+  "ended": "2026-11-01T08:26:58.915Z",
+  "lastSeen": "2026-11-01T08:26:58.915Z",
+  "seen": {
+    "operator": "2026-11-01T08:26:58.915Z",
+    "module-manager": "2026-10-31T20:27:22.087Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T20:30:00.750Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-11-01T00:04:45.410Z",
+          "reason": "sweep-missing",
+          "source": "health-manager",
+          "status": "critical",
+          "derived": false,
+          "message": "vm/test-fw-iot: desired without actual",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-31T20:30:00.750Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T20:30:00.750Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T20:30:00.750Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T20:30:00.750Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-11-01T00:04:45.410Z"
+    },
+    "description": {
+      "value": "Source-NAT test VM — subnet-filtering device in the testIot zone (network/test.sh --deep, ADR-016)",
+      "source": "module-manager",
+      "since": "2026-10-31T20:27:22.087Z"
+    },
+    "desired": {
+      "value": {
+        "file": "test-fw-iot.json"
+      },
+      "source": "module-manager",
+      "since": "2026-10-31T20:27:22.087Z"
+    },
+    "release": {
+      "value": {
+        "module": "tmp.Lq53pKR0Ha",
+        "version": "0.1"
+      },
+      "source": "module-manager",
+      "since": "2026-10-31T20:27:22.087Z"
+    },
+    "stage": {
+      "value": "retired",
+      "source": "operator",
+      "since": "2026-11-01T08:26:58.915Z"
+    },
+    "state": {
+      "value": "unknown",
+      "source": "module-manager",
+      "since": "2026-10-31T20:27:22.087Z"
+    },
+    "vmid": {
+      "value": 924,
+      "source": "module-manager",
+      "since": "2026-10-31T20:27:22.087Z"
+    },
+    "zone": {
+      "value": "testIot",
+      "source": "module-manager",
+      "since": "2026-10-31T20:27:22.087Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

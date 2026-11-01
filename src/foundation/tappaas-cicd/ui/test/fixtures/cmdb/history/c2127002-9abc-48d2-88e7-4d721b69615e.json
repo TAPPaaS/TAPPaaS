@@ -1,0 +1,174 @@
+{
+ "id": "c2127002-9abc-48d2-88e7-4d721b69615e",
+ "class": "network-device",
+ "name": "ap-04",
+ "created": "2026-10-30T19:35:30.671Z",
+ "ended": "2026-10-31T07:32:01.329Z",
+ "attributes": [
+  {
+   "name": "deviceType",
+   "value": "access-point",
+   "source": "asset-manager",
+   "change": 754,
+   "from": "2026-10-30T19:35:30.671Z",
+   "to": null
+  },
+  {
+   "name": "displayName",
+   "value": "Nano HD",
+   "source": "asset-manager",
+   "change": 754,
+   "from": "2026-10-30T19:35:30.671Z",
+   "to": null
+  },
+  {
+   "name": "faulty",
+   "value": false,
+   "source": "asset-manager",
+   "change": 754,
+   "from": "2026-10-30T19:35:30.671Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "stock",
+   "source": "asset-manager",
+   "change": 754,
+   "from": "2026-10-30T19:35:30.671Z",
+   "to": "2026-10-30T19:35:37.666Z"
+  },
+  {
+   "name": "vendor",
+   "value": "manual",
+   "source": "asset-manager",
+   "change": 754,
+   "from": "2026-10-30T19:35:30.671Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "operational",
+   "source": "asset-manager",
+   "change": 755,
+   "from": "2026-10-30T19:35:37.666Z",
+   "to": "2026-10-30T19:35:38.101Z"
+  },
+  {
+   "name": "stage",
+   "value": "stock",
+   "source": "asset-manager",
+   "change": 757,
+   "from": "2026-10-30T19:35:38.101Z",
+   "to": "2026-10-31T07:32:01.329Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:30:02.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1355,
+   "from": "2026-10-31T07:25:02.913Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "disposed",
+   "source": "asset-manager",
+   "change": 1384,
+   "from": "2026-10-31T07:32:01.329Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 569,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "161a0c6b-e193-4c51-8b26-23775470876e",
+    "class": "device",
+    "name": "Nano HD"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 756,
+   "from": "2026-10-30T19:35:37.681Z",
+   "to": "2026-10-30T19:35:38.101Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 754,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset add",
+   "actor": "tappaas",
+   "time": "2026-10-30T19:35:30.671Z",
+   "drift": false
+  },
+  {
+   "id": 755,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset allocate",
+   "actor": "tappaas",
+   "time": "2026-10-30T19:35:37.666Z",
+   "drift": false
+  },
+  {
+   "id": 756,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset allocate",
+   "actor": "tappaas",
+   "time": "2026-10-30T19:35:37.681Z",
+   "drift": false
+  },
+  {
+   "id": 757,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset release",
+   "actor": "tappaas",
+   "time": "2026-10-30T19:35:38.101Z",
+   "drift": false
+  },
+  {
+   "id": 1355,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:25:02.913Z",
+   "drift": false
+  },
+  {
+   "id": 1384,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "end test fixtures 2026-10-31",
+   "actor": null,
+   "time": "2026-10-31T07:32:01.329Z",
+   "drift": false
+  }
+ ]
+}

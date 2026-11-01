@@ -1,0 +1,947 @@
+{
+  "id": "f3a464df-94c5-42ce-9a3c-68d0cf2f0302",
+  "class": "server",
+  "ancestors": [
+    "server",
+    "asset",
+    "resource",
+    "object"
+  ],
+  "name": "srv-01",
+  "displayName": "tappaas1",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-30T08:49:10.799Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.621Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.173Z",
+    "asset-manager": "2026-11-01T08:52:20.621Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "follows",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": true,
+          "message": "follows machine tappaas1",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T11:45:03.903Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T11:45:03.903Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T11:45:03.903Z"
+    },
+    "cpu": {
+      "value": "AMD EPYC 4464P 12-Core Processor",
+      "source": "site-manager",
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    "disks": {
+      "value": [
+        {
+          "bus": "sata",
+          "wwn": "0x5000c500fdb4c263",
+          "name": "ata-ST12000VN0008-3MH101_ZZ30MJL6",
+          "size": 12000138625024,
+          "type": "hdd",
+          "holds": "nothing",
+          "model": "ST12000VN0008-3MH101",
+          "device": "/dev/sda",
+          "health": "PASSED",
+          "serial": "ZZ30MJL6",
+          "vendor": "ATA",
+          "partitions": [
+            {
+              "pool": "tankb1",
+              "size": 12000128139264,
+              "holds": "zfs",
+              "device": "/dev/sda1"
+            },
+            {
+              "size": 8388608,
+              "holds": "zfs",
+              "device": "/dev/sda9"
+            }
+          ]
+        },
+        {
+          "bus": "nvme",
+          "wwn": "eui.0025384a51a33cfb",
+          "name": "nvme-Samsung_SSD_990_PRO_4TB_S7DPNU0YA10709Z",
+          "size": 4000787030016,
+          "type": "nvme",
+          "holds": "nothing",
+          "model": "Samsung SSD 990 PRO 4TB",
+          "device": "/dev/nvme1n1",
+          "health": "PASSED",
+          "serial": "S7DPNU0YA10709Z",
+          "vendor": "unknown",
+          "partitions": [
+            {
+              "pool": "tanka1",
+              "size": 4000776716288,
+              "holds": "zfs",
+              "device": "/dev/nvme1n1p1"
+            },
+            {
+              "size": 8388608,
+              "holds": "zfs",
+              "device": "/dev/nvme1n1p9"
+            }
+          ]
+        },
+        {
+          "bus": "nvme",
+          "wwn": "eui.0025384b5140498f",
+          "name": "nvme-Samsung_SSD_990_PRO_with_Heatsink_4TB_S7DSNJ0YB04294X",
+          "size": 4000787030016,
+          "type": "nvme",
+          "holds": "nothing",
+          "model": "Samsung SSD 990 PRO with Heatsink 4TB",
+          "device": "/dev/nvme2n1",
+          "health": "PASSED",
+          "serial": "S7DSNJ0YB04294X",
+          "vendor": "unknown",
+          "partitions": [
+            {
+              "pool": "tanka1",
+              "size": 4000776716288,
+              "holds": "zfs",
+              "device": "/dev/nvme2n1p1"
+            },
+            {
+              "size": 8388608,
+              "holds": "zfs",
+              "device": "/dev/nvme2n1p9"
+            }
+          ]
+        },
+        {
+          "bus": "nvme",
+          "wwn": "eui.e8238fa6bf530001001b448b43658108",
+          "name": "nvme-WD_BLACK_SN7100_1TB_260923802321",
+          "size": 1000204886016,
+          "type": "nvme",
+          "holds": "nothing",
+          "model": "WD_BLACK SN7100 1TB",
+          "device": "/dev/nvme0n1",
+          "health": "PASSED",
+          "serial": "260923802321",
+          "vendor": "unknown",
+          "partitions": [
+            {
+              "size": 1031168,
+              "holds": "bios-boot",
+              "device": "/dev/nvme0n1p1"
+            },
+            {
+              "size": 1073741824,
+              "holds": "efi",
+              "device": "/dev/nvme0n1p2"
+            },
+            {
+              "size": 999130078720,
+              "holds": "lvm",
+              "device": "/dev/nvme0n1p3"
+            }
+          ]
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T11:38:00.928Z"
+    },
+    "displayName": {
+      "value": "tappaas1",
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    "drift": {
+      "value": {
+        "since": "2026-10-31T09:52:00.815Z",
+        "source": "sweep",
+        "desired": null,
+        "attributes": {
+          "disks": {
+            "now": [
+              {
+                "bus": "sata",
+                "wwn": "0x5000c500fdb4c263",
+                "name": "ata-ST12000VN0008-3MH101_ZZ30MJL6",
+                "size": 12000138625024,
+                "type": "hdd",
+                "holds": "nothing",
+                "model": "ST12000VN0008-3MH101",
+                "device": "/dev/sda",
+                "health": "PASSED",
+                "serial": "ZZ30MJL6",
+                "vendor": "ATA",
+                "partitions": [
+                  {
+                    "pool": "tankb1",
+                    "size": 12000128139264,
+                    "holds": "zfs",
+                    "device": "/dev/sda1"
+                  },
+                  {
+                    "size": 8388608,
+                    "holds": "zfs",
+                    "device": "/dev/sda9"
+                  }
+                ]
+              },
+              {
+                "bus": "nvme",
+                "wwn": "eui.0025384a51a33cfb",
+                "name": "nvme-Samsung_SSD_990_PRO_4TB_S7DPNU0YA10709Z",
+                "size": 4000787030016,
+                "type": "nvme",
+                "holds": "nothing",
+                "model": "Samsung SSD 990 PRO 4TB",
+                "device": "/dev/nvme1n1",
+                "health": "PASSED",
+                "serial": "S7DPNU0YA10709Z",
+                "vendor": "unknown",
+                "partitions": [
+                  {
+                    "pool": "tanka1",
+                    "size": 4000776716288,
+                    "holds": "zfs",
+                    "device": "/dev/nvme1n1p1"
+                  },
+                  {
+                    "size": 8388608,
+                    "holds": "zfs",
+                    "device": "/dev/nvme1n1p9"
+                  }
+                ]
+              },
+              {
+                "bus": "nvme",
+                "wwn": "eui.0025384b5140498f",
+                "name": "nvme-Samsung_SSD_990_PRO_with_Heatsink_4TB_S7DSNJ0YB04294X",
+                "size": 4000787030016,
+                "type": "nvme",
+                "holds": "nothing",
+                "model": "Samsung SSD 990 PRO with Heatsink 4TB",
+                "device": "/dev/nvme2n1",
+                "health": "PASSED",
+                "serial": "S7DSNJ0YB04294X",
+                "vendor": "unknown",
+                "partitions": [
+                  {
+                    "pool": "tanka1",
+                    "size": 4000776716288,
+                    "holds": "zfs",
+                    "device": "/dev/nvme2n1p1"
+                  },
+                  {
+                    "size": 8388608,
+                    "holds": "zfs",
+                    "device": "/dev/nvme2n1p9"
+                  }
+                ]
+              },
+              {
+                "bus": "nvme",
+                "wwn": "eui.e8238fa6bf530001001b448b43658108",
+                "name": "nvme-WD_BLACK_SN7100_1TB_260923802321",
+                "size": 1000204886016,
+                "type": "nvme",
+                "holds": "nothing",
+                "model": "WD_BLACK SN7100 1TB",
+                "device": "/dev/nvme0n1",
+                "health": "PASSED",
+                "serial": "260923802321",
+                "vendor": "unknown",
+                "partitions": [
+                  {
+                    "size": 1031168,
+                    "holds": "bios-boot",
+                    "device": "/dev/nvme0n1p1"
+                  },
+                  {
+                    "size": 1073741824,
+                    "holds": "efi",
+                    "device": "/dev/nvme0n1p2"
+                  },
+                  {
+                    "size": 999130078720,
+                    "holds": "lvm",
+                    "device": "/dev/nvme0n1p3"
+                  }
+                ]
+              }
+            ],
+            "was": [
+              {
+                "bus": "nvme",
+                "wwn": "eui.e8238fa6bf530001001b448b43658108",
+                "name": "nvme-WD_BLACK_SN7100_1TB_260923802321",
+                "size": 1000204886016,
+                "type": "nvme",
+                "holds": "nothing",
+                "model": "WD_BLACK SN7100 1TB",
+                "smart": {
+                  "mediaErrors": 0,
+                  "powerOnHours": 807,
+                  "criticalWarning": 0
+                },
+                "device": "/dev/nvme0n1",
+                "health": "PASSED",
+                "serial": "260923802321",
+                "vendor": "unknown",
+                "wearout": 100,
+                "partitions": [
+                  {
+                    "size": 1031168,
+                    "holds": "bios-boot",
+                    "device": "/dev/nvme0n1p1"
+                  },
+                  {
+                    "size": 1073741824,
+                    "holds": "efi",
+                    "device": "/dev/nvme0n1p2"
+                  },
+                  {
+                    "size": 999130078720,
+                    "holds": "lvm",
+                    "device": "/dev/nvme0n1p3"
+                  }
+                ],
+                "temperature": 34
+              },
+              {
+                "bus": "nvme",
+                "wwn": "eui.0025384a51a33cfb",
+                "name": "nvme-Samsung_SSD_990_PRO_4TB_S7DPNU0YA10709Z",
+                "size": 4000787030016,
+                "type": "nvme",
+                "holds": "nothing",
+                "model": "Samsung SSD 990 PRO 4TB",
+                "smart": {
+                  "mediaErrors": 0,
+                  "powerOnHours": 2523,
+                  "criticalWarning": 0
+                },
+                "device": "/dev/nvme1n1",
+                "health": "PASSED",
+                "serial": "S7DPNU0YA10709Z",
+                "vendor": "unknown",
+                "wearout": 99,
+                "partitions": [
+                  {
+                    "pool": "tanka1",
+                    "size": 4000776716288,
+                    "holds": "zfs",
+                    "device": "/dev/nvme1n1p1"
+                  },
+                  {
+                    "size": 8388608,
+                    "holds": "zfs",
+                    "device": "/dev/nvme1n1p9"
+                  }
+                ],
+                "temperature": 44
+              },
+              {
+                "bus": "nvme",
+                "wwn": "eui.0025384b5140498f",
+                "name": "nvme-Samsung_SSD_990_PRO_with_Heatsink_4TB_S7DSNJ0YB04294X",
+                "size": 4000787030016,
+                "type": "nvme",
+                "holds": "nothing",
+                "model": "Samsung SSD 990 PRO with Heatsink 4TB",
+                "smart": {
+                  "mediaErrors": 0,
+                  "powerOnHours": 2630,
+                  "criticalWarning": 0
+                },
+                "device": "/dev/nvme2n1",
+                "health": "PASSED",
+                "serial": "S7DSNJ0YB04294X",
+                "vendor": "unknown",
+                "wearout": 99,
+                "partitions": [
+                  {
+                    "pool": "tanka1",
+                    "size": 4000776716288,
+                    "holds": "zfs",
+                    "device": "/dev/nvme2n1p1"
+                  },
+                  {
+                    "size": 8388608,
+                    "holds": "zfs",
+                    "device": "/dev/nvme2n1p9"
+                  }
+                ],
+                "temperature": 43
+              },
+              {
+                "bus": "sata",
+                "wwn": "0x5000c500fdb4c263",
+                "name": "ata-ST12000VN0008-3MH101_ZZ30MJL6",
+                "size": 12000138625024,
+                "type": "hdd",
+                "holds": "nothing",
+                "model": "ST12000VN0008-3MH101",
+                "smart": {
+                  "pending": 0,
+                  "reallocated": 0,
+                  "powerOnHours": 2802,
+                  "uncorrectable": 0
+                },
+                "device": "/dev/sda",
+                "health": "PASSED",
+                "serial": "ZZ30MJL6",
+                "vendor": "ATA",
+                "partitions": [
+                  {
+                    "pool": "tankb1",
+                    "size": 12000128139264,
+                    "holds": "zfs",
+                    "device": "/dev/sda1"
+                  },
+                  {
+                    "size": 8388608,
+                    "holds": "zfs",
+                    "device": "/dev/sda9"
+                  }
+                ],
+                "temperature": 36
+              }
+            ]
+          }
+        }
+      },
+      "source": "cmdb-controller",
+      "since": "2026-10-31T11:39:34.958Z"
+    },
+    "faulty": {
+      "value": false,
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    "memory": {
+      "value": 63326,
+      "source": "site-manager",
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    "nics": {
+      "value": [
+        {
+          "mac": "4a:17:60:04:42:03",
+          "kind": "rj45",
+          "link": false,
+          "name": "enx4a1760044203",
+          "operstate": "down"
+        },
+        {
+          "mac": "30:c5:99:56:2b:6f",
+          "kind": "rj45",
+          "link": false,
+          "name": "nic0",
+          "speed": "2.5g",
+          "maxMbps": 2500,
+          "operstate": "down"
+        },
+        {
+          "mac": "00:07:43:38:aa:f0",
+          "bond": "lanbond",
+          "kind": "sfp",
+          "link": true,
+          "name": "nic2",
+          "speed": "10g",
+          "bridge": "lan",
+          "maxMbps": 10000,
+          "linkSpeed": "10g",
+          "operstate": "up"
+        },
+        {
+          "mac": "00:07:43:38:aa:f8",
+          "bond": "lanbond",
+          "kind": "sfp",
+          "link": true,
+          "name": "nic3",
+          "speed": "10g",
+          "bridge": "lan",
+          "maxMbps": 10000,
+          "linkSpeed": "10g",
+          "operstate": "up"
+        },
+        {
+          "mac": "30:c5:99:56:2b:70",
+          "kind": "rj45",
+          "link": true,
+          "name": "nic4",
+          "speed": "10g",
+          "bridge": "wan",
+          "maxMbps": 10000,
+          "linkSpeed": "10g",
+          "operstate": "up"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T08:21:43.213Z"
+    },
+    "stage": {
+      "value": "operational",
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    }
+  },
+  "drift": {
+    "since": "2026-10-31T09:52:00.815Z",
+    "source": "sweep",
+    "desired": null,
+    "attributes": {
+      "disks": {
+        "now": [
+          {
+            "bus": "sata",
+            "wwn": "0x5000c500fdb4c263",
+            "name": "ata-ST12000VN0008-3MH101_ZZ30MJL6",
+            "size": 12000138625024,
+            "type": "hdd",
+            "holds": "nothing",
+            "model": "ST12000VN0008-3MH101",
+            "device": "/dev/sda",
+            "health": "PASSED",
+            "serial": "ZZ30MJL6",
+            "vendor": "ATA",
+            "partitions": [
+              {
+                "pool": "tankb1",
+                "size": 12000128139264,
+                "holds": "zfs",
+                "device": "/dev/sda1"
+              },
+              {
+                "size": 8388608,
+                "holds": "zfs",
+                "device": "/dev/sda9"
+              }
+            ]
+          },
+          {
+            "bus": "nvme",
+            "wwn": "eui.0025384a51a33cfb",
+            "name": "nvme-Samsung_SSD_990_PRO_4TB_S7DPNU0YA10709Z",
+            "size": 4000787030016,
+            "type": "nvme",
+            "holds": "nothing",
+            "model": "Samsung SSD 990 PRO 4TB",
+            "device": "/dev/nvme1n1",
+            "health": "PASSED",
+            "serial": "S7DPNU0YA10709Z",
+            "vendor": "unknown",
+            "partitions": [
+              {
+                "pool": "tanka1",
+                "size": 4000776716288,
+                "holds": "zfs",
+                "device": "/dev/nvme1n1p1"
+              },
+              {
+                "size": 8388608,
+                "holds": "zfs",
+                "device": "/dev/nvme1n1p9"
+              }
+            ]
+          },
+          {
+            "bus": "nvme",
+            "wwn": "eui.0025384b5140498f",
+            "name": "nvme-Samsung_SSD_990_PRO_with_Heatsink_4TB_S7DSNJ0YB04294X",
+            "size": 4000787030016,
+            "type": "nvme",
+            "holds": "nothing",
+            "model": "Samsung SSD 990 PRO with Heatsink 4TB",
+            "device": "/dev/nvme2n1",
+            "health": "PASSED",
+            "serial": "S7DSNJ0YB04294X",
+            "vendor": "unknown",
+            "partitions": [
+              {
+                "pool": "tanka1",
+                "size": 4000776716288,
+                "holds": "zfs",
+                "device": "/dev/nvme2n1p1"
+              },
+              {
+                "size": 8388608,
+                "holds": "zfs",
+                "device": "/dev/nvme2n1p9"
+              }
+            ]
+          },
+          {
+            "bus": "nvme",
+            "wwn": "eui.e8238fa6bf530001001b448b43658108",
+            "name": "nvme-WD_BLACK_SN7100_1TB_260923802321",
+            "size": 1000204886016,
+            "type": "nvme",
+            "holds": "nothing",
+            "model": "WD_BLACK SN7100 1TB",
+            "device": "/dev/nvme0n1",
+            "health": "PASSED",
+            "serial": "260923802321",
+            "vendor": "unknown",
+            "partitions": [
+              {
+                "size": 1031168,
+                "holds": "bios-boot",
+                "device": "/dev/nvme0n1p1"
+              },
+              {
+                "size": 1073741824,
+                "holds": "efi",
+                "device": "/dev/nvme0n1p2"
+              },
+              {
+                "size": 999130078720,
+                "holds": "lvm",
+                "device": "/dev/nvme0n1p3"
+              }
+            ]
+          }
+        ],
+        "was": [
+          {
+            "bus": "nvme",
+            "wwn": "eui.e8238fa6bf530001001b448b43658108",
+            "name": "nvme-WD_BLACK_SN7100_1TB_260923802321",
+            "size": 1000204886016,
+            "type": "nvme",
+            "holds": "nothing",
+            "model": "WD_BLACK SN7100 1TB",
+            "smart": {
+              "mediaErrors": 0,
+              "powerOnHours": 807,
+              "criticalWarning": 0
+            },
+            "device": "/dev/nvme0n1",
+            "health": "PASSED",
+            "serial": "260923802321",
+            "vendor": "unknown",
+            "wearout": 100,
+            "partitions": [
+              {
+                "size": 1031168,
+                "holds": "bios-boot",
+                "device": "/dev/nvme0n1p1"
+              },
+              {
+                "size": 1073741824,
+                "holds": "efi",
+                "device": "/dev/nvme0n1p2"
+              },
+              {
+                "size": 999130078720,
+                "holds": "lvm",
+                "device": "/dev/nvme0n1p3"
+              }
+            ],
+            "temperature": 34
+          },
+          {
+            "bus": "nvme",
+            "wwn": "eui.0025384a51a33cfb",
+            "name": "nvme-Samsung_SSD_990_PRO_4TB_S7DPNU0YA10709Z",
+            "size": 4000787030016,
+            "type": "nvme",
+            "holds": "nothing",
+            "model": "Samsung SSD 990 PRO 4TB",
+            "smart": {
+              "mediaErrors": 0,
+              "powerOnHours": 2523,
+              "criticalWarning": 0
+            },
+            "device": "/dev/nvme1n1",
+            "health": "PASSED",
+            "serial": "S7DPNU0YA10709Z",
+            "vendor": "unknown",
+            "wearout": 99,
+            "partitions": [
+              {
+                "pool": "tanka1",
+                "size": 4000776716288,
+                "holds": "zfs",
+                "device": "/dev/nvme1n1p1"
+              },
+              {
+                "size": 8388608,
+                "holds": "zfs",
+                "device": "/dev/nvme1n1p9"
+              }
+            ],
+            "temperature": 44
+          },
+          {
+            "bus": "nvme",
+            "wwn": "eui.0025384b5140498f",
+            "name": "nvme-Samsung_SSD_990_PRO_with_Heatsink_4TB_S7DSNJ0YB04294X",
+            "size": 4000787030016,
+            "type": "nvme",
+            "holds": "nothing",
+            "model": "Samsung SSD 990 PRO with Heatsink 4TB",
+            "smart": {
+              "mediaErrors": 0,
+              "powerOnHours": 2630,
+              "criticalWarning": 0
+            },
+            "device": "/dev/nvme2n1",
+            "health": "PASSED",
+            "serial": "S7DSNJ0YB04294X",
+            "vendor": "unknown",
+            "wearout": 99,
+            "partitions": [
+              {
+                "pool": "tanka1",
+                "size": 4000776716288,
+                "holds": "zfs",
+                "device": "/dev/nvme2n1p1"
+              },
+              {
+                "size": 8388608,
+                "holds": "zfs",
+                "device": "/dev/nvme2n1p9"
+              }
+            ],
+            "temperature": 43
+          },
+          {
+            "bus": "sata",
+            "wwn": "0x5000c500fdb4c263",
+            "name": "ata-ST12000VN0008-3MH101_ZZ30MJL6",
+            "size": 12000138625024,
+            "type": "hdd",
+            "holds": "nothing",
+            "model": "ST12000VN0008-3MH101",
+            "smart": {
+              "pending": 0,
+              "reallocated": 0,
+              "powerOnHours": 2802,
+              "uncorrectable": 0
+            },
+            "device": "/dev/sda",
+            "health": "PASSED",
+            "serial": "ZZ30MJL6",
+            "vendor": "ATA",
+            "partitions": [
+              {
+                "pool": "tankb1",
+                "size": 12000128139264,
+                "holds": "zfs",
+                "device": "/dev/sda1"
+              },
+              {
+                "size": 8388608,
+                "holds": "zfs",
+                "device": "/dev/sda9"
+              }
+            ],
+            "temperature": 36
+          }
+        ]
+      }
+    }
+  },
+  "relations": [
+    {
+      "id": 457,
+      "type": "allocated-to",
+      "direction": "out",
+      "other": {
+        "id": "c11c3e17-fe34-4bd7-bed6-6f8b259469c8",
+        "class": "machine",
+        "name": "tappaas1"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.989Z"
+    },
+    {
+      "id": 612,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "36966139-8326-4110-9283-b7c1d31330a5",
+        "class": "disk",
+        "name": "dsk-01"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    {
+      "id": 613,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "e023ba3b-f973-417f-b52a-8d9fb31c3864",
+        "class": "disk",
+        "name": "dsk-02"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    {
+      "id": 614,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "0608c77b-780e-4485-9f3e-0a887e6defbe",
+        "class": "disk",
+        "name": "dsk-03"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    {
+      "id": 615,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "ccf76bf7-f037-4e90-879e-36384f3ef653",
+        "class": "disk",
+        "name": "dsk-04"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    {
+      "id": 470,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "a43e5599-1653-4048-9f9d-491135003650",
+        "class": "port",
+        "name": "enx4a1760044203"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    {
+      "id": 471,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "56423fd3-a54d-42f2-b0c3-6e6e012dd539",
+        "class": "port",
+        "name": "nic0"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    {
+      "id": 472,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "5815e989-de17-41a7-9a97-ad81eee29cdd",
+        "class": "port",
+        "name": "nic2"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    {
+      "id": 473,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "bb2845b0-3cd3-43cf-9fb8-f53956076f03",
+        "class": "port",
+        "name": "nic3"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    {
+      "id": 474,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "ed2b21b4-e6c0-4f52-a9fe-f5417d6ab637",
+        "class": "port",
+        "name": "nic4"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    {
+      "id": 444,
+      "type": "placed-in",
+      "direction": "out",
+      "other": {
+        "id": "73a0f756-f569-4eaa-8508-bec8ac7ac791",
+        "class": "rack",
+        "name": "rack1"
+      },
+      "attributes": {
+        "u": 1,
+        "face": "front",
+        "slot": 0,
+        "width": "half",
+        "height": 11,
+        "faceplate": "generic/server-2u",
+        "description": "placeholder position, set by the operator"
+      },
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "jellyfin-admins",
+  "origin": "module jellyfin",
+  "declaredBy": {
+    "file": "jellyfin.json",
+    "key": "identity"
+  },
+  "editable": false
+}

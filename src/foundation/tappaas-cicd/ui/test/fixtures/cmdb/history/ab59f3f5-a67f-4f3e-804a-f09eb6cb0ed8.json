@@ -1,0 +1,657 @@
+{
+ "id": "ab59f3f5-a67f-4f3e-804a-f09eb6cb0ed8",
+ "class": "network-device",
+ "name": "sw-02",
+ "created": "2026-10-30T08:49:10.799Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "deviceType",
+   "value": "switch",
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "name": "displayName",
+   "value": "crs-a",
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "name": "faulty",
+   "value": false,
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "name": "model",
+   "value": "CRS317-1G-16S+",
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "operational",
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "name": "vendor",
+   "value": "mikrotik",
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "name": "ports",
+   "value": 17,
+   "source": "switch-manager",
+   "change": 23,
+   "from": "2026-10-30T08:49:11.217Z",
+   "to": null
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-30T12:58:06.962Z",
+    "source": "sweep",
+    "desired": null,
+    "attributes": {
+     "\u2192allocated-to device/crs-a": {
+      "now": null,
+      "was": {}
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 305,
+   "from": "2026-10-30T12:58:06.962Z",
+   "to": "2026-10-30T14:34:19.677Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-30T12:59:36.103Z",
+     "reason": "sweep-gone",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "network-device/sw-02: drift: gone \u2192allocated-to device/crs-a",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T14:32:46.038Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 307,
+   "from": "2026-10-30T12:59:36.103Z",
+   "to": "2026-10-30T14:35:49.161Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-30T12:58:06.962Z",
+    "source": "sweep",
+    "desired": null,
+    "attributes": {
+     "\u2192allocated-to device/crs-a": {
+      "now": {},
+      "was": null
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 412,
+   "from": "2026-10-30T14:34:19.677Z",
+   "to": "2026-10-31T21:25:37.316Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-30T14:35:49.161Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "network-device/sw-02: drift: appeared \u2192allocated-to device/crs-a",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:00:51.500Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 414,
+   "from": "2026-10-30T14:35:49.161Z",
+   "to": "2026-10-31T00:04:27.092Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:04:27.092Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1080,
+   "from": "2026-10-31T00:04:27.092Z",
+   "to": "2026-10-31T07:25:02.913Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "follows",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": true,
+     "message": "follows device crs-a",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:04:27.092Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1355,
+   "from": "2026-10-31T07:25:02.913Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 408,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "b646ca35-a3a1-4d7b-8a14-389fc9a11fc0",
+    "class": "port",
+    "name": "sfp-sfpplus3"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 409,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "421a432a-f9af-4720-a416-cc7884b360a7",
+    "class": "port",
+    "name": "sfp-sfpplus4"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 412,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "bda50ad8-b945-4443-97c7-f815209a5d49",
+    "class": "port",
+    "name": "sfp-sfpplus7"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 413,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "b33593cf-2f8b-4e08-88fb-67b75e785822",
+    "class": "port",
+    "name": "sfp-sfpplus8"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 414,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "3ded763d-70e8-4a0e-9be5-78d125c9bc58",
+    "class": "port",
+    "name": "sfp-sfpplus9"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 411,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "6cf38efb-183a-4e81-ba61-a76954fdd0d1",
+    "class": "port",
+    "name": "sfp-sfpplus6"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 416,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "ba2054df-acb4-4087-b0ff-af5ade3ebb6f",
+    "class": "port",
+    "name": "sfp-sfpplus11"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 417,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "b8bb5a11-92f8-45ed-9dd0-b52c08d59f7a",
+    "class": "port",
+    "name": "sfp-sfpplus12"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 418,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "673bfe64-3468-4f85-b76b-08a80cb83a72",
+    "class": "port",
+    "name": "sfp-sfpplus13"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 422,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "1659ba75-6043-4674-8fad-3d945515ef19",
+    "class": "port",
+    "name": "ether1"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 410,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "346eb830-be45-441e-8ad0-7b377e635680",
+    "class": "port",
+    "name": "sfp-sfpplus5"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 407,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "5d21fd00-da79-4049-abf7-23d1e79c239e",
+    "class": "port",
+    "name": "sfp-sfpplus2"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 419,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "9932371d-3515-4f8d-a919-565329de8121",
+    "class": "port",
+    "name": "sfp-sfpplus14"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 420,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "771520f8-8603-4127-ae0a-411b6be5973a",
+    "class": "port",
+    "name": "sfp-sfpplus15"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 421,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "a8a3ccd4-21eb-4fed-b8b9-522fa786bafb",
+    "class": "port",
+    "name": "sfp-sfpplus16"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 448,
+   "type": "placed-in",
+   "direction": "out",
+   "other": {
+    "id": "73a0f756-f569-4eaa-8508-bec8ac7ac791",
+    "class": "rack",
+    "name": "rack1"
+   },
+   "attributes": {
+    "u": 24,
+    "face": "front",
+    "slot": 0,
+    "width": "full",
+    "height": 1,
+    "faceplate": "mikrotik/crs317-1g-16s",
+    "description": "placeholder position, set by the operator"
+   },
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 461,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+    "class": "device",
+    "name": "crs-a"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 19,
+   "from": "2026-10-30T08:49:11.019Z",
+   "to": "2026-10-30T12:58:06.772Z"
+  },
+  {
+   "id": 548,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+    "class": "device",
+    "name": "crs-a"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 378,
+   "from": "2026-10-30T14:32:14.815Z",
+   "to": "2026-10-30T19:33:05.436Z"
+  },
+  {
+   "id": 559,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "20689a4e-8826-48ad-8e78-a07dc257489c",
+    "class": "node",
+    "name": "usw"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 720,
+   "from": "2026-10-30T19:33:05.436Z",
+   "to": "2026-10-31T00:02:55.629Z"
+  },
+  {
+   "id": 608,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+    "class": "device",
+    "name": "crs-a"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 1066,
+   "from": "2026-10-31T00:02:55.629Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 10,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:49:10.799Z",
+   "drift": false
+  },
+  {
+   "id": 19,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:49:11.019Z",
+   "drift": false
+  },
+  {
+   "id": 23,
+   "kind": "observation",
+   "source": "switch-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:49:11.217Z",
+   "drift": true
+  },
+  {
+   "id": 305,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-30T12:58:06.962Z",
+   "drift": true
+  },
+  {
+   "id": 307,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T12:59:36.103Z",
+   "drift": false
+  },
+  {
+   "id": 378,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T14:32:14.815Z",
+   "drift": false
+  },
+  {
+   "id": 412,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-30T14:34:19.677Z",
+   "drift": true
+  },
+  {
+   "id": 414,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T14:35:49.161Z",
+   "drift": false
+  },
+  {
+   "id": 720,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset allocate",
+   "actor": "tappaas",
+   "time": "2026-10-30T19:33:05.436Z",
+   "drift": false
+  },
+  {
+   "id": 1066,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T00:02:55.629Z",
+   "drift": false
+  },
+  {
+   "id": 1080,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T00:04:27.092Z",
+   "drift": false
+  },
+  {
+   "id": 1355,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:25:02.913Z",
+   "drift": false
+  },
+  {
+   "id": 6891,
+   "kind": "change",
+   "source": "switch-manager",
+   "job": null,
+   "verb": "switch-manager reconcile --apply",
+   "actor": "tappaas",
+   "time": "2026-10-31T21:25:37.316Z",
+   "drift": false
+  }
+ ]
+}

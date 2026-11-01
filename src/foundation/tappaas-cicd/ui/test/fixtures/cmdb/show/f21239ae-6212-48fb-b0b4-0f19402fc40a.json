@@ -1,0 +1,173 @@
+{
+  "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+  "class": "disk",
+  "ancestors": [
+    "disk",
+    "resource",
+    "object"
+  ],
+  "name": "dsk-09",
+  "displayName": "ata-HGST_HDN726050ALE614_NAHW317X",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-31T09:50:50.296Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.621Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.173Z",
+    "asset-manager": "2026-11-01T08:52:20.621Z"
+  },
+  "at": null,
+  "attributes": {
+    "bay": {
+      "value": "ata-HGST_HDN726050ALE614_NAHW317X",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "bus": {
+      "value": "sata",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T09:52:08.978Z",
+          "reason": "zfs",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": false,
+          "message": "dsk-09 (ata-HGST_HDN726050ALE614_NAHW317X): ZFS DEGRADED in tankc1 (errors); SMART: 534 reallocated, 64 pending, 1675 uncorrectable sectors",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T09:52:08.978Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T09:52:08.978Z"
+    },
+    "displayName": {
+      "value": "ata-HGST_HDN726050ALE614_NAHW317X",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "faulty": {
+      "value": false,
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "health": {
+      "value": "PASSED",
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "holds": {
+      "value": "nothing",
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "kind": {
+      "value": "hdd",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "model": {
+      "value": "HGST_HDN726050ALE614",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "partitions": {
+      "value": [
+        {
+          "pool": "tankc1",
+          "size": 5000971419648,
+          "holds": "zfs",
+          "device": "/dev/sdb1"
+        },
+        {
+          "size": 8388608,
+          "holds": "zfs",
+          "device": "/dev/sdb9"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "serial": {
+      "value": "NAHW317X",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "size": {
+      "value": 5000981078016,
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "smart": {
+      "value": {
+        "pending": 64,
+        "reallocated": 534,
+        "powerOnHours": 66272,
+        "uncorrectable": 1675
+      },
+      "source": "site-manager",
+      "since": "2026-11-01T08:27:46.806Z"
+    },
+    "stage": {
+      "value": "placed",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "temperature": {
+      "value": 41,
+      "source": "site-manager",
+      "since": "2026-11-01T08:02:33.034Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 630,
+      "type": "built-on",
+      "direction": "in",
+      "other": {
+        "id": "0a7d1804-da8c-415e-879c-b077276ae2cd",
+        "class": "storage-pool",
+        "name": "tankc1"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    {
+      "id": 620,
+      "type": "part-of",
+      "direction": "out",
+      "other": {
+        "id": "a82f521b-2cc5-45a5-9cde-aac82a64ee45",
+        "class": "server",
+        "name": "srv-03"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T09:50:50.296Z"
+    }
+  ]
+}

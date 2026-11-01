@@ -1,0 +1,206 @@
+{
+  "module": "backup",
+  "dependsOn": [],
+  "integratesWith": [],
+  "fields": {
+    "backup": {
+      "value": "{\"enabled\":true,\"exclude\":[],\"retention\":\"7y\"}",
+      "defaulted": false,
+      "literal": "{\"enabled\":true,\"exclude\":[],\"retention\":\"7y\"}",
+      "notTracking": true
+    },
+    "dependsOn": {
+      "value": "[]",
+      "defaulted": false,
+      "literal": "[]",
+      "notTracking": false
+    },
+    "description": {
+      "value": "TAPPaaS Proxmox Backup Server configuration",
+      "defaulted": false,
+      "literal": "TAPPaaS Proxmox Backup Server configuration",
+      "notTracking": false
+    },
+    "environment": {
+      "value": "mgmt",
+      "defaulted": false,
+      "literal": "mgmt",
+      "notTracking": true
+    },
+    "image": {
+      "value": "pbs",
+      "defaulted": false,
+      "literal": "pbs",
+      "notTracking": false
+    },
+    "imageLocation": {
+      "value": "http://download.proxmox.com/debian/pbs",
+      "defaulted": false,
+      "literal": "http://download.proxmox.com/debian/pbs",
+      "notTracking": false
+    },
+    "imageType": {
+      "value": "apt",
+      "defaulted": false,
+      "literal": "apt",
+      "notTracking": false
+    },
+    "installTime": {
+      "value": "20260809-20:54:17",
+      "defaulted": false,
+      "literal": "20260809-20:54:17",
+      "notTracking": true
+    },
+    "kind": {
+      "value": "application",
+      "defaulted": false,
+      "literal": "application",
+      "notTracking": false
+    },
+    "management": {
+      "value": "managed",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "moduleSource": {
+      "value": "/home/tappaas/TAPPaaS/src/foundation/backup",
+      "defaulted": false,
+      "literal": "/home/tappaas/TAPPaaS/src/foundation/backup",
+      "notTracking": true
+    },
+    "node": {
+      "value": "tappaas3",
+      "defaulted": false,
+      "literal": "tappaas3",
+      "notTracking": true
+    },
+    "pauseOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pausePriority": {
+      "value": "50",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pbsStorageName": {
+      "value": "tappaas_backup",
+      "defaulted": false,
+      "literal": "tappaas_backup",
+      "notTracking": false
+    },
+    "pbsUrl": {
+      "value": "backup.mgmt.internal",
+      "defaulted": false,
+      "literal": "backup.mgmt.internal",
+      "notTracking": false
+    },
+    "placementState": {
+      "value": "node",
+      "defaulted": false,
+      "literal": "node",
+      "notTracking": true
+    },
+    "portSync": {
+      "value": "on",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "provides": {
+      "value": "[\"vm\",\"filesystem\"]",
+      "defaulted": false,
+      "literal": "[\"vm\",\"filesystem\"]",
+      "notTracking": false
+    },
+    "rebootOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "releaseDate": {
+      "value": "2026-08-09",
+      "defaulted": false,
+      "literal": "2026-08-09",
+      "notTracking": true
+    },
+    "source": {
+      "value": "official",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "sshKeyOnly": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "stack": {
+      "value": "foundation",
+      "defaulted": false,
+      "literal": "foundation",
+      "notTracking": false
+    },
+    "status": {
+      "value": "Testing",
+      "defaulted": false,
+      "literal": "Testing",
+      "notTracking": false
+    },
+    "storage": {
+      "value": "tankc1",
+      "defaulted": false,
+      "literal": "tankc1",
+      "notTracking": false
+    },
+    "suspended": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "suspendedNoUpdate": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "updateTime": {
+      "value": "20261101-02:08:49",
+      "defaulted": false,
+      "literal": "20261101-02:08:49",
+      "notTracking": true
+    },
+    "version": {
+      "value": "1.0.0",
+      "defaulted": false,
+      "literal": "1.0.0",
+      "notTracking": false
+    },
+    "vmtag": {
+      "value": "TAPPaaS,Foundation",
+      "defaulted": false,
+      "literal": "TAPPaaS,Foundation",
+      "notTracking": false
+    },
+    "zone0": {
+      "value": "mgmt",
+      "defaulted": false,
+      "literal": "mgmt",
+      "notTracking": true
+    },
+    "zone1": {
+      "value": "mgmt",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    }
+  },
+  "origAvailable": true
+}

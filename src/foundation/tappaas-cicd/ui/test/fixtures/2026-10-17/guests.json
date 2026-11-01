@@ -1,0 +1,21 @@
+{
+  "nodes": [
+    {
+      "node": "tappaas1", "physicalMem": 68719476736, "usedMem": 34359738368, "committedMem": 25769803776,
+      "guests": [
+        { "vmid": 201, "name": "nextcloud", "module": "nextcloud", "node": "tappaas1", "status": "running", "type": "qemu", "declaredMem": 8589934592, "usedMem": 4294967296, "residentMem": 6442450944, "measured": true, "availableMem": 4294967296, "cacheMem": 2147483648, "ha": true },
+        { "vmid": 110, "name": "firewall", "module": null, "node": "tappaas1", "status": "running", "type": "qemu", "declaredMem": 4294967296, "usedMem": 4294967296, "residentMem": 1073741824, "measured": false, "ha": false }
+      ],
+      "volumes": [
+        { "pool": "tanka1", "volume": "vm-201-disk-0", "vmid": 201, "used": 21474836480, "size": 53687091200, "module": "nextcloud", "replica": false }
+      ]
+    },
+    {
+      "node": "tappaas2", "physicalMem": 68719476736, "usedMem": 17179869184, "committedMem": 8589934592,
+      "guests": [],
+      "volumes": [
+        { "pool": "tankb2", "volume": "vm-201-disk-0", "vmid": 201, "used": 21474836480, "size": 53687091200, "module": "nextcloud", "replica": true }
+      ]
+    }
+  ]
+}

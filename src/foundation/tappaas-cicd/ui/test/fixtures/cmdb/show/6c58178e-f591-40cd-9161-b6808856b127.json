@@ -1,0 +1,470 @@
+{
+  "id": "6c58178e-f591-40cd-9161-b6808856b127",
+  "class": "server",
+  "ancestors": [
+    "server",
+    "asset",
+    "resource",
+    "object"
+  ],
+  "name": "srv-04",
+  "displayName": "tappaas4",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-31T15:51:26.508Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.621Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.305Z",
+    "asset-manager": "2026-11-01T08:52:20.621Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T15:55:02.577Z",
+          "reason": "follows",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": true,
+          "message": "follows machine tappaas4",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T15:55:02.577Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T15:55:02.577Z"
+    },
+    "cpu": {
+      "value": "Intel(R) Atom(TM) CPU C3758R @ 2.40GHz",
+      "source": "site-manager",
+      "since": "2026-10-31T16:34:36.034Z"
+    },
+    "disks": {
+      "value": [
+        {
+          "bus": "sata",
+          "wwn": "0x5002538f55208720",
+          "name": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N",
+          "size": 500107862016,
+          "type": "ssd",
+          "holds": "nothing",
+          "model": "Samsung_SSD_870_EVO_500GB",
+          "device": "/dev/sda",
+          "health": "PASSED",
+          "serial": "S6PYNL0Y209497N",
+          "vendor": "ATA",
+          "partitions": [
+            {
+              "size": 1031168,
+              "holds": "bios-boot",
+              "device": "/dev/sda1"
+            },
+            {
+              "size": 1073741824,
+              "holds": "efi",
+              "device": "/dev/sda2"
+            },
+            {
+              "pool": "rpool",
+              "size": 499033054720,
+              "holds": "zfs",
+              "device": "/dev/sda3"
+            }
+          ]
+        },
+        {
+          "bus": "nvme",
+          "wwn": "eui.0025384541a2503d",
+          "name": "nvme-Samsung_SSD_990_PRO_2TB_S7DNNU0X545837K",
+          "size": 2000398934016,
+          "type": "nvme",
+          "holds": "nothing",
+          "model": "Samsung SSD 990 PRO 2TB",
+          "device": "/dev/nvme0n1",
+          "health": "PASSED",
+          "serial": "S7DNNU0X545837K",
+          "vendor": "unknown",
+          "partitions": [
+            {
+              "pool": "tanka1",
+              "size": 2000389406720,
+              "holds": "zfs",
+              "device": "/dev/nvme0n1p1"
+            },
+            {
+              "size": 8388608,
+              "holds": "zfs",
+              "device": "/dev/nvme0n1p9"
+            }
+          ]
+        },
+        {
+          "bus": "nvme",
+          "wwn": "eui.002538445140830c",
+          "name": "nvme-Samsung_SSD_990_PRO_2TB_S7HENJ0Y412736V",
+          "size": 2000398934016,
+          "type": "nvme",
+          "holds": "nothing",
+          "model": "Samsung SSD 990 PRO 2TB",
+          "device": "/dev/nvme1n1",
+          "health": "PASSED",
+          "serial": "S7HENJ0Y412736V",
+          "vendor": "unknown",
+          "partitions": [
+            {
+              "pool": "tanka1",
+              "size": 2000389406720,
+              "holds": "zfs",
+              "device": "/dev/nvme1n1p1"
+            },
+            {
+              "size": 8388608,
+              "holds": "zfs",
+              "device": "/dev/nvme1n1p9"
+            }
+          ]
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T16:34:36.034Z"
+    },
+    "displayName": {
+      "value": "tappaas4",
+      "source": "asset-manager",
+      "since": "2026-10-31T15:51:26.508Z"
+    },
+    "faulty": {
+      "value": false,
+      "source": "asset-manager",
+      "since": "2026-10-31T15:51:26.508Z"
+    },
+    "memory": {
+      "value": 32063,
+      "source": "site-manager",
+      "since": "2026-10-31T16:34:36.034Z"
+    },
+    "model": {
+      "value": "QDNV01",
+      "source": "asset-manager",
+      "since": "2026-10-31T15:51:26.508Z"
+    },
+    "nics": {
+      "value": [
+        {
+          "mac": "20:7c:14:f4:d0:8c",
+          "kind": "sfp",
+          "link": false,
+          "name": "eno1",
+          "speed": "10g",
+          "maxMbps": 10000,
+          "operstate": "down"
+        },
+        {
+          "mac": "20:7c:14:f4:d0:8d",
+          "kind": "sfp",
+          "link": false,
+          "name": "eno2",
+          "speed": "10g",
+          "maxMbps": 10000,
+          "operstate": "down"
+        },
+        {
+          "mac": "20:7c:14:f4:d0:8e",
+          "kind": "sfp",
+          "link": false,
+          "name": "eno3",
+          "speed": "10g",
+          "maxMbps": 10000,
+          "operstate": "down"
+        },
+        {
+          "mac": "20:7c:14:f4:d0:8f",
+          "kind": "sfp",
+          "link": false,
+          "name": "eno4",
+          "speed": "10g",
+          "maxMbps": 10000,
+          "operstate": "down"
+        },
+        {
+          "mac": "20:7c:14:f4:d0:87",
+          "kind": "rj45",
+          "link": true,
+          "name": "enp4s0",
+          "speed": "2.5g",
+          "bridge": "lan",
+          "maxMbps": 2500,
+          "linkSpeed": "2.5g",
+          "operstate": "up"
+        },
+        {
+          "mac": "20:7c:14:f4:d0:88",
+          "kind": "rj45",
+          "link": false,
+          "name": "enp5s0",
+          "speed": "2.5g",
+          "maxMbps": 2500,
+          "operstate": "down"
+        },
+        {
+          "mac": "20:7c:14:f4:d0:89",
+          "kind": "rj45",
+          "link": false,
+          "name": "enp6s0",
+          "speed": "2.5g",
+          "maxMbps": 2500,
+          "operstate": "down"
+        },
+        {
+          "mac": "20:7c:14:f4:d0:8a",
+          "kind": "rj45",
+          "link": false,
+          "name": "enp7s0",
+          "speed": "2.5g",
+          "maxMbps": 2500,
+          "operstate": "down"
+        },
+        {
+          "mac": "20:7c:14:f4:d0:8b",
+          "kind": "rj45",
+          "link": false,
+          "name": "enp8s0",
+          "speed": "2.5g",
+          "maxMbps": 2500,
+          "operstate": "down"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T16:34:36.034Z"
+    },
+    "stage": {
+      "value": "operational",
+      "source": "asset-manager",
+      "since": "2026-10-31T15:51:27.085Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 653,
+      "type": "allocated-to",
+      "direction": "out",
+      "other": {
+        "id": "434b8354-7cf8-4354-afa4-596852eac5cd",
+        "class": "machine",
+        "name": "tappaas4"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T15:51:27.094Z"
+    },
+    {
+      "id": 654,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "217e1b9d-68a6-4120-a170-13cda77e6b32",
+        "class": "disk",
+        "name": "dsk-11"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T15:51:27.139Z"
+    },
+    {
+      "id": 655,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "5be83860-b952-42e2-a905-525e07be419a",
+        "class": "disk",
+        "name": "dsk-12"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T15:51:27.189Z"
+    },
+    {
+      "id": 656,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "71220f80-02e4-46b2-8256-83ec44a5b4d4",
+        "class": "disk",
+        "name": "dsk-13"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T15:51:27.236Z"
+    },
+    {
+      "id": 649,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "872579d4-f30c-43c8-a3f5-9f1506a6ca03",
+        "class": "port",
+        "name": "eno1"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T15:51:26.801Z"
+    },
+    {
+      "id": 650,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "c0efe8bd-9941-4cc1-8331-3054db86f2ac",
+        "class": "port",
+        "name": "eno2"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T15:51:26.852Z"
+    },
+    {
+      "id": 651,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "1730d791-619e-4797-8f3c-054e0204bc32",
+        "class": "port",
+        "name": "eno3"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T15:51:26.900Z"
+    },
+    {
+      "id": 652,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "7c2192ae-6fac-4f15-8eca-eb6766d8a25a",
+        "class": "port",
+        "name": "eno4"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T15:51:26.949Z"
+    },
+    {
+      "id": 644,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "4b412a08-e8f8-411c-9170-816e7ff89682",
+        "class": "port",
+        "name": "enp4s0"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T15:51:26.553Z"
+    },
+    {
+      "id": 645,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "761c59f4-d8eb-44a4-a844-16a111ff61f7",
+        "class": "port",
+        "name": "enp5s0"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T15:51:26.603Z"
+    },
+    {
+      "id": 646,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "944f4c15-0292-4af2-9a3e-f154ad12ea9d",
+        "class": "port",
+        "name": "enp6s0"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T15:51:26.651Z"
+    },
+    {
+      "id": 647,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "deeed5e7-5d16-43a3-ad82-690e7d41e24d",
+        "class": "port",
+        "name": "enp7s0"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T15:51:26.702Z"
+    },
+    {
+      "id": 648,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "4122d190-a385-4764-bee0-e6bc66365d51",
+        "class": "port",
+        "name": "enp8s0"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T15:51:26.752Z"
+    },
+    {
+      "id": 666,
+      "type": "placed-in",
+      "direction": "out",
+      "other": {
+        "id": "73a0f756-f569-4eaa-8508-bec8ac7ac791",
+        "class": "rack",
+        "name": "rack1"
+      },
+      "attributes": {
+        "u": 19,
+        "face": "front",
+        "slot": 0,
+        "width": "full",
+        "height": 1,
+        "faceplate": "generic/server-1u"
+      },
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T16:44:25.871Z"
+    }
+  ]
+}

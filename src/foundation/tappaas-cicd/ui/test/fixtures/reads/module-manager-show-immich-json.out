@@ -1,0 +1,76 @@
+{
+  "description": "Immich self-hosted photo and video backup with ML-powered search, face recognition and mobile auto-upload.",
+  "version": "0.2.1",
+  "releaseDate": "2026-07-19",
+  "installTime": "20261006-08:46:17",
+  "updateTime": "20261101-02:17:25",
+  "maintainer": "@AndreasJe",
+  "status": "Testing",
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/home/immich",
+  "environment": "rossen",
+  "vmname": "immich",
+  "vmid": 361,
+  "vmtag": "TAPPaaS,App,Photos",
+  "node": "tappaas1",
+  "zone0": "rossen",
+  "dependsOn": [
+    "cluster:vm",
+    "cluster:ha",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy",
+    "network:rules",
+    "identity:identity"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "provides": [],
+  "appVersion": "3.2.4",
+  "displayName": "Immich",
+  "stack": "home",
+  "config": {
+    "backup:vm": {
+      "backup": {
+        "enabled": true,
+        "exclude": [],
+        "retention": "7y"
+      }
+    },
+    "cluster:vm": {
+      "bios": "ovmf",
+      "cputype": "host",
+      "cores": 4,
+      "memory": 8192,
+      "diskSize": "500G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan",
+      "thinDisk": true
+    },
+    "cluster:ha": {
+      "haCpu": "host"
+    },
+    "identity:identity": {
+      "identity": {
+        "configureService": "immich-configure-oidc.service",
+        "launchPath": "/auth/login?autoLaunch=1",
+        "oidcRedirectPaths": [
+          "/auth/login",
+          "/user-settings",
+          "/api/oauth/mobile-redirect"
+        ]
+      }
+    },
+    "network:proxy": {
+      "proxyPort": 2283,
+      "proxyAllowedZones": [
+        "home",
+        "netbird",
+        "internet"
+      ]
+    }
+  }
+}

@@ -1,0 +1,903 @@
+{
+  "id": "a82f521b-2cc5-45a5-9cde-aac82a64ee45",
+  "class": "server",
+  "ancestors": [
+    "server",
+    "asset",
+    "resource",
+    "object"
+  ],
+  "name": "srv-03",
+  "displayName": "tappaas3",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-30T08:49:10.799Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.621Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.292Z",
+    "asset-manager": "2026-11-01T08:52:20.621Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "follows",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": true,
+          "message": "follows machine tappaas3",
+          "rootCause": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T11:45:03.903Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T11:45:03.903Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T11:45:03.903Z"
+    },
+    "cpu": {
+      "value": "AMD Ryzen 7 5825U with Radeon Graphics",
+      "source": "site-manager",
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    "disks": {
+      "value": [
+        {
+          "bus": "sata",
+          "wwn": "0x5000cca242da68ef",
+          "name": "ata-HGST_HDN726050ALE614_NAHW317X",
+          "size": 5000981078016,
+          "type": "hdd",
+          "holds": "nothing",
+          "model": "HGST_HDN726050ALE614",
+          "device": "/dev/sdb",
+          "health": "PASSED",
+          "serial": "NAHW317X",
+          "vendor": "ATA",
+          "partitions": [
+            {
+              "pool": "tankc1",
+              "size": 5000971419648,
+              "holds": "zfs",
+              "device": "/dev/sdb1"
+            },
+            {
+              "size": 8388608,
+              "holds": "zfs",
+              "device": "/dev/sdb9"
+            }
+          ]
+        },
+        {
+          "bus": "sata",
+          "wwn": "0x500a07510938fdb1",
+          "name": "ata-MTFDDAK256MAM-1K12_13180938FDB1",
+          "size": 256060514304,
+          "type": "ssd",
+          "holds": "nothing",
+          "model": "MTFDDAK256MAM-1K12",
+          "device": "/dev/sdc",
+          "health": "PASSED",
+          "serial": "13180938FDB1",
+          "vendor": "ATA",
+          "partitions": [
+            {
+              "size": 1031168,
+              "holds": "bios-boot",
+              "device": "/dev/sdc1"
+            },
+            {
+              "size": 1073741824,
+              "holds": "efi",
+              "device": "/dev/sdc2"
+            },
+            {
+              "size": 254985707008,
+              "holds": "lvm",
+              "device": "/dev/sdc3"
+            }
+          ]
+        },
+        {
+          "bus": "sata",
+          "wwn": "0x5000c50087e61dbb",
+          "name": "ata-ST8000AS0002-1NA17Z_Z840DMA1",
+          "size": 8001563222016,
+          "type": "hdd",
+          "holds": "nothing",
+          "model": "ST8000AS0002-1NA17Z",
+          "device": "/dev/sda",
+          "health": "PASSED",
+          "serial": "Z840DMA1",
+          "vendor": "ATA",
+          "partitions": [
+            {
+              "pool": "larsbackup",
+              "size": 8001553432576,
+              "holds": "zfs",
+              "device": "/dev/sda1"
+            },
+            {
+              "size": 8388608,
+              "holds": "zfs",
+              "device": "/dev/sda9"
+            }
+          ]
+        },
+        {
+          "bus": "nvme",
+          "wwn": "eui.541d61d7fec38753",
+          "name": "nvme-ASint_AS806_1TB_8061TBFDHY25F220056",
+          "size": 1024209543168,
+          "type": "nvme",
+          "holds": "nothing",
+          "model": "ASint AS806 1TB",
+          "device": "/dev/nvme0n1",
+          "health": "PASSED",
+          "serial": "8061TBFDHY25F220056",
+          "vendor": "unknown",
+          "partitions": [
+            {
+              "pool": "tanka1",
+              "size": 1024199753728,
+              "holds": "zfs",
+              "device": "/dev/nvme0n1p1"
+            },
+            {
+              "size": 8388608,
+              "holds": "zfs",
+              "device": "/dev/nvme0n1p9"
+            }
+          ]
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T11:38:00.928Z"
+    },
+    "displayName": {
+      "value": "tappaas3",
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    "drift": {
+      "value": {
+        "since": "2026-10-31T09:52:00.815Z",
+        "source": "sweep",
+        "desired": null,
+        "attributes": {
+          "disks": {
+            "now": [
+              {
+                "bus": "sata",
+                "wwn": "0x5000cca242da68ef",
+                "name": "ata-HGST_HDN726050ALE614_NAHW317X",
+                "size": 5000981078016,
+                "type": "hdd",
+                "holds": "nothing",
+                "model": "HGST_HDN726050ALE614",
+                "device": "/dev/sdb",
+                "health": "PASSED",
+                "serial": "NAHW317X",
+                "vendor": "ATA",
+                "partitions": [
+                  {
+                    "pool": "tankc1",
+                    "size": 5000971419648,
+                    "holds": "zfs",
+                    "device": "/dev/sdb1"
+                  },
+                  {
+                    "size": 8388608,
+                    "holds": "zfs",
+                    "device": "/dev/sdb9"
+                  }
+                ]
+              },
+              {
+                "bus": "sata",
+                "wwn": "0x500a07510938fdb1",
+                "name": "ata-MTFDDAK256MAM-1K12_13180938FDB1",
+                "size": 256060514304,
+                "type": "ssd",
+                "holds": "nothing",
+                "model": "MTFDDAK256MAM-1K12",
+                "device": "/dev/sdc",
+                "health": "PASSED",
+                "serial": "13180938FDB1",
+                "vendor": "ATA",
+                "partitions": [
+                  {
+                    "size": 1031168,
+                    "holds": "bios-boot",
+                    "device": "/dev/sdc1"
+                  },
+                  {
+                    "size": 1073741824,
+                    "holds": "efi",
+                    "device": "/dev/sdc2"
+                  },
+                  {
+                    "size": 254985707008,
+                    "holds": "lvm",
+                    "device": "/dev/sdc3"
+                  }
+                ]
+              },
+              {
+                "bus": "sata",
+                "wwn": "0x5000c50087e61dbb",
+                "name": "ata-ST8000AS0002-1NA17Z_Z840DMA1",
+                "size": 8001563222016,
+                "type": "hdd",
+                "holds": "nothing",
+                "model": "ST8000AS0002-1NA17Z",
+                "device": "/dev/sda",
+                "health": "PASSED",
+                "serial": "Z840DMA1",
+                "vendor": "ATA",
+                "partitions": [
+                  {
+                    "pool": "larsbackup",
+                    "size": 8001553432576,
+                    "holds": "zfs",
+                    "device": "/dev/sda1"
+                  },
+                  {
+                    "size": 8388608,
+                    "holds": "zfs",
+                    "device": "/dev/sda9"
+                  }
+                ]
+              },
+              {
+                "bus": "nvme",
+                "wwn": "eui.541d61d7fec38753",
+                "name": "nvme-ASint_AS806_1TB_8061TBFDHY25F220056",
+                "size": 1024209543168,
+                "type": "nvme",
+                "holds": "nothing",
+                "model": "ASint AS806 1TB",
+                "device": "/dev/nvme0n1",
+                "health": "PASSED",
+                "serial": "8061TBFDHY25F220056",
+                "vendor": "unknown",
+                "partitions": [
+                  {
+                    "pool": "tanka1",
+                    "size": 1024199753728,
+                    "holds": "zfs",
+                    "device": "/dev/nvme0n1p1"
+                  },
+                  {
+                    "size": 8388608,
+                    "holds": "zfs",
+                    "device": "/dev/nvme0n1p9"
+                  }
+                ]
+              }
+            ],
+            "was": [
+              {
+                "bus": "nvme",
+                "wwn": "eui.541d61d7fec38753",
+                "name": "nvme-ASint_AS806_1TB_8061TBFDHY25F220056",
+                "size": 1024209543168,
+                "type": "nvme",
+                "holds": "nothing",
+                "model": "ASint AS806 1TB",
+                "smart": {
+                  "mediaErrors": 0,
+                  "powerOnHours": 5902,
+                  "criticalWarning": 0
+                },
+                "device": "/dev/nvme0n1",
+                "health": "PASSED",
+                "serial": "8061TBFDHY25F220056",
+                "vendor": "unknown",
+                "wearout": 100,
+                "partitions": [
+                  {
+                    "pool": "tanka1",
+                    "size": 1024199753728,
+                    "holds": "zfs",
+                    "device": "/dev/nvme0n1p1"
+                  },
+                  {
+                    "size": 8388608,
+                    "holds": "zfs",
+                    "device": "/dev/nvme0n1p9"
+                  }
+                ],
+                "temperature": 40
+              },
+              {
+                "bus": "sata",
+                "wwn": "0x5000c50087e61dbb",
+                "name": "ata-ST8000AS0002-1NA17Z_Z840DMA1",
+                "size": 8001563222016,
+                "type": "hdd",
+                "holds": "nothing",
+                "model": "ST8000AS0002-1NA17Z",
+                "smart": {
+                  "pending": 632,
+                  "reallocated": 2808,
+                  "powerOnHours": 72209,
+                  "uncorrectable": 632
+                },
+                "device": "/dev/sda",
+                "health": "PASSED",
+                "serial": "Z840DMA1",
+                "vendor": "ATA",
+                "partitions": [
+                  {
+                    "pool": "larsbackup",
+                    "size": 8001553432576,
+                    "holds": "zfs",
+                    "device": "/dev/sda1"
+                  },
+                  {
+                    "size": 8388608,
+                    "holds": "zfs",
+                    "device": "/dev/sda9"
+                  }
+                ],
+                "temperature": 37
+              },
+              {
+                "bus": "sata",
+                "wwn": "0x5000cca242da68ef",
+                "name": "ata-HGST_HDN726050ALE614_NAHW317X",
+                "size": 5000981078016,
+                "type": "hdd",
+                "holds": "nothing",
+                "model": "HGST_HDN726050ALE614",
+                "smart": {
+                  "pending": 64,
+                  "reallocated": 534,
+                  "powerOnHours": 66250,
+                  "uncorrectable": 1675
+                },
+                "device": "/dev/sdb",
+                "health": "PASSED",
+                "serial": "NAHW317X",
+                "vendor": "ATA",
+                "partitions": [
+                  {
+                    "pool": "tankc1",
+                    "size": 5000971419648,
+                    "holds": "zfs",
+                    "device": "/dev/sdb1"
+                  },
+                  {
+                    "size": 8388608,
+                    "holds": "zfs",
+                    "device": "/dev/sdb9"
+                  }
+                ],
+                "temperature": 41
+              },
+              {
+                "bus": "sata",
+                "wwn": "0x500a07510938fdb1",
+                "name": "ata-MTFDDAK256MAM-1K12_13180938FDB1",
+                "size": 256060514304,
+                "type": "ssd",
+                "holds": "nothing",
+                "model": "MTFDDAK256MAM-1K12",
+                "smart": {
+                  "pending": 0,
+                  "reallocated": 0,
+                  "powerOnHours": 1174,
+                  "uncorrectable": 0
+                },
+                "device": "/dev/sdc",
+                "health": "PASSED",
+                "serial": "13180938FDB1",
+                "vendor": "ATA",
+                "wearout": 95,
+                "partitions": [
+                  {
+                    "size": 1031168,
+                    "holds": "bios-boot",
+                    "device": "/dev/sdc1"
+                  },
+                  {
+                    "size": 1073741824,
+                    "holds": "efi",
+                    "device": "/dev/sdc2"
+                  },
+                  {
+                    "size": 254985707008,
+                    "holds": "lvm",
+                    "device": "/dev/sdc3"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "source": "cmdb-controller",
+      "since": "2026-10-31T11:39:34.958Z"
+    },
+    "faulty": {
+      "value": false,
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    "memory": {
+      "value": 31508,
+      "source": "site-manager",
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    "nics": {
+      "value": [
+        {
+          "mac": "c8:ff:bf:05:0d:30",
+          "bond": "lanbond",
+          "kind": "rj45",
+          "link": true,
+          "name": "eno1",
+          "speed": "2.5g",
+          "bridge": "lan",
+          "maxMbps": 2500,
+          "linkSpeed": "2.5g",
+          "operstate": "up"
+        },
+        {
+          "mac": "c8:ff:bf:05:0d:31",
+          "kind": "rj45",
+          "link": true,
+          "name": "enp3s0",
+          "speed": "2.5g",
+          "bridge": "wan",
+          "maxMbps": 2500,
+          "linkSpeed": "2.5g",
+          "operstate": "up"
+        },
+        {
+          "mac": "00:e0:4c:68:00:d1",
+          "bond": "lanbond",
+          "kind": "rj45",
+          "link": true,
+          "name": "usblan0",
+          "speed": "2.5g",
+          "bridge": "lan",
+          "maxMbps": 2500,
+          "linkSpeed": "2.5g",
+          "operstate": "up"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T08:21:43.213Z"
+    },
+    "stage": {
+      "value": "operational",
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    }
+  },
+  "drift": {
+    "since": "2026-10-31T09:52:00.815Z",
+    "source": "sweep",
+    "desired": null,
+    "attributes": {
+      "disks": {
+        "now": [
+          {
+            "bus": "sata",
+            "wwn": "0x5000cca242da68ef",
+            "name": "ata-HGST_HDN726050ALE614_NAHW317X",
+            "size": 5000981078016,
+            "type": "hdd",
+            "holds": "nothing",
+            "model": "HGST_HDN726050ALE614",
+            "device": "/dev/sdb",
+            "health": "PASSED",
+            "serial": "NAHW317X",
+            "vendor": "ATA",
+            "partitions": [
+              {
+                "pool": "tankc1",
+                "size": 5000971419648,
+                "holds": "zfs",
+                "device": "/dev/sdb1"
+              },
+              {
+                "size": 8388608,
+                "holds": "zfs",
+                "device": "/dev/sdb9"
+              }
+            ]
+          },
+          {
+            "bus": "sata",
+            "wwn": "0x500a07510938fdb1",
+            "name": "ata-MTFDDAK256MAM-1K12_13180938FDB1",
+            "size": 256060514304,
+            "type": "ssd",
+            "holds": "nothing",
+            "model": "MTFDDAK256MAM-1K12",
+            "device": "/dev/sdc",
+            "health": "PASSED",
+            "serial": "13180938FDB1",
+            "vendor": "ATA",
+            "partitions": [
+              {
+                "size": 1031168,
+                "holds": "bios-boot",
+                "device": "/dev/sdc1"
+              },
+              {
+                "size": 1073741824,
+                "holds": "efi",
+                "device": "/dev/sdc2"
+              },
+              {
+                "size": 254985707008,
+                "holds": "lvm",
+                "device": "/dev/sdc3"
+              }
+            ]
+          },
+          {
+            "bus": "sata",
+            "wwn": "0x5000c50087e61dbb",
+            "name": "ata-ST8000AS0002-1NA17Z_Z840DMA1",
+            "size": 8001563222016,
+            "type": "hdd",
+            "holds": "nothing",
+            "model": "ST8000AS0002-1NA17Z",
+            "device": "/dev/sda",
+            "health": "PASSED",
+            "serial": "Z840DMA1",
+            "vendor": "ATA",
+            "partitions": [
+              {
+                "pool": "larsbackup",
+                "size": 8001553432576,
+                "holds": "zfs",
+                "device": "/dev/sda1"
+              },
+              {
+                "size": 8388608,
+                "holds": "zfs",
+                "device": "/dev/sda9"
+              }
+            ]
+          },
+          {
+            "bus": "nvme",
+            "wwn": "eui.541d61d7fec38753",
+            "name": "nvme-ASint_AS806_1TB_8061TBFDHY25F220056",
+            "size": 1024209543168,
+            "type": "nvme",
+            "holds": "nothing",
+            "model": "ASint AS806 1TB",
+            "device": "/dev/nvme0n1",
+            "health": "PASSED",
+            "serial": "8061TBFDHY25F220056",
+            "vendor": "unknown",
+            "partitions": [
+              {
+                "pool": "tanka1",
+                "size": 1024199753728,
+                "holds": "zfs",
+                "device": "/dev/nvme0n1p1"
+              },
+              {
+                "size": 8388608,
+                "holds": "zfs",
+                "device": "/dev/nvme0n1p9"
+              }
+            ]
+          }
+        ],
+        "was": [
+          {
+            "bus": "nvme",
+            "wwn": "eui.541d61d7fec38753",
+            "name": "nvme-ASint_AS806_1TB_8061TBFDHY25F220056",
+            "size": 1024209543168,
+            "type": "nvme",
+            "holds": "nothing",
+            "model": "ASint AS806 1TB",
+            "smart": {
+              "mediaErrors": 0,
+              "powerOnHours": 5902,
+              "criticalWarning": 0
+            },
+            "device": "/dev/nvme0n1",
+            "health": "PASSED",
+            "serial": "8061TBFDHY25F220056",
+            "vendor": "unknown",
+            "wearout": 100,
+            "partitions": [
+              {
+                "pool": "tanka1",
+                "size": 1024199753728,
+                "holds": "zfs",
+                "device": "/dev/nvme0n1p1"
+              },
+              {
+                "size": 8388608,
+                "holds": "zfs",
+                "device": "/dev/nvme0n1p9"
+              }
+            ],
+            "temperature": 40
+          },
+          {
+            "bus": "sata",
+            "wwn": "0x5000c50087e61dbb",
+            "name": "ata-ST8000AS0002-1NA17Z_Z840DMA1",
+            "size": 8001563222016,
+            "type": "hdd",
+            "holds": "nothing",
+            "model": "ST8000AS0002-1NA17Z",
+            "smart": {
+              "pending": 632,
+              "reallocated": 2808,
+              "powerOnHours": 72209,
+              "uncorrectable": 632
+            },
+            "device": "/dev/sda",
+            "health": "PASSED",
+            "serial": "Z840DMA1",
+            "vendor": "ATA",
+            "partitions": [
+              {
+                "pool": "larsbackup",
+                "size": 8001553432576,
+                "holds": "zfs",
+                "device": "/dev/sda1"
+              },
+              {
+                "size": 8388608,
+                "holds": "zfs",
+                "device": "/dev/sda9"
+              }
+            ],
+            "temperature": 37
+          },
+          {
+            "bus": "sata",
+            "wwn": "0x5000cca242da68ef",
+            "name": "ata-HGST_HDN726050ALE614_NAHW317X",
+            "size": 5000981078016,
+            "type": "hdd",
+            "holds": "nothing",
+            "model": "HGST_HDN726050ALE614",
+            "smart": {
+              "pending": 64,
+              "reallocated": 534,
+              "powerOnHours": 66250,
+              "uncorrectable": 1675
+            },
+            "device": "/dev/sdb",
+            "health": "PASSED",
+            "serial": "NAHW317X",
+            "vendor": "ATA",
+            "partitions": [
+              {
+                "pool": "tankc1",
+                "size": 5000971419648,
+                "holds": "zfs",
+                "device": "/dev/sdb1"
+              },
+              {
+                "size": 8388608,
+                "holds": "zfs",
+                "device": "/dev/sdb9"
+              }
+            ],
+            "temperature": 41
+          },
+          {
+            "bus": "sata",
+            "wwn": "0x500a07510938fdb1",
+            "name": "ata-MTFDDAK256MAM-1K12_13180938FDB1",
+            "size": 256060514304,
+            "type": "ssd",
+            "holds": "nothing",
+            "model": "MTFDDAK256MAM-1K12",
+            "smart": {
+              "pending": 0,
+              "reallocated": 0,
+              "powerOnHours": 1174,
+              "uncorrectable": 0
+            },
+            "device": "/dev/sdc",
+            "health": "PASSED",
+            "serial": "13180938FDB1",
+            "vendor": "ATA",
+            "wearout": 95,
+            "partitions": [
+              {
+                "size": 1031168,
+                "holds": "bios-boot",
+                "device": "/dev/sdc1"
+              },
+              {
+                "size": 1073741824,
+                "holds": "efi",
+                "device": "/dev/sdc2"
+              },
+              {
+                "size": 254985707008,
+                "holds": "lvm",
+                "device": "/dev/sdc3"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "relations": [
+    {
+      "id": 459,
+      "type": "allocated-to",
+      "direction": "out",
+      "other": {
+        "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+        "class": "machine",
+        "name": "tappaas3"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:11.003Z"
+    },
+    {
+      "id": 618,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "2956e06e-0553-46b0-9307-4aa6b2255d62",
+        "class": "disk",
+        "name": "dsk-07"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    {
+      "id": 619,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+        "class": "disk",
+        "name": "dsk-08"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    {
+      "id": 620,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+        "class": "disk",
+        "name": "dsk-09"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    {
+      "id": 621,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "a2187b22-c7d1-431f-a9d3-f1d0a1320862",
+        "class": "disk",
+        "name": "dsk-10"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    {
+      "id": 478,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "b88e9a0a-5a92-4fc8-baab-d6b3b58823bc",
+        "class": "port",
+        "name": "eno1"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    {
+      "id": 479,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "48d8b85b-ae2d-44a2-9d25-2ede17463f61",
+        "class": "port",
+        "name": "enp3s0"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    {
+      "id": 480,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "23b12096-a593-4b89-8687-ef40b28432a8",
+        "class": "port",
+        "name": "usblan0"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    {
+      "id": 446,
+      "type": "placed-in",
+      "direction": "out",
+      "other": {
+        "id": "73a0f756-f569-4eaa-8508-bec8ac7ac791",
+        "class": "rack",
+        "name": "rack1"
+      },
+      "attributes": {
+        "u": 13,
+        "face": "front",
+        "slot": 2,
+        "width": "third",
+        "height": 6,
+        "faceplate": "generic/server-2u",
+        "description": "placeholder position, set by the operator"
+      },
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    }
+  ]
+}

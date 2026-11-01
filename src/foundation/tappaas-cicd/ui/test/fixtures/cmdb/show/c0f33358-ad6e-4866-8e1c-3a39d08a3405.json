@@ -1,0 +1,91 @@
+{
+  "id": "c0f33358-ad6e-4866-8e1c-3a39d08a3405",
+  "class": "storage-pool",
+  "ancestors": [
+    "storage-pool",
+    "storage-element",
+    "ci",
+    "object"
+  ],
+  "name": "tanka1",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T19:14:05.301Z",
+  "ended": null,
+  "lastSeen": "2026-10-30T19:24:02.956Z",
+  "seen": {
+    "storage-manager": "2026-10-30T19:24:02.956Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-30T19:15:11.335Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "tanka1: zfs ONLINE",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T07:30:02.146Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "flapping": false,
+          "rootCause": null,
+          "lastChecked": "2026-10-31T07:30:02.146Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-30T19:15:11.335Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T07:30:02.146Z"
+    },
+    "size": {
+      "value": 1931124670464,
+      "source": "storage-manager",
+      "since": "2026-10-30T19:14:05.301Z"
+    },
+    "type": {
+      "value": "zfs",
+      "source": "storage-manager",
+      "since": "2026-10-30T19:14:05.301Z"
+    },
+    "used": {
+      "value": 417792,
+      "source": "storage-manager",
+      "since": "2026-10-30T19:14:05.301Z"
+    },
+    "zfsState": {
+      "value": "ONLINE",
+      "source": "storage-manager",
+      "since": "2026-10-30T19:14:05.301Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

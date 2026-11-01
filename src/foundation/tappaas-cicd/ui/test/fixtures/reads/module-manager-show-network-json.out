@@ -1,0 +1,86 @@
+{
+  "description": "The TAPPaaS Network VM (OPNsense): routing, DNS, DHCP, NAT, firewall rules, reverse proxy",
+  "version": "1.0.0",
+  "releaseDate": "2026-07-31",
+  "installTime": "20260731-22:21:34",
+  "updateTime": "20261101-02:07:47",
+  "status": "Production",
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/foundation/network",
+  "environment": "mgmt",
+  "vmname": "network",
+  "vmid": 110,
+  "vmtag": "TAPPaaS,Foundation",
+  "node": "tappaas1",
+  "zone0": "mgmt",
+  "zone1": "mgmt",
+  "ports": [
+    {
+      "port": 80,
+      "protocol": "TCP",
+      "description": "Caddy HTTP (ACME challenges + redirect to HTTPS)"
+    },
+    {
+      "port": 443,
+      "protocol": "TCP",
+      "description": "Caddy HTTPS (reverse-proxy entry for all published services)"
+    }
+  ],
+  "ingress": [
+    {
+      "from": "internet",
+      "ports": [
+        80,
+        443
+      ],
+      "description": "Caddy reverse-proxy entry — public HTTPS for proxyAllowedZones=['internet'] services"
+    }
+  ],
+  "dependsOn": [
+    "cluster:vm",
+    "cluster:ha",
+    "network:proxy"
+  ],
+  "integratesWith": [
+    "backup:vm",
+    "logging:logs"
+  ],
+  "provides": [
+    "proxy",
+    "rules",
+    "discovery",
+    "dns",
+    "nat",
+    "snat"
+  ],
+  "stack": "foundation",
+  "config": {
+    "cluster:ha": {
+      "HANode": "tappaas3"
+    },
+    "cluster:vm": {
+      "bios": "ovmf",
+      "ostype": "other",
+      "cputype": "x86-64-v3",
+      "cores": 4,
+      "memory": 8192,
+      "diskSize": "32G",
+      "storage": "tanka1",
+      "imageType": "img",
+      "image": "tappaas-firewall.qcow2.zst",
+      "imageLocation": "https://github.com/TAPPaaS/TAPPaaS/releases/download/opnsense-firewall-v1.1/",
+      "imageSha256": "a5e7c09aae5aab9e5b49f71defd61b642c4d3497fb716ea11ec9610b5d658c97",
+      "cloudInit": "false",
+      "bridge0": "lan",
+      "trunks0": "ALL",
+      "bridge1": "wan"
+    },
+    "network:proxy": {
+      "proxyPort": 8443,
+      "proxyUpstreamTls": "true",
+      "proxyAllowedZones": [
+        "mgmt"
+      ]
+    }
+  }
+}

@@ -1,0 +1,213 @@
+{
+  "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+  "class": "device",
+  "ancestors": [
+    "device",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "crs-a",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T08:49:11.019Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.200Z",
+  "seen": {
+    "switch-manager": "2026-11-01T08:52:20.200Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T09:55:09.015Z",
+          "reason": "vlan-undeclared",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": false,
+          "message": "crs-a: VLAN 298 in no zone",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T09:55:09.015Z"
+    },
+    "desired": {
+      "value": {
+        "key": "crs-a",
+        "file": "switch-configuration-desired.json"
+      },
+      "source": "switch-manager",
+      "since": "2026-10-30T08:49:11.217Z"
+    },
+    "deviceType": {
+      "value": "switch",
+      "source": "switch-manager",
+      "since": "2026-10-31T07:24:26.280Z"
+    },
+    "firmware": {
+      "value": "7.23.8 (long-term)",
+      "source": "switch-manager",
+      "since": "2026-10-30T08:49:11.217Z"
+    },
+    "lags": {
+      "value": [
+        {
+          "live": [
+            "sfp-sfpplus1"
+          ],
+          "name": "tappaas1-lan",
+          "ports": [
+            "sfp-sfpplus1"
+          ],
+          "formed": true,
+          "mlagId": 10,
+          "switch": "crs-a"
+        },
+        {
+          "live": [
+            "sfp-sfpplus14"
+          ],
+          "name": "usw-uplink",
+          "ports": [
+            "sfp-sfpplus14"
+          ],
+          "formed": true,
+          "mlagId": 11,
+          "switch": "crs-a"
+        }
+      ],
+      "source": "switch-manager",
+      "since": "2026-10-31T07:24:26.280Z"
+    },
+    "managed": {
+      "value": "auto",
+      "source": "switch-manager",
+      "since": "2026-10-31T07:24:26.280Z"
+    },
+    "managementAddress": {
+      "value": "10.0.0.21",
+      "source": "switch-manager",
+      "since": "2026-10-30T08:49:11.217Z"
+    },
+    "mlag": {
+      "value": {
+        "pair": {
+          "name": "crs-a+crs-b",
+          "peerPort": {
+            "crs-a": "peer-link",
+            "crs-b": "peer-link"
+          },
+          "switches": [
+            "crs-a",
+            "crs-b"
+          ]
+        },
+        "bridge": "bridge",
+        "peerPort": "peer-link",
+        "priority": 50,
+        "heartbeat": "5s",
+        "stpPriority": "0x4000"
+      },
+      "source": "switch-manager",
+      "since": "2026-10-31T07:24:26.280Z"
+    },
+    "model": {
+      "value": "CRS317-1G-16S+",
+      "source": "switch-manager",
+      "since": "2026-10-30T08:49:11.217Z"
+    },
+    "order": {
+      "value": 1,
+      "source": "switch-manager",
+      "since": "2026-10-31T07:24:26.280Z"
+    },
+    "vendor": {
+      "value": "mikrotik",
+      "source": "switch-manager",
+      "since": "2026-10-31T07:24:26.280Z"
+    },
+    "vlans": {
+      "value": [
+        {
+          "tag": 1,
+          "declared": false
+        },
+        {
+          "tag": 200,
+          "declared": true
+        },
+        {
+          "tag": 298,
+          "declared": false
+        },
+        {
+          "tag": 299,
+          "declared": true
+        },
+        {
+          "tag": 310,
+          "declared": true
+        },
+        {
+          "tag": 410,
+          "declared": true
+        },
+        {
+          "tag": 420,
+          "declared": true
+        },
+        {
+          "tag": 430,
+          "declared": true
+        },
+        {
+          "tag": 510,
+          "declared": true
+        },
+        {
+          "tag": 610,
+          "declared": true
+        }
+      ],
+      "source": "switch-manager",
+      "since": "2026-10-30T08:50:56.767Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 608,
+      "type": "allocated-to",
+      "direction": "in",
+      "other": {
+        "id": "ab59f3f5-a67f-4f3e-804a-f09eb6cb0ed8",
+        "class": "network-device",
+        "name": "sw-02"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T00:02:55.629Z"
+    }
+  ]
+}

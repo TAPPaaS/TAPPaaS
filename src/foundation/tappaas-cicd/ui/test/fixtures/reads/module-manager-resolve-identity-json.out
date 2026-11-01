@@ -1,0 +1,370 @@
+{
+  "module": "identity",
+  "dependsOn": [
+    "cluster:vm",
+    "cluster:ha",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "fields": {
+    "HANode": {
+      "value": "tappaas3",
+      "defaulted": false,
+      "literal": "tappaas3",
+      "notTracking": true
+    },
+    "autoInstall": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "backup": {
+      "value": "{\"enabled\":true,\"exclude\":[],\"retention\":\"7y\"}",
+      "defaulted": false,
+      "literal": "{\"enabled\":true,\"exclude\":[],\"retention\":\"7y\"}",
+      "notTracking": true
+    },
+    "bios": {
+      "value": "ovmf",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "bridge0": {
+      "value": "lan",
+      "defaulted": false,
+      "literal": "lan",
+      "notTracking": false
+    },
+    "bridge1": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "cloudInit": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "cores": {
+      "value": "2",
+      "defaulted": false,
+      "literal": "2",
+      "notTracking": false
+    },
+    "cputype": {
+      "value": "x86-64-v3",
+      "defaulted": false,
+      "literal": "x86-64-v3",
+      "notTracking": true
+    },
+    "dependsOn": {
+      "value": "[\"cluster:vm\",\"cluster:ha\",\"templates:nixos\",\"backup:vm\",\"network:proxy\"]",
+      "defaulted": false,
+      "literal": "[\"cluster:vm\",\"cluster:ha\",\"templates:nixos\",\"backup:vm\",\"network:proxy\"]",
+      "notTracking": false
+    },
+    "description": {
+      "value": "Authentik SSO identity provider for TAPPaaS",
+      "defaulted": false,
+      "literal": "Authentik SSO identity provider for TAPPaaS",
+      "notTracking": false
+    },
+    "diskAutoGrow": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "diskSize": {
+      "value": "32G",
+      "defaulted": false,
+      "literal": "32G",
+      "notTracking": false
+    },
+    "displayName": {
+      "value": "Identity",
+      "defaulted": false,
+      "literal": "Identity",
+      "notTracking": false
+    },
+    "dropUnits": {
+      "value": "[\"generate-authentik-secrets.*\",\"authentik-env-secrets-only.*\"]",
+      "defaulted": false,
+      "literal": "[\"generate-authentik-secrets.*\",\"authentik-env-secrets-only.*\"]",
+      "notTracking": false
+    },
+    "environment": {
+      "value": "mgmt",
+      "defaulted": false,
+      "literal": "mgmt",
+      "notTracking": true
+    },
+    "haCpu": {
+      "value": "common",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "image": {
+      "value": "8080",
+      "defaulted": false,
+      "literal": "8080",
+      "notTracking": false
+    },
+    "imageType": {
+      "value": "clone",
+      "defaulted": false,
+      "literal": "clone",
+      "notTracking": false
+    },
+    "installTime": {
+      "value": "20260809-20:54:21",
+      "defaulted": false,
+      "literal": "20260809-20:54:21",
+      "notTracking": true
+    },
+    "integratesWith": {
+      "value": "[\"logging:logs\"]",
+      "defaulted": false,
+      "literal": "[\"logging:logs\"]",
+      "notTracking": false
+    },
+    "kind": {
+      "value": "vm",
+      "defaulted": false,
+      "literal": "vm",
+      "notTracking": false
+    },
+    "maintainer": {
+      "value": "@larsrossen",
+      "defaulted": false,
+      "literal": "@larsrossen",
+      "notTracking": false
+    },
+    "management": {
+      "value": "managed",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "memory": {
+      "value": "4096",
+      "defaulted": false,
+      "literal": "4096",
+      "notTracking": false
+    },
+    "moduleSource": {
+      "value": "/home/tappaas/TAPPaaS/src/foundation/identity",
+      "defaulted": false,
+      "literal": "/home/tappaas/TAPPaaS/src/foundation/identity",
+      "notTracking": true
+    },
+    "node": {
+      "value": "tappaas1",
+      "defaulted": false,
+      "literal": "tappaas1",
+      "notTracking": true
+    },
+    "ostype": {
+      "value": "l26",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pauseOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pausePriority": {
+      "value": "50",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pbsStorageName": {
+      "value": "tappaas_backup",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pbsUrl": {
+      "value": "backup.mgmt.internal",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "portSync": {
+      "value": "on",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "provides": {
+      "value": "[\"accessControl\",\"identity\"]",
+      "defaulted": false,
+      "literal": "[\"accessControl\",\"identity\"]",
+      "notTracking": false
+    },
+    "proxyAllowedZones": {
+      "value": "[\"internet\"]",
+      "defaulted": false,
+      "literal": "[\"internet\"]",
+      "notTracking": false
+    },
+    "proxyPort": {
+      "value": "9000",
+      "defaulted": false,
+      "literal": "9000",
+      "notTracking": false
+    },
+    "proxyPreserveHost": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "proxyUpstreamHttp1": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "proxyUpstreamTls": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "rebootOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "releaseDate": {
+      "value": "2026-02-17",
+      "defaulted": false,
+      "literal": "2026-02-17",
+      "notTracking": true
+    },
+    "replicationSchedule": {
+      "value": "*/15",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "source": {
+      "value": "official",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "sshAccess": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "sshKeyOnly": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "stack": {
+      "value": "foundation",
+      "defaulted": false,
+      "literal": "foundation",
+      "notTracking": false
+    },
+    "status": {
+      "value": "Production",
+      "defaulted": false,
+      "literal": "Production",
+      "notTracking": false
+    },
+    "storage": {
+      "value": "tanka1",
+      "defaulted": false,
+      "literal": "tanka1",
+      "notTracking": false
+    },
+    "suspended": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "suspendedNoUpdate": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "trunks0": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "trunks1": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "updateTime": {
+      "value": "20261101-02:10:36",
+      "defaulted": false,
+      "literal": "20261101-02:10:36",
+      "notTracking": true
+    },
+    "version": {
+      "value": "0.5.2",
+      "defaulted": false,
+      "literal": "0.5.2",
+      "notTracking": false
+    },
+    "vmid": {
+      "value": "140",
+      "defaulted": false,
+      "literal": "140",
+      "notTracking": false
+    },
+    "vmname": {
+      "value": "identity",
+      "defaulted": false,
+      "literal": "identity",
+      "notTracking": false
+    },
+    "vmtag": {
+      "value": "TAPPaaS,Foundation",
+      "defaulted": false,
+      "literal": "TAPPaaS,Foundation",
+      "notTracking": false
+    },
+    "zone0": {
+      "value": "mgmt",
+      "defaulted": false,
+      "literal": "mgmt",
+      "notTracking": true
+    },
+    "zone1": {
+      "value": "mgmt",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    }
+  },
+  "origAvailable": true
+}

@@ -1,0 +1,43 @@
+{
+  "description": "vLLM AMD ROCm inference — Ryzen AI MAX+ 395 (tappaas2)",
+  "version": "0.8.1",
+  "releaseDate": "2026-07-02",
+  "installTime": "20260816-15:37:39",
+  "updateTime": "20261101-02:41:17",
+  "maintainer": "@ErikDaniel007",
+  "status": "Development",
+  "kind": "lxc",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/ai/vllm-amd",
+  "environment": "rossen",
+  "vmname": "vllm-amd",
+  "vmid": 312,
+  "vmtag": "TAPPaaS,AI,GPU,vLLM",
+  "node": "tappaas2",
+  "zone0": "rossen",
+  "dependsOn": [
+    "cluster:lxc",
+    "backup:vm"
+  ],
+  "provides": [
+    "inference"
+  ],
+  "stack": "ai",
+  "config": {
+    "backup:vm": {
+      "backup": {
+        "enabled": true,
+        "exclude": [],
+        "retention": "7y"
+      }
+    },
+    "cluster:lxc": {
+      "cores": 24,
+      "memory": 47104,
+      "diskSize": "80G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "debian-12-standard_12.12-1_amd64.tar.zst",
+      "bridge0": "lan"
+    }
+  }
+}

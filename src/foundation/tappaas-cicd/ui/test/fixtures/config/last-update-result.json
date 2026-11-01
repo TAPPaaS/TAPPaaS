@@ -1,0 +1,36 @@
+{
+  "start_time": "2026-11-01 02:00:32",
+  "end_time": "2026-11-01 02:42:48",
+  "request": null,
+  "path": "unit",
+  "total": 31,
+  "succeeded": 31,
+  "failed": 0,
+  "failed_modules": [],
+  "not_attempted": 0,
+  "skipped": 0,
+  "reboot": "ok",
+  "control_plane": "refreshed",
+  "deferred": 0,
+  "deferred_changes": [],
+  "test_warnings": [],
+  "backup_keys": {
+    "current": true,
+    "escrowed": 7,
+    "stick_written": "2026-10-28T17:40:13+01:00"
+  },
+  "memory_held": [],
+  "suspended_patch": {
+    "patched": [],
+    "failed": [],
+    "not_patched": []
+  },
+  "paused_for_room": {
+    "resumed": [],
+    "not_resumed": [],
+    "paused": []
+  },
+  "ok": true,
+  "result": "ok",
+  "failed_foundation": []
+}

@@ -1,0 +1,63 @@
+{
+  "description": "Centralized log aggregation with Grafana Loki, Alloy and Grafana UI",
+  "version": "0.3.0",
+  "releaseDate": "2026-05-14",
+  "installTime": "20260809-20:57:57",
+  "updateTime": "20261101-02:12:29",
+  "maintainer": "@larsrossen",
+  "status": "Production",
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/foundation/logging",
+  "environment": "mgmt",
+  "vmname": "logging",
+  "vmid": 150,
+  "vmtag": "TAPPaaS,Foundation",
+  "zone0": "mgmt",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy"
+  ],
+  "integratesWith": [
+    "identity:identity"
+  ],
+  "provides": [
+    "logs"
+  ],
+  "displayName": "Grafana",
+  "identity": {
+    "configureService": "logging-configure-oidc.service",
+    "launchPath": "/login/generic_oauth",
+    "oidcRedirectPaths": [
+      "/login/generic_oauth"
+    ],
+    "providesAdminRole": true,
+    "secretsEnv": "/etc/secrets/logging.env"
+  },
+  "stack": "foundation",
+  "config": {
+    "backup:vm": {
+      "backup": {
+        "enabled": true,
+        "exclude": [],
+        "retention": "7y"
+      }
+    },
+    "cluster:vm": {
+      "cores": 2,
+      "memory": 2048,
+      "diskSize": "32G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "network:proxy": {
+      "proxyPort": 3000,
+      "proxyAllowedZones": [
+        "mgmt"
+      ]
+    }
+  }
+}

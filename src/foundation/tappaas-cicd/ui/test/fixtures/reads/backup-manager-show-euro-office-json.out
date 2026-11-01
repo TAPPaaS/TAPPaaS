@@ -1,0 +1,17 @@
+{
+  "module": "euro-office",
+  "environment": "rossen",
+  "enabled": true,
+  "retention": "7y",
+  "residency": "eu-only",
+  "schedule": "daily",
+  "scheduleBucket": "daily",
+  "target": "backup.mgmt.internal",
+  "offsite": null,
+  "exclude": [],
+  "optedIn": true,
+  "archived": false,
+  "inPbsJob": true,
+  "jobBucket": "daily",
+  "membershipSource": "job"
+}

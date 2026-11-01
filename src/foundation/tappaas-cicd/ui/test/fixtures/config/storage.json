@@ -1,0 +1,19 @@
+{
+  "description": "Storage for consumer modules (ADR-029): NFS shares declared in config/shares.json through storage-manager, served by the cluster nodes, mounted into consumer guests by storage:nfs. A virtual module, like cluster — nothing of its own to install.",
+  "version": "0.1.0",
+  "releaseDate": "2026-10-05",
+  "installTime": "20261005-16:48:36",
+  "updateTime": "20261101-02:35:39",
+  "maintainer": "@TAPPaaS",
+  "status": "Development",
+  "kind": "application",
+  "source": "official",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/foundation/storage",
+  "environment": "mgmt",
+  "zone0": "mgmt",
+  "dependsOn": [],
+  "provides": [
+    "nfs"
+  ],
+  "stack": "foundation"
+}

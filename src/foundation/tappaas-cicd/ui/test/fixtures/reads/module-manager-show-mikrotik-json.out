@@ -1,0 +1,25 @@
+{
+  "description": "MikroTik RouterOS switches (CRS3xx/CRS5xx, RouterOS 7) managed by TAPPaaS: brings mikrotik-controller (Ansible, community.routeros) for switch-manager — VLAN trunks and access ports, parking, LACP aggregates and MLAG pairs. Installs nothing on any machine; each switch is added with setup-credentials.sh.",
+  "version": "0.1.0",
+  "releaseDate": "2026-10-20",
+  "installTime": "20261021-09:57:17",
+  "updateTime": "20261101-02:23:54",
+  "maintainer": "@larsrossen",
+  "status": "Development",
+  "kind": "application",
+  "moduleSource": "/home/tappaas/Community/src/larsrossen/network/mikrotik",
+  "environment": "rossen",
+  "zone0": "rossen",
+  "dependsOn": [],
+  "provides": [],
+  "controllers": [
+    {
+      "name": "mikrotik-controller",
+      "path": "controller/mikrotik-controller",
+      "plugsInto": [
+        "switch-manager"
+      ]
+    }
+  ],
+  "stack": "misc"
+}

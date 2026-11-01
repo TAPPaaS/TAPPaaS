@@ -1,0 +1,74 @@
+{
+ "id": "600c3a0b-26b0-43ee-b6f3-e43eac8ebae4",
+ "class": "location",
+ "name": "hetzner-fsn1",
+ "created": "2026-10-30T20:18:28.805Z",
+ "ended": "2026-10-30T20:18:29.156Z",
+ "attributes": [
+  {
+   "name": "address",
+   "value": "Hetzner FSN1-DC14",
+   "source": "site-manager",
+   "change": 934,
+   "from": "2026-10-30T20:18:28.805Z",
+   "to": null
+  },
+  {
+   "name": "city",
+   "value": "Falkenstein",
+   "source": "site-manager",
+   "change": 934,
+   "from": "2026-10-30T20:18:28.805Z",
+   "to": null
+  },
+  {
+   "name": "country",
+   "value": "DE",
+   "source": "site-manager",
+   "change": 934,
+   "from": "2026-10-30T20:18:28.805Z",
+   "to": null
+  },
+  {
+   "name": "timezone",
+   "value": "Europe/Berlin",
+   "source": "site-manager",
+   "change": 935,
+   "from": "2026-10-30T20:18:28.924Z",
+   "to": null
+  }
+ ],
+ "relations": [],
+ "changes": [
+  {
+   "id": 934,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "location add hetzner-fsn1",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:18:28.805Z",
+   "drift": false
+  },
+  {
+   "id": 935,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "location modify hetzner-fsn1",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:18:28.924Z",
+   "drift": false
+  },
+  {
+   "id": 937,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "location delete hetzner-fsn1",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:18:29.156Z",
+   "drift": false
+  }
+ ]
+}

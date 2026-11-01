@@ -1,0 +1,933 @@
+{
+  "module": "forgejo",
+  "fields": [
+    {
+      "field": "address",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "aliases",
+      "coordinate": "network:rules",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "aliasType",
+      "coordinate": "network:rules",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "host"
+    },
+    {
+      "field": "alwaysBackup",
+      "coordinate": "backup:vm",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "appVersion",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "16.0.5"
+    },
+    {
+      "field": "assistantModel",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "autoInstall",
+      "coordinate": "",
+      "class": "recreate",
+      "apply": null,
+      "settable": false,
+      "reason": "recreate under cluster:vm — takes effect only at guest creation. Use 'module-manager module delete forgejo' then 'add' to change it.",
+      "value": "false"
+    },
+    {
+      "field": "backup",
+      "coordinate": "backup:vm",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "{\"enabled\":true,\"exclude\":[],\"retention\":\"7y\"}"
+    },
+    {
+      "field": "bios",
+      "coordinate": "",
+      "class": "recreate",
+      "apply": null,
+      "settable": false,
+      "reason": "recreate under cluster:vm — takes effect only at guest creation. Use 'module-manager module delete forgejo' then 'add' to change it.",
+      "value": "ovmf"
+    },
+    {
+      "field": "bootDisks",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "bridge0",
+      "coordinate": "cluster:vm",
+      "class": "in-place-reboot",
+      "apply": "composite",
+      "settable": true,
+      "reason": null,
+      "value": "lan"
+    },
+    {
+      "field": "bridge1",
+      "coordinate": "cluster:vm",
+      "class": "in-place-reboot",
+      "apply": "composite",
+      "settable": true,
+      "reason": null,
+      "value": "NONE"
+    },
+    {
+      "field": "cloudInit",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable under cluster:vm — cannot change in place — requires delete + reinstall. Use 'module-manager module delete forgejo' then 'add' to change it.",
+      "value": "true"
+    },
+    {
+      "field": "config",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "controllers",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "cores",
+      "coordinate": "cluster:vm",
+      "class": "in-place",
+      "apply": "set",
+      "settable": true,
+      "reason": null,
+      "value": "2"
+    },
+    {
+      "field": "cputype",
+      "coordinate": "cluster:vm",
+      "class": "in-place",
+      "apply": "set",
+      "settable": true,
+      "reason": null,
+      "value": "host"
+    },
+    {
+      "field": "dependsOn",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": "[\"cluster:vm\",\"templates:nixos\",\"backup:vm\",\"network:proxy\",\"network:rules\",\"identity:identity\"]"
+    },
+    {
+      "field": "description",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "Forgejo — self-hosted Git service and DevOps platform (Gitea fork)"
+    },
+    {
+      "field": "diskAutoGrow",
+      "coordinate": "cluster:vm",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "true"
+    },
+    {
+      "field": "diskSize",
+      "coordinate": "cluster:vm",
+      "class": "grow-only",
+      "apply": "hook",
+      "settable": true,
+      "reason": null,
+      "value": "20G"
+    },
+    {
+      "field": "diskSizeMax",
+      "coordinate": "cluster:vm",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "displayName",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "Forgejo"
+    },
+    {
+      "field": "dropUnits",
+      "coordinate": "logging:logs",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "egress",
+      "coordinate": "network:rules",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "environment",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "rossen"
+    },
+    {
+      "field": "firewallType",
+      "coordinate": "network:rules",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "opnsense"
+    },
+    {
+      "field": "host",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "icon",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "identity",
+      "coordinate": "identity:identity",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "{\"adminGroupClaim\":\"admin\",\"configureService\":\"forgejo-configure-oidc.service\",\"launchPath\":\"/user/oauth2/authentik\",\"oidcRedirectPaths\":[\"/user/oauth2/authentik/callback\"],\"providesAdminRole\":true,\"scopes\":[\"openid\",\"email\",\"profile\"]}"
+    },
+    {
+      "field": "image",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable under cluster:vm — cannot change in place — requires delete + reinstall. Use 'module-manager module delete forgejo' then 'add' to change it.",
+      "value": "8080"
+    },
+    {
+      "field": "imageLocation",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable under cluster:vm — cannot change in place — requires delete + reinstall. Use 'module-manager module delete forgejo' then 'add' to change it.",
+      "value": null
+    },
+    {
+      "field": "imageSha256",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable under cluster:vm — cannot change in place — requires delete + reinstall. Use 'module-manager module delete forgejo' then 'add' to change it.",
+      "value": null
+    },
+    {
+      "field": "imageType",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable under cluster:vm — cannot change in place — requires delete + reinstall. Use 'module-manager module delete forgejo' then 'add' to change it.",
+      "value": "clone"
+    },
+    {
+      "field": "immutableSnapshots",
+      "coordinate": "backup:vm",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "ingress",
+      "coordinate": "network:rules",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "[{\"from\":\"dmz\",\"ports\":[3000],\"protocol\":\"TCP\",\"description\":\"Caddy reverse proxy forwards HTTPS traffic to Forgejo web UI\"}]"
+    },
+    {
+      "field": "installTime",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "20261006-20:10:32"
+    },
+    {
+      "field": "integratesWith",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": "[\"logging:logs\"]"
+    },
+    {
+      "field": "kind",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "vm"
+    },
+    {
+      "field": "location",
+      "coordinate": "",
+      "class": "refused",
+      "apply": null,
+      "settable": false,
+      "reason": "'forgejo' is a vm, not a machine — a guest is where its node is",
+      "value": null
+    },
+    {
+      "field": "mac0",
+      "coordinate": "cluster:vm",
+      "class": "in-place-reboot",
+      "apply": "composite",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "mac1",
+      "coordinate": "cluster:vm",
+      "class": "in-place-reboot",
+      "apply": "composite",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "maintainer",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "@ErikDaniel007"
+    },
+    {
+      "field": "management",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "managed"
+    },
+    {
+      "field": "managers",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "memory",
+      "coordinate": "cluster:vm",
+      "class": "in-place",
+      "apply": "set",
+      "settable": true,
+      "reason": null,
+      "value": "2048"
+    },
+    {
+      "field": "moduleSource",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "/home/tappaas/TAPPaaS/src/devops/forgejo"
+    },
+    {
+      "field": "name",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "node",
+      "coordinate": "cluster:vm",
+      "class": "migrate",
+      "apply": "hook",
+      "settable": true,
+      "reason": null,
+      "value": "tappaas2"
+    },
+    {
+      "field": "oauthRedirectPaths",
+      "coordinate": "forgejo:oauth",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "os",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable under cluster:vm — cannot change in place — requires delete + reinstall. Use 'module-manager module delete forgejo' then 'add' to change it.",
+      "value": null
+    },
+    {
+      "field": "ostype",
+      "coordinate": "",
+      "class": "recreate",
+      "apply": null,
+      "settable": false,
+      "reason": "recreate under cluster:vm — takes effect only at guest creation. Use 'module-manager module delete forgejo' then 'add' to change it.",
+      "value": "l26"
+    },
+    {
+      "field": "pauseOk",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "false"
+    },
+    {
+      "field": "pausePriority",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "50"
+    },
+    {
+      "field": "pbsStorageName",
+      "coordinate": "backup:vm",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "tappaas_backup"
+    },
+    {
+      "field": "pbsUrl",
+      "coordinate": "backup:vm",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "backup.mgmt.internal"
+    },
+    {
+      "field": "physicalLocation",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": null
+    },
+    {
+      "field": "placementState",
+      "coordinate": "backup:vm",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "ports",
+      "coordinate": "network:rules",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "[{\"port\":3000,\"protocol\":\"TCP\",\"description\":\"Web UI and REST API\"},{\"port\":22,\"protocol\":\"TCP\",\"description\":\"SSH git access\"}]"
+    },
+    {
+      "field": "portSync",
+      "coordinate": "",
+      "class": "refused",
+      "apply": null,
+      "settable": false,
+      "reason": "schemas/fields.json declares no change class for it — what changing it costs is unknown; declare one before it can be set",
+      "value": "on"
+    },
+    {
+      "field": "provider",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "provides",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": "[\"repo\",\"oauth\"]"
+    },
+    {
+      "field": "proxyAccess",
+      "coordinate": "network:proxy",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "proxyAllowedZones",
+      "coordinate": "network:proxy",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "[\"home\",\"work\",\"mgmt\",\"internet\"]"
+    },
+    {
+      "field": "proxyDomain",
+      "coordinate": "network:proxy",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "proxyPort",
+      "coordinate": "network:proxy",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "3000"
+    },
+    {
+      "field": "proxyPreserveHost",
+      "coordinate": "network:proxy",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "false"
+    },
+    {
+      "field": "proxyRoutes",
+      "coordinate": "network:proxy",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "proxyTls",
+      "coordinate": "network:proxy",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "proxyUpstreamHttp1",
+      "coordinate": "network:proxy",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "false"
+    },
+    {
+      "field": "proxyUpstreamTls",
+      "coordinate": "network:proxy",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "false"
+    },
+    {
+      "field": "publicDomain",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "pushTarget",
+      "coordinate": "backup:vm",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "rebootOk",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "false"
+    },
+    {
+      "field": "releaseDate",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "2026-06-01"
+    },
+    {
+      "field": "repoEditors",
+      "coordinate": "forgejo:repo",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "roles",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "source",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "official"
+    },
+    {
+      "field": "sshAccess",
+      "coordinate": "",
+      "class": "recreate",
+      "apply": null,
+      "settable": false,
+      "reason": "recreate under cluster:vm — takes effect only at guest creation. Use 'module-manager module delete forgejo' then 'add' to change it.",
+      "value": "true"
+    },
+    {
+      "field": "sshAllow",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "sshKeyOnly",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "true"
+    },
+    {
+      "field": "sshPort",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "stack",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "devops"
+    },
+    {
+      "field": "status",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "Testing"
+    },
+    {
+      "field": "storage",
+      "coordinate": "cluster:vm",
+      "class": "in-place",
+      "apply": "hook",
+      "settable": true,
+      "reason": null,
+      "value": "tanka1"
+    },
+    {
+      "field": "storagePools",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "suspended",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "false"
+    },
+    {
+      "field": "suspendedNoUpdate",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "false"
+    },
+    {
+      "field": "thinDisk",
+      "coordinate": "cluster:vm",
+      "class": "in-place",
+      "apply": "hook",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "tier",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": null
+    },
+    {
+      "field": "trunks0",
+      "coordinate": "cluster:vm",
+      "class": "in-place",
+      "apply": "composite",
+      "settable": true,
+      "reason": null,
+      "value": "NONE"
+    },
+    {
+      "field": "trunks1",
+      "coordinate": "cluster:vm",
+      "class": "in-place",
+      "apply": "composite",
+      "settable": true,
+      "reason": null,
+      "value": "NONE"
+    },
+    {
+      "field": "updateTime",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "20261101-02:15:32"
+    },
+    {
+      "field": "uplinks",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "variant",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": null
+    },
+    {
+      "field": "version",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "0.4.0"
+    },
+    {
+      "field": "vmid",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable under cluster:vm — cannot change in place — requires delete + reinstall. Use 'module-manager module delete forgejo' then 'add' to change it.",
+      "value": "350"
+    },
+    {
+      "field": "vmname",
+      "coordinate": "cluster:vm",
+      "class": "in-place",
+      "apply": "set",
+      "settable": true,
+      "reason": null,
+      "value": "forgejo"
+    },
+    {
+      "field": "vmtag",
+      "coordinate": "cluster:vm",
+      "class": "in-place",
+      "apply": "set",
+      "settable": true,
+      "reason": null,
+      "value": "TAPPaaS,Community,Testing"
+    },
+    {
+      "field": "vpn",
+      "coordinate": "",
+      "class": "refused",
+      "apply": null,
+      "settable": false,
+      "reason": "schemas/fields.json declares no change class for it — what changing it costs is unknown; declare one before it can be set",
+      "value": null
+    },
+    {
+      "field": "woodpeckerAdmins",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "zone0",
+      "coordinate": "cluster:vm",
+      "class": "in-place-reboot",
+      "apply": "composite",
+      "settable": true,
+      "reason": null,
+      "value": "rossen"
+    },
+    {
+      "field": "zone1",
+      "coordinate": "cluster:vm",
+      "class": "in-place-reboot",
+      "apply": "composite",
+      "settable": true,
+      "reason": null,
+      "value": "mgmt"
+    }
+  ],
+  "warnings": []
+}

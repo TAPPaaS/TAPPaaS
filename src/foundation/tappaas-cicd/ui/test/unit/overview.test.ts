@@ -13,15 +13,15 @@ import { AREA_CLASSES, areaStatus, bytes, environmentTile, identityTile, modules
 import { HealthSummary, JobSummary, ModuleSummary, OpsEvent, Operations, SiteRead, StorageInventory } from "../../web/src/types";
 import { check, done } from "./check";
 import { healthSite, relationTypes } from "./fake-cmdb";
-import { FIX } from "./fake-site";
+import { FIX, pinned } from "./fake-site";
 
 const read = <T>(f: string): T => JSON.parse(readFileSync(join(FIX, f), "utf8")) as T;
 const NOW = Date.parse("2026-10-30T09:00:00Z");
 
-const validate = read<HealthDoc>("validate.json");
-const rows = read<{ modules: ModuleRow[] }>("modules.json").modules;
-const modules = moduleSummaries(rows, validate, read<BackupRow[]>("backup.json")) as unknown as ModuleSummary[];
-const storage = read<StorageInventory>("storage-inventory.json");
+const validate = pinned<HealthDoc>("validate.json");
+const rows = pinned<{ modules: ModuleRow[] }>("modules.json").modules;
+const modules = moduleSummaries(rows, validate, pinned<BackupRow[]>("backup.json")) as unknown as ModuleSummary[];
+const storage = pinned<StorageInventory>("storage-inventory.json");
 const envs = read<{ name: string; displayName?: string }[]>("environments.json");
 const zones = read<ZoneLike[]>("zones.json");
 const hs = healthSite();

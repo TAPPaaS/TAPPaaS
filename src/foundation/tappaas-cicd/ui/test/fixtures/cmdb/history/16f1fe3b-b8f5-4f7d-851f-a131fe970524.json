@@ -1,0 +1,46 @@
+{
+ "id": "16f1fe3b-b8f5-4f7d-851f-a131fe970524",
+ "class": "node",
+ "name": "ap-living",
+ "created": "2026-10-30T19:34:38.684Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "placeholder",
+   "value": true,
+   "source": "asset-manager",
+   "change": 742,
+   "from": "2026-10-30T19:34:38.684Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 565,
+   "type": "allocated-to",
+   "direction": "in",
+   "other": {
+    "id": "bef68e7e-2644-4d97-8284-df97074dd701",
+    "class": "network-device",
+    "name": "ap-01"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 742,
+   "from": "2026-10-30T19:34:38.684Z",
+   "to": "2026-10-30T19:35:52.202Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 742,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset allocate",
+   "actor": "tappaas",
+   "time": "2026-10-30T19:34:38.684Z",
+   "drift": false
+  }
+ ]
+}

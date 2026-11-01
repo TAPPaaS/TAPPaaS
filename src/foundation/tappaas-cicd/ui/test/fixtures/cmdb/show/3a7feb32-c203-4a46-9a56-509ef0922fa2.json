@@ -1,0 +1,600 @@
+{
+  "id": "3a7feb32-c203-4a46-9a56-509ef0922fa2",
+  "class": "machine",
+  "ancestors": [
+    "machine",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "tappaas4",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T19:48:31.009Z",
+  "ended": "2026-10-31T10:30:09.873Z",
+  "lastSeen": "2026-10-31T10:30:09.873Z",
+  "seen": {
+    "site-manager": "2026-10-31T10:27:23.029Z",
+    "module-manager": "2026-10-31T10:30:09.873Z"
+  },
+  "at": null,
+  "attributes": {
+    "addresses": {
+      "value": [
+        "10.0.0.13"
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T00:00:32.049Z"
+    },
+    "clusterMember": {
+      "value": true,
+      "source": "site-manager",
+      "since": "2026-10-31T00:00:32.049Z"
+    },
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-30T19:55:15.330Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T10:25:04.446Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T09:55:09.015Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T09:55:09.015Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-30T19:55:15.330Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "0.0/31.3G committed, 0%",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T10:25:04.446Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "security",
+          "since": "2026-10-31T01:45:00.475Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T10:25:04.446Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-30T19:55:15.330Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T10:25:04.446Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T09:55:09.015Z"
+    },
+    "cpus": {
+      "value": 8,
+      "source": "site-manager",
+      "since": "2026-10-31T00:00:32.049Z"
+    },
+    "description": {
+      "value": "A Proxmox VE cluster node as a module: registered, visible and tested; serves the NFS shares config/shares.json declares for it, through its server hook (ADR-029 v0.9); its OS is still patched by the cluster module (ADR-026 D4 stage 1)",
+      "source": "site-manager",
+      "since": "2026-10-30T19:52:17.204Z"
+    },
+    "desired": {
+      "value": {
+        "file": "tappaas4.json"
+      },
+      "source": "site-manager",
+      "since": "2026-10-30T19:52:17.204Z"
+    },
+    "hostname": {
+      "value": "tappaas4.mgmt.internal",
+      "source": "site-manager",
+      "since": "2026-10-30T19:52:17.204Z"
+    },
+    "management": {
+      "value": "managed",
+      "source": "site-manager",
+      "since": "2026-10-30T19:52:17.204Z"
+    },
+    "maturity": {
+      "value": "Production",
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    },
+    "network": {
+      "value": {
+        "live": {
+          "lan": {
+            "mtu": 1500,
+            "bond": "",
+            "mode": "single",
+            "active": "",
+            "bondMtu": null,
+            "members": [
+              {
+                "mac": "20:7c:14:f4:d0:87",
+                "mii": "",
+                "mtu": 1500,
+                "usb": false,
+                "lldp": {
+                  "name": "USW-Pro-XG-10-PoE",
+                  "port": "Port 1",
+                  "chassis": "a8:9c:6c:b0:8d:76"
+                },
+                "name": "enp4s0",
+                "speed": 2500,
+                "state": "up",
+                "actorState": -1,
+                "aggregator": "",
+                "partnerState": -1
+              }
+            ],
+            "primary": "",
+            "aggregator": "",
+            "partnerMac": "",
+            "primaryMac": ""
+          },
+          "wan": {
+            "members": []
+          },
+          "node": "tappaas4",
+          "lldpd": "active",
+          "ports": [
+            {
+              "mac": "20:7c:14:f4:d0:8c",
+              "mii": "",
+              "mtu": 1500,
+              "usb": false,
+              "lldp": null,
+              "name": "eno1",
+              "speed": -1,
+              "state": "down",
+              "actorState": -1,
+              "aggregator": "",
+              "partnerState": -1
+            },
+            {
+              "mac": "20:7c:14:f4:d0:8d",
+              "mii": "",
+              "mtu": 1500,
+              "usb": false,
+              "lldp": null,
+              "name": "eno2",
+              "speed": -1,
+              "state": "down",
+              "actorState": -1,
+              "aggregator": "",
+              "partnerState": -1
+            },
+            {
+              "mac": "20:7c:14:f4:d0:8e",
+              "mii": "",
+              "mtu": 1500,
+              "usb": false,
+              "lldp": null,
+              "name": "eno3",
+              "speed": -1,
+              "state": "down",
+              "actorState": -1,
+              "aggregator": "",
+              "partnerState": -1
+            },
+            {
+              "mac": "20:7c:14:f4:d0:8f",
+              "mii": "",
+              "mtu": 1500,
+              "usb": false,
+              "lldp": null,
+              "name": "eno4",
+              "speed": -1,
+              "state": "down",
+              "actorState": -1,
+              "aggregator": "",
+              "partnerState": -1
+            },
+            {
+              "mac": "20:7c:14:f4:d0:87",
+              "mii": "",
+              "mtu": 1500,
+              "usb": false,
+              "lldp": {
+                "name": "USW-Pro-XG-10-PoE",
+                "port": "Port 1",
+                "chassis": "a8:9c:6c:b0:8d:76"
+              },
+              "name": "enp4s0",
+              "speed": 2500,
+              "state": "up",
+              "actorState": -1,
+              "aggregator": "",
+              "partnerState": -1
+            },
+            {
+              "mac": "20:7c:14:f4:d0:88",
+              "mii": "",
+              "mtu": 1500,
+              "usb": false,
+              "lldp": null,
+              "name": "enp5s0",
+              "speed": -1,
+              "state": "down",
+              "actorState": -1,
+              "aggregator": "",
+              "partnerState": -1
+            },
+            {
+              "mac": "20:7c:14:f4:d0:89",
+              "mii": "",
+              "mtu": 1500,
+              "usb": false,
+              "lldp": null,
+              "name": "enp6s0",
+              "speed": -1,
+              "state": "down",
+              "actorState": -1,
+              "aggregator": "",
+              "partnerState": -1
+            },
+            {
+              "mac": "20:7c:14:f4:d0:8a",
+              "mii": "",
+              "mtu": 1500,
+              "usb": false,
+              "lldp": null,
+              "name": "enp7s0",
+              "speed": -1,
+              "state": "down",
+              "actorState": -1,
+              "aggregator": "",
+              "partnerState": -1
+            },
+            {
+              "mac": "20:7c:14:f4:d0:8b",
+              "mii": "",
+              "mtu": 1500,
+              "usb": false,
+              "lldp": null,
+              "name": "enp8s0",
+              "speed": -1,
+              "state": "down",
+              "actorState": -1,
+              "aggregator": "",
+              "partnerState": -1
+            }
+          ],
+          "corosync": {
+            "links": 1,
+            "disconnected": 0
+          },
+          "lrmActive": false,
+          "pendingNew": false
+        },
+        "node": "tappaas4",
+        "declared": {
+          "lan": {
+            "mode": "single",
+            "ports": [
+              "20:7c:14:f4:d0:87"
+            ]
+          },
+          "wan": {
+            "ports": []
+          }
+        },
+        "findings": []
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    },
+    "os": {
+      "value": "debian",
+      "source": "site-manager",
+      "since": "2026-10-31T00:00:32.049Z"
+    },
+    "osVersion": {
+      "value": "13",
+      "source": "site-manager",
+      "since": "2026-10-31T00:00:32.049Z"
+    },
+    "pciDevices": {
+      "value": [
+        {
+          "id": "0000:00:05.0",
+          "class": "0x080700",
+          "device": "Atom Processor C3000 Series Root Complex Event Collector",
+          "vendor": "Intel Corporation",
+          "iommuGroup": 2
+        },
+        {
+          "id": "0000:00:12.0",
+          "class": "0x088000",
+          "device": "Atom Processor C3000 Series SMBus Contoller - Host",
+          "vendor": "Intel Corporation",
+          "iommuGroup": 12
+        },
+        {
+          "id": "0000:00:13.0",
+          "class": "0x010601",
+          "device": "Atom Processor C3000 Series SATA Controller 0",
+          "vendor": "Intel Corporation",
+          "iommuGroup": 13
+        },
+        {
+          "id": "0000:00:14.0",
+          "class": "0x010601",
+          "device": "Atom Processor C3000 Series SATA Controller 1",
+          "vendor": "Intel Corporation",
+          "iommuGroup": 14
+        },
+        {
+          "id": "0000:00:15.0",
+          "class": "0x0c0330",
+          "device": "Atom Processor C3000 Series USB 3.0 xHCI Controller",
+          "vendor": "Intel Corporation",
+          "iommuGroup": 15
+        },
+        {
+          "id": "0000:00:18.0",
+          "class": "0x078000",
+          "device": "Atom Processor C3000 Series ME HECI 1",
+          "vendor": "Intel Corporation",
+          "iommuGroup": 18
+        },
+        {
+          "id": "0000:00:1a.0",
+          "class": "0x070002",
+          "device": "Atom Processor C3000 Series HSUART Controller",
+          "vendor": "Intel Corporation",
+          "iommuGroup": 19
+        },
+        {
+          "id": "0000:00:1f.4",
+          "class": "0x0c0500",
+          "device": "Atom Processor C3000 Series SMBus controller",
+          "vendor": "Intel Corporation",
+          "iommuGroup": 20
+        },
+        {
+          "id": "0000:00:1f.5",
+          "class": "0x0c8000",
+          "device": "Atom Processor C3000 Series SPI Controller",
+          "vendor": "Intel Corporation",
+          "iommuGroup": 20
+        },
+        {
+          "id": "0000:02:00.0",
+          "class": "0x010802",
+          "device": "NVMe SSD Controller S4LV008[Pascal]",
+          "vendor": "Samsung Electronics Co Ltd",
+          "iommuGroup": 22
+        },
+        {
+          "id": "0000:03:00.0",
+          "class": "0x010802",
+          "device": "NVMe SSD Controller S4LV008[Pascal]",
+          "vendor": "Samsung Electronics Co Ltd",
+          "iommuGroup": 23
+        },
+        {
+          "id": "0000:04:00.0",
+          "class": "0x020000",
+          "device": "Ethernet Controller I226-V",
+          "vendor": "Intel Corporation",
+          "iommuGroup": 24
+        },
+        {
+          "id": "0000:05:00.0",
+          "class": "0x020000",
+          "device": "Ethernet Controller I226-V",
+          "vendor": "Intel Corporation",
+          "iommuGroup": 25
+        },
+        {
+          "id": "0000:06:00.0",
+          "class": "0x020000",
+          "device": "Ethernet Controller I226-V",
+          "vendor": "Intel Corporation",
+          "iommuGroup": 26
+        },
+        {
+          "id": "0000:07:00.0",
+          "class": "0x020000",
+          "device": "Ethernet Controller I226-V",
+          "vendor": "Intel Corporation",
+          "iommuGroup": 27
+        },
+        {
+          "id": "0000:08:00.0",
+          "class": "0x020000",
+          "device": "Ethernet Controller I226-V",
+          "vendor": "Intel Corporation",
+          "iommuGroup": 28
+        },
+        {
+          "id": "0000:0a:00.0",
+          "class": "0x030000",
+          "device": "ASPEED Graphics Family",
+          "vendor": "ASPEED Technology, Inc.",
+          "iommuGroup": 29
+        },
+        {
+          "id": "0000:0b:00.0",
+          "class": "0x020000",
+          "device": "Ethernet Connection X553 10 GbE SFP+",
+          "vendor": "Intel Corporation",
+          "iommuGroup": 30
+        },
+        {
+          "id": "0000:0b:00.1",
+          "class": "0x020000",
+          "device": "Ethernet Connection X553 10 GbE SFP+",
+          "vendor": "Intel Corporation",
+          "iommuGroup": 31
+        },
+        {
+          "id": "0000:0c:00.0",
+          "class": "0x020000",
+          "device": "Ethernet Connection X553 10 GbE SFP+",
+          "vendor": "Intel Corporation",
+          "iommuGroup": 32
+        },
+        {
+          "id": "0000:0c:00.1",
+          "class": "0x020000",
+          "device": "Ethernet Connection X553 10 GbE SFP+",
+          "vendor": "Intel Corporation",
+          "iommuGroup": 33
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T00:00:32.049Z"
+    },
+    "release": {
+      "value": {
+        "module": "pvehost",
+        "version": "0.3.0"
+      },
+      "source": "site-manager",
+      "since": "2026-10-30T19:52:17.204Z"
+    },
+    "stack": {
+      "value": "foundation",
+      "source": "site-manager",
+      "since": "2026-10-30T19:52:17.204Z"
+    },
+    "stage": {
+      "value": "retired",
+      "source": "module-manager",
+      "since": "2026-10-31T10:30:09.873Z"
+    },
+    "storagePools": {
+      "value": [],
+      "source": "site-manager",
+      "since": "2026-10-31T00:00:32.049Z"
+    },
+    "storages": {
+      "value": [
+        {
+          "type": "zfspool",
+          "used": 0,
+          "avail": 0,
+          "total": 0,
+          "active": false,
+          "shared": false,
+          "content": "rootdir,images",
+          "enabled": false,
+          "storage": "tankc1"
+        },
+        {
+          "type": "zfspool",
+          "used": 0,
+          "avail": 0,
+          "total": 0,
+          "active": false,
+          "shared": false,
+          "content": "rootdir,images",
+          "enabled": false,
+          "storage": "tanka1"
+        },
+        {
+          "type": "dir",
+          "used": 262144,
+          "avail": 479209717760,
+          "total": 479209979904,
+          "active": true,
+          "shared": false,
+          "content": "backup,vztmpl,iso,import,snippets",
+          "enabled": true,
+          "storage": "local"
+        },
+        {
+          "type": "lvmthin",
+          "used": 0,
+          "avail": 0,
+          "total": 0,
+          "active": false,
+          "shared": false,
+          "content": "rootdir,images",
+          "enabled": false,
+          "storage": "local-lvm"
+        },
+        {
+          "type": "pbs",
+          "used": 461914243072,
+          "avail": 4399867101184,
+          "total": 4861781344256,
+          "active": true,
+          "shared": true,
+          "content": "backup",
+          "enabled": true,
+          "storage": "tappaas_backup"
+        },
+        {
+          "type": "zfspool",
+          "used": 0,
+          "avail": 0,
+          "total": 0,
+          "active": false,
+          "shared": false,
+          "content": "rootdir,images",
+          "enabled": false,
+          "storage": "tankb1"
+        },
+        {
+          "type": "zfspool",
+          "used": 98304,
+          "avail": 479209836544,
+          "total": 479209934848,
+          "active": true,
+          "shared": false,
+          "content": "images,rootdir",
+          "enabled": true,
+          "storage": "local-zfs"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T09:52:00.815Z"
+    },
+    "zone": {
+      "value": "mgmt",
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

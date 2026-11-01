@@ -1,0 +1,1482 @@
+{
+  "manifest": 1,
+  "name": "module-manager",
+  "version": "0.1.0",
+  "tagline": "TAPPaaS module lifecycle manager (ADR-007 #3)",
+  "common": [
+    {
+      "flag": "--config-dir",
+      "takesValue": true,
+      "arg": "DIR",
+      "choices": null,
+      "repeatable": false,
+      "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+    },
+    {
+      "flag": "--json",
+      "takesValue": false,
+      "arg": null,
+      "choices": null,
+      "repeatable": false,
+      "description": "Machine-readable output (list / show / validate)."
+    }
+  ],
+  "verbs": [
+    {
+      "verb": "list",
+      "keys": [
+        [
+          "list"
+        ]
+      ],
+      "usage": "list [--diff] [--services] [--resolution] [--json]",
+      "note": null,
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--diff",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Per-module three-way (released/desired/running) drift rollup across every module."
+        },
+        {
+          "flag": "--services",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "--diff: also check each module's dependency-service state (one firewall/API round-trip per dependency — OFF by default across the fleet)."
+        },
+        {
+          "flag": "--resolution",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Which path locates each module's source directory (.moduleSource / repository catalog / neither). Offline; flags modules nothing can resolve."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list / show / validate)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "show",
+      "keys": [
+        [
+          "show"
+        ]
+      ],
+      "usage": "show <module> [--json]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list / show / validate)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "drift",
+      "keys": [
+        [
+          "drift"
+        ]
+      ],
+      "usage": "drift <module> [--service <provider:service>] [--json]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--service",
+          "takesValue": true,
+          "arg": "<provider:service>",
+          "choices": null,
+          "repeatable": false,
+          "description": "One coordinate (e.g. cluster:vm). Default: every dependency that ships a field manifest."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "The drift RECORD — with --service, exactly what 'update-service.sh --apply-drift' consumes."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "fields",
+      "keys": [
+        [
+          "fields"
+        ]
+      ],
+      "usage": "fields <module> [--json]",
+      "note": "(ADR-020: every field the module may set, the service that owns it and its change class)",
+      "details": "What `modify --set` would make of each field before anything is typed: the coordinate whose\nmanifest classifies it and its change class (in-place, grow-only, in-place-reboot, migrate,\nconfig-only, …), or why it cannot be set (immutable, recreate, a tooling field). Fields of\nservices the module does not declare are left out. Reads only.",
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list / show / validate)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "resolve",
+      "keys": [
+        [
+          "resolve"
+        ]
+      ],
+      "usage": "resolve <module> [--json]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "The resolved document as JSON — what the converge consumes (ADR-020 D1)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "validate",
+      "keys": [
+        [
+          "validate"
+        ]
+      ],
+      "usage": "validate [<module>] [--allow-fork] | validate --blueprint [<module>|<dir>]... [--repo PATH]",
+      "note": null,
+      "details": "--blueprint reports what a module is made of (ADR-027): a missing MUST is an error, a\nmissing SHOULD a warning, the same for every module. Exit 1 on any error. It never runs\nat install time — an incomplete module still installs.",
+      "positionals": [
+        {
+          "name": "module",
+          "optional": true,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--allow-fork",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Permit forked/non-canonical module sources (relax scope/source lint)."
+        },
+        {
+          "flag": "--blueprint",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": true,
+          "description": "Check module SOURCE directories against the ADR-027 blueprint instead of linting deployed configs: every module of every registered repository, or the named modules/directories."
+        },
+        {
+          "flag": "--repo",
+          "takesValue": true,
+          "arg": "PATH",
+          "choices": null,
+          "repeatable": false,
+          "description": "With --blueprint: every module in that repository's catalogue (what the release boundary runs)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list / show / validate)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "add-stack",
+      "keys": [
+        [
+          "add-stack"
+        ]
+      ],
+      "usage": "add-stack <stack> [--environment ENV] [--dry-run] [--allow-fork]",
+      "note": "(every module of a stack, in dependsOn order — #763)",
+      "details": "The stack's modules are the catalogue entries whose stack it is; the order is the one its\nINSTALL.md shows. Installed modules are skipped. A dependency outside the stack must be\ninstalled first, or nothing is. The first module that fails stops the run; run it again to\nresume. foundation, template and test are not installable stacks.",
+      "positionals": [
+        {
+          "name": "stack",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--environment",
+          "takesValue": true,
+          "arg": "ENV",
+          "choices": null,
+          "repeatable": false,
+          "description": "Install every module into this environment (passed to each add)."
+        },
+        {
+          "flag": "--dry-run",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the plan — order, what is skipped, outside dependencies missing, hand steps — and change nothing."
+        },
+        {
+          "flag": "--allow-fork",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Passed to each add."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list / show / validate)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--dry-run"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "add",
+      "keys": [
+        [
+          "add"
+        ]
+      ],
+      "usage": "add <module> [--environment ENV] [--instance NAME] [--allow-fork] [--reinstall] [--<field> <value>]...",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--environment",
+          "takesValue": true,
+          "arg": "ENV",
+          "choices": null,
+          "repeatable": false,
+          "description": "Target environment to install into (default: foundation→mgmt, else the org env)."
+        },
+        {
+          "flag": "--instance",
+          "takesValue": true,
+          "arg": "NAME",
+          "choices": null,
+          "repeatable": false,
+          "description": "Name the instance: config/NAME.json instead of the default <module>[-<environment>] — e.g. tappaas2 for one of several nodes (ADR-026 D6.4)."
+        },
+        {
+          "flag": "--allow-fork",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Permit forked/non-canonical module sources."
+        },
+        {
+          "flag": "--reinstall",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Delete the existing deployment first, then install fresh — the only way to replace a deployed config (#301, #453)."
+        },
+        {
+          "flag": "--location",
+          "takesValue": true,
+          "arg": "NAME",
+          "choices": null,
+          "repeatable": false,
+          "description": "A machine: the site's location it is at (site-manager location list); absent, the primary location."
+        },
+        {
+          "flag": "--country",
+          "takesValue": true,
+          "arg": "CC",
+          "choices": null,
+          "repeatable": false,
+          "description": "A machine: where it is, instead of --location — the site's location at that place, added as a location of kind remote when there is none."
+        },
+        {
+          "flag": "--city",
+          "takesValue": true,
+          "arg": "CITY",
+          "choices": null,
+          "repeatable": false,
+          "description": "With --country: the city."
+        },
+        {
+          "flag": "--building",
+          "takesValue": true,
+          "arg": "B",
+          "choices": null,
+          "repeatable": false,
+          "description": "With --country: the building or data centre, when the city is the site's own."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list / show / validate)."
+        }
+      ],
+      "open": true,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "installs the module: writes config/<module>.json, builds and starts its guest, wires the services it depends on"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "adopt",
+      "keys": [
+        [
+          "adopt"
+        ]
+      ],
+      "usage": "adopt <address> [--instance NAME] [--zone ZONE] [--location NAME | --country CC [--city C] [--building B]] [--wait SECONDS] [--set field=value]...",
+      "note": "(ADR-026 D8.1: a machine that already runs becomes a module; its SSH becomes key-only unless --set sshKeyOnly=false — nothing else on it is changed)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "address",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--instance",
+          "takesValue": true,
+          "arg": "NAME",
+          "choices": null,
+          "repeatable": false,
+          "description": "Name the instance instead of the machine's hostname — when that name is taken by another machine."
+        },
+        {
+          "flag": "--zone",
+          "takesValue": true,
+          "arg": "ZONE",
+          "choices": null,
+          "repeatable": false,
+          "description": "The zone it sits in, when its address is in no active zone (a Location reached through a tunnel)."
+        },
+        {
+          "flag": "--location",
+          "takesValue": true,
+          "arg": "NAME",
+          "choices": null,
+          "repeatable": false,
+          "description": "The site's location it is at (site-manager location list); absent, the primary location."
+        },
+        {
+          "flag": "--country",
+          "takesValue": true,
+          "arg": "CC",
+          "choices": null,
+          "repeatable": false,
+          "description": "Where it is, instead of --location: the site's location at that place, added as a location of kind remote when there is none."
+        },
+        {
+          "flag": "--city",
+          "takesValue": true,
+          "arg": "C",
+          "choices": null,
+          "repeatable": false,
+          "description": "With --country: the city."
+        },
+        {
+          "flag": "--building",
+          "takesValue": true,
+          "arg": "B",
+          "choices": null,
+          "repeatable": false,
+          "description": "With --country: the building or data centre, when the city is the site's own."
+        },
+        {
+          "flag": "--wait",
+          "takesValue": true,
+          "arg": "SECONDS",
+          "choices": null,
+          "repeatable": false,
+          "description": "How long to wait for root to accept the mothership's key (default 300); nothing is written until it does."
+        },
+        {
+          "flag": "--set",
+          "takesValue": true,
+          "arg": "field=value",
+          "choices": null,
+          "repeatable": true,
+          "description": "Write a field into the new config before its install runs. --set sshKeyOnly=false keeps password SSH as the machine has it (#756); without it, the machine refuses password logins over SSH, as the cluster nodes do."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list / show / validate)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "makes a running machine a module: writes its config, turns its SSH key-only"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "update",
+      "keys": [
+        [
+          "update"
+        ]
+      ],
+      "usage": "update <module> [--environment ENV] [--force] [--allow-disruption] [--no-snapshot] [--debug] [--silent]",
+      "note": "(#655: take the release forward; local modifications survive the 3-way merge)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--environment",
+          "takesValue": true,
+          "arg": "ENV",
+          "choices": null,
+          "repeatable": false,
+          "description": "Target environment to update."
+        },
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Proceed although something says no: a pre-update test that failed fatally (exit 2), or an archived/external module. Never reboots, never overwrites the deployed config."
+        },
+        {
+          "flag": "--allow-disruption",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Authorize downtime for this module now — a reboot or an offline migrate. Without it such a change is deferred, not applied."
+        },
+        {
+          "flag": "--no-snapshot",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Skip the pre-change VM snapshot."
+        },
+        {
+          "flag": "--debug",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Verbose diagnostic output."
+        },
+        {
+          "flag": "--silent",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Suppress non-essential output."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list / show / validate)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "takes the module to its release: a snapshot, then the converge of its guest and services; a disruptive change waits for --allow-disruption"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "Proceed although something says no: a pre-update test that failed fatally (exit 2), or an archived/external module. Never reboots, never overwrites the deployed config."
+        },
+        {
+          "flag": "--allow-disruption",
+          "consequence": "Authorize downtime for this module now — a reboot or an offline migrate. Without it such a change is deferred, not applied."
+        }
+      ]
+    },
+    {
+      "verb": "modify",
+      "keys": [
+        [
+          "modify"
+        ]
+      ],
+      "usage": "modify <module> --set field=value... [--unset field]... [--lockdown] [--environment ENV] [--force] [--allow-disruption] [--no-snapshot] [--debug] [--silent]",
+      "note": "(change a declared field, then converge; bare `modify` is the deprecated spelling of `update`)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--set",
+          "takesValue": true,
+          "arg": "field=value",
+          "choices": null,
+          "repeatable": true,
+          "description": "Change a declared field, then converge (repeatable). Rejected up front if the field cannot change in place."
+        },
+        {
+          "flag": "--unset",
+          "takesValue": true,
+          "arg": "field",
+          "choices": null,
+          "repeatable": true,
+          "description": "Remove a stale undeclared field the merge keeps forever (repeatable). Refused for a declared field and for one the release source still defines."
+        },
+        {
+          "flag": "--lockdown",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Run the module's lockdown.sh, alone: for a satellite, make it the unmanaged off-site vault — it pulls the Site's PBS, patches itself, and the mothership's key is removed (ADR-010 §8.4.4). One-way."
+        },
+        {
+          "flag": "--environment",
+          "takesValue": true,
+          "arg": "ENV",
+          "choices": null,
+          "repeatable": false,
+          "description": "Target environment to modify."
+        },
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "As for `update`: proceed past a fatally failed pre-update test or an archived/external status."
+        },
+        {
+          "flag": "--allow-disruption",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "As for `update`: authorize downtime for this module now."
+        },
+        {
+          "flag": "--no-snapshot",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Skip the pre-change VM snapshot."
+        },
+        {
+          "flag": "--debug",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Verbose diagnostic output."
+        },
+        {
+          "flag": "--silent",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Suppress non-essential output."
+        },
+        {
+          "flag": "--dry-run",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Run the pre-gate only: print each --set's service and change class (or why it is refused), and change nothing. With `--set instance=<new>`: say what the rename would move and repoint. With --json: the plan as JSON."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list / show / validate)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--dry-run"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "As for `update`: proceed past a fatally failed pre-update test or an archived/external status."
+        },
+        {
+          "flag": "--allow-disruption",
+          "consequence": "As for `update`: authorize downtime for this module now."
+        }
+      ]
+    },
+    {
+      "verb": "delete",
+      "keys": [
+        [
+          "delete"
+        ]
+      ],
+      "usage": "delete <module> [--archive|--remove] [--vmid ID] [--decommission] [--environment ENV] [--yes] [--force]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--archive",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Archive the module config (default; mutually exclusive with --remove)."
+        },
+        {
+          "flag": "--remove",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Fully remove the module config (mutually exclusive with --archive)."
+        },
+        {
+          "flag": "--vmid",
+          "takesValue": true,
+          "arg": "ID",
+          "choices": null,
+          "repeatable": false,
+          "description": "Target a specific VM id."
+        },
+        {
+          "flag": "--decommission",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "A machine only: also run its module's delete.sh, taking the Site's side of it down (a satellite: OPNsense peer, tunnel, edge rules). Without it a machine is only unregistered; the machine itself is never touched (ADR-010 §8.4.5)."
+        },
+        {
+          "flag": "--environment",
+          "takesValue": true,
+          "arg": "ENV",
+          "choices": null,
+          "repeatable": false,
+          "description": "Target environment to delete from."
+        },
+        {
+          "flag": "--yes",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Skip the VM-destroy confirmation prompt, for automation (also -y)."
+        },
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Proceed despite warnings; also implies --yes + --remove."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list / show / validate)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "stops and destroys the guest and its disks; archives config/<module>.json (--remove deletes it); removes its routes, pinholes and identity application; PBS backups stay until purged"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "Proceed despite warnings; also implies --yes + --remove."
+        },
+        {
+          "flag": "--yes",
+          "consequence": "Skip the VM-destroy confirmation prompt, for automation (also -y)."
+        }
+      ]
+    },
+    {
+      "verb": "suspend",
+      "keys": [
+        [
+          "suspend"
+        ]
+      ],
+      "usage": "suspend <module> [--no-update]",
+      "note": "(#428: stop the guest and keep everything else; patched by the nightly update, stopped again after)",
+      "details": "The guest stops — through HA for an HA guest, which then keeps it stopped; otherwise with\nonboot cleared, so a node reboot does not start it. Config, backups, DNS and the published\nroute stay. The config is marked suspended and the health check reports it as suspended, not\ndown. The nightly update still patches it (#890): after every other module, when it fits on its\nnode, it is resumed, updated, tested and suspended again. A machine cannot be suspended.",
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--no-update",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Keep it out of that patch pass too — for a module stopped because it is broken. Resume clears it."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list / show / validate)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "stops the guest and keeps it stopped; config, backups, DNS and route stay; the nightly update still patches it"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "resume",
+      "keys": [
+        [
+          "resume"
+        ]
+      ],
+      "usage": "resume <module>",
+      "note": "(start a suspended module and clear the mark)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list / show / validate)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "starts a suspended module and clears its mark"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "migrate",
+      "keys": [
+        [
+          "migrate"
+        ]
+      ],
+      "usage": "migrate <module> [--force]",
+      "note": "(ADR-019: realizes the DECLARED placement; takes no node argument)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "authorize an OFFLINE move when the guest cannot migrate live"
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list / show / validate)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "moves the guest to the node its config declares"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "authorize an OFFLINE move when the guest cannot migrate live"
+        }
+      ]
+    },
+    {
+      "verb": "reconcile",
+      "keys": [
+        [
+          "reconcile"
+        ]
+      ],
+      "usage": "reconcile <module> [--apply] [--allow-disruption] [--fail-fast] [--environment ENV] [--no-snapshot] [--no-services]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--apply",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Converge the module's config → VM/service. Default is a read-only three-way (released/desired/running) drift INSPECT."
+        },
+        {
+          "flag": "--allow-disruption",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "--apply: authorize a disruptive change (reboot / offline migrate). Without it such a change is deferred, not applied."
+        },
+        {
+          "flag": "--fail-fast",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "--apply: stop at the first dependency that fails to re-apply and skip the module's own update.sh — for a caller that rolls back (module update, #768)."
+        },
+        {
+          "flag": "--environment",
+          "takesValue": true,
+          "arg": "ENV",
+          "choices": null,
+          "repeatable": false,
+          "description": "Target environment to reconcile."
+        },
+        {
+          "flag": "--no-snapshot",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Skip any pre-change VM snapshot (--apply; leaf re-apply is idempotent)."
+        },
+        {
+          "flag": "--no-services",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "INSPECT only: skip the dependency-service drift check (declared firewall/NAT/discovery state), which is ON by default."
+        },
+        {
+          "flag": "--debug",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "--apply: verbose diagnostic output."
+        },
+        {
+          "flag": "--silent",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "--apply: suppress non-essential output."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list / show / validate)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "apply-flag",
+        "flag": "--apply"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--allow-disruption",
+          "consequence": "--apply: authorize a disruptive change (reboot / offline migrate). Without it such a change is deferred, not applied."
+        }
+      ]
+    },
+    {
+      "verb": "test",
+      "keys": [
+        [
+          "test"
+        ]
+      ],
+      "usage": "test <module> [--deep] [--vmid ID] [--zone0 ZONE]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--deep",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Run the deep/regression test suite, not just the smoke test."
+        },
+        {
+          "flag": "--vmid",
+          "takesValue": true,
+          "arg": "ID",
+          "choices": null,
+          "repeatable": false,
+          "description": "Target a specific VM id."
+        },
+        {
+          "flag": "--zone0",
+          "takesValue": true,
+          "arg": "ZONE",
+          "choices": null,
+          "repeatable": false,
+          "description": "Override the primary network zone under test."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list / show / validate)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [
+        {
+          "flag": "--deep",
+          "touches": "runs the deep suite: creates and removes zztest guests"
+        }
+      ],
+      "disruptions": []
+    },
+    {
+      "verb": "report",
+      "keys": [
+        [
+          "report"
+        ]
+      ],
+      "usage": "report [--json] [--discover] [--end <module>]",
+      "note": "(ADR-040: send every installed instance, its services, dependencies and the control plane's components to the CMDB)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the report instead of sending it."
+        },
+        {
+          "flag": "--discover",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Accepted for the sweep (D15): what this plane holds is all report sends."
+        },
+        {
+          "flag": "--end",
+          "takesValue": true,
+          "arg": "<module>",
+          "choices": null,
+          "repeatable": false,
+          "description": "Report the end of this instance instead: delete-module.sh, once its guest is gone."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "snapshot-vm",
+      "keys": [
+        [
+          "snapshot-vm"
+        ]
+      ],
+      "usage": "snapshot-vm <module> [--list|--cleanup N|--restore N]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--list",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "List existing VM snapshots (default action is to create one)."
+        },
+        {
+          "flag": "--cleanup",
+          "takesValue": true,
+          "arg": "N",
+          "choices": null,
+          "repeatable": false,
+          "description": "Prune snapshots, keeping the N most recent."
+        },
+        {
+          "flag": "--restore",
+          "takesValue": true,
+          "arg": "N",
+          "choices": null,
+          "repeatable": false,
+          "description": "Restore the VM by rolling back N snapshot steps."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list / show / validate)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "takes a snapshot of the VM (--restore rolls it back, --cleanup prunes old ones)"
+      },
+      "destructive": false,
+      "destructiveWhen": [
+        "--restore",
+        "--cleanup"
+      ],
+      "readWhen": [
+        "--list"
+      ],
+      "writeWhen": [],
+      "disruptions": []
+    }
+  ]
+}

@@ -29,6 +29,20 @@
       "actualNode": null
     },
     {
+      "name": "console",
+      "kind": "application",
+      "vmname": "tappaas-cicd",
+      "vmid": null,
+      "node": "tappaas1",
+      "zone0": "mgmt",
+      "stack": "foundation",
+      "scope": "site",
+      "status": "Development",
+      "environment": "mgmt",
+      "running": "-",
+      "actualNode": null
+    },
+    {
       "name": "coturn",
       "kind": "vm",
       "vmname": "coturn",
@@ -93,7 +107,7 @@
       "zone0": "mgmt",
       "stack": "foundation",
       "scope": "site",
-      "status": "Development",
+      "status": "Production",
       "environment": "mgmt",
       "running": "running",
       "actualNode": "tappaas1"
@@ -127,6 +141,34 @@
       "actualNode": "tappaas1"
     },
     {
+      "name": "karakeep",
+      "kind": "vm",
+      "vmname": "karakeep",
+      "vmid": 371,
+      "node": "tappaas3",
+      "zone0": "rossen",
+      "stack": "home",
+      "scope": "environment",
+      "status": "Development",
+      "environment": "rossen",
+      "running": "running",
+      "actualNode": "tappaas3"
+    },
+    {
+      "name": "lazysite",
+      "kind": "vm",
+      "vmname": "lazysite",
+      "vmid": 380,
+      "node": "tappaas2",
+      "zone0": "dmz",
+      "stack": "collaboration",
+      "scope": "environment",
+      "status": "Development",
+      "environment": "rossen",
+      "running": "running",
+      "actualNode": "tappaas2"
+    },
+    {
       "name": "litellm",
       "kind": "vm",
       "vmname": "litellm",
@@ -149,10 +191,24 @@
       "zone0": "mgmt",
       "stack": "foundation",
       "scope": "site",
-      "status": "Development",
+      "status": "Production",
       "environment": "mgmt",
       "running": "running",
       "actualNode": "tappaas1"
+    },
+    {
+      "name": "mikrotik",
+      "kind": "application",
+      "vmname": null,
+      "vmid": null,
+      "node": null,
+      "zone0": "rossen",
+      "stack": "misc",
+      "scope": "environment",
+      "status": "Development",
+      "environment": "rossen",
+      "running": "-",
+      "actualNode": null
     },
     {
       "name": "network",
@@ -177,7 +233,7 @@
       "zone0": "rossen",
       "stack": "collaboration",
       "scope": "environment",
-      "status": "Testing",
+      "status": "Production",
       "environment": "rossen",
       "running": "running",
       "actualNode": "tappaas1"
@@ -201,14 +257,14 @@
       "kind": "vm",
       "vmname": "nomad",
       "vmid": 370,
-      "node": null,
+      "node": "tappaas3",
       "zone0": "dmz",
       "stack": "home",
       "scope": "environment",
       "status": "Development",
       "environment": "rossen",
       "running": "running",
-      "actualNode": "tappaas1"
+      "actualNode": "tappaas3"
     },
     {
       "name": "openwebui",
@@ -261,7 +317,7 @@
       "zone0": "mgmt",
       "stack": "foundation",
       "scope": "site",
-      "status": "Development",
+      "status": "Production",
       "environment": "mgmt",
       "running": "-",
       "actualNode": null
@@ -275,7 +331,7 @@
       "zone0": "mgmt",
       "stack": "foundation",
       "scope": "site",
-      "status": "Development",
+      "status": "Production",
       "environment": "mgmt",
       "running": "-",
       "actualNode": null
@@ -289,7 +345,21 @@
       "zone0": "mgmt",
       "stack": "foundation",
       "scope": "site",
-      "status": "Development",
+      "status": "Production",
+      "environment": "mgmt",
+      "running": "-",
+      "actualNode": null
+    },
+    {
+      "name": "tappaas4",
+      "kind": "machine",
+      "vmname": null,
+      "vmid": null,
+      "node": null,
+      "zone0": "mgmt",
+      "stack": "foundation",
+      "scope": "site",
+      "status": "Production",
       "environment": "mgmt",
       "running": "-",
       "actualNode": null
@@ -315,7 +385,7 @@
       "vmid": 811,
       "node": "tappaas3",
       "zone0": "mgmt",
-      "stack": null,
+      "stack": "misc",
       "scope": "environment",
       "status": "Development",
       "environment": "rossen",
@@ -327,14 +397,14 @@
       "kind": "vm",
       "vmname": "vaultwarden",
       "vmid": 610,
-      "node": null,
+      "node": "tappaas3",
       "zone0": "dmz",
       "stack": "security",
       "scope": "environment",
       "status": "Development",
       "environment": "rossen",
       "running": "running",
-      "actualNode": "tappaas1"
+      "actualNode": "tappaas3"
     },
     {
       "name": "vllm-amd",
@@ -346,6 +416,20 @@
       "stack": "ai",
       "scope": "environment",
       "status": "Development",
+      "environment": "rossen",
+      "running": "running",
+      "actualNode": "tappaas2"
+    },
+    {
+      "name": "woodpecker",
+      "kind": "vm",
+      "vmname": "woodpecker",
+      "vmid": 351,
+      "node": "tappaas2",
+      "zone0": "rossen",
+      "stack": "devops",
+      "scope": "environment",
+      "status": "Testing",
       "environment": "rossen",
       "running": "running",
       "actualNode": "tappaas2"

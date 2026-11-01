@@ -1,0 +1,76 @@
+{
+  "description": "Woodpecker CI — runs the pipelines of the site's Forgejo repositories, sign-in with Forgejo.",
+  "version": "0.1.1",
+  "releaseDate": "2026-10-18",
+  "installTime": "20261018-23:10:59",
+  "updateTime": "20261101-02:42:37",
+  "maintainer": "@larsrossen",
+  "status": "Testing",
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/devops/woodpecker",
+  "environment": "rossen",
+  "vmname": "woodpecker",
+  "vmid": 351,
+  "vmtag": "TAPPaaS,App,CI",
+  "node": "tappaas2",
+  "zone0": "rossen",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy",
+    "identity:accessControl",
+    "network:rules",
+    "forgejo:oauth"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "provides": [],
+  "appVersion": "3.18.0",
+  "displayName": "Woodpecker CI",
+  "stack": "devops",
+  "woodpeckerAdmins": [
+    "lars"
+  ],
+  "config": {
+    "backup:vm": {
+      "backup": {
+        "enabled": true,
+        "exclude": [],
+        "retention": "7y"
+      }
+    },
+    "cluster:vm": {
+      "bios": "ovmf",
+      "cores": 4,
+      "memory": 4096,
+      "diskSize": "64G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan",
+      "thinDisk": true
+    },
+    "forgejo:oauth": {
+      "oauthRedirectPaths": [
+        "/authorize"
+      ]
+    },
+    "network:rules": {
+      "ports": [
+        {
+          "port": 8000,
+          "protocol": "TCP",
+          "description": "Woodpecker: the web UI, its API and Forgejo's webhooks"
+        }
+      ]
+    },
+    "network:proxy": {
+      "proxyPort": 8000,
+      "proxyAllowedZones": [
+        "internet"
+      ]
+    }
+  }
+}

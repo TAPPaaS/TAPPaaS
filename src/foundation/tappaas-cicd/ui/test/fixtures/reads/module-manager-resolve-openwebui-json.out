@@ -1,0 +1,372 @@
+{
+  "module": "openwebui",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy",
+    "litellm:models",
+    "network:rules",
+    "identity:identity"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "fields": {
+    "aliasType": {
+      "value": "host",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "appVersion": {
+      "value": "0.11.4",
+      "defaulted": false,
+      "literal": "0.11.4",
+      "notTracking": false
+    },
+    "autoInstall": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "backup": {
+      "value": "{\"enabled\":true,\"exclude\":[],\"retention\":\"7y\"}",
+      "defaulted": false,
+      "literal": "{\"enabled\":true,\"exclude\":[],\"retention\":\"7y\"}",
+      "notTracking": true
+    },
+    "bios": {
+      "value": "ovmf",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "bridge0": {
+      "value": "lan",
+      "defaulted": false,
+      "literal": "lan",
+      "notTracking": false
+    },
+    "bridge1": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "cloudInit": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "cores": {
+      "value": "2",
+      "defaulted": false,
+      "literal": "2",
+      "notTracking": false
+    },
+    "cputype": {
+      "value": "host",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "dependsOn": {
+      "value": "[\"cluster:vm\",\"templates:nixos\",\"backup:vm\",\"network:proxy\",\"litellm:models\",\"network:rules\",\"identity:identity\"]",
+      "defaulted": false,
+      "literal": "[\"cluster:vm\",\"templates:nixos\",\"backup:vm\",\"network:proxy\",\"litellm:models\",\"network:rules\",\"identity:identity\"]",
+      "notTracking": false
+    },
+    "description": {
+      "value": "Open WebUI chat interface — private AI chat for your users, with conversation history and RAG, through the LiteLLM gateway.",
+      "defaulted": false,
+      "literal": "Open WebUI chat interface — private AI chat for your users, with conversation history and RAG, through the LiteLLM gateway.",
+      "notTracking": false
+    },
+    "diskAutoGrow": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "diskSize": {
+      "value": "32G",
+      "defaulted": false,
+      "literal": "32G",
+      "notTracking": false
+    },
+    "displayName": {
+      "value": "Open WebUI",
+      "defaulted": false,
+      "literal": "Open WebUI",
+      "notTracking": false
+    },
+    "environment": {
+      "value": "rossen",
+      "defaulted": false,
+      "literal": "rossen",
+      "notTracking": true
+    },
+    "firewallType": {
+      "value": "opnsense",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "identity": {
+      "value": "{\"configureService\":\"openwebui-integrations.service\",\"launchPath\":\"/oauth/oidc/login\",\"oidcRedirectPaths\":[\"/oauth/oidc/callback\"],\"scopes\":[\"openid\",\"email\",\"profile\"],\"secretsEnv\":\"/etc/secrets/openwebui-oidc.env\"}",
+      "defaulted": false,
+      "literal": "{\"configureService\":\"openwebui-integrations.service\",\"launchPath\":\"/oauth/oidc/login\",\"oidcRedirectPaths\":[\"/oauth/oidc/callback\"],\"scopes\":[\"openid\",\"email\",\"profile\"],\"secretsEnv\":\"/etc/secrets/openwebui-oidc.env\"}",
+      "notTracking": true
+    },
+    "image": {
+      "value": "8080",
+      "defaulted": false,
+      "literal": "8080",
+      "notTracking": false
+    },
+    "imageType": {
+      "value": "clone",
+      "defaulted": false,
+      "literal": "clone",
+      "notTracking": false
+    },
+    "installTime": {
+      "value": "20260823-15:51:07",
+      "defaulted": false,
+      "literal": "20260823-15:51:07",
+      "notTracking": true
+    },
+    "integratesWith": {
+      "value": "[\"logging:logs\"]",
+      "defaulted": false,
+      "literal": "[\"logging:logs\"]",
+      "notTracking": false
+    },
+    "kind": {
+      "value": "vm",
+      "defaulted": false,
+      "literal": "vm",
+      "notTracking": false
+    },
+    "maintainer": {
+      "value": "@ErikDaniel007",
+      "defaulted": false,
+      "literal": "@ErikDaniel007",
+      "notTracking": false
+    },
+    "management": {
+      "value": "managed",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "memory": {
+      "value": "4096",
+      "defaulted": false,
+      "literal": "4096",
+      "notTracking": false
+    },
+    "moduleSource": {
+      "value": "/home/tappaas/TAPPaaS/src/ai/openwebui",
+      "defaulted": false,
+      "literal": "/home/tappaas/TAPPaaS/src/ai/openwebui",
+      "notTracking": true
+    },
+    "node": {
+      "value": "tappaas2",
+      "defaulted": false,
+      "literal": "tappaas2",
+      "notTracking": false
+    },
+    "ostype": {
+      "value": "l26",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pauseOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pausePriority": {
+      "value": "50",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pbsStorageName": {
+      "value": "tappaas_backup",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pbsUrl": {
+      "value": "backup.mgmt.internal",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "portSync": {
+      "value": "on",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "provides": {
+      "value": "[]",
+      "defaulted": false,
+      "literal": "[]",
+      "notTracking": false
+    },
+    "proxyAllowedZones": {
+      "value": "[\"internet\"]",
+      "defaulted": false,
+      "literal": "[\"internet\"]",
+      "notTracking": true
+    },
+    "proxyPort": {
+      "value": "8080",
+      "defaulted": false,
+      "literal": "8080",
+      "notTracking": false
+    },
+    "proxyPreserveHost": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "proxyUpstreamHttp1": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "proxyUpstreamTls": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "rebootOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "releaseDate": {
+      "value": "2026-07-02",
+      "defaulted": false,
+      "literal": "2026-07-02",
+      "notTracking": false
+    },
+    "source": {
+      "value": "official",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "sshAccess": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "sshKeyOnly": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "stack": {
+      "value": "ai",
+      "defaulted": false,
+      "literal": "ai",
+      "notTracking": false
+    },
+    "status": {
+      "value": "Development",
+      "defaulted": false,
+      "literal": "Development",
+      "notTracking": false
+    },
+    "storage": {
+      "value": "tanka1",
+      "defaulted": false,
+      "literal": "tanka1",
+      "notTracking": false
+    },
+    "suspended": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "suspendedNoUpdate": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "trunks0": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "trunks1": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "updateTime": {
+      "value": "20261101-02:35:31",
+      "defaulted": false,
+      "literal": "20261101-02:35:31",
+      "notTracking": true
+    },
+    "version": {
+      "value": "0.8.2",
+      "defaulted": false,
+      "literal": "0.8.2",
+      "notTracking": false
+    },
+    "vmid": {
+      "value": "311",
+      "defaulted": false,
+      "literal": "311",
+      "notTracking": false
+    },
+    "vmname": {
+      "value": "openwebui",
+      "defaulted": false,
+      "literal": "openwebui",
+      "notTracking": false
+    },
+    "vmtag": {
+      "value": "TAPPaaS,App",
+      "defaulted": false,
+      "literal": "TAPPaaS,App",
+      "notTracking": false
+    },
+    "zone0": {
+      "value": "rossen",
+      "defaulted": false,
+      "literal": "rossen",
+      "notTracking": true
+    },
+    "zone1": {
+      "value": "mgmt",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    }
+  },
+  "origAvailable": true
+}

@@ -1,0 +1,289 @@
+{
+ "id": "74c60b8b-9bac-41ce-a397-b8b89da91611",
+ "class": "network-device",
+ "name": "Nano HD",
+ "created": "2026-10-30T12:58:05.487Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "deviceType",
+   "value": "access-point",
+   "source": "ap-manager",
+   "change": 300,
+   "from": "2026-10-30T12:58:05.487Z",
+   "to": null
+  },
+  {
+   "name": "model",
+   "value": "U7NHD",
+   "source": "ap-manager",
+   "change": 300,
+   "from": "2026-10-30T12:58:05.487Z",
+   "to": null
+  },
+  {
+   "name": "vendor",
+   "value": "unifi",
+   "source": "ap-manager",
+   "change": 300,
+   "from": "2026-10-30T12:58:05.487Z",
+   "to": null
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-30T12:58:06.962Z",
+    "source": "sweep",
+    "desired": null,
+    "attributes": {
+     "\u2192allocated-to device/Nano HD": {
+      "now": {},
+      "was": null
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 305,
+   "from": "2026-10-30T12:58:06.962Z",
+   "to": "2026-10-30T14:34:19.677Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-30T12:59:36.103Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "network-device/Nano HD: drift: appeared; network-device/Nano HD: drift: appeared \u2192allocated-to device/Nano HD",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T14:32:46.038Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 307,
+   "from": "2026-10-30T12:59:36.103Z",
+   "to": "2026-10-30T14:35:49.161Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-30T12:58:06.962Z",
+    "source": "sweep",
+    "desired": null,
+    "attributes": {
+     "\u2192allocated-to device/Nano HD": {
+      "now": null,
+      "was": {}
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 412,
+   "from": "2026-10-30T14:34:19.677Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-30T14:35:49.161Z",
+     "reason": "sweep-gone",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "network-device/Nano HD: drift: gone \u2192allocated-to device/Nano HD",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:00:51.500Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 414,
+   "from": "2026-10-30T14:35:49.161Z",
+   "to": "2026-10-31T00:04:27.092Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:04:27.092Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1080,
+   "from": "2026-10-31T00:04:27.092Z",
+   "to": "2026-10-31T07:25:02.913Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:04:27.092Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1355,
+   "from": "2026-10-31T07:25:02.913Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 492,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "161a0c6b-e193-4c51-8b26-23775470876e",
+    "class": "device",
+    "name": "Nano HD"
+   },
+   "attributes": {},
+   "source": "ap-manager",
+   "change": 300,
+   "from": "2026-10-30T12:58:05.487Z",
+   "to": "2026-10-30T14:32:14.762Z"
+  },
+  {
+   "id": 490,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "e287907f-b86d-4b90-802e-42365bb28aa5",
+    "class": "port",
+    "name": "uplink"
+   },
+   "attributes": {},
+   "source": "ap-manager",
+   "change": 300,
+   "from": "2026-10-30T12:58:05.487Z",
+   "to": null
+  },
+  {
+   "id": 491,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "e993bbc6-eecb-41d3-a8ee-4d9edee3e3e3",
+    "class": "port",
+    "name": "wifi"
+   },
+   "attributes": {},
+   "source": "ap-manager",
+   "change": 300,
+   "from": "2026-10-30T12:58:05.487Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 300,
+   "kind": "observation",
+   "source": "ap-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T12:58:05.487Z",
+   "drift": false
+  },
+  {
+   "id": 305,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-30T12:58:06.962Z",
+   "drift": true
+  },
+  {
+   "id": 307,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T12:59:36.103Z",
+   "drift": false
+  },
+  {
+   "id": 412,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-30T14:34:19.677Z",
+   "drift": true
+  },
+  {
+   "id": 414,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T14:35:49.161Z",
+   "drift": false
+  },
+  {
+   "id": 1080,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T00:04:27.092Z",
+   "drift": false
+  },
+  {
+   "id": 1355,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:25:02.913Z",
+   "drift": false
+  }
+ ]
+}

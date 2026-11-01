@@ -1,0 +1,203 @@
+{
+  "id": "b635bc37-3033-49ee-9338-f61672b39a5c",
+  "class": "storage-pool",
+  "ancestors": [
+    "storage-pool",
+    "storage-element",
+    "ci",
+    "object"
+  ],
+  "name": "tanka1",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T08:48:29.865Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:19.173Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.173Z",
+    "health-manager": "2026-10-30T09:04:04.197Z",
+    "storage-manager": "2026-11-01T08:52:04.274Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-30T09:41:14.942Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "tanka1: zfs ONLINE",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T08:21:51.484Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "flapping": false,
+          "rootCause": null,
+          "lastChecked": "2026-10-31T08:21:51.484Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "tappaas1/tanka1: 12% used (428.8/3596.5G)",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T08:56:54.057Z"
+    },
+    "drift": {
+      "value": {
+        "since": "2026-10-30T09:59:39.559Z",
+        "source": "storage-manager",
+        "desired": null,
+        "attributes": {
+          "size": {
+            "now": 3861712470016,
+            "was": 3861712478208
+          },
+          "health": {
+            "now": null,
+            "was": {
+              "time": "2026-10-30T09:02:32.524Z",
+              "check": "zfs ONLINE",
+              "status": "ok"
+            }
+          }
+        }
+      },
+      "source": "cmdb-controller",
+      "since": "2026-10-31T20:15:53.048Z"
+    },
+    "size": {
+      "value": 3861712470016,
+      "source": "storage-manager",
+      "since": "2026-10-31T20:15:53.048Z"
+    },
+    "type": {
+      "value": "zfs",
+      "source": "storage-manager",
+      "since": "2026-10-30T08:48:29.865Z"
+    },
+    "used": {
+      "value": 462782083072,
+      "source": "site-manager",
+      "since": "2026-11-01T08:52:19.173Z"
+    },
+    "vdevs": {
+      "value": [
+        {
+          "name": "mirror-0",
+          "state": "ONLINE",
+          "members": [
+            {
+              "state": "ONLINE",
+              "device": "/dev/nvme2n1p1",
+              "serial": "S7DSNJ0YB04294X"
+            },
+            {
+              "state": "ONLINE",
+              "device": "/dev/nvme1n1p1",
+              "serial": "S7DPNU0YA10709Z"
+            }
+          ]
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    "zfsState": {
+      "value": "ONLINE",
+      "source": "storage-manager",
+      "since": "2026-10-30T09:40:40.849Z"
+    }
+  },
+  "drift": {
+    "since": "2026-10-30T09:59:39.559Z",
+    "source": "storage-manager",
+    "desired": null,
+    "attributes": {
+      "size": {
+        "now": 3861712470016,
+        "was": 3861712478208
+      },
+      "health": {
+        "now": null,
+        "was": {
+          "time": "2026-10-30T09:02:32.524Z",
+          "check": "zfs ONLINE",
+          "status": "ok"
+        }
+      }
+    }
+  },
+  "relations": [
+    {
+      "id": 626,
+      "type": "built-on",
+      "direction": "out",
+      "other": {
+        "id": "e023ba3b-f973-417f-b52a-8d9fb31c3864",
+        "class": "disk",
+        "name": "dsk-02"
+      },
+      "attributes": {
+        "redundancyGroup": "tappaas1:tanka1:mirror-0"
+      },
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    {
+      "id": 625,
+      "type": "built-on",
+      "direction": "out",
+      "other": {
+        "id": "0608c77b-780e-4485-9f3e-0a887e6defbe",
+        "class": "disk",
+        "name": "dsk-03"
+      },
+      "attributes": {
+        "redundancyGroup": "tappaas1:tanka1:mirror-0"
+      },
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    {
+      "id": 333,
+      "type": "runs-on",
+      "direction": "out",
+      "other": {
+        "id": "c11c3e17-fe34-4bd7-bed6-6f8b259469c8",
+        "class": "machine",
+        "name": "tappaas1"
+      },
+      "attributes": {},
+      "source": "storage-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:48:29.865Z"
+    }
+  ]
+}

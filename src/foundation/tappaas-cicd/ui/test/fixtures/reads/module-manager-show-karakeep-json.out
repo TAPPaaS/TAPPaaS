@@ -1,0 +1,79 @@
+{
+  "description": "Karakeep — bookmarks and read-later: links, notes and images, each page archived and full-text searchable, tagged automatically by the site's AI stack when it has one.",
+  "version": "0.1.2",
+  "releaseDate": "2026-10-18",
+  "installTime": "20261018-10:33:15",
+  "updateTime": "20261101-02:19:21",
+  "maintainer": "@larsrossen",
+  "status": "Development",
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/home/karakeep",
+  "environment": "rossen",
+  "vmname": "karakeep",
+  "vmid": 371,
+  "vmtag": "TAPPaaS,App,Bookmarks",
+  "node": "tappaas3",
+  "zone0": "rossen",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy",
+    "network:rules",
+    "identity:identity"
+  ],
+  "integratesWith": [
+    "logging:logs",
+    "litellm:models"
+  ],
+  "provides": [],
+  "appVersion": "0.34.1",
+  "displayName": "Karakeep",
+  "stack": "home",
+  "config": {
+    "backup:vm": {
+      "backup": {
+        "enabled": true,
+        "exclude": [],
+        "retention": "7y"
+      }
+    },
+    "cluster:vm": {
+      "bios": "ovmf",
+      "cores": 2,
+      "memory": 3072,
+      "diskSize": "64G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan",
+      "thinDisk": true
+    },
+    "identity:identity": {
+      "identity": {
+        "configureService": "karakeep.service",
+        "launchPath": "/",
+        "oidcRedirectPaths": [
+          "/api/auth/callback/custom"
+        ]
+      }
+    },
+    "network:rules": {
+      "ports": [
+        {
+          "port": 3000,
+          "protocol": "TCP",
+          "description": "Karakeep: the web app, its API (mobile apps, the browser extension) and the OAuth callback"
+        }
+      ]
+    },
+    "network:proxy": {
+      "proxyPort": 3000,
+      "proxyAllowedZones": [
+        "home",
+        "netbird",
+        "internet"
+      ]
+    }
+  }
+}

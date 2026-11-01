@@ -1,0 +1,17 @@
+{
+  "wanif": "vtnet1",
+  "recorded": "fe80::47:ff:fe00:168",
+  "route": "fe80::47:ff:fe00:168",
+  "gateway": "fe80::47:ff:fe00:168",
+  "prefix": "2001:db8:3:4500::/56",
+  "address": "2001:db8:2:978c::efd",
+  "rtsold": true,
+  "neighbours": [
+    {
+      "address": "fe80::47:ff:fe00:168",
+      "answers": true,
+      "lladdr": "02:47:00:00:01:68"
+    }
+  ],
+  "routerAnswers": true
+}

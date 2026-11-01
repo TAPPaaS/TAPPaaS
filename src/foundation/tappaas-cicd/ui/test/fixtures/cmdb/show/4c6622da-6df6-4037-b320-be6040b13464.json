@@ -1,0 +1,148 @@
+{
+  "id": "4c6622da-6df6-4037-b320-be6040b13464",
+  "class": "disk",
+  "ancestors": [
+    "disk",
+    "resource",
+    "object"
+  ],
+  "name": "dsk-11",
+  "displayName": "nvme-Samsung_SSD_990_PRO_2TB_S7DNNU0X545837K",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-31T09:50:50.296Z",
+  "ended": "2026-10-31T15:19:20.413Z",
+  "lastSeen": "2026-10-31T15:19:20.413Z",
+  "seen": {
+    "site-manager": "2026-10-31T10:27:23.029Z",
+    "asset-manager": "2026-10-31T15:19:20.413Z"
+  },
+  "at": null,
+  "attributes": {
+    "bay": {
+      "value": "nvme-Samsung_SSD_990_PRO_2TB_S7DNNU0X545837K",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "bus": {
+      "value": "nvme",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T09:52:08.978Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "dsk-11 (nvme-Samsung_SSD_990_PRO_2TB_S7DNNU0X545837K): health PASSED",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T15:15:02.019Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T09:52:08.978Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T15:15:02.019Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T09:52:08.978Z"
+    },
+    "displayName": {
+      "value": "nvme-Samsung_SSD_990_PRO_2TB_S7DNNU0X545837K",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "faulty": {
+      "value": false,
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "health": {
+      "value": "PASSED",
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "holds": {
+      "value": "nothing",
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "kind": {
+      "value": "nvme",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "model": {
+      "value": "Samsung SSD 990 PRO 2TB",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "partitions": {
+      "value": [
+        {
+          "pool": "tanka1",
+          "size": 2000389406720,
+          "holds": "zfs",
+          "device": "/dev/nvme0n1p1"
+        },
+        {
+          "size": 8388608,
+          "holds": "zfs",
+          "device": "/dev/nvme0n1p9"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "serial": {
+      "value": "S7DNNU0X545837K",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "size": {
+      "value": 2000398934016,
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "smart": {
+      "value": {
+        "mediaErrors": 0,
+        "powerOnHours": 6450,
+        "criticalWarning": 0
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T09:52:00.815Z"
+    },
+    "stage": {
+      "value": "disposed",
+      "source": "asset-manager",
+      "since": "2026-10-31T15:19:20.413Z"
+    },
+    "temperature": {
+      "value": 48,
+      "source": "site-manager",
+      "since": "2026-10-31T09:52:00.815Z"
+    },
+    "wearout": {
+      "value": 99,
+      "source": "site-manager",
+      "since": "2026-10-31T09:52:00.815Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

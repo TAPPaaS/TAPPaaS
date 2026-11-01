@@ -1,0 +1,1324 @@
+{
+  "$schema": "switch-configuration-schema.json",
+  "version": "2.0",
+  "controllers": {
+    "unifi-controller": {
+      "vendor": "unifi",
+      "managementIp": "https://unifi-os.mgmt.internal:11443",
+      "managed": "auto"
+    }
+  },
+  "switches": {
+    "USW Pro XG 10 PoE": {
+      "vendor": "unifi",
+      "model": "USWED77",
+      "managementIp": "10.0.0.201",
+      "ports": {
+        "2": {
+          "mode": "trunk",
+          "nativeVlan": 0,
+          "taggedVlans": [
+            200,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ],
+          "source": "discovered",
+          "type": "node",
+          "target": "tappaas2",
+          "targetPort": "enp97s0",
+          "lagMembers": [],
+          "link": "up",
+          "neighbors": [
+            {
+              "mac": "02:1b:46:99:54:74",
+              "lease": {
+                "hostname": "litellm",
+                "address": "10.2.0.76"
+              }
+            },
+            {
+              "mac": "02:2c:fc:7b:cb:47",
+              "lease": {
+                "hostname": "nextcloud-hpb",
+                "address": "10.2.0.227"
+              }
+            },
+            {
+              "mac": "02:2f:0c:55:05:69",
+              "lease": {
+                "hostname": "lazysite",
+                "address": "10.6.0.145"
+              }
+            },
+            {
+              "mac": "02:44:ca:67:51:3f",
+              "lease": {
+                "hostname": "euro-office",
+                "address": "10.2.0.225"
+              }
+            },
+            {
+              "mac": "02:81:88:35:6f:47",
+              "lease": {
+                "hostname": "deconz-test",
+                "address": "10.2.99.55"
+              }
+            },
+            {
+              "mac": "02:c5:ec:06:cd:22",
+              "lease": {
+                "hostname": "vllm-amd",
+                "address": "10.2.0.199"
+              }
+            },
+            {
+              "mac": "02:c6:d4:0e:c2:60",
+              "lease": {
+                "hostname": "forgejo",
+                "address": "10.2.0.164"
+              }
+            },
+            {
+              "mac": "02:cd:07:87:2c:a5",
+              "lease": {
+                "hostname": "openwebui",
+                "address": "10.2.0.163"
+              }
+            },
+            {
+              "mac": "02:f5:a6:26:bc:89",
+              "lease": {
+                "hostname": "woodpecker",
+                "address": "10.2.0.237"
+              }
+            },
+            {
+              "mac": "38:05:25:33:b5:f7",
+              "lease": {
+                "hostname": null,
+                "address": "10.0.0.11"
+              }
+            }
+          ]
+        },
+        "3": {
+          "mode": "trunk",
+          "nativeVlan": 0,
+          "taggedVlans": [
+            200,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ],
+          "source": "discovered",
+          "type": "node",
+          "target": "tappaas3",
+          "targetPort": "eno1",
+          "lagMembers": [],
+          "link": "up",
+          "neighbors": [
+            {
+              "mac": "02:22:05:c8:12:b9",
+              "lease": {
+                "hostname": "nomad",
+                "address": "10.6.0.152"
+              }
+            },
+            {
+              "mac": "02:37:78:a9:80:47",
+              "lease": {
+                "hostname": "karakeep",
+                "address": "10.2.0.131"
+              }
+            },
+            {
+              "mac": "02:67:7a:fe:dc:b7",
+              "lease": {
+                "hostname": "unifi-os",
+                "address": "10.0.0.110"
+              }
+            },
+            {
+              "mac": "02:98:07:05:29:50",
+              "lease": {
+                "hostname": "vaultwarden",
+                "address": "10.6.0.174"
+              }
+            },
+            {
+              "mac": "c8:ff:bf:05:0d:30",
+              "lease": {
+                "hostname": null,
+                "address": "10.0.0.12"
+              }
+            }
+          ]
+        },
+        "4": {
+          "link": "up",
+          "source": "discovered",
+          "mode": "trunk",
+          "lagMembers": [],
+          "type": "node",
+          "target": "tappaas3",
+          "targetPort": "usblan0",
+          "nativeVlan": 0,
+          "taggedVlans": [
+            200,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ],
+          "neighbors": []
+        },
+        "5": {
+          "mode": "access",
+          "nativeVlan": 100,
+          "taggedVlans": [
+            200,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ],
+          "source": "discovered",
+          "type": "device",
+          "zone": "wan",
+          "description": "WAN modem (ISP hand-off)",
+          "lagMembers": [],
+          "link": "up",
+          "neighbors": [
+            {
+              "mac": "02:47:00:00:01:68",
+              "lease": {
+                "hostname": null,
+                "address": "198.18.2.1"
+              }
+            }
+          ]
+        },
+        "6": {
+          "mode": "access",
+          "nativeVlan": 100,
+          "taggedVlans": [
+            200,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ],
+          "source": "discovered",
+          "type": "device",
+          "target": "tappaas1",
+          "targetPort": "nic4",
+          "zone": "wan",
+          "description": "tappaas1 WAN NIC",
+          "lagMembers": [],
+          "link": "up",
+          "neighbors": [
+            {
+              "mac": "02:fd:8f:e2:58:cb",
+              "lease": {
+                "hostname": "network",
+                "address": "203.0.113.190"
+              }
+            }
+          ]
+        },
+        "7": {
+          "mode": "access",
+          "nativeVlan": 100,
+          "taggedVlans": [
+            200,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ],
+          "source": "discovered",
+          "type": "device",
+          "target": "tappaas3",
+          "targetPort": "enp3s0",
+          "zone": "wan",
+          "description": "tappaas3 WAN NIC",
+          "lagMembers": [],
+          "link": "up",
+          "neighbors": [
+            {
+              "mac": "c8:ff:bf:05:0d:31",
+              "lease": {
+                "hostname": null,
+                "address": null
+              }
+            }
+          ]
+        },
+        "8": {
+          "source": "discovered",
+          "parked": true,
+          "zone": "iotLocal",
+          "mode": "access",
+          "nativeVlan": 410,
+          "lagMembers": [],
+          "link": "down",
+          "neighbors": []
+        },
+        "9": {
+          "mode": "trunk",
+          "nativeVlan": 0,
+          "taggedVlans": [
+            200,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ],
+          "source": "discovered",
+          "type": "ap",
+          "target": "Nano HD",
+          "lagMembers": [],
+          "link": "up",
+          "neighbors": [
+            {
+              "mac": "74:83:c2:d0:d0:dd",
+              "lldp": {
+                "name": null,
+                "port": "74:83:C2:D0:D0:DD"
+              }
+            }
+          ]
+        },
+        "10": {
+          "source": "discovered",
+          "parked": true,
+          "zone": "iotLocal",
+          "mode": "access",
+          "nativeVlan": 410,
+          "lagMembers": [],
+          "link": "down",
+          "neighbors": []
+        },
+        "11": {
+          "mode": "trunk",
+          "nativeVlan": 0,
+          "taggedVlans": [
+            200,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ],
+          "source": "discovered",
+          "lagMembers": [
+            11,
+            12
+          ],
+          "type": "switch",
+          "target": "crs-a",
+          "targetPort": "sfp-sfpplus14",
+          "link": "up",
+          "lag": "crs-uplink",
+          "neighbors": [
+            {
+              "mac": "04:f4:1c:00:25:60",
+              "lldp": {
+                "name": null,
+                "port": "sfp-sfpplus14"
+              }
+            }
+          ]
+        },
+        "12": {
+          "mode": "trunk",
+          "nativeVlan": 0,
+          "taggedVlans": [
+            100,
+            200,
+            298,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ],
+          "source": "discovered",
+          "type": "switch",
+          "target": "crs-b",
+          "targetPort": "sfp-sfpplus14",
+          "lagMembers": [],
+          "link": "up",
+          "lag": "crs-uplink",
+          "lagLead": "11",
+          "neighbors": [
+            {
+              "mac": "d0:ea:11:74:99:30",
+              "lldp": {
+                "name": null,
+                "port": "sfp-sfpplus14"
+              }
+            }
+          ]
+        },
+        "1": {
+          "link": "up",
+          "source": "discovered",
+          "mode": "trunk",
+          "lagMembers": [],
+          "neighbors": [
+            {
+              "mac": "20:7c:14:f4:d0:87",
+              "lease": {
+                "hostname": null,
+                "address": "10.0.0.13"
+              }
+            }
+          ],
+          "type": "node",
+          "target": "tappaas4",
+          "nativeVlan": 0,
+          "taggedVlans": [
+            200,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ]
+        }
+      },
+      "controller": "unifi-controller",
+      "managed": "auto",
+      "lastRead": "2026-11-01T01:42:59Z"
+    },
+    "crs-a": {
+      "vendor": "mikrotik",
+      "managed": "auto",
+      "controller": null,
+      "managementIp": "10.0.0.21",
+      "model": "CRS317-1G-16S+",
+      "description": "",
+      "ports": {
+        "ether1": {
+          "bridged": false,
+          "disabled": true,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 0,
+          "source": "discovered",
+          "taggedVlans": [],
+          "neighbors": []
+        },
+        "sfp-sfpplus1": {
+          "disabled": false,
+          "lagMembers": [
+            "sfp-sfpplus1"
+          ],
+          "link": "up",
+          "mode": "trunk",
+          "source": "discovered",
+          "taggedVlans": [
+            200,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ],
+          "type": "node",
+          "target": "tappaas1",
+          "targetPort": "nic2",
+          "lag": "tappaas1-lan",
+          "mlagId": 10,
+          "nativeVlan": 0,
+          "bond": "bond-sfp-sfpplus1",
+          "liveMlagId": 10,
+          "neighbors": [
+            {
+              "mac": "00:07:43:38:aa:f0"
+            },
+            {
+              "lldp": {
+                "name": null,
+                "port": null
+              },
+              "mac": "00:07:43:38:aa:f7"
+            },
+            {
+              "mac": "02:05:9b:1f:2b:01"
+            },
+            {
+              "mac": "02:07:e6:f7:74:47"
+            },
+            {
+              "mac": "02:5d:b7:01:7a:8b"
+            },
+            {
+              "mac": "02:67:b6:d8:83:e5"
+            },
+            {
+              "mac": "02:79:7c:40:fc:c1"
+            },
+            {
+              "mac": "02:7f:5e:c2:1a:ad"
+            },
+            {
+              "mac": "02:98:34:69:90:1a"
+            },
+            {
+              "mac": "02:c8:41:33:f4:0d"
+            },
+            {
+              "mac": "02:e1:97:56:29:e5"
+            }
+          ]
+        },
+        "sfp-sfpplus10": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus11": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus12": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus13": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus14": {
+          "disabled": false,
+          "lagMembers": [
+            "sfp-sfpplus14"
+          ],
+          "link": "up",
+          "mode": "trunk",
+          "nativeVlan": 0,
+          "source": "discovered",
+          "taggedVlans": [
+            200,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ],
+          "type": "switch",
+          "target": "USW Pro XG 10 PoE",
+          "targetPort": "11",
+          "lag": "usw-uplink",
+          "mlagId": 11,
+          "bond": "bond-sfp-sfpplus14",
+          "liveMlagId": 11,
+          "neighbors": [
+            {
+              "mac": "02:19:b3:fa:9c:de"
+            },
+            {
+              "mac": "02:1b:46:99:54:74"
+            },
+            {
+              "mac": "02:22:05:c8:12:b9"
+            },
+            {
+              "mac": "02:2c:fc:7b:cb:47"
+            },
+            {
+              "mac": "02:2f:0c:55:05:69"
+            },
+            {
+              "mac": "02:37:78:a9:80:47"
+            },
+            {
+              "mac": "02:44:ca:67:51:3f"
+            },
+            {
+              "mac": "02:4d:dd:19:91:c9"
+            },
+            {
+              "mac": "02:56:b5:4b:15:ff"
+            },
+            {
+              "mac": "02:65:f0:03:03:88"
+            },
+            {
+              "mac": "02:67:7a:fe:dc:b7"
+            },
+            {
+              "mac": "02:77:40:78:7b:ab"
+            },
+            {
+              "mac": "02:81:88:35:6f:47"
+            },
+            {
+              "mac": "02:87:ba:76:90:be"
+            },
+            {
+              "mac": "02:98:07:05:29:50"
+            },
+            {
+              "mac": "02:b6:3f:17:f8:a3"
+            },
+            {
+              "mac": "02:c5:ec:06:cd:22"
+            },
+            {
+              "mac": "02:c6:d4:0e:c2:60"
+            },
+            {
+              "mac": "02:cd:07:87:2c:a5"
+            },
+            {
+              "mac": "02:d6:13:d7:2a:4b"
+            },
+            {
+              "mac": "02:d9:d8:67:9f:18"
+            },
+            {
+              "mac": "02:e2:45:2e:0f:d1"
+            },
+            {
+              "mac": "02:f5:a6:26:bc:89"
+            },
+            {
+              "mac": "14:13:0b:37:69:50"
+            },
+            {
+              "mac": "20:7c:14:f4:d0:87"
+            },
+            {
+              "mac": "38:05:25:33:b5:f7"
+            },
+            {
+              "mac": "74:83:c2:d0:d0:dd"
+            },
+            {
+              "mac": "a8:9c:6c:b0:8d:76"
+            },
+            {
+              "lldp": {
+                "name": "USW-Pro-XG-10-PoE",
+                "port": "SFP_ 1"
+              },
+              "mac": "a8:9c:6c:b0:8d:77"
+            },
+            {
+              "mac": "c8:ff:bf:05:0d:30"
+            }
+          ]
+        },
+        "sfp-sfpplus15": {
+          "bond": "peer-link",
+          "disabled": true,
+          "lagMembers": [
+            "sfp-sfpplus15",
+            "sfp-sfpplus16"
+          ],
+          "link": "up",
+          "mode": "trunk",
+          "nativeVlan": 0,
+          "peerLink": true,
+          "source": "discovered",
+          "taggedVlans": [
+            1,
+            200,
+            298,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ],
+          "neighbors": [
+            {
+              "lldp": {
+                "name": "crs-b",
+                "port": "bridge/peer-link/sfp-sfpplus16"
+              },
+              "mac": "d0:ea:11:74:99:3f"
+            },
+            {
+              "mac": "d0:ea:11:74:99:40"
+            }
+          ]
+        },
+        "sfp-sfpplus16": {
+          "bond": "peer-link",
+          "disabled": true,
+          "lagMembers": [],
+          "link": "up",
+          "mode": "trunk",
+          "nativeVlan": 0,
+          "peerLink": true,
+          "source": "discovered",
+          "taggedVlans": [
+            1,
+            200,
+            298,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ],
+          "lagLead": "sfp-sfpplus15",
+          "neighbors": [
+            {
+              "lldp": {
+                "name": "crs-b",
+                "port": "bridge/peer-link/sfp-sfpplus15"
+              },
+              "mac": "d0:ea:11:74:99:3e"
+            }
+          ]
+        },
+        "sfp-sfpplus2": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus3": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus4": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus5": {
+          "link": "down",
+          "source": "discovered",
+          "parked": true,
+          "zone": "iotLocal",
+          "mode": "access",
+          "nativeVlan": 410,
+          "lagMembers": [],
+          "disabled": false,
+          "taggedVlans": [],
+          "neighbors": []
+        },
+        "sfp-sfpplus6": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus7": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus8": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus9": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        }
+      },
+      "bridge": "bridge",
+      "firmware": "7.23.8 (long-term)",
+      "identity": "crs-a",
+      "mlag": {
+        "bridge": "bridge",
+        "peerPort": "peer-link",
+        "heartbeat": "5s",
+        "priority": 50,
+        "stpPriority": "0x4000"
+      },
+      "lastRead": "2026-11-01T01:42:59Z"
+    },
+    "crs-b": {
+      "vendor": "mikrotik",
+      "managed": "auto",
+      "controller": null,
+      "managementIp": "10.0.0.22",
+      "model": "CRS317-1G-16S+",
+      "description": "",
+      "ports": {
+        "ether1": {
+          "bridged": false,
+          "disabled": true,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 0,
+          "source": "discovered",
+          "taggedVlans": [],
+          "neighbors": []
+        },
+        "sfp-sfpplus1": {
+          "disabled": false,
+          "lagMembers": [
+            "sfp-sfpplus1"
+          ],
+          "link": "up",
+          "mode": "trunk",
+          "source": "discovered",
+          "taggedVlans": [
+            200,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ],
+          "type": "node",
+          "target": "tappaas1",
+          "targetPort": "nic3",
+          "lag": "tappaas1-lan",
+          "mlagId": 10,
+          "nativeVlan": 0,
+          "bond": "bond-sfp-sfpplus1",
+          "liveMlagId": 10,
+          "neighbors": [
+            {
+              "mac": "00:07:43:38:aa:f0"
+            },
+            {
+              "mac": "00:07:43:38:aa:f8"
+            },
+            {
+              "lldp": {
+                "name": null,
+                "port": null
+              },
+              "mac": "00:07:43:38:aa:ff"
+            },
+            {
+              "mac": "02:05:9b:1f:2b:01"
+            },
+            {
+              "mac": "02:07:e6:f7:74:47"
+            },
+            {
+              "mac": "02:67:b6:d8:83:e5"
+            },
+            {
+              "mac": "02:79:7c:40:fc:c1"
+            },
+            {
+              "mac": "02:98:34:69:90:1a"
+            },
+            {
+              "mac": "02:c8:41:33:f4:0d"
+            },
+            {
+              "mac": "02:e1:97:56:29:e5"
+            }
+          ]
+        },
+        "sfp-sfpplus10": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus11": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus12": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus13": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus14": {
+          "disabled": false,
+          "lagMembers": [
+            "sfp-sfpplus14"
+          ],
+          "link": "up",
+          "mode": "trunk",
+          "nativeVlan": 0,
+          "source": "discovered",
+          "taggedVlans": [
+            200,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ],
+          "bridged": false,
+          "type": "switch",
+          "target": "USW Pro XG 10 PoE",
+          "targetPort": "12",
+          "lag": "usw-uplink",
+          "mlagId": 11,
+          "bond": "bond-sfp-sfpplus14",
+          "liveMlagId": 11,
+          "neighbors": [
+            {
+              "mac": "02:19:b3:fa:9c:de"
+            },
+            {
+              "mac": "02:1b:46:99:54:74"
+            },
+            {
+              "mac": "02:22:05:c8:12:b9"
+            },
+            {
+              "mac": "02:2c:fc:7b:cb:47"
+            },
+            {
+              "mac": "02:2f:0c:55:05:69"
+            },
+            {
+              "mac": "02:37:78:a9:80:47"
+            },
+            {
+              "mac": "02:44:ca:67:51:3f"
+            },
+            {
+              "mac": "02:4d:dd:19:91:c9"
+            },
+            {
+              "mac": "02:56:b5:4b:15:ff"
+            },
+            {
+              "mac": "02:65:f0:03:03:88"
+            },
+            {
+              "mac": "02:67:7a:fe:dc:b7"
+            },
+            {
+              "mac": "02:77:40:78:7b:ab"
+            },
+            {
+              "mac": "02:81:88:35:6f:47"
+            },
+            {
+              "mac": "02:87:ba:76:90:be"
+            },
+            {
+              "mac": "02:98:07:05:29:50"
+            },
+            {
+              "mac": "02:b6:3f:17:f8:a3"
+            },
+            {
+              "mac": "02:c5:ec:06:cd:22"
+            },
+            {
+              "mac": "02:c6:d4:0e:c2:60"
+            },
+            {
+              "mac": "02:cd:07:87:2c:a5"
+            },
+            {
+              "mac": "02:d6:13:d7:2a:4b"
+            },
+            {
+              "mac": "02:d9:d8:67:9f:18"
+            },
+            {
+              "mac": "02:e2:45:2e:0f:d1"
+            },
+            {
+              "mac": "02:f5:a6:26:bc:89"
+            },
+            {
+              "mac": "14:13:0b:37:69:50"
+            },
+            {
+              "mac": "20:7c:14:f4:d0:87"
+            },
+            {
+              "mac": "38:05:25:33:b5:f7"
+            },
+            {
+              "mac": "74:83:c2:d0:d0:dd"
+            },
+            {
+              "mac": "a8:9c:6c:b0:8d:76"
+            },
+            {
+              "lldp": {
+                "name": "USW-Pro-XG-10-PoE",
+                "port": "SFP_ 2"
+              },
+              "mac": "a8:9c:6c:b0:8d:77"
+            },
+            {
+              "mac": "c8:ff:bf:05:0d:30"
+            }
+          ]
+        },
+        "sfp-sfpplus15": {
+          "bond": "peer-link",
+          "disabled": true,
+          "lagMembers": [
+            "sfp-sfpplus15",
+            "sfp-sfpplus16"
+          ],
+          "link": "up",
+          "mode": "trunk",
+          "nativeVlan": 0,
+          "peerLink": true,
+          "source": "discovered",
+          "taggedVlans": [
+            1,
+            200,
+            298,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ],
+          "neighbors": [
+            {
+              "lldp": {
+                "name": "crs-a",
+                "port": "bridge/peer-link/sfp-sfpplus16"
+              },
+              "mac": "04:f4:1c:00:25:6f"
+            },
+            {
+              "mac": "04:f4:1c:00:25:70"
+            }
+          ]
+        },
+        "sfp-sfpplus16": {
+          "bond": "peer-link",
+          "disabled": true,
+          "lagMembers": [],
+          "link": "up",
+          "mode": "trunk",
+          "nativeVlan": 0,
+          "peerLink": true,
+          "source": "discovered",
+          "taggedVlans": [
+            1,
+            200,
+            298,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ],
+          "lagLead": "sfp-sfpplus15",
+          "neighbors": [
+            {
+              "lldp": {
+                "name": "crs-a",
+                "port": "bridge/peer-link/sfp-sfpplus15"
+              },
+              "mac": "04:f4:1c:00:25:6e"
+            }
+          ]
+        },
+        "sfp-sfpplus2": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus3": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus4": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus5": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus6": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus7": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus8": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        },
+        "sfp-sfpplus9": {
+          "disabled": false,
+          "lagMembers": [],
+          "link": "down",
+          "mode": "access",
+          "nativeVlan": 410,
+          "source": "discovered",
+          "taggedVlans": [],
+          "parked": true,
+          "zone": "iotLocal",
+          "neighbors": []
+        }
+      },
+      "bridge": "bridge",
+      "firmware": "7.23.8 (long-term)",
+      "identity": "crs-b",
+      "mlag": {
+        "bridge": "bridge",
+        "peerPort": "peer-link",
+        "heartbeat": "5s",
+        "priority": 128,
+        "stpPriority": "0x4000"
+      },
+      "lastRead": "2026-11-01T01:42:59Z"
+    }
+  },
+  "accessPoints": {
+    "Nano HD": {
+      "vendor": "unifi",
+      "model": "U7NHD",
+      "managementIp": "10.0.0.184",
+      "uplinkSwitch": "USW Pro XG 10 PoE",
+      "uplinkPort": "9",
+      "ssids": {
+        "rossen-home": {
+          "vlan": 310,
+          "zone": "home",
+          "security": "wpa2-personal",
+          "enabled": true
+        },
+        "rossen-guest": {
+          "vlan": 510,
+          "zone": "guest",
+          "security": "wpa2-personal",
+          "enabled": true
+        }
+      }
+    }
+  },
+  "mlagPairs": {
+    "crs-a+crs-b": {
+      "switches": [
+        "crs-a",
+        "crs-b"
+      ],
+      "peerPort": {
+        "crs-a": "peer-link",
+        "crs-b": "peer-link"
+      }
+    }
+  }
+}

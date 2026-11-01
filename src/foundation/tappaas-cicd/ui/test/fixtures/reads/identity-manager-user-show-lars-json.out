@@ -1,0 +1,15 @@
+{
+  "name": "lars",
+  "displayName": "lars",
+  "primaryEmail": "operator@example.org",
+  "state": "active",
+  "memberOf": [
+    "users",
+    "authentik Admins",
+    "installer"
+  ],
+  "roles": [
+    "admin",
+    "user"
+  ]
+}

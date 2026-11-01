@@ -1,0 +1,250 @@
+{
+ "id": "8929e901-0d4b-46f0-b41f-9724d746ee5f",
+ "class": "machine",
+ "name": "tappaas4",
+ "created": "2026-10-30T19:05:42.423Z",
+ "ended": "2026-10-30T19:25:01.948Z",
+ "attributes": [
+  {
+   "name": "placeholder",
+   "value": true,
+   "source": "storage-manager",
+   "change": 676,
+   "from": "2026-10-30T19:05:42.423Z",
+   "to": "2026-10-30T19:09:38.017Z"
+  },
+  {
+   "name": "description",
+   "value": "A Proxmox VE cluster node as a module: registered, visible and tested; serves the NFS shares config/shares.json declares for it, through its server hook (ADR-029 v0.9); its OS is still patched by the cluster module (ADR-026 D4 stage 1)",
+   "source": "site-manager",
+   "change": 681,
+   "from": "2026-10-30T19:09:38.017Z",
+   "to": null
+  },
+  {
+   "name": "desired",
+   "value": {
+    "file": "tappaas4.json"
+   },
+   "source": "site-manager",
+   "change": 681,
+   "from": "2026-10-30T19:09:38.017Z",
+   "to": null
+  },
+  {
+   "name": "hostname",
+   "value": "tappaas4.mgmt.internal",
+   "source": "site-manager",
+   "change": 681,
+   "from": "2026-10-30T19:09:38.017Z",
+   "to": null
+  },
+  {
+   "name": "management",
+   "value": "managed",
+   "source": "site-manager",
+   "change": 681,
+   "from": "2026-10-30T19:09:38.017Z",
+   "to": null
+  },
+  {
+   "name": "release",
+   "value": {
+    "module": "pvehost",
+    "version": "0.3.0"
+   },
+   "source": "site-manager",
+   "change": 681,
+   "from": "2026-10-30T19:09:38.017Z",
+   "to": null
+  },
+  {
+   "name": "stack",
+   "value": "foundation",
+   "source": "site-manager",
+   "change": 681,
+   "from": "2026-10-30T19:09:38.017Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:10:05.207Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T19:20:01.652Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:10:05.207Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "0.0/31.3G committed, 0%",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T19:20:01.652Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T19:10:05.207Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T19:20:01.652Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 686,
+   "from": "2026-10-30T19:10:05.207Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "retired",
+   "source": "module-manager",
+   "change": 703,
+   "from": "2026-10-30T19:25:01.948Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 554,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "ff1c184d-8ba7-49ed-a717-489c5ed9e60d",
+    "class": "storage-pool",
+    "name": "rpool"
+   },
+   "attributes": {},
+   "source": "storage-manager",
+   "change": 676,
+   "from": "2026-10-30T19:05:42.423Z",
+   "to": "2026-10-30T19:25:01.948Z"
+  },
+  {
+   "id": 555,
+   "type": "member-of",
+   "direction": "out",
+   "other": {
+    "id": "bb8a818c-90a8-47f1-a71d-f33c0f6d8b0f",
+    "class": "environment",
+    "name": "mgmt"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 681,
+   "from": "2026-10-30T19:09:38.017Z",
+   "to": "2026-10-30T19:25:01.948Z"
+  },
+  {
+   "id": 556,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "c0f33358-ad6e-4866-8e1c-3a39d08a3405",
+    "class": "storage-pool",
+    "name": "tanka1"
+   },
+   "attributes": {},
+   "source": "storage-manager",
+   "change": 689,
+   "from": "2026-10-30T19:14:05.301Z",
+   "to": "2026-10-30T19:25:01.948Z"
+  },
+  {
+   "id": 557,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "222d382f-07a4-4aa7-9daf-5c508c690aa4",
+    "class": "storage-pool",
+    "name": "tankb1"
+   },
+   "attributes": {},
+   "source": "storage-manager",
+   "change": 691,
+   "from": "2026-10-30T19:14:45.702Z",
+   "to": "2026-10-30T19:25:01.948Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 676,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T19:05:42.423Z",
+   "drift": false
+  },
+  {
+   "id": 681,
+   "kind": "change",
+   "source": "site-manager",
+   "job": "20261030184455-0da374",
+   "verb": "node add tappaas4",
+   "actor": "lars",
+   "time": "2026-10-30T19:09:38.017Z",
+   "drift": false
+  },
+  {
+   "id": 686,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T19:10:05.207Z",
+   "drift": false
+  },
+  {
+   "id": 689,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T19:14:05.301Z",
+   "drift": false
+  },
+  {
+   "id": 691,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T19:14:45.702Z",
+   "drift": false
+  },
+  {
+   "id": 703,
+   "kind": "change",
+   "source": "module-manager",
+   "job": "20261030192355-56d42d",
+   "verb": "delete tappaas4",
+   "actor": "lars",
+   "time": "2026-10-30T19:25:01.948Z",
+   "drift": false
+  }
+ ]
+}

@@ -1,0 +1,126 @@
+{
+  "id": "b9cc2e0f-f345-41fa-916b-36259818d40b",
+  "class": "site",
+  "ancestors": [
+    "site",
+    "collection",
+    "ci",
+    "object"
+  ],
+  "name": "s",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T17:49:49.665Z",
+  "ended": "2026-10-31T07:31:38.657Z",
+  "lastSeen": "2026-10-31T07:31:38.657Z",
+  "seen": {
+    "site-manager": "2026-10-31T07:31:38.657Z"
+  },
+  "at": null,
+  "attributes": {
+    "code": {
+      "value": "s",
+      "source": "site-manager",
+      "since": "2026-10-30T17:49:49.665Z"
+    },
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-30T17:50:04.961Z",
+          "reason": "roll-up",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": true,
+          "message": "4 of 51 warning",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T07:25:02.913Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T00:04:27.092Z",
+          "reason": "sweep-missing",
+          "source": "health-manager",
+          "status": "critical",
+          "derived": false,
+          "message": "site/s: desired without actual",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T07:25:02.913Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-31T01:30:00.159Z",
+          "reason": "roll-up",
+          "source": "health-manager",
+          "status": "unknown",
+          "derived": true,
+          "message": "1 of 38 unknown",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T07:25:02.913Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "security",
+          "since": "2026-10-30T17:50:04.961Z",
+          "reason": "roll-up",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": true,
+          "message": "11 of 26 warning",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T07:25:02.913Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-30T17:50:04.961Z",
+          "reason": "roll-up",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": true,
+          "message": "1 of 25 warning",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T07:25:02.913Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "backup",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": true,
+          "message": "23 of 23 ok",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T07:25:02.913Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T07:25:02.913Z"
+    },
+    "desired": {
+      "value": {
+        "file": "site.json"
+      },
+      "source": "site-manager",
+      "since": "2026-10-30T17:49:49.665Z"
+    },
+    "stage": {
+      "value": "retired",
+      "source": "site-manager",
+      "since": "2026-10-31T07:31:38.657Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

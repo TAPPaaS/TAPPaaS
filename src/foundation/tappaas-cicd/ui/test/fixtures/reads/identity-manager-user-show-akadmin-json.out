@@ -1,0 +1,9 @@
+{
+  "name": "akadmin",
+  "origin": "Authentik built-in",
+  "declaredBy": {
+    "file": "identity.json",
+    "key": "bootstrap"
+  },
+  "editable": false
+}

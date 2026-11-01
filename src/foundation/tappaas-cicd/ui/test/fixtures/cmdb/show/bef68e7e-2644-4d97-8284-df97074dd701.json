@@ -1,0 +1,158 @@
+{
+  "id": "bef68e7e-2644-4d97-8284-df97074dd701",
+  "class": "network-device",
+  "ancestors": [
+    "network-device",
+    "asset",
+    "resource",
+    "object"
+  ],
+  "name": "ap-01",
+  "displayName": "Nano HD",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-30T08:49:10.799Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.621Z",
+  "seen": {
+    "ap-manager": "2026-11-01T08:52:20.571Z",
+    "asset-manager": "2026-11-01T08:52:20.621Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "follows",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": true,
+          "message": "follows device Nano HD",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T00:04:27.092Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T00:04:27.092Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T07:25:02.913Z"
+    },
+    "deviceType": {
+      "value": "access-point",
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    "displayName": {
+      "value": "Nano HD",
+      "source": "asset-manager",
+      "since": "2026-10-31T00:02:55.425Z"
+    },
+    "faulty": {
+      "value": false,
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    "model": {
+      "value": "U7NHD",
+      "source": "asset-manager",
+      "since": "2026-10-31T00:02:55.425Z"
+    },
+    "stage": {
+      "value": "operational",
+      "source": "asset-manager",
+      "since": "2026-10-30T19:34:38.670Z"
+    },
+    "vendor": {
+      "value": "unifi",
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 606,
+      "type": "allocated-to",
+      "direction": "out",
+      "other": {
+        "id": "161a0c6b-e193-4c51-8b26-23775470876e",
+        "class": "device",
+        "name": "Nano HD"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T00:02:55.574Z"
+    },
+    {
+      "id": 463,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "b8d80e29-daa4-4e85-9c80-4f0f83240e97",
+        "class": "port",
+        "name": "uplink"
+      },
+      "attributes": {},
+      "source": "ap-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:49:11.095Z"
+    },
+    {
+      "id": 464,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "21282cac-da44-4a18-85b3-262fbe80da45",
+        "class": "port",
+        "name": "wifi"
+      },
+      "attributes": {},
+      "source": "ap-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:49:11.095Z"
+    },
+    {
+      "id": 604,
+      "type": "placed-in",
+      "direction": "out",
+      "other": {
+        "id": "c2915fa3-ac0c-4647-994e-46ae1524cb41",
+        "class": "room",
+        "name": "stue"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T00:02:55.425Z"
+    }
+  ]
+}

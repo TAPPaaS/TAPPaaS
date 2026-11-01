@@ -1,0 +1,362 @@
+{
+  "module": "unifi-os",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:debian",
+    "backup:vm",
+    "network:proxy",
+    "network:rules"
+  ],
+  "integratesWith": [],
+  "fields": {
+    "aliasType": {
+      "value": "host",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "appVersion": {
+      "value": "5.0.6",
+      "defaulted": false,
+      "literal": "5.0.6",
+      "notTracking": false
+    },
+    "autoInstall": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "backup": {
+      "value": "{\"enabled\":true,\"exclude\":[],\"retention\":\"7y\"}",
+      "defaulted": false,
+      "literal": "{\"enabled\":true,\"exclude\":[],\"retention\":\"7y\"}",
+      "notTracking": true
+    },
+    "bios": {
+      "value": "seabios",
+      "defaulted": false,
+      "literal": "seabios",
+      "notTracking": false
+    },
+    "bridge0": {
+      "value": "lan",
+      "defaulted": false,
+      "literal": "lan",
+      "notTracking": false
+    },
+    "bridge1": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "cloudInit": {
+      "value": "true",
+      "defaulted": false,
+      "literal": "true",
+      "notTracking": false
+    },
+    "controllers": {
+      "value": "[{\"name\":\"unifi-controller\",\"path\":\"controller/unifi-controller\",\"plugsInto\":[\"switch-manager\",\"ap-manager\"]}]",
+      "defaulted": false,
+      "literal": "[{\"name\":\"unifi-controller\",\"path\":\"controller/unifi-controller\",\"plugsInto\":[\"switch-manager\",\"ap-manager\"]}]",
+      "notTracking": false
+    },
+    "cores": {
+      "value": "4",
+      "defaulted": false,
+      "literal": "4",
+      "notTracking": false
+    },
+    "cputype": {
+      "value": "host",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "dependsOn": {
+      "value": "[\"cluster:vm\",\"templates:debian\",\"backup:vm\",\"network:proxy\",\"network:rules\"]",
+      "defaulted": false,
+      "literal": "[\"cluster:vm\",\"templates:debian\",\"backup:vm\",\"network:proxy\",\"network:rules\"]",
+      "notTracking": false
+    },
+    "description": {
+      "value": "UniFi OS Server — self-hosted UniFi OS (Network etc.) on Debian 13; the management plane that adopts UniFi switches and APs (ADR-008 Stage 5, #339)",
+      "defaulted": false,
+      "literal": "UniFi OS Server — self-hosted UniFi OS (Network etc.) on Debian 13; the management plane that adopts UniFi switches and APs (ADR-008 Stage 5, #339)",
+      "notTracking": false
+    },
+    "diskAutoGrow": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "diskSize": {
+      "value": "50G",
+      "defaulted": false,
+      "literal": "50G",
+      "notTracking": false
+    },
+    "environment": {
+      "value": "rossen",
+      "defaulted": false,
+      "literal": "rossen",
+      "notTracking": true
+    },
+    "firewallType": {
+      "value": "opnsense",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "image": {
+      "value": "debian-13-generic-amd64.qcow2",
+      "defaulted": false,
+      "literal": "debian-13-generic-amd64.qcow2",
+      "notTracking": false
+    },
+    "imageLocation": {
+      "value": "https://cdimage.debian.org/cdimage/cloud/trixie/latest",
+      "defaulted": false,
+      "literal": "https://cdimage.debian.org/cdimage/cloud/trixie/latest",
+      "notTracking": false
+    },
+    "imageType": {
+      "value": "img",
+      "defaulted": false,
+      "literal": "img",
+      "notTracking": false
+    },
+    "installTime": {
+      "value": "20260810-10:12:26",
+      "defaulted": false,
+      "literal": "20260810-10:12:26",
+      "notTracking": true
+    },
+    "maintainer": {
+      "value": "@larsrossen",
+      "defaulted": false,
+      "literal": "@larsrossen",
+      "notTracking": false
+    },
+    "management": {
+      "value": "managed",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "memory": {
+      "value": "5120",
+      "defaulted": false,
+      "literal": "5120",
+      "notTracking": true
+    },
+    "moduleSource": {
+      "value": "/home/tappaas/Community/src/larsrossen/network/unifi-os",
+      "defaulted": false,
+      "literal": "/home/tappaas/Community/src/larsrossen/network/unifi-os",
+      "notTracking": true
+    },
+    "node": {
+      "value": "tappaas3",
+      "defaulted": false,
+      "literal": "tappaas3",
+      "notTracking": true
+    },
+    "ostype": {
+      "value": "l26",
+      "defaulted": false,
+      "literal": "l26",
+      "notTracking": false
+    },
+    "pauseOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pausePriority": {
+      "value": "50",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pbsStorageName": {
+      "value": "tappaas_backup",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pbsUrl": {
+      "value": "backup.mgmt.internal",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "portSync": {
+      "value": "on",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "ports": {
+      "value": "[{\"port\":11443,\"protocol\":\"TCP\",\"description\":\"UniFi OS console UI + API (HTTPS, /proxy/network)\"},{\"port\":8443,\"protocol\":\"TCP\",\"description\":\"Network application HTTPS\"},{\"port\":8444,\"protocol\":\"TCP\",\"description\":\"Network application HTTPS (secondary)\"},{\"port\":8080,\"protocol\":\"TCP\",\"description\":\"Device communication (inform)\"},{\"port\":6789,\"protocol\":\"TCP\",\"description\":\"Mobile speed test\"},{\"port\":3478,\"protocol\":\"UDP\",\"description\":\"STUN (device discovery)\"},{\"port\":10001,\"protocol\":\"UDP\",\"description\":\"Device discovery\"}]",
+      "defaulted": false,
+      "literal": "[{\"port\":11443,\"protocol\":\"TCP\",\"description\":\"UniFi OS console UI + API (HTTPS, /proxy/network)\"},{\"port\":8443,\"protocol\":\"TCP\",\"description\":\"Network application HTTPS\"},{\"port\":8444,\"protocol\":\"TCP\",\"description\":\"Network application HTTPS (secondary)\"},{\"port\":8080,\"protocol\":\"TCP\",\"description\":\"Device communication (inform)\"},{\"port\":6789,\"protocol\":\"TCP\",\"description\":\"Mobile speed test\"},{\"port\":3478,\"protocol\":\"UDP\",\"description\":\"STUN (device discovery)\"},{\"port\":10001,\"protocol\":\"UDP\",\"description\":\"Device discovery\"}]",
+      "notTracking": false
+    },
+    "provides": {
+      "value": "[]",
+      "defaulted": false,
+      "literal": "[]",
+      "notTracking": false
+    },
+    "proxyAllowedZones": {
+      "value": "[\"mgmt\",\"home\",\"work\"]",
+      "defaulted": false,
+      "literal": "[\"mgmt\",\"home\",\"work\"]",
+      "notTracking": false
+    },
+    "proxyPort": {
+      "value": "11443",
+      "defaulted": false,
+      "literal": "11443",
+      "notTracking": false
+    },
+    "proxyPreserveHost": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "proxyUpstreamHttp1": {
+      "value": "true",
+      "defaulted": false,
+      "literal": "true",
+      "notTracking": false
+    },
+    "proxyUpstreamTls": {
+      "value": "true",
+      "defaulted": false,
+      "literal": "true",
+      "notTracking": false
+    },
+    "rebootOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "releaseDate": {
+      "value": "2026-06-14",
+      "defaulted": false,
+      "literal": "2026-06-14",
+      "notTracking": false
+    },
+    "source": {
+      "value": "official",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "sshAccess": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "sshKeyOnly": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "stack": {
+      "value": "misc",
+      "defaulted": false,
+      "literal": "misc",
+      "notTracking": false
+    },
+    "status": {
+      "value": "Development",
+      "defaulted": false,
+      "literal": "Development",
+      "notTracking": false
+    },
+    "storage": {
+      "value": "tanka1",
+      "defaulted": false,
+      "literal": "tanka1",
+      "notTracking": false
+    },
+    "suspended": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "suspendedNoUpdate": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "trunks0": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "trunks1": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "updateTime": {
+      "value": "20261101-02:38:22",
+      "defaulted": false,
+      "literal": "20261101-02:38:22",
+      "notTracking": true
+    },
+    "version": {
+      "value": "0.2.0",
+      "defaulted": false,
+      "literal": "0.2.0",
+      "notTracking": false
+    },
+    "vmid": {
+      "value": "811",
+      "defaulted": false,
+      "literal": "811",
+      "notTracking": false
+    },
+    "vmname": {
+      "value": "unifi-os",
+      "defaulted": false,
+      "literal": "unifi-os",
+      "notTracking": false
+    },
+    "vmtag": {
+      "value": "TAPPaaS,Community,Network,Mgmt",
+      "defaulted": false,
+      "literal": "TAPPaaS,Community,Network,Mgmt",
+      "notTracking": false
+    },
+    "zone0": {
+      "value": "mgmt",
+      "defaulted": false,
+      "literal": "mgmt",
+      "notTracking": false
+    },
+    "zone1": {
+      "value": "mgmt",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    }
+  },
+  "origAvailable": true
+}

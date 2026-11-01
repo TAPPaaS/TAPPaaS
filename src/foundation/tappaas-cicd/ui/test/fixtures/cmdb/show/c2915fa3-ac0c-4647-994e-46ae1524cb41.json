@@ -1,0 +1,103 @@
+{
+  "id": "c2915fa3-ac0c-4647-994e-46ae1524cb41",
+  "class": "room",
+  "ancestors": [
+    "room",
+    "place",
+    "object"
+  ],
+  "name": "stue",
+  "displayName": "LivingRoom",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-30T08:49:10.799Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.621Z",
+  "seen": {
+    "asset-manager": "2026-11-01T08:52:20.621Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "2 of 2 ok",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T07:25:02.913Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T09:55:09.015Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "2 of 2 ok",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T09:55:09.015Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "1 of 1 ok",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T07:25:02.913Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T10:00:11.396Z"
+    },
+    "displayName": {
+      "value": "LivingRoom",
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 339,
+      "type": "at",
+      "direction": "out",
+      "other": {
+        "id": "eb8b5e14-af28-46e3-8bf3-fb8de068683b",
+        "class": "location",
+        "name": "knudanchersvej95"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 604,
+      "type": "placed-in",
+      "direction": "in",
+      "other": {
+        "id": "bef68e7e-2644-4d97-8284-df97074dd701",
+        "class": "network-device",
+        "name": "ap-01"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T00:02:55.425Z"
+    }
+  ]
+}

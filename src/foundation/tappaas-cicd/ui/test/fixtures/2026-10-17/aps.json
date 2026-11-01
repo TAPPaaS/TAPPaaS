@@ -1,0 +1,13 @@
+[
+  {
+    "name": "Nano HD",
+    "vendor": "unifi",
+    "model": "U7NHD",
+    "managementIp": "10.0.0.184",
+    "uplink": {
+      "switch": "USW Pro XG 10 PoE",
+      "port": "9"
+    },
+    "ssids": []
+  }
+]

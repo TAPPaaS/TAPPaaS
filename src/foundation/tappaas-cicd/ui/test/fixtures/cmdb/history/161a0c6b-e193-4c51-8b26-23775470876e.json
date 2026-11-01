@@ -1,0 +1,454 @@
+{
+ "id": "161a0c6b-e193-4c51-8b26-23775470876e",
+ "class": "device",
+ "name": "Nano HD",
+ "created": "2026-10-30T08:49:10.964Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "placeholder",
+   "value": true,
+   "source": "asset-manager",
+   "change": 12,
+   "from": "2026-10-30T08:49:10.964Z",
+   "to": "2026-10-30T08:49:11.095Z"
+  },
+  {
+   "name": "desired",
+   "value": {
+    "key": "accessPoints.Nano HD",
+    "file": "switch-configuration-desired.json"
+   },
+   "source": "ap-manager",
+   "change": 21,
+   "from": "2026-10-30T08:49:11.095Z",
+   "to": null
+  },
+  {
+   "name": "managementAddress",
+   "value": "10.0.0.184",
+   "source": "ap-manager",
+   "change": 21,
+   "from": "2026-10-30T08:49:11.095Z",
+   "to": null
+  },
+  {
+   "name": "model",
+   "value": "U7NHD",
+   "source": "ap-manager",
+   "change": 21,
+   "from": "2026-10-30T08:49:11.095Z",
+   "to": null
+  },
+  {
+   "name": "clients",
+   "value": [],
+   "source": "ap-manager",
+   "change": 54,
+   "from": "2026-10-30T08:50:55.299Z",
+   "to": null
+  },
+  {
+   "name": "deviceType",
+   "value": "access-point",
+   "source": "ap-manager",
+   "change": 1338,
+   "from": "2026-10-31T07:24:26.636Z",
+   "to": null
+  },
+  {
+   "name": "ssids",
+   "value": [
+    {
+     "name": "rossen-home",
+     "vlan": 310,
+     "zone": "home",
+     "enabled": true,
+     "security": "wpa2-personal"
+    },
+    {
+     "name": "rossen-guest",
+     "vlan": 510,
+     "zone": "guest",
+     "enabled": true,
+     "security": "wpa2-personal"
+    }
+   ],
+   "source": "ap-manager",
+   "change": 1338,
+   "from": "2026-10-31T07:24:26.636Z",
+   "to": null
+  },
+  {
+   "name": "uplink",
+   "value": {
+    "port": "9",
+    "switch": "USW Pro XG 10 PoE"
+   },
+   "source": "ap-manager",
+   "change": 1338,
+   "from": "2026-10-31T07:24:26.636Z",
+   "to": null
+  },
+  {
+   "name": "vendor",
+   "value": "unifi",
+   "source": "ap-manager",
+   "change": 1338,
+   "from": "2026-10-31T07:24:26.636Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T08:21:51.484Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1355,
+   "from": "2026-10-31T07:25:02.913Z",
+   "to": "2026-10-31T08:25:03.232Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T08:23:56.058Z",
+    "source": "sweep",
+    "desired": {
+     "key": "accessPoints.Nano HD",
+     "file": "switch-configuration-desired.json"
+    },
+    "attributes": {
+     "ssids": {
+      "now": [
+       {
+        "name": "rossen-home",
+        "vlan": 310,
+        "zone": "home",
+        "enabled": true,
+        "security": "wpa2-personal"
+       },
+       {
+        "name": "rossen-guest",
+        "vlan": 510,
+        "zone": "guest",
+        "enabled": true,
+        "security": "wpa2-personal"
+       }
+      ],
+      "was": null
+     },
+     "uplink": {
+      "now": {
+       "port": "9",
+       "switch": "USW Pro XG 10 PoE"
+      },
+      "was": null
+     },
+     "vendor": {
+      "now": "unifi",
+      "was": null
+     },
+     "deviceType": {
+      "now": "access-point",
+      "was": null
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 1730,
+   "from": "2026-10-31T08:23:56.058Z",
+   "to": "2026-10-31T21:25:37.898Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T08:25:03.232Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "device/Nano HD: drift: appeared deviceType; device/Nano HD: drift: appeared ssids; device/Nano HD: drift: appeared uplink; device/Nano HD: drift: appeared vendor",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1733,
+   "from": "2026-10-31T08:25:03.232Z",
+   "to": "2026-10-31T09:55:09.015Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T09:55:09.015Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:55:09.015Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 2343,
+   "from": "2026-10-31T09:55:09.015Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 454,
+   "type": "allocated-to",
+   "direction": "in",
+   "other": {
+    "id": "bef68e7e-2644-4d97-8284-df97074dd701",
+    "class": "network-device",
+    "name": "ap-01"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 12,
+   "from": "2026-10-30T08:49:10.964Z",
+   "to": "2026-10-30T12:58:05.487Z"
+  },
+  {
+   "id": 492,
+   "type": "allocated-to",
+   "direction": "in",
+   "other": {
+    "id": "74c60b8b-9bac-41ce-a397-b8b89da91611",
+    "class": "network-device",
+    "name": "Nano HD"
+   },
+   "attributes": {},
+   "source": "ap-manager",
+   "change": 300,
+   "from": "2026-10-30T12:58:05.487Z",
+   "to": "2026-10-30T14:32:14.762Z"
+  },
+  {
+   "id": 546,
+   "type": "allocated-to",
+   "direction": "in",
+   "other": {
+    "id": "bef68e7e-2644-4d97-8284-df97074dd701",
+    "class": "network-device",
+    "name": "ap-01"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 371,
+   "from": "2026-10-30T14:32:14.762Z",
+   "to": "2026-10-30T19:34:31.714Z"
+  },
+  {
+   "id": 569,
+   "type": "allocated-to",
+   "direction": "in",
+   "other": {
+    "id": "c2127002-9abc-48d2-88e7-4d721b69615e",
+    "class": "network-device",
+    "name": "ap-04"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 756,
+   "from": "2026-10-30T19:35:37.681Z",
+   "to": "2026-10-30T19:35:38.101Z"
+  },
+  {
+   "id": 606,
+   "type": "allocated-to",
+   "direction": "in",
+   "other": {
+    "id": "bef68e7e-2644-4d97-8284-df97074dd701",
+    "class": "network-device",
+    "name": "ap-01"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 1058,
+   "from": "2026-10-31T00:02:55.574Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 12,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:49:10.964Z",
+   "drift": false
+  },
+  {
+   "id": 21,
+   "kind": "observation",
+   "source": "ap-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:49:11.095Z",
+   "drift": false
+  },
+  {
+   "id": 54,
+   "kind": "observation",
+   "source": "ap-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:50:55.299Z",
+   "drift": false
+  },
+  {
+   "id": 300,
+   "kind": "observation",
+   "source": "ap-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T12:58:05.487Z",
+   "drift": false
+  },
+  {
+   "id": 371,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T14:32:14.762Z",
+   "drift": false
+  },
+  {
+   "id": 756,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset allocate",
+   "actor": "tappaas",
+   "time": "2026-10-30T19:35:37.681Z",
+   "drift": false
+  },
+  {
+   "id": 1058,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T00:02:55.574Z",
+   "drift": false
+  },
+  {
+   "id": 1338,
+   "kind": "observation",
+   "source": "ap-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:24:26.636Z",
+   "drift": false
+  },
+  {
+   "id": 1355,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:25:02.913Z",
+   "drift": false
+  },
+  {
+   "id": 1730,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-31T08:23:56.058Z",
+   "drift": true
+  },
+  {
+   "id": 1733,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T08:25:03.232Z",
+   "drift": false
+  },
+  {
+   "id": 2343,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:55:09.015Z",
+   "drift": false
+  },
+  {
+   "id": 6897,
+   "kind": "change",
+   "source": "ap-manager",
+   "job": null,
+   "verb": "ap-manager reconcile --apply",
+   "actor": "tappaas",
+   "time": "2026-10-31T21:25:37.898Z",
+   "drift": false
+  }
+ ]
+}

@@ -1,0 +1,1210 @@
+{
+ "id": "c0f33358-ad6e-4866-8e1c-3a39d08a3405",
+ "class": "storage-pool",
+ "name": "tanka1",
+ "created": "2026-10-30T19:14:05.301Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:55:09.993Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T01:10:00.180Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:10:00.180Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:55:09.993Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1127,
+   "from": "2026-10-31T01:11:47.556Z",
+   "to": "2026-10-31T01:56:49.049Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:55:09.993Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T01:10:00.180Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:10:00.180Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:55:09.993Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1182,
+   "from": "2026-10-31T01:56:49.049Z",
+   "to": "2026-10-31T02:00:11.917Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T02:05:15.325Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T02:00:11.917Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "storage-pool/tanka1: drift: appeared",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T02:05:15.325Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T02:05:15.325Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1185,
+   "from": "2026-10-31T02:00:11.917Z",
+   "to": "2026-10-31T02:10:04.148Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T02:10:04.148Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T02:10:04.148Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T02:10:04.148Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T02:10:04.148Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1190,
+   "from": "2026-10-31T02:10:04.148Z",
+   "to": "2026-10-31T02:11:44.458Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T02:35:06.894Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T02:10:04.148Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T02:10:04.148Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T02:35:06.894Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1193,
+   "from": "2026-10-31T02:11:44.458Z",
+   "to": "2026-10-31T02:36:46.680Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T02:40:02.900Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T02:10:04.148Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T02:10:04.148Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T02:40:02.900Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1207,
+   "from": "2026-10-31T02:36:46.680Z",
+   "to": "2026-10-31T02:45:07.401Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T02:50:02.373Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T02:45:07.401Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "storage-pool/tanka1: drift: appeared",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T02:50:02.373Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T02:50:02.373Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1212,
+   "from": "2026-10-31T02:45:07.401Z",
+   "to": "2026-10-31T02:55:01.896Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T03:25:06.378Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T02:55:01.896Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T02:55:01.896Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T03:25:06.378Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1217,
+   "from": "2026-10-31T02:55:01.896Z",
+   "to": "2026-10-31T03:30:05.651Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T03:35:15.328Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T03:30:05.651Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "storage-pool/tanka1: drift: appeared",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T03:35:15.328Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T03:35:15.328Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1235,
+   "from": "2026-10-31T03:30:05.651Z",
+   "to": "2026-10-31T03:40:00.154Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T04:10:15.324Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T03:40:00.154Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T03:40:00.154Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T04:10:15.324Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1239,
+   "from": "2026-10-31T03:40:00.154Z",
+   "to": "2026-10-31T04:15:03.899Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T04:20:08.648Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T04:15:03.899Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "storage-pool/tanka1: drift: appeared",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T04:20:08.648Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T04:20:08.648Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1253,
+   "from": "2026-10-31T04:15:03.899Z",
+   "to": "2026-10-31T04:25:03.357Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T04:55:01.245Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T04:25:03.357Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T04:25:03.357Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T04:55:01.245Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1257,
+   "from": "2026-10-31T04:25:03.357Z",
+   "to": "2026-10-31T05:00:05.649Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T05:05:07.571Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T05:00:05.649Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "storage-pool/tanka1: drift: appeared",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T05:05:07.571Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T05:05:07.571Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1271,
+   "from": "2026-10-31T05:00:05.649Z",
+   "to": "2026-10-31T05:10:00.400Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T05:40:13.559Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T05:10:00.400Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T05:10:00.400Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T05:40:13.559Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1275,
+   "from": "2026-10-31T05:10:00.400Z",
+   "to": "2026-10-31T05:45:03.649Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T05:50:03.152Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T05:45:03.649Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "storage-pool/tanka1: drift: appeared",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T05:50:03.152Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T05:50:03.152Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1289,
+   "from": "2026-10-31T05:45:03.649Z",
+   "to": "2026-10-31T05:55:02.390Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T06:25:04.395Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T05:55:02.390Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T05:55:02.390Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T06:25:04.395Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1293,
+   "from": "2026-10-31T05:55:02.390Z",
+   "to": "2026-10-31T06:30:06.900Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T06:35:03.615Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T06:30:06.900Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "storage-pool/tanka1: drift: appeared",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T06:35:03.615Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T06:35:03.615Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1307,
+   "from": "2026-10-31T06:30:06.900Z",
+   "to": "2026-10-31T06:40:07.685Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:10:05.963Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T06:40:07.685Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T06:40:07.685Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:10:05.963Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1311,
+   "from": "2026-10-31T06:40:07.685Z",
+   "to": "2026-10-31T07:15:10.492Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:25:02.913Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T07:15:10.492Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "storage-pool/tanka1: drift: appeared",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:25:02.913Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:25:02.913Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1325,
+   "from": "2026-10-31T07:15:10.492Z",
+   "to": "2026-10-31T07:30:02.146Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tanka1: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T07:30:02.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:30:02.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:15:11.335Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1382,
+   "from": "2026-10-31T07:30:02.146Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 556,
+   "type": "runs-on",
+   "direction": "out",
+   "other": {
+    "id": "8929e901-0d4b-46f0-b41f-9724d746ee5f",
+    "class": "machine",
+    "name": "tappaas4"
+   },
+   "attributes": {},
+   "source": "storage-manager",
+   "change": 689,
+   "from": "2026-10-30T19:14:05.301Z",
+   "to": "2026-10-30T19:25:01.948Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 1127,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T01:11:47.556Z",
+   "drift": false
+  },
+  {
+   "id": 1182,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T01:56:49.049Z",
+   "drift": false
+  },
+  {
+   "id": 1185,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T02:00:11.917Z",
+   "drift": false
+  },
+  {
+   "id": 1190,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T02:10:04.148Z",
+   "drift": false
+  },
+  {
+   "id": 1193,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T02:11:44.458Z",
+   "drift": false
+  },
+  {
+   "id": 1207,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T02:36:46.680Z",
+   "drift": false
+  },
+  {
+   "id": 1212,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T02:45:07.401Z",
+   "drift": false
+  },
+  {
+   "id": 1217,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T02:55:01.896Z",
+   "drift": false
+  },
+  {
+   "id": 1235,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T03:30:05.651Z",
+   "drift": false
+  },
+  {
+   "id": 1239,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T03:40:00.154Z",
+   "drift": false
+  },
+  {
+   "id": 1253,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T04:15:03.899Z",
+   "drift": false
+  },
+  {
+   "id": 1257,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T04:25:03.357Z",
+   "drift": false
+  },
+  {
+   "id": 1271,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T05:00:05.649Z",
+   "drift": false
+  },
+  {
+   "id": 1275,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T05:10:00.400Z",
+   "drift": false
+  },
+  {
+   "id": 1289,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T05:45:03.649Z",
+   "drift": false
+  },
+  {
+   "id": 1293,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T05:55:02.390Z",
+   "drift": false
+  },
+  {
+   "id": 1307,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T06:30:06.900Z",
+   "drift": false
+  },
+  {
+   "id": 1311,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T06:40:07.685Z",
+   "drift": false
+  },
+  {
+   "id": 1325,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:15:10.492Z",
+   "drift": false
+  },
+  {
+   "id": 1382,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:30:02.146Z",
+   "drift": false
+  }
+ ]
+}

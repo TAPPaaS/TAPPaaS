@@ -1,0 +1,140 @@
+{
+  "id": "6101b828-baa8-4a3a-bd19-66f704725918",
+  "class": "vm",
+  "ancestors": [
+    "vm",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "test-nix-vlannode",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-31T21:07:21.027Z",
+  "ended": "2026-11-01T08:26:58.915Z",
+  "lastSeen": "2026-11-01T08:26:58.915Z",
+  "seen": {
+    "operator": "2026-11-01T08:26:58.915Z",
+    "site-manager": "2026-10-31T21:07:21.027Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T21:10:08.334Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-11-01T00:04:45.410Z",
+          "reason": "sweep-missing",
+          "source": "health-manager",
+          "status": "critical",
+          "derived": false,
+          "message": "vm/test-nix-vlannode: desired without actual",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-31T21:10:08.334Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T21:10:08.334Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-11-01T00:04:45.410Z"
+    },
+    "cores": {
+      "value": 2,
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "description": {
+      "value": "Test: NixOS clone on srv VLAN on a different node (tappaas2)",
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "desired": {
+      "value": {
+        "file": "test-nix-vlannode.json"
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "disks": {
+      "value": [
+        {
+          "size": "528K",
+          "storage": "tanka1"
+        },
+        {
+          "size": "16G",
+          "storage": "tanka1"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "memory": {
+      "value": 2048,
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "release": {
+      "value": {
+        "module": "test-vm-creation",
+        "version": "0.5"
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "stack": {
+      "value": "test",
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "stage": {
+      "value": "retired",
+      "source": "operator",
+      "since": "2026-11-01T08:26:58.915Z"
+    },
+    "state": {
+      "value": "running",
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "vmid": {
+      "value": 912,
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    },
+    "zone": {
+      "value": "rossen",
+      "source": "site-manager",
+      "since": "2026-10-31T21:07:21.027Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

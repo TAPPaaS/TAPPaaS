@@ -1,0 +1,358 @@
+{
+  "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+  "class": "vm",
+  "ancestors": [
+    "vm",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "litellm",
+  "displayName": "LiteLLM",
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T08:47:45.445Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.004Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.173Z",
+    "health-manager": "2026-10-30T09:04:04.197Z",
+    "module-manager": "2026-11-01T08:52:20.004Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T09:55:09.015Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T09:55:09.015Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-30T14:15:00.202Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "security",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "cve-act",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": false,
+          "message": "litellm (litellm): 4 fixable",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "backup",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "newest restore point 0 day(s) old",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T09:55:09.015Z"
+    },
+    "cores": {
+      "value": 4,
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "description": {
+      "value": "LiteLLM AI gateway — one OpenAI-compatible API, with per-user keys and usage tracking, in front of local (vLLM) and remote models.",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "desired": {
+      "value": {
+        "file": "litellm.json"
+      },
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "disks": {
+      "value": [
+        {
+          "size": "1M",
+          "storage": "tanka1"
+        },
+        {
+          "size": "32G",
+          "storage": "tanka1"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "displayName": {
+      "value": "LiteLLM",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "maturity": {
+      "value": "Development",
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    },
+    "memory": {
+      "value": 6144,
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "nics": {
+      "value": [
+        {
+          "mac": "02:1b:46:99:54:74",
+          "tag": 200,
+          "name": "net0",
+          "model": "virtio",
+          "bridge": "lan"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    "release": {
+      "value": {
+        "module": "litellm",
+        "version": "0.7.3"
+      },
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "stack": {
+      "value": "ai",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "stage": {
+      "value": "operational",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "state": {
+      "value": "running",
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    },
+    "vmid": {
+      "value": 310,
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "zone": {
+      "value": "rossen",
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 314,
+      "type": "backs-up",
+      "direction": "in",
+      "other": {
+        "id": "e5d0d704-4a8a-4cb0-a2eb-84ad8f6dc8f8",
+        "class": "datastore",
+        "name": "tappaas_backup"
+      },
+      "attributes": {},
+      "source": "backup-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:53.826Z"
+    },
+    {
+      "id": 181,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "39c19eed-d1ab-44dd-a45f-15d0bc214ba7",
+        "class": "service",
+        "name": "backup:vm"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 179,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "fc39fc51-1a56-4551-8566-53e2eaf17862",
+        "class": "service",
+        "name": "cluster:vm"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 184,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "9d7c7ae6-0a26-4da8-a496-ed1e821312ae",
+        "class": "service",
+        "name": "identity:identity"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 182,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "ee9a7b62-e204-4565-8084-48a003b5b83d",
+        "class": "service",
+        "name": "network:proxy"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 183,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "a0744357-5768-4dc1-bd83-4abca98d3596",
+        "class": "service",
+        "name": "network:rules"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 180,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "b35b1a55-2887-453f-acb5-88c367f31d90",
+        "class": "service",
+        "name": "templates:nixos"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 22,
+      "type": "member-of",
+      "direction": "out",
+      "other": {
+        "id": "9a883fd4-b028-4492-b870-4e8a16b7393c",
+        "class": "environment",
+        "name": "rossen"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 109,
+      "type": "provides",
+      "direction": "out",
+      "other": {
+        "id": "5ec63cd0-d838-4997-833c-c416439567fa",
+        "class": "service",
+        "name": "litellm:models"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 64,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "5ec63cd0-d838-4997-833c-c416439567fa",
+        "class": "service",
+        "name": "litellm:models"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 23,
+      "type": "runs-on",
+      "direction": "out",
+      "other": {
+        "id": "95727e8e-df12-468f-a03b-8b685140e223",
+        "class": "machine",
+        "name": "tappaas2"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    }
+  ]
+}

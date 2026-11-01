@@ -1,0 +1,181 @@
+{
+  "node": "tappaas4",
+  "live": {
+    "node": "tappaas4",
+    "ports": [
+      {
+        "name": "eno1",
+        "mac": "20:7c:14:f4:d0:8c",
+        "state": "down",
+        "speed": -1,
+        "mtu": 1500,
+        "mii": "",
+        "aggregator": "",
+        "usb": false,
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": null
+      },
+      {
+        "name": "eno2",
+        "mac": "20:7c:14:f4:d0:8d",
+        "state": "down",
+        "speed": -1,
+        "mtu": 1500,
+        "mii": "",
+        "aggregator": "",
+        "usb": false,
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": null
+      },
+      {
+        "name": "eno3",
+        "mac": "20:7c:14:f4:d0:8e",
+        "state": "down",
+        "speed": -1,
+        "mtu": 1500,
+        "mii": "",
+        "aggregator": "",
+        "usb": false,
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": null
+      },
+      {
+        "name": "eno4",
+        "mac": "20:7c:14:f4:d0:8f",
+        "state": "down",
+        "speed": -1,
+        "mtu": 1500,
+        "mii": "",
+        "aggregator": "",
+        "usb": false,
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": null
+      },
+      {
+        "name": "enp4s0",
+        "mac": "20:7c:14:f4:d0:87",
+        "state": "up",
+        "speed": 2500,
+        "mtu": 1500,
+        "mii": "",
+        "aggregator": "",
+        "usb": false,
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": {
+          "chassis": "a8:9c:6c:b0:8d:76",
+          "name": "USW-Pro-XG-10-PoE",
+          "port": "Port 1"
+        }
+      },
+      {
+        "name": "enp5s0",
+        "mac": "20:7c:14:f4:d0:88",
+        "state": "down",
+        "speed": -1,
+        "mtu": 1500,
+        "mii": "",
+        "aggregator": "",
+        "usb": false,
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": null
+      },
+      {
+        "name": "enp6s0",
+        "mac": "20:7c:14:f4:d0:89",
+        "state": "down",
+        "speed": -1,
+        "mtu": 1500,
+        "mii": "",
+        "aggregator": "",
+        "usb": false,
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": null
+      },
+      {
+        "name": "enp7s0",
+        "mac": "20:7c:14:f4:d0:8a",
+        "state": "down",
+        "speed": -1,
+        "mtu": 1500,
+        "mii": "",
+        "aggregator": "",
+        "usb": false,
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": null
+      },
+      {
+        "name": "enp8s0",
+        "mac": "20:7c:14:f4:d0:8b",
+        "state": "down",
+        "speed": -1,
+        "mtu": 1500,
+        "mii": "",
+        "aggregator": "",
+        "usb": false,
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": null
+      }
+    ],
+    "lan": {
+      "mtu": 1500,
+      "bond": "",
+      "mode": "single",
+      "active": "",
+      "primary": "",
+      "primaryMac": "",
+      "aggregator": "",
+      "partnerMac": "",
+      "bondMtu": null,
+      "members": [
+        {
+          "name": "enp4s0",
+          "mac": "20:7c:14:f4:d0:87",
+          "state": "up",
+          "speed": 2500,
+          "mtu": 1500,
+          "mii": "",
+          "aggregator": "",
+          "usb": false,
+          "actorState": -1,
+          "partnerState": -1,
+          "lldp": {
+            "chassis": "a8:9c:6c:b0:8d:76",
+            "name": "USW-Pro-XG-10-PoE",
+            "port": "Port 1"
+          }
+        }
+      ]
+    },
+    "wan": {
+      "members": []
+    },
+    "lrmActive": false,
+    "corosync": {
+      "links": 1,
+      "disconnected": 0
+    },
+    "lldpd": "active",
+    "pendingNew": false
+  },
+  "declared": {
+    "lan": {
+      "mode": "single",
+      "ports": [
+        "20:7c:14:f4:d0:87"
+      ]
+    },
+    "wan": {
+      "ports": []
+    }
+  },
+  "findings": []
+}

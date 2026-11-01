@@ -3,7 +3,7 @@
 // cap: a member of users on the status route reads the owner view and gets
 // 403 on every write, the setup and the secrets; no jumps.
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { IncomingMessage, ServerResponse } from "http";
@@ -15,19 +15,17 @@ import { Reads } from "../../src/reads";
 import { ConsoleServer } from "../../src/server";
 import { gateHeaders, testGate } from "./gate-fixture";
 import { check, done } from "./check";
-import { FIX, fakeSite } from "./fake-site";
-
-const j = <T>(f: string): T => JSON.parse(readFileSync(join(FIX, f), "utf8")) as T;
+import { fakeSite, pinned } from "./fake-site";
 
 async function main(): Promise<void> {
-  const health = j<HealthDoc>("validate.json");
-  const modules = j<ModuleList>("modules.json").modules;
+  const health = pinned<HealthDoc>("validate.json");
+  const modules = pinned<ModuleList>("modules.json").modules;
   const o = ownerSummary({
-    site: { name: "rossen", displayName: "rossen", version: "2.0", channel: "unstable", email: "lars@hrossen.dk", ipv6: true, updateSchedule: { frequency: "daily" } },
+    site: { name: "rossen", displayName: "rossen", version: "2.0", channel: "unstable", email: "operator@example.org", ipv6: true, updateSchedule: { frequency: "daily" } },
     health,
     modules,
-    backup: j("backup.json"),
-    topology: j("topology.json"),
+    backup: pinned("backup.json"),
+    topology: pinned("topology.json"),
     configs: { immich: { displayName: "Immich (photos)", proxyDomain: "immich.hrossen.dk" }, nextcloud: { proxyDomain: "nextcloud.hrossen.dk" } },
     lastSweep: { reboot: "none" },
   });
@@ -39,7 +37,7 @@ async function main(): Promise<void> {
   check(o.services.some((s) => s.notes.includes("backed up")) && o.facts.some((f) => /backed up/.test(f)), "backups are worded per service and in the facts");
   check(o.services.find((s) => s.name === "nomad")?.notes.includes("inside the site only") === true, "a module with no published route is 'inside the site only'");
   check(/3 servers · 1 switch · 1 access point · 1 firewall/.test(o.numbers), "the site in numbers, from the topology");
-  check(o.offsite.some((x) => /rasmus/.test(x)) && o.operator === "lars@hrossen.dk" && /Channel unstable · updates nightly/.test(o.release), "off-site copy, operator, release");
+  check(o.offsite.some((x) => /rasmus/.test(x)) && o.operator === "operator@example.org" && /Channel unstable · updates nightly/.test(o.release), "off-site copy, operator, release");
 
   // ── the status route is off (T1) ──────────────────────────────────────────────
   const dir = mkdtempSync(join(tmpdir(), "console-owner-"));

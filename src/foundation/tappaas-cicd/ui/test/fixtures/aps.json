@@ -8,6 +8,21 @@
       "switch": "USW Pro XG 10 PoE",
       "port": "9"
     },
-    "ssids": []
+    "ssids": [
+      {
+        "name": "rossen-home",
+        "vlan": 310,
+        "zone": "home",
+        "security": "wpa2-personal",
+        "enabled": true
+      },
+      {
+        "name": "rossen-guest",
+        "vlan": 510,
+        "zone": "guest",
+        "security": "wpa2-personal",
+        "enabled": true
+      }
+    ]
   }
 ]

@@ -1,0 +1,105 @@
+{
+  "description": "coturn TURN/STUN server for Nextcloud Talk WebRTC audio/video calls.",
+  "version": "0.3.1",
+  "releaseDate": "2026-09-21",
+  "installTime": "20260925-21:23:47",
+  "updateTime": "20261101-02:27:13",
+  "maintainer": "@ErikDaniel007",
+  "status": "Testing",
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/collaboration/coturn",
+  "environment": "rossen",
+  "vmname": "coturn",
+  "vmid": 341,
+  "vmtag": "TAPPaaS,App",
+  "node": "tappaas1",
+  "zone0": "dmz",
+  "publicDomain": "turn.hrossen.dk",
+  "dependsOn": [
+    "backup:vm",
+    "cluster:vm",
+    "network:nat",
+    "network:rules",
+    "nextcloud:fileservice",
+    "templates:nixos"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "provides": [
+    "turn"
+  ],
+  "appVersion": "4.13.1",
+  "stack": "collaboration",
+  "config": {
+    "backup:vm": {
+      "backup": {
+        "enabled": true,
+        "exclude": [],
+        "retention": "7y"
+      }
+    },
+    "cluster:vm": {
+      "bios": "ovmf",
+      "cores": 2,
+      "memory": 2048,
+      "diskSize": "16G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "nextcloud:fileservice": {
+      "connector": "talk",
+      "nextcloudPublicUrl": "https://cloud.hrossen.dk"
+    },
+    "network:rules": {
+      "ports": [
+        {
+          "port": 3478,
+          "protocol": "TCP/UDP",
+          "description": "TURN/STUN"
+        },
+        {
+          "port": "49152:50151",
+          "protocol": "UDP",
+          "description": "TURN relay range"
+        }
+      ],
+      "ingress": [
+        {
+          "from": "home",
+          "ports": [
+            3478,
+            "49152:50151"
+          ],
+          "protocol": "UDP",
+          "description": "Talk clients on client networks relay through coturn without hairpinning via the WAN IP"
+        },
+        {
+          "from": "home",
+          "ports": [
+            3478
+          ],
+          "protocol": "TCP",
+          "description": "Talk clients on client networks: TURN TCP fallback"
+        }
+      ]
+    },
+    "network:nat": {
+      "natRules": [
+        {
+          "externalPort": 3478,
+          "protocol": "TCP/UDP",
+          "description": "TURN/STUN"
+        },
+        {
+          "externalPort": "49152-50151",
+          "internalPort": 49152,
+          "protocol": "UDP",
+          "description": "TURN relay range"
+        }
+      ]
+    }
+  }
+}

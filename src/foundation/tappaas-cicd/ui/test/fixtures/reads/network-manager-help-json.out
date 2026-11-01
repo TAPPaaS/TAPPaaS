@@ -1,0 +1,1375 @@
+{
+  "manifest": 1,
+  "name": "network-manager",
+  "version": "0.1.0",
+  "tagline": "TAPPaaS network owner + orchestrator: zones, firewall, switches, access points",
+  "common": [
+    {
+      "flag": "--zones-file",
+      "takesValue": true,
+      "arg": "<f>",
+      "choices": null,
+      "repeatable": false,
+      "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+    }
+  ],
+  "verbs": [
+    {
+      "verb": "list",
+      "keys": [
+        [
+          "list"
+        ]
+      ],
+      "usage": "list [--state S] [--type T] [--tier N] [--json]",
+      "note": "`--type Client|IoT` adds tier + environment columns. Enabling/disabling a zone\nis `enable|disable|manual <name>` — `list --state Inactive` is how you find\nthe candidates.",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--state",
+          "takesValue": true,
+          "arg": "S",
+          "choices": null,
+          "repeatable": false,
+          "description": "Active | Inactive | Manual | Mandatory | Disabled"
+        },
+        {
+          "flag": "--type",
+          "takesValue": true,
+          "arg": "T",
+          "choices": null,
+          "repeatable": false,
+          "description": "Management | Service | Client | IoT | Guest | DMZ | Overlay | WAN"
+        },
+        {
+          "flag": "--tier",
+          "takesValue": true,
+          "arg": "N",
+          "choices": null,
+          "repeatable": false,
+          "description": "trust rank 0-6 (see ZONES.md)"
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "emit the matching zone names as a JSON array"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "exists",
+      "keys": [
+        [
+          "exists"
+        ]
+      ],
+      "usage": "exists <name>",
+      "note": null,
+      "details": "Exit 0 when the zone exists, non-zero when it does not.",
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "report",
+      "keys": [
+        [
+          "report"
+        ]
+      ],
+      "usage": "report [--json] [--discover]",
+      "note": null,
+      "details": "Sends what the network is, as one observation, to the CMDB (cmdb-controller): the zones of\nzones.json, and from the firewall the DHCP leases and reservations, the DNS host entries,\nthe reverse proxy's routes and the admin VPN's peers. A source that does not answer is\nleft out and named on stderr. When the CMDB does not answer the report is spooled.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "print the report instead of sending it (with --discover, an array of two)"
+        },
+        {
+          "flag": "--discover",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "everything the firewall holds, in a second report: rules and aliases by UUID with their live position, NAT, routes, certificates, packages (ADR-040 D15)"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "topology",
+      "keys": [
+        [
+          "topology"
+        ]
+      ],
+      "usage": "topology [--json] [--live | --diff] [--health <file> | --no-health] [--no-positions]",
+      "note": null,
+      "details": "The physical site as one derived document, read from the CMDB (ADR-040); --live joins the\nplanes instead, and is what runs, with a line on stderr, when the CMDB does not answer or\ndoes not yet hold all of it: nodes with their uplinks, legs, LLDP peers and\nguests; switches with their ports, LAGs and drift; access points; zones; the buddies and the\nsatellite; and the health findings placed on the object each names. The live join reads\nsite.json, site-manager node list / node network show, switch-manager list / list-ports /\nlag list, ap-manager list, zones.json, module-manager module list, backup-manager peers,\nhealth-manager validate and asset-manager export (the locations, their rooms and racks,\neach placement on its device and faceplate, every link mapped to faceplate ports). Every\ndevice carries its location, its placement and the record it came from; a device a switch\nport sees and nobody recorded is listed as seen. Read-only: it stores nothing. A source\nthat does not answer is named under `sources` and its part is left empty.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "print the topology document as JSON"
+        },
+        {
+          "flag": "--live",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "join the planes as they are now instead of reading the CMDB"
+        },
+        {
+          "flag": "--diff",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "build both and report what differs (exit 1 when something does, 2 when the CMDB cannot be read)"
+        },
+        {
+          "flag": "--health",
+          "takesValue": true,
+          "arg": "<file>",
+          "choices": null,
+          "repeatable": false,
+          "description": "take the health findings from this `health-manager validate --json` output instead of running it"
+        },
+        {
+          "flag": "--no-health",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "leave the health findings out (no validate run)"
+        },
+        {
+          "flag": "--no-positions",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "leave the positions out (no asset-manager run; what asset-manager itself reads)"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "show",
+      "keys": [
+        [
+          "show"
+        ],
+        [
+          "get"
+        ]
+      ],
+      "usage": "show <name> [--json]",
+      "note": "(alias: get)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "print the zone object as JSON"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "add",
+      "keys": [
+        [
+          "add"
+        ]
+      ],
+      "usage": "add <name> [options]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "options",
+          "optional": true,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--archetype",
+          "takesValue": true,
+          "arg": "<A>",
+          "choices": null,
+          "repeatable": false,
+          "description": "a preset with the right tier for the zone's role — one of:\n                control, service, trusted-client, guest, dmz,\n                iot-local, iot-cloud, iot-cams, iot-untrust.\n                Stamps type/typeId/tier/isolated + the access-to seed."
+        },
+        {
+          "flag": "--environment",
+          "takesValue": true,
+          "arg": "<env>",
+          "choices": null,
+          "repeatable": false,
+          "description": "the environment the new zone belongs to: a Service zone's own,\n                or the one(s) a Client/IoT/Guest/DMZ zone serves (a,b for several);\n                a,b on a Service zone makes it a shared service zone"
+        },
+        {
+          "flag": "--from-zone",
+          "takesValue": true,
+          "arg": "<src>",
+          "choices": null,
+          "repeatable": false,
+          "description": "inherit type/typeId/bridge/access-to/pinhole from <src>"
+        },
+        {
+          "flag": "--type",
+          "takesValue": true,
+          "arg": "<T>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zone type (default: Service)"
+        },
+        {
+          "flag": "--typeId",
+          "takesValue": true,
+          "arg": "<N>",
+          "choices": null,
+          "repeatable": false,
+          "description": "numeric type band (default: 2)"
+        },
+        {
+          "flag": "--vlan",
+          "takesValue": true,
+          "arg": "<tag>",
+          "choices": null,
+          "repeatable": false,
+          "description": "explicit VLAN tag (else auto-allocated 60-99 in band)"
+        },
+        {
+          "flag": "--variant",
+          "takesValue": true,
+          "arg": "<name>",
+          "choices": null,
+          "repeatable": false,
+          "description": "tag the zone with this variant (metadata)"
+        },
+        {
+          "flag": "--tftp-server-name",
+          "takesValue": true,
+          "arg": "<s>",
+          "choices": null,
+          "repeatable": false,
+          "description": "DHCP option 66 (TFTP server) — inherited on --from-zone"
+        },
+        {
+          "flag": "--bootfile-name",
+          "takesValue": true,
+          "arg": "<s>",
+          "choices": null,
+          "repeatable": false,
+          "description": "DHCP option 67 (boot file); both-or-neither with --tftp-server-name"
+        },
+        {
+          "flag": "--no-activate",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "author zones.json only; skip the all-plane reconcile"
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "dry-run: show actions, mutate nothing"
+        },
+        {
+          "flag": "--no-distribute",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "skip the push of zones.json to the Proxmox nodes"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "delete",
+      "keys": [
+        [
+          "delete"
+        ]
+      ],
+      "usage": "delete <name> [--check] [--no-distribute]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "dry-run: show actions, mutate nothing"
+        },
+        {
+          "flag": "--no-distribute",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "skip the push of zones.json to the Proxmox nodes"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "modify",
+      "keys": [
+        [
+          "modify"
+        ]
+      ],
+      "usage": "modify <name> [--set field=value]... [--unset field]...",
+      "note": "Writes zones.json only, like enable/disable and bind, and prints the\nreconcile that makes the change live on the firewall and the switches.",
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--set",
+          "takesValue": true,
+          "arg": "field=value",
+          "choices": null,
+          "repeatable": true,
+          "description": "Change a zone's policy (access-to, pinhole-allowed-from, description,\n                isolated, tier, the DHCP options). Repeatable. A field that\n                cannot change in place — vlantag, ip, type, bridge — is refused\n                before anything is written, and one that has its own verb points\n                at it. A list takes 'a,b' or JSON."
+        },
+        {
+          "flag": "--unset",
+          "takesValue": true,
+          "arg": "field",
+          "choices": null,
+          "repeatable": true,
+          "description": "Remove a field the schema lets you remove. Today: ipv6Subnet, which\n                keeps the zone IPv4-only. Repeatable."
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "writes the zone's fields into zones.json; network-manager reconcile --apply makes them live"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "bind",
+      "keys": [
+        [
+          "bind"
+        ]
+      ],
+      "usage": "bind <zone> --environment <env> [--add] | --unbind [--environment <env> [--own]]",
+      "note": "Sets the zone's `environment` field. A Service zone takes two forms:\n  \"environment\": \"<env>\"        the environment's own zone (one per environment)\n  \"environment\": [\"<a>\", ...]  a shared service zone serving those environments;\n                                  a list of one stays shared until --own\nA Client/IoT/Guest/DMZ zone names one environment or several it serves.\nFor a Client/Guest/IoT zone the access-to / pinhole-allowed-from edge\nis DERIVED from it on every reconcile (into zones.effective.json), so it\nsurvives the install-time srv→<environment> rename.\nzones.json itself stays purely authored.",
+      "details": null,
+      "positionals": [
+        {
+          "name": "zone",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--environment",
+          "takesValue": true,
+          "arg": "<env>",
+          "choices": null,
+          "repeatable": false,
+          "description": "a Service zone: the environment whose zone it is (one per environment);\n                      a Client/IoT/Guest/DMZ zone: the environment it serves.\n                      Replaces any link the zone has."
+        },
+        {
+          "flag": "--add",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "with --environment: add it to the zone's environments instead of\n                      replacing them. On a Service zone this makes it a shared\n                      service zone: it serves the environments it lists and is\n                      the own zone of none"
+        },
+        {
+          "flag": "--unbind",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "clear the link; with --environment, remove only that one"
+        },
+        {
+          "flag": "--own",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "with --unbind --environment: when one environment is left on a\n                      shared service zone, make the zone that environment's own"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "links the zone to an environment in zones.json"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "set-ssid",
+      "keys": [
+        [
+          "set-ssid"
+        ]
+      ],
+      "usage": "set-ssid <zone> <ssid> | set-ssid <zone> --clear",
+      "note": "The zone's SSID names the site-wide WiFi network that bridges to it. ap-manager\nowns the WiFi networks and calls this from `ap-manager ssid add|modify|remove`;\nset an SSID there, so the SSID, its zone and the access points stay in step.",
+      "details": null,
+      "positionals": [
+        {
+          "name": "zone",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "ssid",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--clear",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "remove the zone's SSID: it has no WiFi"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "writes the zone's SSID field in zones.json"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "enable|disable|manual",
+      "keys": [
+        [
+          "enable"
+        ],
+        [
+          "disable"
+        ],
+        [
+          "manual"
+        ]
+      ],
+      "usage": "enable|disable|manual <name> [--force]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "allow leaving the \"Mandatory\" state (refused by default)"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "changes the zone's state in zones.json only; network-manager reconcile --apply makes it live"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "allow leaving the \"Mandatory\" state (refused by default)"
+        }
+      ]
+    },
+    {
+      "verb": "snat",
+      "keys": [
+        [
+          "snat"
+        ]
+      ],
+      "usage": "snat list | snat verify <module> | snat mode  [--json]",
+      "note": "There is no `snat add|delete`: a module's source NAT follows its own\ndeclaration, so use `module-manager module add|modify|delete`. There is\nno `mode --set` either — the mode is DERIVED, and applying a module's\nsnatFrom moves it to 'hybrid' when it is not already enforcing.",
+      "details": null,
+      "positionals": [
+        {
+          "name": "verify",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "print the controller's answer as JSON"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "wan ipv6-relearn",
+      "keys": [
+        [
+          "wan",
+          "ipv6-relearn"
+        ]
+      ],
+      "usage": "wan ipv6-relearn [--check | --apply]",
+      "note": null,
+      "details": "For a WAN whose ISP replaced its router: OPNsense keeps routing IPv6 to the old one, which\nno longer answers (health-manager's ipv6-egress gate names this verb). Both send one router\nsolicitation on the WAN. --apply keeps the DHCPv6 lease: it does not reconfigure the WAN.\nSee IPV6.md, *When the ISP replaces its router*.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "report the recorded router, the one advertising now, the route and the prefix, and what --apply would do (the default)"
+        },
+        {
+          "flag": "--apply",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "record the advertising router, re-run the firewall's IPv6 WAN event, then the network module's IPv6 converge"
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "<dir>",
+          "choices": null,
+          "repeatable": false,
+          "description": "where site.json and zones.json are (default: the site's config)"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "apply-flag",
+        "flag": "--apply"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "render",
+      "keys": [
+        [
+          "render"
+        ]
+      ],
+      "usage": "render [--zones <file>]",
+      "note": "write zones.effective.json from zones.json (the edges the environment links derive); offline, touches no plane",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--zones",
+          "takesValue": true,
+          "arg": "<file>",
+          "choices": null,
+          "repeatable": false,
+          "description": "the authored zones.json (default: the site's config/zones.json)"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "reconcile",
+      "keys": [
+        [
+          "reconcile"
+        ]
+      ],
+      "usage": "reconcile [--apply] [--only opnsense|proxmox|switch|ap]",
+      "note": null,
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--apply",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "converge all planes (default is dry-run / report only)"
+        },
+        {
+          "flag": "--only",
+          "takesValue": true,
+          "arg": "opnsense|proxmox|switch|ap",
+          "choices": [
+            "opnsense",
+            "proxmox",
+            "switch",
+            "ap"
+          ],
+          "repeatable": false,
+          "description": "one plane only (default: all four)"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "apply-flag",
+        "flag": "--apply"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "init",
+      "keys": [
+        [
+          "init"
+        ],
+        [
+          "zones-init"
+        ]
+      ],
+      "usage": "init [<profile>] --name <N> [--from <tpl>] [--out <f>] [--force]",
+      "note": "(alias: zones-init)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "profile",
+          "optional": true,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--name",
+          "takesValue": true,
+          "arg": "<N>",
+          "choices": null,
+          "repeatable": false,
+          "description": "TAPPaaS system name; renames srv→<N> (home/guest are kept\n                as site-local role zones) and parameterises the distributed template"
+        },
+        {
+          "flag": "--from",
+          "takesValue": true,
+          "arg": "<tpl>",
+          "choices": null,
+          "repeatable": false,
+          "description": "source template (default: zones.json shipped with the bin)"
+        },
+        {
+          "flag": "--out",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "output file (default: $TAPPAAS_CONFIG/zones.json)"
+        },
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "re-stamp this profile's zones from the template (default:\n                existing zones always win — a re-run is non-destructive)"
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "<dir>",
+          "choices": null,
+          "repeatable": false,
+          "description": "installed module configs, so an occupied zone stays Active\n                (default $TAPPAAS_CONFIG)"
+        },
+        {
+          "flag": "--no-distribute",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "skip the push of zones.json to the Proxmox nodes"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "writes a zones file from an install-time profile"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "re-stamp this profile's zones from the template (default:\n                existing zones always win — a re-run is non-destructive)"
+        }
+      ]
+    },
+    {
+      "verb": "retire",
+      "keys": [
+        [
+          "retire"
+        ]
+      ],
+      "usage": "retire [--apply]",
+      "note": "Removes srvHome, srvWork, srvCust, srvDev, srvTest, iot, test, testAllowA, testAllowB, testPinhole —\nbut ONLY where the zone is not Active/Mandatory/Manual AND hosts no\ninstalled module. Anything else is kept and reported. References to a\nretired zone are stripped from every other zone. `work` and `srv` are\nnever retired.",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--apply",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "commit (default is a dry-run listing)"
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "<dir>",
+          "choices": null,
+          "repeatable": false,
+          "description": "installed module configs to check occupancy against\n                (default $TAPPAAS_CONFIG)"
+        },
+        {
+          "flag": "--no-distribute",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "skip the push of zones.json to the Proxmox nodes"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "apply-flag",
+        "flag": "--apply"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "merge",
+      "keys": [
+        [
+          "merge"
+        ],
+        [
+          "zones-merge"
+        ]
+      ],
+      "usage": "merge [--diff] [--config-dir <dir>] [--template <tpl>]",
+      "note": "(alias: zones-merge)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--diff",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "show what would change; write nothing"
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "<dir>",
+          "choices": null,
+          "repeatable": false,
+          "description": "config dir holding site.json + the three zones files\n                      (default $TAPPAAS_CONFIG)"
+        },
+        {
+          "flag": "--template",
+          "takesValue": true,
+          "arg": "<tpl>",
+          "choices": null,
+          "repeatable": false,
+          "description": "repo zones.json template (default: shipped template)"
+        },
+        {
+          "flag": "--from",
+          "takesValue": true,
+          "arg": "<tpl>",
+          "choices": null,
+          "repeatable": false,
+          "description": "alias for --template"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--diff"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "zones-check",
+      "keys": [
+        [
+          "validate"
+        ],
+        [
+          "zones-check"
+        ]
+      ],
+      "usage": "validate [--zones <file>] [--config-dir <dir>] [--strict] [--effective]",
+      "note": "(alias: zones-check)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--zones",
+          "takesValue": true,
+          "arg": "<file>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to check (default $TAPPAAS_CONFIG/zones.json)"
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "<dir>",
+          "choices": null,
+          "repeatable": false,
+          "description": "installed module configs to cross-check (default $TAPPAAS_CONFIG)"
+        },
+        {
+          "flag": "--strict",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "promote warnings to errors"
+        },
+        {
+          "flag": "--effective",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "audit the RENDERED graph (environment links resolved) — the\n                      document the planes actually receive, not the authored file"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": ""
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "distribute",
+      "keys": [
+        [
+          "distribute"
+        ],
+        [
+          "zones-distribute"
+        ]
+      ],
+      "usage": "distribute [--zones <file>] [--dry-run]",
+      "note": "(alias: zones-distribute)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--zones",
+          "takesValue": true,
+          "arg": "<file>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to push (default $TAPPAAS_CONFIG/zones.json)"
+        },
+        {
+          "flag": "--dry-run",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "list the node targets that WOULD receive it; no scp"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--dry-run"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "wgvpn",
+      "keys": [
+        [
+          "wgvpn"
+        ]
+      ],
+      "usage": "wgvpn <setup|add-peer|remove-peer|list|config> [options]",
+      "note": null,
+      "details": "setup                                  ensure the OPNsense admin-WG server + admin->mgmt and WAN rules\nadd-peer --name N --pubkey K [--ip A] [--endpoint H:P]\n                                       register a device and print its client config\nremove-peer <name>                     remove a device\nlist                                   server key, rule status, peers\nconfig <ip/32> <host:port> [privkey]   print a device's client config again\nWorks with no satellite (a Site with a public IP) or through one (CGNAT). Runbook: ADMIN-VPN.md.",
+      "positionals": [
+        {
+          "name": "setup|add-peer|remove-peer|list|config",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "options",
+          "optional": true,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": true,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "the admin VPN on OPNsense: setup creates the server and its rules, add-peer a peer (prints its wg-quick config), remove-peer removes one"
+      },
+      "destructive": false,
+      "destructiveWhen": [
+        "remove-peer"
+      ],
+      "readWhen": [
+        "list",
+        "config",
+        "status"
+      ],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "split-horizon-target",
+      "keys": [
+        [
+          "split-horizon-target"
+        ]
+      ],
+      "usage": "split-horizon-target <domain> [--json] [--assume-published]",
+      "note": null,
+      "details": "Prints the address on stdout. Exit 0 published, 3 unpublished (no public DNS),\n1 when the site cannot answer (no usable dmz zone).",
+      "positionals": [
+        {
+          "name": "domain",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "print the whole result as JSON"
+        },
+        {
+          "flag": "--assume-published",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "skip the public-DNS probe (offline installs and tests)"
+        },
+        {
+          "flag": "--zones-file",
+          "takesValue": true,
+          "arg": "<f>",
+          "choices": null,
+          "repeatable": false,
+          "description": "zones.json to act on (default $TAPPAAS_CONFIG/zones.json)"
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    }
+  ]
+}

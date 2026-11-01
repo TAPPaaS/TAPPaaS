@@ -1,0 +1,490 @@
+{
+ "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+ "class": "device",
+ "name": "USW Pro XG 10 PoE",
+ "created": "2026-10-30T08:49:11.011Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "placeholder",
+   "value": true,
+   "source": "asset-manager",
+   "change": 18,
+   "from": "2026-10-30T08:49:11.011Z",
+   "to": "2026-10-30T08:49:11.217Z"
+  },
+  {
+   "name": "controller",
+   "value": "unifi-controller",
+   "source": "switch-manager",
+   "change": 23,
+   "from": "2026-10-30T08:49:11.217Z",
+   "to": null
+  },
+  {
+   "name": "desired",
+   "value": {
+    "key": "USW Pro XG 10 PoE",
+    "file": "switch-configuration-desired.json"
+   },
+   "source": "switch-manager",
+   "change": 23,
+   "from": "2026-10-30T08:49:11.217Z",
+   "to": null
+  },
+  {
+   "name": "managementAddress",
+   "value": "10.0.0.201",
+   "source": "switch-manager",
+   "change": 23,
+   "from": "2026-10-30T08:49:11.217Z",
+   "to": null
+  },
+  {
+   "name": "model",
+   "value": "USWED77",
+   "source": "switch-manager",
+   "change": 23,
+   "from": "2026-10-30T08:49:11.217Z",
+   "to": null
+  },
+  {
+   "name": "vlans",
+   "value": [
+    {
+     "tag": 100,
+     "declared": true
+    },
+    {
+     "tag": 200,
+     "declared": true
+    },
+    {
+     "tag": 298,
+     "declared": false
+    },
+    {
+     "tag": 299,
+     "declared": true
+    },
+    {
+     "tag": 310,
+     "declared": true
+    },
+    {
+     "tag": 410,
+     "declared": true
+    },
+    {
+     "tag": 420,
+     "declared": true
+    },
+    {
+     "tag": 430,
+     "declared": true
+    },
+    {
+     "tag": 510,
+     "declared": true
+    },
+    {
+     "tag": 610,
+     "declared": true
+    }
+   ],
+   "source": "switch-manager",
+   "change": 61,
+   "from": "2026-10-30T08:50:56.767Z",
+   "to": null
+  },
+  {
+   "name": "controllerAddress",
+   "value": "https://unifi-os.mgmt.internal:11443",
+   "source": "switch-manager",
+   "change": 1332,
+   "from": "2026-10-31T07:24:26.280Z",
+   "to": null
+  },
+  {
+   "name": "deviceType",
+   "value": "switch",
+   "source": "switch-manager",
+   "change": 1332,
+   "from": "2026-10-31T07:24:26.280Z",
+   "to": null
+  },
+  {
+   "name": "lags",
+   "value": [
+    {
+     "live": [
+      11,
+      12
+     ],
+     "name": "crs-uplink",
+     "ports": [
+      "11",
+      "12"
+     ],
+     "formed": true,
+     "mlagId": null,
+     "switch": "USW Pro XG 10 PoE"
+    }
+   ],
+   "source": "switch-manager",
+   "change": 1332,
+   "from": "2026-10-31T07:24:26.280Z",
+   "to": null
+  },
+  {
+   "name": "managed",
+   "value": "auto",
+   "source": "switch-manager",
+   "change": 1332,
+   "from": "2026-10-31T07:24:26.280Z",
+   "to": null
+  },
+  {
+   "name": "order",
+   "value": 0,
+   "source": "switch-manager",
+   "change": 1332,
+   "from": "2026-10-31T07:24:26.280Z",
+   "to": null
+  },
+  {
+   "name": "vendor",
+   "value": "unifi",
+   "source": "switch-manager",
+   "change": 1332,
+   "from": "2026-10-31T07:24:26.280Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T08:21:51.484Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "vlan-undeclared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "USW Pro XG 10 PoE: VLAN 298 in no zone",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T08:21:51.484Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1355,
+   "from": "2026-10-31T07:25:02.913Z",
+   "to": "2026-10-31T08:25:03.232Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T08:23:56.058Z",
+    "source": "sweep",
+    "desired": {
+     "key": "USW Pro XG 10 PoE",
+     "file": "switch-configuration-desired.json"
+    },
+    "attributes": {
+     "order": {
+      "now": 0,
+      "was": null
+     },
+     "vendor": {
+      "now": "unifi",
+      "was": null
+     },
+     "managed": {
+      "now": "auto",
+      "was": null
+     },
+     "deviceType": {
+      "now": "switch",
+      "was": null
+     },
+     "controllerAddress": {
+      "now": "https://unifi-os.mgmt.internal:11443",
+      "was": null
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 1730,
+   "from": "2026-10-31T08:23:56.058Z",
+   "to": "2026-10-31T10:29:43.478Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T08:25:03.232Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "device/USW Pro XG 10 PoE: drift: appeared controllerAddress; device/USW Pro XG 10 PoE: drift: appeared deviceType; device/USW Pro XG 10 PoE: drift: appeared managed; device/USW Pro XG 10 PoE: drift: appeared order; device/USW Pro XG 10 PoE: drift: appeared vendor",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1733,
+   "from": "2026-10-31T08:25:03.232Z",
+   "to": "2026-10-31T09:55:09.015Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T09:55:09.015Z",
+     "reason": "vlan-undeclared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "USW Pro XG 10 PoE: VLAN 298 in no zone",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 2343,
+   "from": "2026-10-31T09:55:09.015Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 460,
+   "type": "allocated-to",
+   "direction": "in",
+   "other": {
+    "id": "370b3fc9-0163-4d22-a8ea-54769c666337",
+    "class": "network-device",
+    "name": "sw-01"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 18,
+   "from": "2026-10-30T08:49:11.011Z",
+   "to": "2026-10-30T12:58:06.772Z"
+  },
+  {
+   "id": 541,
+   "type": "allocated-to",
+   "direction": "in",
+   "other": {
+    "id": "10828c57-8089-4f34-a6a2-6e5099bd4764",
+    "class": "network-device",
+    "name": "USW Pro XG 10 PoE"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": "2026-10-30T14:32:14.807Z"
+  },
+  {
+   "id": 547,
+   "type": "allocated-to",
+   "direction": "in",
+   "other": {
+    "id": "370b3fc9-0163-4d22-a8ea-54769c666337",
+    "class": "network-device",
+    "name": "sw-01"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 377,
+   "from": "2026-10-30T14:32:14.807Z",
+   "to": "2026-10-30T19:32:50.025Z"
+  },
+  {
+   "id": 607,
+   "type": "allocated-to",
+   "direction": "in",
+   "other": {
+    "id": "370b3fc9-0163-4d22-a8ea-54769c666337",
+    "class": "network-device",
+    "name": "sw-01"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 1065,
+   "from": "2026-10-31T00:02:55.622Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 18,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:49:11.011Z",
+   "drift": false
+  },
+  {
+   "id": 23,
+   "kind": "observation",
+   "source": "switch-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:49:11.217Z",
+   "drift": true
+  },
+  {
+   "id": 61,
+   "kind": "observation",
+   "source": "switch-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:50:56.767Z",
+   "drift": false
+  },
+  {
+   "id": 303,
+   "kind": "observation",
+   "source": "switch-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T12:58:06.772Z",
+   "drift": false
+  },
+  {
+   "id": 377,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T14:32:14.807Z",
+   "drift": false
+  },
+  {
+   "id": 1065,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T00:02:55.622Z",
+   "drift": false
+  },
+  {
+   "id": 1332,
+   "kind": "observation",
+   "source": "switch-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:24:26.280Z",
+   "drift": false
+  },
+  {
+   "id": 1355,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:25:02.913Z",
+   "drift": false
+  },
+  {
+   "id": 1730,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-31T08:23:56.058Z",
+   "drift": true
+  },
+  {
+   "id": 1733,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T08:25:03.232Z",
+   "drift": false
+  },
+  {
+   "id": 2343,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:55:09.015Z",
+   "drift": false
+  },
+  {
+   "id": 2586,
+   "kind": "change",
+   "source": "switch-manager",
+   "job": "20261031102900-f158b0",
+   "verb": "switch-manager remove-port",
+   "actor": "lars",
+   "time": "2026-10-31T10:29:43.478Z",
+   "drift": false
+  }
+ ]
+}

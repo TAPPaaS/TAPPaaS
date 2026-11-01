@@ -1,0 +1,259 @@
+{
+ "id": "a2187b22-c7d1-431f-a9d3-f1d0a1320862",
+ "class": "disk",
+ "name": "dsk-10",
+ "created": "2026-10-31T09:50:50.296Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "bay",
+   "value": "ata-MTFDDAK256MAM-1K12_13180938FDB1",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "bus",
+   "value": "sata",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "displayName",
+   "value": "ata-MTFDDAK256MAM-1K12_13180938FDB1",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "faulty",
+   "value": false,
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "kind",
+   "value": "ssd",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "model",
+   "value": "MTFDDAK256MAM-1K12",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "serial",
+   "value": "13180938FDB1",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "size",
+   "value": 256060514304,
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "placed",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "health",
+   "value": "PASSED",
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  },
+  {
+   "name": "holds",
+   "value": "nothing",
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  },
+  {
+   "name": "partitions",
+   "value": [
+    {
+     "size": 1031168,
+     "holds": "bios-boot",
+     "device": "/dev/sdc1"
+    },
+    {
+     "size": 1073741824,
+     "holds": "efi",
+     "device": "/dev/sdc2"
+    },
+    {
+     "size": 254985707008,
+     "holds": "lvm",
+     "device": "/dev/sdc3"
+    }
+   ],
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  },
+  {
+   "name": "smart",
+   "value": {
+    "pending": 0,
+    "reallocated": 0,
+    "powerOnHours": 1174,
+    "uncorrectable": 0
+   },
+   "source": "site-manager",
+   "change": 2276,
+   "from": "2026-10-31T09:52:00.815Z",
+   "to": "2026-11-01T00:01:17.336Z"
+  },
+  {
+   "name": "wearout",
+   "value": 95,
+   "source": "site-manager",
+   "change": 2276,
+   "from": "2026-10-31T09:52:00.815Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T09:52:08.978Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "dsk-10 (ata-MTFDDAK256MAM-1K12_13180938FDB1): health PASSED",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T09:52:08.978Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 2316,
+   "from": "2026-10-31T09:52:08.978Z",
+   "to": null
+  },
+  {
+   "name": "smart",
+   "value": {
+    "pending": 0,
+    "reallocated": 0,
+    "powerOnHours": 1175,
+    "uncorrectable": 0
+   },
+   "source": "site-manager",
+   "change": 7841,
+   "from": "2026-11-01T00:01:17.336Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 621,
+   "type": "part-of",
+   "direction": "out",
+   "other": {
+    "id": "a82f521b-2cc5-45a5-9cde-aac82a64ee45",
+    "class": "server",
+    "name": "srv-03"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 2240,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "disk adopt",
+   "actor": "tappaas",
+   "time": "2026-10-31T09:50:50.296Z",
+   "drift": false
+  },
+  {
+   "id": 2241,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:51:07.157Z",
+   "drift": true
+  },
+  {
+   "id": 2276,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:52:00.815Z",
+   "drift": true
+  },
+  {
+   "id": 2316,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:52:08.978Z",
+   "drift": false
+  },
+  {
+   "id": 7841,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T00:01:17.336Z",
+   "drift": false
+  }
+ ]
+}

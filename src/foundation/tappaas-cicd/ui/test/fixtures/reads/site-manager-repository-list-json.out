@@ -1,0 +1,18 @@
+[
+  {
+    "name": "TAPPaaS",
+    "url": "codeberg.org/TAPPaaS/TAPPaaS",
+    "branch": "adr-041",
+    "path": "/home/tappaas/TAPPaaS",
+    "managed": "full",
+    "catalog": "src/module-catalog.json"
+  },
+  {
+    "name": "Community",
+    "url": "codeberg.org/TAPPaaS/Community",
+    "branch": "main",
+    "path": "/home/tappaas/Community",
+    "managed": "full",
+    "catalog": "src/module-catalog.json"
+  }
+]

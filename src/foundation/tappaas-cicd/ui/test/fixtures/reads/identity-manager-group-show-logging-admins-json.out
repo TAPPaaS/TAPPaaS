@@ -1,0 +1,9 @@
+{
+  "name": "logging-admins",
+  "origin": "module logging",
+  "declaredBy": {
+    "file": "logging.json",
+    "key": "identity"
+  },
+  "editable": false
+}

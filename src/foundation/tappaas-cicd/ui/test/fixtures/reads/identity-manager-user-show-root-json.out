@@ -1,0 +1,14 @@
+{
+  "name": "root",
+  "displayName": "Root",
+  "primaryEmail": "user2@example.org",
+  "state": "active",
+  "memberOf": [
+    "users"
+  ],
+  "roles": [
+    "admin",
+    "user",
+    "root"
+  ]
+}

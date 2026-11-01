@@ -1,0 +1,59 @@
+{
+  "description": "VaultWarden password manager (Bitwarden-compatible) in DMZ",
+  "version": "0.6.1",
+  "releaseDate": "2026-02-17",
+  "installTime": "20261004-12:16:43",
+  "updateTime": "20261101-02:40:33",
+  "maintainer": "@larsrossen",
+  "status": "Development",
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/security/vaultwarden",
+  "environment": "rossen",
+  "vmname": "vaultwarden",
+  "vmid": 610,
+  "vmtag": "TAPPaaS,App",
+  "node": "tappaas3",
+  "zone0": "dmz",
+  "dependsOn": [
+    "cluster:vm",
+    "cluster:ha",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy",
+    "network:rules"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "provides": [],
+  "stack": "security",
+  "config": {
+    "cluster:ha": {
+      "HANode": "tappaas2"
+    },
+    "backup:vm": {
+      "backup": {
+        "enabled": true,
+        "exclude": [],
+        "retention": "7y"
+      }
+    },
+    "cluster:vm": {
+      "bios": "ovmf",
+      "cputype": "x86-64-v3",
+      "cores": 1,
+      "memory": 1536,
+      "diskSize": "16G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "network:proxy": {
+      "proxyPort": 8222,
+      "proxyAllowedZones": [
+        "internet"
+      ]
+    }
+  }
+}

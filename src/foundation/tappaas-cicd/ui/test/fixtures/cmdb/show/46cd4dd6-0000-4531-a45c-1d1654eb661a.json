@@ -1,0 +1,44 @@
+{
+  "id": "46cd4dd6-0000-4531-a45c-1d1654eb661a",
+  "class": "room",
+  "ancestors": [
+    "room",
+    "place",
+    "object"
+  ],
+  "name": "diningroom",
+  "displayName": "DiningRoom",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-31T16:46:48.023Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.621Z",
+  "seen": {
+    "asset-manager": "2026-11-01T08:52:20.621Z"
+  },
+  "at": null,
+  "attributes": {
+    "displayName": {
+      "value": "DiningRoom",
+      "source": "asset-manager",
+      "since": "2026-10-31T16:46:48.023Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 667,
+      "type": "at",
+      "direction": "out",
+      "other": {
+        "id": "eb8b5e14-af28-46e3-8bf3-fb8de068683b",
+        "class": "location",
+        "name": "knudanchersvej95"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T16:46:48.023Z"
+    }
+  ]
+}

@@ -1,0 +1,788 @@
+{
+ "id": "6c58178e-f591-40cd-9161-b6808856b127",
+ "class": "server",
+ "name": "srv-04",
+ "created": "2026-10-31T15:51:26.508Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "displayName",
+   "value": "tappaas4",
+   "source": "asset-manager",
+   "change": 4663,
+   "from": "2026-10-31T15:51:26.508Z",
+   "to": null
+  },
+  {
+   "name": "faulty",
+   "value": false,
+   "source": "asset-manager",
+   "change": 4663,
+   "from": "2026-10-31T15:51:26.508Z",
+   "to": null
+  },
+  {
+   "name": "model",
+   "value": "QDNV01",
+   "source": "asset-manager",
+   "change": 4663,
+   "from": "2026-10-31T15:51:26.508Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "stock",
+   "source": "asset-manager",
+   "change": 4663,
+   "from": "2026-10-31T15:51:26.508Z",
+   "to": "2026-10-31T15:51:27.085Z"
+  },
+  {
+   "name": "stage",
+   "value": "operational",
+   "source": "asset-manager",
+   "change": 4673,
+   "from": "2026-10-31T15:51:27.085Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T15:55:02.577Z",
+     "reason": "follows",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": true,
+     "message": "follows machine tappaas4",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T15:55:02.577Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 4711,
+   "from": "2026-10-31T15:55:02.577Z",
+   "to": null
+  },
+  {
+   "name": "cpu",
+   "value": "Intel(R) Atom(TM) CPU C3758R @ 2.40GHz",
+   "source": "site-manager",
+   "change": 4982,
+   "from": "2026-10-31T16:34:36.034Z",
+   "to": null
+  },
+  {
+   "name": "disks",
+   "value": [
+    {
+     "bus": "sata",
+     "wwn": "0x5002538f55208720",
+     "name": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N",
+     "size": 500107862016,
+     "type": "ssd",
+     "holds": "nothing",
+     "model": "Samsung_SSD_870_EVO_500GB",
+     "device": "/dev/sda",
+     "health": "PASSED",
+     "serial": "S6PYNL0Y209497N",
+     "vendor": "ATA",
+     "partitions": [
+      {
+       "size": 1031168,
+       "holds": "bios-boot",
+       "device": "/dev/sda1"
+      },
+      {
+       "size": 1073741824,
+       "holds": "efi",
+       "device": "/dev/sda2"
+      },
+      {
+       "pool": "rpool",
+       "size": 499033054720,
+       "holds": "zfs",
+       "device": "/dev/sda3"
+      }
+     ]
+    },
+    {
+     "bus": "nvme",
+     "wwn": "eui.0025384541a2503d",
+     "name": "nvme-Samsung_SSD_990_PRO_2TB_S7DNNU0X545837K",
+     "size": 2000398934016,
+     "type": "nvme",
+     "holds": "nothing",
+     "model": "Samsung SSD 990 PRO 2TB",
+     "device": "/dev/nvme0n1",
+     "health": "PASSED",
+     "serial": "S7DNNU0X545837K",
+     "vendor": "unknown",
+     "partitions": [
+      {
+       "pool": "tanka1",
+       "size": 2000389406720,
+       "holds": "zfs",
+       "device": "/dev/nvme0n1p1"
+      },
+      {
+       "size": 8388608,
+       "holds": "zfs",
+       "device": "/dev/nvme0n1p9"
+      }
+     ]
+    },
+    {
+     "bus": "nvme",
+     "wwn": "eui.002538445140830c",
+     "name": "nvme-Samsung_SSD_990_PRO_2TB_S7HENJ0Y412736V",
+     "size": 2000398934016,
+     "type": "nvme",
+     "holds": "nothing",
+     "model": "Samsung SSD 990 PRO 2TB",
+     "device": "/dev/nvme1n1",
+     "health": "PASSED",
+     "serial": "S7HENJ0Y412736V",
+     "vendor": "unknown",
+     "partitions": [
+      {
+       "pool": "tanka1",
+       "size": 2000389406720,
+       "holds": "zfs",
+       "device": "/dev/nvme1n1p1"
+      },
+      {
+       "size": 8388608,
+       "holds": "zfs",
+       "device": "/dev/nvme1n1p9"
+      }
+     ]
+    }
+   ],
+   "source": "site-manager",
+   "change": 4982,
+   "from": "2026-10-31T16:34:36.034Z",
+   "to": null
+  },
+  {
+   "name": "memory",
+   "value": 32063,
+   "source": "site-manager",
+   "change": 4982,
+   "from": "2026-10-31T16:34:36.034Z",
+   "to": null
+  },
+  {
+   "name": "nics",
+   "value": [
+    {
+     "mac": "20:7c:14:f4:d0:8c",
+     "kind": "sfp",
+     "link": false,
+     "name": "eno1",
+     "speed": "10g",
+     "maxMbps": 10000,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:8d",
+     "kind": "sfp",
+     "link": false,
+     "name": "eno2",
+     "speed": "10g",
+     "maxMbps": 10000,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:8e",
+     "kind": "sfp",
+     "link": false,
+     "name": "eno3",
+     "speed": "10g",
+     "maxMbps": 10000,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:8f",
+     "kind": "sfp",
+     "link": false,
+     "name": "eno4",
+     "speed": "10g",
+     "maxMbps": 10000,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:87",
+     "kind": "rj45",
+     "link": true,
+     "name": "enp4s0",
+     "speed": "2.5g",
+     "bridge": "lan",
+     "maxMbps": 2500,
+     "linkSpeed": "2.5g",
+     "operstate": "up"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:88",
+     "kind": "rj45",
+     "link": false,
+     "name": "enp5s0",
+     "speed": "2.5g",
+     "maxMbps": 2500,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:89",
+     "kind": "rj45",
+     "link": false,
+     "name": "enp6s0",
+     "speed": "2.5g",
+     "maxMbps": 2500,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:8a",
+     "kind": "rj45",
+     "link": false,
+     "name": "enp7s0",
+     "speed": "2.5g",
+     "maxMbps": 2500,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:8b",
+     "kind": "rj45",
+     "link": false,
+     "name": "enp8s0",
+     "speed": "2.5g",
+     "maxMbps": 2500,
+     "operstate": "down"
+    }
+   ],
+   "source": "site-manager",
+   "change": 4982,
+   "from": "2026-10-31T16:34:36.034Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 644,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "4b412a08-e8f8-411c-9170-816e7ff89682",
+    "class": "port",
+    "name": "enp4s0"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 4664,
+   "from": "2026-10-31T15:51:26.553Z",
+   "to": null
+  },
+  {
+   "id": 645,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "761c59f4-d8eb-44a4-a844-16a111ff61f7",
+    "class": "port",
+    "name": "enp5s0"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 4665,
+   "from": "2026-10-31T15:51:26.603Z",
+   "to": null
+  },
+  {
+   "id": 646,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "944f4c15-0292-4af2-9a3e-f154ad12ea9d",
+    "class": "port",
+    "name": "enp6s0"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 4666,
+   "from": "2026-10-31T15:51:26.651Z",
+   "to": null
+  },
+  {
+   "id": 647,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "deeed5e7-5d16-43a3-ad82-690e7d41e24d",
+    "class": "port",
+    "name": "enp7s0"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 4667,
+   "from": "2026-10-31T15:51:26.702Z",
+   "to": null
+  },
+  {
+   "id": 648,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "4122d190-a385-4764-bee0-e6bc66365d51",
+    "class": "port",
+    "name": "enp8s0"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 4668,
+   "from": "2026-10-31T15:51:26.752Z",
+   "to": null
+  },
+  {
+   "id": 649,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "872579d4-f30c-43c8-a3f5-9f1506a6ca03",
+    "class": "port",
+    "name": "eno1"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 4669,
+   "from": "2026-10-31T15:51:26.801Z",
+   "to": null
+  },
+  {
+   "id": 650,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "c0efe8bd-9941-4cc1-8331-3054db86f2ac",
+    "class": "port",
+    "name": "eno2"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 4670,
+   "from": "2026-10-31T15:51:26.852Z",
+   "to": null
+  },
+  {
+   "id": 651,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "1730d791-619e-4797-8f3c-054e0204bc32",
+    "class": "port",
+    "name": "eno3"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 4671,
+   "from": "2026-10-31T15:51:26.900Z",
+   "to": null
+  },
+  {
+   "id": 652,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "7c2192ae-6fac-4f15-8eca-eb6766d8a25a",
+    "class": "port",
+    "name": "eno4"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 4672,
+   "from": "2026-10-31T15:51:26.949Z",
+   "to": null
+  },
+  {
+   "id": 653,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "434b8354-7cf8-4354-afa4-596852eac5cd",
+    "class": "machine",
+    "name": "tappaas4"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 4674,
+   "from": "2026-10-31T15:51:27.094Z",
+   "to": null
+  },
+  {
+   "id": 654,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "217e1b9d-68a6-4120-a170-13cda77e6b32",
+    "class": "disk",
+    "name": "dsk-11"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 4675,
+   "from": "2026-10-31T15:51:27.139Z",
+   "to": null
+  },
+  {
+   "id": 655,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "5be83860-b952-42e2-a905-525e07be419a",
+    "class": "disk",
+    "name": "dsk-12"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 4676,
+   "from": "2026-10-31T15:51:27.189Z",
+   "to": null
+  },
+  {
+   "id": 656,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "71220f80-02e4-46b2-8256-83ec44a5b4d4",
+    "class": "disk",
+    "name": "dsk-13"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 4677,
+   "from": "2026-10-31T15:51:27.236Z",
+   "to": null
+  },
+  {
+   "id": 662,
+   "type": "placed-in",
+   "direction": "out",
+   "other": {
+    "id": "73a0f756-f569-4eaa-8508-bec8ac7ac791",
+    "class": "rack",
+    "name": "rack1"
+   },
+   "attributes": {
+    "u": 19,
+    "face": "front",
+    "slot": 0,
+    "width": "full",
+    "height": 1,
+    "faceplate": "generic/server-1u"
+   },
+   "source": "asset-manager",
+   "change": 4708,
+   "from": "2026-10-31T15:54:00.755Z",
+   "to": "2026-10-31T16:43:43.756Z"
+  },
+  {
+   "id": 663,
+   "type": "placed-in",
+   "direction": "out",
+   "other": {
+    "id": "73a0f756-f569-4eaa-8508-bec8ac7ac791",
+    "class": "rack",
+    "name": "rack1"
+   },
+   "attributes": {
+    "u": 27,
+    "face": "front",
+    "slot": 0,
+    "width": "full",
+    "height": 1,
+    "faceplate": "generic/server-1u"
+   },
+   "source": "asset-manager",
+   "change": 5118,
+   "from": "2026-10-31T16:43:43.756Z",
+   "to": "2026-10-31T16:44:03.382Z"
+  },
+  {
+   "id": 664,
+   "type": "placed-in",
+   "direction": "out",
+   "other": {
+    "id": "73a0f756-f569-4eaa-8508-bec8ac7ac791",
+    "class": "rack",
+    "name": "rack1"
+   },
+   "attributes": {
+    "u": 19,
+    "face": "front",
+    "slot": 0,
+    "width": "full",
+    "height": 1,
+    "faceplate": "generic/server-1u"
+   },
+   "source": "asset-manager",
+   "change": 5119,
+   "from": "2026-10-31T16:44:03.382Z",
+   "to": "2026-10-31T16:44:18.711Z"
+  },
+  {
+   "id": 665,
+   "type": "placed-in",
+   "direction": "out",
+   "other": {
+    "id": "c2915fa3-ac0c-4647-994e-46ae1524cb41",
+    "class": "room",
+    "name": "stue"
+   },
+   "attributes": {
+    "faceplate": "generic/server-1u"
+   },
+   "source": "asset-manager",
+   "change": 5121,
+   "from": "2026-10-31T16:44:18.711Z",
+   "to": "2026-10-31T16:44:25.871Z"
+  },
+  {
+   "id": 666,
+   "type": "placed-in",
+   "direction": "out",
+   "other": {
+    "id": "73a0f756-f569-4eaa-8508-bec8ac7ac791",
+    "class": "rack",
+    "name": "rack1"
+   },
+   "attributes": {
+    "u": 19,
+    "face": "front",
+    "slot": 0,
+    "width": "full",
+    "height": 1,
+    "faceplate": "generic/server-1u"
+   },
+   "source": "asset-manager",
+   "change": 5122,
+   "from": "2026-10-31T16:44:25.871Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 4665,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031153411-02719e",
+   "verb": "port add",
+   "actor": "lars",
+   "time": "2026-10-31T15:51:26.603Z",
+   "drift": false
+  },
+  {
+   "id": 4666,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031153411-02719e",
+   "verb": "port add",
+   "actor": "lars",
+   "time": "2026-10-31T15:51:26.651Z",
+   "drift": false
+  },
+  {
+   "id": 4667,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031153411-02719e",
+   "verb": "port add",
+   "actor": "lars",
+   "time": "2026-10-31T15:51:26.702Z",
+   "drift": false
+  },
+  {
+   "id": 4668,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031153411-02719e",
+   "verb": "port add",
+   "actor": "lars",
+   "time": "2026-10-31T15:51:26.752Z",
+   "drift": false
+  },
+  {
+   "id": 4669,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031153411-02719e",
+   "verb": "port add",
+   "actor": "lars",
+   "time": "2026-10-31T15:51:26.801Z",
+   "drift": false
+  },
+  {
+   "id": 4670,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031153411-02719e",
+   "verb": "port add",
+   "actor": "lars",
+   "time": "2026-10-31T15:51:26.852Z",
+   "drift": false
+  },
+  {
+   "id": 4671,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031153411-02719e",
+   "verb": "port add",
+   "actor": "lars",
+   "time": "2026-10-31T15:51:26.900Z",
+   "drift": false
+  },
+  {
+   "id": 4672,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031153411-02719e",
+   "verb": "port add",
+   "actor": "lars",
+   "time": "2026-10-31T15:51:26.949Z",
+   "drift": false
+  },
+  {
+   "id": 4673,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031153411-02719e",
+   "verb": "asset allocate",
+   "actor": "lars",
+   "time": "2026-10-31T15:51:27.085Z",
+   "drift": false
+  },
+  {
+   "id": 4674,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031153411-02719e",
+   "verb": "asset allocate",
+   "actor": "lars",
+   "time": "2026-10-31T15:51:27.094Z",
+   "drift": false
+  },
+  {
+   "id": 4675,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031153411-02719e",
+   "verb": "disk add",
+   "actor": "lars",
+   "time": "2026-10-31T15:51:27.139Z",
+   "drift": false
+  },
+  {
+   "id": 4676,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031153411-02719e",
+   "verb": "disk add",
+   "actor": "lars",
+   "time": "2026-10-31T15:51:27.189Z",
+   "drift": false
+  },
+  {
+   "id": 4677,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031153411-02719e",
+   "verb": "disk add",
+   "actor": "lars",
+   "time": "2026-10-31T15:51:27.236Z",
+   "drift": false
+  },
+  {
+   "id": 4708,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031155400-274152",
+   "verb": "place",
+   "actor": "lars",
+   "time": "2026-10-31T15:54:00.755Z",
+   "drift": false
+  },
+  {
+   "id": 4711,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T15:55:02.577Z",
+   "drift": false
+  },
+  {
+   "id": 4982,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T16:34:36.034Z",
+   "drift": false
+  },
+  {
+   "id": 5118,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031164343-a64370",
+   "verb": "place modify",
+   "actor": "lars",
+   "time": "2026-10-31T16:43:43.756Z",
+   "drift": false
+  },
+  {
+   "id": 5119,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031164403-0b7588",
+   "verb": "place modify",
+   "actor": "lars",
+   "time": "2026-10-31T16:44:03.382Z",
+   "drift": false
+  },
+  {
+   "id": 5121,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031164418-6114b6",
+   "verb": "place modify",
+   "actor": "lars",
+   "time": "2026-10-31T16:44:18.711Z",
+   "drift": false
+  },
+  {
+   "id": 5122,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031164425-430852",
+   "verb": "place modify",
+   "actor": "lars",
+   "time": "2026-10-31T16:44:25.871Z",
+   "drift": false
+  }
+ ]
+}

@@ -1,0 +1,305 @@
+{
+  "id": "f838733f-d890-4e32-af60-eee4a8b68488",
+  "class": "server",
+  "ancestors": [
+    "server",
+    "asset",
+    "resource",
+    "object"
+  ],
+  "name": "srv-04",
+  "displayName": "tappaas4",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-30T19:52:23.768Z",
+  "ended": "2026-10-31T15:19:20.549Z",
+  "lastSeen": "2026-10-31T15:19:20.549Z",
+  "seen": {
+    "site-manager": "2026-10-31T10:27:23.146Z",
+    "asset-manager": "2026-10-31T15:19:20.549Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T10:31:25.084Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T10:31:25.084Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T11:03:09.123Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T11:03:09.123Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T15:15:02.019Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T11:03:09.123Z"
+    },
+    "cpu": {
+      "value": "Intel(R) Atom(TM) CPU C3758R @ 2.40GHz",
+      "source": "site-manager",
+      "since": "2026-10-31T00:00:32.049Z"
+    },
+    "disks": {
+      "value": [
+        {
+          "bus": "nvme",
+          "wwn": "eui.0025384541a2503d",
+          "name": "nvme-Samsung_SSD_990_PRO_2TB_S7DNNU0X545837K",
+          "size": 2000398934016,
+          "type": "nvme",
+          "holds": "nothing",
+          "model": "Samsung SSD 990 PRO 2TB",
+          "smart": {
+            "mediaErrors": 0,
+            "powerOnHours": 6450,
+            "criticalWarning": 0
+          },
+          "device": "/dev/nvme0n1",
+          "health": "PASSED",
+          "serial": "S7DNNU0X545837K",
+          "vendor": "unknown",
+          "wearout": 99,
+          "partitions": [
+            {
+              "pool": "tanka1",
+              "size": 2000389406720,
+              "holds": "zfs",
+              "device": "/dev/nvme0n1p1"
+            },
+            {
+              "size": 8388608,
+              "holds": "zfs",
+              "device": "/dev/nvme0n1p9"
+            }
+          ],
+          "temperature": 48
+        },
+        {
+          "bus": "nvme",
+          "wwn": "eui.002538445140830c",
+          "name": "nvme-Samsung_SSD_990_PRO_2TB_S7HENJ0Y412736V",
+          "size": 2000398934016,
+          "type": "nvme",
+          "holds": "nothing",
+          "model": "Samsung SSD 990 PRO 2TB",
+          "smart": {
+            "mediaErrors": 0,
+            "powerOnHours": 859,
+            "criticalWarning": 0
+          },
+          "device": "/dev/nvme1n1",
+          "health": "PASSED",
+          "serial": "S7HENJ0Y412736V",
+          "vendor": "unknown",
+          "wearout": 100,
+          "partitions": [
+            {
+              "pool": "tankb1",
+              "size": 2000389406720,
+              "holds": "zfs",
+              "device": "/dev/nvme1n1p1"
+            },
+            {
+              "size": 8388608,
+              "holds": "zfs",
+              "device": "/dev/nvme1n1p9"
+            }
+          ],
+          "temperature": 47
+        },
+        {
+          "bus": "sata",
+          "wwn": "0x5002538f55208720",
+          "name": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N",
+          "size": 500107862016,
+          "type": "ssd",
+          "holds": "nothing",
+          "model": "Samsung_SSD_870_EVO_500GB",
+          "smart": {
+            "reallocated": 0,
+            "powerOnHours": 10306,
+            "uncorrectable": 0
+          },
+          "device": "/dev/sda",
+          "health": "PASSED",
+          "serial": "S6PYNL0Y209497N",
+          "vendor": "ATA",
+          "wearout": 99,
+          "partitions": [
+            {
+              "size": 1031168,
+              "holds": "bios-boot",
+              "device": "/dev/sda1"
+            },
+            {
+              "size": 1073741824,
+              "holds": "efi",
+              "device": "/dev/sda2"
+            },
+            {
+              "pool": "rpool",
+              "size": 499033054720,
+              "holds": "zfs",
+              "device": "/dev/sda3"
+            }
+          ],
+          "temperature": 33
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T09:52:00.815Z"
+    },
+    "displayName": {
+      "value": "tappaas4",
+      "source": "asset-manager",
+      "since": "2026-10-30T19:52:23.768Z"
+    },
+    "faulty": {
+      "value": false,
+      "source": "asset-manager",
+      "since": "2026-10-30T19:52:23.768Z"
+    },
+    "memory": {
+      "value": 32063,
+      "source": "site-manager",
+      "since": "2026-10-31T00:00:32.049Z"
+    },
+    "model": {
+      "value": "QDNV01",
+      "source": "asset-manager",
+      "since": "2026-10-30T19:52:23.768Z"
+    },
+    "nics": {
+      "value": [
+        {
+          "mac": "20:7c:14:f4:d0:8c",
+          "kind": "sfp",
+          "link": false,
+          "name": "eno1",
+          "speed": "10g",
+          "maxMbps": 10000,
+          "operstate": "down"
+        },
+        {
+          "mac": "20:7c:14:f4:d0:8d",
+          "kind": "sfp",
+          "link": false,
+          "name": "eno2",
+          "speed": "10g",
+          "maxMbps": 10000,
+          "operstate": "down"
+        },
+        {
+          "mac": "20:7c:14:f4:d0:8e",
+          "kind": "sfp",
+          "link": false,
+          "name": "eno3",
+          "speed": "10g",
+          "maxMbps": 10000,
+          "operstate": "down"
+        },
+        {
+          "mac": "20:7c:14:f4:d0:8f",
+          "kind": "sfp",
+          "link": false,
+          "name": "eno4",
+          "speed": "10g",
+          "maxMbps": 10000,
+          "operstate": "down"
+        },
+        {
+          "mac": "20:7c:14:f4:d0:87",
+          "kind": "rj45",
+          "link": true,
+          "name": "enp4s0",
+          "speed": "2.5g",
+          "bridge": "lan",
+          "maxMbps": 2500,
+          "linkSpeed": "2.5g",
+          "operstate": "up"
+        },
+        {
+          "mac": "20:7c:14:f4:d0:88",
+          "kind": "rj45",
+          "link": false,
+          "name": "enp5s0",
+          "speed": "2.5g",
+          "maxMbps": 2500,
+          "operstate": "down"
+        },
+        {
+          "mac": "20:7c:14:f4:d0:89",
+          "kind": "rj45",
+          "link": false,
+          "name": "enp6s0",
+          "speed": "2.5g",
+          "maxMbps": 2500,
+          "operstate": "down"
+        },
+        {
+          "mac": "20:7c:14:f4:d0:8a",
+          "kind": "rj45",
+          "link": false,
+          "name": "enp7s0",
+          "speed": "2.5g",
+          "maxMbps": 2500,
+          "operstate": "down"
+        },
+        {
+          "mac": "20:7c:14:f4:d0:8b",
+          "kind": "rj45",
+          "link": false,
+          "name": "enp8s0",
+          "speed": "2.5g",
+          "maxMbps": 2500,
+          "operstate": "down"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T08:21:43.213Z"
+    },
+    "stage": {
+      "value": "disposed",
+      "source": "asset-manager",
+      "since": "2026-10-31T15:19:20.549Z"
+    },
+    "vendor": {
+      "value": "Default string",
+      "source": "asset-manager",
+      "since": "2026-10-30T19:52:23.768Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

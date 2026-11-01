@@ -1,0 +1,69 @@
+{
+  "description": "Nextcloud file sharing and collaboration platform with Authentik SSO support.",
+  "version": "0.2.2",
+  "releaseDate": "2026-06-12",
+  "installTime": "20260814-00:00:00",
+  "updateTime": "20261101-02:25:33",
+  "maintainer": "@ErikDaniel007",
+  "status": "Production",
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/collaboration/nextcloud",
+  "environment": "rossen",
+  "vmname": "nextcloud",
+  "vmid": 340,
+  "vmtag": "TAPPaaS,App",
+  "node": "tappaas1",
+  "os": "nixos",
+  "zone0": "rossen",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy",
+    "network:rules",
+    "identity:identity"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "provides": [
+    "fileservice"
+  ],
+  "appVersion": "35",
+  "displayName": "Nextcloud",
+  "stack": "collaboration",
+  "config": {
+    "backup:vm": {
+      "backup": {
+        "enabled": true,
+        "exclude": [],
+        "retention": "7y"
+      }
+    },
+    "cluster:vm": {
+      "bios": "ovmf",
+      "ostype": "l26",
+      "cputype": "host",
+      "cores": 4,
+      "memory": 8192,
+      "diskSize": "80G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "cloudInit": true,
+      "bridge0": "lan"
+    },
+    "identity:identity": {
+      "identity": {
+        "adminGroupClaim": "admin",
+        "providesAdminRole": true
+      }
+    },
+    "network:proxy": {
+      "proxyDomain": "cloud.hrossen.dk",
+      "proxyAllowedZones": [
+        "internet"
+      ]
+    }
+  }
+}
