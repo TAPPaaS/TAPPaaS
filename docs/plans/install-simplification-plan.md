@@ -70,8 +70,28 @@ The new order:
 - `rest-of-foundation.sh` already does most of this in one run. The step should run it (or a verb built on it), so the CLI and the console stay one path. It lacks the storage move.
 - **Order inside the step:** the move should come first, so the later modules land on the pool, unless a test shows otherwise. Backup's placement on one node needs a look.
 - Moving `network` carries the firewall, so this is where the live move is most dangerous. Test it on lab2 alone first, from the install LAN, and watch whether the console session survives. Today's doc claims "without a restart".
-- **Token expiry.** Installing identity ends the setup token: the console refuses it and deletes the file, and the install-LAN forward closes when the console module is published. A one-click step will hit this mid-run. Decide how the operator gets back in: the admin VPN and `console.<domain>` behind the gate, and who the first user is. This must be solved before the step ships; otherwise the page dies halfway through.
-- Keep "Publish the console" inside this step.
+- **Installing identity locks the operator out of the console. This happened on lab2 on 2026-11-01** (see below). It must be fixed before the step ships, and it is worth fixing first, since today's wizard does it too.
+- Keep "Publish the console" inside this step. Today it is a separate button next to Identity, and it cannot be reached once identity is in.
+
+**The identity lockout, as seen on lab2.** Lars installed identity from Day 1 over the install LAN at 21:31. The result:
+
+- `config/identity.json` exists, so the console deleted `console-setup-token` and refuses the install LAN (`refused connection from 192.168.14.91`). The browser gets nothing back. It is not a 401 and there is no message.
+- The console module is not installed, so there is no `console.<domain>` route, and the bootstrap of the operator's own user has not run either. The next Day 1 steps are out of reach.
+- `install-access.sh` never ran `close`: the firewall forward on wan:9097 and `config/console-setup-allow` are still there, doing nothing. `status` still reports the install LAN as open, and `console-setup-url` is gone only because this site predates that file.
+- The service itself is healthy (200 on `127.0.0.1`), and nothing tells the operator what happened or how to get back.
+
+The cause: the switch to the gate keys on `config/identity.json`, written the moment identity is installed. But the gate only works later, once the identity bootstrap has made a user and the console module has published the route, and it is only reachable from `mgmt` or the admin VPN.
+
+What the fix must do:
+
+- Make the cut-over the last thing that happens, not the first. The setup token and install LAN stay valid until the gate is proven: operator's user exists, the console route answers, and a signed-in request succeeded. Key the refusal on that, not on `identity.json`. ADR-034 D10 and `console/INSTALL.md` state the current rule, so update them, and review the security effect of keeping the token alive during this window.
+- The foundation step runs identity, bootstrap and the console publish as one job. It keeps running on the mothership if the browser is cut off, and the operator ends on a page that says where to go next.
+- Before the cut-over, the operator must have a way in that works: the admin VPN imported and tested. An install-LAN operator today has no reason to have done so.
+- The console's refusal should explain itself in the browser: the address to use and why, not a dropped connection.
+- `install-access.sh close` runs as part of the cut-over, so no forward is left behind.
+- A recovery path for a site already in this state, documented in `console/INSTALL.md`.
+
+**lab2 is still locked out, left as found for study.** Recovery is not yet tried. The likely route is the mothership's CLI: `identity-manager bootstrap` and `reconcile`, then `module-manager add console --proxyDomain console.<domain>`, then reach it over the admin VPN (`/root/tappaas-admin-vpn.conf`). Its domain `lab2.hrossen.dk` must resolve for that route. Run it as the first test of the recovery path, or reinstall.
 
 ### Step 3: TLS (needs design)
 
@@ -115,7 +135,7 @@ Move the rest (SSH appendix, hand PXE, Cloudflare scope) to the full path or to 
 ## 5. Order of work
 
 1. Boot disk question (§1). Small, independent.
-2. Day 1 landing page (§2), and make the switch step not block completion (§3 Step 4). Small, and it unblocks everything else.
+2. Day 1 landing page (§2), make the switch step not block completion (§3 Step 4), and fix the identity lockout (§3 Step 2). The lockout comes first: until it is fixed, Day 1 cannot be completed from the install LAN.
 3. Prove the pool and move commands by hand on lab2: move lab2 to `main`, make `tanka1` with `--wipe`, move `tappaas-cicd` and `network` from the CLI, and fix what breaks. Everything in Step 1 and 2 depends on this. Then `rest-of-foundation.sh` on lab2.
 4. Day 1 Step 1 (disks).
 5. Day 1 Step 2 (foundation as one step), including the token expiry answer.
