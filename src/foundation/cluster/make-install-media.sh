@@ -531,12 +531,12 @@ ask_install() {
   read -r -p "${IN} Start the TAPPaaS install over ssh when the node is up? [Y/n]: " yn; logged "$yn"
   [[ "$yn" != [nN]* ]] || return 1
   [[ -n "$BRANCH"    ]] || BRANCH="$(prompt 'Branch (stable, or main for the newest work)' stable)"
-  [[ -n "$SITE_CODE" ]] || SITE_CODE="$(prompt 'Site code (lowercase, at most 15 characters)')"
-  [[ -n "$ORG"       ]] || ORG="$(prompt 'Organisation' "$SITE_CODE")"
+  [[ -n "$SITE_CODE" ]] || SITE_CODE="$(prompt 'The TAPPaaS Site name (lowercase, at most 15 characters)')"
+  [[ -n "$ORG"       ]] || ORG="$(prompt 'Name of Organisation controlling the Site' "$SITE_CODE")"
   [[ -n "$DOMAIN"    ]] || DOMAIN="$(prompt 'Public domain')"
   [[ "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]] || die "not a branch: ${BRANCH}"
-  [[ "$SITE_CODE" =~ ^[a-z0-9-]{1,15}$ ]] || die "the site code is lowercase, at most 15 characters: ${SITE_CODE}"
-  [[ "$ORG" =~ ^[a-z0-9-]+$ ]] || die "the organisation is lowercase: ${ORG}"
+  [[ "$SITE_CODE" =~ ^[a-z0-9-]{1,15}$ ]] || die "the Site name is lowercase, at most 15 characters: ${SITE_CODE}"
+  [[ "$ORG" =~ ^[a-z0-9-]+$ ]] || die "the Organisation name is lowercase: ${ORG}"
   [[ "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] || die "not a domain: ${DOMAIN}"
 }
 

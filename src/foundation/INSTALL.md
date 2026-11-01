@@ -77,7 +77,7 @@ writes `proxmox-ve_9.2-1-tappaas-auto.iso`, and asks what next:
 - **Network-boot the target from this machine:** see Option C.
 
 It then offers to start the TAPPaaS install on the node over ssh, and asks the branch, the
-site code, the organisation and the domain of [Step 2](#step-2--bootstrap-minimal-tappaas-on-the-first-node)
+Site name (Step 2's site code), the organisation controlling the Site and the domain of [Step 2](#step-2--bootstrap-minimal-tappaas-on-the-first-node)
 up front. Say yes and it waits for the node, finds it on your network and runs Step 2 for
 you, unattended, so skip that step's commands. The install keeps running on the node if
 this machine loses the connection, and the script picks it up again. It takes the network
