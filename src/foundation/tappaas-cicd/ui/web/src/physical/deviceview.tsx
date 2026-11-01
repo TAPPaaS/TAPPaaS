@@ -7,21 +7,18 @@
 // coloured by the disk's health (the Assets view's tree). A click on a card
 // selects the device, on a line its link; the side panel has the rest.
 
-import { BaseEdge, Background, Controls, ControlButton, Edge, EdgeProps, Handle, Node, NodeChange, NodeProps, Position, ReactFlow, ReactFlowProvider, applyNodeChanges, useInternalNode, useReactFlow } from "@xyflow/react";
+import { BaseEdge, Background, Controls, ControlButton, Edge, EdgeProps, Handle, Node, NodeChange, NodeProps, Position, ReactFlow, ReactFlowProvider, applyNodeChanges, useInternalNode, useReactFlow, useStore } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AssetTree, AssetTreeDisk, Topology } from "../types";
 import { disksOf } from "../diskview";
 import { DevLabel, linkStyle, linkText } from "./devicecard";
 import { BayRow } from "./disks";
-import { DevNode, DevState, Pt, deviceGraph, deviceState, forceLayout, selectedDevice } from "./devicegraph";
+import { CARD_H as H, DevNode, DevState, Pt, cardBox, cardWidth, centreZoom, deviceGraph, deviceState, forceLayout, selectedDevice } from "./devicegraph";
 import { Sel } from "./layout";
 import { stateClass } from "./states";
 
 type DevData = { d: DevNode; s: DevState; on: boolean; w: number; disks: AssetTreeDisk[]; pick: (s: Sel) => void };
 
-const H = 36;
-// Its name, and its bay row: a cell per disk.
-const widthOf = (d: DevNode, disks = 0) => 58 + d.name.length * 8 + (disks ? 10 + disks * 10 : 0);
 const hidden = { opacity: 0, width: 1, height: 1, minWidth: 0, minHeight: 0, border: 0, top: "50%", left: "50%" };
 
 function DevCard({ data }: NodeProps<Node<DevData, "dev">>) {
@@ -61,7 +58,7 @@ const edgeTypes = { float: FloatEdge };
 function Inner({ t, sel, pick, onPane, labels, tree }: { t: Topology; sel: Sel | null; pick: (s: Sel) => void; onPane: () => void; labels: boolean; tree?: AssetTree | null }) {
   const g = useMemo(() => deviceGraph(t), [t]);
   const bays = useMemo(() => new Map(g.nodes.map((d) => [d.id, disksOf(tree, d.name)])), [g, tree]);
-  const wOf = useCallback((d: DevNode) => widthOf(d, bays.get(d.id)?.length ?? 0), [bays]);
+  const wOf = useCallback((d: DevNode) => cardWidth(d, bays.get(d.id)?.length ?? 0), [bays]);
   const states = useMemo(() => new Map(g.nodes.map((d) => [d.id, deviceState(t, d)])), [g, t]);
   const rf = useReactFlow();
   // The device the layout centres on: the selected one; a link or nothing
@@ -75,8 +72,7 @@ function Inner({ t, sel, pick, onPane, labels, tree }: { t: Topology; sel: Sel |
   const [nodes, setNodes] = useState<Node<DevData, "dev">[]>([]);
   const data = useCallback((d: DevNode): DevData => ({ d, s: states.get(d.id)!, on: d.id === picked, w: wOf(d), disks: bays.get(d.id) ?? [], pick }), [states, picked, pick, wOf, bays]);
   const place = useCallback((at: Map<string, Pt>) => g.nodes.map((d): Node<DevData, "dev"> => {
-    const p = at.get(d.id) ?? { x: 0, y: 0 };
-    return { id: d.id, type: "dev", position: { x: p.x - wOf(d) / 2, y: p.y - H / 2 }, data: data(d), width: wOf(d), height: H };
+    return { id: d.id, type: "dev", data: data(d), ...cardBox(at.get(d.id) ?? { x: 0, y: 0 }, wOf(d)) };
   }), [g, data, wOf]);
   // The latest: a frame of the move below may come after the disks did.
   const placeNow = useRef(place);
@@ -84,13 +80,12 @@ function Inner({ t, sel, pick, onPane, labels, tree }: { t: Topology; sel: Sel |
 
   // The selection in the middle, zoomed so the farthest card still shows;
   // without one, everything fitted.
-  const wrap = useRef<HTMLDivElement>(null);
-  const centre = (at: Map<string, Pt>) => {
-    const el = wrap.current;
-    if (!center || !el) return void rf.fitView({ padding: 0.18, duration: 350 });
-    const far = Math.max(...g.nodes.map((d) => Math.max(Math.abs(at.get(d.id)?.x ?? 0) + wOf(d) / 2, Math.abs(at.get(d.id)?.y ?? 0) + H / 2)));
-    const zoom = Math.max(0.25, Math.min(1.3, (Math.min(el.clientWidth, el.clientHeight) / 2 - 20) / far));
-    void rf.setCenter(0, 0, { zoom, duration: 350 });
+  const paneW = useStore((s) => s.width);
+  const paneH = useStore((s) => s.height);
+  const centre = (at: Map<string, Pt>, duration: number) => {
+    if (!center) return void rf.fitView({ padding: 0.18, duration });
+    const zoom = centreZoom(g.nodes.map((d) => ({ at: at.get(d.id) ?? { x: 0, y: 0 }, w: wOf(d) })), paneW, paneH);
+    void rf.setCenter(0, 0, { zoom, duration });
   };
   // A new centre (or a new topology): lay out from where the cards are, and
   // move them there.
@@ -110,8 +105,7 @@ function Inner({ t, sel, pick, onPane, labels, tree }: { t: Topology; sel: Sel |
       pos.current = at;
       setNodes(placeNow.current(at));
       if (k < 1) frame = requestAnimationFrame(step);
-      // (the first picture is centred once React Flow has its size: onInit)
-      else if (rf.viewportInitialized) requestAnimationFrame(() => centre(at));
+      else if (ms) requestAnimationFrame(() => centre(at, 350));
     };
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
@@ -122,9 +116,17 @@ function Inner({ t, sel, pick, onPane, labels, tree }: { t: Topology; sel: Sel |
   // the layout): it stays centred on its point.
   useEffect(() => setNodes((ns) => ns.map((n) => {
     const p = pos.current.get(n.id);
-    const w = wOf(n.data.d);
-    return { ...n, data: data(n.data.d), width: w, position: p ? { x: p.x - w / 2, y: p.y - H / 2 } : n.position };
+    return { ...n, data: data(n.data.d), ...(p ? cardBox(p, wOf(n.data.d)) : {}) };
   })), [data, wOf]);
+  // The picture is fitted to what it holds whichever came last: the cards, their
+  // widths, the pane's size. It stands at once (only a new selection moves); a
+  // poll's new read with the same widths changes nothing.
+  const widths = g.nodes.map(wOf).join();
+  const drawn = nodes.length > 0;
+  useEffect(() => {
+    if (drawn && rf.viewportInitialized && paneW > 0 && paneH > 0) centre(pos.current, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawn, rf.viewportInitialized, widths, paneW, paneH]);
 
   const onNodesChange = useCallback((ch: NodeChange<Node<DevData, "dev">>[]) => {
     setNodes((ns) => {
@@ -154,7 +156,7 @@ function Inner({ t, sel, pick, onPane, labels, tree }: { t: Topology; sel: Sel |
   }), [g, t, sel, labels]);
 
   return (
-    <div ref={wrap} className="dev-flow">
+    <div className="dev-flow">
     <ReactFlow
       nodes={nodes}
       edges={edges}
@@ -163,7 +165,6 @@ function Inner({ t, sel, pick, onPane, labels, tree }: { t: Topology; sel: Sel |
       onNodesChange={onNodesChange}
       onEdgeClick={(_: unknown, e: Edge) => pick({ kind: "link", id: e.id })}
       onPaneClick={onPane}
-      onInit={() => requestAnimationFrame(() => centre(pos.current))}
       minZoom={0.2}
       maxZoom={2}
       nodesDraggable
