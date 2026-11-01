@@ -534,7 +534,7 @@ if [[ "$(cat "${DWORK}/mm.calls" 2>/dev/null)" == "report --end emod --config-di
 else
     bad "delete: no end reported: $(cat "${DWORK}/mm.calls" 2>/dev/null)"
 fi
-if [[ $del_e_rc -eq 0 && ! -e "${DWORK}/cfg/emod.json" ]] && echo "$del_e" | grep -q "could not report the end"; then
+if [[ $del_e_rc -eq 0 && ! -e "${DWORK}/cfg/emod.json" ]] && echo "$del_e" | grep -c "could not report the end" >/dev/null; then
     ok "delete: a CMDB that does not answer never stops the delete"
 else
     bad "delete: a failed report stopped the delete (rc=${del_e_rc})"
