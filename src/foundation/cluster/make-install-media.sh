@@ -508,8 +508,13 @@ start_install() {
   info "starting the TAPPaaS install on ${NODE_IP}"
   # A sleeping laptop would drop the session.
   if command -v caffeinate >/dev/null 2>&1; then caffeinate -i -w $$ & fi
-  node_ssh -t "root@${NODE_IP}" "$cmd" \
-    || warn "the session ended: the install goes on in tmux. Back to it: ssh -i ${INSTALL_KEY} root@${NODE_IP} -t tmux attach -t tappaas-install"
+  if ! node_ssh -t "root@${NODE_IP}" "$cmd"; then
+    if node_ssh -n "root@${NODE_IP}" 'tmux has-session -t tappaas-install' 2>/dev/null; then
+      warn "the session ended, the install goes on in tmux. Back to it: ssh -i ${INSTALL_KEY} root@${NODE_IP} -t tmux attach -t tappaas-install"
+    else
+      die "the install stopped on ${NODE_IP}: see above, and ${LOG:-the output}."
+    fi
+  fi
 }
 
 # The three names the bootstrap takes, asked before the wait so it runs unattended.

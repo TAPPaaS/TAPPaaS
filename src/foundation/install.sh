@@ -229,7 +229,7 @@ echo -e "\n${GN}=== [5/5] Platform (NixOS template + tappaas-cicd) ===${CL}"
 fetch "${REPO}${BRANCH}/src/foundation/cluster/install-platform.sh" ~/tappaas/install-platform.sh 755
 dom_arg=(); [ -n "$DOMAIN" ] && dom_arg=(--domain "$DOMAIN")
 ~/tappaas/install-platform.sh --repo "$REPO" --branch "$BRANCH" --name "$SITE_CODE" --organization "$ORG" "${dom_arg[@]}" ${NONINT_ARG} \
-  || { msg_error "install-platform.sh did not complete — re-run ~/tappaas/install-platform.sh --name ${SITE_CODE} --organization ${ORG} --domain <yourdomain>."; exit 1; }
+  || { msg_error "install-platform.sh did not complete — re-run ~/tappaas/install-platform.sh --branch ${BRANCH} --name ${SITE_CODE} --organization ${ORG} --domain <yourdomain>."; exit 1; }
 
 # ── Done ───────────────────────────────────────────────────────────────
 echo ""
