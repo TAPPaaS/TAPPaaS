@@ -13,7 +13,9 @@
 import { Read, useRead } from "../api";
 import { OperateButton, Step } from "../operate";
 import { fieldsStep } from "../fields";
-import { SiteRead } from "../types";
+import { SiteRead, StorageInventory } from "../types";
+import { Ipv6Read } from "../zonenet";
+import { bytes } from "../overview";
 import { ReactNode, useEffect } from "react";
 import { KV, Link, ReadState, Section, navigate, since, useHash } from "../ui";
 import { locationAnchor } from "../locations";
@@ -70,9 +72,11 @@ function NodeActions() {
 // Backup page, the repositories just below. The
 // site's locations are site-manager location's: the primary one (where the
 // site is, its timezone the site's) on the card, every one in its Locations
-// section with the location forms.
-const SITE_FIELDS = ["name", "displayName", "version", "defaultEnvironment", "owner", "email", "primaryLocation", "locale", "keyboard", "network"];
-const SETTINGS_FIELDS = ["ipv6", "dnssec", "branding", "dnsBlocklists", "diskAutoGrow", "requireSigned"];
+// section with the location forms. The nodes' memory is health-manager's
+// (the site read carries it), their pools' use the storage inventory's; the
+// IPv6 prefix and Caddy's IPv6 address are the ipv6 read's.
+const SITE_FIELDS = ["name", "displayName", "branding", "version", "defaultEnvironment", "owner", "email", "primaryLocation", "locale", "keyboard", "network", "ipv6", "dnssec"];
+const SETTINGS_FIELDS = ["dnsBlocklists", "diskAutoGrow", "requireSigned"];
 const UPDATE_FIELDS = ["updateSchedule", "channel", "automaticReboot", "snapshotRetention"];
 
 // A value as the card shows it: absent is the schema's default, an object its
@@ -100,6 +104,23 @@ function val(v: unknown, absent = "not set"): ReactNode {
 
 const siteModify = (title: string, fields: string[], note: string) => () => [fieldsStep({ title, bin: "site-manager", verb: "site modify", kind: "site", name: null, mode: "modify", fields, note })];
 
+// "51 GB / 66 GB", breaking only at the slash on a narrow column.
+const useText = (used: number, total: number): string => `${bytes(used).replace(" ", "\u00a0")} / ${bytes(total).replace(" ", "\u00a0")}`;
+
+// A node's pools as the card lists them, one a line: the root pool first, then
+// its pvehost record's, each with its use when the storage inventory has the pool.
+function Pools({ pools, inv }: { pools: string[]; inv: StorageInventory["nodes"][number] | undefined }) {
+  const names = pools.includes("rpool") ? pools : ["rpool", ...pools];
+  return (
+    <>
+      {names.map((name) => {
+        const u = inv?.pools.find((p) => p.name === name)?.usable;
+        return <div key={name}>{u ? `${name} (${useText(u.used, u.total)})` : name}</div>;
+      })}
+    </>
+  );
+}
+
 // Above the Overview's physical summary: the Site card and the Updates card.
 function SiteTop({ r }: { r: Read<SiteRead> }) {
   const d = r.env?.data;
@@ -117,6 +138,9 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
   const primary = locations.find((l) => l.name === s.primaryLocation) ?? null;
   const others = locations.filter((l) => l !== primary).sort((a, b) => a.name.localeCompare(b.name));
   const pub = publicText(publicAddress({ network: { publicIp: s.network?.publicIp ?? null } }, d?.wan ?? null));
+  const v6 = useRead<Ipv6Read>("ipv6", 600_000).env?.data ?? null;
+  const inv = useRead<StorageInventory>("storage").env?.data ?? null;
+  const muted = (t: string) => <span className="muted">{t}</span>;
   return (
     <div className="site-records">
       <ReadState env={r.env} failure={r.failure} what="site" />
@@ -126,9 +150,9 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
             rows={[
               ["name", val(s.name)],
               ["display name", val(s.displayName)],
+              ["branding", val(s.branding, "the generated logo")],
               ["version", val(s.version)],
-              ["default environment", val(s.defaultEnvironment)],
-              ["owner", val(s.owner)],
+              ["default environment", s.defaultEnvironment === undefined ? val(undefined) : `${String(s.defaultEnvironment)}${s.owner !== undefined ? ` (Owner Organisation: ${String(s.owner)})` : ""}`],
               ["email", val(s.email)],
             ]}
           />
@@ -140,27 +164,39 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
                 ["place", placeText(primary)],
                 ["timezone", val(primary.timezone, "not set — every node and guest falls back to UTC")],
                 ...(primary.latitude !== undefined || primary.longitude !== undefined ? [["coordinates", `${primary.latitude ?? "?"}, ${primary.longitude ?? "?"}`] as [string, ReactNode]] : []),
-                ["locale", val(s.locale)],
-                ["keyboard", val(s.keyboard)],
+                ["Locale/Keyboard", `${s.locale === undefined ? "not set" : String(s.locale)} / ${s.keyboard === undefined ? "not set" : String(s.keyboard)}`],
               ]}
             />
           ) : (
             <p className="muted">No primary location: add the site's own below, with its timezone.</p>
           )}
           <h3>Network</h3>
-          <KV rows={[["ISP", val(s.network?.isp)], ["public IP", val(s.network?.publicIp)], ["WAN", pub]]} />
+          <KV
+            rows={[
+              ["ISP", val(s.network?.isp)],
+              ["WAN", pub],
+              ["IPv6 enabled", s.ipv6 === true ? "yes" : "no"],
+              ...(s.ipv6 === true
+                ? ([
+                    ["IPv6 prefix", v6?.prefix ?? muted(v6 ? (v6.error ?? "none") : "not read yet")],
+                    ["Caddy IPv6 address", v6?.address ?? muted(v6 ? "not recorded" : "not read yet")],
+                  ] as [string, ReactNode][])
+                : []),
+              ["DNSSEC", val(s.dnssec, "default")],
+            ]}
+          />
           <h3>Nodes</h3>
           {nodes.length ? (
             <table className="table compact">
               <thead>
-                <tr><th>node</th><th>address</th><th>storage pools</th><th>location</th></tr>
+                <tr><th>node</th><th>memory</th><th>storage pools</th><th>location</th></tr>
               </thead>
               <tbody>
                 {nodes.map((n) => (
                   <tr key={n.name}>
                     <td className="mono"><Link to={`/site/devices?select=node:${encodeURIComponent(n.name)}`}>{n.name}</Link></td>
-                    <td className="mono">{n.address ?? ""}</td>
-                    <td className="mono">{(n.storagePools ?? []).join(", ") || <span className="muted">none</span>}</td>
+                    <td className="mono">{n.memory ? useText(n.memory.used, n.memory.total) : <span className="muted">not read</span>}</td>
+                    <td className="mono"><Pools pools={n.storagePools ?? []} inv={inv?.nodes.find((x) => x.name === n.name)} /></td>
                     <td>{n.location ?? <span className="muted">{primary ? primary.name : "the primary"}</span>}</td>
                   </tr>
                 ))}
@@ -172,9 +208,6 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
           <h3>Settings</h3>
           <KV
             rows={[
-              ["IPv6", val(s.ipv6, "off (default)")],
-              ["DNSSEC", val(s.dnssec, "default")],
-              ["branding", val(s.branding, "the generated logo")],
               ["DNS blocklists", val(s.dnsBlocklists, "none")],
               ["disk auto-grow", val(s.diskAutoGrow, "on, the defaults")],
               ["require signed", val(s.requireSigned, "no (default)")],

@@ -8,6 +8,7 @@ export interface Ipv6Read {
   mode: string;
   prefix: string | null;
   source: "delegated" | "site.json" | null;
+  address: string | null; // the WAN's IPv6 address: where the internet reaches Caddy
   error?: string;
 }
 

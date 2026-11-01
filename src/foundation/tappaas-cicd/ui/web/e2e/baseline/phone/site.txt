@@ -62,12 +62,12 @@
 - definition: rossen
 - term: display name
 - definition: Rossen Production Cluster
+- term: branding
+- definition: logo branding/rossen-logo.svg
 - term: version
 - definition: "2.0"
 - term: default environment
-- definition: rossen
-- term: owner
-- definition: rossen
+- definition: "rossen (Owner Organisation: rossen)"
 - term: email
 - definition: operator@example.org
 - heading "Location" [level=3]
@@ -77,61 +77,59 @@
 - definition: Knud Anchers Vej 95, Rodovre, DK
 - term: timezone
 - definition: Europe/Copenhagen
-- term: locale
-- definition: en_US
-- term: keyboard
-- definition: dk
+- term: Locale/Keyboard
+- definition: en_US / dk
 - heading "Network" [level=3]
 - term: ISP
 - definition: Netnørden
-- term: public IP
-- definition: auto
 - term: WAN
 - definition: "public address 203.0.113.190 (auto: what the WAN held on 2026-11-01)"
+- term: IPv6 enabled
+- definition: "yes"
+- term: IPv6 prefix
+- definition: 2001:db8:3:4500::/56
+- term: Caddy IPv6 address
+- definition: 2001:db8:2:978c::efd
+- term: DNSSEC
+- definition: default
 - heading "Nodes" [level=3]
 - table:
   - rowgroup:
-    - row "node address storage pools location":
+    - row "node memory storage pools location":
       - columnheader "node"
-      - columnheader "address"
+      - columnheader "memory"
       - columnheader "storage pools"
       - columnheader "location"
   - rowgroup:
-    - row "tappaas1 tappaas1.mgmt.internal tanka1, tankb1 knudanchersvej95":
+    - row "tappaas1 51 GB / 66 GB rpool tanka1 (463 GB / 3.9 TB) tankb1 (2.3 MB / 12 TB) knudanchersvej95":
       - cell "tappaas1":
         - link "tappaas1":
           - /url: /site/devices?select=node:tappaas1
-      - cell "tappaas1.mgmt.internal"
-      - cell "tanka1, tankb1"
+      - cell "51 GB / 66 GB"
+      - cell "rpool tanka1 (463 GB / 3.9 TB) tankb1 (2.3 MB / 12 TB)"
       - cell "knudanchersvej95"
-    - row "tappaas2 tappaas2.mgmt.internal tanka1 knudanchersvej95":
+    - row "tappaas2 105 GB / 133 GB rpool tanka1 (351 GB / 2.0 TB) knudanchersvej95":
       - cell "tappaas2":
         - link "tappaas2":
           - /url: /site/devices?select=node:tappaas2
-      - cell "tappaas2.mgmt.internal"
-      - cell "tanka1"
+      - cell "105 GB / 133 GB"
+      - cell "rpool tanka1 (351 GB / 2.0 TB)"
       - cell "knudanchersvej95"
-    - row "tappaas3 tappaas3.mgmt.internal tanka1, tankc1 knudanchersvej95":
+    - row "tappaas3 19 GB / 33 GB rpool tanka1 (495 GB / 991 GB) tankc1 (468 GB / 4.9 TB) knudanchersvej95":
       - cell "tappaas3":
         - link "tappaas3":
           - /url: /site/devices?select=node:tappaas3
-      - cell "tappaas3.mgmt.internal"
-      - cell "tanka1, tankc1"
+      - cell "19 GB / 33 GB"
+      - cell "rpool tanka1 (495 GB / 991 GB) tankc1 (468 GB / 4.9 TB)"
       - cell "knudanchersvej95"
-    - row "tappaas4 tappaas4.mgmt.internal tanka1 knudanchersvej95":
+    - row "tappaas4 2.7 GB / 34 GB rpool (3.6 GB / 483 GB) tanka1 (1.0 MB / 1.9 TB) knudanchersvej95":
       - cell "tappaas4":
         - link "tappaas4":
           - /url: /site/devices?select=node:tappaas4
-      - cell "tappaas4.mgmt.internal"
-      - cell "tanka1"
+      - cell "2.7 GB / 34 GB"
+      - cell "rpool (3.6 GB / 483 GB) tanka1 (1.0 MB / 1.9 TB)"
       - cell "knudanchersvej95"
 - heading "Settings" [level=3]
-- term: IPv6
-- definition: "yes"
-- term: DNSSEC
-- definition: default
-- term: branding
-- definition: logo branding/rossen-logo.svg
 - term: DNS blocklists
 - definition: none
 - term: disk auto-grow
