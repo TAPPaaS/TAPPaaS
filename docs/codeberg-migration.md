@@ -108,22 +108,26 @@ Both image pipelines run on **GitHub Actions** until self-hosted Woodpecker runn
 special step is getting the trigger to GitHub:
 
 1. **Make sure the commit you want to build is on Codeberg `main`** (normal workflow).
-2. **Tag it and push the tag to the `github` remote** — pushing a tag also pushes every
-   object it needs, so this works even though `github/main` is stale; Actions triggers on
-   the tag push and checks out the tag:
+2. **Tag it and push the tag to `origin` first, then to the `github` remote.** The tag must
+   be on **both**: the push mirror makes GitHub match Codeberg, so it deletes a tag that is
+   only on GitHub, and the image's download URL then answers 404. Pushing a tag also pushes
+   every object it needs, so this works even though `github/main` is stale; Actions triggers
+   on the tag push and checks out the tag:
 
    ```bash
    # NixOS VM template image (.github/workflows/build-nixos-template-image.yml)
-   git tag nixos-template-v1.4            # next after the current nixos-template-v1.3
-   git push github nixos-template-v1.4    # ← github remote, NOT origin
+   git tag nixos-template-v1.5
+   git push origin nixos-template-v1.5    # first: the mirror keeps only what Codeberg has
+   git push github nixos-template-v1.5    # this one fires the build
 
    # Preconfigured OPNsense/Proxmox-firewall image (.github/workflows/build-opnsense-image.yml)
    git tag opnsense-firewall-v1.2         # next after the current opnsense-firewall-v1.1
+   git push origin opnsense-firewall-v1.2
    git push github opnsense-firewall-v1.2
    ```
 
-   Pushing the same tag to `origin` (Codeberg) too is fine for bookkeeping — nothing
-   triggers there anymore.
+   Never re-push an existing image tag to GitHub: that rebuilds the image, replaces the
+   release asset, and its SHA-256 no longer matches the one the configs record.
 3. **Watch the run** under github.com/TAPPaaS/TAPPaaS → Actions. On success the release
    appears under GitHub → Releases with the stable asset name
    (`tappaas-nixos.qcow2.zst` / `tappaas-firewall.qcow2.zst` — the release TAG carries

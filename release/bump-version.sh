@@ -150,6 +150,17 @@ release_sha() {
     normalise_sha "${h}"
 }
 
+# tag_missing_from <tag> — print the remotes without the tag. It must be on both:
+# the GitHub release's download URL needs it there, and the Codeberg→GitHub push
+# mirror deletes from GitHub a tag Codeberg lacks. Skipped for a test's own base URL.
+tag_missing_from() {
+    local r
+    [[ -z "${TAPPAAS_IMAGE_RELEASE_BASE:-}" ]] || return 0
+    for r in origin github; do
+        git ls-remote --exit-code --tags "${r}" "refs/tags/$1" >/dev/null 2>&1 || echo "${r}"
+    done
+}
+
 # ── --check / default: report state and drift ────────────────────────
 if [[ "${CHECK_ONLY}" -eq 1 || ( -z "${NIXOS_ARG}" && -z "${OPNSENSE_ARG}" ) ]]; then
     nver="$(jq -r '.version // "?"' "${REL_NIXOS}")"
@@ -165,7 +176,10 @@ if [[ "${CHECK_ONLY}" -eq 1 || ( -z "${NIXOS_ARG}" && -z "${OPNSENSE_ARG}" ) ]];
         warn "drift: tappaas-nixos.json version (${nver}) != image tag (${ntag})"
         drift=1
     fi
-    if git rev-parse -q --verify "refs/tags/${ntag}" >/dev/null 2>&1; then :; fi
+    for t in "${ntag}" "${otag}"; do
+        gone="$(tag_missing_from "${t}" | xargs)"
+        [[ -z "${gone}" ]] || { warn "image tag ${t} is missing from: ${gone} — its download breaks (see release/README.md)"; drift=1; }
+    done
     latest_nixos="$(git tag --list 'nixos-template-v*' --sort=-v:refname | head -1)"
     latest_opn="$(git tag --list 'opnsense-firewall-v*' --sort=-v:refname | head -1)"
     [[ -n "${latest_nixos}" && "${latest_nixos}" != "${ntag}" ]] && \
@@ -179,6 +193,8 @@ fi
 # ── Apply bumps ──────────────────────────────────────────────────────
 if [[ -n "${NIXOS_ARG}" ]]; then
     tag="$(normalise nixos-template-v "${NIXOS_ARG}")"
+    gone="$(tag_missing_from "${tag}" | xargs)"
+    [[ -z "${gone}" ]] || die "${tag} is not on: ${gone} — push it there first (release/README.md)"
     ver="${tag#nixos-template-v}"
     loc="${BASE_URL}/${tag}/"
     if [[ -n "${NIXOS_SHA}" ]]; then sha="$(normalise_sha "${NIXOS_SHA}")"
@@ -191,6 +207,8 @@ fi
 
 if [[ -n "${OPNSENSE_ARG}" ]]; then
     tag="$(normalise opnsense-firewall-v "${OPNSENSE_ARG}")"
+    gone="$(tag_missing_from "${tag}" | xargs)"
+    [[ -z "${gone}" ]] || die "${tag} is not on: ${gone} — push it there first (release/README.md)"
     loc="${BASE_URL}/${tag}/"
     if [[ -n "${OPNSENSE_SHA}" ]]; then sha="$(normalise_sha "${OPNSENSE_SHA}")"
     else sha="$(release_sha "${loc}" "$(get_image "${REL_OPNSENSE}")")"; fi

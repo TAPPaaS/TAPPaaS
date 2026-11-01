@@ -56,10 +56,12 @@ release/changelog.sh --from v2.1 --to v2.2 --enrich > NOTES.md
 
 Images are built from a tag pushed to the **`github`** remote (that fires the Actions build; the
 mirror does not trigger it promptly), then the configs are repointed and the change travels the
-train like any other commit:
+train like any other commit. The tag goes to **`origin` first**: the push mirror deletes a tag
+that is only on GitHub, which breaks the image's download URL. `bump-version.sh` refuses a tag
+that is not on both:
 
 ```bash
-git tag nixos-template-v1.5 && git push github nixos-template-v1.5
+git tag nixos-template-v1.5 && git push origin nixos-template-v1.5 && git push github nixos-template-v1.5
 # … wait for the GitHub Release …
 release/sign-image-release.sh nixos-template-v1.5
 release/bump-version.sh --nixos 1.5      # then commit and push to main
