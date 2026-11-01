@@ -3,6 +3,9 @@
 #
 # Format: <command> <verb>...   # why
 # A verb is the command's first word that is not an option. `*` is any verb.
+# `verb:sub` is the first two such words; a word starting with `-` is an option
+# found anywhere in the command, for tools without verbs. `sudo` lists what is
+# held behind it on top of what is held anyway.
 # What is not listed runs, so `pvesh get`, `qm status`, `zfs list`, `zpool list`,
 # `systemctl is-active` give a preview its real answers. A command found behind
 # sudo, env, timeout, `bash -c` or ssh counts the same.
@@ -31,3 +34,32 @@ systemctl reload-or-restart enable disable mask unmask         # unit state and 
 systemctl daemon-reload reboot poweroff halt kill              # the manager and the machine
 reboot *                                                       # the machine
 poweroff *                                                     # the machine
+qm guest                                                       # runs a command inside a guest, read or write cannot be told apart
+pct exec                                                       # the same in a container
+pvecm add delnode expected                                     # cluster membership; `status` and `nodes` read
+dd *                                                           # writes a device
+wipefs *                                                       # erases a disk's signatures
+sgdisk *                                                       # rewrites a partition table
+apt-get install remove purge upgrade dist-upgrade              # packages on a node
+scp *                                                          # copies files onto the other machine, or fetches over a local file
+rsync *                                                        # the same
+ssh-copy-id *                                                  # installs a key on the other machine
+ssh-keygen -R                                                  # edits known_hosts
+curl -X --request -d --data --data-raw --data-binary --json    # a body or a method: an API write (OPNsense, UniFi, a module's); a plain GET reads
+curl -F --form -T --upload-file                                # uploads
+git commit push pull fetch merge rebase reset checkout switch  # moves refs or the working tree; `log`, `show`, `status` read
+git clean clone init restore revert cherry-pick am apply       # the same
+git add rm mv gc submodule                                     # the same
+git stash:push stash:pop stash:apply stash:drop stash:clear    # `stash list` and `stash show` read
+git worktree:add worktree:remove worktree:prune                # `worktree list` reads
+git remote:add remote:remove remote:set-url                    # `remote -v` reads
+nix copy                                                       # puts a closure on another machine
+nix profile                                                    # changes a profile
+nix store:delete store:gc                                      # deletes from the store
+nix --out-link -o                                              # a build that links a gcroot or a component; a plain `nix build` only fills the store
+nix-env *                                                      # changes a profile, the system's too
+nix-collect-garbage *                                          # deletes from the store
+switch-to-configuration *                                      # activates a system; update-os.sh runs it directly
+node-provisioner register unregister enable disable           # arms a node's install; `assets`, `list`, `status` read
+systemd-cat *                                                  # writes the journal, which the event stream reads
+sudo rm mv cp tee install ln chmod chown mkdir touch truncate sed  # file tools as root: outside config/ too; `sudo cat` reads

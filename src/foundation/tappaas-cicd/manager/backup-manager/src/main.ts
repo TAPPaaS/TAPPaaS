@@ -67,8 +67,7 @@ import { KeyTarget, keyStampArgs, keyTarget, keysUsb } from "./keys";
 import { placementFinishReset, placementReset, placementUseExternal, ResetDeps } from "./placement-reset";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { existsSync, readFileSync } from "fs";
-import { spawnSync } from "child_process";
-import { askTerminal, stream } from "../../../lib/ts/src/exec";
+import { askTerminal, spawnGuarded, stream } from "../../../lib/ts/src/exec";
 import { clusterNodeNames } from "../../../lib/ts/src/nodes";
 import { GN, CL, RD, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { readJsonObject, writeJsonAtomic } from "../../../lib/ts/src/config-io";
@@ -954,7 +953,7 @@ function cmdPulse(opts: Opts): number {
     if (!isNode && typeof m.address === "string" && m.address) host = m.address;
   } catch { /* the name as it is */ }
   info(`The pulse on ${node}`);
-  const timer = spawnSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", `root@${host}`,
+  const timer = spawnGuarded("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", `root@${host}`,
     "systemctl is-active tappaas-pulse.timer; /usr/local/sbin/tappaas-pulse --status"], { encoding: "utf8" });
   if (timer.status !== 0 && !timer.stdout) die(`pulse: ${node} did not answer, or has no pulse (the backup update installs it)`);
   const [state, ...rows] = (timer.stdout ?? "").split("\n");

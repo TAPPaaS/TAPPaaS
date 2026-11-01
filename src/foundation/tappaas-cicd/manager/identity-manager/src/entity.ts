@@ -5,10 +5,11 @@
 // Authentik. The operator runs `identity-manager reconcile` afterwards to push
 // config → live. Writes are atomic (mktemp+rename) and gated by validateRefs.
 
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { loadPeople, toGroup, toOrg, toRole, toUser, validateRefs } from "./config";
 import { PeopleModel } from "./types";
+import { mkdirGuarded, renameGuarded, unlinkGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 
 // Raised by the CRUD ops on a user-facing error (bad ref, missing entity, …).
 // main.ts maps this to a `die()` (exit 1); tests assert on it.
@@ -301,10 +302,10 @@ export function referencesTo(model: PeopleModel, kind: Kind, name: string): stri
 // path for the Identity domain.
 export function atomicWrite(path: string, data: string): void {
   const dir = dirname(path);
-  mkdirSync(dir, { recursive: true });
+  mkdirGuarded(dir, { recursive: true });
   const tmp = join(dir, `.${process.pid}.${Date.now()}.tmp`);
-  writeFileSync(tmp, data, "utf8");
-  renameSync(tmp, path);
+  writeFileGuarded(tmp, data, "utf8");
+  renameGuarded(tmp, path);
 }
 
 export function serialize(rec: Record<string, unknown>): string {
@@ -374,6 +375,6 @@ export function deleteEntity(
       );
     }
   }
-  unlinkSync(path);
+  unlinkGuarded(path);
   return { path, action: "deleted" };
 }

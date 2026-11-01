@@ -7,8 +7,9 @@
 // an expired hold warns, is removed, and the next sweep pulls again, so a
 // forgotten hold cannot freeze a site. lib/repo-hold.sh reads the same file.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "fs";
+import { existsSync, readdirSync, readFileSync } from "fs";
 import { join } from "path";
+import { mkdirGuarded, unlinkGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 
 export interface RepoHold {
   repository: string;
@@ -68,9 +69,9 @@ export function isActive(h: RepoHold, nowSec: number): boolean {
 export function writeHold(configDir: string, h: RepoHold): string {
   if (!validRepoName(h.repository)) throw new Error(`not a repository name: ${h.repository}`);
   const dir = holdDir(configDir);
-  mkdirSync(dir, { recursive: true });
+  mkdirGuarded(dir, { recursive: true });
   const f = join(dir, `${h.repository}.json`);
-  writeFileSync(f, JSON.stringify(h, null, 2) + "\n", "utf8");
+  writeFileGuarded(f, JSON.stringify(h, null, 2) + "\n", "utf8");
   return f;
 }
 
@@ -79,7 +80,7 @@ export function releaseHold(configDir: string, repository: string): boolean {
   if (!validRepoName(repository)) throw new Error(`not a repository name: ${repository}`);
   const f = join(holdDir(configDir), `${repository}.json`);
   if (!existsSync(f)) return false;
-  unlinkSync(f);
+  unlinkGuarded(f);
   return true;
 }
 

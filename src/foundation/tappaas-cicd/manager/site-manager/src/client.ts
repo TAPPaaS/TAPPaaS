@@ -9,7 +9,7 @@
 // `site add` and `repository add`/`delete` stays in the still-live .sh tools
 // (create-site.sh / repository.sh), invoked here as thin delegations.
 
-import { existsSync, readdirSync, rmSync } from "fs";
+import { existsSync, readdirSync } from "fs";
 import { basename, join } from "path";
 import {
   defaultNodeCandidates,
@@ -19,13 +19,13 @@ import {
   reachableNodes, queryClusterGuests, ssh} from "../../../lib/ts/src/cluster";
 import { nodeDiscoveryProbe, nodeStorageProbe, parseNodeDiscovery, parseNodeStorage } from "./cmdb-discover";
 import { CLUSTER_DISCOVERY, CLUSTER_PROBE, ClusterRead, HOST_PROBE, STORAGE_MARK, parseClusterProbe, parseHostProbe, splitStorage } from "./cmdb-report";
-import { defaultConfigDir } from "../../../lib/ts/src/config-io";
+import { defaultConfigDir, rmGuarded } from "../../../lib/ts/src/config-io";
 import { clusterScript } from "./config";
-import { capture as run, captureResult, stream as runStreaming, streamToFile } from "../../../lib/ts/src/exec";
+import { capture as run, captureResult, spawnGuarded, stream as runStreaming, streamToFile } from "../../../lib/ts/src/exec";
 import { setNodeStoragePools } from "../../../lib/ts/src/nodes";
 import { RepositoryTrust, SiteClient } from "./types";
 import { UNIT } from "./unitrun";
-import { spawn, spawnSync } from "child_process";
+import { spawn } from "child_process";
 
 // Bin names (overridable via env for tests / relocations). Resolved LAZILY, as
 // in environment-manager/src/clients.ts: a module-level const would freeze the
@@ -66,7 +66,7 @@ export class CliSiteClient implements SiteClient {
     // `repository add` would have asked for them, or for --unsigned.
     const rc = runStreaming(REPOSITORY_SH(), ["introduce", name]);
     if (rc !== 0) {
-      rmSync(path, { recursive: true, force: true });
+      rmGuarded(path, { recursive: true, force: true });
       throw new Error(
         trust
           ? `repository ${name}: the clone does not verify against its signers ${trust.signers.join(" ")} — removed again`
@@ -283,7 +283,7 @@ export class CliSiteClient implements SiteClient {
       const st = this.unitState();
       if (id && (st === "activating" || st === "active")) return { ok: true, invocationId: id, err: "" };
       if (st === "failed") return { ok: true, invocationId: id, err: "" };
-      spawnSync("sleep", ["1"], {});
+      spawnGuarded("sleep", ["1"], {});
     }
     return { ok: true, invocationId: "", err: "" };
   }
@@ -299,11 +299,11 @@ export class CliSiteClient implements SiteClient {
         const st = this.unitState();
         if (st !== "activating" && st !== "active" && st !== "deactivating") return "finished";
         // Ctrl-C reaches sleep too; that is the only way this loop learns of it.
-        const s = spawnSync("sleep", ["2"], {});
+        const s = spawnGuarded("sleep", ["2"], {});
         if (s.signal === "SIGINT") return "detached";
       }
     } finally {
-      spawnSync("sleep", ["1"], {}); // let journalctl print the last lines
+      spawnGuarded("sleep", ["1"], {}); // let journalctl print the last lines
       j.kill("SIGTERM");
     }
   }

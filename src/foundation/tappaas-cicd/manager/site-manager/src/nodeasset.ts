@@ -3,7 +3,7 @@
 // A failure here is a warning with the command to run by hand, never a failed
 // join or a failed delete: the node is in (or out of) the cluster already.
 
-import { spawnSync } from "child_process";
+import { spawnGuarded } from "../../../lib/ts/src/exec";
 import { existsSync, readFileSync } from "fs";
 import { GN, YW, CL, info, warn } from "../../../lib/ts/src/cli";
 import { POSITIONS_FILE, PositionsDoc } from "../../../lib/ts/src/positions";
@@ -21,13 +21,13 @@ export function readPositions(configDir = defaultConfigDir()): PositionsDoc | nu
 }
 
 function assetManager(args: string[]): { rc: number; out: string } {
-  const r = spawnSync("asset-manager", args, { encoding: "utf8" });
+  const r = spawnGuarded("asset-manager", args, { encoding: "utf8" });
   if (r.error) return { rc: -1, out: r.error.message };
   return { rc: r.status ?? -1, out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim() };
 }
 
 const sshRoot = (host: string, cmd: string): string | null => {
-  const r = spawnSync("ssh", ["-o", "ConnectTimeout=10", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", `root@${host}`, cmd], { encoding: "utf8" });
+  const r = spawnGuarded("ssh", ["-o", "ConnectTimeout=10", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", `root@${host}`, cmd], { encoding: "utf8" });
   return r.error || r.status !== 0 ? null : r.stdout ?? "";
 };
 

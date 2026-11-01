@@ -23,6 +23,10 @@ import { basename, join } from "path";
 import { tmpdir } from "os";
 import { spawnSync } from "child_process";
 
+// TAPPAAS_SIMULATE=1 (tappaas-cicd lib/ts config-io.ts; this build holds no lib/ts):
+// no file written, no plugin_apply; a plugin's read is a bash child, gated by BASH_ENV.
+const SIMULATE = process.env.TAPPAAS_SIMULATE === "1";
+
 const VERSION = "0.1.0";
 
 // ── Colours / logging (match switch-manager's helper surface) ────────
@@ -91,6 +95,10 @@ function readJson(path: string): JObj {
   return parsed;
 }
 function writeJsonAtomic(path: string, data: JObj): void {
+  if (SIMULATE) {
+    console.error(`[simulate] write ${path}`);
+    return;
+  }
   const txt = JSON.stringify(data, null, 2) + "\n";
   JSON.parse(txt); // validate round-trip before committing
   const tmp = join(tmpdir(), `sc-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
@@ -732,6 +740,10 @@ function cmdApply(autoconfirm: boolean): { manual: number; applied: number } {
     const changes = delta[sw];
     if (changes.length === 0) continue;
     const plugin = pluginForSwitch(a, sw);
+    if (SIMULATE) {
+      console.error(`[simulate] ${basename(plugin, ".sh")} plugin_apply ${sw}`);
+      continue;
+    }
     const env = { ...process.env };
     if (autoconfirm) env.SM_AUTOCONFIRM = "1";
     const r = spawnSync(

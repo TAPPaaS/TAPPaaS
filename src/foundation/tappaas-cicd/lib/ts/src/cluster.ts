@@ -8,7 +8,7 @@
 // the documented manager→proxmox-controller boundary question is tracked in
 // docs/design/ADR007-post-implement-refactor.md §6 "Parked".
 
-import { spawnSync } from "child_process";
+import { spawnGuarded } from "./exec";
 import { guestConfProbe, parseGuestConfProbe } from "./guest-conf";
 
 // The mgmt-zone DNS suffix nodes/guests are addressed under. Overridable for
@@ -68,7 +68,7 @@ export interface RemoteResult {
 }
 
 function runLocal(cmd: string, args: string[]): RemoteResult {
-  const r = spawnSync(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const r = spawnGuarded(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   if (r.error) return { rc: -1, stdout: "", stderr: r.error.message, ran: false };
   return { rc: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "", ran: true };
 }

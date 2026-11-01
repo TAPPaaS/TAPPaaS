@@ -43,7 +43,7 @@ import { listNodeUsb, writeNodeUsb } from "./usb";
 import { listMedia, prepareMedia } from "./media";
 import { Site, SiteClient } from "./types";
 import { runningVersion } from "./version";
-import { spawnSync } from "child_process";
+import { spawnGuarded } from "../../../lib/ts/src/exec";
 import { existsSync, mkdirSync, readFileSync } from "fs";
 import { homedir } from "os";
 import { dirname, join } from "path";
@@ -433,7 +433,7 @@ function unregisterNodeModule(name: string, configDir: string, archive = false):
   try {
     if (!String(JSON.parse(readFileSync(cfg, "utf8")).moduleSource ?? "").endsWith("/pvehost")) return;
   } catch { return; }
-  const r = spawnSync("module-manager", ["delete", name, archive ? "--archive" : "--remove", "--force"], { stdio: "inherit" });
+  const r = spawnGuarded("module-manager", ["delete", name, archive ? "--archive" : "--remove", "--force"], { stdio: "inherit" });
   if (r.status === 0) info(`${GN}✓${CL} its node record is ${archive ? "archived" : "deleted"} and unregistered`);
   else warn(`the node record '${name}' is still registered — module-manager delete ${name}${archive ? " --archive" : " --remove"} --force`);
 }
@@ -448,7 +448,7 @@ function writeNodeRecord(configDir: string, name: string, pools: string[]): void
   if (!existsSync(`${moduleDir}/pvehost.json`)) die(`node add: the pvehost module is not at ${moduleDir}`);
   const args = ["pvehost", "--instance", name, "--address", `${name}.${mgmtDomain()}`, "--zone0", "mgmt", "--environment", "mgmt"];
   if (pools.length > 0) args.push("--storagePools", JSON.stringify(pools));
-  const r = spawnSync(process.env.SITE_COPY_JSON_BIN ?? "copy-update-json.sh", args, {
+  const r = spawnGuarded(process.env.SITE_COPY_JSON_BIN ?? "copy-update-json.sh", args, {
     cwd: moduleDir,
     stdio: "inherit",
     env: { ...process.env, CONFIG_DIR: configDir },
@@ -816,7 +816,7 @@ function cmdSite(o: Opts): void {
     // ADR-017 D2: a new schedule takes effect now — re-render the timer. Only
     // for the site's own config, never for a --config-dir copy.
     if ((freq !== undefined || wday !== undefined || hour !== undefined) && o.configDir === defaultConfigDir()) {
-      const r = spawnSync(process.env.SITE_SYSTEMCTL_BIN ?? "systemctl", ["start", "update-tappaas-schedule.service"], { encoding: "utf8" });
+      const r = spawnGuarded(process.env.SITE_SYSTEMCTL_BIN ?? "systemctl", ["start", "update-tappaas-schedule.service"], { encoding: "utf8" });
       if (r.status === 0) info("  update timer re-rendered from the new schedule");
       else warn("  could not re-render the update timer — it takes effect at the next boot or update (systemctl start update-tappaas-schedule.service)");
     }
@@ -1110,7 +1110,7 @@ function cmdNode(o: Opts, client: SiteClient): void {
     if (o.apply && o.boolFlags.has("--yes")) args.push("--yes");
     args.push(name);
     info(`${o.apply ? "" : "[preview] "}node delete '${name}' → ${script} ${args.join(" ")}`);
-    const r = spawnSync(script, args, { stdio: "inherit" });
+    const r = spawnGuarded(script, args, { stdio: "inherit" });
     const rc = r.status ?? -1;
     if (rc !== 0) die(`remove-node.sh exited ${rc} — the node's record and its asset are unchanged`);
     if (!o.apply) {
@@ -1123,7 +1123,7 @@ function cmdNode(o: Opts, client: SiteClient): void {
     // The role ends; the asset is kept for its next role or removed (ADR-040 D7).
     releaseNodeAsset(name, true, fate, nodesDir);
     // A node rebuilt under this name brings a new host key: no stale pin here.
-    for (const h of [name, `${name}.${mgmtDomain()}`]) spawnSync("ssh-keygen", ["-R", h], { stdio: "ignore" });
+    for (const h of [name, `${name}.${mgmtDomain()}`]) spawnGuarded("ssh-keygen", ["-R", h], { stdio: "ignore" });
     return;
   }
 
@@ -1155,7 +1155,7 @@ function cmdNode(o: Opts, client: SiteClient): void {
 
     // stdio inherit: the operator watches the drain/reboot/failback live, and
     // --execute prompts for confirmation in the script itself.
-    const r = spawnSync(script, [mode, name], { stdio: "inherit" });
+    const r = spawnGuarded(script, [mode, name], { stdio: "inherit" });
     const rc = r.status ?? -1;
     if (rc !== 0) die(`reboot-node.sh exited ${rc}`);
     return;
@@ -1175,7 +1175,7 @@ function cmdNode(o: Opts, client: SiteClient): void {
     }
     const user = o.flags.get("--user");
     if (user && action !== "status") args.push("--user", user);
-    const r = spawnSync(script, args, { stdio: "inherit" });
+    const r = spawnGuarded(script, args, { stdio: "inherit" });
     const rc = r.status ?? -1;
     if (rc !== 0) die(`qdevice.sh exited ${rc}`);
     return;
@@ -1216,7 +1216,7 @@ function cmdNode(o: Opts, client: SiteClient): void {
       args.push(o.apply ? "--execute" : "--dry-run");
       if (o.boolFlags.has("--yes")) args.push("--yes");
     }
-    const r = spawnSync(script, args, { stdio: "inherit" });
+    const r = spawnGuarded(script, args, { stdio: "inherit" });
     const rc = r.status ?? -1;
     if (rc !== 0) process.exit(rc > 0 ? rc : 1);
     return;

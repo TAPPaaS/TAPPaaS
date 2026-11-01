@@ -4,7 +4,7 @@
 // BOTH spellings so bash children (CONFIG_DIR) and TS children
 // (TAPPAAS_CONFIG) agree on where the live config lives.
 
-import { spawnSync } from "child_process";
+import { SpawnSyncOptions, SpawnSyncReturn, spawnSync } from "child_process";
 import { closeSync, existsSync, openSync, readFileSync } from "fs";
 import { basename, dirname, join } from "path";
 import { defaultConfigDir, simulating } from "./config-io";
@@ -31,7 +31,11 @@ export function configEnv(): Record<string, string | undefined> {
 // instead): a command on the mutator list is logged and not run, and answers
 // exit 0 with empty output. Reads run. lib/simulate-mutators.txt is the list,
 // with the reason for each entry; common-install-routines.sh reads the same
-// file and matches the same way.
+// file and matches the same way. A rule's verb can also be `verb:sub` (`git
+// stash:push`) or an option (`curl -X`), and a script on a machine over ssh is
+// held unless it was asked for its dry run. An ssh that runs carries the variable
+// along, and every bash child sources lib/simulate-gate.sh through BASH_ENV, so
+// a script is gated whether or not it sources the lib.
 
 export interface MutatorRule {
   bin: string;
@@ -74,13 +78,29 @@ export function mutators(): MutatorRule[] | null {
   return loaded;
 }
 
+const GIT_VALUE_OPTS = new Set("-C -c --git-dir --work-tree --namespace".split(" "));
 const SSH_VALUE_OPTS = new Set("-b -c -D -E -e -F -I -i -J -L -l -m -O -o -p -Q -R -S -W -w".split(" "));
 const PLAIN_PREFIXES = new Set(["then", "do", "if", "elif", "else", "while", "until", "!", "{", "exec", "nohup", "command", "time"]);
 
 function ruleMatches(rules: MutatorRule[], words: string[]): boolean {
   const bin = basename(words[0]);
-  const verb = words.slice(1).find((w) => !w.startsWith("-"));
-  return rules.some((r) => r.bin === bin && (r.verbs.includes("*") || (verb !== undefined && r.verbs.includes(verb))));
+  let rest = words.slice(1);
+  if (bin === "git") while (rest.length && rest[0].startsWith("-")) rest = rest.slice(GIT_VALUE_OPTS.has(rest[0]) ? 2 : 1);
+  const [verb, sub] = rest.filter((w) => !w.startsWith("-"));
+  const opts = rest.filter((w) => w.startsWith("-")).map((w) => w.replace(/=.*/, ""));
+  return rules.some(
+    (r) =>
+      r.bin === bin &&
+      (r.verbs.includes("*") ||
+        (verb !== undefined && (r.verbs.includes(verb) || r.verbs.includes(`${verb}:${sub}`))) ||
+        opts.some((o) => r.verbs.includes(o))),
+  );
+}
+
+// A script file on the other machine: the list cannot see into it, so it counts
+// as a write, unless the command asks for the script's own dry run.
+function remoteScript(cmd: string): boolean {
+  return /(^|[\s;&|(])[^\s;&|()'"]*\.sh(\s|$|[;&|)'"])/.test(cmd) && !/\s--(dry-run|check)(\s|$|['"])/.test(cmd);
 }
 
 // A shell string: every command in it, split at its separators. Quotes go, so a
@@ -103,6 +123,7 @@ function wordsMatch(rules: MutatorRule[], argv: string[]): boolean {
     } else if (bin === "env" || bin === "sudo") {
       w = w.slice(1);
       while (w.length && (w[0].startsWith("-") || (bin === "env" && w[0].includes("=")))) w = w.slice(/^-[ug]$/.test(w[0]) ? 2 : 1);
+      if (bin === "sudo" && w.length && rules.some((r) => r.bin === "sudo" && r.verbs.includes(basename(w[0])))) return true;
     } else if (bin === "timeout") {
       w = w.slice(1);
       while (w.length && w[0].startsWith("-")) w = w.slice(1);
@@ -110,7 +131,8 @@ function wordsMatch(rules: MutatorRule[], argv: string[]): boolean {
     } else if (bin === "ssh") {
       w = w.slice(1);
       while (w.length && w[0].startsWith("-")) w = w.slice(SSH_VALUE_OPTS.has(w[0]) ? 2 : 1);
-      return shellMatches(rules, w.slice(1).join(" "));
+      const remote = w.slice(1).join(" ");
+      return shellMatches(rules, remote) || remoteScript(remote);
     } else if ((bin === "bash" || bin === "sh") && w[1] && /^-[a-z]*c$/.test(w[1])) {
       return shellMatches(rules, w.slice(2).join(" "));
     } else {
@@ -123,12 +145,44 @@ export function isMutator(bin: string, args: string[], rules: MutatorRule[] | nu
   return rules === null || wordsMatch(rules, [bin, ...args]);
 }
 
-// True when this command must not run: said on stderr, the caller answers 0.
-function simulated(bin: string, args: string[]): boolean {
-  if (!simulating() || !isMutator(bin, args)) return false;
+// True when this command must not run: said on stderr, the caller answers 0. A
+// script on stdin (`ssh … bash -s`) is judged with the command.
+function simulated(bin: string, args: string[], input?: string): boolean {
+  if (!simulating()) return false;
+  armBash();
+  const fed = input !== undefined && basename(bin) === "ssh" && /(^|\s)(ba)?sh(\s+-[a-z]+)*\s+-[a-z]*s(\s|$)/.test(args.join(" "));
+  if (!isMutator(bin, args) && !(fed && isMutator("bash", ["-c", input as string]))) return false;
   if (mutators() === null) console.error("[simulate] simulate-mutators.txt not found: running nothing");
   console.error(`[simulate] ${[bin, ...args].join(" ")}`);
   return true;
+}
+
+// A bash child reads the gate on its own start, and so does its child: exported
+// here once, and every spawn inherits it.
+function armBash(): void {
+  if (process.env.BASH_ENV) return;
+  const f = mutatorsFile();
+  if (f) process.env.BASH_ENV = join(dirname(f), "simulate-gate.sh");
+}
+if (simulating()) armBash();
+
+// The ssh that does run carries TAPPAAS_SIMULATE, for a script or manager at the
+// other end. The remote shell still runs the command, as `ssh` would have: it may
+// be dash, or csh on the firewall, and `env` could not start a `cd`.
+function carried(bin: string, args: string[]): string[] {
+  if (!simulating() || basename(bin) !== "ssh") return args;
+  let i = 0;
+  while (i < args.length && args[i].startsWith("-")) i += SSH_VALUE_OPTS.has(args[i]) ? 2 : 1;
+  if (i + 1 >= args.length) return args;
+  const cmd = args.slice(i + 1).join(" ").replace(/'/g, `'\\''`);
+  return [...args.slice(0, i + 1), `env TAPPAAS_SIMULATE=1 sh -c 'exec "\${SHELL:-sh}" -c "\$0"' '${cmd}'`];
+}
+
+// spawnSync behind the gate, for a caller whose shape the helpers below do not
+// fit (stdio, input, a timeout). A held command answers status 0 and no output.
+export function spawnGuarded(bin: string, args: string[], opts: SpawnSyncOptions): SpawnSyncReturn {
+  if (simulated(bin, args, opts.input)) return { status: 0, stdout: "", stderr: "", signal: null };
+  return spawnSync(bin, carried(bin, args), opts);
 }
 
 export interface ExecResult {
@@ -142,8 +196,7 @@ export interface ExecResult {
 // Run + capture, never throwing on non-zero exit: callers that need the rc /
 // output triple (e.g. scraping a validator's stderr) use this.
 export function captureResult(bin: string, args: string[]): ExecResult {
-  if (simulated(bin, args)) return { rc: 0, stdout: "", stderr: "", ran: true };
-  const r = spawnSync(bin, args, {
+  const r = spawnGuarded(bin, args, {
     encoding: "utf8",
     env: configEnv(),
     maxBuffer: MAX_BUFFER,
@@ -157,8 +210,7 @@ export function captureResult(bin: string, args: string[]): ExecResult {
 // Run + capture stdout; THROW on spawn failure or non-zero exit with the
 // unified message every manager used to hand-roll.
 export function capture(bin: string, args: string[]): string {
-  if (simulated(bin, args)) return "";
-  const r = spawnSync(bin, args, {
+  const r = spawnGuarded(bin, args, {
     encoding: "utf8",
     env: configEnv(),
     maxBuffer: MAX_BUFFER,
@@ -184,8 +236,7 @@ export function stream(
   args: string[],
   opts?: { cwd?: string; env?: Record<string, string | undefined> },
 ): number {
-  if (simulated(bin, args)) return 0;
-  const r = spawnSync(bin, args, {
+  const r = spawnGuarded(bin, args, {
     encoding: "utf8",
     stdio: "inherit",
     env: { ...configEnv(), ...(opts?.env ?? {}) },
@@ -208,7 +259,7 @@ export function streamToFile(
   if (simulated(bin, args)) return 0;
   const fd = openSync(file, "a");
   try {
-    const r = spawnSync(bin, args, {
+    const r = spawnGuarded(bin, args, {
       stdio: ["ignore", fd, fd],
       env: { ...configEnv(), ...(opts?.env ?? {}) },
     });

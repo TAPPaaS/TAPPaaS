@@ -26,8 +26,8 @@
 //
 // All I/O goes through SecurityIO so the tests run offline.
 
-import { spawnSync } from "child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, statfsSync, writeFileSync } from "fs";
+import { spawnGuarded } from "../../../lib/ts/src/exec";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync, statfsSync } from "fs";
 import { hostname, tmpdir } from "os";
 import { join } from "path";
 import { RemoteResult, mgmtDomain, operatorHome, sshIdentity } from "../../../lib/ts/src/cluster";
@@ -35,6 +35,7 @@ import { moduleOfLocation, moduleSourceOf } from "../../../lib/ts/src/instance";
 import { isManaged, loadConfigModules, readModuleJson, siteNodeHostnames } from "./config";
 import { guestTarget } from "./checks";
 import { CheckResult, CheckRow, CheckStatus, CheckSubject, ClusterClient } from "./types";
+import { mkdirGuarded, renameGuarded, rmGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 
 export const SBOM_DIRNAME = "sbom";
 export const STATUS_FILE = "cve-status.json";
@@ -762,7 +763,7 @@ const SSH_OPTS = ["-o", "ConnectTimeout=10", "-o", "BatchMode=yes", "-o", "Stric
 const MIN = 60_000;
 
 function exec(cmd: string, args: string[], input?: string, timeout = 10 * MIN, env?: Record<string, string | undefined>): RemoteResult {
-  const r = spawnSync(cmd, args, { encoding: "utf8", maxBuffer: 512 * 1024 * 1024, input, timeout, env });
+  const r = spawnGuarded(cmd, args, { encoding: "utf8", maxBuffer: 512 * 1024 * 1024, input, timeout, env });
   if (r.error) return { rc: -1, stdout: "", stderr: r.error.message, ran: false };
   return { rc: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "", ran: true };
 }
@@ -794,7 +795,7 @@ export class CliSecurityIO implements SecurityIO {
     const dir = mkdtempSync(join(tmpdir(), "tappaas-cpe-"));
     try {
       const f = join(dir, "names.json");
-      writeFileSync(f, JSON.stringify(names));
+      writeFileGuarded(f, JSON.stringify(names));
       // The mothership's own nixpkgs IS the estate pin (ADR-028 D1): the vendor
       // it declares holds for every guest built from the same pin.
       const np = process.env.TAPPAAS_NIXPKGS ? `import ${process.env.TAPPAAS_NIXPKGS}` : "import <nixpkgs>";
@@ -810,7 +811,7 @@ export class CliSecurityIO implements SecurityIO {
     } catch {
       return null;
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmGuarded(dir, { recursive: true, force: true });
     }
   }
   cveSeverities(ids: string[]): Record<string, string> | null {
@@ -831,7 +832,7 @@ export class CliSecurityIO implements SecurityIO {
     const dir = mkdtempSync(join(tmpdir(), "tappaas-patches-"));
     try {
       const f = join(dir, "names.json");
-      writeFileSync(f, JSON.stringify(names));
+      writeFileGuarded(f, JSON.stringify(names));
       const np = process.env.TAPPAAS_NIXPKGS ? `import ${process.env.TAPPAAS_NIXPKGS}` : "import <nixpkgs>";
       const expr =
         `let pkgs = ${np} {}; names = builtins.fromJSON (builtins.readFile ${f}); ` +
@@ -870,7 +871,7 @@ export class CliSecurityIO implements SecurityIO {
     } catch {
       return null;
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmGuarded(dir, { recursive: true, force: true });
     }
   }
   dbUpdate(): string[] {
@@ -1206,7 +1207,7 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
         } else {
           log(`matching ${t.name}: ${nc.components.length} Nix packages`);
           const f = join(tmp, `${safe(t.id)}.cdx.json`);
-          writeFileSync(f, JSON.stringify(cdxDoc(nc.components)));
+          writeFileGuarded(f, JSON.stringify(cdxDoc(nc.components)));
           let cov = nixCoverage(nc.components);
           let findings: Finding[] = [];
           if (!cov) {
@@ -1232,11 +1233,11 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
         else {
           log(`matching ${t.name}: Debian packages`);
           const root = join(tmp, safe(t.id));
-          mkdirSync(join(root, "etc"), { recursive: true });
-          mkdirSync(join(root, "var", "lib", "dpkg"), { recursive: true });
-          writeFileSync(join(root, "etc", "os-release"), lp.osRelease + "\n");
-          if (lp.debianVersion) writeFileSync(join(root, "etc", "debian_version"), lp.debianVersion + "\n");
-          writeFileSync(join(root, "var", "lib", "dpkg", "status"), lp.dpkg + "\n");
+          mkdirGuarded(join(root, "etc"), { recursive: true });
+          mkdirGuarded(join(root, "var", "lib", "dpkg"), { recursive: true });
+          writeFileGuarded(join(root, "etc", "os-release"), lp.osRelease + "\n");
+          if (lp.debianVersion) writeFileGuarded(join(root, "etc", "debian_version"), lp.debianVersion + "\n");
+          writeFileGuarded(join(root, "var", "lib", "dpkg", "status"), lp.dpkg + "\n");
           results.push(trivyTarget({ id: t.id, name: t.name, layer: "debian", host: t.host }, io.trivyRootfs(root), tv));
         }
       } else {
@@ -1263,7 +1264,7 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
       }
     }
   } finally {
-    rmSync(tmp, { recursive: true, force: true });
+    rmGuarded(tmp, { recursive: true, force: true });
   }
 
   // Which module each target is an instance of, and what is installed on a node
@@ -1305,7 +1306,7 @@ export function matchBundled(c: Container, io: SecurityIO, tmp: string): Bundled
       : null;
   }
   const f = join(tmp, `bundled-${safe(c.name)}-${comps.length}.cdx.json`);
-  writeFileSync(f, JSON.stringify(cdxDoc(comps)));
+  writeFileGuarded(f, JSON.stringify(cdxDoc(comps)));
   const g = io.grype(f);
   const list = comps.map((x) => `${x.name.replace(/ \(in .*\)$/, "")} ${x.version}`).join(", ");
   if (!g.ran || g.rc !== 0) {
@@ -1369,7 +1370,7 @@ export function scanComponentList(list: { name: string; version: string }[], io:
   const dir = mkdtempSync(join(tmpdir(), "tappaas-preview-"));
   try {
     const f = join(dir, "list.cdx.json");
-    writeFileSync(f, JSON.stringify(cdxDoc(comps)));
+    writeFileGuarded(f, JSON.stringify(cdxDoc(comps)));
     const g = io.grype(f);
     if (!g.ran || g.rc !== 0) return { findings: [], suppressed: [], error: `grype failed: ${lastLine(g.stderr) || `exit ${g.rc}`}` };
     try {
@@ -1382,7 +1383,7 @@ export function scanComponentList(list: { name: string; version: string }[], io:
       return { findings: [], suppressed: [], error: "grype output not parseable" };
     }
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmGuarded(dir, { recursive: true, force: true });
   }
 }
 
@@ -1521,14 +1522,14 @@ export function readStatus(path: string): ScanStatus | null {
 // atomically, so a reader never sees half a scan.
 export function writeScan(configDir: string, status: ScanStatus, cdx: Record<string, unknown>): ScanDiff {
   const dir = sbomDir(configDir);
-  mkdirSync(dir, { recursive: true });
+  mkdirGuarded(dir, { recursive: true });
   const cur = join(dir, STATUS_FILE);
   const prev = readStatus(cur);
   const diff = diffScans(status, prev);
-  if (existsSync(cur)) renameSync(cur, join(dir, PREVIOUS_FILE));
+  if (existsSync(cur)) renameGuarded(cur, join(dir, PREVIOUS_FILE));
   for (const [file, doc] of [[SITE_CDX_FILE, cdx], [STATUS_FILE, status]] as const) {
-    writeFileSync(join(dir, `${file}.tmp`), JSON.stringify(doc, null, 1) + "\n");
-    renameSync(join(dir, `${file}.tmp`), join(dir, file));
+    writeFileGuarded(join(dir, `${file}.tmp`), JSON.stringify(doc, null, 1) + "\n");
+    renameGuarded(join(dir, `${file}.tmp`), join(dir, file));
   }
   return diff;
 }

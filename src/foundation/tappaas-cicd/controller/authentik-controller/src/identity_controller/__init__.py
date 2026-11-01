@@ -5,6 +5,10 @@ embedded forward-auth outpost). Extracted from opnsense-controller (ADR-007
 S2b-1); move + repackage only.
 """
 
+from . import simulate
+
+simulate.install()
+
 from .authentik_manager import (
     AuthentikConfig,
     AuthentikManager,

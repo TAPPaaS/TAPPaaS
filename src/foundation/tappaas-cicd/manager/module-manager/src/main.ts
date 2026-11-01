@@ -25,7 +25,7 @@
 //
 // Exit codes: ok=0, error / non-zero child rc = that rc (1 for config errors).
 
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync } from "fs";
 import { tmpdir } from "os";
 import { dirname, join } from "path";
 import { CliModuleClient } from "./client";
@@ -73,6 +73,7 @@ import { validateModules } from "./validate";
 import { PlaceFlags, releaseKind, resolvePlace, takePlaceFlags } from "./location";
 import { BlueprintTarget, SchemaFacts, checkModule, dirTarget, realBlueprintFs, repoTargets, schemaFacts } from "./blueprint";
 import { composeFields } from "../../../lib/ts/src/compose-fields";
+import { rmGuarded } from "../../../lib/ts/src/config-io";
 
 const VERSION = "0.1.0";
 
@@ -1190,7 +1191,7 @@ function cmdModify(opts: Opts, client: ModuleClient, verb: "update" | "modify"):
     preModify = savePreModifyConfig(opts.configDir, module);
     const rc = applyFieldChanges(module, opts);
     if (rc !== 0) {
-      if (preModify) rmSync(preModify, { recursive: true, force: true });
+      if (preModify) rmGuarded(preModify, { recursive: true, force: true });
       return rc;
     }
   }
@@ -1206,7 +1207,7 @@ function cmdModify(opts: Opts, client: ModuleClient, verb: "update" | "modify"):
   try {
     return client.modify(module, m);
   } finally {
-    if (preModify) rmSync(preModify, { recursive: true, force: true });
+    if (preModify) rmGuarded(preModify, { recursive: true, force: true });
   }
 }
 

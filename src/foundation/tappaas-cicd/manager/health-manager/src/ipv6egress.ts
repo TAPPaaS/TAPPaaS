@@ -21,7 +21,7 @@
 //
 // WARN, never FAIL: IPv4 still carries the site (dual-stack clients fall back).
 
-import { spawnSync } from "child_process";
+import { spawnGuarded } from "../../../lib/ts/src/exec";
 import { join } from "path";
 import { ssh } from "../../../lib/ts/src/cluster";
 import { isManaged, loadConfigModules, readModuleJson } from "./config";
@@ -111,7 +111,7 @@ export function ipv6EgressResult(i: EgressInput): CheckResult {
 const IPV6_MANAGER_BIN = process.env.IPV6_MANAGER_BIN ?? "ipv6-manager";
 
 function readWan(): { wan: Wan6 | null; error?: string } {
-  const r = spawnSync(IPV6_MANAGER_BIN, ["wan", "--json"], { encoding: "utf8", timeout: 90_000 });
+  const r = spawnGuarded(IPV6_MANAGER_BIN, ["wan", "--json"], { encoding: "utf8", timeout: 90_000 });
   if (r.error || r.status !== 0) {
     return { wan: null, error: (r.error?.message ?? r.stderr ?? "").trim().split("\n").pop() };
   }
@@ -124,10 +124,10 @@ function readWan(): { wan: Wan6 | null; error?: string } {
 
 // From this VM, when it holds a global IPv6 address: any HTTP answer is egress.
 function probeLocal(): EgressProbe | null {
-  const a = spawnSync("ip", ["-6", "-o", "addr", "show", "scope", "global"], { encoding: "utf8" });
+  const a = spawnGuarded("ip", ["-6", "-o", "addr", "show", "scope", "global"], { encoding: "utf8" });
   if (a.error || !(a.stdout ?? "").trim()) return null;
   for (const to of PUBLIC_V6) {
-    const r = spawnSync("curl", ["-6", "-sS", "-o", "/dev/null", "-I", "--max-time", "6", `http://[${to}]/`], { encoding: "utf8" });
+    const r = spawnGuarded("curl", ["-6", "-sS", "-o", "/dev/null", "-I", "--max-time", "6", `http://[${to}]/`], { encoding: "utf8" });
     if (r.status === 0) return { from: "cicd", to, ok: true };
   }
   return { from: "cicd", to: PUBLIC_V6[0], ok: false };

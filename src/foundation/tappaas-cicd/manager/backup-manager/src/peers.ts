@@ -35,9 +35,10 @@
 // a live PBS — is delegated to the module's own scripts, exactly as `restore`
 // delegates to restore.sh. Nothing here reimplements a PBS call.
 
-import { existsSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import { Tunnel, tunnelHosts } from "./tunnel";
+import { renameGuarded, unlinkGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 
 export type PeerKind = "pull" | "remote" | "receive";
 
@@ -192,8 +193,8 @@ export function writePeerConfig(
     throw new Error(`peer '${spec.name}' already exists (${f}) — pass --force to overwrite`);
   }
   const tmp = `${f}.tmp`;
-  writeFileSync(tmp, JSON.stringify(buildPeerConfig(kind, spec, site), null, 2) + "\n", "utf8");
-  renameSync(tmp, f);
+  writeFileGuarded(tmp, JSON.stringify(buildPeerConfig(kind, spec, site), null, 2) + "\n", "utf8");
+  renameGuarded(tmp, f);
   return f;
 }
 
@@ -229,7 +230,7 @@ export function removePeerConfig(
 ): { kind: PeerKind; file: string } {
   const hit = findPeer(configDir, kind, name);
   if (!hit) throw new Error(`no ${kind} peer named '${name}' in ${configDir}`);
-  unlinkSync(hit.file);
+  unlinkGuarded(hit.file);
   return hit;
 }
 
@@ -270,7 +271,7 @@ export function setPeerContact(configDir: string, kind: PeerKind, name: string, 
   if (contact) doc.contact = contact;
   else delete doc.contact;
   const tmp = `${f}.tmp`;
-  writeFileSync(tmp, JSON.stringify(doc, null, 2) + "\n", "utf8");
-  renameSync(tmp, f);
+  writeFileGuarded(tmp, JSON.stringify(doc, null, 2) + "\n", "utf8");
+  renameGuarded(tmp, f);
   return f;
 }

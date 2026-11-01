@@ -6,7 +6,7 @@
 // the operator configures the port by hand — what to configure is printed from
 // zones.json — and gives the MAC.
 
-import { spawnSync } from "child_process";
+import { spawnGuarded } from "../../../lib/ts/src/exec";
 import * as fs from "fs";
 
 import { GN, YW, CL, die, info, warn } from "../../../lib/ts/src/cli";
@@ -50,7 +50,7 @@ export function printManualPortSetup(): void {
 }
 
 function sm(args: string[]): { rc: number; out: string } {
-  const r = spawnSync("switch-manager", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const r = spawnGuarded("switch-manager", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   return { rc: r.status ?? 1, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
 }
 

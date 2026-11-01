@@ -567,6 +567,14 @@ else
     skip "lib/test-common-install-routines.sh not found"
 fi
 
+info "${BOLD}Test 9f3: TAPPAAS_SIMULATE coverage of the tree${CL}"
+if "${SCRIPT_DIR}/scripts/test/test-simulate-coverage.sh" >/dev/null 2>&1 \
+    && "${SCRIPT_DIR}/scripts/test/test-simulate-coverage.sh" --self-test >/dev/null 2>&1; then
+    pass "simulate coverage: no direct mutator or raw config write outside the guarded paths"
+else
+    fail "simulate coverage failed (run scripts/test/test-simulate-coverage.sh)"
+fi
+
 info "${BOLD}Test 9f2: TAPPAAS_SIMULATE gate of the bash lib${CL}"
 if [[ -x "${SCRIPT_DIR}/lib/test-simulate.sh" ]]; then
     if "${SCRIPT_DIR}/lib/test-simulate.sh" >/dev/null 2>&1; then

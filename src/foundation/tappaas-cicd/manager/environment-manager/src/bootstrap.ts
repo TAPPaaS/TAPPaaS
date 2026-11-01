@@ -22,12 +22,11 @@
 // file is left untouched unless force=true. A stale literal default.json from an
 // older bootstrap is NOTED, never deleted.
 
-import { existsSync, mkdirSync, readFileSync, readdirSync } from "fs";
+import { existsSync, readFileSync, readdirSync } from "fs";
 import { basename, join } from "path";
 import { environmentsDir, serializeEnvironment } from "./config";
 import { Environment } from "./types";
-import { writeFileSync } from "fs";
-import { identityDir } from "../../../lib/ts/src/config-io";
+import { identityDir, mkdirGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 
 export interface BootstrapOptions {
   configDir: string;
@@ -116,7 +115,7 @@ export function bootstrap(opts: BootstrapOptions): BootstrapResult {
   const outDir = environmentsDir(configDir);
   // Fresh install: config/environments does not exist yet (the retired bash
   // did `mkdir -p "$OUT_DIR"` — parity, ADR-007 refactor Phase 8.1).
-  mkdirSync(outDir, { recursive: true });
+  mkdirGuarded(outDir, { recursive: true });
 
   const name = resolveName(configDir, opts.name);
   if (!name) {
@@ -153,7 +152,7 @@ export function bootstrap(opts: BootstrapOptions): BootstrapResult {
       skipped.push(path);
       continue;
     }
-    writeFileSync(path, serializeEnvironment(env));
+    writeFileGuarded(path, serializeEnvironment(env));
     wrote.push(path);
   }
 

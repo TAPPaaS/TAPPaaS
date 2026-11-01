@@ -7,8 +7,9 @@
 // has none, which is how the sweep tells a scheduled pass from an operator run.
 // Pure helpers here; the systemctl / journalctl side is in client.ts.
 
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { join } from "path";
+import { unlinkGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 
 export const UNIT = "update-tappaas.service";
 
@@ -32,13 +33,13 @@ export function buildRequest(force: boolean, allowDisruption: boolean, noGitPull
 
 export function writeRequest(configDir: string, req: UpdateRequest): string {
   const f = requestPath(configDir);
-  writeFileSync(f, JSON.stringify(req) + "\n", "utf8");
+  writeFileGuarded(f, JSON.stringify(req) + "\n", "utf8");
   return f;
 }
 
 export function dropRequest(configDir: string): void {
   const f = requestPath(configDir);
-  if (existsSync(f)) unlinkSync(f);
+  if (existsSync(f)) unlinkGuarded(f);
 }
 
 // A graceful stop (`site-manager update --stop`): config/.update-stop names the
@@ -58,7 +59,7 @@ export function stopPath(configDir: string): string {
 
 export function writeStop(configDir: string, req: StopRequest): string {
   const f = stopPath(configDir);
-  writeFileSync(f, JSON.stringify(req) + "\n", "utf8");
+  writeFileGuarded(f, JSON.stringify(req) + "\n", "utf8");
   return f;
 }
 

@@ -31,13 +31,12 @@
 // the operator on manual installs). Every wait has a timeout; the PXE trap
 // TTL keeps the boot phase fail-safe.
 
-import { spawnSync } from "child_process";
-import { askTerminal } from "../../../lib/ts/src/exec";
+import { askTerminal, spawnGuarded } from "../../../lib/ts/src/exec";
 import * as fs from "fs";
 
 import { GN, YW, CL, die, info, warn } from "../../../lib/ts/src/cli";
 import { mgmtDomain } from "../../../lib/ts/src/cluster";
-import { writeJsonAtomic } from "../../../lib/ts/src/config-io";
+import { chmodGuarded, mkdirGuarded, rmGuarded, writeFileGuarded, writeJsonAtomic } from "../../../lib/ts/src/config-io";
 import { clusterNode } from "../../../lib/ts/src/nodes";
 import { clusterScript, defaultConfigDir } from "./config";
 import { learnMac, parseSwitchPort, preparePort, printManualPortSetup, warnSeveral } from "./port";
@@ -98,14 +97,14 @@ export function bootDiskWarnings(bootDisk: string | undefined, bootMirror?: stri
 }
 
 function run(cmd: string, args: string[]): { rc: number; out: string } {
-  const r = spawnSync(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const r = spawnGuarded(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   if (r.error) return { rc: -1, out: r.error.message };
   return { rc: r.status ?? -1, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
 }
 
 // Streamed variant (operator watches node-provisioner/install chatter live).
 function runStream(cmd: string, args: string[]): number {
-  const r = spawnSync(cmd, args, { stdio: "inherit" });
+  const r = spawnGuarded(cmd, args, { stdio: "inherit" });
   return r.status ?? -1;
 }
 
@@ -167,10 +166,10 @@ function restoreRootKey(name: string, host: string): boolean {
   warn(`  ${host} is up but refuses our key — putting it back with the stored root password`);
   const dir = fs.mkdtempSync("/tmp/tappaas-askpass.");
   const askpass = `${dir}/askpass`;
-  fs.writeFileSync(askpass, `#!/bin/sh\ncat ${pw} 2>/dev/null || exec sudo -n cat ${pw}\n`);
-  fs.chmodSync(askpass, 0o700);
+  writeFileGuarded(askpass, `#!/bin/sh\ncat ${pw} 2>/dev/null || exec sudo -n cat ${pw}\n`);
+  chmodGuarded(askpass, 0o700);
   try {
-    const r = spawnSync("ssh", [
+    const r = spawnGuarded("ssh", [
       "-o", "ConnectTimeout=10", "-o", "StrictHostKeyChecking=accept-new",
       "-o", "PreferredAuthentications=password,keyboard-interactive",
       "-o", "PubkeyAuthentication=no", "-o", "NumberOfPasswordPrompts=1",
@@ -188,7 +187,7 @@ function restoreRootKey(name: string, host: string): boolean {
     warn(`  password login to ${host} failed too: ${(r.stderr ?? "").trim().split("\n").pop()}`);
     return false;
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    rmGuarded(dir, { recursive: true, force: true });
   }
 }
 
@@ -198,7 +197,7 @@ function restoreRootKey(name: string, host: string): boolean {
 // finally). Node itself ignores SIGINT while a boot window is open — its
 // handler could not run during these synchronous waits anyway.
 function sleep(seconds: number): void {
-  const r = spawnSync("sleep", [String(seconds)], {});
+  const r = spawnGuarded("sleep", [String(seconds)], {});
   if (r.signal === "SIGINT" || r.signal === "SIGTERM") die(`interrupted (${r.signal})`);
 }
 
@@ -358,7 +357,7 @@ export function provisionNode(o: ProvisionOpts): void {
   step(`register '${o.name}' (standard mgmt IP ${stdIp})`);
   // A consumed marker from a PREVIOUS provisioning of this name would make
   // the answer-wait fire instantly — clear it before arming.
-  fs.rmSync(`${provisionDir}/${o.name}.json.consumed`, { force: true });
+  rmGuarded(`${provisionDir}/${o.name}.json.consumed`, { force: true });
   const regArgs = ["register", o.name];
   if (o.bootDisk) regArgs.push("--boot-disk", o.bootDisk);
   if (o.bootFilesystem) regArgs.push("--boot-filesystem", o.bootFilesystem);
@@ -548,7 +547,7 @@ function joinAndCapture(
   step(`node step on ${o.name} (repo served from cicd:${SERVE_PORT}, branch state = last commit)`);
   const branch = run("git", ["-C", REPO_DIR, "rev-parse", "--abbrev-ref", "HEAD"]).out.trim() || "main";
   run("rm", ["-rf", SERVE_ROOT]);
-  fs.mkdirSync(`${SERVE_ROOT}/${branch}`, { recursive: true });
+  mkdirGuarded(`${SERVE_ROOT}/${branch}`, { recursive: true });
   if (run("bash", ["-c", `git -C ${REPO_DIR} archive ${branch} | tar -x -C ${SERVE_ROOT}/${branch}`]).rc !== 0) {
     die(`git archive ${branch} failed — is ${REPO_DIR} a clean checkout?`);
   }
@@ -729,7 +728,7 @@ function joinAndCapture(
   step("bringing the new node to the cluster baseline (cluster update)");
   const upd = clusterScript("update.sh");
   const baselineOk = upd !== null &&
-    spawnSync("bash", [upd], { stdio: "inherit", env: { ...process.env, CLUSTER_UPDATE_NODES: o.name } }).status === 0;
+    spawnGuarded("bash", [upd], { stdio: "inherit", env: { ...process.env, CLUSTER_UPDATE_NODES: o.name } }).status === 0;
   if (!baselineOk) warn(`  ${o.name} is not at the cluster baseline yet — run ${YW}update-module.sh cluster${CL}`);
 
   // The baseline's dist-upgrade almost always brings a newer kernel than the
@@ -743,7 +742,7 @@ function joinAndCapture(
   } else if (baselineOk) {
     step("rebooting the new node into its newest kernel");
     const rb = clusterScript("reboot-node.sh");
-    const rc = rb === null ? -1 : (spawnSync("bash", [rb, "--new-node", o.name], { stdio: "inherit" }).status ?? -1);
+    const rc = rb === null ? -1 : (spawnGuarded("bash", [rb, "--new-node", o.name], { stdio: "inherit" }).status ?? -1);
     if (rc === 2) warn(`  ${o.name} not rebooted — reboot it when it suits: ${YW}reboot-node.sh --execute ${o.name}${CL}`);
     else if (rc !== 0) {
       rebootOk = false;
@@ -782,7 +781,7 @@ function joinAndCapture(
   step("key-only SSH on the new node (#19)");
   const keyOnly = `${REPO_DIR}/src/foundation/tappaas-cicd/scripts/ssh-key-only.sh`;
   const hard = fs.existsSync(keyOnly)
-    ? spawnSync("ssh", ["-o", "BatchMode=yes", "-o", "PasswordAuthentication=no", "-o", "ConnectTimeout=10",
+    ? spawnGuarded("ssh", ["-o", "BatchMode=yes", "-o", "PasswordAuthentication=no", "-o", "ConnectTimeout=10",
         `root@${o.name}.${domain}`, "bash -s -- apply"], { input: fs.readFileSync(keyOnly, "utf8"), encoding: "utf8" })
     : null;
   if (hard?.status === 0) info(`  ${GN}✓${CL} ${o.name} refuses password logins over ssh (console and GUI keep the root password)`);

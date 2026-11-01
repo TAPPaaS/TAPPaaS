@@ -6,10 +6,10 @@
 // shells out to authentik-controller. NO plane/module logic is reimplemented here:
 // these are thin FFI boundaries.
 
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, readdirSync } from "fs";
 import { basename, join } from "path";
 import { captureResult, stream } from "../../../lib/ts/src/exec";
-import { defaultConfigDir } from "../../../lib/ts/src/config-io";
+import { defaultConfigDir, writeFileGuarded } from "../../../lib/ts/src/config-io";
 import { DnsTlsClient, ModuleClient, NetworkClient, NetworkUnreachable, WildcardDnsState } from "./types";
 import { ownZones, readZoneLinks } from "./config";
 
@@ -336,7 +336,7 @@ export class CliDnsTlsClient implements DnsTlsClient {
   writeCertRefid(envName: string, refid: string): void {
     const map = this.readCertRefids();
     map[envName] = refid;
-    writeFileSync(this.certRefidsPath(), JSON.stringify(map, null, 2) + "\n");
+    writeFileGuarded(this.certRefidsPath(), JSON.stringify(map, null, 2) + "\n");
   }
 
   acmeCredsAvailable(): boolean {
@@ -369,7 +369,7 @@ export class CliDnsTlsClient implements DnsTlsClient {
     if (!(envName in map)) return false;
     if (!dryRun) {
       delete map[envName];
-      writeFileSync(this.certRefidsPath(), JSON.stringify(map, null, 2) + "\n");
+      writeFileGuarded(this.certRefidsPath(), JSON.stringify(map, null, 2) + "\n");
     }
     return true;
   }

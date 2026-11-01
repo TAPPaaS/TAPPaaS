@@ -5,9 +5,9 @@
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { writeJsonAtomic } from "../../../lib/ts/src/config-io";
+import { writeFileGuarded, writeJsonAtomic } from "../../../lib/ts/src/config-io";
 import { cmdbReport } from "../../../lib/ts/src/cmdb";
-import { capture, captureResult, isMutator, mutators, stream, streamToFile } from "../../../lib/ts/src/exec";
+import { capture, captureResult, isMutator, mutators, spawnGuarded, stream, streamToFile } from "../../../lib/ts/src/exec";
 import { check, done } from "./check";
 
 function logged(fn: () => void): string[] {
@@ -52,6 +52,17 @@ const MUTATORS: string[][] = [
   ["ssh", "root@node", "uptime; qm stop 100"],
   ["ssh", "root@node", "bash -lc 'zfs destroy a/b'"],
   ["ssh", "root@node", "out=$(pct set 101 -onboot 1)"],
+  ["sudo", "-n", "rm", "-rf", "/var/lib/x"],
+  ["pct", "exec", "101", "--", "hostname"],
+  ["qm", "guest", "exec", "100", "--", "hostname"],
+  ["scp", "a", "root@node:/tmp/a"],
+  ["git", "-C", "/x", "-c", "a=b", "commit", "-m", "y"],
+  ["git", "-C", "/x", "stash", "push", "-u"],
+  ["curl", "-ks", "-X", "POST", "https://fw/api/x"],
+  ["curl", "--data=a", "https://fw/api/x"],
+  ["nix", "build", ".#x", "--out-link", "/y"],
+  ["ssh", "root@node", "/root/tappaas/x.sh arg"],
+  ["ssh", "root@node", "bash /root/tappaas/x.sh"],
 ];
 for (const m of MUTATORS) check(isMutator(m[0], m.slice(1)), `mutator: ${m.join(" ")}`);
 
@@ -72,6 +83,11 @@ const READS: string[][] = [
   ["bash", "-c", "zfs list | grep x"],
   ["curl", "-s", "http://x/start"],
   ["jq", "set", "a"],
+  ["sudo", "cat", "/etc/x"],
+  ["git", "-C", "/x", "stash", "list"],
+  ["git", "-C", "/x", "log"],
+  ["nix", "build", ".#x"],
+  ["ssh", "root@node", "/root/tappaas/x.sh --dry-run"],
 ];
 for (const r of READS) check(!isMutator(r[0], r.slice(1)), `runs: ${r.join(" ")}`);
 check(isMutator("uptime", [], null), "no list: nothing is taken for a read");
@@ -95,9 +111,31 @@ check(log.filter((l) => l === `[simulate] ${qm} stop 100`).length === 4, "each i
 check(logged(() => void capture(qm, ["status", "100"])).length === 0 && readFileSync(mark, "utf8") === "status 100\n", "a read runs, and says nothing");
 check(capture("echo", ["hello"]) === "hello\n", "an unlisted command runs");
 
-// The config helper: under the config root skipped, elsewhere written.
+// spawnGuarded: held like the rest, a script on ssh's stdin judged too, and the
+// ssh that runs carries the variable with the remote command whole.
+const ssh = join(dir, "ssh");
+writeFileSync(ssh, `#!/bin/sh\nprintf '%s\\n' "$@"\n`);
+chmodSync(ssh, 0o755);
+logged(() => check(spawnGuarded(qm, ["stop", "1"], { encoding: "utf8" }).status === 0, "spawnGuarded: held, status 0"));
+check(!existsSync(mark) || !readFileSync(mark, "utf8").includes("stop"), "spawnGuarded: the mutator never ran");
+logged(() => check(spawnGuarded(ssh, ["root@n", "bash", "-s"], { encoding: "utf8", input: "qm stop 1\n" }).stdout === "", "spawnGuarded: a mutator on stdin is held"));
+const sent = (spawnGuarded(ssh, ["-o", "X=1", "root@n", "cd /tmp && echo 'a b'"], { encoding: "utf8" }).stdout ?? "").split("\n");
+check(sent[2] === "root@n" && sent[3].startsWith("env TAPPAAS_SIMULATE=1 sh -c ") && sent[3].includes("cd /tmp && echo"), "ssh carries TAPPAAS_SIMULATE");
+check((process.env.BASH_ENV ?? "").endsWith("simulate-gate.sh"), "a bash child gets the gate through BASH_ENV");
+
+// The guarded fs: wherever it goes, except scratch under the temp dir.
 process.env.TAPPAAS_CONFIG = join(dir, "config");
 mkdirSync(join(dir, "config"));
+const inside = join(dir, "config", "x");
+logged(() => writeFileGuarded(inside, "x"));
+check(!existsSync(inside), "writeFileGuarded under config/: skipped, also under the temp dir");
+const scratch = join(dir, "scratch");
+writeFileGuarded(scratch, "x");
+check(existsSync(scratch), "writeFileGuarded in scratch: written");
+const site = "/nonexistent-tappaas-state/x";
+check(logged(() => writeFileGuarded(site, "x")).length === 1, "writeFileGuarded elsewhere: skipped, nothing thrown");
+
+// The config helper: under the config root skipped, elsewhere written.
 const cfg = join(dir, "config", "site.json");
 const lines = logged(() => writeJsonAtomic(cfg, { a: 1 }));
 check(!existsSync(cfg) && lines[0] === `[simulate] write ${cfg}`, "writeJsonAtomic under config/: logged, skipped");

@@ -16,7 +16,7 @@ bad() { printf '  FAIL %s\n' "$1"; fail=$((fail + 1)); }
 d="$(mktemp -d)"
 trap 'rm -rf "${d}"' EXIT
 mkdir -p "${d}/bin" "${d}/config"
-for c in qm pct pvesh zfs zpool systemctl nixos-rebuild; do
+for c in qm pct pvesh zfs zpool systemctl nixos-rebuild git curl nix scp; do
     printf '#!/bin/sh\necho "$0 $*" >> "%s/ran"\necho real-output\n' "${d}" > "${d}/bin/${c}"
 done
 # A stub ssh and sudo run what they are handed, as the real ones would.
@@ -62,6 +62,47 @@ expect "zpool list"         run  'zpool list'
 expect "is-active"          run  'systemctl is-active foo'
 expect "ssh read"           run  'ssh root@node "qm status 100"'
 expect "ssh other"          run  'ssh root@node "uptime"'
+expect "sudo rm"            skip 'sudo -n rm -rf /var/lib/x'
+expect "pct exec"           skip 'pct exec 101 -- hostname'
+expect "qm guest exec"      skip 'qm guest exec 100 -- hostname'
+expect "scp"                skip 'scp a root@node:/tmp/a'
+expect "git -C commit"      skip 'git -C /x -c a=b commit -m y'
+expect "git stash push"     skip 'git -C /x stash push -u'
+expect "git stash list"     run  'git -C /x stash list'
+expect "git log"            run  'git -C /x log'
+expect "curl -X POST"       skip 'curl -ks -X POST https://fw/api/x'
+expect "curl --data"        skip 'curl --data=a https://fw/api/x'
+expect "curl GET"           run  'curl -ks https://fw/api/x'
+expect "nix out-link"       skip 'nix build .#x --out-link /y'
+expect "nix build"          run  'nix build .#x'
+expect "ssh script"         skip 'ssh root@node "/root/tappaas/x.sh arg"'
+expect "ssh bash script"    skip 'ssh root@node "bash /root/tappaas/x.sh"'
+expect "ssh script dry run" run  'ssh root@node "/root/tappaas/x.sh --dry-run"'
+
+# An ssh that runs carries the variable; the remote command stays whole.
+: > "${d}/ran"
+TAPPAAS_SIMULATE=1 CONFIG_DIR="${d}/config" bash -c ". '${HERE}/common-install-routines.sh' >/dev/null 2>&1; ssh -o X=1 root@node \"cd /tmp && echo 'a b'\"" >/dev/null
+grep -q "root@node env TAPPAAS_SIMULATE=1 sh -c" "${d}/ran" && grep -q 'cd /tmp && echo' "${d}/ran" \
+    && ok "ssh carries TAPPAAS_SIMULATE" || bad "ssh carry: $(cat "${d}/ran")"
+
+# A script that sources nothing, started by something that is not gated, with
+# BASH_ENV as exec.ts sets it.
+printf '#!/usr/bin/env bash\nqm stop 100\n' > "${d}/plain.sh"
+chmod +x "${d}/plain.sh"
+: > "${d}/ran"
+TAPPAAS_SIMULATE=1 BASH_ENV="${HERE}/simulate-gate.sh" CONFIG_DIR="${d}/config" env -u TAPPAAS_SIM_RULES "${d}/plain.sh" 2>/dev/null
+[[ ! -s "${d}/ran" ]] && ok "BASH_ENV: a script that sources nothing is gated" || bad "BASH_ENV: $(cat "${d}/ran")"
+
+# The file tools: under the config root skipped, elsewhere they run.
+echo keep > "${d}/config/f"
+echo out > "${d}/out"
+TAPPAAS_SIMULATE=1 CONFIG_DIR="${d}/config" bash -c ". '${HERE}/common-install-routines.sh' >/dev/null 2>&1
+rm -f '${d}/config/f'; mv '${d}/out' '${d}/config/f'; cp '${d}/out' '${d}/config/g'; sed -i s/keep/x/ '${d}/config/f'
+echo y | tee '${d}/config/g' >/dev/null; touch '${d}/config/h'; echo z | tappaas_config_write '${d}/config/f'
+cp '${d}/config/f' '${d}/copy'; touch '${d}/elsewhere'; tmp=\$(mktemp '${d}/config/f.XXXXXX'); echo x > \"\$tmp\"; mv \"\$tmp\" '${d}/config/f'" 2>/dev/null
+[[ "$(cat "${d}/config/f")" == keep && ! -e "${d}/config/g" && ! -e "${d}/config/h" && -f "${d}/out" && "$(ls "${d}/config" | wc -l | tr -d ' ')" == 1 ]] \
+    && ok "file tools under config/ skipped" || bad "file tools: $(ls "${d}/config")"
+[[ "$(cat "${d}/copy" 2>/dev/null)" == keep && -e "${d}/elsewhere" ]] && ok "file tools elsewhere run, config/ still reads" || bad "file tools elsewhere"
 
 # A script on ssh's stdin: judged too, and handed on when it only reads.
 : > "${d}/ran"

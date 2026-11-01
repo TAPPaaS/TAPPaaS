@@ -1,5 +1,9 @@
 """OPNsense Controller for TAPPaaS using oxl-opnsense-client."""
 
+from . import simulate
+
+simulate.install()
+
 from .acme_manager import (
     AcmeAccount,
     AcmeAction,

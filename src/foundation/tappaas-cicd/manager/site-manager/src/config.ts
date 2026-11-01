@@ -8,7 +8,7 @@
 // `repository` are sub-entities — arrays inside the singleton, each with their
 // own CRUD that loads, mutates, and writes the whole document back atomically.
 
-import { spawnSync } from "child_process";
+import { spawnGuarded } from "../../../lib/ts/src/exec";
 import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import {
@@ -137,7 +137,7 @@ export function writeSite(siteFile: string, doc: Record<string, unknown>): void 
 // it from the cluster module's recorded location the same way update-tappaas
 // resolves reboot-cluster.sh.
 export function clusterScript(file: string): string | null {
-  const r = spawnSync("module-manager", ["show", "cluster", "--json"], { encoding: "utf8" });
+  const r = spawnGuarded("module-manager", ["show", "cluster", "--json"], { encoding: "utf8" });
   if (r.status === 0 && r.stdout) {
     try {
       const loc = (JSON.parse(r.stdout) as Record<string, unknown>).location;

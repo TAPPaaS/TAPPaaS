@@ -101,121 +101,37 @@ fatal() { echo -e "${RD}${BOLD}[Fatal]${CL} $*" >&2; }
 die()   { error "$@"; exit 1; }
 
 # ── TAPPAAS_SIMULATE=1 (docs/plans/console-gui-pipeline.md §6 layer B) ──
-#
-# The bash half of lib/ts/src/exec.ts's gate: the same list
-# (lib/simulate-mutators.txt) and the same matching. A script calls qm, ssh, sudo
-# directly, there is no run helper to hook, so each listed command (and the four
-# that wrap one) becomes a function here: a mutator logs `[simulate] <argv>` on
-# stderr and returns 0 with empty stdout; anything else runs as `command`.
-# tappaas_ssh_guest and run_with_dots go through them too. Exported, so a bash
-# child inherits the gate even if it never sources this file.
-
-_tappaas_sim_list() {
-    local d f
-    d="$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]}")")"
-    for f in "${d}/simulate-mutators.txt" /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/lib/simulate-mutators.txt; do
-        f="${TAPPAAS_SIMULATE_MUTATORS:-${f}}"
-        [[ -r "${f}" ]] && { sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "${f}"; return 0; }
+# lib/simulate-gate.sh. No gate, nothing to trust: the script stops.
+if [[ "${TAPPAAS_SIMULATE:-}" == "1" ]]; then
+    for _sim_gate in "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]}")")/simulate-gate.sh" \
+        /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/lib/simulate-gate.sh ""; do
+        [[ -r "${_sim_gate}" ]] && break
     done
-    return 1
-}
+    [[ -n "${_sim_gate}" ]] || { echo "[simulate] simulate-gate.sh not found: refusing to run" >&2; exit 1; }
+    # shellcheck disable=SC1090
+    . "${_sim_gate}"
+    unset _sim_gate
+fi
 
-# Does this command's first word and verb stand on the list?
-_tappaas_sim_rule() {
-    local bin="${1##*/}" verb="" w rule_bin rule_verbs
-    shift
-    for w in "$@"; do [[ "${w}" == -* ]] || { verb="${w}"; break; }; done
-    while read -r rule_bin rule_verbs; do
-        [[ "${rule_bin}" == "${bin}" ]] || continue
-        [[ " ${rule_verbs} " == *" * "* ]] && return 0
-        [[ -n "${verb}" && " ${rule_verbs} " == *" ${verb} "* ]] && return 0
-    done <<<"${TAPPAAS_SIM_RULES}"
-    return 1
-}
-
-# A shell string: every command in it, split at its separators, quotes gone.
-_tappaas_sim_shell() {
-    local s="$1" seg nl=$'\n' i
-    local -a words
-    s="${s//&&/${nl}}"; s="${s//||/${nl}}"; s="${s//\$(/${nl}}"
-    for i in ';' '|' '&' '(' ')' '`'; do s="${s//"${i}"/${nl}}"; done
-    s="${s//\'/ }"; s="${s//\"/ }"; s="${s//\\/ }"
-    while IFS= read -r seg; do
-        read -r -a words <<<"${seg}"
-        (( ${#words[@]} )) || continue
-        _tappaas_sim_words "${words[@]}" && return 0
-    done <<<"${s}"
-    return 1
-}
-
-# The command in an argv, behind what only wraps it (exec.ts wordsMatch).
-_tappaas_sim_words() {
-    local bin
-    while (( $# )); do
-        bin="${1##*/}"
-        case "${1}" in
-            [A-Za-z_]*=*) if [[ "${1%%=*}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then shift; continue; fi ;;
-        esac
-        case "${bin}" in
-            then|do|if|elif|else|while|until|'!'|'{'|exec|nohup|command|time) shift ;;
-            sudo|env)
-                shift
-                while (( $# )) && [[ "$1" == -* || ( "${bin}" == env && "$1" == *=* ) ]]; do
-                    case "$1" in -u|-g) shift 2 || return 1 ;; *) shift ;; esac
-                done ;;
-            timeout)
-                shift
-                while (( $# )) && [[ "$1" == -* ]]; do shift; done
-                (( $# )) && shift ;;
-            ssh)
-                shift
-                while (( $# )) && [[ "$1" == -* ]]; do
-                    case "$1" in
-                        -[bcDEeFIiJLlmOopQRSWw]) shift 2 || return 1 ;;
-                        *) shift ;;
-                    esac
-                done
-                (( $# )) || return 1
-                shift
-                _tappaas_sim_shell "$*"
-                return ;;
-            bash|sh)
-                if [[ "${2:-}" =~ ^-[a-z]*c$ ]]; then shift 2; _tappaas_sim_shell "$*"; return; fi
-                _tappaas_sim_rule "$@"
-                return ;;
-            *)
-                _tappaas_sim_rule "$@"
-                return ;;
-        esac
-    done
-    return 1
-}
-
-# Log and skip a mutator; else run it. `ssh … bash -s` takes its script on stdin
-# (a heredoc), so the script is read and judged as well, and handed on.
-_tappaas_sim_run() {
-    local body="" fed=0 re='(^|[[:space:]])(bash|sh)([[:space:]]+-[a-z]+)*[[:space:]]+-[a-z]*s([[:space:]]|$)'
-    if [[ "$1" == ssh && "$*" =~ ${re} ]]; then body="$(cat)"; fed=1; fi
-    if _tappaas_sim_words "$@" || { (( fed )) && _tappaas_sim_shell "${body}"; }; then
-        echo "[simulate] $*" >&2
+# tappaas_config_write <file> — stdin into a file under config/, atomically;
+# tappaas_config_append <file> adds to it. A redirect is not gated, this is.
+tappaas_config_write() {
+    if [[ "${TAPPAAS_SIMULATE:-}" == "1" ]]; then
+        echo "[simulate] write $1" >&2
+        cat >/dev/null
         return 0
     fi
-    if (( fed )); then command "$@" <<<"${body}"; else command "$@"; fi
+    local tmp="${1}.tmp.$$"
+    cat > "${tmp}" && mv -f "${tmp}" "$1"
 }
-
-if [[ "${TAPPAAS_SIMULATE:-}" == "1" && "$(type -t _tappaas_sim_run_active)" != "function" ]]; then
-    export TAPPAAS_SIM_RULES
-    # No list, no gate to trust: the script stops rather than runs unguarded.
-    TAPPAAS_SIM_RULES="$(_tappaas_sim_list)" || { echo "[simulate] simulate-mutators.txt not found: refusing to run" >&2; exit 1; }
-    export TAPPAAS_CMDB=off # lib/cmdb-report.sh sends nothing
-    _tappaas_sim_run_active() { :; }
-    for _sim_bin in $(awk '{print $1}' <<<"${TAPPAAS_SIM_RULES}" | sort -u) ssh sudo env timeout; do
-        eval "${_sim_bin}() { _tappaas_sim_run ${_sim_bin} \"\$@\"; }"
-        export -f "${_sim_bin}"
-    done
-    unset _sim_bin
-    export -f _tappaas_sim_list _tappaas_sim_rule _tappaas_sim_shell _tappaas_sim_words _tappaas_sim_run _tappaas_sim_run_active
-fi
+tappaas_config_append() {
+    if [[ "${TAPPAAS_SIMULATE:-}" == "1" ]]; then
+        echo "[simulate] write $1" >&2
+        cat >/dev/null
+        return 0
+    fi
+    cat >> "$1"
+}
 
 # ── Preflight guard (#533) ───────────────────────────────────────────
 # TAPPaaS managers must run as the 'tappaas' operator, never root. Running a
