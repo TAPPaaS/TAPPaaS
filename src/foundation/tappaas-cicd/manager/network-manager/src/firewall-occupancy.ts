@@ -5,8 +5,7 @@
 // device and assigned interface. A firewall that cannot be asked — not there
 // yet on a fresh install, down, no credentials — is SAID and the caller
 // proceeds as before #862, checking zones.json only: null is never "empty".
-import { spawnSync } from "child_process";
-import { configEnv } from "../../../lib/ts/src/exec";
+import { configEnv, spawnGuarded } from "../../../lib/ts/src/exec";
 import { Occupancy, occupancyFrom } from "./occupancy";
 
 // Read at call time so a test can point it at a stub.
@@ -21,7 +20,7 @@ export function readFirewallOccupancy(log: { warn: (m: string) => void }): Occup
       `the firewall could not be asked what it carries (${bin} segments: ${why}) — ` +
         `VLAN tags and subnets are checked against zones.json only`,
     );
-  const r = spawnSync(bin, ["segments", "--json", "--no-ssl-verify"], {
+  const r = spawnGuarded(bin, ["segments", "--json", "--no-ssl-verify"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     env: configEnv(),

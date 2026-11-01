@@ -45,10 +45,11 @@ import { DnsTlsClient, Environment, ModuleClient, NetworkClient, RefSources } fr
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { MODIFY_SHORTCUTS, SetError, expandSet } from "../../../lib/ts/src/setfields";
 import { RD, GN, CL, die, guarded, info, warn } from "../../../lib/ts/src/cli";
-import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, readdirSync } from "fs";
 import { reportChange, sendObservation } from "../../../lib/ts/src/cmdb-source";
 import { SOURCE, environmentObservation } from "./cmdb-report";
 import { join } from "path";
+import { unlinkGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 
 // The two always-required bootstrap environments are protected from delete:
 // 'mgmt' and the default <N> environment (= site.json '.defaultEnvironment'). The `add`
@@ -499,8 +500,8 @@ function cmdAdd(opts: Opts, net: NetworkClient): void {
         info(`${GN}Zone '${zone}' is environment '${name}''s zone${CL} (network-manager bind)`);
       }
     } catch (e) {
-      if (before === null) unlinkSync(written);
-      else writeFileSync(written, before);
+      if (before === null) unlinkGuarded(written);
+      else writeFileGuarded(written, before);
       const why = e instanceof Error ? e.message : String(e);
       die(`could not ${creating ? "author" : "link"} zone '${zone}': ${why} — ${written} ${before === null ? "removed" : "restored"}`);
     }
@@ -627,7 +628,7 @@ function cmdDelete(opts: Opts, net: NetworkClient, mod: ModuleClient, dt: DnsTls
   const leftover: string[] = [];
 
   if (dry) info(`delete '${name}' [check] — nothing is changed`);
-  if (!dry) unlinkSync(path);
+  if (!dry) unlinkGuarded(path);
   say(`remove ${path}`);
 
   // The zones naming the environment lose that link (#865): its own zone stays

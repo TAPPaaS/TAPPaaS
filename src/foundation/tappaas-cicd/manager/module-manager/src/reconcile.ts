@@ -38,9 +38,9 @@
 //
 // Exit codes: 0 = converged; 1 = a converge step failed.
 
-import { chmodSync, existsSync, readFileSync, readdirSync, statSync } from "fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
-import { readJsonObject } from "../../../lib/ts/src/config-io";
+import { chmodGuarded, readJsonObject } from "../../../lib/ts/src/config-io";
 import { captureResult, stream } from "../../../lib/ts/src/exec";
 import {
   defaultConfigDir,
@@ -119,7 +119,7 @@ function ensureScriptsExecutable(dir: string): void {
       try {
         if (!statSync(p).isFile()) continue;
         const wants = tracked ? tracked.has(f) : hasShebang(p);
-        if (wants) chmodSync(p, 0o755);
+        if (wants) chmodGuarded(p, 0o755);
       } catch {
         // best-effort, exactly like the bash loop
       }

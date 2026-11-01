@@ -5,7 +5,7 @@
 // ADR-039's rules match them. Keys keep the order they are built in: the rule
 // file's `match` reads `"kind":"causal"` before `"silenced":false`.
 
-import { spawnSync } from "child_process";
+import { spawnGuarded } from "../../../lib/ts/src/exec";
 import { Status } from "./emit-cmdb";
 
 export const IDENTIFIER = "tappaas-health";
@@ -86,7 +86,7 @@ export const eventLine = (e: HealthEvent): string => JSON.stringify(e);
 /** The journal, as cmdb-sweep writes it. Without one the lines go to stderr. */
 export const systemJournal: Journal = (lines) => {
   if (!lines.length) return;
-  const r = spawnSync("systemd-cat", ["-t", IDENTIFIER], { input: lines.join("\n") + "\n", encoding: "utf8" });
+  const r = spawnGuarded("systemd-cat", ["-t", IDENTIFIER], { input: lines.join("\n") + "\n", encoding: "utf8" });
   if (r.error || r.status !== 0) {
     process.stderr.write(`[Warning] no journal (${r.error?.message ?? `exit ${String(r.status)}`}); the events follow\n${lines.join("\n")}\n`);
   }

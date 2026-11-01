@@ -6,9 +6,9 @@
 // from TAPPAAS_CONFIG (or /home/tappaas/config); tests pass an explicit dir
 // (the fixture tree under test/fixtures/).
 
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, readdirSync } from "fs";
 import { basename, join } from "path";
-import { asString, asStringArray, defaultConfigDir, identityDir } from "../../../lib/ts/src/config-io";
+import { asString, asStringArray, defaultConfigDir, identityDir, writeFileGuarded } from "../../../lib/ts/src/config-io";
 import {
   Environment,
   EnvironmentModel,
@@ -103,7 +103,7 @@ export function serializeEnvironment(env: Environment): string {
 // Write one environment file (caller decides overwrite policy).
 export function writeEnvironment(configDir: string, env: Environment): string {
   const path = join(environmentsDir(configDir), `${env.name}.json`);
-  writeFileSync(path, serializeEnvironment(env));
+  writeFileGuarded(path, serializeEnvironment(env));
   return path;
 }
 

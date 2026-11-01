@@ -15,7 +15,7 @@
 // version's installer hook (node add would re-stage them on its own, but a
 // stick is wanted before node add runs), or for a new Proxmox version.
 
-import { spawnSync } from "child_process";
+import { spawnGuarded } from "../../../lib/ts/src/exec";
 
 import { GN, YW, CL, die, info, warn } from "../../../lib/ts/src/cli";
 
@@ -70,7 +70,7 @@ export function mediaReport(s: MediaStatus): MediaReport {
 }
 
 export function readMediaStatus(): MediaStatus {
-  const r = spawnSync("node-provisioner", ["assets", "--json"], { encoding: "utf8" });
+  const r = spawnGuarded("node-provisioner", ["assets", "--json"], { encoding: "utf8" });
   if (r.error) die(`node media: node-provisioner could not be run: ${r.error.message}`);
   if (r.status !== 0) die(`node media: node-provisioner assets --json failed (rc ${r.status}): ${(r.stderr ?? "").trim()}`);
   try {
@@ -120,7 +120,7 @@ export function prepareMedia(force: boolean, run: (argv: string[]) => number = r
 }
 
 function runStream(argv: string[]): number {
-  const r = spawnSync(argv[0], argv.slice(1), { stdio: "inherit" });
+  const r = spawnGuarded(argv[0], argv.slice(1), { stdio: "inherit" });
   if (r.error) return -1;
   return r.status ?? -1;
 }

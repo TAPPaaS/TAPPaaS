@@ -17,8 +17,9 @@
 // deploy (DESIGN.md) — that path is unchanged; this manager does not duplicate
 // it. These verbs are the operator's hand-free way to change the override.
 
-import { existsSync, readFileSync, renameSync, writeFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { join } from "path";
+import { renameGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 
 export interface ModifyOpts {
   enabled?: boolean;
@@ -48,8 +49,8 @@ function readModule(configDir: string, module: string): Record<string, unknown> 
 function writeModule(configDir: string, module: string, obj: Record<string, unknown>): void {
   const f = moduleFile(configDir, module);
   const tmp = `${f}.tmp`;
-  writeFileSync(tmp, JSON.stringify(obj, null, 2) + "\n", "utf8");
-  renameSync(tmp, f);
+  writeFileGuarded(tmp, JSON.stringify(obj, null, 2) + "\n", "utf8");
+  renameGuarded(tmp, f);
 }
 
 function asObject(v: unknown): Record<string, unknown> {

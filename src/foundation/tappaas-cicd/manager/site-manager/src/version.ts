@@ -6,7 +6,7 @@
 // was written and wrong after the first update — which is what site.json's
 // `version` is: the release the site was installed from, kept as that.
 
-import { spawnSync } from "child_process";
+import { spawnGuarded } from "../../../lib/ts/src/exec";
 
 // `git describe --tags --long --match 'v[0-9]*'` → the version. "v2.1-0-g…" is
 // exactly 2.1; "v2.1-14-g…" is 14 commits past it, shown "2.1+14" (an unstable
@@ -18,6 +18,6 @@ export function versionFromDescribe(described: string): string | null {
 }
 
 export function runningVersion(repoPath: string): string | null {
-  const r = spawnSync("git", ["-C", repoPath, "describe", "--tags", "--long", "--match", "v[0-9]*"], { encoding: "utf8" });
+  const r = spawnGuarded("git", ["-C", repoPath, "describe", "--tags", "--long", "--match", "v[0-9]*"], { encoding: "utf8" });
   return r.status === 0 ? versionFromDescribe(r.stdout ?? "") : null;
 }

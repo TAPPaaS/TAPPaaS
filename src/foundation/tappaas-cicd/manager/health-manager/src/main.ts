@@ -32,7 +32,7 @@
 //
 // Exit codes: ok=0, error / failed-health-gate = 1.
 
-import { spawnSync } from "child_process";
+import { spawnGuarded } from "../../../lib/ts/src/exec";
 import { readFileSync } from "fs";
 import { hostname } from "os";
 import { join } from "path";
@@ -639,7 +639,7 @@ function cmdReboot(opts: Opts, client: ClusterClient): number {
   if (before?.pending) info(`  pending: booted ${before.booted || "?"}, next boot ${before.next || "?"}`);
   else if (before) info("  no reboot was pending — rebooting anyway");
 
-  const r = spawnSync(REBOOT_BIN(), [vmname, String(vmid), node], { encoding: "utf8", stdio: "inherit" });
+  const r = spawnGuarded(REBOOT_BIN(), [vmname, String(vmid), node], { encoding: "utf8", stdio: "inherit" });
   if (r.error) die(`reboot: failed to run ${REBOOT_BIN()} (${r.error.message})`);
   if (r.status !== 0) return r.status ?? 1;
 
@@ -740,7 +740,7 @@ export function run(argv: string[], client: ClusterClient): number {
         if (passthru.length < 3) {
           die("update-os: expected <name> <vmid> <node>");
         }
-        const r = spawnSync(UPDATE_OS_BIN(), passthru, {
+        const r = spawnGuarded(UPDATE_OS_BIN(), passthru, {
           encoding: "utf8",
           stdio: "inherit",
           maxBuffer: 64 * 1024 * 1024,

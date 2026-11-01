@@ -4,7 +4,7 @@
 // refactor, Phase 3).
 
 import { existsSync } from "fs";
-import { spawnSync } from "child_process";
+import { spawnGuarded } from "./exec";
 
 export const YW = "\x1b[01;33m";
 export const RD = "\x1b[01;31m";
@@ -94,7 +94,7 @@ export function preflightGuard(uid: number = currentUid()): void {
   const repair = "/home/tappaas/bin/tappaas-repair-ownership.sh";
   if (existsSync(repair)) {
     try {
-      spawnSync(repair, [], { stdio: "inherit" });
+      spawnGuarded(repair, [], { stdio: "inherit" });
     } catch {
       // best-effort; never block the command
     }

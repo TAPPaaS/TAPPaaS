@@ -13,7 +13,7 @@
 // reconcile then reads. The console's storage page proposes the arguments from
 // the inventory; this verb decides.
 
-import { spawnSync } from "child_process";
+import { spawnGuarded } from "../../../lib/ts/src/exec";
 import * as fs from "fs";
 
 import { GN, YW, CL, die, info, warn } from "../../../lib/ts/src/cli";
@@ -88,7 +88,7 @@ interface FreeDisk {
 // reads them (the console's storage page reads the same document).
 export function listNodeStorage(name: string, json: boolean): void {
   const pools = requireNode(name);
-  const r = spawnSync("storage-manager", ["inventory", "--node", name, "--json"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const r = spawnGuarded("storage-manager", ["inventory", "--node", name, "--json"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   if (r.status !== 0 && !r.stdout) die(`storage-manager inventory failed: ${(r.stderr ?? "").trim()}`);
   let free: FreeDisk[] = [];
   try {
@@ -129,7 +129,7 @@ export function addNodeStorage(o: StorageAddOpts): void {
 
   // A storage of that name elsewhere in the cluster must be the same kind of
   // thing: a zfspool on a pool of that name (tanka1 on several nodes).
-  const kind = spawnSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host,
+  const kind = spawnGuarded("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host,
     `awk -v s='${o.pool}' '$2==s && $1 ~ /:$/ {t=$1; f=1; next} f && $1=="pool" {p=$2} f && $1 ~ /:$/ {exit} END {print t, p}' /etc/pve/storage.cfg`],
     { encoding: "utf8" });
   if (kind.status !== 0) die(`cannot reach ${host}: ${(kind.stderr ?? "").trim()}`);
@@ -138,17 +138,17 @@ export function addNodeStorage(o: StorageAddOpts): void {
     die(`node storage add: the cluster already has a storage '${o.pool}' that is ${type === "zfspool:" ? `on the pool '${dataset}'` : `a ${type.replace(/:$/, "")}`} — name the pool otherwise`);
   }
 
-  if (spawnSync("ssh", ["-o", "BatchMode=yes", host, `zpool list -H -o name ${o.pool}`], { encoding: "utf8" }).status === 0) {
+  if (spawnGuarded("ssh", ["-o", "BatchMode=yes", host, `zpool list -H -o name ${o.pool}`], { encoding: "utf8" }).status === 0) {
     die(`node storage add: ${o.node} has a pool '${o.pool}' already, not in its record — check it (zpool status ${o.pool}) and name the new pool otherwise`);
   }
 
   const spec = `${o.pool}=${LAYOUTS[o.layout].topology}:${o.disks.join(",")}`;
   info(`building ${o.pool} (${o.layout}: ${o.disks.join(", ")}) on ${o.node}${o.wipe ? ` — ${YW}disks that carry data are erased${CL}` : ""}`);
-  const r = spawnSync("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host,
+  const r = spawnGuarded("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host,
     "bash", "-s", "--", "--non-interactive", ...(o.wipe ? ["--yes"] : []), "--pool", `'${spec}'`],
     { input: fs.readFileSync(script, "utf8"), stdio: ["pipe", "inherit", "inherit"] });
   if (r.status !== 0) die(`node storage add: ${o.pool} was not built on ${o.node} (see above) — the node's record is unchanged`);
-  const built = spawnSync("ssh", ["-o", "BatchMode=yes", host, `zpool list -H -o name ${o.pool}`], { encoding: "utf8" });
+  const built = spawnGuarded("ssh", ["-o", "BatchMode=yes", host, `zpool list -H -o name ${o.pool}`], { encoding: "utf8" });
   if (built.status !== 0) die(`node storage add: ${o.pool} is not on ${o.node} after the build — the node's record is unchanged`);
 
   const file = nodeRecordPath(o.node);
@@ -158,7 +158,7 @@ export function addNodeStorage(o: StorageAddOpts): void {
   info(`  ${GN}✓${CL} ${o.node}'s record carries ${rec.storagePools.join(", ")}`);
 
   const reconcile = clusterScript("reconcile-storage-nodes.sh");
-  if (!reconcile || spawnSync("bash", [reconcile], { stdio: "inherit" }).status !== 0) {
+  if (!reconcile || spawnGuarded("bash", [reconcile], { stdio: "inherit" }).status !== 0) {
     warn(`  the storage nodes lists were not reconciled — the next cluster update does it`);
   }
   haOntoPool(o.node, o.pool);
@@ -185,7 +185,7 @@ function haOntoPool(node: string, pool: string): void {
   if (mods.length === 0) return;
   info(`  HA modules on ${pool}: ${mods.join(", ")} — their replication can now reach ${node}`);
   for (const m of mods) {
-    if (spawnSync("bash", [ha, m], { stdio: "inherit" }).status !== 0) {
+    if (spawnGuarded("bash", [ha, m], { stdio: "inherit" }).status !== 0) {
       warn(`  ${m}: cluster:ha did not converge — the next cluster update tries again (module-manager module update ${m})`);
     }
   }

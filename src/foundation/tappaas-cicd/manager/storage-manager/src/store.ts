@@ -2,10 +2,11 @@
 // writer at a time, every write atomic (temp file + rename), an absent file an empty
 // one. Also the instance lookups the verbs need from the rest of config/.
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, statSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 import { ConfigReader, SHARES_INSTANCE, SharesDoc, mountsShare } from "../../../lib/ts/src/nfs-shares";
 import { moduleSourceOf } from "../../../lib/ts/src/instance";
+import { mkdirGuarded, renameGuarded, rmdirGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 
 export class Store {
   constructor(readonly configDir: string) {}
@@ -23,8 +24,8 @@ export class Store {
 
   save(doc: SharesDoc): void {
     const tmp = `${this.file}.tmp-${process.pid}`;
-    writeFileSync(tmp, JSON.stringify(doc, null, 2) + "\n", "utf8");
-    renameSync(tmp, this.file);
+    writeFileGuarded(tmp, JSON.stringify(doc, null, 2) + "\n", "utf8");
+    renameGuarded(tmp, this.file);
   }
 
   // withLock — one storage-manager writer at a time. A directory lock: created
@@ -33,12 +34,12 @@ export class Store {
     const lock = join(this.configDir, ".shares.lock");
     for (let i = 0; ; i++) {
       try {
-        mkdirSync(lock);
+        mkdirGuarded(lock);
         break;
       } catch {
         try {
           if (Date.now() - statSync(lock).mtimeMs > 10 * 60 * 1000) {
-            rmdirSync(lock);
+            rmdirGuarded(lock);
             continue;
           }
         } catch {
@@ -55,7 +56,7 @@ export class Store {
       return fn();
     } finally {
       try {
-        rmdirSync(lock);
+        rmdirGuarded(lock);
       } catch {
         /* already gone */
       }

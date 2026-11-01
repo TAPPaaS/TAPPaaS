@@ -1,7 +1,8 @@
 // config-io.ts — shared config-root resolution + JSON file I/O for the
 // TAPPaaS TypeScript managers (ADR-007 post-implementation refactor, Phase 3).
 
-import { existsSync, mkdtempSync, readFileSync, renameSync, rmdirSync, writeFileSync } from "fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, rmdirSync, unlinkSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
 import { dirname, join } from "path";
 
 // The ONE canonical config-root rule (documented in tappaas-cicd/README.md,
@@ -65,15 +66,59 @@ function skipConfigWrite(file: string): boolean {
   return true;
 }
 
+// A manager's write, simulated: logged and skipped, wherever it goes. Only its
+// own scratch under the temp dir still happens; the config root counts as the
+// site even there, which is where a test keeps it.
+export function skipWrite(file: string): boolean {
+  if (!simulating()) return false;
+  const under = (root: string) => file === root || file.startsWith(`${root}/`);
+  if (under(tmpdir().replace(/\/$/, "")) && !under(defaultConfigDir().replace(/\/$/, ""))) return false;
+  console.error(`[simulate] write ${file}`);
+  return true;
+}
+
+// The guarded fs: a manager changes files through these, so the one rule above
+// holds (scripts/test/test-simulate-coverage.sh fails on a raw call).
+export function writeFileGuarded(file: string, text: string, encoding?: "utf8"): void {
+  if (!skipWrite(file)) writeFileSync(file, text, encoding);
+}
+
+export function renameGuarded(from: string, to: string): void {
+  if (!skipWrite(to)) renameSync(from, to);
+}
+
+export function unlinkGuarded(file: string): void {
+  if (!skipWrite(file)) unlinkSync(file);
+}
+
+export function rmGuarded(path: string, opts?: { recursive?: boolean; force?: boolean }): void {
+  if (!skipWrite(path)) rmSync(path, opts);
+}
+
+export function mkdirGuarded(dir: string, opts?: { recursive?: boolean }): void {
+  if (!skipWrite(dir)) mkdirSync(dir, opts);
+}
+
+export function rmdirGuarded(dir: string): void {
+  if (!skipWrite(dir)) rmdirSync(dir);
+}
+
+export function chmodGuarded(path: string, mode: number): void {
+  if (!skipWrite(path)) chmodSync(path, mode);
+}
+
 // Atomically write a JSON document: write into a fresh temp dir NEXT TO the
 // target (same filesystem, so rename is atomic), rename over the target, and
 // remove the now-empty temp dir (the old per-manager copies leaked it).
-export function writeJsonAtomic(file: string, doc: unknown): void {
+export function writeJsonAtomic(file: string, doc: unknown, indent = 2): void {
   if (skipConfigWrite(file)) return;
   const dir = dirname(file);
   const tmpDir = mkdtempSync(join(dir, ".tmp-"));
-  const tmp = join(tmpDir, "out.json");
-  writeFileSync(tmp, JSON.stringify(doc, null, 2) + "\n", "utf8");
-  renameSync(tmp, file);
-  rmdirSync(tmpDir);
+  try {
+    const tmp = join(tmpDir, "out.json");
+    writeFileSync(tmp, JSON.stringify(doc, null, indent) + "\n", "utf8");
+    renameSync(tmp, file);
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
 }

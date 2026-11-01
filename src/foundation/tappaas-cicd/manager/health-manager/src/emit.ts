@@ -19,11 +19,12 @@
 // a condition that stops changing stops flapping by itself, which is why every
 // flapping condition is read on every run.
 
-import { closeSync, existsSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "fs";
+import { closeSync, existsSync, openSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 import { cloneObjects, endedBeforeEmit, reconcileAcks, silenced } from "./ack";
 import { Condition, HealthCmdb, HealthObject, Period, RootEntry, Status, conditionsOf, rootsOf, rootsOfSite, worse } from "./emit-cmdb";
 import { EventKind, HealthEvent, Journal, RootCauseEvent, TransitionEvent, eventLine } from "./events";
+import { renameGuarded, simulating, unlinkGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 
 export const CURSOR_FILE = ".health-emit-cursor";
 const LOCK_FILE = ".health-emit.lock";
@@ -64,8 +65,8 @@ export function readCursor(configDir: string): Cursor | null {
 
 export function writeCursor(configDir: string, c: Cursor): void {
   const f = join(configDir, CURSOR_FILE);
-  writeFileSync(`${f}.tmp`, JSON.stringify(c) + "\n", "utf8");
-  renameSync(`${f}.tmp`, f);
+  writeFileGuarded(`${f}.tmp`, JSON.stringify(c) + "\n", "utf8");
+  renameGuarded(`${f}.tmp`, f);
 }
 
 /** site.json's health.assessInterval, in minutes. */
@@ -295,9 +296,13 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
 /** One run: under a lock, as the timer and the alert receiver may overlap. false
  *  when another run holds it; that run or the next one tells what this would. */
 export function withEmitLock(configDir: string, fn: () => void): boolean {
+  if (simulating()) {
+    fn();
+    return true;
+  }
   const f = join(configDir, LOCK_FILE);
   try {
-    if (existsSync(f) && Date.now() - statSync(f).mtimeMs > LOCK_STALE_MS) unlinkSync(f);
+    if (existsSync(f) && Date.now() - statSync(f).mtimeMs > LOCK_STALE_MS) unlinkGuarded(f);
     closeSync(openSync(f, "wx"));
   } catch {
     return false;
@@ -306,7 +311,7 @@ export function withEmitLock(configDir: string, fn: () => void): boolean {
     fn();
   } finally {
     try {
-      unlinkSync(f);
+      unlinkGuarded(f);
     } catch {
       // gone already: nothing holds it
     }

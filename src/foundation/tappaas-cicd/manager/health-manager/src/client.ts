@@ -23,7 +23,7 @@ import {
   reachableNodes as pingReachableNodes,
   ssh,
 } from "../../../lib/ts/src/cluster";
-import { spawnSync } from "child_process";
+import { spawnGuarded } from "../../../lib/ts/src/exec";
 import { existsSync } from "fs";
 import { applyBalloonStats, balloonProbe, parseBalloonStats } from "./balloon";
 import { defaultConfigDir, siteNodeHostnames } from "./config";
@@ -302,7 +302,7 @@ export class CliClusterClient implements ClusterClient {
   lanUplink(node: string): LanUplink | null {
     const script = clusterScriptPath("lan-uplink.sh");
     if (!script) return null;
-    const r = spawnSync(script, ["show", node, "--json"], { encoding: "utf8", timeout: 60_000 });
+    const r = spawnGuarded(script, ["show", node, "--json"], { encoding: "utf8", timeout: 60_000 });
     if (r.status !== 0 || !r.stdout) return null;
     try {
       return parseLanUplink(JSON.parse(r.stdout) as Record<string, unknown>);
@@ -421,7 +421,7 @@ export function parseAvx512Use(out: string): Avx512Use {
 // The cluster module's script <file>: where module-manager says the module is,
 // else the site's checkout. null when neither has it.
 function clusterScriptPath(file: string): string | null {
-  const r = spawnSync("module-manager", ["show", "cluster", "--json"], { encoding: "utf8" });
+  const r = spawnGuarded("module-manager", ["show", "cluster", "--json"], { encoding: "utf8" });
   if (r.status === 0 && r.stdout) {
     try {
       const loc = (JSON.parse(r.stdout) as Record<string, unknown>).location;

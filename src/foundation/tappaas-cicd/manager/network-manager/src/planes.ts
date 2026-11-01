@@ -20,8 +20,7 @@
 //
 // NO firewall/scripts/ paths appear here.
 
-import { spawnSync } from "child_process";
-import { configEnv } from "../../../lib/ts/src/exec";
+import { configEnv, spawnGuarded } from "../../../lib/ts/src/exec";
 import { Plane, PlaneClient, PlaneResult, PlaneStatus } from "./types";
 
 // The bin name for each plane (overridable via env for tests / relocations).
@@ -49,7 +48,7 @@ export interface RunResult {
 // config-root env plumbing (CONFIG_DIR + TAPPAAS_CONFIG for the bash/TS
 // children) IS the shared exec.configEnv().
 function runStreaming(bin: string, args: string[]): RunResult {
-  const r = spawnSync(bin, args, { encoding: "utf8", stdio: "inherit", env: configEnv() });
+  const r = spawnGuarded(bin, args, { encoding: "utf8", stdio: "inherit", env: configEnv() });
   if (r.error) {
     return { rc: -1, stdout: "", stderr: r.error.message, ran: false };
   }

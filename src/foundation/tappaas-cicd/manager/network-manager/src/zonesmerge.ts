@@ -39,8 +39,8 @@
 // Dependency-free TS (strict tsc, ambient env.d.ts), mirroring the rest of the
 // component.
 
-import { existsSync, readFileSync, writeFileSync, renameSync, mkdtempSync, rmSync } from "fs";
-import { dirname, join } from "path";
+import { existsSync, readFileSync } from "fs";
+import { writeJsonAtomic as writeJsonFile } from "../../../lib/ts/src/config-io";
 import { isDocKey } from "./zones";
 import { backfillServes } from "./serves";
 import { MOVE_ADVICE, Occupancy, collisionOf } from "./occupancy";
@@ -297,22 +297,10 @@ export interface Logger {
   warn(msg: string): void;
 }
 
-// Atomic JSON write (temp in the SAME dir → rename), mirroring zones.ts.
-// The temp dir is removed in a finally, so a failed write leaks nothing either
-// (#527: one empty .zones-merge-* dir per call had been accumulating in the
-// config dir since the function was introduced).
+// Atomic JSON write, the lib's, with this file's indent.
 function writeJsonAtomic(file: string, raw: Raw, indent: number): void {
-  const text = JSON.stringify(raw, null, indent) + "\n";
-  JSON.parse(text); // defence in depth
-  const dir = dirname(file);
-  const tmpDir = mkdtempSync(join(dir, ".zones-merge-"));
-  try {
-    const tmp = join(tmpDir, "zones.json");
-    writeFileSync(tmp, text, "utf8");
-    renameSync(tmp, file);
-  } finally {
-    rmSync(tmpDir, { recursive: true, force: true });
-  }
+  JSON.parse(JSON.stringify(raw, null, indent) + "\n"); // defence in depth
+  writeJsonFile(file, raw, indent);
 }
 
 // Run the rename-aware 3-way merge. Returns the merge exit code (0 success).

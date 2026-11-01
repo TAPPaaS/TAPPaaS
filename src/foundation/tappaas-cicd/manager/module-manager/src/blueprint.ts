@@ -23,7 +23,7 @@
 // hand it a fake tree.
 
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
-import { spawnSync } from "child_process";
+import { spawnGuarded } from "../../../lib/ts/src/exec";
 import { basename, dirname, join } from "path";
 
 export type Severity = "error" | "warning";
@@ -81,7 +81,7 @@ export const realBlueprintFs: BlueprintFs = {
     const script = [process.env.TAPPAAS_ALERT_RULES, "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/tappaas-alert-rules.py"]
       .find((p): p is string => !!p && existsSync(p));
     if (!script) return [];
-    const r = spawnSync("python3", ["-I", script, "validate", ...(foundation ? ["--foundation"] : []), file], { encoding: "utf8", timeout: 30_000 });
+    const r = spawnGuarded("python3", ["-I", script, "validate", ...(foundation ? ["--foundation"] : []), file], { encoding: "utf8", timeout: 30_000 });
     if (r.status === 0) return [];
     const lines = (r.stderr || r.stdout || "").split("\n").map((l) => l.replace(`${file}: `, "").trim()).filter(Boolean);
     return lines.length ? lines : [`tappaas-alert-rules.py validate failed (${r.status ?? r.error?.message})`];

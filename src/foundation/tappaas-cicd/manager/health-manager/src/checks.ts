@@ -24,7 +24,7 @@
 //   - ipv6-egress       (#875: the firewall's IPv6 router and a public IPv6
 //                       address answering from inside the site — WARN)
 
-import { spawnSync } from "child_process";
+import { spawnGuarded } from "../../../lib/ts/src/exec";
 import { join } from "path";
 import { isManaged, loadConfigModules, readModuleJson, siteNodeHostnames } from "./config";
 import { CheckResult, CheckRow, CheckStatus, CheckSubject, ClusterClient, ConfigModule, GuestMemory, HealthReport, NodeCapacity, StoragePool } from "./types";
@@ -134,7 +134,7 @@ export function checkDiskThreshold(
 const BACKUP_MANAGER_BIN = process.env.BACKUP_MANAGER_BIN ?? "backup-manager";
 
 export function checkBackupStatus(configDir: string): CheckResult {
-  const r = spawnSync(BACKUP_MANAGER_BIN, ["list", "--config-dir", configDir, "--json"], {
+  const r = spawnGuarded(BACKUP_MANAGER_BIN, ["list", "--config-dir", configDir, "--json"], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
@@ -707,7 +707,7 @@ export function storageReplicationResult(doc: unknown): CheckResult {
 
 export function checkStorageReplication(configDir: string): CheckResult {
   const bin = process.env.STORAGE_MANAGER_BIN ?? "storage-manager";
-  const r = spawnSync(bin, ["inventory", "--json", "--no-smart"], {
+  const r = spawnGuarded(bin, ["inventory", "--json", "--no-smart"], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
     timeout: 180_000,
@@ -752,7 +752,7 @@ export function backupKeysResult(doc: unknown): CheckResult {
 
 export function checkBackupKeys(configDir: string): CheckResult {
   const bin = process.env.BACKUP_MANAGER_BIN ?? "backup-manager";
-  const r = spawnSync(bin, ["key", "status", "--config-dir", configDir, "--json"], {
+  const r = spawnGuarded(bin, ["key", "status", "--config-dir", configDir, "--json"], {
     encoding: "utf8",
     timeout: 60_000,
   });
@@ -1124,7 +1124,7 @@ export function switchPortsResult(doc: unknown, now: number = Date.now()): Check
 
 export function checkSwitchPorts(configDir: string): CheckResult {
   const bin = process.env.SWITCH_CONTROLLER_BIN ?? "switch-manager";
-  const r = spawnSync(bin, ["list-ports", "--json"], {
+  const r = spawnGuarded(bin, ["list-ports", "--json"], {
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,
     timeout: 60_000,

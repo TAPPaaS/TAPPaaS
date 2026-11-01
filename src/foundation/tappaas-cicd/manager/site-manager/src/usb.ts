@@ -14,7 +14,7 @@
 // SATA/NVMe disk, an optical drive or a ZFS volume — and never one that is
 // mounted, swap, or a ZFS/LVM/RAID member, which is in use whatever it is.
 
-import { spawnSync } from "child_process";
+import { spawnGuarded } from "../../../lib/ts/src/exec";
 import * as fs from "fs";
 
 import { GN, YW, CL, die, info } from "../../../lib/ts/src/cli";
@@ -228,7 +228,7 @@ export function writeNodeUsb(node: string, device: string, yes: boolean): void {
   const fd = fs.openSync(image, "r");
   let r;
   try {
-    r = spawnSync("ssh", [...sshArgs(), `root@${host}`, ddProgressCmd(device, size)],
+    r = spawnGuarded("ssh", [...sshArgs(), `root@${host}`, ddProgressCmd(device, size)],
       { stdio: [fd, "inherit", "pipe"], encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
   } finally { fs.closeSync(fd); }
   if (r.error) die(`node usb write: ssh could not be started: ${r.error.message}`);

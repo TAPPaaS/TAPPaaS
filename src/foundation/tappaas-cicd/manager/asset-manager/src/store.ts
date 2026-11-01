@@ -5,9 +5,9 @@
 // Also the faceplate catalog (faceplates/<vendor>/<model>.json beside the
 // sources, or in the built package) and the topology the checks need.
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmdirSync, statSync } from "fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
-import { writeJsonAtomic } from "../../../lib/ts/src/config-io";
+import { mkdirGuarded, rmdirGuarded, writeJsonAtomic } from "../../../lib/ts/src/config-io";
 import { captureResult } from "../../../lib/ts/src/exec";
 import { Faceplate, LEGACY_RACKS_FILE, POSITIONS_FILE, PositionsDoc, SiteDevice, TopoLike, parseFaceplate, siteDevices } from "../../../lib/ts/src/positions";
 
@@ -43,12 +43,12 @@ export class Store {
     const lock = join(this.configDir, ".positions.lock");
     for (let i = 0; ; i++) {
       try {
-        mkdirSync(lock);
+        mkdirGuarded(lock);
         break;
       } catch {
         try {
           if (Date.now() - statSync(lock).mtimeMs > 10 * 60 * 1000) {
-            rmdirSync(lock);
+            rmdirGuarded(lock);
             continue;
           }
         } catch {
@@ -65,7 +65,7 @@ export class Store {
       return fn();
     } finally {
       try {
-        rmdirSync(lock);
+        rmdirGuarded(lock);
       } catch {
         /* already gone */
       }
