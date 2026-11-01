@@ -63,6 +63,20 @@ expect "is-active"          run  'systemctl is-active foo'
 expect "ssh read"           run  'ssh root@node "qm status 100"'
 expect "ssh other"          run  'ssh root@node "uptime"'
 
+# A script on ssh's stdin: judged too, and handed on when it only reads.
+: > "${d}/ran"
+err="$(TAPPAAS_SIMULATE=1 CONFIG_DIR="${d}/config" bash -c ". '${HERE}/common-install-routines.sh' >/dev/null 2>&1; ssh root@node bash -s <<'X'
+hostname
+qm stop 100
+X" 2>&1)"
+[[ ! -s "${d}/ran" && "${err}" == *"[simulate] ssh root@node bash -s"* ]] && ok "ssh bash -s with a mutator: skipped" || bad "ssh bash -s: ${err}"
+printf '#!/bin/sh\ncat >> "%s/ran"\n' "${d}" > "${d}/bin/ssh"
+: > "${d}/ran"
+TAPPAAS_SIMULATE=1 CONFIG_DIR="${d}/config" bash -c ". '${HERE}/common-install-routines.sh' >/dev/null 2>&1; ssh root@node bash -euo pipefail -s <<'X'
+qm status 100
+X"
+grep -q 'qm status 100' "${d}/ran" && ok "ssh bash -s that reads: runs, script handed on" || bad "ssh bash -s read"
+
 # run_with_dots sends the command's stderr to its log.
 : > "${d}/ran"
 TAPPAAS_SIMULATE=1 CONFIG_DIR="${d}/config" bash -c ". '${HERE}/common-install-routines.sh' >/dev/null 2>&1; run_with_dots '${d}/log' qm stop 100"

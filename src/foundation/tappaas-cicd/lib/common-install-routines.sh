@@ -191,13 +191,16 @@ _tappaas_sim_words() {
     return 1
 }
 
-# Log and skip a mutator; else run it.
+# Log and skip a mutator; else run it. `ssh … bash -s` takes its script on stdin
+# (a heredoc), so the script is read and judged as well, and handed on.
 _tappaas_sim_run() {
-    if _tappaas_sim_words "$@"; then
+    local body="" fed=0 re='(^|[[:space:]])(bash|sh)([[:space:]]+-[a-z]+)*[[:space:]]+-[a-z]*s([[:space:]]|$)'
+    if [[ "$1" == ssh && "$*" =~ ${re} ]]; then body="$(cat)"; fed=1; fi
+    if _tappaas_sim_words "$@" || { (( fed )) && _tappaas_sim_shell "${body}"; }; then
         echo "[simulate] $*" >&2
         return 0
     fi
-    command "$@"
+    if (( fed )); then command "$@" <<<"${body}"; else command "$@"; fi
 }
 
 if [[ "${TAPPAAS_SIMULATE:-}" == "1" && "$(type -t _tappaas_sim_run_active)" != "function" ]]; then
