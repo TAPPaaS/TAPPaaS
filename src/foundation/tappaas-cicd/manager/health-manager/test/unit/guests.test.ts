@@ -1,7 +1,7 @@
 // guests.test.ts — `guests`: the ZFS names Proxmox gives a guest's volumes, and
 // each guest and volume joined to its module.
 
-import { nodeGuests, parseVolumes } from "../../src/guests";
+import { nodeGuests, parseCpu, parseVolumes } from "../../src/guests";
 import { GuestMemory, NodeCapacity } from "../../src/types";
 
 let passed = 0;
@@ -36,6 +36,12 @@ check(docs[0].guests[1].module === "firewall", "a guest carries its module");
 check(docs[0].volumes[0].module === "nextcloud" && docs[0].volumes[0].replica, "a guest on another node: this copy is its replica");
 check(docs[0].volumes[1].replica === false, "a guest here: its own volume");
 check(docs[0].volumes[2].module === null && !docs[0].volumes[2].replica, "a volume of no guest is listed, unattributed");
+
+const twoSockets = ["# The following is the parsable format", "# CPU,Core", "0,0", "1,0", "0,0", "1,0", "0,1", "1,1", "0,1", "1,1"].join("\n");
+check(parseCpu(twoSockets)?.cores === 4 && parseCpu(twoSockets)?.threads === 8, "cores and threads over every socket");
+check(parseCpu("") === null, "no answer, no processors");
+const cpus = nodeGuests([cap("a", []), cap("b", [])], new Map(), new Map(), new Map([["a", { cores: 12, threads: 24 }]]));
+check(cpus[0].cpu?.threads === 24 && cpus[1].cpu === null, "a node's processors; a node that did not answer has none");
 
 console.log(`\nguests: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exitCode = 1;

@@ -28,8 +28,8 @@ import { existsSync } from "fs";
 import { applyBalloonStats, balloonProbe, parseBalloonStats } from "./balloon";
 import { defaultConfigDir, siteNodeHostnames } from "./config";
 import { countedMem } from "./memcount";
-import { parseVolumes } from "./guests";
-import { Avx512Use, ClusterClient, GuestVolume, LanUplink, NodeCapacity, PendingReboot, RunningGuest, StoragePool } from "./types";
+import { parseCpu, parseVolumes } from "./guests";
+import { Avx512Use, ClusterClient, GuestVolume, LanUplink, NodeCapacity, NodeCpu, PendingReboot, RunningGuest, StoragePool } from "./types";
 
 // `lxc:<node>:<vmid>` (checks.ts probeTarget): an LXC module, reached through
 // `pct exec` on its node rather than SSH of its own (#901).
@@ -230,6 +230,11 @@ export class CliClusterClient implements ClusterClient {
   nodeVolumes(node: string): GuestVolume[] {
     const r = ssh("root", `${node}.${mgmtDomain()}`, "zfs list -Hp -t filesystem,volume -o name,usedbydataset,usedbysnapshots,volsize");
     return r.rc === 0 ? parseVolumes(r.stdout) : [];
+  }
+
+  nodeCpu(node: string): NodeCpu | null {
+    const r = ssh("root", `${node}.${mgmtDomain()}`, "lscpu -p=CORE,SOCKET");
+    return r.rc === 0 ? parseCpu(r.stdout) : null;
   }
 
   diskUsagePct(target: string): number | null {

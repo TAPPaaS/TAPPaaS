@@ -104,6 +104,12 @@ export interface ClusterDiff {
 // distinction that matters: `committed` is what the guests are entitled to,
 // `used` is what the host has actually handed out. Without ballooning those
 // converge, which is exactly why the ratio is worth reporting.
+// A node's processors: physical cores and hardware threads, over every socket.
+export interface NodeCpu {
+  cores: number;
+  threads: number;
+}
+
 export interface NodeCapacity {
   node: string;
   physicalMem: number; // bytes
@@ -198,6 +204,8 @@ export interface ClusterClient {
   nodeCapacity(): NodeCapacity[];
   // The guests' ZFS volumes on one node; empty if it does not answer.
   nodeVolumes(node: string): GuestVolume[];
+  // A node's cores and threads; null if it does not answer.
+  nodeCpu(node: string): NodeCpu | null;
   // Whether a guest is waiting for a reboot (via SSH); null if unreachable (#730).
   pendingReboot(target: string): PendingReboot | null;
   // Every active guest-disk pool on every node (#100); backup stores excluded.

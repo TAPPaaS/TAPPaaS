@@ -4,7 +4,7 @@
 // reads to say what uses a node (the console's Memory by module, Storage used
 // by modules). Read-only.
 
-import { GuestMemory, GuestVolume, NodeCapacity } from "./types";
+import { GuestMemory, GuestVolume, NodeCapacity, NodeCpu } from "./types";
 
 export interface GuestRow extends GuestMemory {
   module: string | null; // the deployed instance with this vmid; null: none
@@ -20,6 +20,7 @@ export interface NodeGuests {
   physicalMem: number;
   usedMem: number;
   committedMem: number;
+  cpu: NodeCpu | null; // null: the node did not answer
   guests: GuestRow[];
   volumes: VolumeRow[];
 }
@@ -41,13 +42,22 @@ export function parseVolumes(text: string): GuestVolume[] {
   return out;
 }
 
-export function nodeGuests(caps: NodeCapacity[], volumes: Map<string, GuestVolume[]>, modules: Map<number, string>): NodeGuests[] {
+// `lscpu -p=CORE,SOCKET`: a line per thread, so the distinct lines are the
+// physical cores, over every socket. pvesh's cpuinfo.cores is left alone: what
+// it counts on a machine of several sockets depends on the version.
+export function parseCpu(text: string): NodeCpu | null {
+  const lines = text.split("\n").map((l) => l.trim()).filter((l) => /^\d+,\d+$/.test(l));
+  return lines.length ? { cores: new Set(lines).size, threads: lines.length } : null;
+}
+
+export function nodeGuests(caps: NodeCapacity[], volumes: Map<string, GuestVolume[]>, modules: Map<number, string>, cpus: Map<string, NodeCpu | null> = new Map()): NodeGuests[] {
   const homes = new Map(caps.flatMap((c) => c.guests.map((g) => [g.vmid, c.node] as [number, string])));
   return caps.map((c) => ({
     node: c.node,
     physicalMem: c.physicalMem,
     usedMem: c.usedMem,
     committedMem: c.committedMem,
+    cpu: cpus.get(c.node) ?? null,
     guests: c.guests.map((g) => ({ ...g, module: modules.get(g.vmid) ?? null })).sort((a, b) => b.declaredMem - a.declaredMem),
     volumes: (volumes.get(c.node) ?? [])
       .map((v) => ({ ...v, module: modules.get(v.vmid) ?? null, replica: (homes.get(v.vmid) ?? c.node) !== c.node }))

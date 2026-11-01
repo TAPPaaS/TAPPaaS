@@ -663,7 +663,8 @@ function cmdGuests(opts: Opts, client: ClusterClient): number {
   const shown = caps.filter((c) => !node || c.node === node);
   const modules = new Map(loadConfigModules(opts.configDir, DEFAULT_NODE).map((m) => [m.vmid, m.module]));
   const volumes = new Map(shown.map((c) => [c.node, client.nodeVolumes(c.node)]));
-  const docs = nodeGuests(caps, volumes, modules).filter((d) => !node || d.node === node);
+  const cpus = new Map(shown.map((c) => [c.node, client.nodeCpu(c.node)]));
+  const docs = nodeGuests(caps, volumes, modules, cpus).filter((d) => !node || d.node === node);
   if (opts.rest.includes("--json")) {
     info(JSON.stringify(node ? docs[0] : { nodes: docs }, null, 2));
     return 0;
