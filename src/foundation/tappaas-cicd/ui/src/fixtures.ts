@@ -8,7 +8,8 @@
 //   <dir>/modules.json ...       the reads the fakes have always named
 //   <dir>/reads/<slug>.out       any other verb's stdout (<slug>.rc: its exit)
 //   <dir>/jobs/<slug>.preview.txt, .apply.txt   what a job says; <slug> is its
-//                                argv without the flags, or a prefix of it
+//                                argv without the flags, or a prefix of it;
+//                                <slug>.<phase>.pace paces it (jobFile)
 //   <dir>/cmdb/                  objects, relations, classes, sweep, show/, history/
 //   <dir>/config/                the records the console reads directly
 
@@ -18,7 +19,7 @@ import { ExecResult } from "../../lib/ts/src/exec";
 import { Cmdb, CmdbAttributePeriod, CmdbChange, CmdbObject, CmdbQuery, CmdbRelationQuery, CmdbRelationRow } from "./cmdb";
 import { RelationType } from "./health";
 import { Manifests, validateArgv } from "./manifest";
-import { Runner, StdinRunner, Streamer } from "./run";
+import { Runner, StdinRunner, StreamControl, Streamer } from "./run";
 
 export type CallKind = "read" | "preview" | "apply";
 
@@ -171,15 +172,50 @@ export function fixtureSite(dir: string, opts: FixtureOptions = {}): FixtureSite
   };
   // What a job says: jobs/<slug>.<phase>.txt, for its argv or the longest prefix
   // of it that was recorded, so one file can stand for a verb on any object.
-  const jobText = (phase: "preview" | "apply", argv: string[]): string | null => {
+  // Beside it, <slug>.<phase>.pace ("<first> <ms>") paces it: the first lines at
+  // once, then one line every <ms> ms, so a test sees a job that is still running
+  // (its status line, Stop, the output following its last line). Stop ends it.
+  const jobFile = (phase: "preview" | "apply", argv: string[]): string | null => {
     const words = argv.filter((a) => !JOB_FLAGS.has(a));
     for (let n = words.length; n >= 2; n--) {
-      const f = join(dir, "jobs", `${fixtureSlug(words.slice(0, n))}.${phase}.txt`);
-      if (existsSync(f)) return readFileSync(f, "utf8");
+      const f = join(dir, "jobs", `${fixtureSlug(words.slice(0, n))}.${phase}`);
+      if (existsSync(`${f}.txt`)) return f;
     }
     return null;
   };
-  const stream: Streamer = async (bin, args, onOutput) => {
+  const jobText = (phase: "preview" | "apply", argv: string[]): string | null => {
+    const f = jobFile(phase, argv);
+    return f ? readFileSync(`${f}.txt`, "utf8") : null;
+  };
+  const paceOf = (f: string | null): { first: number; ms: number } | null => {
+    if (!f || !existsSync(`${f}.pace`)) return null;
+    const [first, ms] = readFileSync(`${f}.pace`, "utf8").trim().split(/\s+/).map(Number);
+    return Number.isFinite(first) && ms > 0 ? { first, ms } : null;
+  };
+  const paced = (text: string, pace: { first: number; ms: number }, onOutput: (chunk: string) => void, ctl?: StreamControl): Promise<{ rc: number; ran: boolean; error: string | null }> =>
+    new Promise((resolve) => {
+      const lines = text.split(/(?<=\n)/);
+      let at = Math.min(pace.first, lines.length);
+      onOutput(lines.slice(0, at).join(""));
+      let timer: ReturnType<typeof setInterval> | null = null;
+      const end = (rc: number): void => {
+        if (timer) clearInterval(timer);
+        timer = null;
+        resolve({ rc, ran: true, error: null });
+      };
+      ctl?.onSpawn?.((s) => {
+        if (!timer) return false;
+        onOutput(`\n[fixture] stopped by ${s}\n`);
+        end(130);
+        return true;
+      });
+      if (at >= lines.length) return end(0);
+      timer = setInterval(() => {
+        onOutput(lines[at++]);
+        if (at >= lines.length) end(0);
+      }, pace.ms);
+    });
+  const stream: Streamer = async (bin, args, onOutput, _timeoutMs, ctl) => {
     const argv = [bin, ...args];
     const phase = opts.phaseOf?.(argv) ?? phaseByFlags(args);
     note(phase, argv);
@@ -188,7 +224,10 @@ export function fixtureSite(dir: string, opts: FixtureOptions = {}): FixtureSite
       onOutput(r.stdout + r.stderr);
       return { rc: r.ran ? r.rc : 0, ran: true, error: null };
     }
-    const said = jobText(phase, argv);
+    const f = jobFile(phase, argv);
+    const said = f ? readFileSync(`${f}.txt`, "utf8") : null;
+    const pace = paceOf(f);
+    if (said !== null && pace) return paced(said, pace, onOutput, ctl);
     onOutput(said ?? (phase === "apply" ? "applied (fixture)\n" : `${argv.join(" ")}\n`));
     return { rc: 0, ran: true, error: null };
   };

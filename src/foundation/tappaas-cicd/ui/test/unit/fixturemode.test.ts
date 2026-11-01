@@ -49,11 +49,26 @@ async function units(): Promise<void> {
   check((await said(["apply", "b", "--apply"])) === "applied (fixture)\n", "no recording of an apply: applied, exit 0");
   check((await said(["wide", "any-object"])) === "changed something\n", "a recording of the verb stands for any object");
 
+  // a paced recording: the first lines at once, then one at a time; Stop ends it
+  writeFileSync(join(dir, "jobs", "thing-manager-slow.apply.txt"), "one\ntwo\nthree\nfour\n");
+  writeFileSync(join(dir, "jobs", "thing-manager-slow.apply.pace"), "2 30\n");
+  const chunks: string[] = [];
+  const t0 = Date.now();
+  const slow = await site.stream("thing-manager", ["slow", "x"], (c) => chunks.push(c));
+  check(slow.rc === 0 && chunks.join("") === "one\ntwo\nthree\nfour\n" && chunks[0] === "one\ntwo\n" && chunks.length === 3, `paced: the first two lines at once, then one by one (${JSON.stringify(chunks)})`);
+  check(Date.now() - t0 >= 50, "and it takes its time");
+  const halt: ((s: "SIGINT" | "SIGTERM") => boolean)[] = [];
+  const stopped: string[] = [];
+  const running = site.stream("thing-manager", ["slow", "y"], (c) => stopped.push(c), undefined, { onSpawn: (s) => halt.push(s) });
+  check(halt.length === 1 && halt[0]("SIGINT"), "a paced job can be stopped");
+  const sr = await running;
+  check(sr.rc === 130 && stopped.join("").includes("stopped by SIGINT") && !stopped.join("").includes("three"), "stopped: exit 130, the rest never said");
+
   await site.runStdin("thing-manager", ["set-passphrase", "ssid"], "hunter2-secret\n");
   const j = lines(journal);
   check(j.filter((l) => l.kind === "read").length === 3, "every read is journalled");
   check(j.filter((l) => l.kind === "preview").map((l) => l.argv.join(" ")).join() === "thing-manager apply a --check,thing-manager apply b --check", "the previews, by argv");
-  check(j.filter((l) => l.kind === "apply").length === 4, "the applies, the secret's too");
+  check(j.filter((l) => l.kind === "apply").length === 6, "the applies, the secret's too");
   check(!readFileSync(journal, "utf8").includes("hunter2"), "a secret on stdin is never journalled");
 
   // preview by the manifest, not by the flag's spelling
@@ -132,7 +147,8 @@ async function server(): Promise<void> {
     check(Array.isArray(mods.data) && mods.at !== undefined && mods.ageSeconds === 0, "a read answers from the capture, age 0 by the stopped clock");
     check((await get("health/summary")).error === null, "the health graph builds from the captured CMDB");
 
-    const p = await post("jobs", { argv: ["site-manager", "node", "delete", "tappaas4"], preview: true });
+    // tappaas3: no recording (jobs/ has tappaas4's, for the flows)
+    const p = await post("jobs", { argv: ["site-manager", "node", "delete", "tappaas3"], preview: true });
     const finished = async (id: string): Promise<Record<string, unknown> | null> => {
       for (let i = 0; i < 50; i++) {
         const j = (await get(`jobs/${id}`)).data;
@@ -142,12 +158,12 @@ async function server(): Promise<void> {
       return null;
     };
     const pj = await finished(p.data.id);
-    check(pj?.output === "site-manager node delete tappaas4\n" && pj.exit === 0, "a preview with no recording says its argv");
-    const a = await post(`jobs/${p.data.id}/apply`, { confirm: "tappaas4" });
+    check(pj?.output === "site-manager node delete tappaas3\n" && pj.exit === 0, "a preview with no recording says its argv");
+    const a = await post(`jobs/${p.data.id}/apply`, { confirm: "tappaas3" });
     const aj = await finished(a.data.id);
     check(String(aj?.output).includes("applied (fixture)") && aj?.exit === 0, "the apply answers, exit 0");
     const writes = lines(journal).filter((l) => l.kind !== "read");
-    check(writes.map((l) => `${l.kind} ${l.argv.join(" ")}`).join("|") === "preview site-manager node delete tappaas4|apply site-manager node delete tappaas4 --apply", "the journal has the argv of both");
+    check(writes.map((l) => `${l.kind} ${l.argv.join(" ")}`).join("|") === "preview site-manager node delete tappaas3|apply site-manager node delete tappaas3 --apply", "the journal has the argv of both");
   } finally {
     child.kill("SIGTERM");
   }
