@@ -1,4 +1,5 @@
 {
+  "kind": "vm",
   "description": "Test: Debian on tappaas3 with no HANode (no cluster:ha in dependsOn)",
   "version": "0.5",
   "stack": "test",

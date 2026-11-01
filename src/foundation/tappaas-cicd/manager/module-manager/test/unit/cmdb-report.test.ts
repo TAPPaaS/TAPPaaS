@@ -217,6 +217,29 @@ function spooled(cfg: string): Obj[] {
   check(!(app?.objects ?? []).some((o: Obj) => o.class === "machine" && o.end === true), "its node stays");
 }
 
+// ── report --end of a guest whose config names no kind (a test fixture) ──
+// Only the live cluster ever said whether it was a vm or an lxc, so the end
+// names both by the vmid: the one it is ends, the other is an end of nothing.
+{
+  const cfg = fixture();
+  writeFileSync(join(cfg, "test-ghost.json"), JSON.stringify({ vmid: 902, vmname: "test-ghost", node: "tappaas1", status: "Testing", dependsOn: ["cluster:vm"] }));
+  const saved = { ...process.env };
+  process.env.TAPPAAS_CMDB = "";
+  process.env.CMDB_SOCKET = join(cfg, "no.sock");
+  try {
+    capture(() => run(["report", "--end", "test-ghost", "--config-dir", cfg], new FakeModuleClient()));
+  } finally {
+    for (const k of ["TAPPAAS_CMDB", "CMDB_SOCKET"]) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  }
+  const [r] = spooled(cfg);
+  check(cmdbProblems(r).length === 0, `the metamodel takes the kind-less end: ${cmdbProblems(r).join("; ")}`);
+  const ends = (r?.objects ?? []).filter((o: Obj) => o.end === true);
+  check(ends.length === 2 && ends.map((o: Obj) => o.class).sort().join() === "lxc,vm" && ends.every((o: Obj) => o.attributes?.vmid === 902 && o.name === "test-ghost"), "a kind-less guest ends as vm and as lxc, by its vmid");
+}
+
 // ── update carries what it applied to the guest ────────────────────────
 // The update leaves config/tappaas-cicd.json as it was and halves the guest's
 // memory: the change names the vm with the fields read back from its config,

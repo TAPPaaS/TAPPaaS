@@ -179,6 +179,12 @@ export function moduleObservation(configDir: string, guests: RunningGuest[]): Cm
 export function moduleEndObjects(configDir: string, was: ModuleConfig): { objects: CmdbObject[]; relations: CmdbRelation[] } {
   const cls = nodeClassOf(was.kind);
   if (cls) return { objects: [{ class: cls, name: was.name, attributes: compact({ vmid: cls === "vm" || cls === "lxc" ? was.vmid ?? undefined : undefined }), end: true }], relations: [] };
+  // A guest whose config names no kind (a legacy or test fixture): the live
+  // cluster reported it as a vm or an lxc by its vmid, so end both; the end of
+  // the class it is not is nothing (the controller matches by key, D5/D7).
+  if (was.kind == null && typeof was.vmid === "number") {
+    return { objects: ["vm", "lxc"].map((c) => ({ class: c, name: was.name, attributes: { vmid: was.vmid }, end: true })), relations: [] };
+  }
   if (was.kind !== "application") return { objects: [], relations: [] };
   const host = listModules(configDir).filter((m) => m.status !== "archived" && m.name === was.node);
   const b = build(configDir, [was, ...host], []);
