@@ -341,3 +341,22 @@ export function forceLayout(ids: string[], links: { a: string; b: string }[], ce
   }
   return pos;
 }
+
+// A device's card: its height, and its width (its name, and its bay row: a cell
+// per disk).
+export const CARD_H = 36;
+export const cardWidth = (d: DevNode, disks = 0): number => 58 + d.name.length * 8 + (disks ? 10 + disks * 10 : 0);
+
+// A card with its middle at a point. React Flow is told the size up front: a
+// node handed over without `measured` loses its handles' bounds, and when that
+// lands before the node has rendered them it is not measured again and its
+// lines are never drawn.
+export function cardBox(at: Pt, w: number): { position: Pt; width: number; height: number; measured: { width: number; height: number } } {
+  return { position: { x: at.x - w / 2, y: at.y - CARD_H / 2 }, width: w, height: CARD_H, measured: { width: w, height: CARD_H } };
+}
+
+// The zoom that keeps the farthest card in a pane centred on the origin.
+export function centreZoom(cards: { at: Pt; w: number }[], paneW: number, paneH: number): number {
+  const far = Math.max(...cards.map((c) => Math.max(Math.abs(c.at.x) + c.w / 2, Math.abs(c.at.y) + CARD_H / 2)));
+  return Math.max(0.25, Math.min(1.3, (Math.min(paneW, paneH) / 2 - 20) / far));
+}

@@ -6,7 +6,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { Topology } from "../../web/src/types";
-import { ISP, depths, deviceGraph, deviceState, forceLayout, freePanelPorts, linkId, selectedDevice } from "../../web/src/physical/devicegraph";
+import { CARD_H, ISP, cardBox, cardWidth, centreZoom, depths, deviceGraph, deviceState, forceLayout, freePanelPorts, linkId, selectedDevice } from "../../web/src/physical/devicegraph";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -85,4 +85,14 @@ const moved = forceLayout(nodeIds, g.links, "crs-a", L);
 check(moved.get("crs-a")!.x === 0 && moved.get("crs-a")!.y === 0 && Math.hypot(moved.get("tappaas1")!.x, moved.get("tappaas1")!.y) < mean(ring(2)), "a new selection moves to the middle from where it was, its neighbours with it");
 const none = forceLayout(nodeIds, g.links, null);
 check(none.size === nodeIds.length && [...none.values()].every((p) => Number.isFinite(p.x) && Number.isFinite(p.y)), "without a selection every device is placed");
+
+// A card's box: everything React Flow needs from the first hand-over on, so no
+// order of reads and measurements can leave a card without its lines.
+const box = cardBox({ x: 100, y: 40 }, 120);
+check(box.measured.width === 120 && box.measured.height === CARD_H && box.width === 120, "a card is handed over with its measure, every time");
+check(box.position.x === 40 && box.position.y === 40 - CARD_H / 2, "a card's box is centred on its point, whatever its width");
+const server = g.nodes.find((n) => n.id === "tappaas1")!;
+check(cardWidth(server, 4) === cardWidth(server) + 50, "a card widens by its bay row");
+check(centreZoom([{ at: { x: 100, y: 0 }, w: 100 }], 400, 800) === (200 - 20) / 150, "the zoom keeps the farthest card in the pane's shorter side");
+check(centreZoom([{ at: { x: 0, y: 0 }, w: 10 }], 2000, 2000) === 1.3 && centreZoom([{ at: { x: 9000, y: 0 }, w: 10 }], 200, 200) === 0.25, "the zoom stays between its limits");
 done("device");
