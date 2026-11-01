@@ -77,6 +77,7 @@ read_ health-manager roots --json
 read_ backup-manager key status --json
 read_ backup-manager peers --json
 read_ site-manager site show --json
+read_ git -C /home/tappaas/TAPPaaS describe --tags --long --match 'v[0-9]*'
 read_ site-manager node list --json
 read_ site-manager repository list --json
 read_ site-manager node media --json

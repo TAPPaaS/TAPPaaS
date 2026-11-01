@@ -32,6 +32,7 @@ const none: HealthSummary = { ...summary, available: false, byType: {} };
 const site: SiteRead = {
   site: { name: "rossen", displayName: "Rossen", channel: "stable", locations: { hq: { displayName: "Home" }, cabin: { displayName: "Cabin", kind: "remote" } }, primaryLocation: "hq" },
   nodes: [{ name: "tappaas1" }, { name: "tappaas2" }, { name: "tappaas3", location: "hq" }],
+  running: "2.3.3+412",
   repositories: [],
   lastSweep: { end_time: "2026-10-30 23:00:00", ok: true, total: 25, failed: 0 },
 };

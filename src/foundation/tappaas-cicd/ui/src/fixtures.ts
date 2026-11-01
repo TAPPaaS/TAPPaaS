@@ -70,7 +70,9 @@ export function fixtureSite(dir: string, opts: FixtureOptions = {}): FixtureSite
     appendFileSync(opts.journal, JSON.stringify({ at: new Date().toISOString(), kind, argv }) + "\n");
   };
   const recorded = (argv: string[]): ExecResult | null => {
-    const f = join(dir, "reads", fixtureSlug(argv));
+    // The inverse of the repository-list substitution below: a verb run at the
+    // substituted root (git -C <root> …) is the recorded one.
+    const f = join(dir, "reads", fixtureSlug(opts.repoRoot ? argv.map((a) => (a === opts.repoRoot ? "/home/tappaas/TAPPaaS" : a)) : argv));
     if (!opts.recorded || !existsSync(`${f}.out`)) return null;
     const rc = existsSync(`${f}.rc`) ? Number(readFileSync(`${f}.rc`, "utf8").trim()) : 0;
     let stdout = readFileSync(`${f}.out`, "utf8");
@@ -162,6 +164,8 @@ export function fixtureSite(dir: string, opts: FixtureOptions = {}): FixtureSite
         return { rc: 3, stdout: "inactive\n", stderr: "", ran: true };
       case "systemctl show":
         return ok("ActiveState=inactive\nActiveEnterTimestamp=\n");
+      case "git -C": // the TAPPaaS version the checkout runs (ADR-028 D13), 412 past v2.3.3
+        return ok("v2.3.3-412-g1f607aa7\n");
       default:
         return { rc: -1, stdout: "", stderr: `${bin}: not in the fake site`, ran: false };
     }

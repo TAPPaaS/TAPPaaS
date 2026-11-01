@@ -153,7 +153,7 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
               ["name", val(s.name)],
               ["display name", val(s.displayName)],
               ["branding", val(s.branding, "the generated logo")],
-              ["version", val(s.version)],
+              ["TAPPaaS version", d?.running ? `${d.running} (installed from ${s.version ?? "?"})` : val(undefined, s.version ? `unknown (installed from ${String(s.version)})` : undefined)],
               ["default environment", s.defaultEnvironment === undefined ? val(undefined) : `${String(s.defaultEnvironment)}${s.owner !== undefined ? ` (Owner Organisation: ${String(s.owner)})` : ""}`],
               ["email", val(s.email)],
             ]}

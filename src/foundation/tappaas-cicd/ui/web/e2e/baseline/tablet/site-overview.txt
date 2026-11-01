@@ -68,8 +68,8 @@
 - definition: Rossen Production Cluster
 - term: branding
 - definition: logo branding/rossen-logo.svg
-- term: version
-- definition: "2.0"
+- term: TAPPaaS version
+- definition: 2.3.3+412 (installed from 2.0)
 - term: default environment
 - definition: "rossen (Owner Organisation: rossen)"
 - term: email

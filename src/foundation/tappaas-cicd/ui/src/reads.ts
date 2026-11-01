@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync } from "fs";
 import { dirname, join } from "path";
 import { writeJsonAtomic } from "../../lib/ts/src/config-io";
 import { WanAddress, readWanAddress, wanAddressFile } from "../../lib/ts/src/wan-address";
+import { DESCRIBE_ARGS, versionFromDescribe } from "../../lib/ts/src/version";
 import { environmentZoneIn, readZonesFile, sharedZonesIn } from "../../lib/ts/src/zones";
 import { parseJournal, parseLedger, sweepRuns, SweepRun } from "./activity";
 import { Cached, CachedMap, Entry } from "./cache";
@@ -1148,6 +1149,11 @@ export class Reads {
       const memory = live && typeof live.usedMem === "number" && typeof live.physicalMem === "number" ? { used: live.usedMem, total: live.physicalMem } : null;
       return { ...(n as Record<string, unknown>), memory };
     });
+    // The TAPPaaS version the site runs, from its checkout (ADR-028 D13):
+    // site.json's `version` is only the release it was installed from.
+    const repo = (repositories ?? []).find((r) => (r as { name?: unknown }).name === "TAPPaaS") as { path?: unknown } | undefined;
+    const described = await run("git", ["-C", typeof repo?.path === "string" ? repo.path : "/home/tappaas/TAPPaaS", ...DESCRIBE_ARGS]).catch(() => null);
+    const running = described?.ran && described.rc === 0 ? versionFromDescribe(described.stdout) : null;
     // A missing or unreadable record is no address, not a failed site read.
     let wan: WanAddress | null = null;
     try {
@@ -1155,7 +1161,7 @@ export class Reads {
     } catch {
       wan = null;
     }
-    return { site, nodes, repositories, lastSweep: this.readJson("last-update-result.json"), wan };
+    return { site, nodes, repositories, running, lastSweep: this.readJson("last-update-result.json"), wan };
   }
 
   private async loadIpv6(): Promise<Ipv6Read> {

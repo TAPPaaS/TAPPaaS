@@ -128,6 +128,7 @@ export interface SiteRead {
   // Each with its memory (health-manager guests: used and physical bytes), null when the read did not reach it.
   nodes: { name: string; address?: string; storagePools?: string[]; location?: string; memory?: { used: number; total: number } | null }[] | null;
   repositories: { name: string; branch?: string; url?: string }[] | null;
+  running: string | null; // the TAPPaaS version the checkout runs; site.version is the one installed from
   lastSweep: { start_time?: string; end_time?: string; total?: number; succeeded?: number; failed?: number; ok?: boolean; reboot?: string; failed_modules?: string[] } | null;
 }
 

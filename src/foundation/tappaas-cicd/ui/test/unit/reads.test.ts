@@ -145,6 +145,7 @@ async function main(): Promise<void> {
   const st = await reads.site.get();
   check((st.value?.site as { name?: string }).name === "rossen" && (st.value?.lastSweep as { ok?: boolean }).ok === true, "site: site show and the last sweep");
   check((st.value?.wan as { ipv4?: string } | null)?.ipv4 === "8.8.4.4", "site: the address the WAN held at the last network update");
+  check(st.value?.running === "2.3.3+412", "site: the TAPPaaS version the checkout runs, from git describe");
   {
     const nodes = st.value?.nodes as { name: string; memory: { used: number; total: number } | null }[];
     const t1 = nodes.find((n) => n.name === "tappaas1");
