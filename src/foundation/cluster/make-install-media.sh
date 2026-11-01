@@ -188,7 +188,7 @@ if ! command -v proxmox-auto-install-assistant >/dev/null 2>&1; then
       # repository's signature itself (paia_fetch), with gpgv.
       # apt's own chatter (and debconf's, without a terminal frontend) is shown
       # only when it fails.
-      exec docker run --rm -it --platform linux/amd64 -e DEBIAN_FRONTEND=noninteractive -e TAPPAAS_MEDIA_CONTAINER=1 \
+      exec docker run --rm -it --init --platform linux/amd64 -e DEBIAN_FRONTEND=noninteractive -e TAPPAAS_MEDIA_CONTAINER=1 \
         -v "$PWD:/work" -w /work debian:trixie bash -c "
         { apt-get update -qq && apt-get install -y -qq wget ca-certificates zstd cpio xorriso gpgv; } >/tmp/apt.log 2>&1 \
           || { cat /tmp/apt.log; echo 'installing the build tools in the container failed' >&2; exit 1; }
