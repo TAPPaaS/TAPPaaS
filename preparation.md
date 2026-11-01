@@ -10,12 +10,12 @@ This is is the previous step — [Hardware Selection](hardware-selection.md).
 ## 1. Network
 
 - [ ] An **existing network** (your home/office LAN) with working **DHCP and
-  internet** — the install of the first node runs on it, After the first node is installed then this is considered the WAN (unprotected) side of TAPPaaS and the rest of the TAPPaaS ndes are installed on the TAPPaaS LAN. 
-  - Note that the existing network can not use the 10.0.0.0/8 IP domain as it conflict with the TAPPaaS own LAN.
-  - Also note that after the TAPPaaS fpoundation have been installed, then you can move the TAPPaaS WAN to connect directly to a DHCP providing Internet connection (thus replacing an existing home/office LAN)  
+  internet** — the install of the first node runs on it. After the first node is installed this is the WAN (unprotected) side of TAPPaaS, and the other TAPPaaS nodes are installed on the TAPPaaS LAN.
+  - Note that the existing network can not use the 10.0.0.0/8 range: it conflicts with the TAPPaaS LAN.
+  - Also note that after the TAPPaaS foundation has been installed you can move the TAPPaaS WAN to connect directly to a DHCP providing Internet connection (thus replacing an existing home/office LAN)  
 - [ ] At least the First TAPPaaS node must be wired with  **two NICs**: one towards the upstream router (WAN), one towards your downstream switch (LAN). 
   - If you install more than a single TAPPaaS node then you need a switch between the nodes. 
-- [ ] Drive the install from a client (PC/Mackbook runnning a webserver and preferably also ssh) that is connected to the office/home LAN
+- [ ] Drive the install from a client (PC or laptop with a web browser, preferably also ssh) connected to the office/home LAN
 
 ## 2. Domain
 
@@ -26,8 +26,8 @@ This is is the previous step — [Hardware Selection](hardware-selection.md).
 
 ## 3. Credentials and contact
 
-- [ ] A **strong password** for Proxmox and the firewall — you'll be asked for it
-  several times during install.
+- [ ] A **strong root password** for Proxmox — you set it when you build the install
+  media, or on the installer screens. The firewall makes its own credentials.
 - [ ] A **working email address you actually monitor** — Proxmox sends system and health notifications there. 
 TAPPaaS reuses it as the admin email.
 

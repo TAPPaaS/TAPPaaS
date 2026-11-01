@@ -73,6 +73,9 @@ curl -fsSL "https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/main/src/foundation/
 dd if=proxmox-ve_9.2-1-tappaas-auto.iso of=/dev/<usb> bs=4M status=progress
 ```
 
+On macOS, run `diskutil unmountDisk /dev/diskN` first, then `sudo dd` to `/dev/rdiskN`:
+the plain `/dev/diskN` works too, but much slower.
+
 (If you already have — or prefer — a full checkout:
 `git clone https://codeberg.org/TAPPaaS/TAPPaaS.git` and run
 `src/foundation/cluster/make-install-media.sh` from it instead.)
@@ -208,7 +211,7 @@ sudo dnsmasq --no-daemon --conf-file=pxe/dnsmasq-pxe.conf   # Ctrl-C when done
 **6. Boot the target from the network** — enter its UEFI boot menu (F12/F11/F8,
 board-dependent) and pick **Network / PXE (IPv4)**. It chainloads iPXE →
 `boot.ipxe` → the kernel + initrd over HTTP, then runs the **unattended**
-installer, which **WIPES the baked `--disk`** and reboots into Proxmox.
+installer, which **WIPES the boot disk(s) it picks** and reboots into Proxmox.
 
 **7. Tear down** — once PVE is up (it takes a normal DHCP lease from your router),
 `Ctrl-C` both `dnsmasq` and the HTTP server, then continue with
@@ -308,10 +311,25 @@ to reach it from where you are:
 - **the install LAN**, when the firewall's WAN is a private network (an install at home):
   `http://<the firewall's WAN address>:9097/` from that network only. It closes when the
   console module is installed behind the identity gate; on a public WAN (a hosted server)
-  there is no such way in, only the VPN. Optionally move your admin laptop onto the
-**downstream switch** (you'll get a `10.0.0.x` lease; Proxmox at
-`https://10.0.0.10:8006`, firewall GUI at `https://10.0.0.1`) — not required,
-since the node also keeps its upstream IP until you harden it later.
+  there is no such way in, only the VPN.
+
+Optionally move your admin laptop onto the **downstream switch** (you'll get a
+`10.0.0.x` lease; Proxmox at `https://10.0.0.10:8006`, firewall GUI at
+`https://10.0.0.1`) — not required, since the node also keeps its upstream IP until
+you harden it later.
+
+**A data pool on the first node.** The bootstrap's storage step offers the node's other
+disks. Skip it and the firewall and the mothership live on the boot pool. To build the
+pool later and move them onto it, on the mothership:
+
+```bash
+site-manager node storage tappaas1      # the node's disks, by serial
+site-manager node storage add tappaas1 tanka1 --disks <serial>,<serial> --layout mirror
+module-manager module modify network --set storage=tanka1
+module-manager module modify tappaas-cicd --set storage=tanka1
+```
+
+The disks move live, without a restart. A disk that carries data needs `--wipe`.
 
 ## Step 3 — Add additional nodes (optional; skip for single-node)
 
@@ -329,7 +347,7 @@ is wiped. *(Managed inter-node switch? Configure its VLAN trunks first; see
 The netboot assets are **staged automatically by the first-node bootstrap**
 (`prepare-netboot.sh`, run at the end of the cicd install) — adding nodes is
 a latent capability of every TAPPaaS system. After a PVE version upgrade,
-re-stage once with `prepare-netboot.sh --force` on the mothership.
+re-stage once with `site-manager node media prepare --force` on the mothership.
 
 **Per node — one command:**
 
@@ -493,7 +511,14 @@ the wildcard (Option A) for most services and use HTTP-01 for a specific public 
 
 ## Step 5 — Complete the foundation
 
-From here on you work **from the cicd mothership** (`ssh tappaas@tappaas-cicd`).
+From here on you work **on the cicd mothership**. Your laptop's key is not on it yet,
+and its name resolves only behind the firewall, so go through the node's Shell
+(*Datacenter → tappaas1 → Shell*):
+
+```bash
+ssh -i /root/tappaas/tappaas-cicd.key tappaas@tappaas-cicd.mgmt.internal
+```
+
 One command does two things:
 
 ```bash
@@ -522,8 +547,6 @@ When it finishes you'll see a **"🎉 your TAPPaaS foundation is installed"** su
 > cd ~/TAPPaaS/src/foundation/logging  && module-manager module add logging    #  Loki / Grafana / Alloy
 > ```
 > *(Module sizing/zones are defaults — see appendix.)*
-
----
 
 ---
 
@@ -883,4 +906,4 @@ Once complete, you can access:
 
 - **Proxmox UI:** `https://10.0.0.10:8006` (or the node's upstream IP)
 - **Firewall GUI:** `https://10.0.0.1`
-- **CICD Mothership:** `ssh tappaas@tappaas-cicd` (or `ssh tappaas@10.0.0.143`)
+- **CICD Mothership:** `ssh tappaas@tappaas-cicd.mgmt.internal`, from behind the firewall

@@ -3,14 +3,14 @@
 Primary audience: TAPPaaS admin.
 
 The cluster module is **not** installed with `install-module.sh` — it is the node step of
-the foundation bootstrap. The full first-node story is in the repo-root
-[INSTALL.md](../INSTALL.md); this page covers the cluster part.
+the foundation bootstrap. The full first-node story is in
+[Install Foundation](../INSTALL.md); this page covers the cluster part.
 
 ## Prerequisites
 
 1. **Proxmox VE 9.2** installed on the node. Either build a
-   preconfigured USB stick with `make-install-media.sh` (asks only for the boot disk on
-   the target), or use the stock ISO. During install set:
+   preconfigured USB stick with `make-install-media.sh` (the boot disk is picked on the
+   target), or use the stock ISO. With the stock ISO, set:
    - Hostname (FQDN): `tappaas1.mgmt.internal` — subsequent nodes `tappaas2`, `tappaas3`, …
      The first node **must** be `tappaas1` (it creates the cluster).
    - A working email address (Proxmox health notifications; reused as the admin email).
@@ -19,7 +19,7 @@ the foundation bootstrap. The full first-node story is in the repo-root
    switch (becomes LAN).
 3. Drive the install from the node **console** (xterm.js) or from an SSH client that is
    **not** on `10.0.0.0/24` — the network phase moves the management net onto the node.
-4. A strong root password for Proxmox (asked several times).
+4. A strong root password for Proxmox.
 
 > There is no `cluster.json` sizing to copy/edit — deviations from the defaults
 > (management subnet, NIC roles, pool layout) are passed as flags to
@@ -55,12 +55,13 @@ storage phases are individually idempotent.
 ## Post-install
 
 - **Network phase confirmation** — applying the bridge change arms a 90-second
-  auto-rollback; you must type `keep` at the prompt to make it permanent.
+  auto-rollback. The node confirms it itself by pinging its gateway; if that fails, the
+  change reverts.
 - **Storage wipe confirmations** — any disk that already contains data must be explicitly
   confirmed before it is wiped.
-- **Cluster join password** — a joining node's `pvecm add` prompts for the existing
-  node's root password (in `--non-interactive` mode the command is printed for you
-  to run manually).
+- **Cluster join password** — only when you run `install.sh --join` by hand: its
+  `pvecm add` prompts for the existing node's root password (in `--non-interactive` mode
+  the command is printed for you to run manually). `site-manager node add` needs none.
 - **Minisforum MS-S1 MAX (Realtek RTL8127 10GbE) only** — two steps the OS cannot do
   (issue #308, detected and instructed by `setup-realtek-nic.sh`):
   1. Disable Secure Boot in the BIOS (the unsigned DKMS module will not load otherwise).
@@ -90,8 +91,8 @@ On a freshly bootstrapped node, `sanity-check.sh` verifies gateway, DNS and inte
 ## Troubleshooting
 
 **Locked out during the network phase**
-The 90-second auto-rollback reverts to the previous working config if you do not type
-`keep` — reconnect and re-run. Only use `--no-rollback` when you have console access.
+The 90-second auto-rollback reverts to the previous working config when the node cannot
+reach its gateway — reconnect and re-run. Only use `--no-rollback` when you have console access.
 
 **Cluster join fails / was skipped**
 Re-run `install.sh` (idempotent) or run the printed `pvecm add tappaas1.mgmt.internal`
