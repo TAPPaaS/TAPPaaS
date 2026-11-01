@@ -188,6 +188,12 @@ paia_fetch() {
 }
 # <<< media-checks
 
+prompt() {
+  local v d="${2:-}"
+  if [[ -n "$d" ]]; then read -r -p "  $1 [$d]: " v; printf '%s' "${v:-$d}"
+  else read -r -p "  $1: " v; printf '%s' "$v"; fi
+}
+
 # >>> after-the-build
 # Everything below runs on the operator's own machine, never in the build
 # container: it needs the machine's USB ports and network. What differs by
@@ -567,11 +573,6 @@ iso_check "$ISO" "$ISO_SHA256"
 SITE_JSON="${TAPPAAS_CONFIG:-/home/tappaas/config}/site.json"
 # keyboard is site-wide, country and timezone the primary location's (or the retired .location's).
 site_location() { [[ -f "$SITE_JSON" ]] && jq -r --arg k "$1" 'if $k == "keyboard" then (.keyboard // .location.keyboard // "") else ((.locations[.primaryLocation // ""] // .location // {})[$k] // "") end' "$SITE_JSON" 2>/dev/null || true; }
-prompt() {
-  local v d="${2:-}"
-  if [[ -n "$d" ]]; then read -r -p "  $1 [$d]: " v; printf '%s' "${v:-$d}"
-  else read -r -p "  $1: " v; printf '%s' "$v"; fi
-}
 # The default of each question: the site's answer, then this machine's own setting,
 # then a plain value. A blank return takes it.
 host_country() {
