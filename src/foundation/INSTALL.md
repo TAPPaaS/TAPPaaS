@@ -72,8 +72,8 @@ default to this machine's settings: press Enter to take them. It validates the a
 writes `proxmox-ve_9.2-1-tappaas-auto.iso`, and asks what next:
 
 - **Write it to a USB stick:** it lists the USB sticks in this machine and erases the one
-  you pick, after you confirm, then reads the stick back. It asks for your password
-  (`sudo`) for the write.
+  you pick, after you confirm, then reads the stick back. It asks for your login
+  password on this computer (`sudo`) for the write, not the node's root password.
 - **Network-boot the target from this machine:** see Option C.
 
 It then offers to start the TAPPaaS install on the node over ssh, and asks the branch, the

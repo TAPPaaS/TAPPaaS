@@ -261,10 +261,16 @@ sticks_read() {
   esac
 }
 
+# sudo_ask <what for> — says whose password this is: not the node's root password.
+sudo_ask() {
+  sudo -v -p "  Your login password on THIS computer (sudo, not the node's root password), to $1: "
+}
+
 # stick_write <device> <iso> — erase, write, read back.
 stick_write() {
   local d="$1" iso="$2" size p
   size="$(wc -c <"$iso" | tr -d ' ')"
+  sudo_ask "write the stick"
   case "$(uname -s)" in
     Darwin)
       diskutil unmountDisk "$d" >/dev/null
@@ -402,7 +408,8 @@ pxe-service=tag:ipxe,BC_EFI,"TAPPaaS: installer",boot.ipxe
 EOF
   ( cd pxe && exec python3 -u -m http.server 8080 --bind "$NET_IP" ) >"pxe-http.log" 2>&1 &
   PXE_HTTP=$!
-  info "starting the network boot service (sudo asks for your password)..."
+  info "starting the network boot service..."
+  sudo_ask "start it"
   sudo "$dns" --conf-file="${PXE_RUN}/dnsmasq.conf" || die "dnsmasq did not start: see ${PXE_RUN}/dnsmasq.log"
   [[ "$(uname -s)" != Darwin ]] || info "  macOS firewall: allow dnsmasq and python3 when it asks, or the target gets no answer."
   warn "Until the target has fetched it, anyone on this network can fetch the installer, and the root password in it."
