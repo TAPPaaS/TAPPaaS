@@ -1,0 +1,94 @@
+- navigation:
+  - list:
+    - listitem:
+      - link "Overview":
+        - /url: /
+    - listitem:
+      - link "Day 1 setup wizard":
+        - /url: /setup/day1
+    - listitem:
+      - link "Day 2 wizards":
+        - /url: /setup/day2
+    - listitem:
+      - link "Health":
+        - /url: /health
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Site":
+        - /url: /site
+    - listitem:
+      - link "Environments":
+        - /url: /environments
+    - listitem:
+      - link "Network":
+        - /url: /zones
+    - listitem:
+      - link "Modules":
+        - /url: /modules
+    - listitem:
+      - link "Identity":
+        - /url: /identity
+    - listitem:
+      - link "Assets":
+        - /url: /assets
+    - listitem:
+      - link "Backup":
+        - /url: /backup
+    - listitem: Security
+    - listitem:
+      - link "Activity":
+        - /url: /activity
+- banner:
+  - text: site rossen
+  - button "Refresh"
+  - text: operator · installer
+- heading "cluster" [level=1]
+- link "Modules":
+  - /url: /modules
+- text: › mgmt › foundation stack
+- link "Grafana · logs ↗":
+  - /url: https://logging.hrossen.dk/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bhost%3D%5C%22cluster%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-6h%22%2C%22to%22%3A%22now%22%7D%7D%7D
+- text: application health warning Production env mgmt · zone —
+- tablist:
+  - tab "Overview" [selected]
+  - tab "Config"
+  - tab "Drift"
+  - tab "Backup"
+  - tab "Activity"
+- heading "Health — the conditions of this module's objects" [level=2]
+- link "the Health view":
+  - /url: /health
+- list:
+  - listitem:
+    - text: WARN security cluster RootKeyChanged since 2026-10-29T18:53:50+01:00 · since 30/10/2026 10:40
+    - link "Health":
+      - /url: /health?select=5037fd40-48ff-4142-86c6-a46c989e9f97
+- heading "Operate — every verb runs through module-manager" [level=2]
+- button "Update (release)"
+- text: module update cluster — snapshot, 3-way merge, converge
+- button "Modify fields…"
+- text: "on the Config tab: the module and each service as a card, every field typed"
+- button "Reconcile"
+- text: preview = the three-way drift; apply = --apply
+- button "Test"
+- button "Test --deep"
+- text: "fast · --deep (a read: runs at once)"
+- button "Delete…"
+- text: "--archive (default) · --remove · typed name"
+- heading "About" [level=2]
+- term: description
+- definition: TAPPaaS Proxmox Cluster - provides VM, LXC and HA services
+- term: version
+- definition: 0.8.0 · released 2026-07-31
+- term: maturity
+- definition: Production
+- term: maintainer
+- definition: "@TAPPaaS"
+- term: installed
+- definition: 20260731-22:21:33
+- term: updated
+- definition: 20261101-02:04:19
+- term: source
+- definition: /home/tappaas/TAPPaaS/src/foundation/cluster

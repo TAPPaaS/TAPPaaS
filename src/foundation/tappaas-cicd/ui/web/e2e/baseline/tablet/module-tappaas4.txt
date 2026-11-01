@@ -1,0 +1,220 @@
+- navigation:
+  - link "TAPPaaS":
+    - /url: https://tappaas.org/operate/
+  - text: Rossen Production Cluster
+  - list:
+    - listitem:
+      - link "Overview":
+        - /url: /
+    - listitem:
+      - link "Day 1 setup wizard":
+        - /url: /setup/day1
+    - listitem:
+      - link "Day 2 wizards":
+        - /url: /setup/day2
+    - listitem:
+      - link "Health":
+        - /url: /health
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Site":
+        - /url: /site
+    - listitem:
+      - link "Environments":
+        - /url: /environments
+    - listitem:
+      - link "Network":
+        - /url: /zones
+    - listitem:
+      - link "Modules":
+        - /url: /modules
+    - listitem:
+      - link "Identity":
+        - /url: /identity
+    - listitem:
+      - link "Assets":
+        - /url: /assets
+    - listitem:
+      - link "Backup":
+        - /url: /backup
+    - listitem: Security
+    - listitem:
+      - link "Activity":
+        - /url: /activity
+  - text: channel unstable tappaas-cicd · console P3
+- banner:
+  - text: site rossen
+  - button "Refresh"
+  - text: operator · installer
+- heading "tappaas4" [level=1]
+- link "Modules":
+  - /url: /modules
+- text: › mgmt › foundation stack
+- link "Grafana · logs ↗":
+  - /url: https://logging.hrossen.dk/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bhost%3D%5C%22tappaas4%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-6h%22%2C%22to%22%3A%22now%22%7D%7D%7D
+- text: machine health ok Production env mgmt · zone mgmt
+- tablist:
+  - tab "Overview" [selected]
+  - tab "Config"
+  - tab "Drift"
+  - tab "Backup"
+  - tab "Activity"
+- heading "Health — the conditions of this module's objects" [level=2]
+- link "the Health view":
+  - /url: /health
+- paragraph: Every condition on its 1 object is ok.
+- list
+- heading "Guests" [level=2]
+- text: CMDB · health-manager guests
+- paragraph: nothing runs here
+- heading "Pools" [level=2]
+- text: CMDB rpool · ONLINE 3.4 GiB of 450 GiB · 1% tanka1 · ONLINE 984 KiB of 1.8 TiB · 0%
+- heading "Ports and links" [level=2]
+- text: CMDB
+- table:
+  - rowgroup:
+    - row "port kind speed link role connects to":
+      - columnheader "port"
+      - columnheader "kind"
+      - columnheader "speed"
+      - columnheader "link"
+      - columnheader "role"
+      - columnheader "connects to"
+  - rowgroup:
+    - row "eno1 rj45 1g down — —":
+      - cell "eno1"
+      - cell "rj45"
+      - cell "1g"
+      - cell "down"
+      - cell "—"
+      - cell "—"
+    - row "eno2 rj45 1g down — —":
+      - cell "eno2"
+      - cell "rj45"
+      - cell "1g"
+      - cell "down"
+      - cell "—"
+      - cell "—"
+    - row "eno3 rj45 1g down — —":
+      - cell "eno3"
+      - cell "rj45"
+      - cell "1g"
+      - cell "down"
+      - cell "—"
+      - cell "—"
+    - row "eno4 rj45 1g down — —":
+      - cell "eno4"
+      - cell "rj45"
+      - cell "1g"
+      - cell "down"
+      - cell "—"
+      - cell "—"
+    - row "enp4s0 rj45 2.5g up — sw-01:1":
+      - cell "enp4s0"
+      - cell "rj45"
+      - cell "2.5g"
+      - cell "up"
+      - cell "—"
+      - cell "sw-01:1"
+    - row "enp5s0 rj45 1g down — —":
+      - cell "enp5s0"
+      - cell "rj45"
+      - cell "1g"
+      - cell "down"
+      - cell "—"
+      - cell "—"
+    - row "enp6s0 rj45 1g down — —":
+      - cell "enp6s0"
+      - cell "rj45"
+      - cell "1g"
+      - cell "down"
+      - cell "—"
+      - cell "—"
+    - row "enp7s0 rj45 1g down — —":
+      - cell "enp7s0"
+      - cell "rj45"
+      - cell "1g"
+      - cell "down"
+      - cell "—"
+      - cell "—"
+    - row "enp8s0 rj45 1g down — —":
+      - cell "enp8s0"
+      - cell "rj45"
+      - cell "1g"
+      - cell "down"
+      - cell "—"
+      - cell "—"
+- heading "Cluster membership" [level=2]
+- text: CMDB · network-manager topology
+- term: member
+- definition: "yes"
+- term: cluster
+- definition: rossen
+- term: quorum
+- definition: "yes"
+- term: other members
+- definition: tappaas1, tappaas2, tappaas3
+- term: corosync links
+- definition: "1"
+- term: disconnected links
+- definition: "0"
+- term: HA
+- definition: idle
+- term: environment
+- definition: mgmt
+- heading "Memory by module" [level=2]
+- text: health-manager guests · 09:54
+- paragraph: nothing to show
+- heading "Storage used by modules" [level=2]
+- text: health-manager guests · 09:54
+- paragraph: nothing to show
+- heading "Operations" [level=2]
+- button "Migrate guests…"
+- text: moves every guest off this node, by module
+- button "Reboot node…"
+- text: preview = which HA services drain where; apply = drain, reboot, rejoin, fail back
+- heading "Operate — every verb runs through module-manager" [level=2]
+- button "Update (release)"
+- text: module update tappaas4 — snapshot, 3-way merge, converge
+- button "Modify fields…"
+- text: "on the Config tab: the module and each service as a card, every field typed"
+- button "Reconcile"
+- text: preview = the three-way drift; apply = --apply
+- button "Test"
+- button "Test --deep"
+- text: "fast · --deep (a read: runs at once)"
+- button "Delete…"
+- text: "--archive (default) · --remove · typed name"
+- heading "About" [level=2]
+- term: description
+- definition: "A Proxmox VE cluster node as a module: registered, visible and tested; serves the NFS shares config/shares.json declares for it, through its server hook (ADR-029 v0.9); its OS is still patched by the cluster module (ADR-026 D4 stage 1)"
+- term: version
+- definition: 0.3.0 · released 2026-10-06
+- term: maturity
+- definition: Production
+- term: maintainer
+- definition: —
+- term: location
+- definition:
+  - link "KnudAnchersVej95":
+    - /url: /site#location-knudanchersvej95
+  - text: · Knud Anchers Vej 95, Rodovre, DK · primary (it names none)
+- term: placement
+- definition:
+  - link "rack1":
+    - /url: /site/physical?select=rack%3Arack1
+  - text: U19 · front · in
+  - link "Basement":
+    - /url: /site/physical?select=room%3Abasement
+  - text: · generic/server-1u
+  - button "Move to…"
+  - button "Change placement…"
+  - button "Unplace…"
+- term: installed
+- definition: 20261031-16:46:49
+- term: updated
+- definition: 20261101-02:05:32
+- term: source
+- definition: /home/tappaas/TAPPaaS/src/foundation/pvehost

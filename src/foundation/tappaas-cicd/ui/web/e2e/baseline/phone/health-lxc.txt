@@ -1,0 +1,164 @@
+- navigation:
+  - list:
+    - listitem:
+      - link "Overview":
+        - /url: /
+    - listitem:
+      - link "Day 1 setup wizard":
+        - /url: /setup/day1
+    - listitem:
+      - link "Day 2 wizards":
+        - /url: /setup/day2
+    - listitem:
+      - link "Health":
+        - /url: /health
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Site":
+        - /url: /site
+    - listitem:
+      - link "Environments":
+        - /url: /environments
+    - listitem:
+      - link "Network":
+        - /url: /zones
+    - listitem:
+      - link "Modules":
+        - /url: /modules
+    - listitem:
+      - link "Identity":
+        - /url: /identity
+    - listitem:
+      - link "Assets":
+        - /url: /assets
+    - listitem:
+      - link "Backup":
+        - /url: /backup
+    - listitem: Security
+    - listitem:
+      - link "Activity":
+        - /url: /activity
+- banner:
+  - text: site rossen
+  - button "Refresh"
+  - text: operator · installer
+- heading "Health" [level=1]
+- text: 2 critical · 32 warning · 0 silenced · 17 unknown · 423 ok · read 01/11/2026 09:54
+- button "Tree"
+- button "Details"
+- button "Fit"
+- combobox "condition type":
+  - option "every condition" [selected]
+  - option "operational"
+  - option "drift"
+  - option "capacity"
+  - option "security"
+  - option "maintenance"
+  - option "backup"
+  - option "impact"
+- combobox "class":
+  - option "every class" [selected]
+  - option "address"
+  - option "app"
+  - option "appliance"
+  - option "backup-peer"
+  - option "cluster"
+  - option "controller"
+  - option "datastore"
+  - option "device"
+  - option "disk"
+  - option "dns-name"
+  - option "environment"
+  - option "group"
+  - option "location"
+  - option "lxc"
+  - option "machine"
+  - option "manager"
+  - option "network-device"
+  - option "node"
+  - option "organization"
+  - option "passive-device"
+  - option "port"
+  - option "proxy-route"
+  - option "rack"
+  - option "role"
+  - option "room"
+  - option "server"
+  - option "service"
+  - option "share"
+  - option "site"
+  - option "ssid"
+  - option "storage-pool"
+  - option "user"
+  - option "vm"
+  - option "vpn-peer"
+  - option "zone"
+- combobox "environment":
+  - option "every environment" [selected]
+  - option "mgmt"
+  - option "rossen"
+  - option "test"
+- text: now
+- slider "replay the graph as of a moment": "0"
+- button "To the root cause" [disabled]
+- button "What this impacts"
+- application:
+  - img:
+    - group "Edge from g:c6eec96f-e8de-4217-bea3-5ce0b88930fb|backs-up|in to c6eec96f-e8de-4217-bea3-5ce0b88930fb"
+  - img:
+    - group "Edge from e5d0d704-4a8a-4cb0-a2eb-84ad8f6dc8f8 to g:c6eec96f-e8de-4217-bea3-5ce0b88930fb|backs-up|in"
+  - img:
+    - group "Edge from c6eec96f-e8de-4217-bea3-5ce0b88930fb to g:c6eec96f-e8de-4217-bea3-5ce0b88930fb|provides|out"
+  - img:
+    - group "Edge from g:c6eec96f-e8de-4217-bea3-5ce0b88930fb|provides|out to 62001128-8619-4da4-bceb-40165e5e9022"
+  - img:
+    - group "Edge from c6eec96f-e8de-4217-bea3-5ce0b88930fb to g:c6eec96f-e8de-4217-bea3-5ce0b88930fb|runs-on|in"
+  - img:
+    - group "Edge from g:c6eec96f-e8de-4217-bea3-5ce0b88930fb|runs-on|in to 62001128-8619-4da4-bceb-40165e5e9022"
+  - img:
+    - group "Edge from g:c6eec96f-e8de-4217-bea3-5ce0b88930fb|depends-on|out to c6eec96f-e8de-4217-bea3-5ce0b88930fb"
+  - img:
+    - group "Edge from 39c19eed-d1ab-44dd-a45f-15d0bc214ba7 to g:c6eec96f-e8de-4217-bea3-5ce0b88930fb|depends-on|out"
+  - img:
+    - group "Edge from bb6e1fc2-ed12-4b03-a3de-42e8f0b803eb to g:c6eec96f-e8de-4217-bea3-5ce0b88930fb|depends-on|out"
+  - img:
+    - group "Edge from g:c6eec96f-e8de-4217-bea3-5ce0b88930fb|member-of|out to c6eec96f-e8de-4217-bea3-5ce0b88930fb"
+  - img:
+    - group "Edge from 9a883fd4-b028-4492-b870-4e8a16b7393c to g:c6eec96f-e8de-4217-bea3-5ce0b88930fb|member-of|out"
+  - img:
+    - group "Edge from g:c6eec96f-e8de-4217-bea3-5ce0b88930fb|runs-on|out to c6eec96f-e8de-4217-bea3-5ce0b88930fb"
+  - img:
+    - group "Edge from 95727e8e-df12-468f-a03b-8b685140e223 to g:c6eec96f-e8de-4217-bea3-5ce0b88930fb|runs-on|out"
+  - group: "vllm-amd vllm (vllm-amd): 7 fixable"
+  - group:
+    - text: tappaas_backup datastore
+    - button "Expand tappaas_backup": +
+  - group: vllm-amd:inference service
+  - group:
+    - text: backup:vm service
+    - button "Expand backup:vm": +
+  - group:
+    - text: cluster:lxc service
+    - button "Expand cluster:lxc": +
+  - group:
+    - text: Rossen 7 of 16 warning
+    - button "Expand Rossen": +
+  - group:
+    - text: tappaas2 machine
+    - button "Expand tappaas2": +
+  - group: backs-up ← 1
+  - group: contains · provides 1
+  - group: contains · runs-on 1
+  - group: depends-on 2
+  - group: member-of 1 1 bad
+  - group: runs-on 1
+  - img
+  - button "Zoom In":
+    - img
+  - button "Zoom Out":
+    - img
+  - button "Fit View":
+    - img
+- text: "critical warning unknown ok acknowledged maintenance ↯ flapping · a ring: a root cause · + one more hop · − fold · a pill: a relation type · a number in the tree: objects that need a look"

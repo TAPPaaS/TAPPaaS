@@ -1,0 +1,91 @@
+- navigation:
+  - list:
+    - listitem:
+      - link "Overview":
+        - /url: /
+    - listitem:
+      - link "Day 1 setup wizard":
+        - /url: /setup/day1
+    - listitem:
+      - link "Day 2 wizards":
+        - /url: /setup/day2
+    - listitem:
+      - link "Health":
+        - /url: /health
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Site":
+        - /url: /site
+    - listitem:
+      - link "Environments":
+        - /url: /environments
+    - listitem:
+      - link "Network":
+        - /url: /zones
+    - listitem:
+      - link "Modules":
+        - /url: /modules
+    - listitem:
+      - link "Identity":
+        - /url: /identity
+    - listitem:
+      - link "Assets":
+        - /url: /assets
+    - listitem:
+      - link "Backup":
+        - /url: /backup
+    - listitem: Security
+    - listitem:
+      - link "Activity":
+        - /url: /activity
+- banner:
+  - text: site rossen
+  - button "Refresh"
+  - text: operator · installer
+- heading "Day 1 setup wizard" [level=1]
+- text: the installation, derived from the records · done · 09:54
+- 'button "Check: run the module tests"'
+- paragraph:
+  - text: "Every required step is done: the foundation is installed."
+  - link "Overview":
+    - /url: /
+  - text: is the site from here, and
+  - link "Day 2":
+    - /url: /setup/day2
+  - text: "grows it. The setup token is closed: identity is installed, so the console is reached through the gate."
+- list:
+  - listitem:
+    - button "pass TLS — certificates done ▸": TLS — certificates done ▸
+    - paragraph: "rossen is dnsMode per-service: Caddy gets each route's certificate itself (HTTP-01); there is no wildcard to issue"
+  - listitem:
+    - button "pass Backup (PBS) done ▸": Backup (PBS) done ▸
+    - paragraph: installed; updated and tested by the sweep (2026-11-01 01:42:48Z)
+  - listitem:
+    - button "pass Identity (Authentik) done ▸": Identity (Authentik) done ▸
+    - paragraph: installed; updated and tested by the sweep (2026-11-01 01:42:48Z)
+  - listitem:
+    - button "pass Logging (Loki, Grafana) done ▸": Logging (Loki, Grafana) done ▸
+    - paragraph: installed; updated and tested by the sweep (2026-11-01 01:42:48Z)
+  - listitem:
+    - button "pass Identity bootstrap — your organization and you done ▸": Identity bootstrap — your organization and you done ▸
+    - paragraph: "config/identities: 1 organization(s), 3 user(s)"
+  - listitem:
+    - button "pass Nodes done ▸": Nodes done ▸
+    - paragraph: "4 node(s), all cluster members: tappaas1, tappaas2, tappaas3, tappaas4"
+  - listitem:
+    - button "pass The switch done ▸": The switch done ▸
+    - paragraph: "USW Pro XG 10 PoE: 12 port(s), 12 discovered via unifi-controller; crs-a: 17 port(s), 17 discovered; crs-b: 17 port(s), 17 discovered"
+  - listitem:
+    - button "pass The admin VPN done ▸": The admin VPN done ▸
+    - paragraph: "peer(s): lars-mac"
+  - listitem:
+    - button "pass WiFi (optional) done ▸": WiFi (optional) done ▸
+    - paragraph: "every active Client zone has an SSID: rossen-home → home"
+  - listitem:
+    - button "pass The physical site (optional) done ▸": The physical site (optional) done ▸
+    - paragraph: "3 room(s): basement at knudanchersvej95, stue at knudanchersvej95, diningroom; every node and switch placed; recorded: ISP modem (modem), patchpanel1 (patch-panel), patchpanel 2 (patch-panel)"
+  - listitem:
+    - button "pass Stacks (optional) done ▸": Stacks (optional) done ▸
+    - paragraph: "installed: ai, collaboration, devops, home, misc, security"

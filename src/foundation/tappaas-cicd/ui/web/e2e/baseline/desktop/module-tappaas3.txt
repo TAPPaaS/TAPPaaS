@@ -1,0 +1,508 @@
+- navigation:
+  - link "TAPPaaS":
+    - /url: https://tappaas.org/operate/
+  - text: Rossen Production Cluster
+  - list:
+    - listitem:
+      - link "Overview":
+        - /url: /
+    - listitem:
+      - link "Day 1 setup wizard":
+        - /url: /setup/day1
+    - listitem:
+      - link "Day 2 wizards":
+        - /url: /setup/day2
+    - listitem:
+      - link "Health":
+        - /url: /health
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Site":
+        - /url: /site
+    - listitem:
+      - link "Environments":
+        - /url: /environments
+    - listitem:
+      - link "Network":
+        - /url: /zones
+    - listitem:
+      - link "Modules":
+        - /url: /modules
+    - listitem:
+      - link "Identity":
+        - /url: /identity
+    - listitem:
+      - link "Assets":
+        - /url: /assets
+    - listitem:
+      - link "Backup":
+        - /url: /backup
+    - listitem: Security
+    - listitem:
+      - link "Activity":
+        - /url: /activity
+  - text: channel unstable tappaas-cicd · console P3
+- banner:
+  - text: site rossen
+  - button "Refresh"
+  - text: operator · installer
+- heading "tappaas3" [level=1]
+- link "Modules":
+  - /url: /modules
+- text: › mgmt › foundation stack
+- link "Grafana · logs ↗":
+  - /url: https://logging.hrossen.dk/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bhost%3D%5C%22tappaas3%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-6h%22%2C%22to%22%3A%22now%22%7D%7D%7D
+- text: machine health warning Production env mgmt · zone mgmt
+- tablist:
+  - tab "Overview" [selected]
+  - tab "Config"
+  - tab "Drift"
+  - tab "Backup"
+  - tab "Activity"
+- heading "Health — the conditions of this module's objects" [level=2]
+- link "the Health view":
+  - /url: /health
+- list:
+  - listitem:
+    - text: WARN operational tappaas3 tappaas3 every leg reaches the same switch (USW-Pro-XG-10-PoE) — redundant ports, not redundant switches · since 31/10/2026 16:50
+    - link "Health":
+      - /url: /health?select=2df905fc-99ad-4ce9-8f70-e3989f9a308a
+- heading "Guests" [level=2]
+- text: CMDB · health-manager guests
+- table:
+  - rowgroup:
+    - row "guest kind id state declared used HA":
+      - columnheader "guest"
+      - columnheader "kind"
+      - columnheader "id"
+      - columnheader "state"
+      - columnheader "declared"
+      - columnheader "used"
+      - columnheader "HA"
+  - rowgroup:
+    - row "unifi-os vm 811 running 5.0 GiB 2.0 GiB —":
+      - cell "unifi-os":
+        - link "unifi-os":
+          - /url: /modules/unifi-os
+      - cell "vm"
+      - cell "811"
+      - cell "running"
+      - cell "5.0 GiB"
+      - cell "2.0 GiB"
+      - cell "—"
+    - row "nomad vm 370 running 4.0 GiB 1.2 GiB —":
+      - cell "nomad":
+        - link "nomad":
+          - /url: /modules/nomad
+      - cell "vm"
+      - cell "370"
+      - cell "running"
+      - cell "4.0 GiB"
+      - cell "1.2 GiB"
+      - cell "—"
+    - row "karakeep vm 371 running 3.0 GiB 990 MiB —":
+      - cell "karakeep":
+        - link "karakeep":
+          - /url: /modules/karakeep
+      - cell "vm"
+      - cell "371"
+      - cell "running"
+      - cell "3.0 GiB"
+      - cell "990 MiB"
+      - cell "—"
+    - row "vaultwarden vm 610 running 1.5 GiB 291 MiB HA":
+      - cell "vaultwarden":
+        - link "vaultwarden":
+          - /url: /modules/vaultwarden
+      - cell "vm"
+      - cell "610"
+      - cell "running"
+      - cell "1.5 GiB"
+      - cell "291 MiB"
+      - cell "HA"
+- heading "Pools" [level=2]
+- text: CMDB tanka1 · ONLINE 461 GiB of 923 GiB · 50% tankc1 · DEGRADED 436 GiB of 4.4 TiB · 10%
+- heading "Ports and links" [level=2]
+- text: CMDB
+- table:
+  - rowgroup:
+    - row "port kind speed link role connects to":
+      - columnheader "port"
+      - columnheader "kind"
+      - columnheader "speed"
+      - columnheader "link"
+      - columnheader "role"
+      - columnheader "connects to"
+  - rowgroup:
+    - row "eno1 rj45 2.5g up — sw-01:3, patchpanel1:6":
+      - cell "eno1"
+      - cell "rj45"
+      - cell "2.5g"
+      - cell "up"
+      - cell "—"
+      - cell "sw-01:3, patchpanel1:6"
+    - row "enp3s0 rj45 2.5g up — —":
+      - cell "enp3s0"
+      - cell "rj45"
+      - cell "2.5g"
+      - cell "up"
+      - cell "—"
+      - cell "—"
+    - row "usblan0 rj45 2.5g up — sw-01:4":
+      - cell "usblan0"
+      - cell "rj45"
+      - cell "2.5g"
+      - cell "up"
+      - cell "—"
+      - cell "sw-01:4"
+- heading "Cluster membership" [level=2]
+- text: CMDB · network-manager topology
+- term: member
+- definition: "yes"
+- term: cluster
+- definition: rossen
+- term: quorum
+- definition: "yes"
+- term: other members
+- definition: tappaas1, tappaas2, tappaas4
+- term: corosync links
+- definition: "1"
+- term: disconnected links
+- definition: "0"
+- term: HA
+- definition: active
+- term: roles
+- definition: backup
+- term: environment
+- definition: mgmt
+- heading "Memory by module" [level=2]
+- text: health-manager guests · 09:54
+- table:
+  - rowgroup:
+    - row "module guest state declared allocated used reported by the guest available":
+      - columnheader "module"
+      - columnheader "guest"
+      - columnheader "state"
+      - columnheader "declared"
+      - columnheader "allocated"
+      - columnheader "used"
+      - columnheader "reported by the guest"
+      - columnheader "available"
+  - rowgroup:
+    - row "unifi-os unifi-os running 5.0 GiB 3.6 GiB 2.0 GiB yes 2.8 GiB":
+      - cell "unifi-os":
+        - link "unifi-os":
+          - /url: /modules/unifi-os
+      - cell "unifi-os"
+      - cell "running"
+      - cell "5.0 GiB"
+      - cell "3.6 GiB"
+      - cell "2.0 GiB"
+      - cell "yes"
+      - cell "2.8 GiB"
+    - row "nomad nomad running 4.0 GiB 3.5 GiB 1.2 GiB yes 2.6 GiB":
+      - cell "nomad":
+        - link "nomad":
+          - /url: /modules/nomad
+      - cell "nomad"
+      - cell "running"
+      - cell "4.0 GiB"
+      - cell "3.5 GiB"
+      - cell "1.2 GiB"
+      - cell "yes"
+      - cell "2.6 GiB"
+    - row "karakeep karakeep running 3.0 GiB 3.0 GiB 990 MiB yes 1.9 GiB":
+      - cell "karakeep":
+        - link "karakeep":
+          - /url: /modules/karakeep
+      - cell "karakeep"
+      - cell "running"
+      - cell "3.0 GiB"
+      - cell "3.0 GiB"
+      - cell "990 MiB"
+      - cell "yes"
+      - cell "1.9 GiB"
+    - row "vaultwarden vaultwarden running 1.5 GiB 1.5 GiB 291 MiB yes 1.1 GiB":
+      - cell "vaultwarden":
+        - link "vaultwarden":
+          - /url: /modules/vaultwarden
+      - cell "vaultwarden"
+      - cell "running"
+      - cell "1.5 GiB"
+      - cell "1.5 GiB"
+      - cell "291 MiB"
+      - cell "yes"
+      - cell "1.1 GiB"
+- heading "Storage used by modules" [level=2]
+- text: health-manager guests · 09:54
+- table:
+  - rowgroup:
+    - row "module pool volume used snapshots size replica":
+      - columnheader "module"
+      - columnheader "pool"
+      - columnheader "volume"
+      - columnheader "used"
+      - columnheader "snapshots"
+      - columnheader "size"
+      - columnheader "replica"
+  - rowgroup:
+    - row "tappaas-cicd tanka1 vm-130-disk-1 37.4 GiB 5.2 GiB 64.0 GiB yes":
+      - cell "tappaas-cicd":
+        - link "tappaas-cicd":
+          - /url: /modules/tappaas-cicd
+      - cell "tanka1"
+      - cell "vm-130-disk-1"
+      - cell "37.4 GiB"
+      - cell "5.2 GiB"
+      - cell "64.0 GiB"
+      - cell "yes"
+    - row "identity tanka1 vm-140-disk-1 15.5 GiB 838 MiB 32.0 GiB yes":
+      - cell "identity":
+        - link "identity":
+          - /url: /modules/identity
+      - cell "tanka1"
+      - cell "vm-140-disk-1"
+      - cell "15.5 GiB"
+      - cell "838 MiB"
+      - cell "32.0 GiB"
+      - cell "yes"
+    - row "immich tanka1 vm-361-disk-1 13.5 GiB 264 MiB 500 GiB yes":
+      - cell "immich":
+        - link "immich":
+          - /url: /modules/immich
+      - cell "tanka1"
+      - cell "vm-361-disk-1"
+      - cell "13.5 GiB"
+      - cell "264 MiB"
+      - cell "500 GiB"
+      - cell "yes"
+    - row "unifi-os tanka1 vm-811-disk-0 12.1 GiB 1.2 GiB 50.0 GiB no":
+      - cell "unifi-os":
+        - link "unifi-os":
+          - /url: /modules/unifi-os
+      - cell "tanka1"
+      - cell "vm-811-disk-0"
+      - cell "12.1 GiB"
+      - cell "1.2 GiB"
+      - cell "50.0 GiB"
+      - cell "no"
+    - row "karakeep tanka1 vm-371-disk-1 11.8 GiB 1.1 GiB 64.0 GiB no":
+      - cell "karakeep":
+        - link "karakeep":
+          - /url: /modules/karakeep
+      - cell "tanka1"
+      - cell "vm-371-disk-1"
+      - cell "11.8 GiB"
+      - cell "1.1 GiB"
+      - cell "64.0 GiB"
+      - cell "no"
+    - row "nomad tanka1 vm-370-disk-1 6.4 GiB 165 MiB 128 GiB no":
+      - cell "nomad":
+        - link "nomad":
+          - /url: /modules/nomad
+      - cell "tanka1"
+      - cell "vm-370-disk-1"
+      - cell "6.4 GiB"
+      - cell "165 MiB"
+      - cell "128 GiB"
+      - cell "no"
+    - row "vaultwarden tanka1 vm-610-disk-3 4.2 GiB 177 MiB 16.0 GiB no":
+      - cell "vaultwarden":
+        - link "vaultwarden":
+          - /url: /modules/vaultwarden
+      - cell "tanka1"
+      - cell "vm-610-disk-3"
+      - cell "4.2 GiB"
+      - cell "177 MiB"
+      - cell "16.0 GiB"
+      - cell "no"
+    - row "vaultwarden tanka1 vm-610-disk-1 3.8 GiB 223 MiB 16.0 GiB no":
+      - cell "vaultwarden":
+        - link "vaultwarden":
+          - /url: /modules/vaultwarden
+      - cell "tanka1"
+      - cell "vm-610-disk-1"
+      - cell "3.8 GiB"
+      - cell "223 MiB"
+      - cell "16.0 GiB"
+      - cell "no"
+    - row "network tanka1 vm-110-disk-0 3.5 GiB 561 MiB 32.0 GiB yes":
+      - cell "network":
+        - link "network":
+          - /url: /modules/network
+      - cell "tanka1"
+      - cell "vm-110-disk-0"
+      - cell "3.5 GiB"
+      - cell "561 MiB"
+      - cell "32.0 GiB"
+      - cell "yes"
+    - row "identity tanka1 vm-140-disk-0 120 KiB 368 KiB 1.0 MiB yes":
+      - cell "identity":
+        - link "identity":
+          - /url: /modules/identity
+      - cell "tanka1"
+      - cell "vm-140-disk-0"
+      - cell "120 KiB"
+      - cell "368 KiB"
+      - cell "1.0 MiB"
+      - cell "yes"
+    - row "immich tanka1 vm-361-disk-0 104 KiB 400 KiB 1.0 MiB yes":
+      - cell "immich":
+        - link "immich":
+          - /url: /modules/immich
+      - cell "tanka1"
+      - cell "vm-361-disk-0"
+      - cell "104 KiB"
+      - cell "400 KiB"
+      - cell "1.0 MiB"
+      - cell "yes"
+    - row "network tanka1 vm-110-disk-1 96.0 KiB 0 B 4.0 MiB yes":
+      - cell "network":
+        - link "network":
+          - /url: /modules/network
+      - cell "tanka1"
+      - cell "vm-110-disk-1"
+      - cell "96.0 KiB"
+      - cell "0 B"
+      - cell "4.0 MiB"
+      - cell "yes"
+    - row "tappaas-cicd tanka1 vm-130-disk-0 88.0 KiB 76.0 KiB 1.0 MiB yes":
+      - cell "tappaas-cicd":
+        - link "tappaas-cicd":
+          - /url: /modules/tappaas-cicd
+      - cell "tanka1"
+      - cell "vm-130-disk-0"
+      - cell "88.0 KiB"
+      - cell "76.0 KiB"
+      - cell "1.0 MiB"
+      - cell "yes"
+    - row "vaultwarden tanka1 vm-610-disk-0 88.0 KiB 388 KiB 1.0 MiB no":
+      - cell "vaultwarden":
+        - link "vaultwarden":
+          - /url: /modules/vaultwarden
+      - cell "tanka1"
+      - cell "vm-610-disk-0"
+      - cell "88.0 KiB"
+      - cell "388 KiB"
+      - cell "1.0 MiB"
+      - cell "no"
+    - row "nomad tanka1 vm-370-disk-0 80.0 KiB 360 KiB 1.0 MiB no":
+      - cell "nomad":
+        - link "nomad":
+          - /url: /modules/nomad
+      - cell "tanka1"
+      - cell "vm-370-disk-0"
+      - cell "80.0 KiB"
+      - cell "360 KiB"
+      - cell "1.0 MiB"
+      - cell "no"
+    - row "nomad tanka1 vm-370-cloudinit 76.0 KiB 0 B 4.0 MiB no":
+      - cell "nomad":
+        - link "nomad":
+          - /url: /modules/nomad
+      - cell "tanka1"
+      - cell "vm-370-cloudinit"
+      - cell "76.0 KiB"
+      - cell "0 B"
+      - cell "4.0 MiB"
+      - cell "no"
+    - row "karakeep tanka1 vm-371-cloudinit 76.0 KiB 0 B 4.0 MiB no":
+      - cell "karakeep":
+        - link "karakeep":
+          - /url: /modules/karakeep
+      - cell "tanka1"
+      - cell "vm-371-cloudinit"
+      - cell "76.0 KiB"
+      - cell "0 B"
+      - cell "4.0 MiB"
+      - cell "no"
+    - row "karakeep tanka1 vm-371-disk-0 76.0 KiB 400 KiB 1.0 MiB no":
+      - cell "karakeep":
+        - link "karakeep":
+          - /url: /modules/karakeep
+      - cell "tanka1"
+      - cell "vm-371-disk-0"
+      - cell "76.0 KiB"
+      - cell "400 KiB"
+      - cell "1.0 MiB"
+      - cell "no"
+    - row "vaultwarden tanka1 vm-610-cloudinit 76.0 KiB 0 B 4.0 MiB no":
+      - cell "vaultwarden":
+        - link "vaultwarden":
+          - /url: /modules/vaultwarden
+      - cell "tanka1"
+      - cell "vm-610-cloudinit"
+      - cell "76.0 KiB"
+      - cell "0 B"
+      - cell "4.0 MiB"
+      - cell "no"
+    - row "unifi-os tanka1 vm-811-cloudinit 76.0 KiB 0 B 4.0 MiB no":
+      - cell "unifi-os":
+        - link "unifi-os":
+          - /url: /modules/unifi-os
+      - cell "tanka1"
+      - cell "vm-811-cloudinit"
+      - cell "76.0 KiB"
+      - cell "0 B"
+      - cell "4.0 MiB"
+      - cell "no"
+    - row "vaultwarden tanka1 vm-610-disk-2 72.0 KiB 416 KiB 1.0 MiB no":
+      - cell "vaultwarden":
+        - link "vaultwarden":
+          - /url: /modules/vaultwarden
+      - cell "tanka1"
+      - cell "vm-610-disk-2"
+      - cell "72.0 KiB"
+      - cell "416 KiB"
+      - cell "1.0 MiB"
+      - cell "no"
+- heading "Operations" [level=2]
+- button "Migrate guests…"
+- text: moves every guest off this node, by module
+- button "Reboot node…"
+- text: preview = which HA services drain where; apply = drain, reboot, rejoin, fail back
+- heading "Operate — every verb runs through module-manager" [level=2]
+- button "Update (release)"
+- text: module update tappaas3 — snapshot, 3-way merge, converge
+- button "Modify fields…"
+- text: "on the Config tab: the module and each service as a card, every field typed"
+- button "Reconcile"
+- text: preview = the three-way drift; apply = --apply
+- button "Test"
+- button "Test --deep"
+- text: "fast · --deep (a read: runs at once)"
+- button "Delete…"
+- text: "--archive (default) · --remove · typed name"
+- heading "About" [level=2]
+- term: description
+- definition: "A Proxmox VE cluster node as a module: registered, visible and tested; serves the NFS shares config/shares.json declares for it, through its server hook (ADR-029 v0.9); its OS is still patched by the cluster module (ADR-026 D4 stage 1)"
+- term: version
+- definition: 0.3.0 · released 2026-09-19
+- term: maturity
+- definition: Production
+- term: maintainer
+- definition: —
+- term: location
+- definition:
+  - link "KnudAnchersVej95":
+    - /url: /site#location-knudanchersvej95
+  - text: · Knud Anchers Vej 95, Rodovre, DK · primary (it names none)
+- term: placement
+- definition:
+  - link "rack1":
+    - /url: /site/physical?select=rack%3Arack1
+  - text: U13-U18 · front · third width, slot 2 · in
+  - link "Basement":
+    - /url: /site/physical?select=room%3Abasement
+  - text: · generic/server-2u
+  - button "Move to…"
+  - button "Change placement…"
+  - button "Unplace…"
+- term: installed
+- definition: 20260919-08:36:17
+- term: updated
+- definition: 20261101-02:05:03
+- term: source
+- definition: /home/tappaas/TAPPaaS/src/foundation/pvehost

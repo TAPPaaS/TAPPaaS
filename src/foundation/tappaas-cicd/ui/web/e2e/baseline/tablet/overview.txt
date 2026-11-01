@@ -1,0 +1,207 @@
+- navigation:
+  - link "TAPPaaS":
+    - /url: https://tappaas.org/operate/
+  - text: Rossen Production Cluster
+  - list:
+    - listitem:
+      - link "Overview":
+        - /url: /
+    - listitem:
+      - link "Day 1 setup wizard":
+        - /url: /setup/day1
+    - listitem:
+      - link "Day 2 wizards":
+        - /url: /setup/day2
+    - listitem:
+      - link "Health":
+        - /url: /health
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Site":
+        - /url: /site
+    - listitem:
+      - link "Environments":
+        - /url: /environments
+    - listitem:
+      - link "Network":
+        - /url: /zones
+    - listitem:
+      - link "Modules":
+        - /url: /modules
+    - listitem:
+      - link "Identity":
+        - /url: /identity
+    - listitem:
+      - link "Assets":
+        - /url: /assets
+    - listitem:
+      - link "Backup":
+        - /url: /backup
+    - listitem: Security
+    - listitem:
+      - link "Activity":
+        - /url: /activity
+  - text: channel unstable tappaas-cicd · console P3
+- banner:
+  - text: site rossen
+  - button "Refresh"
+  - text: operator · installer
+- heading "Overview" [level=1]
+- text: site Rossen Production Cluster · health read 09:54
+- heading "Site" [level=2]:
+  - link "Site":
+    - /url: /site
+- text: Rossen Production Cluster
+- paragraph:
+  - link "KnudAnchersVej95":
+    - /url: /site#location-knudanchersvej95
+  - text: (primary) ·
+  - link "Rasmus":
+    - /url: /site#location-hareskov
+- list:
+  - listitem:
+    - link "tappaas1":
+      - /url: /site/devices?select=node:tappaas1
+  - listitem:
+    - link "tappaas2":
+      - /url: /site/devices?select=node:tappaas2
+  - listitem:
+    - link "tappaas3":
+      - /url: /site/devices?select=node:tappaas3
+    - text: tappaas3 every leg reaches the same switch (USW-Pro-XG-10-PoE) — redundant ports, not redundant switches
+  - listitem:
+    - link "tappaas4":
+      - /url: /site/devices?select=node:tappaas4
+- paragraph:
+  - text: "quorum: 4 vote(s) ·"
+  - link "storage 1.8 TB of 26 TB used (7%, 7 pools)":
+    - /url: /site/storage
+- heading "Environment" [level=2]:
+  - link "Environment":
+    - /url: /environments
+- text: 3 environments
+- table:
+  - rowgroup:
+    - row "environment zone maturity modules":
+      - columnheader
+      - columnheader "environment"
+      - columnheader "zone"
+      - columnheader "maturity"
+      - columnheader "modules"
+  - rowgroup:
+    - 'row "its modules: warning Rossen default rossen 9 Development · 7 Testing · 1 Production 17"':
+      - 'cell "its modules: warning"'
+      - cell "Rossen default":
+        - link "Rossen":
+          - /url: /environments?env=rossen
+        - text: default
+      - cell "rossen"
+      - cell "9 Development · 7 Testing · 1 Production"
+      - cell "17"
+    - 'row "its modules: warning Management mgmt 10 Production · 2 Development · 1 Testing 13"':
+      - 'cell "its modules: warning"'
+      - cell "Management":
+        - link "Management":
+          - /url: /environments?env=mgmt
+      - cell "mgmt"
+      - cell "10 Production · 2 Development · 1 Testing"
+      - cell "13"
+    - 'row "its modules: warning Test test 1 Development 1"':
+      - 'cell "its modules: warning"'
+      - cell "Test":
+        - link "Test":
+          - /url: /environments?env=test
+      - cell "test"
+      - cell "1 Development"
+      - cell "1"
+- heading "Modules" [level=2]:
+  - link "Modules":
+    - /url: /modules
+- text: 31 modules
+- paragraph: 21 running · 0 stopped · 0 updating · 0 archived · 10 without a guest of their own
+- heading "Last updates" [level=3]
+- list:
+  - listitem:
+    - link "the sweep":
+      - /url: /activity
+    - text: 01/11/2026 02:42
+- heading "Needs attention" [level=3]
+- paragraph:
+  - link "cluster":
+    - /url: /modules/cluster
+  - link "console":
+    - /url: /modules/console
+  - link "deconz-test":
+    - /url: /modules/deconz-test
+  - link "euro-office":
+    - /url: /modules/euro-office
+  - link "identity":
+    - /url: /modules/identity
+  - link "karakeep":
+    - /url: /modules/karakeep
+  - link "litellm":
+    - /url: /modules/litellm
+  - link "mikrotik":
+    - /url: /modules/mikrotik
+  - link "nomad":
+    - /url: /modules/nomad
+  - link "openwebui":
+    - /url: /modules/openwebui
+  - link "tappaas-cicd":
+    - /url: /modules/tappaas-cicd
+  - link "tappaas3":
+    - /url: /modules/tappaas3
+  - link "unifi-os":
+    - /url: /modules/unifi-os
+  - link "vllm-amd":
+    - /url: /modules/vllm-amd
+- heading "Identity" [level=2]:
+  - link "Identity":
+    - /url: /identity
+- paragraph: 5 users · 9 groups · 3 roles · 1 organization
+- paragraph:
+  - text: identity provider (
+  - link "identity":
+    - /url: /modules/identity
+  - text: "): running · health warning"
+- heading "Health" [level=2]
+- link "Health":
+  - /url: /health
+- text: "2 critical · 32 warning · 423 ok 23 root causes · 0 silenced · 17 unknown Last sweep 01/11/2026 02:42 · succeeded 31 modules · 0 failed · reboot ok Backups 30 module(s) covered buddy rasmus: ? Release channel unstable TAPPaaS adr-041 · Community main Security 38 target(s): 10 act, 0 failed, 18 triage, 10 watch 10 to act on · SIEM: not installed"
+- heading "Alerts 25 open · 0 silenced" [level=2]
+- list:
+  - listitem:
+    - link "FAIL site/Rossen Production Cluster / at 93%, over 80% 21:05":
+      - /url: /operations?select=b090efc7-4700-40c0-b91a-d6b30d1c6369
+  - listitem:
+    - 'link "WARN ssid/TAPPaaS-Test TAPPaaS-Test: zone swdeepA does not exist 09:27"':
+      - /url: /operations?select=247b3ada-42ab-4fbd-b57f-91eaf7939874
+  - listitem:
+    - link "WARN vm/tappaas-cicd tappaas-cicd booted 26.05.20261025.1f607aa, next boot 26.05.20261025.1f607aa 17:35":
+      - /url: /operations?select=6da7a770-a531-4469-b125-9f5fd7568ea2
+  - listitem:
+    - link "WARN machine/tappaas3 tappaas3 every leg reaches the same switch (USW-Pro-XG-10-PoE) — redundant ports, not redundant switches 16:50":
+      - /url: /operations?select=2df905fc-99ad-4ce9-8f70-e3989f9a308a
+  - listitem:
+    - link "WARN app/TAPPaaS console HealthDailyDigest on tappaas-cicd since 2026-10-30T13:03:50Z 14:07":
+      - /url: /operations?select=802e4d6e-daa5-4458-a001-c21cdaf6c6a4
+  - listitem:
+    - 'link "WARN app/pve pve: on no node 11:35"':
+      - /url: /operations?select=1e921a29-0040-4f97-b719-984fa3ba93ed
+  - listitem:
+    - 'link "WARN device/crs-a crs-a: VLAN 298 in no zone 10:55"':
+      - /url: /operations?select=ab1ce443-0026-4d0c-9579-2cf6c2904a9b
+  - listitem:
+    - 'link "WARN device/crs-b crs-b: VLAN 298 in no zone 10:55"':
+      - /url: /operations?select=fa18fcb0-59e0-48eb-a67d-66291d38eccf
+  - listitem:
+    - 'link "WARN device/USW Pro XG 10 PoE USW Pro XG 10 PoE: VLAN 298 in no zone 10:55"':
+      - /url: /operations?select=399d45b1-8021-4e61-949e-2d600a3fe25f
+  - listitem:
+    - 'link "WARN disk/ata-HGST_HDN726050ALE614_NAHW317X dsk-09 (ata-HGST_HDN726050ALE614_NAHW317X): ZFS DEGRADED in tankc1 (errors); SMART: 534 reallocated, 64 pending, 1675 uncorrectable sectors 10:52"':
+      - /url: /operations?select=f21239ae-6212-48fb-b0b4-0f19402fc40a
+- paragraph:
+  - link "15 more open events on the Operations page":
+    - /url: /operations

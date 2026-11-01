@@ -1,0 +1,236 @@
+- navigation:
+  - link "TAPPaaS":
+    - /url: https://tappaas.org/operate/
+  - text: Rossen Production Cluster
+  - list:
+    - listitem:
+      - link "Overview":
+        - /url: /
+    - listitem:
+      - link "Day 1 setup wizard":
+        - /url: /setup/day1
+    - listitem:
+      - link "Day 2 wizards":
+        - /url: /setup/day2
+    - listitem:
+      - link "Health":
+        - /url: /health
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Site":
+        - /url: /site
+    - listitem:
+      - link "Environments":
+        - /url: /environments
+    - listitem:
+      - link "Network":
+        - /url: /zones
+    - listitem:
+      - link "Modules":
+        - /url: /modules
+    - listitem:
+      - link "Identity":
+        - /url: /identity
+    - listitem:
+      - link "Assets":
+        - /url: /assets
+    - listitem:
+      - link "Backup":
+        - /url: /backup
+    - listitem: Security
+    - listitem:
+      - link "Activity":
+        - /url: /activity
+  - text: channel unstable tappaas-cicd · console P3
+- banner:
+  - text: site rossen
+  - button "Refresh"
+  - text: operator · installer
+- heading "Operations" [level=1]
+- text: 1 critical · 24 warning · 23 root cause(s) · 0 silenced · read 09:54
+- heading "Open events" [level=2]
+- text: "by root cause · what changed: the last 24 h"
+- list:
+  - listitem:
+    - button "CRITICAL Rossen Production Cluster site root cause capacity / at 93%, over 80% · since 31/10/2026 21:05 (13 h) · and operational critical, maintenance warning"
+    - list:
+      - listitem: 01/11/2026 09:35 observation · health-manager rootCauses
+      - listitem: 01/11/2026 09:32 observation · health-manager rootCauses
+      - listitem: 01/11/2026 09:30 observation · health-manager rootCauses
+      - listitem: 01/11/2026 09:27 observation · health-manager rootCauses
+      - listitem: 01/11/2026 09:27 observation · site-manager version
+      - listitem: 01/11/2026 09:05 observation · health-manager rootCauses
+      - listitem: 01/11/2026 09:02 observation · health-manager rootCauses
+      - listitem: 01/11/2026 09:00 observation · health-manager rootCauses
+      - listitem: "… 10 more: the object's panel has them all"
+- list:
+  - listitem:
+    - button "WARNING tappaas3 machine · mgmt root cause operational tappaas3 every leg reaches the same switch (USW-Pro-XG-10-PoE) — redundant ports, not redundant switches · since 31/10/2026 16:50 (17 h)"
+    - list:
+      - listitem: 01/11/2026 09:32 observation · site-manager storages
+      - listitem: 01/11/2026 09:27 observation · site-manager storages
+      - listitem: 01/11/2026 09:02 observation · site-manager storages
+      - listitem: 01/11/2026 08:46 observation · site-manager storages
+      - listitem: 01/11/2026 01:01 observation · site-manager storages
+      - listitem: 31/10/2026 22:27 observation · site-manager +runs-on ← vm/tvbase-zcnode
+      - listitem: 31/10/2026 22:07 observation · site-manager +runs-on ← vm/test-nix-vlannode
+      - listitem: 31/10/2026 22:02 observation · site-manager +runs-on ← vm/test-deb-vlannode
+      - listitem: "… 9 more: the object's panel has them all"
+  - listitem:
+    - 'button "WARNING tankc1 storage-pool operational tankc1: zfs DEGRADED · since 31/10/2026 10:50 (23 h)"'
+    - paragraph: nothing changed in the last 24 h
+  - listitem:
+    - button "WARNING TAPPaaS console app · mgmt operational HealthDailyDigest on tappaas-cicd since 2026-10-30T13:03:50Z · since 31/10/2026 14:07 (20 h)"
+    - paragraph: nothing changed in the last 24 h
+- text: "impacts 3:"
+- button "warning TAPPaaS console": TAPPaaS console
+- button "warning tappaas3": tappaas3
+- button "warning tankc1": tankc1
+- list:
+  - listitem:
+    - button "WARNING unifi-os vm · rossen root cause security unifi-controller from Community (module unifi-os), not a verified release — plugs into switch-manager, ap-manager · since 30/10/2026 10:40 (47 h)"
+    - list:
+      - listitem: 31/10/2026 20:56 update unifi-os · module-manager · tappaas
+- list:
+  - listitem:
+    - 'button "WARNING Open WebUI vm · rossen root cause security openwebui (openwebui): 10 fixable · since 30/10/2026 10:40 (47 h)"'
+    - list:
+      - listitem: 31/10/2026 20:52 update openwebui · module-manager · tappaas
+- list:
+  - listitem:
+    - button "WARNING cluster app · mgmt root cause security RootKeyChanged since 2026-10-29T18:53:50+01:00 · since 30/10/2026 10:40 (47 h)"
+    - paragraph: nothing changed in the last 24 h
+- list:
+  - listitem:
+    - 'button "WARNING Karakeep vm · rossen root cause security karakeep_chrome (karakeep): 2 fixable; karakeep_web (karakeep): 31 fixable · since 30/10/2026 10:40 (47 h)"'
+    - list:
+      - listitem: 31/10/2026 20:36 update karakeep · module-manager · tappaas
+- list:
+  - listitem:
+    - 'button "WARNING Project N.O.M.A.D. vm · rossen root cause security nomad_admin (nomad): 124 fixable; nomad_mysql (nomad): 94 fixable · since 30/10/2026 10:40 (47 h)"'
+    - list:
+      - listitem: 31/10/2026 20:51 update nomad · module-manager · tappaas
+- list:
+  - listitem:
+    - 'button "WARNING euro-office vm · rossen root cause security euro-office (euro-office): 1 fixable · since 30/10/2026 10:40 (47 h)"'
+    - list:
+      - listitem: 31/10/2026 20:46 update euro-office · module-manager · tappaas
+- list:
+  - listitem:
+    - 'button "WARNING tappaas-nixos vm root cause drift vm/tappaas-nixos: actual without desired · since 30/10/2026 10:40 (47 h)"'
+    - paragraph: nothing changed in the last 24 h
+- list:
+  - listitem:
+    - 'button "WARNING Identity vm · mgmt root cause security authentik-server, authentik-worker (identity): 9 fixable · since 30/10/2026 10:40 (47 h)"'
+    - list:
+      - listitem: 01/11/2026 08:48 sweep drift · cmdb-controller drift
+      - listitem: 01/11/2026 08:46 observation drift · identity-manager authentik, drift
+      - listitem: 01/11/2026 02:10 update identity · module-manager · tappaas
+      - listitem: 01/11/2026 01:03 sweep drift · cmdb-controller drift
+      - listitem: 01/11/2026 01:01 observation drift · identity-manager authentik, drift
+      - listitem: 31/10/2026 20:27 update identity · module-manager · tappaas
+- list:
+  - listitem:
+    - button "WARNING mikrotik app · rossen root cause security mikrotik-controller from Community (module mikrotik), not a verified release — plugs into switch-manager · since 30/10/2026 10:40 (47 h)"
+    - paragraph: nothing changed in the last 24 h
+- list:
+  - listitem:
+    - button "WARNING rasmus backup-peer root cause operational pulled-by-rasmus DOWN · since 30/10/2026 10:40 (47 h)"
+    - paragraph: nothing changed in the last 24 h
+- list:
+  - listitem:
+    - 'button "WARNING LiteLLM vm · rossen root cause security litellm (litellm): 4 fixable · since 30/10/2026 10:40 (47 h)"'
+    - list:
+      - listitem: 31/10/2026 20:40 update litellm · module-manager · tappaas
+- list:
+  - listitem:
+    - 'button "WARNING vllm-amd lxc · rossen root cause security vllm (vllm-amd): 7 fixable · since 30/10/2026 10:40 (47 h)"'
+    - list:
+      - listitem: 31/10/2026 20:58 update vllm-amd · module-manager · tappaas
+- list:
+  - listitem:
+    - 'button "WARNING deconz-test vm · test root cause security diyhue (deconz-test): 1 fixable · since 30/10/2026 10:40 (47 h)"'
+    - list:
+      - listitem: 31/10/2026 20:31 update deconz-test · module-manager · tappaas
+- list:
+  - listitem:
+    - 'button "WARNING ata-ST8000AS0002-1NA17Z_Z840DMA1 disk root cause operational dsk-08 (ata-ST8000AS0002-1NA17Z_Z840DMA1): SMART: 2808 reallocated, 632 pending, 632 uncorrectable sectors · since 31/10/2026 10:52 (23 h)"'
+    - list:
+      - listitem: 01/11/2026 08:46 observation · site-manager smart
+      - listitem: 01/11/2026 01:01 observation · site-manager smart
+      - listitem: 31/10/2026 17:34 observation · site-manager smart
+      - listitem: 31/10/2026 16:07 observation · site-manager smart
+      - listitem: 31/10/2026 11:59 observation drift · site-manager smart
+      - listitem: 31/10/2026 10:52 observation drift · site-manager smart, temperature
+      - listitem: 31/10/2026 10:51 observation drift · site-manager health, holds, partitions
+      - listitem: 31/10/2026 10:50 disk adopt · asset-manager · tappaas bay, bus, displayName, faulty, kind, model +4
+- list:
+  - listitem:
+    - 'button "WARNING ata-HGST_HDN726050ALE614_NAHW317X disk root cause operational dsk-09 (ata-HGST_HDN726050ALE614_NAHW317X): ZFS DEGRADED in tankc1 (errors); SMART: 534 reallocated, 64 pending, 1675 uncorrectable sectors · since 31/10/2026 10:52 (23 h)"'
+    - list:
+      - listitem: 01/11/2026 09:27 observation · site-manager smart
+      - listitem: 01/11/2026 09:02 observation · site-manager temperature
+      - listitem: 01/11/2026 08:46 observation · site-manager smart, temperature
+      - listitem: 01/11/2026 01:01 observation · site-manager smart
+      - listitem: 31/10/2026 17:34 observation · site-manager smart
+      - listitem: 31/10/2026 16:07 observation · site-manager smart
+      - listitem: 31/10/2026 12:38 observation drift · site-manager smart
+      - listitem: 31/10/2026 11:59 observation drift · site-manager smart
+      - listitem: "… 3 more: the object's panel has them all"
+- list:
+  - listitem:
+    - 'button "WARNING USW Pro XG 10 PoE device root cause drift USW Pro XG 10 PoE: VLAN 298 in no zone · since 31/10/2026 10:55 (23 h)"'
+    - list:
+      - listitem: 31/10/2026 11:29 switch-manager remove-port · switch-manager · lars · job 20261031102900-f158b0
+- list:
+  - listitem:
+    - 'button "WARNING crs-a device root cause drift crs-a: VLAN 298 in no zone · since 31/10/2026 10:55 (23 h)"'
+    - list:
+      - listitem: 31/10/2026 22:25 switch-manager reconcile --apply · switch-manager · tappaas
+- list:
+  - listitem:
+    - 'button "WARNING crs-b device root cause drift crs-b: VLAN 298 in no zone · since 31/10/2026 10:55 (23 h)"'
+    - list:
+      - listitem: 31/10/2026 22:25 switch-manager reconcile --apply · switch-manager · tappaas
+- list:
+  - listitem:
+    - 'button "WARNING pve app root cause operational pve: on no node · since 31/10/2026 11:35 (22 h)"'
+    - paragraph: nothing changed in the last 24 h
+- list:
+  - listitem:
+    - button "WARNING tappaas-cicd vm · mgmt root cause maintenance tappaas-cicd booted 26.05.20261025.1f607aa, next boot 26.05.20261025.1f607aa · since 31/10/2026 17:35 (16 h)"
+    - list:
+      - listitem: 31/10/2026 17:33 update tappaas-cicd · module-manager · tappaas
+      - listitem: 31/10/2026 16:09 sweep drift · cmdb-controller drift
+      - listitem: 31/10/2026 16:07 update tappaas-cicd · module-manager · tappaas
+      - listitem: 31/10/2026 16:07 observation drift · site-manager drift, memory
+      - listitem: 31/10/2026 12:42 sweep drift · cmdb-controller drift
+      - listitem: 31/10/2026 12:39 sweep drift · cmdb-controller drift
+      - listitem: 31/10/2026 12:37 update tappaas-cicd · module-manager · tappaas
+      - listitem: 31/10/2026 12:04 sweep drift · cmdb-controller drift
+      - listitem: "… 4 more: the object's panel has them all"
+- list:
+  - listitem:
+    - 'button "WARNING TAPPaaS-Test ssid root cause operational TAPPaaS-Test: zone swdeepA does not exist · since 01/11/2026 09:27 (26 min)"'
+    - paragraph: nothing changed in the last 24 h
+- heading "Discovery sweep" [level=2]
+- button "Run discovery sweep"
+- paragraph: WARNING 01/11/2026 09:34 (20 min ago) · against the sweep of 01/11/2026 09:29
+- paragraph: 0 drift · 0 from desired · 1 unmanaged · 0 missing · 0 not compared · 0 expected (0 new) · 11 source(s), 0 failed
+- paragraph: "Asked without --discover (they do not know it yet): asset-manager"
+- table:
+  - rowgroup:
+    - row "found object what source":
+      - columnheader "found"
+      - columnheader "object"
+      - columnheader "what"
+      - columnheader "source"
+  - rowgroup:
+    - row "unmanaged vm/tappaas-nixos site-manager":
+      - cell "unmanaged"
+      - cell "vm/tappaas-nixos":
+        - button "vm/tappaas-nixos"
+      - cell
+      - cell "site-manager"

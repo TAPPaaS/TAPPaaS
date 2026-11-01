@@ -1,0 +1,390 @@
+- navigation:
+  - list:
+    - listitem:
+      - link "Overview":
+        - /url: /
+    - listitem:
+      - link "Day 1 setup wizard":
+        - /url: /setup/day1
+    - listitem:
+      - link "Day 2 wizards":
+        - /url: /setup/day2
+    - listitem:
+      - link "Health":
+        - /url: /health
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Site":
+        - /url: /site
+    - listitem:
+      - link "Environments":
+        - /url: /environments
+    - listitem:
+      - link "Network":
+        - /url: /zones
+    - listitem:
+      - link "Modules":
+        - /url: /modules
+    - listitem:
+      - link "Identity":
+        - /url: /identity
+    - listitem:
+      - link "Assets":
+        - /url: /assets
+    - listitem:
+      - link "Backup":
+        - /url: /backup
+    - listitem: Security
+    - listitem:
+      - link "Activity":
+        - /url: /activity
+- banner:
+  - text: site rossen
+  - button "Refresh"
+  - text: operator · installer
+- heading "Modules" [level=1]
+- text: 31 deployed · module-manager list · read 09:54
+- tablist:
+  - tab "Installed" [selected]
+  - tab "TAPPaaS repository"
+  - tab "Community repository"
+- textbox "Filter by name, stack, environment, zone, node"
+- checkbox "needs attention"
+- text: needs attention
+- table:
+  - rowgroup:
+    - row "module kind runs on zone environment Install name badges":
+      - columnheader "module"
+      - columnheader "kind"
+      - columnheader "runs on"
+      - columnheader "zone"
+      - columnheader "environment"
+      - columnheader "Install name"
+      - columnheader "badges"
+  - rowgroup:
+    - row "foundation 13 installs":
+      - cell "foundation 13 installs"
+    - row "none cluster application — — mgmt cluster health warning Production":
+      - cell "none cluster":
+        - link "cluster":
+          - /url: /modules/cluster
+      - cell "application"
+      - cell "—"
+      - cell "—"
+      - cell "mgmt"
+      - cell "cluster"
+      - cell "health warning Production"
+    - row "none console application tappaas1 mgmt mgmt console health warning Development":
+      - cell "none console":
+        - link "console":
+          - /url: /modules/console
+      - cell "application"
+      - cell "tappaas1"
+      - cell "mgmt"
+      - cell "mgmt"
+      - cell "console"
+      - cell "health warning Development"
+    - row "running identity vm 140 tappaas1 mgmt mgmt identity health warning backup covered CVE act Production":
+      - cell "running identity":
+        - link "identity":
+          - /url: /modules/identity
+      - cell "vm 140"
+      - cell "tappaas1"
+      - cell "mgmt"
+      - cell "mgmt"
+      - cell "identity"
+      - cell "health warning backup covered CVE act Production"
+    - row "none pvehost machine — mgmt mgmt tappaas1 health ok Production":
+      - cell "none pvehost":
+        - link "pvehost":
+          - /url: /modules/tappaas1
+      - cell "machine"
+      - cell "—"
+      - cell "mgmt"
+      - cell "mgmt"
+      - cell "tappaas1"
+      - cell "health ok Production"
+    - row "none pvehost machine — mgmt mgmt tappaas2 health ok Production":
+      - cell "none pvehost":
+        - link "pvehost":
+          - /url: /modules/tappaas2
+      - cell "machine"
+      - cell "—"
+      - cell "mgmt"
+      - cell "mgmt"
+      - cell "tappaas2"
+      - cell "health ok Production"
+    - row "none pvehost machine — mgmt mgmt tappaas3 health warning Production":
+      - cell "none pvehost":
+        - link "pvehost":
+          - /url: /modules/tappaas3
+      - cell "machine"
+      - cell "—"
+      - cell "mgmt"
+      - cell "mgmt"
+      - cell "tappaas3"
+      - cell "health warning Production"
+    - row "none pvehost machine — mgmt mgmt tappaas4 health ok Production":
+      - cell "none pvehost":
+        - link "pvehost":
+          - /url: /modules/tappaas4
+      - cell "machine"
+      - cell "—"
+      - cell "mgmt"
+      - cell "mgmt"
+      - cell "tappaas4"
+      - cell "health ok Production"
+    - row "running tappaas-cicd vm 130 tappaas1 mgmt mgmt tappaas-cicd health warning backup covered Production":
+      - cell "running tappaas-cicd":
+        - link "tappaas-cicd":
+          - /url: /modules/tappaas-cicd
+      - cell "vm 130"
+      - cell "tappaas1"
+      - cell "mgmt"
+      - cell "mgmt"
+      - cell "tappaas-cicd"
+      - cell "health warning backup covered Production"
+    - row "none backup application tappaas3 mgmt mgmt backup health ok Testing":
+      - cell "none backup":
+        - link "backup":
+          - /url: /modules/backup
+      - cell "application"
+      - cell "tappaas3"
+      - cell "mgmt"
+      - cell "mgmt"
+      - cell "backup"
+      - cell "health ok Testing"
+    - row "running logging vm 150 tappaas1 mgmt mgmt logging health ok backup covered Production":
+      - cell "running logging":
+        - link "logging":
+          - /url: /modules/logging
+      - cell "vm 150"
+      - cell "tappaas1"
+      - cell "mgmt"
+      - cell "mgmt"
+      - cell "logging"
+      - cell "health ok backup covered Production"
+    - row "none storage application — mgmt mgmt storage health ok Development":
+      - cell "none storage":
+        - link "storage":
+          - /url: /modules/storage
+      - cell "application"
+      - cell "—"
+      - cell "mgmt"
+      - cell "mgmt"
+      - cell "storage"
+      - cell "health ok Development"
+    - row "none templates vm — — mgmt templates health ok Production":
+      - cell "none templates":
+        - link "templates":
+          - /url: /modules/templates
+      - cell "vm"
+      - cell "—"
+      - cell "—"
+      - cell "mgmt"
+      - cell "templates"
+      - cell "health ok Production"
+    - row "running network vm 110 tappaas1 mgmt mgmt network health unknown backup covered Production":
+      - cell "running network":
+        - link "network":
+          - /url: /modules/network
+      - cell "vm 110"
+      - cell "tappaas1"
+      - cell "mgmt"
+      - cell "mgmt"
+      - cell "network"
+      - cell "health unknown backup covered Production"
+    - row "ai 3 installs":
+      - cell "ai 3 installs"
+    - row "running litellm vm 310 tappaas2 rossen rossen litellm health warning backup covered CVE act Development":
+      - cell "running litellm":
+        - link "litellm":
+          - /url: /modules/litellm
+      - cell "vm 310"
+      - cell "tappaas2"
+      - cell "rossen"
+      - cell "rossen"
+      - cell "litellm"
+      - cell "health warning backup covered CVE act Development"
+    - row "running openwebui vm 311 tappaas2 rossen rossen openwebui health warning backup covered CVE act Development":
+      - cell "running openwebui":
+        - link "openwebui":
+          - /url: /modules/openwebui
+      - cell "vm 311"
+      - cell "tappaas2"
+      - cell "rossen"
+      - cell "rossen"
+      - cell "openwebui"
+      - cell "health warning backup covered CVE act Development"
+    - row "running vllm-amd lxc 312 tappaas2 rossen rossen vllm-amd health warning backup covered CVE act Development":
+      - cell "running vllm-amd":
+        - link "vllm-amd":
+          - /url: /modules/vllm-amd
+      - cell "lxc 312"
+      - cell "tappaas2"
+      - cell "rossen"
+      - cell "rossen"
+      - cell "vllm-amd"
+      - cell "health warning backup covered CVE act Development"
+    - row "collaboration 5 installs":
+      - cell "collaboration 5 installs"
+    - row "running euro-office vm 343 tappaas2 rossen rossen euro-office health warning backup covered CVE act Testing":
+      - cell "running euro-office":
+        - link "euro-office":
+          - /url: /modules/euro-office
+      - cell "vm 343"
+      - cell "tappaas2"
+      - cell "rossen"
+      - cell "rossen"
+      - cell "euro-office"
+      - cell "health warning backup covered CVE act Testing"
+    - row "running coturn vm 341 tappaas1 dmz rossen coturn health ok backup covered Testing":
+      - cell "running coturn":
+        - link "coturn":
+          - /url: /modules/coturn
+      - cell "vm 341"
+      - cell "tappaas1"
+      - cell "dmz"
+      - cell "rossen"
+      - cell "coturn"
+      - cell "health ok backup covered Testing"
+    - row "running lazysite vm 380 tappaas2 dmz rossen lazysite health ok backup not-opted Development":
+      - cell "running lazysite":
+        - link "lazysite":
+          - /url: /modules/lazysite
+      - cell "vm 380"
+      - cell "tappaas2"
+      - cell "dmz"
+      - cell "rossen"
+      - cell "lazysite"
+      - cell "health ok backup not-opted Development"
+    - row "running nextcloud vm 340 tappaas1 rossen rossen nextcloud health ok backup covered Production":
+      - cell "running nextcloud":
+        - link "nextcloud":
+          - /url: /modules/nextcloud
+      - cell "vm 340"
+      - cell "tappaas1"
+      - cell "rossen"
+      - cell "rossen"
+      - cell "nextcloud"
+      - cell "health ok backup covered Production"
+    - row "running nextcloud-hpb vm 342 tappaas2 rossen rossen nextcloud-hpb health ok backup covered Testing":
+      - cell "running nextcloud-hpb":
+        - link "nextcloud-hpb":
+          - /url: /modules/nextcloud-hpb
+      - cell "vm 342"
+      - cell "tappaas2"
+      - cell "rossen"
+      - cell "rossen"
+      - cell "nextcloud-hpb"
+      - cell "health ok backup covered Testing"
+    - row "devops 2 installs":
+      - cell "devops 2 installs"
+    - row "running forgejo vm 350 tappaas2 rossen rossen forgejo health ok backup covered Testing":
+      - cell "running forgejo":
+        - link "forgejo":
+          - /url: /modules/forgejo
+      - cell "vm 350"
+      - cell "tappaas2"
+      - cell "rossen"
+      - cell "rossen"
+      - cell "forgejo"
+      - cell "health ok backup covered Testing"
+    - row "running woodpecker vm 351 tappaas2 rossen rossen woodpecker health ok backup covered Testing":
+      - cell "running woodpecker":
+        - link "woodpecker":
+          - /url: /modules/woodpecker
+      - cell "vm 351"
+      - cell "tappaas2"
+      - cell "rossen"
+      - cell "rossen"
+      - cell "woodpecker"
+      - cell "health ok backup covered Testing"
+    - row "home 5 installs":
+      - cell "home 5 installs"
+    - row "running deconz vm 213 tappaas2 test test deconz-test health warning backup covered CVE act Development":
+      - cell "running deconz":
+        - link "deconz":
+          - /url: /modules/deconz-test
+      - cell "vm 213"
+      - cell "tappaas2"
+      - cell "test"
+      - cell "test"
+      - cell "deconz-test"
+      - cell "health warning backup covered CVE act Development"
+    - row "running karakeep vm 371 tappaas3 rossen rossen karakeep health warning backup covered CVE act Development":
+      - cell "running karakeep":
+        - link "karakeep":
+          - /url: /modules/karakeep
+      - cell "vm 371"
+      - cell "tappaas3"
+      - cell "rossen"
+      - cell "rossen"
+      - cell "karakeep"
+      - cell "health warning backup covered CVE act Development"
+    - row "running nomad vm 370 tappaas3 dmz rossen nomad health warning backup covered CVE act Development":
+      - cell "running nomad":
+        - link "nomad":
+          - /url: /modules/nomad
+      - cell "vm 370"
+      - cell "tappaas3"
+      - cell "dmz"
+      - cell "rossen"
+      - cell "nomad"
+      - cell "health warning backup covered CVE act Development"
+    - row "running immich vm 361 tappaas1 rossen rossen immich health ok backup covered Testing":
+      - cell "running immich":
+        - link "immich":
+          - /url: /modules/immich
+      - cell "vm 361"
+      - cell "tappaas1"
+      - cell "rossen"
+      - cell "rossen"
+      - cell "immich"
+      - cell "health ok backup covered Testing"
+    - row "running jellyfin vm 360 tappaas1 rossen rossen jellyfin health ok backup covered Testing":
+      - cell "running jellyfin":
+        - link "jellyfin":
+          - /url: /modules/jellyfin
+      - cell "vm 360"
+      - cell "tappaas1"
+      - cell "rossen"
+      - cell "rossen"
+      - cell "jellyfin"
+      - cell "health ok backup covered Testing"
+    - row "misc 2 installs":
+      - cell "misc 2 installs"
+    - row "none mikrotik application — rossen rossen mikrotik health warning Development":
+      - cell "none mikrotik":
+        - link "mikrotik":
+          - /url: /modules/mikrotik
+      - cell "application"
+      - cell "—"
+      - cell "rossen"
+      - cell "rossen"
+      - cell "mikrotik"
+      - cell "health warning Development"
+    - row "running unifi-os vm 811 tappaas3 mgmt rossen unifi-os health warning backup covered Development":
+      - cell "running unifi-os":
+        - link "unifi-os":
+          - /url: /modules/unifi-os
+      - cell "vm 811"
+      - cell "tappaas3"
+      - cell "mgmt"
+      - cell "rossen"
+      - cell "unifi-os"
+      - cell "health warning backup covered Development"
+    - row "security 1 install":
+      - cell "security 1 install"
+    - row "running vaultwarden vm 610 tappaas3 dmz rossen vaultwarden health ok backup covered Development":
+      - cell "running vaultwarden":
+        - link "vaultwarden":
+          - /url: /modules/vaultwarden
+      - cell "vm 610"
+      - cell "tappaas3"
+      - cell "dmz"
+      - cell "rossen"
+      - cell "vaultwarden"
+      - cell "health ok backup covered Development"

@@ -1,0 +1,284 @@
+- navigation:
+  - link "TAPPaaS":
+    - /url: https://tappaas.org/operate/
+  - text: Rossen Production Cluster
+  - list:
+    - listitem:
+      - link "Overview":
+        - /url: /
+    - listitem:
+      - link "Day 1 setup wizard":
+        - /url: /setup/day1
+    - listitem:
+      - link "Day 2 wizards":
+        - /url: /setup/day2
+    - listitem:
+      - link "Health":
+        - /url: /health
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Site":
+        - /url: /site
+    - listitem:
+      - link "Environments":
+        - /url: /environments
+    - listitem:
+      - link "Network":
+        - /url: /zones
+    - listitem:
+      - link "Modules":
+        - /url: /modules
+    - listitem:
+      - link "Identity":
+        - /url: /identity
+    - listitem:
+      - link "Assets":
+        - /url: /assets
+    - listitem:
+      - link "Backup":
+        - /url: /backup
+    - listitem: Security
+    - listitem:
+      - link "Activity":
+        - /url: /activity
+  - text: channel unstable tappaas-cicd · console P3
+- banner:
+  - text: site rossen
+  - button "Refresh"
+  - text: operator · installer
+- heading "Network" [level=1]
+- text: network-manager · read 09:54
+- heading "Zones" [level=2]
+- button "Add a zone…"
+- button "Reconcile the network…"
+- application:
+  - img:
+    - group "Edge from mgmt to all"
+  - img:
+    - group "Edge from mgmt to wan"
+  - img:
+    - group "Edge from admin to mgmt"
+  - img:
+    - group "Edge from rossen to wan"
+  - img:
+    - group "Edge from dmz to rossen": pinhole
+  - img:
+    - group "Edge from work to wan"
+  - img:
+    - group "Edge from iotCloud to wan"
+  - img:
+    - group "Edge from home to iotCloud": pinhole
+  - img:
+    - group "Edge from iotUntrust to wan"
+  - img:
+    - group "Edge from dmz to wan"
+  - img:
+    - group "Edge from wan to dmz": pinhole
+  - img:
+    - group "Edge from home to dmz": pinhole
+  - img:
+    - group "Edge from home to wan"
+  - img:
+    - group "Edge from guest to wan"
+  - img:
+    - group "Edge from test to wan"
+  - img:
+    - group "Edge from rossen to iotLocal": pinhole · rossen
+  - img:
+    - group "Edge from rossen to iotCloud": pinhole · rossen
+  - img:
+    - group "Edge from rossen to iotCams": pinhole · rossen
+  - img:
+    - group "Edge from home to rossen": serves rossen
+  - group: mgmt Management · Manual · tier 0 mgmt's zone
+  - group: netbird Overlay · Manual 100.64.0.0/10
+  - group: edge Overlay · Manual 10.255.0.0/31
+  - group: admin Overlay · Manual 10.255.1.0/24
+  - group: rossen vlan 200 Service · Active · tier 1 rossen's zone
+  - group: work vlan 320 Client · Inactive 10.3.20.0/24
+  - group: iotLocal vlan 410 IoT · Active · tier 6 serves rossen
+  - group: iotCloud vlan 420 IoT · Active · tier 3 serves rossen
+  - group: iotCams vlan 430 IoT · Active · tier 6 serves rossen
+  - group: iotUntrust vlan 440 IoT · Disabled · tier 3 10.4.40.0/24
+  - group: dmz vlan 610 DMZ · Mandatory · tier 4 10.6.0.0/24
+  - group: home vlan 310 Client · Active · tier 2 serves rossen
+  - group: guest vlan 510 Guest · Active · tier 3 10.5.10.0/24
+  - group: WAN / internet vlan 100 wan · Manual public 203.0.113.190
+  - group: buddy Overlay · Manual 10.255.2.0/24
+  - group: test vlan 299 Service · Active · tier 1 test's zone
+  - group: every zone
+  - group: tier 0 · management
+  - group: overlays
+  - group: tier 1 · services
+  - group: tier 2 · trusted clients
+  - group: tier 6 · no egress
+  - group: tier 3
+  - group: tier 4 · DMZ
+  - group: internet · tier 5
+  - img
+  - button "Zoom In":
+    - img
+  - button "Zoom Out":
+    - img
+  - button "Fit View":
+    - img
+- text: "Management Service Client IoT Guest DMZ Overlay WAN → may reach (access-to) · ⇢ may be let in through a pinhole (pinhole-allowed-from) · faded: inactive or disabled · click a zone, or its row below, for its fields and verbs"
+- table:
+  - rowgroup:
+    - row "zone type vlan IPv4 IPv6 environment state tier":
+      - columnheader "zone"
+      - columnheader "type"
+      - columnheader "vlan"
+      - columnheader "IPv4"
+      - columnheader "IPv6"
+      - columnheader "environment"
+      - columnheader "state"
+      - columnheader "tier"
+  - rowgroup:
+    - row "mgmt Management 0 10.0.0.0/24 - mgmt info Manual 0":
+      - cell "mgmt"
+      - cell "Management"
+      - cell "0"
+      - cell "10.0.0.0/24"
+      - cell "-"
+      - cell "mgmt"
+      - cell "info Manual": Manual
+      - cell "0"
+    - row "netbird Overlay 0 100.64.0.0/10 - info Manual":
+      - cell "netbird"
+      - cell "Overlay"
+      - cell "0"
+      - cell "100.64.0.0/10"
+      - cell "-"
+      - cell
+      - cell "info Manual": Manual
+      - cell
+    - row "edge Overlay 0 10.255.0.0/31 - info Manual":
+      - cell "edge"
+      - cell "Overlay"
+      - cell "0"
+      - cell "10.255.0.0/31"
+      - cell "-"
+      - cell
+      - cell "info Manual": Manual
+      - cell
+    - row "admin Overlay 0 10.255.1.0/24 - info Manual":
+      - cell "admin"
+      - cell "Overlay"
+      - cell "0"
+      - cell "10.255.1.0/24"
+      - cell "-"
+      - cell
+      - cell "info Manual": Manual
+      - cell
+    - row "rossen Service 200 10.2.0.0/24 2001:db8:3:4520::/64 rossen pass Active 1":
+      - cell "rossen"
+      - cell "Service"
+      - cell "200"
+      - cell "10.2.0.0/24"
+      - cell "2001:db8:3:4520::/64"
+      - cell "rossen"
+      - cell "pass Active": Active
+      - cell "1"
+    - row "work Client 320 10.3.20.0/24 2001:db8:3:4532::/64 skip Inactive":
+      - cell "work"
+      - cell "Client"
+      - cell "320"
+      - cell "10.3.20.0/24"
+      - cell "2001:db8:3:4532::/64"
+      - cell
+      - cell "skip Inactive": Inactive
+      - cell
+    - row "iotLocal IoT 410 10.4.10.0/24 2001:db8:3:4541::/64 rossen pass Active 6":
+      - cell "iotLocal"
+      - cell "IoT"
+      - cell "410"
+      - cell "10.4.10.0/24"
+      - cell "2001:db8:3:4541::/64"
+      - cell "rossen"
+      - cell "pass Active": Active
+      - cell "6"
+    - row "iotCloud IoT 420 10.4.20.0/24 2001:db8:3:4542::/64 rossen pass Active 3":
+      - cell "iotCloud"
+      - cell "IoT"
+      - cell "420"
+      - cell "10.4.20.0/24"
+      - cell "2001:db8:3:4542::/64"
+      - cell "rossen"
+      - cell "pass Active": Active
+      - cell "3"
+    - row "iotCams IoT 430 10.4.30.0/24 2001:db8:3:4543::/64 rossen pass Active 6":
+      - cell "iotCams"
+      - cell "IoT"
+      - cell "430"
+      - cell "10.4.30.0/24"
+      - cell "2001:db8:3:4543::/64"
+      - cell "rossen"
+      - cell "pass Active": Active
+      - cell "6"
+    - row "iotUntrust IoT 440 10.4.40.0/24 2001:db8:3:4544::/64 skip Disabled 3":
+      - cell "iotUntrust"
+      - cell "IoT"
+      - cell "440"
+      - cell "10.4.40.0/24"
+      - cell "2001:db8:3:4544::/64"
+      - cell
+      - cell "skip Disabled": Disabled
+      - cell "3"
+    - row "dmz DMZ 610 10.6.0.0/24 2001:db8:3:4561::/64 pass Mandatory 4":
+      - cell "dmz"
+      - cell "DMZ"
+      - cell "610"
+      - cell "10.6.0.0/24"
+      - cell "2001:db8:3:4561::/64"
+      - cell
+      - cell "pass Mandatory": Mandatory
+      - cell "4"
+    - row "home Client 310 10.3.10.0/24 2001:db8:3:4531::/64 rossen pass Active 2":
+      - cell "home"
+      - cell "Client"
+      - cell "310"
+      - cell "10.3.10.0/24"
+      - cell "2001:db8:3:4531::/64"
+      - cell "rossen"
+      - cell "pass Active": Active
+      - cell "2"
+    - row "guest Guest 510 10.5.10.0/24 2001:db8:3:4551::/64 pass Active 3":
+      - cell "guest"
+      - cell "Guest"
+      - cell "510"
+      - cell "10.5.10.0/24"
+      - cell "2001:db8:3:4551::/64"
+      - cell
+      - cell "pass Active": Active
+      - cell "3"
+    - row "wan WAN 100 10.1.0.0/24 - info Manual":
+      - cell "wan"
+      - cell "WAN"
+      - cell "100"
+      - cell "10.1.0.0/24"
+      - cell "-"
+      - cell
+      - cell "info Manual": Manual
+      - cell
+    - row "buddy Overlay 0 10.255.2.0/24 - info Manual":
+      - cell "buddy"
+      - cell "Overlay"
+      - cell "0"
+      - cell "10.255.2.0/24"
+      - cell "-"
+      - cell
+      - cell "info Manual": Manual
+      - cell
+    - row "test Service 299 10.2.99.0/24 2001:db8:3:4501::/64 test pass Active 1":
+      - cell "test"
+      - cell "Service"
+      - cell "299"
+      - cell "10.2.99.0/24"
+      - cell "2001:db8:3:4501::/64"
+      - cell "test"
+      - cell "pass Active": Active
+      - cell "1"
+- paragraph: "IPv6: each zone's /64 is its ipv6Subnet within 2001:db8:3:4500::/56 (delegated to the WAN, as the firewall holds it now); a zone without an ipv6Subnet has none."

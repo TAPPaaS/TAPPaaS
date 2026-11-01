@@ -1,0 +1,262 @@
+- navigation:
+  - list:
+    - listitem:
+      - link "Overview":
+        - /url: /
+    - listitem:
+      - link "Day 1 setup wizard":
+        - /url: /setup/day1
+    - listitem:
+      - link "Day 2 wizards":
+        - /url: /setup/day2
+    - listitem:
+      - link "Health":
+        - /url: /health
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Site":
+        - /url: /site
+    - listitem:
+      - link "Environments":
+        - /url: /environments
+    - listitem:
+      - link "Network":
+        - /url: /zones
+    - listitem:
+      - link "Modules":
+        - /url: /modules
+    - listitem:
+      - link "Identity":
+        - /url: /identity
+    - listitem:
+      - link "Assets":
+        - /url: /assets
+    - listitem:
+      - link "Backup":
+        - /url: /backup
+    - listitem: Security
+    - listitem:
+      - link "Activity":
+        - /url: /activity
+- banner:
+  - text: site rossen
+  - button "Refresh"
+  - text: operator · installer
+- heading "Day 2 wizards" [level=1]
+- text: the guided sequences that grow and run the site
+- heading "The site" [level=2]
+- text: Add a node
+- paragraph: Adding a new physical machine as a Proxmox node of this site. This includes defining its connectivity and its boot disk, configuring it in the cluster, and setting up its data pools.
+- button "Add a node…"
+- dialog "Add a node":
+  - heading "Add a node" [level=2]
+  - button "close": ×
+  - paragraph: Adding a new physical machine as a Proxmox node of this site. This includes defining its connectivity and its boot disk, configuring it in the cluster, and setting up its data pools. Nothing changes until you Declare the node in stage 1.
+  - list:
+    - listitem:
+      - button "warn 0 · Prepare boot medium pending ▾" [expanded]: 0 · Prepare boot medium pending ▾
+      - paragraph: The network-boot files and the installer stick image on the mothership, built once per Proxmox version and checked here; then, for a machine that cannot network-boot, the stick. Continue when the machine network-boots or you have a stick already.
+      - paragraph: "Every new node installs from one medium on the mothership: a machine that network-boots (PXE) fetches it from there, a machine that cannot boots the installer stick made from the same image. The cicd install built it once; it is built again here when it is missing, from before this version, or wanted for a new Proxmox version."
+      - list:
+        - listitem: network-boot files on the mothership — in place, current
+        - listitem: installer stick image — 1.8 GB, 2026-10-31T16:34:37+0100
+      - paragraph: "The installer stick — only for a machine that cannot network-boot. One image for every node: the stick fetches the node's own answer from the mothership once stage 1's job runs. Two ways to write it:"
+      - paragraph: By a TAPPaaS node — a stick in a free USB port of an existing node; the mothership is a VM with no USB port, so it writes through the node
+      - text: node *
+      - 'combobox "node * The node the stick is plugged into: the mothership is a VM and has no USB port."':
+        - option "tappaas1" [selected]
+        - option "tappaas2"
+        - option "tappaas3"
+        - option "tappaas4"
+      - text: "The node the stick is plugged into: the mothership is a VM and has no USB port. USB stick *"
+      - combobox "USB stick * Insert the stick into tappaas1; the list is read again every few seconds. A stick in use is listed but cannot be written." [disabled]:
+        - option "— no USB stick in tappaas1" [selected]
+      - text: "Insert the stick into tappaas1; the list is read again every few seconds. A stick in use is listed but cannot be written. The mothership copies the installer stick image (the same for every node) onto the stick in tappaas1, erasing it, then ejects it: a minute or two. The node needs nothing in advance. device *"
+      - textbox "device *":
+        - /placeholder: <device>
+      - text: runs
+      - code: $ site-manager node usb write tappaas1 --yes
+      - button "Copy"
+      - button "Write the stick" [disabled]
+      - text: pick the stick first
+      - paragraph: On your own machine — copy the image from the mothership, then write it to a stick (everything on the stick is erased).
+      - paragraph: Linux
+      - list:
+        - listitem: scp tappaas@tappaas-cicd.mgmt.internal:/var/lib/tappaas-pxe/tappaas-usb.iso .
+        - listitem: "Find the stick: lsblk (a disk of the stick's size, e.g. sdb; unmount anything mounted from it)."
+        - listitem: sudo dd if=tappaas-usb.iso of=/dev/sdb bs=4M status=progress conv=fsync, then sudo eject /dev/sdb.
+      - paragraph: macOS
+      - list:
+        - listitem: "In Terminal: scp tappaas@tappaas-cicd.mgmt.internal:/var/lib/tappaas-pxe/tappaas-usb.iso ."
+        - listitem: "Find the stick: diskutil list (an external disk of the stick's size, e.g. disk4), then diskutil unmountDisk /dev/disk4."
+        - listitem: sudo dd if=tappaas-usb.iso of=/dev/rdisk4 bs=4m status=progress, then diskutil eject /dev/disk4. Ignore "The disk you inserted was not readable" if macOS shows it.
+      - paragraph: Windows
+      - list:
+        - listitem: "In PowerShell: scp tappaas@tappaas-cicd.mgmt.internal:/var/lib/tappaas-pxe/tappaas-usb.iso . (scp comes with Windows 10 and later)."
+        - listitem:
+          - text: Write it with
+          - link "Rufus":
+            - /url: https://rufus.ie
+          - text: or
+          - link "balenaEtcher":
+            - /url: https://etcher.balena.io
+          - text: ": pick the stick and tappaas-usb.iso, and in Rufus choose DD image mode when asked."
+      - paragraph: balenaEtcher works the same way on Linux and macOS, for a stick without the terminal.
+      - button "Continue →"
+      - text: For a network boot, or with a stick you already have, nothing more is needed here.
+    - listitem:
+      - button "fail 1 · Declare the node to do ▾" [expanded]: 1 · Declare the node to do ▾
+      - paragraph: Its name, where it is cabled, its initial ethernet port and boot disks, and a few other options. Declare records its install answer on the mothership and opens the boot window; stage 2 says how to boot the machine.
+      - paragraph: "The machine — as recorded in the asset register. Pick it when it was recorded before (bought, racked, cabled, or kept in stock when a node was removed): its recorded cable and MAC fill in below. Blank: once the node has joined, the machine is recognised among the free servers by its serial number or a network card's MAC, and when none matches a new record is made for it (srv-NN), to be placed in stage 6. Either way, what the machine says of itself — serial number, maker, model, its network cards' MACs — is added to its record where the record lacks it."
+      - paragraph: "Where it is cabled — one of two:"
+      - list:
+        - listitem: "Connected to a TAPPaaS-managed switch: pick its port (the free ones are listed). TAPPaaS makes it a node trunk and learns the machine's MAC there; the MAC field may stay blank."
+        - listitem: "A self-managed switch: set the port as a trunk: the management network untagged (native), and tagged VLAN 200, 299, 310, 410, 420, 430, 510, 610 and leave the switch port at none. Give the MAC (from the machine's label, its BIOS or its BMC); left blank, the first machine that asks for an install answer while the boot window is open gets this node's, so keep other machines from booting the installer meanwhile."
+      - paragraph: "Boot disk: specify the boot disk and optionally a mirror disk. Default: the installer takes the smallest SSD or NVMe disk, and both when the smallest two are the same model and size (mirrored); when nothing matches, the node's own screen asks."
+      - paragraph: Its data pools come after the join (stage 4), from the disks it really has.
+      - paragraph: When applied, TAPPaaS records the node's install answer on the mothership and opens its network-boot window; stage 2 says how to boot it, from the network or from the USB stick image (the same for every node).
+      - text: node name *
+      - 'textbox "node name * The Proxmox host name; tappaas5 gets the management address 10.0.0.14. Nodes today: tappaas1, tappaas2, tappaas3, tappaas4."': tappaas5
+      - text: "The Proxmox host name; tappaas5 gets the management address 10.0.0.14. Nodes today: tappaas1, tappaas2, tappaas3, tappaas4."
+      - group "Options":
+        - text: Options the machine
+        - 'combobox "the machine The machine as the asset register records it: a server in stock or placed, in no role. Its recorded cable and MAC fill in where it is cabled. Blank: recognised once it has joined, or recorded as new."':
+          - 'option "— blank: recognised by its serial number or MAC once it has joined, or recorded as new" [selected]'
+        - text: "The machine as the asset register records it: a server in stock or placed, in no role. Its recorded cable and MAC fill in where it is cabled. Blank: recognised once it has joined, or recorded as new. switch port"
+        - combobox "switch port The switch and port the machine is cabled to. On a switch TAPPaaS manages, the port is set up for a node and the machine's MAC is learned there when it boots the installer. On a switch you manage yourself, leave it at none and set the port up by hand (above).":
+          - 'option "— none: the port is configured by hand" [selected]'
+          - option "crs-a port ether1 — unused, no link"
+          - option "crs-a port sfp-sfpplus2 — parked, no link"
+          - option "crs-a port sfp-sfpplus3 — parked, no link"
+          - option "crs-a port sfp-sfpplus4 — parked, no link"
+          - option "crs-a port sfp-sfpplus5 — parked, no link"
+          - option "crs-a port sfp-sfpplus6 — parked, no link"
+          - option "crs-a port sfp-sfpplus7 — parked, no link"
+          - option "crs-a port sfp-sfpplus8 — parked, no link"
+          - option "crs-a port sfp-sfpplus9 — parked, no link"
+          - option "crs-a port sfp-sfpplus10 — parked, no link"
+          - option "crs-a port sfp-sfpplus11 — parked, no link"
+          - option "crs-a port sfp-sfpplus12 — parked, no link"
+          - option "crs-a port sfp-sfpplus13 — parked, no link"
+          - option "crs-b port ether1 — unused, no link"
+          - option "crs-b port sfp-sfpplus2 — parked, no link"
+          - option "crs-b port sfp-sfpplus3 — parked, no link"
+          - option "crs-b port sfp-sfpplus4 — parked, no link"
+          - option "crs-b port sfp-sfpplus5 — parked, no link"
+          - option "crs-b port sfp-sfpplus6 — parked, no link"
+          - option "crs-b port sfp-sfpplus7 — parked, no link"
+          - option "crs-b port sfp-sfpplus8 — parked, no link"
+          - option "crs-b port sfp-sfpplus9 — parked, no link"
+          - option "crs-b port sfp-sfpplus10 — parked, no link"
+          - option "crs-b port sfp-sfpplus11 — parked, no link"
+          - option "crs-b port sfp-sfpplus12 — parked, no link"
+          - option "crs-b port sfp-sfpplus13 — parked, no link"
+          - option "USW Pro XG 10 PoE port 8 — parked, no link"
+          - option "USW Pro XG 10 PoE port 10 — parked, no link"
+        - text: The switch and port the machine is cabled to. On a switch TAPPaaS manages, the port is set up for a node and the machine's MAC is learned there when it boots the installer. On a switch you manage yourself, leave it at none and set the port up by hand (above). MAC address
+        - 'textbox "MAC address The MAC address of the cabled network card, from the machine''s label, its BIOS or its BMC. Blank: learned on the switch port; with no switch port either, the first machine that asks for an install answer while the boot window is open gets this node''s, so keep the window short."':
+          - /placeholder: "e.g. 58:47:ca:7a:12:34 — blank: learned on the switch port; with none, the first machine that asks"
+        - text: "The MAC address of the cabled network card, from the machine's label, its BIOS or its BMC. Blank: learned on the switch port; with no switch port either, the first machine that asks for an install answer while the boot window is open gets this node's, so keep the window short. boot disk"
+        - 'textbox "boot disk The disk Proxmox is installed on (wiped): its model, size or serial, when that names one disk. Blank: the smallest SSD or NVMe disk, and both when the smallest two are alike (mirrored). ask: chosen on the machine''s own screen."':
+          - /placeholder: "blank: the smallest SSD/NVMe"
+        - text: "The disk Proxmox is installed on (wiped): its model, size or serial, when that names one disk. Blank: the smallest SSD or NVMe disk, and both when the smallest two are alike (mirrored). ask: chosen on the machine's own screen. mirror disk"
+        - 'textbox "mirror disk A second disk to mirror the boot disk onto, named the same way. Blank: a mirror only when the boot disk names two disks alike. none: one disk."':
+          - /placeholder: "blank: mirrored only when two disks alike match · none: one disk"
+        - text: "A second disk to mirror the boot disk onto, named the same way. Blank: a mirror only when the boot disk names two disks alike. none: one disk. boot window (seconds)"
+        - 'textbox "boot window (seconds) How long the boot window stays open (default: two hours)."':
+          - /placeholder: "7200"
+        - text: "How long the boot window stays open (default: two hours)."
+        - checkbox "no restart after its first update Keep the node running on the installer's kernel. By default it restarts into its newest kernel after its first update, before it takes any guests, when the cluster can spare it."
+        - text: no restart after its first update Keep the node running on the installer's kernel. By default it restarts into its newest kernel after its first update, before it takes any guests, when the cluster can spare it.
+      - button "Declare tappaas5"
+    - listitem:
+      - 'button "warn 2 · Boot the machine: from the network (PXE) or a USB stick (by hand) pending ▸"': "2 · Boot the machine: from the network (PXE) or a USB stick (by hand) pending ▸"
+      - paragraph: Power it on and boot it once from the network or from the installer stick; the mothership answers with the installer either way.
+    - listitem:
+      - button "warn 3 · Install and join (automatic) pending ▸": 3 · Install and join (automatic) pending ▸
+      - paragraph: Proxmox installs onto its boot disk(s), the node joins the cluster, is patched and restarted, and is recorded as a node of the site, its machine in the asset register.
+    - listitem:
+      - button "warn 4 · Define data pools pending ▸": 4 · Define data pools pending ▸
+      - paragraph: Until it has one, its guests go on its boot disk. Proposed from its free disks.
+    - listitem:
+      - button "warn 5a · A second lan port (bond, then the failover test) pending ▸": 5a · A second lan port (bond, then the failover test) pending ▸
+      - paragraph: "The lan carries management, the cluster link and every guest: a second port, paired with the first, keeps the node reachable when one fails. Its switch port is set up with it, and a test pulls one to prove it."
+    - listitem:
+      - button "warn 5b · The WAN port pending ▸": 5b · The WAN port pending ▸
+      - paragraph: "Only for a node that may carry the firewall: the port, and optionally the switch port, for its WAN."
+    - listitem:
+      - button "skip 6 · Place the machine correctly in the physical view optional ▸": 6 · Place the machine correctly in the physical view optional ▸
+      - paragraph: "Its machine — the one picked in stage 1, or the one recognised or recorded for it (srv-NN) — and its location, room and rack: where the machine actually stands."
+- text: Remove a node
+- paragraph: Takes a machine out of the cluster for good. The console first checks that nothing still needs it (something running on it, a copy kept on it, the site's backup server) and says where to move each; then the machine leaves the cluster, its switch ports are parked and the node is gone from the site. The other nodes are untouched.
+- button "Remove a node…"
+- text: Adopt a machine
+- paragraph: A machine that already runs — a Debian host in a cupboard or a data centre — becomes a module of the site, at the location it is at. The mothership's key is added for root, its config is written and nothing else on it changes.
+- button "Adopt a machine…"
+- text: Add a satellite
+- paragraph: A rented machine with a public IPv4 gives a site without one public ingress and the admin-VPN relay.
+- button "Add a satellite…"
+- heading "The physical view" [level=2]
+- text: Record the rooms
+- paragraph:
+  - text: Where the hardware stands, at one of the site's locations (the primary unless you choose another; a location the site lacks is added in the Site page's
+  - link "Locations":
+    - /url: /site#locations
+  - text: ).
+  - link "KnudAnchersVej95":
+    - /url: /site#location-knudanchersvej95
+  - text: ":"
+  - link "Basement":
+    - /url: /site/physical?select=room%3Abasement
+  - text: ","
+  - link "DiningRoom":
+    - /url: /site/physical?select=room%3Adiningroom
+  - text: ","
+  - link "LivingRoom":
+    - /url: /site/physical?select=room%3Astue
+  - text: .
+- button "Add a room…"
+- text: Add a rack
+- paragraph: "A rack the site's hardware stands in: its height in units, its width, how its units are numbered, and its room."
+- button "Add a rack…"
+- text: Place the nodes and switches
+- paragraph: Every device is placed.
+- combobox [disabled]
+- button "Place…" [disabled]
+- text: Record what the cluster cannot see
+- paragraph: "A device nothing manages — the ISP's modem, an ONT, a UPS, a patch panel — with its kind, ports and location; then place it. Recorded: ISP modem, patchpanel1, patchpanel 2."
+- button "Record a device…"
+- paragraph:
+  - text: "3 room(s): basement at knudanchersvej95, stue at knudanchersvej95, diningroom; every node and switch placed; recorded: ISP modem (modem), patchpanel1 (patch-panel), patchpanel 2 (patch-panel) · Done when every node and switch is placed. The"
+  - link "Physical view":
+    - /url: /site/physical
+  - text: draws the result by location, room and rack.
+- heading "Environments, people and stacks" [level=2]
+- text: Add an environment
+- paragraph: A new environment — its record, its zone, its domain — then the reconcile that makes it live.
+- button "Add an environment…"
+- text: Add a user
+- paragraph: "A person who signs in: their name, email, groups and roles, staged and then pushed to Authentik."
+- button "Add a user…"
+- text: Reset a user's password
+- paragraph: "Gives a user who cannot sign in a new way in: a one-time link where they set a password of their own, or a temporary password you hand over."
+- button "Reset a user's password…"
+- text: Add a stack
+- paragraph: Every module of a stack installed in dependency order; the preview is the plan.
+- button "Add a stack…"
+- heading "Access and backup" [level=2]
+- text: Enrol a device for mgmt access
+- paragraph: Register a laptop or other device running WireGuard to be able to connect to the TAPPaaS management zone.
+- button "Enrol a device…"
+- text: Add a backup buddy
+- paragraph: Another site's PBS keeps an off-site copy — pulled through its own tunnel — or this site keeps theirs.
+- button "Add a backup buddy…"
+- text: Write the backup keys to a USB stick
+- paragraph: "Writes the backup encryption keys, encrypted with a password of your choice, to a USB stick in a node: the copy of the keys that leaves the building. Without it an encrypted off-site backup cannot be restored after a full loss. Keep two sticks, and the password apart from them."
+- button "Write the backup keys…"
+- heading "WiFi" [level=2]
+- text: Add WiFi to a zone
+- paragraph: Creates or changes a site-wide SSID with its passphrase and associates it with a zone. If access points are managed, they are configured with the SSID and route it to the zone.
+- button "Add or change WiFi…"

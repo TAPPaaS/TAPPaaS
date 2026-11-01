@@ -1,0 +1,124 @@
+- navigation:
+  - list:
+    - listitem:
+      - link "Overview":
+        - /url: /
+    - listitem:
+      - link "Day 1 setup wizard":
+        - /url: /setup/day1
+    - listitem:
+      - link "Day 2 wizards":
+        - /url: /setup/day2
+    - listitem:
+      - link "Health":
+        - /url: /health
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Site":
+        - /url: /site
+    - listitem:
+      - link "Environments":
+        - /url: /environments
+    - listitem:
+      - link "Network":
+        - /url: /zones
+    - listitem:
+      - link "Modules":
+        - /url: /modules
+    - listitem:
+      - link "Identity":
+        - /url: /identity
+    - listitem:
+      - link "Assets":
+        - /url: /assets
+    - listitem:
+      - link "Backup":
+        - /url: /backup
+    - listitem: Security
+    - listitem:
+      - link "Activity":
+        - /url: /activity
+- banner:
+  - text: site rossen
+  - button "Refresh"
+  - text: operator · installer
+- heading "Health" [level=1]
+- text: 2 critical · 32 warning · 0 silenced · 17 unknown · 423 ok · read 01/11/2026 09:54
+- button "Tree"
+- button "Details"
+- button "Fit"
+- combobox "condition type":
+  - option "every condition" [selected]
+  - option "operational"
+  - option "drift"
+  - option "capacity"
+  - option "security"
+  - option "maintenance"
+  - option "backup"
+  - option "impact"
+- combobox "class":
+  - option "every class" [selected]
+  - option "address"
+  - option "app"
+  - option "appliance"
+  - option "backup-peer"
+  - option "cluster"
+  - option "controller"
+  - option "datastore"
+  - option "device"
+  - option "disk"
+  - option "dns-name"
+  - option "environment"
+  - option "group"
+  - option "location"
+  - option "lxc"
+  - option "machine"
+  - option "manager"
+  - option "network-device"
+  - option "node"
+  - option "organization"
+  - option "passive-device"
+  - option "port"
+  - option "proxy-route"
+  - option "rack"
+  - option "role"
+  - option "room"
+  - option "server"
+  - option "service"
+  - option "share"
+  - option "site"
+  - option "ssid"
+  - option "storage-pool"
+  - option "user"
+  - option "vm"
+  - option "vpn-peer"
+  - option "zone"
+- combobox "environment":
+  - option "every environment" [selected]
+  - option "mgmt"
+  - option "rossen"
+  - option "test"
+- text: now
+- slider "replay the graph as of a moment": "0"
+- button "To the root cause" [disabled]
+- button "What this impacts"
+- application:
+  - img:
+    - group "Edge from g:5037fd40-48ff-4142-86c6-a46c989e9f97|runs-on|out to 5037fd40-48ff-4142-86c6-a46c989e9f97"
+  - img:
+    - group "Edge from c11c3e17-fe34-4bd7-bed6-6f8b259469c8 to g:5037fd40-48ff-4142-86c6-a46c989e9f97|runs-on|out"
+  - group: cluster RootKeyChanged since 2026-10-29T18:53:50+01:00
+  - group:
+    - text: tappaas1 machine
+    - button "Expand tappaas1": +
+  - group: runs-on 1
+  - img
+  - button "Zoom In":
+    - img
+  - button "Zoom Out":
+    - img
+  - button "Fit View":
+    - img
+- text: "critical warning unknown ok acknowledged maintenance ↯ flapping · a ring: a root cause · + one more hop · − fold · a pill: a relation type · a number in the tree: objects that need a look"

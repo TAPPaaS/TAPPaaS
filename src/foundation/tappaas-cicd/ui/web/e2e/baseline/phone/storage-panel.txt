@@ -1,0 +1,266 @@
+- navigation:
+  - list:
+    - listitem:
+      - link "Overview":
+        - /url: /
+    - listitem:
+      - link "Day 1 setup wizard":
+        - /url: /setup/day1
+    - listitem:
+      - link "Day 2 wizards":
+        - /url: /setup/day2
+    - listitem:
+      - link "Health":
+        - /url: /health
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Site":
+        - /url: /site
+    - listitem:
+      - link "Environments":
+        - /url: /environments
+    - listitem:
+      - link "Network":
+        - /url: /zones
+    - listitem:
+      - link "Modules":
+        - /url: /modules
+    - listitem:
+      - link "Identity":
+        - /url: /identity
+    - listitem:
+      - link "Assets":
+        - /url: /assets
+    - listitem:
+      - link "Backup":
+        - /url: /backup
+    - listitem: Security
+    - listitem:
+      - link "Activity":
+        - /url: /activity
+- banner:
+  - text: site rossen
+  - button "Refresh"
+  - text: operator · installer
+- heading "Site" [level=1]
+- text: Rossen Production Cluster as built
+- tablist:
+  - tab "Overview"
+  - tab "Physical"
+  - tab "Devices"
+  - tab "Storage" [selected]
+- text: Storage · storage-manager inventory 09:52
+- application:
+  - img:
+    - group "Edge from node:tappaas1 to boot:tappaas1:/dev/nvme0n1"
+  - img:
+    - group "Edge from node:tappaas1 to pool:tappaas1/tanka1"
+  - img:
+    - group "Edge from pool:tappaas1/tanka1 to disk:tappaas1:/dev/nvme2n1"
+  - img:
+    - group "Edge from pool:tappaas1/tanka1 to disk:tappaas1:/dev/nvme1n1"
+  - img:
+    - group "Edge from node:tappaas1 to pool:tappaas1/tankb1"
+  - img:
+    - group "Edge from pool:tappaas1/tankb1 to disk:tappaas1:/dev/sda"
+  - img:
+    - group "Edge from node:tappaas2 to boot:tappaas2:/dev/nvme0n1"
+  - img:
+    - group "Edge from node:tappaas2 to pool:tappaas2/tanka1"
+  - img:
+    - group "Edge from pool:tappaas2/tanka1 to disk:tappaas2:/dev/nvme1n1"
+  - img:
+    - group "Edge from node:tappaas3 to boot:tappaas3:/dev/sdc"
+  - img:
+    - group "Edge from node:tappaas3 to pool:tappaas3/tanka1"
+  - img:
+    - group "Edge from pool:tappaas3/tanka1 to disk:tappaas3:/dev/nvme0n1"
+  - img:
+    - group "Edge from node:tappaas3 to pool:tappaas3/tankc1"
+  - img:
+    - group "Edge from pool:tappaas3/tankc1 to disk:tappaas3:/dev/sdb"
+  - img:
+    - group "Edge from node:tappaas3 to nopool:tappaas3"
+  - img:
+    - group "Edge from nopool:tappaas3 to disk:tappaas3:/dev/sda"
+  - img:
+    - group "Edge from node:tappaas4 to boot:tappaas4:/dev/sda"
+  - img:
+    - group "Edge from node:tappaas4 to pool:tappaas4/rpool"
+  - img:
+    - group "Edge from pool:tappaas4/rpool to disk:tappaas4:/dev/sda"
+  - img:
+    - group "Edge from node:tappaas4 to pool:tappaas4/tanka1"
+  - img:
+    - group "Edge from pool:tappaas4/tanka1 to disk:tappaas4:/dev/nvme0n1"
+  - img:
+    - group "Edge from pool:tappaas4/tanka1 to disk:tappaas4:/dev/nvme1n1"
+  - group: tappaas1 2 pool(s) · 4 disk(s)
+  - group: boot /dev/nvme0n1 932 GiB WD_BLACK SN7100 1TB · nvme · 100% life left · 34°C · SMART passed
+  - group: pool tanka1 ONLINE 431 GiB of 3.5 TiB · 12% · scrub 2026-10-10
+  - group: mirror-0 /dev/nvme2n1 3.6 TiB Samsung SSD 990 PRO with Heatsink 4TB · S7DSNJ0YB04294X · dsk-03 bay nvme-Samsung_SSD_990_PRO_with_Heatsink_4TB_S7DSNJ0YB04294X nvme · 99% life left · 43°C · SMART passed
+  - group: /dev/nvme1n1 3.6 TiB Samsung SSD 990 PRO 4TB · S7DPNU0YA10709Z · dsk-02 bay nvme-Samsung_SSD_990_PRO_4TB_S7DPNU0YA10709Z nvme · 99% life left · 44°C · SMART passed
+  - group: pool tankb1 ONLINE 2.2 MiB of 10.8 TiB · 0% · scrub 2026-10-10
+  - group: /dev/sda 10.9 TiB ST12000VN0008-3MH101 · ZZ30MJL6 · dsk-04 bay ata-ST12000VN0008-3MH101_ZZ30MJL6 hdd · 36°C · SMART passed
+  - group: tappaas2 1 pool(s) · 2 disk(s)
+  - group: boot /dev/nvme0n1 466 GiB SanDisk SSD Plus 500GB A3N · nvme · 100% life left · 33°C · SMART passed
+  - group: pool tanka1 ONLINE 327 GiB of 1.8 TiB · 18% · scrub 2026-10-10
+  - group: /dev/nvme1n1 1.9 TiB KINGSTON OM8TAP42048K1-A00 · 50026B73842AD86F · dsk-06 bay nvme-KINGSTON_OM8TAP42048K1-A00_50026B73842AD86F nvme · 99% life left · 30°C · SMART passed
+  - group: tappaas3 2 pool(s) · 4 disk(s)
+  - group: boot /dev/sdc 238 GiB MTFDDAK256MAM-1K12 · ssd · 95% life left · SMART passed
+  - group: pool tanka1 ONLINE 461 GiB of 923 GiB · 50% · scrub 2026-10-10
+  - group: /dev/nvme0n1 954 GiB ASint AS806 1TB · 8061TBFDHY25F220056 · dsk-07 bay nvme-ASint_AS806_1TB_8061TBFDHY25F220056 nvme · 100% life left · 40°C · SMART passed
+  - group: pool tankc1 DEGRADED 436 GiB of 4.4 TiB · 10% · no scrub on record
+  - group: /dev/sdb 4.5 TiB HGST_HDN726050ALE614 · NAHW317X · dsk-09 bay ata-HGST_HDN726050ALE614_NAHW317X hdd · 41°C · SMART passed
+  - group: in no pool 1 disk(s)
+  - group: /dev/sda 7.3 TiB · pool larsbackup (not imported) ST8000AS0002-1NA17Z · Z840DMA1 · dsk-08 bay ata-ST8000AS0002-1NA17Z_Z840DMA1 hdd · 37°C · SMART passed
+  - group: tappaas4 2 pool(s) · 4 disk(s)
+  - group: boot /dev/sda 466 GiB Samsung_SSD_870_EVO_500GB · ssd · 99% life left · 33°C · SMART passed
+  - group: pool rpool ONLINE 3.4 GiB of 450 GiB · 1% · no scrub on record
+  - group: /dev/sda 466 GiB Samsung_SSD_870_EVO_500GB · S6PYNL0Y209497N · dsk-11 bay ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N ssd · 99% life left · 33°C · SMART passed
+  - group: pool tanka1 ONLINE 984 KiB of 1.8 TiB · 0% · no scrub on record
+  - group: mirror-0 /dev/nvme0n1 1.8 TiB Samsung SSD 990 PRO 2TB · S7DNNU0X545837K · dsk-12 bay nvme-Samsung_SSD_990_PRO_2TB_S7DNNU0X545837K nvme · 99% life left · 48°C · SMART passed
+  - group: /dev/nvme1n1 1.8 TiB Samsung SSD 990 PRO 2TB · S7HENJ0Y412736V · dsk-13 bay nvme-Samsung_SSD_990_PRO_2TB_S7HENJ0Y412736V nvme · 100% life left · 47°C · SMART passed
+  - img
+  - button "Zoom In":
+    - img
+  - button "Zoom Out":
+    - img
+  - button "Fit View":
+    - img
+- complementary:
+  - heading "pool tanka1 · tappaas1" [level=2]
+  - button "close": ×
+  - paragraph:
+    - link "Details →":
+      - /url: /modules/tappaas1
+    - link "Asset →":
+      - /url: /assets/tappaas1
+  - paragraph: PASS healthy
+  - term: size
+  - definition: 3.5 TiB
+  - term: used
+  - definition: 431 GiB (12.0%)
+  - term: free
+  - definition: 3.1 TiB
+  - term: health
+  - definition: ONLINE
+  - term: status
+  - definition: —
+  - term: scrub
+  - definition: scrub repaired 0B in 00:02:17 with 0 errors on Sun Oct 11 00:26:18 2026
+  - term: fragmentation
+  - definition: 14%
+  - term: compression
+  - definition: lz4 · 1.74x
+  - heading "Members" [level=3]
+  - list:
+    - listitem:
+      - text: mirror-0 mirror · ONLINE
+      - list:
+        - listitem:
+          - button "/dev/nvme2n1"
+          - text: · S7DSNJ0YB04294X · ONLINE
+        - listitem:
+          - button "/dev/nvme1n1"
+          - text: · S7DPNU0YA10709Z · ONLINE
+  - heading "What it holds" [level=3]
+  - img "what tanka1 holds": 3.5 TiB 12% used
+  - table:
+    - rowgroup:
+      - row "tappaas-cicd 108 GiB 3%":
+        - cell
+        - cell "tappaas-cicd":
+          - link "tappaas-cicd":
+            - /url: /modules/tappaas-cicd
+        - cell "108 GiB"
+        - cell "3%"
+      - row "nextcloud 94.8 GiB 3%":
+        - cell
+        - cell "nextcloud":
+          - link "nextcloud":
+            - /url: /modules/nextcloud
+        - cell "94.8 GiB"
+        - cell "3%"
+      - row "logging 49.0 GiB 1%":
+        - cell
+        - cell "logging":
+          - link "logging":
+            - /url: /modules/logging
+        - cell "49.0 GiB"
+        - cell "1%"
+      - row "identity 48.8 GiB 1%":
+        - cell
+        - cell "identity":
+          - link "identity":
+            - /url: /modules/identity
+        - cell "48.8 GiB"
+        - cell "1%"
+      - row "jellyfin 40.4 GiB 1%":
+        - cell
+        - cell "jellyfin":
+          - link "jellyfin":
+            - /url: /modules/jellyfin
+        - cell "40.4 GiB"
+        - cell "1%"
+      - row "network 36.5 GiB 1%":
+        - cell
+        - cell "network":
+          - link "network":
+            - /url: /modules/network
+        - cell "36.5 GiB"
+        - cell "1%"
+      - row "coturn 21.4 GiB 0.6%":
+        - cell
+        - cell "coturn":
+          - link "coturn":
+            - /url: /modules/coturn
+        - cell "21.4 GiB"
+        - cell "0.6%"
+      - row "immich 14.5 GiB 0.4%":
+        - cell
+        - cell "immich":
+          - link "immich":
+            - /url: /modules/immich
+        - cell "14.5 GiB"
+        - cell "0.4%"
+      - row "other datasets 17.9 GiB 0.5%":
+        - cell
+        - cell "other datasets"
+        - cell "17.9 GiB"
+        - cell "0.5%"
+      - row "template base-8080-disk-0 17.6 GiB":
+        - cell
+        - cell "template base-8080-disk-0"
+        - cell "17.6 GiB"
+        - cell
+      - row "template base-8080-disk-1 6.1 MiB":
+        - cell
+        - cell "template base-8080-disk-1"
+        - cell "6.1 MiB"
+        - cell
+      - row "template vm-8080-cloudinit 6.0 MiB":
+        - cell
+        - cell "template vm-8080-cloudinit"
+        - cell "6.0 MiB"
+        - cell
+      - row "ORPHAN-130-cloudinit 6.0 MiB":
+        - cell
+        - cell "ORPHAN-130-cloudinit"
+        - cell "6.0 MiB"
+        - cell
+      - row "ORPHAN-140-cloudinit 6.0 MiB":
+        - cell
+        - cell "ORPHAN-140-cloudinit"
+        - cell "6.0 MiB"
+        - cell
+      - row "free 3.1 TiB 88%":
+        - cell
+        - cell "free"
+        - cell "3.1 TiB"
+        - cell "88%"
+  - heading "Findings" [level=3]
+  - paragraph: No finding on it.
+- text: "State: ok warn fail — the reason on hover, the findings on click · a pool's bar is its fill Data: storage-manager inventory 09:52"

@@ -1,0 +1,264 @@
+- navigation:
+  - link "TAPPaaS":
+    - /url: https://tappaas.org/operate/
+  - text: Rossen Production Cluster
+  - list:
+    - listitem:
+      - link "Overview":
+        - /url: /
+    - listitem:
+      - link "Day 1 setup wizard":
+        - /url: /setup/day1
+    - listitem:
+      - link "Day 2 wizards":
+        - /url: /setup/day2
+    - listitem:
+      - link "Health":
+        - /url: /health
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Site":
+        - /url: /site
+    - listitem:
+      - link "Environments":
+        - /url: /environments
+    - listitem:
+      - link "Network":
+        - /url: /zones
+    - listitem:
+      - link "Modules":
+        - /url: /modules
+    - listitem:
+      - link "Identity":
+        - /url: /identity
+    - listitem:
+      - link "Assets":
+        - /url: /assets
+    - listitem:
+      - link "Backup":
+        - /url: /backup
+    - listitem: Security
+    - listitem:
+      - link "Activity":
+        - /url: /activity
+  - text: channel unstable tappaas-cicd · console P3
+- banner:
+  - text: site rossen
+  - button "Refresh"
+  - text: operator · installer
+- heading "Site" [level=1]
+- text: Rossen Production Cluster as built
+- tablist:
+  - tab "Overview"
+  - tab "Physical"
+  - tab "Devices" [selected]
+  - tab "Storage"
+- text: Devices · rossen as cabled · topology 09:51 · layout by force, around the selection
+- checkbox "link labels" [checked]
+- text: link labels
+- application:
+  - img:
+    - group "Edge from USW Pro XG 10 PoE to tappaas4": 1 ↔ enp4s0
+  - img:
+    - group "Edge from USW Pro XG 10 PoE to tappaas3": 3 cables
+  - img:
+    - group "Edge from USW Pro XG 10 PoE to tappaas1": 6 ↔ nic4
+  - img:
+    - group "Edge from Nano HD to USW Pro XG 10 PoE": 9 ↔ uplink
+  - img:
+    - group "Edge from USW Pro XG 10 PoE to crs-a": 11 ↔ sfp-sfpplus14
+  - img:
+    - group "Edge from USW Pro XG 10 PoE to crs-b": 12 ↔ sfp-sfpplus14
+  - img:
+    - group "Edge from crs-a to tappaas1": sfp-sfpplus1 ↔ nic2
+  - img:
+    - group "Edge from crs-a to crs-b": 2 cables
+  - img:
+    - group "Edge from crs-b to tappaas1": sfp-sfpplus1 ↔ nic3
+  - img:
+    - group "Edge from ISP modem to USW Pro XG 10 PoE": 5 ↔ LAN 1
+  - img:
+    - group "Edge from USW Pro XG 10 PoE to tappaas2": 2 ↔ enp97s0
+  - img:
+    - group "Edge from ISP modem to Internet": hand-off
+  - img:
+    - group "Edge from buddy rasmus to tappaas1": tunnel
+  - group: ⇄ USW Pro XG 10 PoE
+  - group: ⇄ crs-a
+  - group: ⇄ crs-b
+  - group: ▤ tappaas1
+  - group: ▤ tappaas2
+  - group: ▤ tappaas3
+  - group: ▤ tappaas4
+  - group: ◉ Nano HD
+  - group: ⌁ ISP modem
+  - group: ▦ patchpanel1
+  - group: ▦ patchpanel 2
+  - group: ☁ Internet
+  - group: ⇆ rasmus
+  - img
+  - button "Zoom In":
+    - img
+  - button "Zoom Out":
+    - img
+  - button "fit": Fit
+- complementary:
+  - heading "⇄ crs-a" [level=2]
+  - button "close": ×
+  - paragraph:
+    - link "Details →":
+      - /url: /assets/crs-a
+  - img "crs-a's faceplate": crs-a MikroTik CRS317-1G-16S+
+  - paragraph:
+    - button "CMDB record and trace"
+  - term: vendor / model
+  - definition: mikrotik · CRS317-1G-16S+
+  - term: management
+  - definition: 10.0.0.21
+  - term: managed
+  - definition: auto
+  - term: controller
+  - definition: —
+  - term: LLDP name
+  - definition: —
+  - term: ports
+  - definition: 17 · 12 parked · 1 unmanaged · 0 drifting
+  - term: LAGs
+  - definition: —
+  - term: location
+  - definition:
+    - link "KnudAnchersVej95":
+      - /url: /site#location-knudanchersvej95
+    - text: · Knud Anchers Vej 95, Rodovre, DK · primary
+  - term: placement
+  - definition:
+    - link "rack1":
+      - /url: /site/physical?select=rack%3Arack1
+    - text: U24 · front · in
+    - link "Basement":
+      - /url: /site/physical?select=room%3Abasement
+    - text: · mikrotik/crs317-1g-16s
+  - heading "Ports" [level=3]
+  - table:
+    - rowgroup:
+      - row "ether1 down — access 0":
+        - cell "ether1":
+          - button "ether1"
+        - cell "down"
+        - cell "—"
+        - cell "access 0"
+      - row "sfp-sfpplus1 up tappaas1 nic2 trunk · tappaas1-lan":
+        - cell "sfp-sfpplus1":
+          - button "sfp-sfpplus1"
+        - cell "up"
+        - cell "tappaas1 nic2"
+        - cell "trunk · tappaas1-lan"
+      - row "sfp-sfpplus2 down parked · iotLocal parked":
+        - cell "sfp-sfpplus2":
+          - button "sfp-sfpplus2"
+        - cell "down"
+        - cell "parked · iotLocal"
+        - cell "parked"
+      - row "sfp-sfpplus3 down parked · iotLocal parked":
+        - cell "sfp-sfpplus3":
+          - button "sfp-sfpplus3"
+        - cell "down"
+        - cell "parked · iotLocal"
+        - cell "parked"
+      - row "sfp-sfpplus4 down parked · iotLocal parked":
+        - cell "sfp-sfpplus4":
+          - button "sfp-sfpplus4"
+        - cell "down"
+        - cell "parked · iotLocal"
+        - cell "parked"
+      - row "sfp-sfpplus5 down parked · iotLocal parked":
+        - cell "sfp-sfpplus5":
+          - button "sfp-sfpplus5"
+        - cell "down"
+        - cell "parked · iotLocal"
+        - cell "parked"
+      - row "sfp-sfpplus6 down parked · iotLocal parked":
+        - cell "sfp-sfpplus6":
+          - button "sfp-sfpplus6"
+        - cell "down"
+        - cell "parked · iotLocal"
+        - cell "parked"
+      - row "sfp-sfpplus7 down parked · iotLocal parked":
+        - cell "sfp-sfpplus7":
+          - button "sfp-sfpplus7"
+        - cell "down"
+        - cell "parked · iotLocal"
+        - cell "parked"
+      - row "sfp-sfpplus8 down parked · iotLocal parked":
+        - cell "sfp-sfpplus8":
+          - button "sfp-sfpplus8"
+        - cell "down"
+        - cell "parked · iotLocal"
+        - cell "parked"
+      - row "sfp-sfpplus9 down parked · iotLocal parked":
+        - cell "sfp-sfpplus9":
+          - button "sfp-sfpplus9"
+        - cell "down"
+        - cell "parked · iotLocal"
+        - cell "parked"
+      - row "sfp-sfpplus10 down parked · iotLocal parked":
+        - cell "sfp-sfpplus10":
+          - button "sfp-sfpplus10"
+        - cell "down"
+        - cell "parked · iotLocal"
+        - cell "parked"
+      - row "sfp-sfpplus11 down parked · iotLocal parked":
+        - cell "sfp-sfpplus11":
+          - button "sfp-sfpplus11"
+        - cell "down"
+        - cell "parked · iotLocal"
+        - cell "parked"
+      - row "sfp-sfpplus12 down parked · iotLocal parked":
+        - cell "sfp-sfpplus12":
+          - button "sfp-sfpplus12"
+        - cell "down"
+        - cell "parked · iotLocal"
+        - cell "parked"
+      - row "sfp-sfpplus13 down parked · iotLocal parked":
+        - cell "sfp-sfpplus13":
+          - button "sfp-sfpplus13"
+        - cell "down"
+        - cell "parked · iotLocal"
+        - cell "parked"
+      - row "sfp-sfpplus14 up USW Pro XG 10 PoE 11 trunk · usw-uplink":
+        - cell "sfp-sfpplus14":
+          - button "sfp-sfpplus14"
+        - cell "up"
+        - cell "USW Pro XG 10 PoE 11"
+        - cell "trunk · usw-uplink"
+      - row "sfp-sfpplus15 up crs-b peer-link trunk":
+        - cell "sfp-sfpplus15":
+          - button "sfp-sfpplus15"
+        - cell "up"
+        - cell "crs-b peer-link"
+        - cell "trunk"
+      - row "sfp-sfpplus16 up crs-b peer-link trunk":
+        - cell "sfp-sfpplus16":
+          - button "sfp-sfpplus16"
+        - cell "up"
+        - cell "crs-b peer-link"
+        - cell "trunk"
+  - heading "Findings" [level=3]
+  - paragraph: No finding on it.
+  - heading "Connected to" [level=3]
+  - list:
+    - listitem:
+      - button "⇄ USW Pro XG 10 PoE"
+      - text: on sfp-sfpplus14 · uplink
+      - button "the link"
+    - listitem:
+      - button "▤ tappaas1"
+      - text: on sfp-sfpplus1 · lan
+      - button "the link"
+    - listitem:
+      - button "⇄ crs-b"
+      - text: on sfp-sfpplus15, sfp-sfpplus16 · peer-link · 2 cables
+      - button "the link"
+- text: "Zones on links: 100 wan 200 rossen 299 test 310 home 410 iotLocal 420 iotCloud 430 iotCams 510 guest 610 dmz — trunk · - - wan and the internet · ··· tunnel · red: a cable down · thick: several cables or a LAG State: ok warn fail — the reason on hover, the findings on click Data: cmdb · asset-manager export · wan-address.json"

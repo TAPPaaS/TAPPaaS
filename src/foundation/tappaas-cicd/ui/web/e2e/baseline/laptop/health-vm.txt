@@ -1,0 +1,381 @@
+- navigation:
+  - link "TAPPaaS":
+    - /url: https://tappaas.org/operate/
+  - text: Rossen Production Cluster
+  - list:
+    - listitem:
+      - link "Overview":
+        - /url: /
+    - listitem:
+      - link "Day 1 setup wizard":
+        - /url: /setup/day1
+    - listitem:
+      - link "Day 2 wizards":
+        - /url: /setup/day2
+    - listitem:
+      - link "Health":
+        - /url: /health
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Site":
+        - /url: /site
+    - listitem:
+      - link "Environments":
+        - /url: /environments
+    - listitem:
+      - link "Network":
+        - /url: /zones
+    - listitem:
+      - link "Modules":
+        - /url: /modules
+    - listitem:
+      - link "Identity":
+        - /url: /identity
+    - listitem:
+      - link "Assets":
+        - /url: /assets
+    - listitem:
+      - link "Backup":
+        - /url: /backup
+    - listitem: Security
+    - listitem:
+      - link "Activity":
+        - /url: /activity
+  - text: channel unstable tappaas-cicd · console P3
+- banner:
+  - text: site rossen
+  - button "Refresh"
+  - text: operator · installer
+- heading "Health" [level=1]
+- text: 2 critical · 32 warning · 0 silenced · 17 unknown · 423 ok · read 01/11/2026 09:54
+- button "Details"
+- button "Fit"
+- combobox "condition type":
+  - option "every condition" [selected]
+  - option "operational"
+  - option "drift"
+  - option "capacity"
+  - option "security"
+  - option "maintenance"
+  - option "backup"
+  - option "impact"
+- combobox "class":
+  - option "every class" [selected]
+  - option "address"
+  - option "app"
+  - option "appliance"
+  - option "backup-peer"
+  - option "cluster"
+  - option "controller"
+  - option "datastore"
+  - option "device"
+  - option "disk"
+  - option "dns-name"
+  - option "environment"
+  - option "group"
+  - option "location"
+  - option "lxc"
+  - option "machine"
+  - option "manager"
+  - option "network-device"
+  - option "node"
+  - option "organization"
+  - option "passive-device"
+  - option "port"
+  - option "proxy-route"
+  - option "rack"
+  - option "role"
+  - option "room"
+  - option "server"
+  - option "service"
+  - option "share"
+  - option "site"
+  - option "ssid"
+  - option "storage-pool"
+  - option "user"
+  - option "vm"
+  - option "vpn-peer"
+  - option "zone"
+- combobox "environment":
+  - option "every environment" [selected]
+  - option "mgmt"
+  - option "rossen"
+  - option "test"
+- text: now
+- slider "replay the graph as of a moment": "0"
+- searchbox "find an object in the CMDB"
+- heading "Root causes (23)" [level=3]
+- list:
+  - listitem:
+    - button "warning tappaas3 machine tappaas3 every leg reaches the same switch (USW-Pro-XG-10-PoE) — redundant ports, not redundant switches 2 impacted · mgmt · 31/10/2026 16:50": tappaas3 machine tappaas3 every leg reaches the same switch (USW-Pro-XG-10-PoE) — redundant ports, not redundant switches 2 impacted · mgmt · 31/10/2026 16:50
+  - listitem:
+    - button "critical Rossen Production Cluster site / at 93%, over 80% 0 impacted · 31/10/2026 21:05": Rossen Production Cluster site / at 93%, over 80% 0 impacted · 31/10/2026 21:05
+  - listitem:
+    - 'button "warning ata-HGST_HDN726050ALE614_NAHW317X disk dsk-09 (ata-HGST_HDN726050ALE614_NAHW317X): ZFS DEGRADED in tankc1 (errors); SMART: 534 reallocated, 64 pending, 1675 uncorrectable sectors 0 impacted · 31/10/2026 10:52"': "ata-HGST_HDN726050ALE614_NAHW317X disk dsk-09 (ata-HGST_HDN726050ALE614_NAHW317X): ZFS DEGRADED in tankc1 (errors); SMART: 534 reallocated, 64 pending, 1675 uncorrectable sectors 0 impacted · 31/10/2026 10:52"
+  - listitem:
+    - 'button "warning ata-ST8000AS0002-1NA17Z_Z840DMA1 disk dsk-08 (ata-ST8000AS0002-1NA17Z_Z840DMA1): SMART: 2808 reallocated, 632 pending, 632 uncorrectable sectors 0 impacted · 31/10/2026 10:52"': "ata-ST8000AS0002-1NA17Z_Z840DMA1 disk dsk-08 (ata-ST8000AS0002-1NA17Z_Z840DMA1): SMART: 2808 reallocated, 632 pending, 632 uncorrectable sectors 0 impacted · 31/10/2026 10:52"
+  - listitem:
+    - button "warning cluster app RootKeyChanged since 2026-10-29T18:53:50+01:00 0 impacted · 30/10/2026 10:40": cluster app RootKeyChanged since 2026-10-29T18:53:50+01:00 0 impacted · 30/10/2026 10:40
+  - listitem:
+    - 'button "warning crs-a device crs-a: VLAN 298 in no zone 0 impacted · 31/10/2026 10:55"': "crs-a device crs-a: VLAN 298 in no zone 0 impacted · 31/10/2026 10:55"
+  - listitem:
+    - 'button "warning crs-b device crs-b: VLAN 298 in no zone 0 impacted · 31/10/2026 10:55"': "crs-b device crs-b: VLAN 298 in no zone 0 impacted · 31/10/2026 10:55"
+  - listitem:
+    - 'button "warning deconz-test vm diyhue (deconz-test): 1 fixable 0 impacted · 30/10/2026 10:40"': "deconz-test vm diyhue (deconz-test): 1 fixable 0 impacted · 30/10/2026 10:40"
+  - listitem:
+    - 'button "warning euro-office vm euro-office (euro-office): 1 fixable 0 impacted · 30/10/2026 10:40"': "euro-office vm euro-office (euro-office): 1 fixable 0 impacted · 30/10/2026 10:40"
+  - listitem:
+    - 'button "warning Identity vm authentik-server, authentik-worker (identity): 9 fixable 0 impacted · 30/10/2026 10:40"': "Identity vm authentik-server, authentik-worker (identity): 9 fixable 0 impacted · 30/10/2026 10:40"
+  - listitem:
+    - 'button "warning Karakeep vm karakeep_chrome (karakeep): 2 fixable; karakeep_web (karakeep): 31 fixable 0 impacted · 30/10/2026 10:40"': "Karakeep vm karakeep_chrome (karakeep): 2 fixable; karakeep_web (karakeep): 31 fixable 0 impacted · 30/10/2026 10:40"
+  - listitem:
+    - 'button "warning LiteLLM vm litellm (litellm): 4 fixable 0 impacted · 30/10/2026 10:40"': "LiteLLM vm litellm (litellm): 4 fixable 0 impacted · 30/10/2026 10:40"
+  - listitem:
+    - button "warning mikrotik app mikrotik-controller from Community (module mikrotik), not a verified release — plugs into switch-manager 0 impacted · 30/10/2026 10:40": mikrotik app mikrotik-controller from Community (module mikrotik), not a verified release — plugs into switch-manager 0 impacted · 30/10/2026 10:40
+  - listitem:
+    - 'button "warning Open WebUI vm openwebui (openwebui): 10 fixable 0 impacted · 30/10/2026 10:40"': "Open WebUI vm openwebui (openwebui): 10 fixable 0 impacted · 30/10/2026 10:40"
+  - listitem:
+    - 'button "warning Project N.O.M.A.D. vm nomad_admin (nomad): 124 fixable; nomad_mysql (nomad): 94 fixable 0 impacted · 30/10/2026 10:40"': "Project N.O.M.A.D. vm nomad_admin (nomad): 124 fixable; nomad_mysql (nomad): 94 fixable 0 impacted · 30/10/2026 10:40"
+  - listitem:
+    - 'button "warning pve app pve: on no node 0 impacted · 31/10/2026 11:35"': "pve app pve: on no node 0 impacted · 31/10/2026 11:35"
+  - listitem:
+    - button "warning rasmus backup-peer pulled-by-rasmus DOWN 0 impacted · 30/10/2026 10:40": rasmus backup-peer pulled-by-rasmus DOWN 0 impacted · 30/10/2026 10:40
+  - listitem:
+    - button "warning tappaas-cicd vm tappaas-cicd booted 26.05.20261025.1f607aa, next boot 26.05.20261025.1f607aa 0 impacted · 31/10/2026 17:35": tappaas-cicd vm tappaas-cicd booted 26.05.20261025.1f607aa, next boot 26.05.20261025.1f607aa 0 impacted · 31/10/2026 17:35
+  - listitem:
+    - 'button "warning tappaas-nixos vm vm/tappaas-nixos: actual without desired 0 impacted · 30/10/2026 10:40"': "tappaas-nixos vm vm/tappaas-nixos: actual without desired 0 impacted · 30/10/2026 10:40"
+  - listitem:
+    - 'button "warning TAPPaaS-Test ssid TAPPaaS-Test: zone swdeepA does not exist 0 impacted · 01/11/2026 09:27"': "TAPPaaS-Test ssid TAPPaaS-Test: zone swdeepA does not exist 0 impacted · 01/11/2026 09:27"
+  - listitem:
+    - button "warning unifi-os vm unifi-controller from Community (module unifi-os), not a verified release — plugs into switch-manager, ap-manager 0 impacted · 30/10/2026 10:40": unifi-os vm unifi-controller from Community (module unifi-os), not a verified release — plugs into switch-manager, ap-manager 0 impacted · 30/10/2026 10:40
+  - listitem:
+    - 'button "warning USW Pro XG 10 PoE device USW Pro XG 10 PoE: VLAN 298 in no zone 0 impacted · 31/10/2026 10:55"': "USW Pro XG 10 PoE device USW Pro XG 10 PoE: VLAN 298 in no zone 0 impacted · 31/10/2026 10:55"
+  - listitem:
+    - 'button "warning vllm-amd lxc vllm (vllm-amd): 7 fixable 0 impacted · 30/10/2026 10:40"': "vllm-amd lxc vllm (vllm-amd): 7 fixable 0 impacted · 30/10/2026 10:40"
+- list:
+  - listitem:
+    - button "Close Physical" [expanded]: ▾
+    - button "critical · 24 need a look · 17 unknown Physical": Physical
+    - text: "24"
+    - list:
+      - listitem:
+        - button "unknown · 1 unknown ap-living": ap-living
+      - listitem:
+        - button "unknown · 1 unknown ap-loft": ap-loft
+      - listitem:
+        - button "unknown · 1 unknown ap-stub": ap-stub
+      - listitem:
+        - button "unknown · 1 unknown ap1": ap1
+      - listitem:
+        - button "unknown · 1 unknown core": core
+      - listitem:
+        - button "unknown · 1 unknown core-sw1": core-sw1
+      - listitem:
+        - button "Open crs-a": ▸
+        - button "ok crs-a": crs-a
+      - listitem:
+        - button "Open crs-b": ▸
+        - button "ok crs-b": crs-b
+      - listitem:
+        - button "Open KnudAnchersVej95": ▸
+        - button "critical · 23 need a look · 5 unknown KnudAnchersVej95": KnudAnchersVej95
+        - text: "23"
+      - listitem:
+        - button "unknown · 1 unknown mtA": mtA
+      - listitem:
+        - button "unknown · 1 unknown mtB": mtB
+      - listitem:
+        - button "Open Nano HD": ▸
+        - button "ok Nano HD": Nano HD
+      - listitem:
+        - button "unknown · 1 unknown nsw": nsw
+      - listitem:
+        - button "Open Rasmus": ▸
+        - button "warning · 1 need a look Rasmus": Rasmus
+        - text: "1"
+      - listitem:
+        - button "unknown · 1 unknown s3": s3
+      - listitem:
+        - button "unknown · 1 unknown s4": s4
+      - listitem:
+        - button "Open templates": ▸
+        - button "ok templates": templates
+      - listitem:
+        - button "unknown · 1 unknown usw": usw
+      - listitem:
+        - button "Open USW Pro XG 10 PoE": ▸
+        - button "ok USW Pro XG 10 PoE": USW Pro XG 10 PoE
+  - listitem:
+    - button "Open Environments": ▸
+    - button "warning · 16 need a look · 1 unknown Environments": Environments
+    - text: "16"
+  - listitem:
+    - button "Open Identity": ▸
+    - button "warning · 16 need a look · 1 unknown Identity": Identity
+    - text: "16"
+  - listitem:
+    - button "Open Elsewhere": ▸
+    - button "warning · 18 need a look · 1 unknown Elsewhere": Elsewhere
+    - text: "18"
+- button "To the root cause" [disabled]
+- button "What this impacts"
+- application:
+  - img:
+    - group "Edge from g:d303eb7b-1eaf-42b6-a330-0c96f2eab18d|backs-up|in to d303eb7b-1eaf-42b6-a330-0c96f2eab18d"
+  - img:
+    - group "Edge from e5d0d704-4a8a-4cb0-a2eb-84ad8f6dc8f8 to g:d303eb7b-1eaf-42b6-a330-0c96f2eab18d|backs-up|in"
+  - img:
+    - group "Edge from d303eb7b-1eaf-42b6-a330-0c96f2eab18d to g:d303eb7b-1eaf-42b6-a330-0c96f2eab18d|provides|out"
+  - img:
+    - group "Edge from g:d303eb7b-1eaf-42b6-a330-0c96f2eab18d|provides|out to e7e5c2aa-550f-4e13-bdde-b5e4d963aebb"
+  - img:
+    - group "Edge from g:d303eb7b-1eaf-42b6-a330-0c96f2eab18d|provides|out to 572e6c7a-68cb-4850-b37d-b7c74164f976"
+  - img:
+    - group "Edge from d303eb7b-1eaf-42b6-a330-0c96f2eab18d to g:d303eb7b-1eaf-42b6-a330-0c96f2eab18d|runs-on|in"
+  - img:
+    - group "Edge from g:d303eb7b-1eaf-42b6-a330-0c96f2eab18d|runs-on|in to e7e5c2aa-550f-4e13-bdde-b5e4d963aebb"
+  - img:
+    - group "Edge from g:d303eb7b-1eaf-42b6-a330-0c96f2eab18d|runs-on|in to 572e6c7a-68cb-4850-b37d-b7c74164f976"
+  - img:
+    - group "Edge from g:d303eb7b-1eaf-42b6-a330-0c96f2eab18d|depends-on|out to d303eb7b-1eaf-42b6-a330-0c96f2eab18d"
+  - img:
+    - group "Edge from 39c19eed-d1ab-44dd-a45f-15d0bc214ba7 to g:d303eb7b-1eaf-42b6-a330-0c96f2eab18d|depends-on|out"
+  - img:
+    - group "Edge from fc39fc51-1a56-4551-8566-53e2eaf17862 to g:d303eb7b-1eaf-42b6-a330-0c96f2eab18d|depends-on|out"
+  - img:
+    - group "Edge from ee9a7b62-e204-4565-8084-48a003b5b83d to g:d303eb7b-1eaf-42b6-a330-0c96f2eab18d|depends-on|out"
+  - img:
+    - group "Edge from a0744357-5768-4dc1-bd83-4abca98d3596 to g:d303eb7b-1eaf-42b6-a330-0c96f2eab18d|depends-on|out"
+  - img:
+    - group "Edge from b35b1a55-2887-453f-acb5-88c367f31d90 to g:d303eb7b-1eaf-42b6-a330-0c96f2eab18d|depends-on|out"
+  - img:
+    - group "Edge from g:d303eb7b-1eaf-42b6-a330-0c96f2eab18d|member-of|out to d303eb7b-1eaf-42b6-a330-0c96f2eab18d"
+  - img:
+    - group "Edge from b3eb7524-92fa-4664-9703-c5f04287dc9e to g:d303eb7b-1eaf-42b6-a330-0c96f2eab18d|member-of|out"
+  - img:
+    - group "Edge from g:d303eb7b-1eaf-42b6-a330-0c96f2eab18d|runs-on|out to d303eb7b-1eaf-42b6-a330-0c96f2eab18d"
+  - img:
+    - group "Edge from 95727e8e-df12-468f-a03b-8b685140e223 to g:d303eb7b-1eaf-42b6-a330-0c96f2eab18d|runs-on|out"
+  - group: "deconz-test diyhue (deconz-test): 1 fixable"
+  - group:
+    - text: tappaas_backup datastore
+    - button "Expand tappaas_backup": +
+  - group: deconz:hue-bridge service
+  - group: deconz:zigbee service
+  - group:
+    - text: backup:vm service
+    - button "Expand backup:vm": +
+  - group:
+    - text: cluster:vm service
+    - button "Expand cluster:vm": +
+  - group:
+    - text: network:proxy service
+    - button "Expand network:proxy": +
+  - group:
+    - text: network:rules service
+    - button "Expand network:rules": +
+  - group:
+    - text: templates:nixos service
+    - button "Expand templates:nixos": +
+  - group:
+    - text: Test 1 of 1 warning
+    - button "Expand Test": +
+  - group:
+    - text: tappaas2 machine
+    - button "Expand tappaas2": +
+  - group: backs-up ← 1
+  - group: contains · provides 2
+  - group: contains · runs-on 2
+  - group: depends-on 5
+  - group: member-of 1 1 bad
+  - group: runs-on 1
+  - img
+  - button "Zoom In":
+    - img
+  - button "Zoom Out":
+    - img
+  - button "Fit View":
+    - img
+- complementary:
+  - text: deconz-test vm · node › ci
+  - button "Close": ×
+  - paragraph:
+    - link "Details →":
+      - /url: /modules/deconz-test
+  - paragraph:
+    - button "Show in tree"
+    - button "CMDB record and trace"
+  - button "Maintenance…"
+  - heading "Conditions" [level=2]
+  - list:
+    - listitem:
+      - text: "WARNING security diyhue (deconz-test): 1 fixable · since 30/10/2026 10:40 · health-manager"
+      - button "Ack…"
+    - listitem: OK operational · since 30/10/2026 10:40 · health-manager
+    - listitem: OK drift · since 31/10/2026 10:55 · health-manager
+    - listitem: OK capacity · since 30/10/2026 10:40 · health-manager
+    - listitem: OK maintenance · since 30/10/2026 10:40 · health-manager
+    - listitem: OK backup newest restore point 0 day(s) old · since 31/10/2026 08:25 · health-manager
+  - heading "History" [level=2]
+  - text: the conditions' periods
+  - list:
+    - listitem: "OK 31/10/2026 10:55 drift from warning:"
+    - listitem: "WARNING 31/10/2026 09:25 drift from ok: vm/deconz-test: drift: appeared maturity; vm/deconz-test: drift: appeared zone"
+    - listitem: "OK 30/10/2026 11:06 drift from warning:"
+    - listitem: "WARNING 30/10/2026 11:01 drift: vm/deconz-test: drift: gone health"
+    - listitem: "WARNING 30/10/2026 10:40 security: diyhue (deconz-test): 1 fixable"
+  - heading "Changes to it" [level=3]
+  - list:
+    - listitem: 31/10/2026 20:31 update deconz-test module-manager · tappaas
+    - listitem: 31/10/2026 10:55 observation health-manager
+    - listitem: 31/10/2026 09:25 observation health-manager
+    - listitem: 31/10/2026 09:23 sweep cmdb-controller
+    - listitem: 31/10/2026 08:25 observation health-manager
+    - listitem: 31/10/2026 08:24 observation site-manager
+    - listitem: 30/10/2026 17:29 update deconz-test module-manager · tappaas
+    - listitem: 30/10/2026 11:07 observation health-manager
+    - listitem: 30/10/2026 11:06 observation health-manager
+    - listitem: 30/10/2026 11:01 observation health-manager
+    - listitem: 30/10/2026 10:59 sweep cmdb-controller
+    - listitem: 30/10/2026 10:40 observation health-manager
+  - heading "Relations" [level=2]
+  - list:
+    - listitem:
+      - text: depends-on →
+      - button "ok backup:vm": backup:vm
+    - listitem:
+      - text: depends-on →
+      - button "ok cluster:vm": cluster:vm
+    - listitem:
+      - text: depends-on →
+      - button "ok network:proxy": network:proxy
+    - listitem:
+      - text: depends-on →
+      - button "ok network:rules": network:rules
+    - listitem:
+      - text: depends-on →
+      - button "ok templates:nixos": templates:nixos
+    - listitem:
+      - text: member-of →
+      - button "warning test": test
+    - listitem:
+      - text: provides →
+      - button "ok deconz:hue-bridge": deconz:hue-bridge
+    - listitem:
+      - text: provides →
+      - button "ok deconz:zigbee": deconz:zigbee
+    - listitem:
+      - text: runs-on →
+      - button "ok tappaas2": tappaas2
+    - listitem:
+      - text: backs-up ←
+      - button "ok tappaas_backup": tappaas_backup
+    - listitem:
+      - text: runs-on ←
+      - button "ok deconz:hue-bridge": deconz:hue-bridge
+    - listitem:
+      - text: runs-on ←
+      - button "ok deconz:zigbee": deconz:zigbee
+- text: "critical warning unknown ok acknowledged maintenance ↯ flapping · a ring: a root cause · + one more hop · − fold · a pill: a relation type · a number in the tree: objects that need a look"

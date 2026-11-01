@@ -1,0 +1,222 @@
+- navigation:
+  - link "TAPPaaS":
+    - /url: https://tappaas.org/operate/
+  - text: Rossen Production Cluster
+  - list:
+    - listitem:
+      - link "Overview":
+        - /url: /
+    - listitem:
+      - link "Day 1 setup wizard":
+        - /url: /setup/day1
+    - listitem:
+      - link "Day 2 wizards":
+        - /url: /setup/day2
+    - listitem:
+      - link "Health":
+        - /url: /health
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Site":
+        - /url: /site
+    - listitem:
+      - link "Environments":
+        - /url: /environments
+    - listitem:
+      - link "Network":
+        - /url: /zones
+    - listitem:
+      - link "Modules":
+        - /url: /modules
+    - listitem:
+      - link "Identity":
+        - /url: /identity
+    - listitem:
+      - link "Assets":
+        - /url: /assets
+    - listitem:
+      - link "Backup":
+        - /url: /backup
+    - listitem: Security
+    - listitem:
+      - link "Activity":
+        - /url: /activity
+  - text: channel unstable tappaas-cicd · console P3
+- banner:
+  - text: site rossen
+  - button "Refresh"
+  - text: operator · installer
+- heading "Site" [level=1]
+- text: Rossen Production Cluster as built · site-manager read 09:54
+- button "Add a node…"
+- button "Adopt a machine…"
+- button "Add a satellite…"
+- button "Register joined nodes…"
+- button "Update now…"
+- tablist:
+  - tab "Overview" [selected]
+  - tab "Physical"
+  - tab "Devices"
+  - tab "Storage"
+- heading "Site" [level=2]
+- button "Modify…"
+- term: name
+- definition: rossen
+- term: display name
+- definition: Rossen Production Cluster
+- term: version
+- definition: "2.0"
+- term: default environment
+- definition: rossen
+- term: owner
+- definition: rossen
+- term: email
+- definition: operator@example.org
+- heading "Location" [level=3]
+- term: primary location
+- definition: KnudAnchersVej95
+- term: place
+- definition: Knud Anchers Vej 95, Rodovre, DK
+- term: timezone
+- definition: Europe/Copenhagen
+- term: locale
+- definition: en_US
+- term: keyboard
+- definition: dk
+- heading "Network" [level=3]
+- term: ISP
+- definition: Netnørden
+- term: public IP
+- definition: auto
+- term: WAN
+- definition: "public address 203.0.113.190 (auto: what the WAN held on 2026-11-01)"
+- heading "Nodes" [level=3]
+- table:
+  - rowgroup:
+    - row "node address storage pools location":
+      - columnheader "node"
+      - columnheader "address"
+      - columnheader "storage pools"
+      - columnheader "location"
+  - rowgroup:
+    - row "tappaas1 tappaas1.mgmt.internal tanka1, tankb1 knudanchersvej95":
+      - cell "tappaas1":
+        - link "tappaas1":
+          - /url: /site/devices?select=node:tappaas1
+      - cell "tappaas1.mgmt.internal"
+      - cell "tanka1, tankb1"
+      - cell "knudanchersvej95"
+    - row "tappaas2 tappaas2.mgmt.internal tanka1 knudanchersvej95":
+      - cell "tappaas2":
+        - link "tappaas2":
+          - /url: /site/devices?select=node:tappaas2
+      - cell "tappaas2.mgmt.internal"
+      - cell "tanka1"
+      - cell "knudanchersvej95"
+    - row "tappaas3 tappaas3.mgmt.internal tanka1, tankc1 knudanchersvej95":
+      - cell "tappaas3":
+        - link "tappaas3":
+          - /url: /site/devices?select=node:tappaas3
+      - cell "tappaas3.mgmt.internal"
+      - cell "tanka1, tankc1"
+      - cell "knudanchersvej95"
+    - row "tappaas4 tappaas4.mgmt.internal tanka1 knudanchersvej95":
+      - cell "tappaas4":
+        - link "tappaas4":
+          - /url: /site/devices?select=node:tappaas4
+      - cell "tappaas4.mgmt.internal"
+      - cell "tanka1"
+      - cell "knudanchersvej95"
+- heading "Settings" [level=3]
+- term: IPv6
+- definition: "yes"
+- term: DNSSEC
+- definition: default
+- term: branding
+- definition: logo branding/rossen-logo.svg
+- term: DNS blocklists
+- definition: none
+- term: disk auto-grow
+- definition: on, the defaults
+- term: require signed
+- definition: no (default)
+- heading "Updates and repositories" [level=2]
+- button "Change…"
+- term: frequency
+- definition: daily
+- term: weekday
+- definition: —
+- term: hour
+- definition: 2:00
+- term: channel
+- definition: unstable
+- term: automatic reboot
+- definition: "yes"
+- term: snapshots kept
+- definition: "5"
+- term: last sweep
+- definition: 2026-11-01 02:42:48 · 31 of 31 ok
+- 'button "Release train: preview"'
+- 'button "Release train: status"'
+- button "Reconcile repositories…"
+- table:
+  - rowgroup:
+    - row "repository branch managed hold":
+      - columnheader "repository"
+      - columnheader "branch"
+      - columnheader "managed"
+      - columnheader "hold"
+      - columnheader
+  - rowgroup:
+    - row "TAPPaaS adr-041 full Sync… Hold… Stashes":
+      - cell "TAPPaaS"
+      - cell "adr-041"
+      - cell "full"
+      - cell
+      - cell "Sync… Hold… Stashes":
+        - button "Sync…"
+        - button "Hold…"
+        - button "Stashes"
+    - row "Community main full Sync… Hold… Stashes":
+      - cell "Community"
+      - cell "main"
+      - cell "full"
+      - cell
+      - cell "Sync… Hold… Stashes":
+        - button "Sync…"
+        - button "Hold…"
+        - button "Stashes"
+- paragraph:
+  - text: The nodes' connections and disks are the Device and Storage views', and the backup target the
+  - link "Backup":
+    - /url: /backup
+  - text: page's.
+- heading "Locations" [level=2]
+- button "Add location…"
+- table:
+  - rowgroup:
+    - row "location kind place timezone":
+      - columnheader "location"
+      - columnheader "kind"
+      - columnheader "place"
+      - columnheader "timezone"
+      - columnheader
+  - rowgroup:
+    - row "knudanchersvej95 · primary site Knud Anchers Vej 95, Rodovre, DK Europe/Copenhagen Modify…":
+      - cell "knudanchersvej95 · primary"
+      - cell "site"
+      - cell "Knud Anchers Vej 95, Rodovre, DK"
+      - cell "Europe/Copenhagen"
+      - cell "Modify…":
+        - button "Modify…"
+    - row "hareskov remote Hareskov, DK Modify… Delete…":
+      - cell "hareskov"
+      - cell "remote"
+      - cell "Hareskov, DK"
+      - cell
+      - cell "Modify… Delete…":
+        - button "Modify…"
+        - button "Delete…"
+- paragraph: The primary location is where the site is; make another one primary in the Site card's Modify. A backup buddy's place is a location of kind remote.

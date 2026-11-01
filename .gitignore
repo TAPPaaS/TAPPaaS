@@ -26,3 +26,9 @@ dist-test/
 # The console's fixture mode: a local build, and the journal of what a run asked.
 src/foundation/tappaas-cicd/ui/dist/
 src/foundation/tappaas-cicd/ui/test/fixtures/journal.jsonl
+
+# The console's visual loop (ui/web/e2e/run.sh): PNG baselines, the stamp and
+# out/ are local; the .txt siblings are in git.
+src/foundation/tappaas-cicd/ui/web/e2e/baseline/*/*.png
+src/foundation/tappaas-cicd/ui/web/e2e/baseline/STAMP
+src/foundation/tappaas-cicd/ui/web/e2e/out/

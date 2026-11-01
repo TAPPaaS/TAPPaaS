@@ -1,0 +1,186 @@
+- navigation:
+  - link "TAPPaaS":
+    - /url: https://tappaas.org/operate/
+  - text: Rossen Production Cluster
+  - list:
+    - listitem:
+      - link "Overview":
+        - /url: /
+    - listitem:
+      - link "Day 1 setup wizard":
+        - /url: /setup/day1
+    - listitem:
+      - link "Day 2 wizards":
+        - /url: /setup/day2
+    - listitem:
+      - link "Health":
+        - /url: /health
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Site":
+        - /url: /site
+    - listitem:
+      - link "Environments":
+        - /url: /environments
+    - listitem:
+      - link "Network":
+        - /url: /zones
+    - listitem:
+      - link "Modules":
+        - /url: /modules
+    - listitem:
+      - link "Identity":
+        - /url: /identity
+    - listitem:
+      - link "Assets":
+        - /url: /assets
+    - listitem:
+      - link "Backup":
+        - /url: /backup
+    - listitem: Security
+    - listitem:
+      - link "Activity":
+        - /url: /activity
+  - text: channel unstable tappaas-cicd · console P3
+- banner:
+  - text: site rossen
+  - button "Refresh"
+  - text: operator · installer
+- heading "network" [level=1]
+- link "Modules":
+  - /url: /modules
+- text: › mgmt › foundation stack
+- link "Proxmox · VM 110 ↗":
+  - /url: https://tappaas1.mgmt.internal:8006/#v1:0:=qemu/110
+- link "Grafana · logs ↗":
+  - /url: https://logging.hrossen.dk/explore?schemaVersion=1&orgId=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bhost%3D%5C%22network%5C%22%7D%22%2C%22datasource%22%3A%7B%22type%22%3A%22loki%22%2C%22uid%22%3A%22loki%22%7D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-6h%22%2C%22to%22%3A%22now%22%7D%7D%7D
+- link "PBS · backups ↗":
+  - /url: https://backup.mgmt.internal:8007/#DataStore-tappaas_backup
+- link "OPNsense ↗":
+  - /url: https://firewall.mgmt.internal:8443/
+- text: running · tappaas1 · VM 110 health unknown backup covered Production env mgmt · zone mgmt
+- tablist:
+  - tab "Overview" [selected]
+  - tab "Config"
+  - tab "Drift"
+  - tab "Backup"
+  - tab "Activity"
+- heading "Health — the conditions of this module's objects" [level=2]
+- link "the Health view":
+  - /url: /health
+- list:
+  - listitem:
+    - text: UNKNOWN capacity network network 8.0G 7.9G unmeasured usage figure is the host's, not the guest's · since 30/10/2026 10:40
+    - link "Health":
+      - /url: /health?select=29b608bb-c548-4588-addb-fcf3f238d271
+- heading "Resources" [level=2]
+- text: "CMDB · health-manager guests · module-manager snapshot-vm memory in use (the host's view: the guest reports none) 7.6 GiB of 8.0 GiB · 95%"
+- term: memory declared
+- definition: 8.0 GiB
+- term: allocated
+- definition: 8.0 GiB
+- term: cores
+- definition: "4"
+- term: node
+- definition:
+  - link "tappaas1":
+    - /url: /modules/tappaas1
+- term: run state
+- definition: running
+- term: HA
+- definition: started · an HA resource
+- heading "Disks and their pools" [level=3]
+- table:
+  - rowgroup:
+    - row "pool volume on size used snapshots":
+      - columnheader "pool"
+      - columnheader "volume"
+      - columnheader "on"
+      - columnheader "size"
+      - columnheader "used"
+      - columnheader "snapshots"
+      - columnheader
+  - rowgroup:
+    - row "tanka1 vm-110-disk-0 tappaas1 32.0 GiB 3.5 GiB 567 MiB —":
+      - cell "tanka1"
+      - cell "vm-110-disk-0"
+      - cell "tappaas1"
+      - cell "32.0 GiB"
+      - cell "3.5 GiB"
+      - cell "567 MiB"
+      - cell "—"
+    - row "tanka1 vm-110-disk-1 tappaas1 4.0 MiB 96.0 KiB 0 B —":
+      - cell "tanka1"
+      - cell "vm-110-disk-1"
+      - cell "tappaas1"
+      - cell "4.0 MiB"
+      - cell "96.0 KiB"
+      - cell "0 B"
+      - cell "—"
+    - row "tanka1 vm-110-disk-0 tappaas3 32.0 GiB 3.5 GiB 561 MiB replica":
+      - cell "tanka1"
+      - cell "vm-110-disk-0"
+      - cell "tappaas3"
+      - cell "32.0 GiB"
+      - cell "3.5 GiB"
+      - cell "561 MiB"
+      - cell "replica"
+    - row "tanka1 vm-110-disk-1 tappaas3 4.0 MiB 96.0 KiB 0 B replica":
+      - cell "tanka1"
+      - cell "vm-110-disk-1"
+      - cell "tappaas3"
+      - cell "4.0 MiB"
+      - cell "96.0 KiB"
+      - cell "0 B"
+      - cell "replica"
+- heading "Snapshots" [level=3]
+- text: tappaas-20261030 2026-10-30
+- heading "Backups" [level=2]
+- text: backup-manager
+- term: enabled
+- definition: "yes"
+- term: in the PBS job
+- definition: "yes"
+- term: schedule
+- definition: daily
+- term: retention
+- definition: 7y
+- term: last backup
+- definition: ok
+- term: last verify
+- definition: ok
+- term: PBS jobs
+- definition: tappaas_backup
+- heading "Operate — every verb runs through module-manager" [level=2]
+- button "Update (release)"
+- text: module update network — snapshot, 3-way merge, converge
+- button "Modify fields…"
+- text: "on the Config tab: the module and each service as a card, every field typed"
+- button "Reconcile"
+- text: preview = the three-way drift; apply = --apply
+- button "Test"
+- button "Test --deep"
+- text: "fast · --deep (a read: runs at once)"
+- button "Snapshot VM"
+- text: a VM snapshot now (--list to see them)
+- button "Suspend"
+- text: stop it and keep it stopped
+- button "Delete…"
+- text: "--archive (default) · --remove · typed name"
+- heading "About" [level=2]
+- term: description
+- definition: "The TAPPaaS Network VM (OPNsense): routing, DNS, DHCP, NAT, firewall rules, reverse proxy"
+- term: version
+- definition: 1.0.0 · released 2026-07-31
+- term: maturity
+- definition: Production
+- term: maintainer
+- definition: —
+- term: installed
+- definition: 20260731-22:21:34
+- term: updated
+- definition: 20261101-02:07:47
+- term: source
+- definition: /home/tappaas/TAPPaaS/src/foundation/network

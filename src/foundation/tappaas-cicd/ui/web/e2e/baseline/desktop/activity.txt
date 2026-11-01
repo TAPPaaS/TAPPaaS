@@ -1,0 +1,187 @@
+- navigation:
+  - link "TAPPaaS":
+    - /url: https://tappaas.org/operate/
+  - text: Rossen Production Cluster
+  - list:
+    - listitem:
+      - link "Overview":
+        - /url: /
+    - listitem:
+      - link "Day 1 setup wizard":
+        - /url: /setup/day1
+    - listitem:
+      - link "Day 2 wizards":
+        - /url: /setup/day2
+    - listitem:
+      - link "Health":
+        - /url: /health
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Site":
+        - /url: /site
+    - listitem:
+      - link "Environments":
+        - /url: /environments
+    - listitem:
+      - link "Network":
+        - /url: /zones
+    - listitem:
+      - link "Modules":
+        - /url: /modules
+    - listitem:
+      - link "Identity":
+        - /url: /identity
+    - listitem:
+      - link "Assets":
+        - /url: /assets
+    - listitem:
+      - link "Backup":
+        - /url: /backup
+    - listitem: Security
+    - listitem:
+      - link "Activity":
+        - /url: /activity
+  - text: channel unstable tappaas-cicd · console P3
+- banner:
+  - text: site rossen
+  - button "Refresh"
+  - text: operator · installer
+- heading "Activity" [level=1]
+- text: the console's jobs, the sweep's journal (7 days) and failures ledger · read 09:54
+- heading "Console jobs" [level=2]
+- text: 0 job(s) · state dir jobs.jsonl
+- paragraph: No console job yet.
+- heading "Last sweep" [level=2]
+- text: config/last-update-result.json
+- paragraph: PASS 2026-11-01 02:42:48 · 31 of 31 modules · control plane refreshed · reboot ok
+- heading "Sweep runs" [level=2]
+- text: 1 run(s)
+- list:
+  - listitem:
+    - button "PASS 01/11/2026 02:00 43 min sweep · update-tappaas 13 warning(s) ▸"
+- heading "Failures ledger" [level=2]
+- text: config/update-tappaas.failures
+- table:
+  - rowgroup:
+    - row "30/10/2026 17:57 resolved notice sent to operator@example.org through tappaas1 (update-sweep, resolved)":
+      - cell "30/10/2026 17:57"
+      - cell "resolved notice sent to operator@example.org through tappaas1 (update-sweep, resolved)"
+    - row "30/10/2026 15:52 failure notice sent to operator@example.org through tappaas1 (update-sweep)":
+      - cell "30/10/2026 15:52"
+      - cell "failure notice sent to operator@example.org through tappaas1 (update-sweep)"
+    - row "30/10/2026 15:52 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "30/10/2026 15:52"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
+    - row "30/10/2026 02:40 failure notice sent to operator@example.org through tappaas1 (update-sweep)":
+      - cell "30/10/2026 02:40"
+      - cell "failure notice sent to operator@example.org through tappaas1 (update-sweep)"
+    - row "30/10/2026 02:40 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "30/10/2026 02:40"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
+    - row "29/10/2026 21:21 resolved notice sent to operator@example.org through tappaas1 (update-sweep, resolved)":
+      - cell "29/10/2026 21:21"
+      - cell "resolved notice sent to operator@example.org through tappaas1 (update-sweep, resolved)"
+    - row "29/10/2026 16:40 failure notice sent to operator@example.org through tappaas1 (update-sweep)":
+      - cell "29/10/2026 16:40"
+      - cell "failure notice sent to operator@example.org through tappaas1 (update-sweep)"
+    - row "29/10/2026 16:40 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "29/10/2026 16:40"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
+    - row "29/10/2026 02:40 failure notice sent to operator@example.org through tappaas1 (update-sweep)":
+      - cell "29/10/2026 02:40"
+      - cell "failure notice sent to operator@example.org through tappaas1 (update-sweep)"
+    - row "29/10/2026 02:40 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "29/10/2026 02:40"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
+    - row "23/10/2026 21:03 failure notice sent to operator@example.org through tappaas1":
+      - cell "23/10/2026 21:03"
+      - cell "failure notice sent to operator@example.org through tappaas1"
+    - row "23/10/2026 21:03 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "23/10/2026 21:03"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
+    - row "21/10/2026 02:43 failure notice sent to operator@example.org through tappaas1":
+      - cell "21/10/2026 02:43"
+      - cell "failure notice sent to operator@example.org through tappaas1"
+    - row "21/10/2026 02:43 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "21/10/2026 02:43"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
+    - row "19/10/2026 02:54 failure notice sent to operator@example.org through tappaas1":
+      - cell "19/10/2026 02:54"
+      - cell "failure notice sent to operator@example.org through tappaas1"
+    - row "19/10/2026 02:54 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "19/10/2026 02:54"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
+    - row "18/10/2026 15:33 failure notice sent to operator@example.org through tappaas1":
+      - cell "18/10/2026 15:33"
+      - cell "failure notice sent to operator@example.org through tappaas1"
+    - row "18/10/2026 15:33 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "18/10/2026 15:33"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
+    - row "14/10/2026 02:33 failure notice sent to operator@example.org through tappaas1":
+      - cell "14/10/2026 02:33"
+      - cell "failure notice sent to operator@example.org through tappaas1"
+    - row "14/10/2026 02:33 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "14/10/2026 02:33"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
+    - row "10/10/2026 12:19 failure notice sent to operator@example.org through tappaas1":
+      - cell "10/10/2026 12:19"
+      - cell "failure notice sent to operator@example.org through tappaas1"
+    - row "10/10/2026 12:19 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "10/10/2026 12:19"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
+    - row "10/10/2026 09:50 failure notice sent to operator@example.org through tappaas1":
+      - cell "10/10/2026 09:50"
+      - cell "failure notice sent to operator@example.org through tappaas1"
+    - row "10/10/2026 09:50 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "10/10/2026 09:50"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
+    - row "10/10/2026 02:31 failure notice sent to operator@example.org through tappaas1":
+      - cell "10/10/2026 02:31"
+      - cell "failure notice sent to operator@example.org through tappaas1"
+    - row "10/10/2026 02:31 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "10/10/2026 02:31"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
+    - row "04/10/2026 17:08 failure notice sent to operator@example.org through tappaas1":
+      - cell "04/10/2026 17:08"
+      - cell "failure notice sent to operator@example.org through tappaas1"
+    - row "04/10/2026 17:08 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "04/10/2026 17:08"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
+    - row "04/10/2026 14:08 failure notice sent to operator@example.org through tappaas1":
+      - cell "04/10/2026 14:08"
+      - cell "failure notice sent to operator@example.org through tappaas1"
+    - row "04/10/2026 14:08 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "04/10/2026 14:08"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
+    - row "04/10/2026 02:00 failure notice sent to operator@example.org through tappaas1":
+      - cell "04/10/2026 02:00"
+      - cell "failure notice sent to operator@example.org through tappaas1"
+    - row "04/10/2026 02:00 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "04/10/2026 02:00"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
+    - row "03/10/2026 12:55 failure notice sent to operator@example.org through tappaas1":
+      - cell "03/10/2026 12:55"
+      - cell "failure notice sent to operator@example.org through tappaas1"
+    - row "03/10/2026 12:55 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "03/10/2026 12:55"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
+    - row "01/10/2026 02:28 failure notice sent to operator@example.org through tappaas1":
+      - cell "01/10/2026 02:28"
+      - cell "failure notice sent to operator@example.org through tappaas1"
+    - row "01/10/2026 02:28 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "01/10/2026 02:28"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
+    - row "27/09/2026 20:44 failure notice sent to operator@example.org through tappaas1":
+      - cell "27/09/2026 20:44"
+      - cell "failure notice sent to operator@example.org through tappaas1"
+    - row "27/09/2026 20:44 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "27/09/2026 20:44"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
+    - row "27/09/2026 02:18 failure notice sent to operator@example.org through tappaas1":
+      - cell "27/09/2026 02:18"
+      - cell "failure notice sent to operator@example.org through tappaas1"
+    - row "27/09/2026 02:18 update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)":
+      - cell "27/09/2026 02:18"
+      - cell "update-tappaas.service FAILED — see config/last-update-result.json (journalctl -u update-tappaas for detail)"
