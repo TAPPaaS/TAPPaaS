@@ -234,6 +234,24 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check(io.written.length === before, "--dry-run writes nothing");
 }
 
+// ── a finding the CMDB cannot place lands on the site, and the gate takes it back ──
+{
+  const s = fresh();
+  const io = new StubIO(s.items, s.rels);
+  const mod = { kind: "module" as const, name: "nextcloud" };
+  const ghost = { kind: "module" as const, name: "ghost" };
+  io.checks = () => [gate("service-liveness", "fail", [], { findings: [{ status: "fail", text: "not running", subject: ghost }], judged: [mod] })];
+  const r1 = assess(io, {}, NOW);
+  check(got(r1, site, "operational")?.status === "critical" && got(r1, site, "operational")?.reason === "guest-stopped", "a failure about something the CMDB does not have is the site's");
+  io.checks = () => [gate("service-liveness", "pass", [], { judged: [mod] })];
+  const r2 = assess(io, {}, later(5));
+  const c2 = got(r2, site, "operational")!;
+  check(c2.reason === "roll-up" && c2.status === "warning", "the gate ran again without it: the site's own failure is over, though the site is in no judged list; its members' roll-up remains");
+  check(r2.transitions.some((t) => t.id === site.id && t.from === "critical" && t.to === "warning"), "…a transition");
+  io.checks = () => [gate("service-liveness", "skip")];
+  check(got(assess(io, {}, later(10)), site, "operational")?.reason === "roll-up", "…and it stays over when the gate later skips");
+}
+
 // ── what the operator set ──
 {
   const s = fresh();

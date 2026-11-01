@@ -177,8 +177,10 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
   const looked = (owner: string, id: string): boolean => {
     if (only && id !== only.id) return false;
     if (!ran.has(owner)) return false;
+    // The site is where a gate puts what it could not place (fromGates), so a
+    // gate that ran has looked at the site: a fallback it no longer makes is over.
     const judged = g.unjudged.get(owner);
-    return !judged || judged.has(id);
+    return !judged || judged.has(id) || id === idx.site?.id;
   };
   const scoped = only ? findings.filter((f) => f.object === only.id) : findings;
   const source = t("settle", () => settle(priorOf, objects.map((o) => o.id), scoped, looked, time));
