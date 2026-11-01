@@ -5,7 +5,7 @@
 // child reads the config the console reads.
 
 import { ChildProcess, spawn } from "child_process";
-import { ExecResult, configEnv } from "../../lib/ts/src/exec";
+import { ExecResult, configEnv, simulating } from "../../lib/ts/src/exec";
 
 export type Runner = (bin: string, args: string[], timeoutMs?: number) => Promise<ExecResult>;
 
@@ -59,8 +59,14 @@ export function jobEnv(id: string, who: { user: string | null; name: string | nu
 // stdin is written once and closed; the output is captured as for runAsync.
 export type StdinRunner = (bin: string, args: string[], input: string, timeoutMs?: number, env?: JobEnv) => Promise<ExecResult>;
 
+export const SIMULATE_NO_SECRET = "simulate mode (TAPPAAS_SIMULATE=1): a secret has no dry run, so it is refused: nothing changed";
+
 export const runWithStdin: StdinRunner = (bin, args, input, timeoutMs = 60_000, env) =>
   new Promise((resolve) => {
+    if (simulating()) {
+      resolve({ rc: 1, stdout: "", stderr: SIMULATE_NO_SECRET, ran: true });
+      return;
+    }
     let child: ChildProcess;
     try {
       child = spawn(bin, args, { env: { ...configEnv(), NO_COLOR: "1", TERM: "dumb", ...env }, stdio: ["pipe", "pipe", "pipe"] });

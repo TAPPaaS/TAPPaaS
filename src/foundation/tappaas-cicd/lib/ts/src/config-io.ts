@@ -49,10 +49,27 @@ export function readJsonObject(file: string): Record<string, unknown> | null {
   return v as Record<string, unknown>;
 }
 
+// TAPPAAS_SIMULATE=1 (docs/plans/console-gui-pipeline.md §6 layer B): nothing
+// changes the site. One rule for the lib, exec.ts builds its gate on it.
+export function simulating(): boolean {
+  return process.env.TAPPAAS_SIMULATE === "1";
+}
+
+// A write under the config root, simulated: logged and skipped. The console's
+// own state directory is elsewhere and keeps being written.
+function skipConfigWrite(file: string): boolean {
+  if (!simulating()) return false;
+  const root = defaultConfigDir().replace(/\/$/, "");
+  if (file !== root && !file.startsWith(`${root}/`)) return false;
+  console.error(`[simulate] write ${file}`);
+  return true;
+}
+
 // Atomically write a JSON document: write into a fresh temp dir NEXT TO the
 // target (same filesystem, so rename is atomic), rename over the target, and
 // remove the now-empty temp dir (the old per-manager copies leaked it).
 export function writeJsonAtomic(file: string, doc: unknown): void {
+  if (skipConfigWrite(file)) return;
   const dir = dirname(file);
   const tmpDir = mkdtempSync(join(dir, ".tmp-"));
   const tmp = join(tmpDir, "out.json");

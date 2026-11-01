@@ -144,7 +144,7 @@ export function JobStatusLine({ job, label, state, level, ms, control = true }: 
   return (
     <p className="job-status">
       <Tag level={level ?? jobLevel(job)} /> {label}
-      <span className="muted"> · {state ?? jobResult(job)}{took ? ` · ${took}` : ""} · job {job.id}</span>
+      <span className="muted"> · {state ?? jobResult(job)}{job.simulated ? " (simulated)" : ""}{took ? ` · ${took}` : ""} · job {job.id}</span>
       {control ? <> <JobControl job={job} /></> : null}
     </p>
   );

@@ -694,3 +694,27 @@ the reads and their cache, every route, Activity and the jumps; the verb manifes
 check (T2); the job model: preview before apply (T3), the installer on every write (T1), the typed
 confirmation, the sweep refusal, the serial runner and jobs.jsonl — over hrossen's captured
 outputs with a fake runner. `--deep`: the installed service answers `/api/v1/status`.
+
+## Simulate mode (test systems)
+
+`TAPPAAS_SIMULATE=1` in the console's environment: nothing a job does changes the system, and every job still shows the real plan. It is for test systems such as hrossen, to try a flow against a real site (`docs/plans/console-gui-pipeline.md` §6 layer B). It is not a safety setting for production, and a job's Activity record says `simulated: true`, so the sign is visible.
+
+Switch it on and off without a rebuild:
+
+```bash
+echo TAPPAAS_SIMULATE=1 | sudo tee /etc/tappaas/console.env
+sudo systemctl restart tappaas-console
+```
+
+```bash
+sudo rm /etc/tappaas/console.env
+sudo systemctl restart tappaas-console
+```
+
+(`sudo mkdir -p /etc/tappaas` the first time. The unit reads the file with `EnvironmentFile=-`; absent is off.) Wait for a running job to finish first: a restart cuts it off.
+
+- **An apply** runs the verb's preview argv instead: the plan for `apply-flag`, the `--check`/`--dry-run` form for `dry-run-flag`, nothing for `none`. Its output starts with `simulated: would run <argv>`. It exits 0 when the preview is clean (an `apply-flag` plan's exit 2 counts as clean) and keeps the preview's failure when it is not. The record has `simulated: true`, `ran` is what ran and `wouldRun` the apply; the status line shows "(simulated)".
+- **Previews and reads** run as ever.
+- **A secret** has no dry run: a job with one, a verb fed one on stdin, and a file the console writes itself are all refused, with a message that says so.
+- **Under it**, the verbs inherit the variable. `lib/ts/src/exec.ts` and `lib/common-install-routines.sh` skip anything on `lib/simulate-mutators.txt` (`[simulate] <argv>` on stderr, exit 0, empty stdout), `writeJsonAtomic` and `jq_module_write` skip writes under `config/`, and CMDB reports are neither sent nor spooled. If the list cannot be read, the TS gate runs nothing and a bash script stops. This net catches a preview that writes; what it does not cover is listed in the design doc, §6 "Gaps".
+- **It cannot show** the output of a real apply. That is fixture mode's recorded transcript, or a live test with a reverse (`test/live-test-template.sh`).

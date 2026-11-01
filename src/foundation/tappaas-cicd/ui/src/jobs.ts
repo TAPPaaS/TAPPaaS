@@ -16,6 +16,13 @@
 //   read     a verb that changes nothing (module test, node network show):
 //            runs at once, beside the queue
 //
+// With TAPPAAS_SIMULATE=1 in the console's environment (test systems, O2 of
+// docs/plans/console-gui-pipeline.md), an apply runs its preview argv instead
+// and says what it would have run: the real plan, nothing changed. Its record
+// has simulated: true; a verb with no dry run runs nothing, and one that takes a
+// secret is refused. Previews and reads run as ever; the children inherit the
+// variable, so lib/ts exec.ts and the bash lib hold any write a preview tries.
+//
 // Who may: access.ts mayWrite — the gate's installer, or the setup token while
 // setup is open; never loopback without the gate. Two kinds of job come from
 // the console's own routes, not from an argv a caller posts: a verb with a
@@ -34,6 +41,7 @@ import { join } from "path";
 import { Me, SetupState, mayWrite } from "./access";
 import { Proposal } from "./conversations";
 import { Manifests, Validated, applyArgv, baseArgv, previewArgv, sameArgv, validateArgv } from "./manifest";
+import { simulating } from "../../lib/ts/src/exec";
 import { ManifestVerb } from "../../lib/ts/src/help";
 import { Runner, StopSignal, Streamer, jobEnv } from "./run";
 
@@ -79,6 +87,10 @@ export interface Job {
   // ran; running, it was stopped — the signals its process group was sent,
   // in order. Absent otherwise.
   cancelled?: { by: string | null; at: string; was: "queued" | "running"; signals: StopSignal[] };
+  // TAPPAAS_SIMULATE=1: `ran` is the preview (null: nothing ran) and `wouldRun`
+  // the apply it stood in for. Absent otherwise.
+  simulated?: boolean;
+  wouldRun?: string[];
 }
 
 export type JobSummary = Omit<Job, "output">;
@@ -532,11 +544,18 @@ export class Jobs {
       return { status: 400, error: `a destructive verb: type '${v.object}' to confirm${v.objectLabel !== v.object ? ` (${v.objectLabel})` : ""}` };
     }
     const job = this.newJob(me, v, "apply", applyArgv(v), p.id, p.assistant ?? null);
+    this.markSimulated(job, v);
     this.add(job);
     const s = await this.refuseForSweep(job);
     if (s) return { status: 409, job, error: job.refused ?? "", sweep: s };
     this.enqueue(job);
     return { status: 201, job };
+  }
+
+  // An apply under TAPPAAS_SIMULATE=1: its preview stands in for it.
+  private markSimulated(job: JobSummary, v: Validated): void {
+    if (!simulating()) return;
+    Object.assign(job, { simulated: true, wouldRun: job.ran, ran: previewArgv(v) });
   }
 
   // POST /jobs {argv, apply: true}: Apply without a separate preview click. The
@@ -551,8 +570,9 @@ export class Jobs {
       return { status: 400, error: `a destructive verb: type '${v.object}' to confirm${v.objectLabel !== v.object ? ` (${v.objectLabel})` : ""}` };
     }
     const job = this.newJob(me, v, "apply", applyArgv(v), null, card);
+    this.markSimulated(job, v);
     const pre = previewArgv(v);
-    if (pre) job.previewPhase = { ran: pre, kind: v.preview.kind === "apply-flag" ? "apply-flag" : "dry-run-flag", exit: null, durationMs: null, outputLength: 0, stopped: null };
+    if (pre && !job.simulated) job.previewPhase = { ran: pre, kind: v.preview.kind === "apply-flag" ? "apply-flag" : "dry-run-flag", exit: null, durationMs: null, outputLength: 0, stopped: null };
     this.add(job);
     const s = await this.refuseForSweep(job);
     if (s) return { status: 409, job, error: job.refused ?? "", sweep: s };
@@ -574,6 +594,7 @@ export class Jobs {
     const v = validateArgv(ms, argv);
     if (!v.ok) return { status: 400, error: v.reason };
     if (v.read || v.preview.kind !== "none") return { status: 409, error: `${argv.join(" ")}: a job with a secret has no dry run` };
+    if (simulating()) return { status: 409, error: `simulate mode (TAPPAAS_SIMULATE=1): ${argv.join(" ")} takes a secret and has no dry run, so it is refused: nothing ran` };
     return this.createApply(me, setup, v, null, undefined, secret);
   }
 
@@ -714,6 +735,7 @@ export class Jobs {
     this.record(job); // the running record: a job the console stops on is visible as cut off
     this.emit(job, { type: "state", job: summary(job) });
     const out = { written: 0, tail: "" }; // the output so far (capped) and its end, for onDone
+    if (job.simulated) return this.executeSimulated(job, t0, out);
     const pp = job.previewPhase;
     if (pp) {
       this.cfg.log?.(`job ${job.id} preview by ${job.who.user ?? "?"} (${job.who.via}): ${pp.ran.join(" ")}`);
@@ -746,6 +768,40 @@ export class Jobs {
     this.emit(job, { type: "end", job: summary(job) });
     if (job.kind === "apply") this.cfg.onWriteDone?.(job);
     this.cfg.onDone?.(job, r.ran ? out.tail.replace(/\s+$/, "") : "");
+  }
+
+  // An apply under TAPPAAS_SIMULATE=1: the line that says so, then the preview
+  // in place of the apply. Clean is exit 0, a pending plan (apply-flag's exit 2)
+  // included; a preview that refuses keeps its exit, as it would stop the apply.
+  private async executeSimulated(job: JobSummary, t0: number, out: { written: number; tail: string }): Promise<void> {
+    this.note(job, out, `simulated: would run ${shellQuote(job.wouldRun ?? job.argv)}\n`);
+    let rc = 0;
+    let ran = true;
+    if (job.ran) {
+      this.cfg.log?.(`job ${job.id} simulated by ${job.who.user ?? "?"} (${job.who.via}): ${job.ran.join(" ")}`);
+      const r = await this.stream(job, job.ran, out);
+      ran = r.ran;
+      const stopped = previewStop(r.ran, r.rc, out.tail, job.preview.kind === "apply-flag");
+      if (job.cancelled) rc = r.rc;
+      else if (stopped) {
+        rc = r.rc || 1;
+        this.note(job, out, `simulated: ${stopped}\n`);
+      }
+    } else this.note(job, out, "simulated: this verb has no dry run: nothing ran\n");
+    const t1 = this.now();
+    Object.assign(job, { state: "done", exit: rc, ended: new Date(t1).toISOString(), durationMs: t1 - t0 });
+    this.record(job);
+    this.emit(job, { type: "end", job: summary(job) });
+    this.cfg.onWriteDone?.(job);
+    this.cfg.onDone?.(job, ran ? out.tail.replace(/\s+$/, "") : "");
+  }
+
+  // A line of the console's own in a job's output.
+  private note(job: JobSummary, out: { written: number; tail: string }, line: string): void {
+    out.written += line.length;
+    out.tail = (out.tail + line).slice(-4096);
+    this.appendOutput(job.id, line);
+    this.emit(job, { type: "output", chunk: line });
   }
 
   // One command of a job, its output appended to the job's log (capped at
