@@ -80,7 +80,7 @@ export function ModuleConfig({ d }: { d: ModuleDetail }) {
         id: c.id || "@module",
         w: W,
         h: height(shown.length),
-        accent: c.how === "module" ? "#3b6fd4" : c.how === "integrates with" ? "#cbd5e1" : "#94a3b8",
+        accent: c.how === "module" ? "var(--accent)" : c.how === "integrates with" ? "var(--slate-300)" : "var(--slate-400)",
         onClick: operator && c.rows.length ? () => setOpen(c) : undefined,
         content: (
           <div className="mcard">
@@ -122,7 +122,7 @@ export function ModuleConfig({ d }: { d: ModuleDetail }) {
         ),
       };
     });
-    const edges: GEdge[] = cards.slice(1).map((c) => ({ source: "@module", target: c.id, dashed: c.how === "integrates with", color: c.how === "integrates with" ? "#cbd5e1" : "#94a3b8" }));
+    const edges: GEdge[] = cards.slice(1).map((c) => ({ source: "@module", target: c.id, dashed: c.how === "integrates with", color: c.how === "integrates with" ? "var(--slate-300)" : "var(--slate-400)" }));
     return { nodes, edges };
   }, [cards, operator, d]);
 

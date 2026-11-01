@@ -142,10 +142,10 @@ export function layout(nodes: GNode[], edges: GEdge[], rankdir: "TB" | "LR", nod
       label: e.label,
       type: bus ? "bus" : routes ? "route" : "default",
       data: routes ? { route: routes[i] } : undefined,
-      style: { stroke: e.color ?? "#94a3b8", strokeWidth: 1.6, strokeDasharray: e.dashed ? "5 4" : undefined },
-      labelStyle: { fontSize: 11, fill: "#475569" },
-      labelBgStyle: { fill: "#f8fafc" },
-      markerEnd: e.arrow ? { type: MarkerType.ArrowClosed, color: e.color ?? "#94a3b8", width: 16, height: 16 } : undefined,
+      style: { stroke: e.color ?? "var(--slate-400)", strokeWidth: 1.6, strokeDasharray: e.dashed ? "5 4" : undefined },
+      labelStyle: { fontSize: 11, fill: "var(--slate-600)" },
+      labelBgStyle: { fill: "var(--slate-50)" },
+      markerEnd: e.arrow ? { type: MarkerType.ArrowClosed, color: e.color ?? "var(--slate-400)", width: 16, height: 16 } : undefined,
     })),
   };
 }
@@ -170,7 +170,7 @@ export function Graph({ nodes, edges, rankdir = "TB", height = 520, nodesep = 30
         // A node with no click handler gets no pointer events; the cards handle their own.
         onNodeClick={() => undefined}
       >
-        <Background gap={24} color="#e5e7eb" />
+        <Background gap={24} color="var(--gray-200)" />
         <Controls showInteractive={false} />
       </ReactFlow>
     </div>

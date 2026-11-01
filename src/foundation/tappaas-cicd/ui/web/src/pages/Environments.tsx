@@ -122,7 +122,7 @@ function EnvCardView({ c, on, pick }: { c: Card; on: boolean; pick: () => void }
       </header>
       <div className="env-zones">
         {c.boxes.map((b) => (
-          <div key={b.zone ?? "-"} className={`zone-box${b.own ? "" : " zone-box-shared"}`} style={{ borderTopColor: TYPE_COLOR[b.record?.type ?? ""] ?? "#94a3b8" }}>
+          <div key={b.zone ?? "-"} className={`zone-box${b.own ? "" : " zone-box-shared"}`} style={{ borderTopColor: TYPE_COLOR[b.record?.type ?? ""] ?? "var(--slate-400)" }}>
             <div className={`zone-box-head${b.zone ? " linkish" : ""}`} onClick={b.zone ? () => navigate(`/zones?zone=${encodeURIComponent(b.zone!)}`) : undefined} title={b.zone ? `open ${b.zone} on the Network page` : undefined}>
               <b>{b.zone ?? "no zone"}</b>
               <span className="muted small">

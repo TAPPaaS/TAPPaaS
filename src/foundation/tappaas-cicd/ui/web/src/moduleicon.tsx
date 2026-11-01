@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 
-const TILE = ["#3b6fd4", "#7c3aed", "#0891b2", "#be185d", "#4d7c0f", "#b45309", "#1d4ed8", "#0f766e"];
+const TILE = ["var(--accent)", "var(--violet-600)", "var(--cyan-600)", "var(--pink-700)", "var(--lime-700)", "var(--amber-700)", "var(--blue-700)", "var(--teal-700)"];
 
 function tileColor(name: string): string {
   let h = 0;

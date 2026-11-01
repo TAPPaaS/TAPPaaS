@@ -201,9 +201,9 @@ export function DiskBody({ inv, notes, node, device }: { inv: StorageInventory; 
 // The pie's colours: the guests in the categorical order (never cycled: past
 // the fifth they share one "more guests" colour, each still named in the
 // list), the rest in greys, the mirror copies hatched.
-const GUEST_HUES = ["#2a78d6", "#eb6834", "#1baf7a", "#e87ba4", "#6250d6"];
-const MORE_GUESTS = "#8a94a6";
-const FIXED: Record<Exclude<Slice["kind"], "guest">, string> = { mirror: "url(#hatch-mirror)", store: "#475569", other: "#b6c0cc", free: "#eef1f4" };
+const GUEST_HUES = ["var(--guest-1)", "var(--guest-2)", "var(--guest-3)", "var(--guest-4)", "var(--guest-5)"];
+const MORE_GUESTS = "var(--steel)";
+const FIXED: Record<Exclude<Slice["kind"], "guest">, string> = { mirror: "url(#hatch-mirror)", store: "var(--slate-600)", other: "var(--steel-light)", free: "var(--chip)" };
 
 function sliceColor(s: Slice, guestIndex: number): string {
   if (s.kind !== "guest") return FIXED[s.kind];
@@ -242,8 +242,8 @@ export function Pie({ pool }: { pool: StoragePool }) {
       <svg viewBox="0 0 160 160" width="160" height="160" role="img" aria-label={`what ${pool.name} holds`}>
         <defs>
           <pattern id="hatch-mirror" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <rect width="6" height="6" fill="#c7cfe0" />
-            <line x1="0" y1="0" x2="0" y2="6" stroke="#5b6b8c" strokeWidth="2.4" />
+            <rect width="6" height="6" fill="var(--hatch-bg)" />
+            <line x1="0" y1="0" x2="0" y2="6" stroke="var(--hatch-ink)" strokeWidth="2.4" />
           </pattern>
         </defs>
         {arcs.map((x) => (

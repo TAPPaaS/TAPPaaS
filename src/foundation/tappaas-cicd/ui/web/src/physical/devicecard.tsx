@@ -32,8 +32,8 @@ export function DevLabel({ d, s, bays }: { d: DevNode; s: DevState; bays?: React
 // slate; an aggregate (a LAG, several cables) thicker.
 export function linkStyle(l: DevLink, t: Topology): { stroke: string; width: number; dash?: string } {
   const width = l.cables.length > 1 || l.cables.some((c) => c.lag) ? 3.4 : 2;
-  if (l.up === false) return { stroke: "#d64545", width, dash: "3 3" };
-  if (l.kind === "tunnel") return { stroke: "#7c3aed", width: 1.6, dash: "1 4" };
+  if (l.up === false) return { stroke: "var(--fail)", width, dash: "3 3" };
+  if (l.kind === "tunnel") return { stroke: "var(--violet-600)", width: 1.6, dash: "1 4" };
   // (a pair joined by a wan and a lan cable is drawn as the lan's)
   if (l.kind === "hand-off" || (l.cables.length > 0 && l.cables.every((c) => c.kind === "wan")) || (l.zones.length === 1 && l.zones[0] === t.site.wan.zone)) return { stroke: zoneColor({ name: "wan" }), width, dash: "6 4" };
   const zs = l.cables.every((c) => c.kind === "wan") ? l.zones : l.cables.filter((c) => c.kind !== "wan").flatMap((c) => c.zones);
@@ -41,7 +41,7 @@ export function linkStyle(l: DevLink, t: Topology): { stroke: string; width: num
     const z = t.zones.find((x) => x.name === zs[0]);
     return { stroke: zoneColor(z ?? { name: zs[0] }), width };
   }
-  return { stroke: "#475569", width };
+  return { stroke: "var(--slate-600)", width };
 }
 
 // A link's label: the ports at its ends, or how many cables.

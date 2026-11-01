@@ -65,8 +65,8 @@ function Preview({ values, keyName }: { values: Values; keyName: string }) {
   return (
     <div className="faceplate-preview">
       <svg viewBox={`0 0 ${R.w19 + 2 * R.rail} ${h + 12}`} width="100%" role="img" aria-label="the plate as it will be drawn">
-        <rect x={0} y={2} width={R.rail} height={h + 8} fill="#cbd5e1" />
-        <rect x={R.w19 + R.rail} y={2} width={R.rail} height={h + 8} fill="#cbd5e1" />
+        <rect x={0} y={2} width={R.rail} height={h + 8} fill="var(--slate-300)" />
+        <rect x={R.w19 + R.rail} y={2} width={R.rail} height={h + 8} fill="var(--slate-300)" />
         <PlateSvg p={p} on={false} portOn={() => false} onPlate={() => undefined} onPort={() => undefined} />
       </svg>
       <small className="muted">

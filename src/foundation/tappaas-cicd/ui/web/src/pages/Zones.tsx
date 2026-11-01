@@ -37,14 +37,14 @@ export interface ZoneRead {
 }
 
 export const TYPE_COLOR: Record<string, string> = {
-  Management: "#475569",
-  Service: "#3b6fd4",
-  Client: "#2f9e44",
-  IoT: "#e8a317",
-  Guest: "#0ea5a4",
-  DMZ: "#d64545",
-  Overlay: "#7c3aed",
-  WAN: "#8e8e8e",
+  Management: "var(--zone-mgmt)",
+  Service: "var(--zone-p0)",
+  Client: "var(--zone-home)",
+  IoT: "var(--zone-iotLocal)",
+  Guest: "var(--zone-guest)",
+  DMZ: "var(--zone-dmz)",
+  Overlay: "var(--violet-600)",
+  WAN: "var(--zone-wan)",
 };
 
 const net = (title: string, verb: string, extra: Partial<Step> = {}): Step => ({ title, bin: "network-manager", verb, ...extra });
@@ -59,13 +59,13 @@ const live = (z: ZoneRead) => z.state === "Active" || z.state === "Mandatory" ||
 const dot = (z: ZoneRead) => (z.state === "Active" || z.state === "Mandatory" ? "pass" : z.state === "Manual" ? "info" : "skip");
 
 export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected: string | null, pub: PublicAddress = publicAddress(null)): { nodes: GNode[]; edges: GEdge[] } {
-  const color = new Map(zones.map((z) => [z.name, TYPE_COLOR[z.type ?? ""] ?? "#94a3b8"]));
+  const color = new Map(zones.map((z) => [z.name, TYPE_COLOR[z.type ?? ""] ?? "var(--slate-400)"]));
   const wan = wanZone(zones);
   const { edges: lines, pseudo } = zoneEdges(zones);
   const edges: GEdge[] = lines.map((e) =>
     e.kind === "access"
       ? { source: e.source, target: e.target, color: color.get(e.source), arrow: true, ...(e.via ? { label: `serves ${e.via}` } : e.shared ? { label: `shared · ${e.shared.join(", ")}` } : {}) }
-      : { source: e.source, target: e.target, color: "#f08c3a", dashed: true, arrow: true, label: e.via ? `pinhole · ${e.via}` : e.shared ? `pinhole · shared · ${e.shared.join(", ")}` : "pinhole" },
+      : { source: e.source, target: e.target, color: "var(--orange-400)", dashed: true, arrow: true, label: e.via ? `pinhole · ${e.via}` : e.shared ? `pinhole · shared · ${e.shared.join(", ")}` : "pinhole" },
   );
   const nodes: GNode[] = zones.map((z) => ({
     id: z.name,
@@ -73,7 +73,7 @@ export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected
     h: 74,
     col: zoneColumn(z),
     order: z.vlantag ?? 0,
-    accent: TYPE_COLOR[z.type ?? ""] ?? "#94a3b8",
+    accent: TYPE_COLOR[z.type ?? ""] ?? "var(--slate-400)",
     className: `zcard${live(z) ? "" : " zcard-off"}${selected === z.name ? " zcard-on" : ""}`,
     onClick: () => pick(z.name),
     content:

@@ -7,6 +7,7 @@
 import { Background, Controls, ReactFlow, ReactFlowProvider, useReactFlow } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { get, useHealthStream } from "../api";
+import { PHONE_QUERY } from "../breakpoints";
 import { GEdge, GNode, edgeTypes, layout, nodeTypes } from "../graph";
 import { Anchor, Card, EgoState, Filters, NO_FILTERS, boundsOf, egoCards, expand, fold, hubsOf, kept, patchEgo, patchPaths, rollup, shapeOf, statusClass, viewFor, wrapRanks } from "../healthgraph";
 import { ClassIcon, ModuleIcon } from "../moduleicon";
@@ -16,8 +17,8 @@ import { HealthPanel } from "./HealthPanel";
 import { TreePane, useTree } from "./HealthTree";
 
 const CONDITION_TYPES = ["operational", "drift", "capacity", "security", "maintenance", "backup", "impact"];
-const STRONG = "#d64545";
-const THIN = "#94a3b8";
+const STRONG = "var(--fail)";
+const THIN = "var(--slate-400)";
 const WEEK_HOURS = 168;
 const NODESEP = 22;
 const RANKSEP = 52;
@@ -28,7 +29,7 @@ const near = (v: { width: number; height: number }, w: number, h: number): boole
 
 type Chain = HealthPath["to"];
 
-const phone = (): boolean => window.matchMedia("(max-width: 700px)").matches;
+const phone = (): boolean => window.matchMedia(PHONE_QUERY).matches;
 const atQuery = (at: string | null, joiner: string): string => (at ? `${joiner}at=${encodeURIComponent(at)}` : "");
 
 function Marks({ v }: { v: HealthView }) {
@@ -148,7 +149,7 @@ function Flow({ state, filters, pick, grow, toggleGroup, nonce }: FlowProps) {
   return (
     <div className="graph health-canvas" ref={canvas}>
       <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} minZoom={0.1} maxZoom={MAX_ZOOM} nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} proOptions={{ hideAttribution: true }} onNodeClick={() => undefined}>
-        <Background gap={24} color="#e5e7eb" />
+        <Background gap={24} color="var(--gray-200)" />
         <Controls showInteractive={false} />
       </ReactFlow>
     </div>

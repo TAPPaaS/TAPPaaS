@@ -19,10 +19,10 @@ import { KV, ReadState, Section, since } from "../ui";
 import { identitySpecs } from "../wizards";
 
 const KIND: Record<IdKind, { title: string; one: string; color: string }> = {
-  org: { title: "Organizations", one: "organization", color: "#3b6fd4" },
-  group: { title: "Groups", one: "group", color: "#2f9e44" },
-  user: { title: "Users", one: "user", color: "#e8a317" },
-  role: { title: "Roles", one: "role", color: "#7c3aed" },
+  org: { title: "Organizations", one: "organization", color: "var(--accent)" },
+  group: { title: "Groups", one: "group", color: "var(--pass)" },
+  user: { title: "Users", one: "user", color: "var(--amber-400)" },
+  role: { title: "Roles", one: "role", color: "var(--violet-600)" },
 };
 
 const reconcileNote = "The preview is the plan against Authentik (what would be created, changed, removed); apply pushes it.";
@@ -137,7 +137,7 @@ export function Identity() {
         ),
       };
     });
-    const edges: GEdge[] = g.edges.map((e) => ({ ...e, arrow: true, color: e.label === "has role" || e.label === "grants" ? "#a78bfa" : e.label === "owner" ? "#e8a317" : "#94a3b8", dashed: e.label === "owner" }));
+    const edges: GEdge[] = g.edges.map((e) => ({ ...e, arrow: true, color: e.label === "has role" || e.label === "grants" ? "var(--violet-400)" : e.label === "owner" ? "var(--amber-400)" : "var(--slate-400)", dashed: e.label === "owner" }));
     return { nodes, edges };
   }, [g, sel]);
   const picked = g.nodes.find((n) => n.id === sel) ?? null;

@@ -8,7 +8,7 @@ import { gaugeLevel, gaugePct, valueText } from "../sectionview";
 import { ModuleSection, SectionBlock, SectionFormat } from "../types";
 import { Badge, KV, Link, Section, levelOf, since } from "../ui";
 
-const GAUGE_COLOR = { pass: "#3a9d5d", warn: "#d9a21b", fail: "#d14343", skip: "#8a94a6" };
+const GAUGE_COLOR = { pass: "var(--gauge-pass)", warn: "var(--gauge-warn)", fail: "var(--gauge-fail)", skip: "var(--steel)" };
 
 function Value({ v, format }: { v: unknown; format?: SectionFormat }): ReactNode {
   const text = valueText(v, format);

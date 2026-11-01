@@ -106,12 +106,12 @@ function RackThumb({ r }: { r: RackInfo }) {
   return (
     <button className="ov-rack" onClick={() => navigate(viewLink("rack", `rack:${r.name}`))} title={`${r.displayName ?? r.name}: ${r.placements.map((m) => `U${m.u} ${m.device}`).join(", ")}`}>
       <svg width={w + 8} height={r.units * px + 8} role="img" aria-label={`rack ${r.name}`}>
-        <rect x={0.5} y={0.5} width={w + 7} height={r.units * px + 7} rx={3} fill="#f1f3f6" stroke="#94a3b8" />
+        <rect x={0.5} y={0.5} width={w + 7} height={r.units * px + 7} rx={3} fill="var(--rack-thumb)" stroke="var(--slate-400)" />
         {r.placements
           .filter((m) => m.face === "front")
           .map((m) => {
             const mw = m.width === "full" ? w : m.width === "half" ? w / 2 : w / 3;
-            return <rect key={m.device} x={4 + (m.width === "full" ? 0 : m.slot * mw)} y={4 + top(m.u, m.height)} width={mw - 1} height={m.height * px - 1} rx={1} fill={m.kind === "node" ? "#3b6fd4" : m.kind === "switch" ? "#475569" : "#8a94a6"} />;
+            return <rect key={m.device} x={4 + (m.width === "full" ? 0 : m.slot * mw)} y={4 + top(m.u, m.height)} width={mw - 1} height={m.height * px - 1} rx={1} fill={m.kind === "node" ? "var(--accent)" : m.kind === "switch" ? "var(--slate-600)" : "var(--steel)"} />;
           })}
       </svg>
       <span className="ov-rack-name">{r.displayName ?? r.name}</span>

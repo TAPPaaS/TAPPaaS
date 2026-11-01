@@ -51,7 +51,7 @@ function Zones({ t, vlans }: { t: Topology; vlans: number[] }) {
         const z = t.zones.find((x) => x.vlan === v);
         return (
           <span key={v} className="zone">
-            <i style={{ background: z ? zoneColor(z) : "#cbd5e1" }} />
+            <i style={{ background: z ? zoneColor(z) : "var(--slate-300)" }} />
             {v}
             {z ? ` ${z.name}` : ""}
           </span>

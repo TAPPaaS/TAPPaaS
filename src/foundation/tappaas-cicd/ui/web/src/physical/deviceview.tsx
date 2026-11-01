@@ -138,9 +138,9 @@ function Inner({ t, sel, pick, onPane, labels, tree }: { t: Topology; sel: Sel |
       target: l.b,
       type: "float",
       label: labels ? linkText(l) : undefined,
-      style: { stroke: on ? "#f59e0b" : st.stroke, strokeWidth: on ? st.width + 2 : st.width, strokeDasharray: st.dash },
-      labelStyle: { fontSize: 11, fill: "#475569" },
-      labelBgStyle: { fill: "#f8fafc" },
+      style: { stroke: on ? "var(--amber-500)" : st.stroke, strokeWidth: on ? st.width + 2 : st.width, strokeDasharray: st.dash },
+      labelStyle: { fontSize: 11, fill: "var(--slate-600)" },
+      labelBgStyle: { fill: "var(--slate-50)" },
     };
   }), [g, t, sel, labels]);
 
@@ -162,7 +162,7 @@ function Inner({ t, sel, pick, onPane, labels, tree }: { t: Topology; sel: Sel |
       elementsSelectable={false}
       proOptions={{ hideAttribution: true }}
     >
-      <Background gap={24} color="#e5e7eb" />
+      <Background gap={24} color="var(--gray-200)" />
       <Controls showInteractive={false} showFitView={false}>
         <ControlButton onClick={() => void rf.fitView({ padding: 0.18, duration: 350 })} title="fit: see every device" aria-label="fit">
           <span className="fit-label">Fit</span>

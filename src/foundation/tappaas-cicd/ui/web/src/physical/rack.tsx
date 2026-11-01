@@ -34,14 +34,14 @@ export type { Box, Placed } from "./platelayout";
 // A trunk's colour by what it joins, bright enough to tell apart on the
 // light canvas (CABLE_KINDS is also the legend's).
 export const CABLE_KINDS: { kind: string; stroke: string; label: string }[] = [
-  { kind: "lan", stroke: "#16a34a", label: "node trunk" },
-  { kind: "uplink", stroke: "#f97316", label: "switch uplink" },
-  { kind: "peer-link", stroke: "#2563eb", label: "peer link" },
-  { kind: "ap", stroke: "#a21caf", label: "access point" },
-  { kind: "device", stroke: "#e11d48", label: "device" },
-  { kind: "patch", stroke: "#0891b2", label: "patch" },
+  { kind: "lan", stroke: "var(--green-600)", label: "node trunk" },
+  { kind: "uplink", stroke: "var(--orange-500)", label: "switch uplink" },
+  { kind: "peer-link", stroke: "var(--blue-600)", label: "peer link" },
+  { kind: "ap", stroke: "var(--fuchsia-700)", label: "access point" },
+  { kind: "device", stroke: "var(--rose-600)", label: "device" },
+  { kind: "patch", stroke: "var(--cyan-600)", label: "patch" },
 ];
-export const CABLE_DOWN = "#dc2626";
+export const CABLE_DOWN = "var(--red-600)";
 
 // A cable's colour and dash: a wan link dashed in the wan colour, an access
 // link in its zone's colour, a trunk in its kind's colour, a link that is
@@ -54,8 +54,8 @@ export function cableStyle(c: RackCable, t: Topology): { stroke: string; width: 
     const z = t.zones.find((x) => x.name === c.zones[0]);
     return { stroke: zoneColor(z ?? { name: c.zones[0] }), width, dash: c.source === "recorded" ? "2 3" : undefined };
   }
-  if (c.kind === "power") return { stroke: "#b91c1c", width: 2, dash: "1 3" };
-  return { stroke: CABLE_KINDS.find((k) => k.kind === c.kind)?.stroke ?? "#475569", width, dash: c.source === "recorded" ? "2 3" : undefined };
+  if (c.kind === "power") return { stroke: "var(--red-700)", width: 2, dash: "1 3" };
+  return { stroke: CABLE_KINDS.find((k) => k.kind === c.kind)?.stroke ?? "var(--slate-600)", width, dash: c.source === "recorded" ? "2 3" : undefined };
 }
 
 // The cable a click on <device>:<port> selected.
@@ -73,10 +73,10 @@ export function cableText(c: RackCable): string {
 }
 
 function portFill(p: PlatePort): string {
-  if (p.disabled) return "#e5e7eb";
-  if (p.up === true) return "#2f9e44";
-  if (p.up === false) return "#475569";
-  return "#cbd5e1";
+  if (p.disabled) return "var(--gray-200)";
+  if (p.up === true) return "var(--pass)";
+  if (p.up === false) return "var(--slate-600)";
+  return "var(--slate-300)";
 }
 
 function portTitle(p: PlatePort): string {
@@ -91,15 +91,15 @@ function Port({ c, selected, cabled, rear, onClick }: { c: { port: PlatePort; bo
     <g className="rack-port" onClick={(e) => (e.stopPropagation(), onClick())}>
       <title>{portTitle(p)}</title>
       {p.kind === "power" ? (
-        <circle cx={b.x + b.w / 2} cy={b.y + b.h / 2} r={Math.min(b.w, b.h) / 2} fill="#1f2937" stroke="#94a3b8" />
+        <circle cx={b.x + b.w / 2} cy={b.y + b.h / 2} r={Math.min(b.w, b.h) / 2} fill="var(--gray-800)" stroke="var(--slate-400)" />
       ) : (
-        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={sfp ? 1 : 1.5} fill={sfp ? "#111827" : "#0f172a"} stroke={p.lag ? "#7c3aed" : "#64748b"} strokeWidth={p.lag ? 1.6 : 0.8} />
+        <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={sfp ? 1 : 1.5} fill={sfp ? "var(--gray-900)" : "var(--slate-900)"} stroke={p.lag ? "var(--violet-600)" : "var(--slate-500)"} strokeWidth={p.lag ? 1.6 : 0.8} />
       )}
       {p.kind !== "power" ? <rect x={b.x + 2} y={b.y + (sfp ? 2 : 3)} width={b.w - 4} height={b.h - (sfp ? 4 : 5)} rx={1} fill={portFill(p)} opacity={p.kind === "console" ? 0.6 : 1} /> : null}
-      {p.kind === "poe" ? <rect x={b.x + 2} y={b.y + 1} width={b.w - 4} height={1.4} fill="#facc15" /> : null}
-      {cabled ? <rect x={b.x} y={b.y + b.h + 1.2} width={b.w} height={1.8} rx={0.9} fill="#38bdf8" /> : null}
-      {rear ? <rect x={b.x} y={b.y - 3} width={b.w} height={1.8} rx={0.9} fill="#c084fc"><title>its rear is cabled</title></rect> : null}
-      {selected ? <rect x={b.x - 2} y={b.y - 2} width={b.w + 4} height={b.h + 4} rx={2} fill="none" stroke="#f59e0b" strokeWidth={2.2} /> : null}
+      {p.kind === "poe" ? <rect x={b.x + 2} y={b.y + 1} width={b.w - 4} height={1.4} fill="var(--yellow-400)" /> : null}
+      {cabled ? <rect x={b.x} y={b.y + b.h + 1.2} width={b.w} height={1.8} rx={0.9} fill="var(--sky-400)" /> : null}
+      {rear ? <rect x={b.x} y={b.y - 3} width={b.w} height={1.8} rx={0.9} fill="var(--purple-400)"><title>its rear is cabled</title></rect> : null}
+      {selected ? <rect x={b.x - 2} y={b.y - 2} width={b.w + 4} height={b.h + 4} rx={2} fill="none" stroke="var(--amber-500)" strokeWidth={2.2} /> : null}
     </g>
   );
 }
@@ -112,7 +112,7 @@ const isSel = (s: Sel | null, kind: Placed["kind"], device: string): boolean =>
 // The rack draws every placed device with it; the side panel draws the selected one.
 export function PlateSvg({ p, on, portOn, cabled, rear, onPlate, onPort, onGrab, dragged }: { p: Placed; on: boolean; portOn: (id: string) => boolean; cabled?: Set<string>; rear?: Set<string>; onPlate: () => void; onPort: (id: string) => void; onGrab?: (e: ReactPointerEvent) => void; dragged?: boolean }) {
   const cells = portCells(p);
-  const led = p.up === true ? "#2f9e44" : p.up === false ? "#d64545" : "#9aa4b2";
+  const led = p.up === true ? "var(--pass)" : p.up === false ? "var(--fail)" : "var(--skip)";
   const na = nameArea(p.plate);
   const onTop = na.at === "top";
   // The name's place: left of the ports, right of them, or a strip along the top.
@@ -123,12 +123,12 @@ export function PlateSvg({ p, on, portOn, cabled, rear, onPlate, onPort, onGrab,
   return (
     <g className={onGrab ? "rack-plate rack-plate-drag" : "rack-plate"} opacity={dragged ? 0.45 : undefined} onClick={(e) => (e.stopPropagation(), onPlate())} onPointerDown={onGrab}>
       <title>{`${p.title} — ${p.sub}`}</title>
-      <rect x={p.box.x} y={p.box.y} width={p.box.w} height={p.box.h} rx={3} fill={p.kind === "outside" ? "#f1f5f9" : p.plate?.passive ? "#e2e8f0" : "#1e293b"} stroke={on ? "#3b6fd4" : p.kind === "outside" ? "#94a3b8" : "#0f172a"} strokeWidth={on ? 2.5 : 1} strokeDasharray={p.kind === "outside" ? "4 3" : undefined} />
+      <rect x={p.box.x} y={p.box.y} width={p.box.w} height={p.box.h} rx={3} fill={p.kind === "outside" ? "var(--slate-100)" : p.plate?.passive ? "var(--slate-200)" : "var(--slate-800)"} stroke={on ? "var(--accent)" : p.kind === "outside" ? "var(--slate-400)" : "var(--slate-900)"} strokeWidth={on ? 2.5 : 1} strokeDasharray={p.kind === "outside" ? "4 3" : undefined} />
       {/* the rack ears with their screws */}
       {p.kind !== "outside" && p.box.w > 300 ? (
         <>
-          <circle cx={p.box.x - R.rail / 2 + 1} cy={p.box.y + R.u / 2 - 1} r={2.2} fill="#94a3b8" />
-          <circle cx={p.box.x + p.box.w + R.rail / 2 - 1} cy={p.box.y + R.u / 2 - 1} r={2.2} fill="#94a3b8" />
+          <circle cx={p.box.x - R.rail / 2 + 1} cy={p.box.y + R.u / 2 - 1} r={2.2} fill="var(--slate-400)" />
+          <circle cx={p.box.x + p.box.w + R.rail / 2 - 1} cy={p.box.y + R.u / 2 - 1} r={2.2} fill="var(--slate-400)" />
         </>
       ) : null}
       <circle cx={nx + (onTop ? 6 : 8)} cy={p.box.y + (onTop ? 6 : 8)} r={onTop ? 2.6 : 3.4} fill={led}>
@@ -278,7 +278,7 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane, drag, dropRef, onG
       <svg ref={svgRef} width={L.width * k} height={L.height * k} viewBox={`0 0 ${L.width} ${L.height}`} role="img" aria-label="the racks">
         {L.locations.map((l) => (
           <g key={`loc:${l.name}`} className="rack-location">
-            <rect x={l.x} y={l.y} width={l.w} height={l.h} rx={14} fill="none" stroke="#64748b" strokeWidth={l.primary ? 1.6 : 1.2} strokeDasharray={l.primary ? undefined : "10 5"} />
+            <rect x={l.x} y={l.y} width={l.w} height={l.h} rx={14} fill="none" stroke="var(--slate-500)" strokeWidth={l.primary ? 1.6 : 1.2} strokeDasharray={l.primary ? undefined : "10 5"} />
             {/* One line, so the address follows the name however wide the font draws it. */}
             <text x={l.x + 14} y={l.y + 20}>
               <tspan className="rack-location-title rack-location-link" onClick={(e) => (e.stopPropagation(), navigate(locationHref(l.name)))}>
@@ -301,7 +301,7 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane, drag, dropRef, onG
         ))}
         {L.rooms.map((room) => (
           <g key={room.name} className="rack-room" onClick={(e) => (e.stopPropagation(), pick({ kind: "room", id: room.name }))}>
-            <rect x={room.x} y={room.y} width={room.w} height={room.h} rx={10} fill="#f8fafc" stroke="#94a3b8" strokeDasharray={room.recorded ? undefined : "6 4"} />
+            <rect x={room.x} y={room.y} width={room.w} height={room.h} rx={10} fill="var(--slate-50)" stroke="var(--slate-400)" strokeDasharray={room.recorded ? undefined : "6 4"} />
             <text x={room.x + 12} y={room.y + 22} className="rack-room-title">{room.title}</text>
             {room.sub ? <text x={room.x + 12} y={room.y + 38} className="rack-where">{room.sub}</text> : null}
           </g>
@@ -317,11 +317,11 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane, drag, dropRef, onG
               <text x={x} y={y - 10} className="rack-where">
                 {[`${r.units}U ${r.width}`, r.room].filter(Boolean).join(" · ")}
               </text>
-              <rect x={x} y={y} width={iw + 2 * R.rail} height={h} rx={4} fill="#f8fafc" stroke={sel?.kind === "rack" && sel.id === r.name ? "#3b6fd4" : "#334155"} strokeWidth={sel?.kind === "rack" && sel.id === r.name ? 3 : 2} onClick={(e) => (e.stopPropagation(), pick({ kind: "rack", id: r.name }))} />
-              <rect x={x + R.rail} y={y} width={iw} height={h} fill="#eef2f6" />
+              <rect x={x} y={y} width={iw + 2 * R.rail} height={h} rx={4} fill="var(--slate-50)" stroke={sel?.kind === "rack" && sel.id === r.name ? "var(--accent)" : "var(--slate-700)"} strokeWidth={sel?.kind === "rack" && sel.id === r.name ? 3 : 2} onClick={(e) => (e.stopPropagation(), pick({ kind: "rack", id: r.name }))} />
+              <rect x={x + R.rail} y={y} width={iw} height={h} fill="var(--rack-bay)" />
               {Array.from({ length: r.units }, (_, row) => (
                 <g key={row}>
-                  <line x1={x + R.rail} x2={x + R.rail + iw} y1={y + row * R.u} y2={y + row * R.u} stroke="#dbe2ea" />
+                  <line x1={x + R.rail} x2={x + R.rail + iw} y1={y + row * R.u} y2={y + row * R.u} stroke="var(--rack-rule)" />
                   <text x={x + R.rail / 2} y={y + row * R.u + R.u / 2 + 3.5} className="rack-unit">{unitAt(r, row)}</text>
                   <text x={x + R.rail * 1.5 + iw} y={y + row * R.u + R.u / 2 + 3.5} className="rack-unit">{unitAt(r, row)}</text>
                 </g>
@@ -353,8 +353,8 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane, drag, dropRef, onG
                   <path d={d} fill="none" stroke="transparent" strokeWidth={10} />
                   <path d={d} fill="none" stroke={st.stroke} strokeWidth={lit ? st.width + 1.4 : st.width} strokeDasharray={st.dash} strokeLinecap="round" />
                   {/* a dot where it meets each port */}
-                  <circle cx={a.x} cy={a.y} r={lit ? 3.2 : 2.4} fill={st.stroke} stroke="#ffffff" strokeWidth={0.8} />
-                  <circle cx={b.x} cy={b.y} r={lit ? 3.2 : 2.4} fill={st.stroke} stroke="#ffffff" strokeWidth={0.8} />
+                  <circle cx={a.x} cy={a.y} r={lit ? 3.2 : 2.4} fill={st.stroke} stroke="var(--white)" strokeWidth={0.8} />
+                  <circle cx={b.x} cy={b.y} r={lit ? 3.2 : 2.4} fill={st.stroke} stroke="var(--white)" strokeWidth={0.8} />
                 </g>
               );
             })
@@ -373,7 +373,7 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane, drag, dropRef, onG
                 const y = mid[1] - 22 - k * 17;
                 return (
                   <g key={`tag:${i}`} className="rack-cable-tag" pointerEvents="none">
-                    <rect x={mid[0] - tw / 2} y={y} width={tw} height={15} rx={3} fill="#ffffff" stroke={cableStyle(c, t).stroke} strokeWidth={1.2} />
+                    <rect x={mid[0] - tw / 2} y={y} width={tw} height={15} rx={3} fill="var(--white)" stroke={cableStyle(c, t).stroke} strokeWidth={1.2} />
                     <text x={mid[0]} y={y + 11} textAnchor="middle" className="rack-cable-tag-text">{tx}</text>
                   </g>
                 );
@@ -387,7 +387,7 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane, drag, dropRef, onG
               const y = Math.min(hovered.a!.y, hovered.b!.y) - 12;
               return (
                 <>
-                  <rect x={x - 5} y={y - 13} width={tx.length * 6.2 + 10} height={18} rx={3} fill="#0f172a" opacity={0.92} />
+                  <rect x={x - 5} y={y - 13} width={tx.length * 6.2 + 10} height={18} rx={3} fill="var(--slate-900)" opacity={0.92} />
                   <text x={x} y={y} className="rack-tip">{tx}</text>
                 </>
               );
