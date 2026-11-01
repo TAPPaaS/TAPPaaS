@@ -9,7 +9,7 @@ firewall rules and the Caddy reverse proxy for every published service.
 
 | Capability | Access from | How |
 |------------|-------------|-----|
-| OPNsense firewall/router at `10.0.0.1` | mgmt zone | `https://10.0.0.1` (GUI), root password set at bootstrap |
+| OPNsense firewall/router at `10.0.0.1` | mgmt zone | `https://10.0.0.1` (GUI), root password in `/root/.opnsense-root-password` on the first node |
 | Zones/VLANs from `zones.json` | whole platform | `zone-manager` (driven by tappaas-cicd) |
 | Internal DNS `<vmname>.<zone>.internal` | all zones | Unbound + Dnsmasq on the firewall |
 | Reverse proxy (`network:proxy`) | consumer modules | `dependsOn: ["network:proxy"]` → Caddy entry `<service>.<domain>` |

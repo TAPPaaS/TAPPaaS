@@ -18,9 +18,6 @@
 
 header_info() {
   # generated with https://patorjk.com/software/taag/#p=display&f=Big&t=TAPPaaS%20Post%20PVE%20Install
-  # `clear` needs a terminal/$TERM; never let its absence (e.g. a non-TTY or
-  # piped run) abort the whole script under `set -e`.
-  clear 2>/dev/null || true
   cat <<"EOF"
   _______       _____  _____             _____   _____          _     _______      ________   _____           _        _ _ 
  |__   __|/\   |  __ \|  __ \           / ____| |  __ \        | |   |  __ \ \    / /  ____| |_   _|         | |      | | |
@@ -664,13 +661,14 @@ else
   msg_ok "Fetched config-storage.sh"
   # F1: in unattended mode pass --yes (assume-yes to wipe; implies --non-interactive)
   # plus any --pool specs. Without --pool no pools are created, and the boot
-  # pool's ESPs are still checked. Interactive mode keeps the config-storage menu.
+  # pool's ESPs are still checked.
   stor_args=()
-  if [ "$NONINTERACTIVE" = 1 ]; then
-    stor_args+=(--yes)
-    # No --pool: a node without data pools yet — the boot pool carries its guests
-    # (ADR-037 D1), and `site-manager node storage add` gives it pools later (D4).
-    [ "${#POOL_ARGS[@]}" -eq 0 ] && msg_ok "No --pool given — no data pools now; the boot pool carries the guests (site-manager node storage add)"
+  [ "$NONINTERACTIVE" = 1 ] && stor_args+=(--yes)
+  # No --pool: a node without data pools yet — the boot pool carries its guests
+  # (ADR-037 D1), and `site-manager node storage add` gives it pools later (D4).
+  if [ "${#POOL_ARGS[@]}" -eq 0 ]; then
+    stor_args+=(--non-interactive)
+    msg_ok "No data pools now: the boot pool carries the guests. Add pools later in the console"
   fi
   stor_args+=(${POOL_ARGS[@]+"${POOL_ARGS[@]}"})
   ~/tappaas/config-storage.sh ${stor_args[@]+"${stor_args[@]}"} \

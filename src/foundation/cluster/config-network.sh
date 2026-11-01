@@ -30,7 +30,8 @@
 #   --admin-route N  With --swap-gateway: keep a static route to management network
 #                    N (CIDR/IP) via the OLD upstream gateway, so an admin client
 #                    reached that way (e.g. a jump LAN) stays connected after the
-#                    default route moves to the firewall. Prompted if interactive.
+#                    default route moves to the firewall. Default: the SSH client,
+#                    when it is reached that way.
 #   --drop-upstream  Hardening (run later): remove the node's upstream (wan-side)
 #                    host IP so Proxmox is reachable only on the mgmt net / via the
 #                    firewall (or netbird).
@@ -196,6 +197,16 @@ EOF
 
 apply_network() { ifreload -a 2>/dev/null || systemctl restart networking; }
 
+# routed_ssh_client <gw> — the SSH client's address when it is reached through <gw>,
+# not on a network of this node; nothing otherwise, the firewall's gateway included.
+routed_ssh_client() {
+  local gw="$1" src="${SSH_CLIENT:-${SSH_CONNECTION:-}}"
+  src="${src%% *}"
+  [[ -n "$src" && -n "$gw" && "$gw" != "$FW_IP" ]] || return 0
+  ip route get "$src" 2>/dev/null | grep -qF " via ${gw} " && echo "$src"
+  return 0
+}
+
 # ── Mode: gateway cutover (additive — preserves the upstream IP) ──────
 swap_gateway() {
   local host mgmt_ip old_ip old_gw
@@ -243,18 +254,11 @@ swap_gateway() {
   printf '%s %s.mgmt.internal %s\n' "$mgmt_ip" "$host" "$host" >> /etc/hosts
   info "  /etc/hosts → ${mgmt_ip} ${host}.mgmt.internal ${host}"
 
-  # 4.5 Optional admin route: after the default route moves to the firewall, a
-  #     management client reached via the OLD upstream gateway (e.g. an admin
-  #     laptop on a jump network) would lose its return path. Keep a static route
-  #     to that network via the upstream gateway so the operator stays connected.
-  if [[ -z "$ADMIN_ROUTE" && "$INTERACTIVE" == "1" && -n "$old_gw" ]]; then
-    echo "" >&2
-    info "Is your management console (browser/SSH) on a DIFFERENT network than this node?"
-    info "  - If YES: enter that network below to add a static route via ${old_gw},"
-    info "            so you keep connectivity after the default route moves to the firewall."
-    info "  - If NO (same subnet as this node): just press Enter — no extra route needed."
-    read -r -p "  Admin network to route via ${old_gw} (CIDR, e.g. 192.168.1.0/24, or blank): " ADMIN_ROUTE
-  fi
+  # 4.5 Admin route: after the default route moves to the firewall, a management
+  #     client reached via the OLD upstream gateway (e.g. an admin laptop on a jump
+  #     network) would lose its return path. Keep a static route to it via the
+  #     upstream gateway: the SSH client when it is routed that way, else --admin-route.
+  [[ -n "$ADMIN_ROUTE" ]] || ADMIN_ROUTE="$(routed_ssh_client "$old_gw")"
   if [[ -n "$ADMIN_ROUTE" ]]; then
     if [[ -z "$old_gw" ]]; then
       warn "  No upstream gateway detected — cannot add admin route ${ADMIN_ROUTE}."

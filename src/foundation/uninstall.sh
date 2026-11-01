@@ -255,7 +255,7 @@ if step user; then
   else
     id tappaas >/dev/null 2>&1 && run userdel -r tappaas
     run rm -rf /root/tappaas
-    run rm -f /root/.opnsense-credentials.txt /root/.authentik-credentials.txt \
+    run rm -f /root/.opnsense-credentials.txt /root/.opnsense-root-password /root/.authentik-credentials.txt \
               /root/.acme-dns-credentials.txt /root/.pbs-credentials.txt
     run rm -rf /etc/secrets
   fi

@@ -499,22 +499,30 @@ wait_for_node() {
   done
 }
 
+# The install runs detached in tmux on the node, unattended like a node add, and its
+# log is followed here: it scrolls on in this terminal, and a lost ssh session only
+# stops the following.
 start_install() {
-  local cmd
-  # A fresh Proxmox has no tmux, and without it install.sh dies with this session.
+  local cmd seen state run="./install.sh '${INSTALL_REPO}' '${BRANCH}' --name '${SITE_CODE}'${ORG:+ --organization '${ORG}'} --domain '${DOMAIN}' --non-interactive --no-tmux"
   # apt update fails on the enterprise repository the install has not replaced yet;
   # Debian's own still serves tmux.
-  cmd="export LC_ALL=C.UTF-8; command -v tmux >/dev/null || { apt-get update -qq >/dev/null 2>&1; apt-get install -y -qq tmux >/dev/null 2>&1; }; curl -fsSL '${INSTALL_REPO}${BRANCH}/src/foundation/install.sh' -o install.sh && chmod +x install.sh && ./install.sh '${INSTALL_REPO}' '${BRANCH}' --name '${SITE_CODE}'${ORG:+ --organization '${ORG}'} --domain '${DOMAIN}'"
+  cmd="export LC_ALL=C.UTF-8; command -v tmux >/dev/null || { apt-get update -qq >/dev/null 2>&1; apt-get install -y -qq tmux >/dev/null 2>&1; }; tmux has-session -t tappaas-install 2>/dev/null && exit 0; curl -fsSL '${INSTALL_REPO}${BRANCH}/src/foundation/install.sh' -o install.sh && chmod +x install.sh || exit 1; rm -f tappaas-install.rc; : > tappaas-install.log; tmux new-session -d -s tappaas-install \"{ ${run} 2>&1; echo \\\$? > tappaas-install.rc.tmp; } | tee -a tappaas-install.log; mv tappaas-install.rc.tmp tappaas-install.rc\""
   info "starting the TAPPaaS install on ${NODE_IP}"
   # A sleeping laptop would drop the session.
   if command -v caffeinate >/dev/null 2>&1; then caffeinate -i -w $$ & fi
-  if ! node_ssh -t "root@${NODE_IP}" "$cmd"; then
-    if node_ssh -n "root@${NODE_IP}" 'tmux has-session -t tappaas-install' 2>/dev/null; then
-      warn "the session ended, the install goes on in tmux. Back to it: ssh -i ${INSTALL_KEY} root@${NODE_IP} -t tmux attach -t tappaas-install"
-    else
-      die "the install stopped on ${NODE_IP}: see above, and ${LOG:-the output}."
-    fi
-  fi
+  node_ssh -n "root@${NODE_IP}" "$cmd" || die "could not start the install on ${NODE_IP}: see above, and ${LOG:-the output}."
+  info "Ctrl-C stops the watching here, not the install. On the node: tail -f tappaas-install.log"
+  seen="$(mktemp)"; EXIT_SEEN="$seen"
+  while :; do
+    node_ssh -n -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "root@${NODE_IP}" "tail -c +$(( $(wc -c <"$seen") + 1 )) -f tappaas-install.log & t=\$!; while tmux has-session -t tappaas-install 2>/dev/null; do sleep 2; done; sleep 1; kill \$t" 2>/dev/null | tee -a "$seen" || true
+    state="$(node_ssh -n "root@${NODE_IP}" 'if [ -f tappaas-install.rc ]; then cat tappaas-install.rc; elif tmux has-session -t tappaas-install 2>/dev/null; then echo running; else echo gone; fi' 2>/dev/null || echo lost)"
+    case "$state" in
+      running|lost) sleep 5 ;;
+      *) break ;;
+    esac
+  done
+  rm -f "$seen"
+  [[ "$state" == 0 ]] || die "the install stopped on ${NODE_IP}: see above, and ${LOG:-the output}."
 }
 
 # The three names the bootstrap takes, asked before the wait so it runs unattended.
@@ -581,8 +589,8 @@ if [[ -z "${TAPPAAS_MEDIA_CONTAINER:-}" ]]; then
   info "log: ${LOG}"
 fi
 
-EXIT_WORK=""
-trap '[[ -z "$SCAN_PID" ]] || kill "$SCAN_PID" 2>/dev/null || true; pxe_stop; [[ -z "$EXIT_WORK" ]] || rm -rf "$EXIT_WORK"' EXIT
+EXIT_WORK="" EXIT_SEEN=""
+trap '[[ -z "$SCAN_PID" ]] || kill "$SCAN_PID" 2>/dev/null || true; pxe_stop; [[ -z "$EXIT_WORK" ]] || rm -rf "$EXIT_WORK"; rm -f "$EXIT_SEEN"' EXIT
 trap 'exit 130' INT TERM
 
 # ── This machine: the ISO, the questions, the key ─────────────────────

@@ -79,7 +79,10 @@ writes `proxmox-ve_9.2-1-tappaas-auto.iso`, and asks what next:
 It then offers to start the TAPPaaS install on the node over ssh, and asks the branch, the
 site code, the organisation and the domain of [Step 2](#step-2--bootstrap-minimal-tappaas-on-the-first-node)
 up front. Say yes and it waits for the node, finds it on your network and runs Step 2 for
-you, so skip that step's commands. To find it the node must be on the same network as
+you, unattended, so skip that step's commands. The install keeps running on the node if
+this machine loses the connection, and the script picks it up again. It takes the network
+ports the node detects, makes no data pools and generates the firewall's root password,
+which stays on the node in `/root/.opnsense-root-password`. To find it the node must be on the same network as
 this machine; otherwise give its address with `--node <address>`. Run it again later with
 `--use proxmox-ve_9.2-1-tappaas-auto.iso` to skip the build. Everything it shows, the
 install on the node included, also goes to `make-install-media-<date>.log` in this
@@ -286,8 +289,8 @@ a five-phase chain — you run it once and watch:
 
 1. **[1/5] Node** — Proxmox post-install, the `lan`/`wan` bridges (auto-detected:
       the install NIC with internet becomes **WAN**; the other, to your downstream
-      switch, becomes **LAN**), the Proxmox **cluster named `<site-code>`**, and the
-      ZFS pools.
+      switch, becomes **LAN**) and the Proxmox **cluster named `<site-code>`**. Data
+      pools come later, see below.
 2. **[2/5] Firewall** — downloads and boots the **prebuilt OPNsense image** at
       `10.0.0.1`, self-configured with unique credentials (no GUI, no installer).
 3. **[3/5] Gateway cutover** — adds this node's management IP `10.0.0.10` and
@@ -338,9 +341,8 @@ Optionally move your admin laptop onto the **downstream switch** (you'll get a
 `https://10.0.0.1`) — not required, since the node also keeps its upstream IP until
 you harden it later.
 
-**A data pool on the first node.** The bootstrap's storage step offers the node's other
-disks. Skip it and the firewall and the mothership live on the boot pool. To build the
-pool later and move them onto it, on the mothership:
+**A data pool on the first node.** The firewall and the mothership start on the boot
+pool. To build a pool on the node's other disks and move them onto it, on the mothership:
 
 ```bash
 site-manager node storage tappaas1      # the node's disks, by serial
@@ -801,8 +803,8 @@ Defaults are chosen so the commands above "just work". Override as needed:
 | Take Proxmox off the upstream net (hardening) | `config-network.sh --drop-upstream` (run later, once you manage via the mgmt net / netbird). |
 | Platform install branch / domain | `install-platform.sh --branch <name> --domain <domain>`. |
 | Automated vs. manual cicd install | `install-platform.sh` automates the in-VM install over SSH; pass `--manual-cicd` to run `bootstrap.sh` then `install.sh` by hand inside the cicd VM instead. |
-| ZFS pools (`tankXY`, topology) | `config-storage.sh --pool name=topology:disks` (interactive by default). |
-| Firewall root password | `config-firewall.sh --root-pw <pw>` (otherwise prompted/generated; the API key is always unique per deploy). |
+| ZFS pools (`tankXY`, topology) | `install.sh --pool name=topology:disks` (none by default), or `site-manager node storage add` later. |
+| Firewall root password | `config-firewall.sh --root-pw <pw>` (otherwise generated, in `/root/.opnsense-root-password` on the node; the API key is always unique per deploy). |
 | VM sizing, storage, network zone per module | edit the module's `<name>.json` (cores, memory, diskSize, storage, zone0/bridge0). |
 | Domain / TLS | provided to the `firewall`/app modules; TLS issuance is DNS-01 by default. |
 | Unattended runs | most scripts accept `--non-interactive` (supply the values via flags). |

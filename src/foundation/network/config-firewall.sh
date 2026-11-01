@@ -92,6 +92,7 @@ command -v sshpass >/dev/null || { info "Installing sshpass"; apt-get -y install
 readonly CONFIG_DIR="/home/tappaas/config"
 readonly TAPPAAS_DIR="/root/tappaas"
 readonly CREDS_FILE="${HOME}/.opnsense-credentials.txt"
+readonly ROOT_PW_FILE="${HOME}/.opnsense-root-password"
 readonly FW_JSON="${TAPPAAS_DIR}/network.json"
 readonly TEMPLATE="${TAPPAAS_DIR}/firewall-config.xml.template"
 readonly CREATE_VM="${TAPPAAS_DIR}/Create-TAPPaaS-VM.sh"
@@ -159,22 +160,14 @@ API_KEY="$(openssl rand -base64 60 | tr -d '\n')"
 API_SECRET="$(openssl rand -base64 60 | tr -d '\n')"
 API_SECRET_HASH="$(openssl passwd -6 "$API_SECRET")"
 
-# Root password for the DEPLOYED firewall (replaces the bootstrap password).
-# Prompt twice and require a match (standard practice — a typo here would set an
-# unknown root password on the firewall). Blank = generate a random one.
-if [[ -z "$ROOT_PW" && "$INTERACTIVE" == "1" ]]; then
-  while true; do
-    read -r -s -p "  Set OPNsense root password (blank = generate one): " ROOT_PW; echo
-    [[ -z "$ROOT_PW" ]] && break                       # blank → generate below
-    read -r -s -p "  Re-enter password to confirm: " _ROOT_PW2; echo
-    [[ "$ROOT_PW" == "$_ROOT_PW2" ]] && break
-    warn "  Passwords did not match — please try again."
-  done
-  unset _ROOT_PW2
-fi
+# Root password for the DEPLOYED firewall (replaces the bootstrap password). Nothing
+# in TAPPaaS logs in with it (API key, SSH key); it is the operator's way in at the
+# console. Generated unless --root-pw gives one, and kept in a file, never printed:
+# the install's output goes to logs.
+ROOT_PW_GENERATED=0
 if [[ -z "$ROOT_PW" ]]; then
   ROOT_PW="$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)"
-  info "  Generated root password: ${BOLD}${ROOT_PW}${CL}  (save this!)"
+  ROOT_PW_GENERATED=1
 fi
 ROOT_PW_HASH="$(openssl passwd -6 "$ROOT_PW")"
 
@@ -281,6 +274,10 @@ key=${API_KEY}
 secret=${API_SECRET}
 EOF
 info "Wrote API credentials → ${CREDS_FILE} (for tappaas-cicd / opnsense-controller)"
+if [[ "$ROOT_PW_GENERATED" == 1 ]]; then
+  printf '%s\n' "$ROOT_PW" > "$ROOT_PW_FILE"
+  info "Wrote the firewall's root password → ${ROOT_PW_FILE}"
+fi
 
 info "Verifying the firewall comes back at ${FW_IP} with the deployed config..."
 ok=0
