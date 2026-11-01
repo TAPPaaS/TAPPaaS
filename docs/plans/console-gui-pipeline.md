@@ -130,7 +130,7 @@ The deep test (`site-manager test --deep`) stays the proof of layer C across the
 |---|---|---|---|
 | 1 | Fixture mode for the server (`CONSOLE_RUNNER=fixtures`, `src/fixtures.ts` from the test fakes, actor header, `CONSOLE_NOW`); `test/fixtures/capture.sh`; refresh the fixtures from hrossen | Opus | the console runs on the Mac against fixtures; every page opens |
 | 2 | Playwright in `web/`; `routes.json`, `capture.ts`, `compare.ts`, `run.sh`; first baselines at the four viewports | Opus | `run.sh` clean twice in a row |
-| 3 | `.interface-design/system.md` written by a session from the stylesheet (direction, spacing, radii, breakpoints, patterns, wording); fold `colors.ts` into the tokens; breakpoints to tokens; our own audit check | Opus | the audit check clean; capture shows no diff |
+| 3 | **Done.** `.interface-design/system.md` written by a session from the stylesheet (direction, spacing, radii, breakpoints, patterns, wording); fold `colors.ts` into the tokens; breakpoints to tokens; our own audit check | Opus | the audit check clean; capture shows no diff (the capture to rerun once step 2 lands; for now the resolved CSS differs from before only in the media queries of §4) |
 | 4 | Flows for Remove node, Add node step 1, Ack, Output stick | Opus | the flows pass, and each fails when its bug is reintroduced |
 | 5 | `TAPPAAS_SIMULATE=1` in `jobs.ts` and the exec wrappers; a layer-C test script template with setup/check/teardown | Opus | a simulated apply on hrossen writes nothing (sweep unchanged) |
 | 6 | `--visual` in `ui/test.sh`, `test-console-visual.sh`, the repo skill | Opus | `ui/test.sh --visual` on the Mac; the skill loads on a `ui/` task |
