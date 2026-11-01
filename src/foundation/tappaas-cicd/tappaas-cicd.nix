@@ -709,11 +709,14 @@ in
   # The store is in tappaas-cicd's file backup as a dump (D12): taken just
   # before each capture, so the two describe the same moment whatever the
   # backup schedule is. /var/lib/cmdb/dump is in tappaas-cicd.json's
-  # backup.filesystemPaths.
+  # backup.filesystemPaths. The dependency is stated here: the capture's unit is
+  # the baseline's (#324).
   systemd.services.cmdb-dump = {
     description = "Dump the CMDB for tappaas-cicd's file backup (ADR-040 D12)";
     after = [ "postgresql.service" "cmdb-db.service" ];
     requires = [ "postgresql.service" ];
+    wantedBy = [ "tappaas-fs-backup.service" ];
+    before = [ "tappaas-fs-backup.service" ];
     serviceConfig = {
       Type = "oneshot";
       User = "tappaas";
@@ -726,10 +729,6 @@ in
       ${config.services.postgresql.package}/bin/pg_dump --format=custom --file="$d/cmdb.dump.new" cmdb
       mv "$d/cmdb.dump.new" "$d/cmdb.dump"
     '';
-  };
-  systemd.services.tappaas-fs-backup = {
-    wants = [ "cmdb-dump.service" ];
-    after = [ "cmdb-dump.service" ];
   };
 
   # The alerting watches itself (#126): Grafana's Heartbeat rule reaches the
