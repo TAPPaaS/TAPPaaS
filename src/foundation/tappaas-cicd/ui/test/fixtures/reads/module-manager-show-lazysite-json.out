@@ -1,0 +1,64 @@
+{
+  "description": "lazysite — the site owner's public website: Markdown pages in a Forgejo repository, served as HTML, with no build step or database.",
+  "version": "0.1.1",
+  "releaseDate": "2026-10-18",
+  "installTime": "20261018-15:09:48",
+  "updateTime": "20261101-02:20:36",
+  "maintainer": "@larsrossen",
+  "status": "Development",
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/collaboration/lazysite",
+  "environment": "rossen",
+  "vmname": "lazysite",
+  "vmid": 380,
+  "vmtag": "TAPPaaS,App,Website",
+  "node": "tappaas2",
+  "zone0": "dmz",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "network:proxy",
+    "network:rules",
+    "forgejo:repo"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "provides": [],
+  "appVersion": "0.16.0",
+  "displayName": "lazysite",
+  "stack": "collaboration",
+  "config": {
+    "cluster:vm": {
+      "bios": "ovmf",
+      "cores": 1,
+      "memory": 1024,
+      "diskSize": "16G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan",
+      "thinDisk": true
+    },
+    "network:rules": {
+      "ports": [
+        {
+          "port": 8080,
+          "protocol": "TCP",
+          "description": "lazysite: the website (nginx), reached through the firewall's Caddy"
+        }
+      ]
+    },
+    "network:proxy": {
+      "proxyPort": 8080,
+      "proxyAllowedZones": [
+        "internet"
+      ]
+    },
+    "forgejo:repo": {
+      "repoEditors": [
+        "lars"
+      ]
+    }
+  }
+}

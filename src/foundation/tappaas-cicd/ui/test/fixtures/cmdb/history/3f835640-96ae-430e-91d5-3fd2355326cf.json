@@ -1,0 +1,675 @@
+{
+ "id": "3f835640-96ae-430e-91d5-3fd2355326cf",
+ "class": "room",
+ "name": "basement",
+ "created": "2026-10-30T08:49:10.799Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "displayName",
+   "value": "Basement",
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "2 of 4 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "2 of 2 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": true,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": true,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": true,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 143,
+   "from": "2026-10-30T09:40:04.146Z",
+   "to": "2026-10-30T09:41:14.942Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "2 of 4 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:07:04.671Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "2 of 2 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:07:04.671Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 145,
+   "from": "2026-10-30T09:41:14.942Z",
+   "to": "2026-10-30T12:52:18.899Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "2 of 4 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T12:52:18.899Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-30T12:52:18.899Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": true,
+     "message": "6 of 6 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T12:52:18.899Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 286,
+   "from": "2026-10-30T12:52:18.899Z",
+   "to": "2026-10-30T12:55:04.889Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "2 of 4 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T12:56:51.353Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-30T12:52:18.899Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "6 of 6 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T12:52:18.899Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 288,
+   "from": "2026-10-30T12:55:04.889Z",
+   "to": "2026-10-30T12:59:36.103Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "2 of 4 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:20:12.904Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-30T12:59:36.103Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "7 of 9 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:20:12.904Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 307,
+   "from": "2026-10-30T12:59:36.103Z",
+   "to": "2026-10-31T07:25:02.913Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "2 of 4 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:25:02.913Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-30T12:59:36.103Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "7 of 9 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:25:02.913Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": true,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:25:02.913Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1355,
+   "from": "2026-10-31T07:25:02.913Z",
+   "to": "2026-10-31T07:30:02.146Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "2 of 4 warning",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-30T12:59:36.103Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "7 of 9 warning",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:40:04.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "4 of 4 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:25:02.913Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1382,
+   "from": "2026-10-31T07:30:02.146Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 338,
+   "type": "at",
+   "direction": "out",
+   "other": {
+    "id": "eb8b5e14-af28-46e3-8bf3-fb8de068683b",
+    "class": "location",
+    "name": "knudanchersvej95"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 340,
+   "type": "placed-in",
+   "direction": "in",
+   "other": {
+    "id": "73a0f756-f569-4eaa-8508-bec8ac7ac791",
+    "class": "rack",
+    "name": "rack1"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 10,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:49:10.799Z",
+   "drift": false
+  },
+  {
+   "id": 143,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T09:40:04.146Z",
+   "drift": false
+  },
+  {
+   "id": 145,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T09:41:14.942Z",
+   "drift": false
+  },
+  {
+   "id": 286,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T12:52:18.899Z",
+   "drift": false
+  },
+  {
+   "id": 288,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T12:55:04.889Z",
+   "drift": false
+  },
+  {
+   "id": 307,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T12:59:36.103Z",
+   "drift": false
+  },
+  {
+   "id": 1355,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:25:02.913Z",
+   "drift": false
+  },
+  {
+   "id": 1382,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:30:02.146Z",
+   "drift": false
+  }
+ ]
+}

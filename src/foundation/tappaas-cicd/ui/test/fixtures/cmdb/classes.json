@@ -1,0 +1,378 @@
+[
+  {
+    "name": "object",
+    "parent": null,
+    "abstract": true,
+    "physical": false,
+    "depth": 0,
+    "description": "Every object in the CMDB: a CI, a resource or a place."
+  },
+  {
+    "name": "ci",
+    "parent": "object",
+    "abstract": true,
+    "physical": false,
+    "depth": 1,
+    "description": "A configuration item: exists because a desired record exists, and ends with it (D7)."
+  },
+  {
+    "name": "node",
+    "parent": "ci",
+    "abstract": true,
+    "physical": false,
+    "depth": 2,
+    "description": "What runs software (ArchiMate Node, ADR-022c): a module of kind vm, lxc, machine or device (ADR-022d)."
+  },
+  {
+    "name": "vm",
+    "parent": "node",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "A module of kind vm."
+  },
+  {
+    "name": "lxc",
+    "parent": "node",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "A module of kind lxc."
+  },
+  {
+    "name": "machine",
+    "parent": "node",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "A module of kind machine: a cluster member, a satellite, a managed host (ADR-026)."
+  },
+  {
+    "name": "device",
+    "parent": "node",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "A module of kind device: reachable, not managed; also a switch or AP from the switch configuration."
+  },
+  {
+    "name": "software",
+    "parent": "ci",
+    "abstract": true,
+    "physical": false,
+    "depth": 2,
+    "description": "What runs in a node: known by its name within its node (D5)."
+  },
+  {
+    "name": "app",
+    "parent": "software",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "An application with a version: pve on tappaas1, authentik in identity; a module of kind application."
+  },
+  {
+    "name": "service",
+    "parent": "software",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "<module>:<service>."
+  },
+  {
+    "name": "controller",
+    "parent": "software",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "A controller of the control plane (ADR-007f)."
+  },
+  {
+    "name": "manager",
+    "parent": "software",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "A manager of the control plane (ADR-007f)."
+  },
+  {
+    "name": "network-element",
+    "parent": "ci",
+    "abstract": true,
+    "physical": false,
+    "depth": 2,
+    "description": "What the network is made of."
+  },
+  {
+    "name": "zone",
+    "parent": "network-element",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "A zone of zones.json."
+  },
+  {
+    "name": "ssid",
+    "parent": "network-element",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "A wireless network."
+  },
+  {
+    "name": "address",
+    "parent": "network-element",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "An IP address, leased or reserved."
+  },
+  {
+    "name": "dns-name",
+    "parent": "network-element",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "A name in DNS."
+  },
+  {
+    "name": "proxy-route",
+    "parent": "network-element",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "A reverse-proxy route."
+  },
+  {
+    "name": "vpn-peer",
+    "parent": "network-element",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "A WireGuard peer."
+  },
+  {
+    "name": "storage-element",
+    "parent": "ci",
+    "abstract": true,
+    "physical": false,
+    "depth": 2,
+    "description": "What storage is made of."
+  },
+  {
+    "name": "storage-pool",
+    "parent": "storage-element",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "A pool on a node: ZFS pool names repeat across the nodes, so its key is its name on its node."
+  },
+  {
+    "name": "share",
+    "parent": "storage-element",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "An NFS or SMB share."
+  },
+  {
+    "name": "datastore",
+    "parent": "storage-element",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "A backup datastore."
+  },
+  {
+    "name": "backup-peer",
+    "parent": "storage-element",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "A buddy site we back up to or receive from."
+  },
+  {
+    "name": "identity",
+    "parent": "ci",
+    "abstract": true,
+    "physical": false,
+    "depth": 2,
+    "description": "ADR-007a's objects, identity-manager's."
+  },
+  {
+    "name": "organization",
+    "parent": "identity",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "An organization."
+  },
+  {
+    "name": "group",
+    "parent": "identity",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "A group."
+  },
+  {
+    "name": "user",
+    "parent": "identity",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "A user."
+  },
+  {
+    "name": "role",
+    "parent": "identity",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "A role."
+  },
+  {
+    "name": "collection",
+    "parent": "ci",
+    "abstract": true,
+    "physical": false,
+    "depth": 2,
+    "description": "What groups other CIs."
+  },
+  {
+    "name": "site",
+    "parent": "collection",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "The site."
+  },
+  {
+    "name": "cluster",
+    "parent": "collection",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "The Proxmox cluster."
+  },
+  {
+    "name": "environment",
+    "parent": "collection",
+    "abstract": false,
+    "physical": false,
+    "depth": 3,
+    "description": "An environment."
+  },
+  {
+    "name": "place",
+    "parent": "object",
+    "abstract": true,
+    "physical": true,
+    "depth": 1,
+    "description": "Where something stands."
+  },
+  {
+    "name": "location",
+    "parent": "place",
+    "abstract": false,
+    "physical": true,
+    "depth": 2,
+    "description": "A place with an address: the site's building, a provider's data centre, a buddy's site (site.json locations, ADR-036 D1)."
+  },
+  {
+    "name": "room",
+    "parent": "place",
+    "abstract": false,
+    "physical": true,
+    "depth": 2,
+    "description": "A room in a location."
+  },
+  {
+    "name": "rack",
+    "parent": "place",
+    "abstract": false,
+    "physical": true,
+    "depth": 2,
+    "description": "A rack in a room."
+  },
+  {
+    "name": "resource",
+    "parent": "object",
+    "abstract": true,
+    "physical": false,
+    "depth": 1,
+    "description": "A resource: allocated to a CI or free."
+  },
+  {
+    "name": "asset",
+    "parent": "resource",
+    "abstract": true,
+    "physical": true,
+    "depth": 2,
+    "description": "A physical thing. Named by a tag per kind (srv-01, sw-01, ap-01, dev-01; O5). Known by vendor + serial, then any of its ports' MACs, then its tag (D5)."
+  },
+  {
+    "name": "server",
+    "parent": "asset",
+    "abstract": false,
+    "physical": true,
+    "depth": 3,
+    "description": "A server. The BMC is a port with role bmc."
+  },
+  {
+    "name": "network-device",
+    "parent": "asset",
+    "abstract": false,
+    "physical": true,
+    "depth": 3,
+    "description": "A switch or an access point."
+  },
+  {
+    "name": "appliance",
+    "parent": "asset",
+    "abstract": false,
+    "physical": true,
+    "depth": 3,
+    "description": "A modem, an ONT, a UPS."
+  },
+  {
+    "name": "passive-device",
+    "parent": "asset",
+    "abstract": false,
+    "physical": true,
+    "depth": 3,
+    "description": "A patch panel, a PDU."
+  },
+  {
+    "name": "other-device",
+    "parent": "asset",
+    "abstract": false,
+    "physical": true,
+    "depth": 3,
+    "description": "Anything else with a port: a USB network adapter, a printer."
+  },
+  {
+    "name": "port",
+    "parent": "resource",
+    "abstract": false,
+    "physical": true,
+    "depth": 2,
+    "description": "A connector on an asset (D9): its name within its asset is its key."
+  },
+  {
+    "name": "disk",
+    "parent": "resource",
+    "abstract": false,
+    "physical": true,
+    "depth": 2,
+    "description": "A disk in an asset (ADR-042): named by its tag (dsk-NN), its by-id name shown. Known by the asset it is in and its name; its serial is unique across all disks (asset-manager refuses a second). Moving it to another asset ends this CI and begins one there, so its history of placements is its CIs'. A pool is built-on it."
+  },
+  {
+    "name": "pool",
+    "parent": "resource",
+    "abstract": true,
+    "physical": false,
+    "depth": 2,
+    "description": "A consumable consumed by allocations (O10; no leaves yet)."
+  }
+]

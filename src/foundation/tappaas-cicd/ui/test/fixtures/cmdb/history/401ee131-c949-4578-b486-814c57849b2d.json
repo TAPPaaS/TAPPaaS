@@ -1,0 +1,318 @@
+{
+ "id": "401ee131-c949-4578-b486-814c57849b2d",
+ "class": "vm",
+ "name": "test-hadrift",
+ "created": "2026-10-31T20:07:21.348Z",
+ "ended": "2026-11-01T08:26:58.915Z",
+ "attributes": [
+  {
+   "name": "cores",
+   "value": 2,
+   "source": "site-manager",
+   "change": 6375,
+   "from": "2026-10-31T20:07:21.348Z",
+   "to": null
+  },
+  {
+   "name": "description",
+   "value": "Test fixture: cluster:ha drift reconciler (issue #193). Disposable NixOS clone used by ../test.sh --deep; safe to delete. zone0=srv-home (VLAN 210) so it stays reachable on either node \u2014 the only test VLAN this switch trunks cross-node.",
+   "source": "site-manager",
+   "change": 6375,
+   "from": "2026-10-31T20:07:21.348Z",
+   "to": null
+  },
+  {
+   "name": "desired",
+   "value": {
+    "file": "test-hadrift.json"
+   },
+   "source": "site-manager",
+   "change": 6375,
+   "from": "2026-10-31T20:07:21.348Z",
+   "to": null
+  },
+  {
+   "name": "disks",
+   "value": [
+    {
+     "size": "1M",
+     "storage": "tanka1"
+    },
+    {
+     "size": "24G",
+     "storage": "tanka1"
+    }
+   ],
+   "source": "site-manager",
+   "change": 6375,
+   "from": "2026-10-31T20:07:21.348Z",
+   "to": null
+  },
+  {
+   "name": "memory",
+   "value": 2048,
+   "source": "site-manager",
+   "change": 6375,
+   "from": "2026-10-31T20:07:21.348Z",
+   "to": null
+  },
+  {
+   "name": "release",
+   "value": {
+    "module": "test-hadrift",
+    "version": "0.1.0"
+   },
+   "source": "site-manager",
+   "change": 6375,
+   "from": "2026-10-31T20:07:21.348Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "operational",
+   "source": "site-manager",
+   "change": 6375,
+   "from": "2026-10-31T20:07:21.348Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "name": "state",
+   "value": "stopped",
+   "source": "site-manager",
+   "change": 6375,
+   "from": "2026-10-31T20:07:21.348Z",
+   "to": null
+  },
+  {
+   "name": "vmid",
+   "value": 921,
+   "source": "site-manager",
+   "change": 6375,
+   "from": "2026-10-31T20:07:21.348Z",
+   "to": null
+  },
+  {
+   "name": "zone",
+   "value": "rossen",
+   "source": "site-manager",
+   "change": 6375,
+   "from": "2026-10-31T20:07:21.348Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T20:10:01.133Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T00:01:26.213Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-31T20:10:01.133Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:10:01.133Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 6408,
+   "from": "2026-10-31T20:10:01.133Z",
+   "to": "2026-11-01T00:04:45.410Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T20:10:01.133Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:25:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T00:04:45.410Z",
+     "reason": "sweep-missing",
+     "source": "health-manager",
+     "status": "critical",
+     "derived": false,
+     "message": "vm/test-hadrift: desired without actual",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:25:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-31T20:10:01.133Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:10:01.133Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 7907,
+   "from": "2026-11-01T00:04:45.410Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "retired",
+   "source": "operator",
+   "change": 11047,
+   "from": "2026-11-01T08:26:58.915Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 669,
+   "type": "member-of",
+   "direction": "out",
+   "other": {
+    "id": "9a883fd4-b028-4492-b870-4e8a16b7393c",
+    "class": "environment",
+    "name": "rossen"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 6375,
+   "from": "2026-10-31T20:07:21.348Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 670,
+   "type": "runs-on",
+   "direction": "out",
+   "other": {
+    "id": "c11c3e17-fe34-4bd7-bed6-6f8b259469c8",
+    "class": "machine",
+    "name": "tappaas1"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 6375,
+   "from": "2026-10-31T20:07:21.348Z",
+   "to": "2026-10-31T20:08:50.966Z"
+  },
+  {
+   "id": 673,
+   "type": "runs-on",
+   "direction": "out",
+   "other": {
+    "id": "95727e8e-df12-468f-a03b-8b685140e223",
+    "class": "machine",
+    "name": "tappaas2"
+   },
+   "attributes": {},
+   "source": "proxmox-controller",
+   "change": 6403,
+   "from": "2026-10-31T20:08:50.966Z",
+   "to": "2026-10-31T20:10:01.035Z"
+  },
+  {
+   "id": 674,
+   "type": "runs-on",
+   "direction": "out",
+   "other": {
+    "id": "c11c3e17-fe34-4bd7-bed6-6f8b259469c8",
+    "class": "machine",
+    "name": "tappaas1"
+   },
+   "attributes": {},
+   "source": "proxmox-controller",
+   "change": 6405,
+   "from": "2026-10-31T20:10:01.035Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 6375,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T20:07:21.348Z",
+   "drift": false
+  },
+  {
+   "id": 6403,
+   "kind": "change",
+   "source": "proxmox-controller",
+   "job": null,
+   "verb": "migrate-vm test-hadrift",
+   "actor": "tappaas",
+   "time": "2026-10-31T20:08:50.966Z",
+   "drift": false
+  },
+  {
+   "id": 6405,
+   "kind": "change",
+   "source": "proxmox-controller",
+   "job": null,
+   "verb": "migrate-vm test-hadrift",
+   "actor": "tappaas",
+   "time": "2026-10-31T20:10:01.035Z",
+   "drift": false
+  },
+  {
+   "id": 6408,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T20:10:01.133Z",
+   "drift": false
+  },
+  {
+   "id": 7907,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T00:04:45.410Z",
+   "drift": false
+  },
+  {
+   "id": 11047,
+   "kind": "change",
+   "source": "operator",
+   "job": null,
+   "verb": "retire deep-test leftovers",
+   "actor": null,
+   "time": "2026-11-01T08:26:58.915Z",
+   "drift": false
+  }
+ ]
+}

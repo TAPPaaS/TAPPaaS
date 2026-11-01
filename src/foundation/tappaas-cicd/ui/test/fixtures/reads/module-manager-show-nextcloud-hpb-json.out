@@ -1,0 +1,74 @@
+{
+  "description": "Nextcloud Talk High-Performance Backend - dedicated WebSocket signaling server (nextcloud-spreed-signaling) with a Janus SFU for group calls.",
+  "version": "0.3.1",
+  "releaseDate": "2026-09-21",
+  "installTime": "20260925-21:29:02",
+  "updateTime": "20261101-02:30:48",
+  "maintainer": "@ErikDaniel007",
+  "status": "Testing",
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/collaboration/nextcloud-hpb",
+  "environment": "rossen",
+  "vmname": "nextcloud-hpb",
+  "vmid": 342,
+  "vmtag": "TAPPaaS,App",
+  "node": "tappaas2",
+  "zone0": "rossen",
+  "dependsOn": [
+    "backup:vm",
+    "cluster:vm",
+    "coturn:turn",
+    "network:proxy",
+    "network:rules",
+    "nextcloud:fileservice",
+    "templates:nixos"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "provides": [],
+  "appVersion": "2.1.1",
+  "stack": "collaboration",
+  "config": {
+    "backup:vm": {
+      "backup": {
+        "enabled": true,
+        "exclude": [],
+        "retention": "7y"
+      }
+    },
+    "cluster:vm": {
+      "bios": "ovmf",
+      "cores": 4,
+      "memory": 4096,
+      "diskSize": "16G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "nextcloud:fileservice": {
+      "connector": "hpb",
+      "nextcloudPublicUrl": "https://cloud.hrossen.dk"
+    },
+    "network:rules": {
+      "ingress": [
+        {
+          "from": "dmz",
+          "ports": [
+            "20000:20999"
+          ],
+          "protocol": "UDP",
+          "description": "Janus media relayed by coturn (dmz): participants that cannot reach the HPB directly"
+        }
+      ]
+    },
+    "network:proxy": {
+      "proxyPort": 8080
+    },
+    "coturn:turn": {
+      "turnHost": "turn.hrossen.dk:3478",
+      "turnHostInternal": "coturn.dmz.internal:3478"
+    }
+  }
+}

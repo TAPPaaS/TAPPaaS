@@ -15,7 +15,7 @@ import { parseKv, secretStatus, writeSecret } from "../../src/secrets";
 import { SetupInputs, TESTS_FILE, physicalStep, readPhysical, WifiInputs, clientZonesWithoutWifi, closeSetupToken, gatherSetup, parseApList, parseSwitches, parseWgvpnPeers, readSetupTests, readWifiZones, recordSetupTest, setupCheckModules, setupComplete, setupSteps, wifiStep } from "../../src/setup";
 import { testGate } from "./gate-fixture";
 import { check, done } from "./check";
-import { FIX } from "./fake-site";
+import { FIX, PIN } from "./fake-site";
 
 const fx = (f: string): string => readFileSync(join(FIX, "setup", f), "utf8");
 
@@ -30,7 +30,7 @@ async function main(): Promise<void> {
   // hrossen's WiFi (fixtures/wizards/zones.json, fixtures/aps.json, 2026-10-19):
   // home 310 Client Active, work 320 Client Inactive, guest 510; every SSID the
   // template's placeholder; one AP, Nano HD, with no SSID.
-  const wifi: WifiInputs = { zones: readWifiZones(join(FIX, "wizards", "zones.json")), aps: parseApList(readFileSync(join(FIX, "aps.json"), "utf8")) };
+  const wifi: WifiInputs = { zones: readWifiZones(join(FIX, "wizards", "zones.json")), aps: parseApList(readFileSync(join(PIN, "aps.json"), "utf8")) };
   check(wifi.zones.find((z) => z.name === "home")?.vlan === 310 && wifi.zones.find((z) => z.name === "work")?.state === "Inactive" && wifi.aps?.length === 1 && wifi.aps[0].name === "Nano HD" && wifi.aps[0].ssids.length === 0, "the WiFi records: zones.json's zones, ap-manager list's APs");
   check(parseApList("ok") === null && parseApList("{}") === null, "…an answer that is not the AP list is unknown, not empty");
 

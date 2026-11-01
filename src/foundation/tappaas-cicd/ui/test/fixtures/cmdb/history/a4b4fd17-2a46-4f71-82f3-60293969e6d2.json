@@ -1,0 +1,224 @@
+{
+ "id": "a4b4fd17-2a46-4f71-82f3-60293969e6d2",
+ "class": "network-device",
+ "name": "testcore",
+ "created": "2026-10-31T20:19:20.051Z",
+ "ended": "2026-11-01T08:26:58.915Z",
+ "attributes": [
+  {
+   "name": "deviceType",
+   "value": "switch",
+   "source": "switch-manager",
+   "change": 6468,
+   "from": "2026-10-31T20:19:20.051Z",
+   "to": null
+  },
+  {
+   "name": "ports",
+   "value": 0,
+   "source": "switch-manager",
+   "change": 6468,
+   "from": "2026-10-31T20:19:20.051Z",
+   "to": "2026-10-31T20:19:20.160Z"
+  },
+  {
+   "name": "vendor",
+   "value": "generic",
+   "source": "switch-manager",
+   "change": 6468,
+   "from": "2026-10-31T20:19:20.051Z",
+   "to": null
+  },
+  {
+   "name": "ports",
+   "value": 1,
+   "source": "switch-manager",
+   "change": 6469,
+   "from": "2026-10-31T20:19:20.160Z",
+   "to": "2026-10-31T20:19:20.275Z"
+  },
+  {
+   "name": "ports",
+   "value": 2,
+   "source": "switch-manager",
+   "change": 6470,
+   "from": "2026-10-31T20:19:20.275Z",
+   "to": "2026-10-31T20:19:33.279Z"
+  },
+  {
+   "name": "ports",
+   "value": 3,
+   "source": "switch-manager",
+   "change": 6487,
+   "from": "2026-10-31T20:19:33.279Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T20:20:12.587Z",
+     "reason": "follows",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": true,
+     "message": "follows device testcore",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:25:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T20:20:12.587Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:25:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 6494,
+   "from": "2026-10-31T20:20:12.587Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "disposed",
+   "source": "operator",
+   "change": 11047,
+   "from": "2026-11-01T08:26:58.915Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 683,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "f28a3bda-ec21-490e-90d2-5d1e95bd54b8",
+    "class": "device",
+    "name": "testcore"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 6468,
+   "from": "2026-10-31T20:19:20.051Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 684,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "ff822d5a-29df-4f3b-adf5-f447ce572a9e",
+    "class": "port",
+    "name": "1"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 6469,
+   "from": "2026-10-31T20:19:20.160Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 685,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "ecaaa4f6-41a4-4f78-a692-9e01237dff8d",
+    "class": "port",
+    "name": "5"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 6470,
+   "from": "2026-10-31T20:19:20.275Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 690,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "58ab8a81-9e62-44e4-9d73-a18cdac666ff",
+    "class": "port",
+    "name": "9"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 6487,
+   "from": "2026-10-31T20:19:33.279Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 6468,
+   "kind": "change",
+   "source": "switch-manager",
+   "job": null,
+   "verb": "switch-manager add-switch",
+   "actor": "tappaas",
+   "time": "2026-10-31T20:19:20.051Z",
+   "drift": false
+  },
+  {
+   "id": 6469,
+   "kind": "change",
+   "source": "switch-manager",
+   "job": null,
+   "verb": "switch-manager add-port",
+   "actor": "tappaas",
+   "time": "2026-10-31T20:19:20.160Z",
+   "drift": false
+  },
+  {
+   "id": 6470,
+   "kind": "change",
+   "source": "switch-manager",
+   "job": null,
+   "verb": "switch-manager add-port",
+   "actor": "tappaas",
+   "time": "2026-10-31T20:19:20.275Z",
+   "drift": false
+  },
+  {
+   "id": 6487,
+   "kind": "change",
+   "source": "switch-manager",
+   "job": null,
+   "verb": "switch-manager add-port",
+   "actor": "tappaas",
+   "time": "2026-10-31T20:19:33.279Z",
+   "drift": false
+  },
+  {
+   "id": 6494,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T20:20:12.587Z",
+   "drift": false
+  },
+  {
+   "id": 11047,
+   "kind": "change",
+   "source": "operator",
+   "job": null,
+   "verb": "retire deep-test leftovers",
+   "actor": null,
+   "time": "2026-11-01T08:26:58.915Z",
+   "drift": false
+  }
+ ]
+}

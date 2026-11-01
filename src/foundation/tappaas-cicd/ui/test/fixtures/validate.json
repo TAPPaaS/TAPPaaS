@@ -1,30 +1,30 @@
 {
  "version": 1,
- "generated": "2026-10-17T18:35:36.476Z",
- "status": "fail",
+ "generated": "2026-11-01T08:51:12.240Z",
+ "status": "warn",
  "failed": 1,
- "warned": 5,
+ "warned": 8,
  "gates": [
   {
    "name": "service-liveness",
    "status": "pass",
-   "detail": "18 managed module(s) running",
+   "detail": "21 managed module(s) running",
    "findings": []
   },
   {
    "name": "disk-threshold",
    "status": "pass",
-   "detail": "16 guest(s) under 80%",
+   "detail": "20 guest(s) under 80%",
    "findings": []
   },
   {
    "name": "memory-commitment",
    "status": "pass",
-   "detail": "tappaas1 55.5/61.8G 90%; tappaas2 74.0/123.5G 60%; tappaas3 5.0/30.8G 16%",
+   "detail": "tappaas1 42.0/61.8G 68%; tappaas2 37.8/123.5G 31%; tappaas3 13.5/30.8G 44%; tappaas4 0.0/31.3G 0%",
    "findings": [
     {
      "status": "pass",
-     "text": "55.5/61.8G committed, 90%",
+     "text": "42.0/61.8G committed, 68%",
      "subject": {
       "kind": "node",
       "name": "tappaas1"
@@ -32,7 +32,7 @@
     },
     {
      "status": "pass",
-     "text": "74.0/123.5G committed, 60%",
+     "text": "37.8/123.5G committed, 31%",
      "subject": {
       "kind": "node",
       "name": "tappaas2"
@@ -40,10 +40,18 @@
     },
     {
      "status": "pass",
-     "text": "5.0/30.8G committed, 16%",
+     "text": "13.5/30.8G committed, 44%",
      "subject": {
       "kind": "node",
       "name": "tappaas3"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "0.0/31.3G committed, 0%",
+     "subject": {
+      "kind": "node",
+      "name": "tappaas4"
      }
     }
    ]
@@ -51,11 +59,11 @@
   {
    "name": "storage-pools",
    "status": "pass",
-   "detail": "11 pool(s) under 80%",
+   "detail": "14 pool(s) under 80%",
    "findings": [
     {
      "status": "pass",
-     "text": "tappaas1/local: 16% used (14.9/93.9G)",
+     "text": "tappaas1/local: 17% used (16.0/93.9G)",
      "subject": {
       "kind": "pool",
       "name": "tappaas1/local"
@@ -71,7 +79,7 @@
     },
     {
      "status": "pass",
-     "text": "tappaas1/tanka1: 16% used (575.5/3596.5G)",
+     "text": "tappaas1/tanka1: 12% used (431.0/3596.5G)",
      "subject": {
       "kind": "pool",
       "name": "tappaas1/tanka1"
@@ -87,7 +95,7 @@
     },
     {
      "status": "pass",
-     "text": "tappaas2/local: 8% used (7.9/93.9G)",
+     "text": "tappaas2/local: 12% used (11.7/93.9G)",
      "subject": {
       "kind": "pool",
       "name": "tappaas2/local"
@@ -103,7 +111,7 @@
     },
     {
      "status": "pass",
-     "text": "tappaas2/tanka1: 15% used (274.9/1845.0G)",
+     "text": "tappaas2/tanka1: 18% used (327.2/1845.0G)",
      "subject": {
       "kind": "pool",
       "name": "tappaas2/tanka1"
@@ -111,7 +119,7 @@
     },
     {
      "status": "pass",
-     "text": "tappaas3/local: 16% used (10.9/67.7G)",
+     "text": "tappaas3/local: 17% used (11.3/67.7G)",
      "subject": {
       "kind": "pool",
       "name": "tappaas3/local"
@@ -127,7 +135,7 @@
     },
     {
      "status": "pass",
-     "text": "tappaas3/tanka1: 31% used (287.5/922.5G)",
+     "text": "tappaas3/tanka1: 50% used (461.0/922.5G)",
      "subject": {
       "kind": "pool",
       "name": "tappaas3/tanka1"
@@ -135,13 +143,43 @@
     },
     {
      "status": "pass",
-     "text": "tappaas3/tankc1: 8% used (355.8/4528.0G)",
+     "text": "tappaas3/tankc1: 10% used (435.8/4528.0G)",
      "subject": {
       "kind": "pool",
       "name": "tappaas3/tankc1"
      }
+    },
+    {
+     "status": "pass",
+     "text": "tappaas4/local: 0% used (0.0/446.3G)",
+     "subject": {
+      "kind": "pool",
+      "name": "tappaas4/local"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "tappaas4/local-zfs: 0% used (0.0/446.3G)",
+     "subject": {
+      "kind": "pool",
+      "name": "tappaas4/local-zfs"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+     "subject": {
+      "kind": "pool",
+      "name": "tappaas4/tanka1"
+     }
     }
    ]
+  },
+  {
+   "name": "storage-replication",
+   "status": "pass",
+   "detail": "5 replication job(s) on 4 node(s) on schedule",
+   "findings": []
   },
   {
    "name": "cpu-impact",
@@ -192,20 +230,12 @@
   },
   {
    "name": "guest-memory",
-   "status": "fail",
+   "status": "pass",
    "detail": "declared / allocated / used, largest gap first",
    "findings": [
     {
      "status": "pass",
-     "text": "jellyfin        2.0G    1.9G    1.0G      52% of declared, gap 0.9G",
-     "subject": {
-      "kind": "module",
-      "name": "jellyfin"
-     }
-    },
-    {
-     "status": "warn",
-     "text": "tappaas-cicd    16.0G   13.7G   12.9G     80% of declared, gap 0.8G",
+     "text": "tappaas-cicd    8.0G    7.9G    0.9G      12% of declared, gap 6.9G, cache 5.4G",
      "subject": {
       "kind": "module",
       "name": "tappaas-cicd"
@@ -213,103 +243,7 @@
     },
     {
      "status": "pass",
-     "text": "euro-office     8.0G    4.6G    4.2G      52% of declared, gap 0.4G",
-     "subject": {
-      "kind": "module",
-      "name": "euro-office"
-     }
-    },
-    {
-     "status": "warn",
-     "text": "litellm         6.0G    5.3G    4.9G      82% of declared, gap 0.4G",
-     "subject": {
-      "kind": "module",
-      "name": "litellm"
-     }
-    },
-    {
-     "status": "pass",
-     "text": "nomad           4.0G    2.6G    2.3G      57% of declared, gap 0.3G",
-     "subject": {
-      "kind": "module",
-      "name": "nomad"
-     }
-    },
-    {
-     "status": "fail",
-     "text": "openwebui       4.0G    3.9G    3.7G      92% of declared, gap 0.3G",
-     "subject": {
-      "kind": "module",
-      "name": "openwebui"
-     }
-    },
-    {
-     "status": "pass",
-     "text": "deconz-test     4.0G    2.1G    1.9G      47% of declared, gap 0.2G",
-     "subject": {
-      "kind": "module",
-      "name": "deconz-test"
-     }
-    },
-    {
-     "status": "pass",
-     "text": "nextcloud-hpb   4.0G    2.0G    1.8G      44% of declared, gap 0.2G",
-     "subject": {
-      "kind": "module",
-      "name": "nextcloud-hpb"
-     }
-    },
-    {
-     "status": "warn",
-     "text": "forgejo         2.0G    1.8G    1.6G      82% of declared, gap 0.2G",
-     "subject": {
-      "kind": "module",
-      "name": "forgejo"
-     }
-    },
-    {
-     "status": "warn",
-     "text": "identity        4.0G    3.5G    3.4G      85% of declared, gap 0.1G",
-     "subject": {
-      "kind": "module",
-      "name": "identity"
-     }
-    },
-    {
-     "status": "fail",
-     "text": "logging         2.0G    1.9G    1.8G      90% of declared, gap 0.1G",
-     "subject": {
-      "kind": "module",
-      "name": "logging"
-     }
-    },
-    {
-     "status": "pass",
-     "text": "nextcloud       8.0G    2.5G    2.5G      31% of declared, gap 0.1G",
-     "subject": {
-      "kind": "module",
-      "name": "nextcloud"
-     }
-    },
-    {
-     "status": "pass",
-     "text": "vllm-amd        46.0G   0.0G    2.8G      6% of its LXC limit",
-     "subject": {
-      "kind": "module",
-      "name": "vllm-amd"
-     }
-    },
-    {
-     "status": "skip",
-     "text": "network         8.0G    7.8G    unmeasured  usage figure is the host's, not the guest's",
-     "subject": {
-      "kind": "module",
-      "name": "network"
-     }
-    },
-    {
-     "status": "fail",
-     "text": "immich          8.0G    7.6G    7.6G      95% of declared, gap 0.0G",
+     "text": "immich          8.0G    8.0G    1.3G      16% of declared, gap 6.7G, cache 6.4G",
      "subject": {
       "kind": "module",
       "name": "immich"
@@ -317,23 +251,119 @@
     },
     {
      "status": "pass",
-     "text": "unifi-os        5.0G    3.0G    3.6G      71% of declared, gap 0.0G",
+     "text": "euro-office     8.0G    4.9G    1.3G      16% of declared, gap 3.6G, cache 3.4G",
      "subject": {
       "kind": "module",
-      "name": "unifi-os"
+      "name": "euro-office"
      }
     },
     {
-     "status": "warn",
-     "text": "coturn          2.0G    1.4G    1.6G      80% of declared, gap 0.0G",
+     "status": "pass",
+     "text": "openwebui       4.0G    4.0G    1.2G      29% of declared, gap 2.8G, cache 2.7G",
+     "subject": {
+      "kind": "module",
+      "name": "openwebui"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "litellm         6.0G    5.7G    3.2G      54% of declared, gap 2.5G, cache 2.4G",
+     "subject": {
+      "kind": "module",
+      "name": "litellm"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "nextcloud       8.0G    3.3G    0.8G      10% of declared, gap 2.5G, cache 2.3G",
+     "subject": {
+      "kind": "module",
+      "name": "nextcloud"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "identity        4.0G    4.0G    1.5G      38% of declared, gap 2.4G, cache 2.4G",
+     "subject": {
+      "kind": "module",
+      "name": "identity"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "nomad           4.0G    3.5G    1.2G      30% of declared, gap 2.3G, cache 2.3G",
+     "subject": {
+      "kind": "module",
+      "name": "nomad"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "karakeep        3.0G    3.0G    1.0G      32% of declared, gap 2.0G, cache 2.0G",
+     "subject": {
+      "kind": "module",
+      "name": "karakeep"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "deconz-test     4.0G    2.4G    0.5G      13% of declared, gap 1.9G, cache 1.8G",
+     "subject": {
+      "kind": "module",
+      "name": "deconz-test"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "woodpecker      4.0G    2.3G    0.5G      13% of declared, gap 1.8G, cache 1.7G",
+     "subject": {
+      "kind": "module",
+      "name": "woodpecker"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "nextcloud-hpb   4.0G    2.2G    0.4G      11% of declared, gap 1.8G, cache 1.7G",
+     "subject": {
+      "kind": "module",
+      "name": "nextcloud-hpb"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "coturn          2.0G    2.0G    0.3G      16% of declared, gap 1.7G, cache 1.6G",
      "subject": {
       "kind": "module",
       "name": "coturn"
      }
     },
     {
-     "status": "warn",
-     "text": "vaultwarden     1.5G    1.2G    1.3G      90% of declared, gap 0.0G",
+     "status": "pass",
+     "text": "unifi-os        5.0G    3.6G    2.0G      40% of declared, gap 1.6G, cache 1.5G",
+     "subject": {
+      "kind": "module",
+      "name": "unifi-os"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "forgejo         2.0G    2.0G    0.4G      20% of declared, gap 1.6G, cache 1.5G",
+     "subject": {
+      "kind": "module",
+      "name": "forgejo"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "jellyfin        2.0G    2.0G    0.5G      24% of declared, gap 1.5G, cache 1.5G",
+     "subject": {
+      "kind": "module",
+      "name": "jellyfin"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "vaultwarden     1.5G    1.5G    0.3G      19% of declared, gap 1.3G, cache 1.2G",
      "subject": {
       "kind": "module",
       "name": "vaultwarden"
@@ -341,12 +371,44 @@
     },
     {
      "status": "pass",
-     "text": "── VM totals    88.5G   66.7G   56.1G     reclaimable 4.0G",
+     "text": "logging         2.0G    2.0G    1.1G      56% of declared, gap 0.9G, cache 0.8G",
+     "subject": {
+      "kind": "module",
+      "name": "logging"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "lazysite        1.0G    1.0G    0.3G      31% of declared, gap 0.7G, cache 0.7G",
+     "subject": {
+      "kind": "module",
+      "name": "lazysite"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "vllm-amd        46.0G   0.0G    3.0G      6% of its LXC limit",
+     "subject": {
+      "kind": "module",
+      "name": "vllm-amd"
+     }
+    },
+    {
+     "status": "skip",
+     "text": "network         8.0G    8.0G    unmeasured  usage figure is the host's, not the guest's",
+     "subject": {
+      "kind": "module",
+      "name": "network"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "── VM totals    88.5G   73.4G   18.8G     reclaimable 46.6G",
      "subject": null
     },
     {
      "status": "pass",
-     "text": "── LXC totals   46.0G   0.0G    2.8G      declared is a limit, not an allocation",
+     "text": "── LXC totals   46.0G   0.0G    3.0G      declared is a limit, not an allocation",
      "subject": null
     }
    ]
@@ -354,28 +416,26 @@
   {
    "name": "backup-status",
    "status": "pass",
-   "detail": "24 module(s) covered",
+   "detail": "30 module(s) covered",
+   "findings": []
+  },
+  {
+   "name": "backup-keys",
+   "status": "pass",
+   "detail": "the key stick of 2026-10-28 holds all 7 key(s)",
    "findings": []
   },
   {
    "name": "pending-reboot",
    "status": "warn",
-   "detail": "2 of 16 guest(s) waiting for a reboot — health-manager reboot <module>",
+   "detail": "1 of 20 guest(s) waiting for a reboot — health-manager reboot <module>",
    "findings": [
     {
      "status": "warn",
-     "text": "tappaas-cicd    booted 26.05.20261008.7c8764b, next boot 26.05.20261008.7c8764b",
+     "text": "tappaas-cicd    booted 26.05.20261025.1f607aa, next boot 26.05.20261025.1f607aa",
      "subject": {
       "kind": "module",
       "name": "tappaas-cicd"
-     }
-    },
-    {
-     "status": "warn",
-     "text": "unifi-os        the OS asks for a reboot",
-     "subject": {
-      "kind": "module",
-      "name": "unifi-os"
      }
     }
    ]
@@ -383,60 +443,47 @@
   {
    "name": "site-timezone",
    "status": "pass",
-   "detail": "19 node(s)/guest(s) on Europe/Copenhagen",
+   "detail": "23 node(s)/guest(s) on Europe/Copenhagen",
    "findings": []
   },
   {
    "name": "quorum",
    "status": "pass",
-   "detail": "3 vote(s)",
+   "detail": "4 vote(s)",
    "findings": []
   },
   {
    "name": "lan-uplink",
    "status": "warn",
-   "detail": "2 finding(s) on 3 node(s) — site-manager node network show <node>",
+   "detail": "1 finding(s) on 4 node(s) — site-manager node network show <node>",
    "findings": [
     {
      "status": "warn",
-     "text": "tappaas1        the switch asks for the slow LACP rate: a leg that fails with its link still up is noticed only after ~90s (link loss is noticed at once)",
+     "text": "tappaas3        every leg reaches the same switch (USW-Pro-XG-10-PoE) — redundant ports, not redundant switches",
      "subject": {
       "kind": "node",
-      "name": "tappaas1"
-     }
-    },
-    {
-     "status": "warn",
-     "text": "tappaas1        every leg reaches the same switch (USW-Pro-XG-10-PoE) — redundant ports, not redundant switches",
-     "subject": {
-      "kind": "node",
-      "name": "tappaas1"
+      "name": "tappaas3"
      }
     }
    ]
   },
   {
    "name": "ipv6-egress",
-   "status": "warn",
-   "detail": "IPv6 egress fails: the IPv6 default route's router fe80::ff:fe91:2291 does not answer on vtnet1; no public IPv6 address answered from immich (2606:4700:4700::1111, 2001:4860:4860::8888)",
-   "findings": [
-    {
-     "status": "warn",
-     "text": "the IPv6 default route's router fe80::ff:fe91:2291 does not answer on vtnet1",
-     "subject": {
-      "kind": "module",
-      "name": "network"
-     }
-    },
-    {
-     "status": "warn",
-     "text": "no public IPv6 address answered from immich (2606:4700:4700::1111, 2001:4860:4860::8888)",
-     "subject": {
-      "kind": "site",
-      "name": "uplink"
-     }
-    }
-   ]
+   "status": "pass",
+   "detail": "default route via fe80::47:ff:fe00:168, prefix 2001:db8:3:4500::/56; 2606:4700:4700::1111 answers from deconz-test",
+   "findings": []
+  },
+  {
+   "name": "switch-ports",
+   "status": "pass",
+   "detail": "46 port(s) on 3 switch(es) as recorded, 26 parked, read 7 h ago",
+   "findings": []
+  },
+  {
+   "name": "mlag-pairs",
+   "status": "pass",
+   "detail": "1 MLAG pair(s), 2 LAG(s) across them",
+   "findings": []
   },
   {
    "name": "pulse",
@@ -486,13 +533,28 @@
    ]
   },
   {
-   "name": "cve-status",
+   "name": "open-alerts",
    "status": "warn",
-   "detail": "31 target(s): 6 act, 0 failed, 15 triage, 10 watch — scanned 0 day(s) ago; health-manager report security",
+   "detail": "1 open alert(s) — health-manager alerts",
    "findings": [
     {
      "status": "warn",
-     "text": "diyhue (deconz-test)          ACT: 7 critical/high fixable",
+     "text": "open   DiskErrors on tappaas3  since 2026-10-31T15:48:00.000Z  [pvehost]",
+     "subject": {
+      "kind": "node",
+      "name": "tappaas3"
+     }
+    }
+   ]
+  },
+  {
+   "name": "cve-status",
+   "status": "warn",
+   "detail": "38 target(s): 10 act, 0 failed, 18 triage, 10 watch — scanned 0 day(s) ago; health-manager report security",
+   "findings": [
+    {
+     "status": "warn",
+     "text": "diyhue (deconz-test)          ACT: 1 critical/high fixable",
      "subject": {
       "kind": "module",
       "name": "deconz-test"
@@ -500,7 +562,15 @@
     },
     {
      "status": "warn",
-     "text": "authentik-server, authentik-… ACT: 1 critical/high fixable",
+     "text": "euro-office (euro-office)     ACT: 1 critical/high fixable",
+     "subject": {
+      "kind": "module",
+      "name": "euro-office"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "authentik-server, authentik-… ACT: 14 critical/high fixable",
      "subject": {
       "kind": "module",
       "name": "identity"
@@ -508,7 +578,31 @@
     },
     {
      "status": "warn",
-     "text": "nomad_admin (nomad)           ACT: 98 critical/high fixable",
+     "text": "karakeep_chrome (karakeep)    ACT: 2 critical/high fixable",
+     "subject": {
+      "kind": "module",
+      "name": "karakeep"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "karakeep_web (karakeep)       ACT: 31 critical/high fixable",
+     "subject": {
+      "kind": "module",
+      "name": "karakeep"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "litellm (litellm)             ACT: 17 critical/high fixable",
+     "subject": {
+      "kind": "module",
+      "name": "litellm"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "nomad_admin (nomad)           ACT: 125 critical/high fixable",
      "subject": {
       "kind": "module",
       "name": "nomad"
@@ -516,7 +610,7 @@
     },
     {
      "status": "warn",
-     "text": "nomad_mysql (nomad)           ACT: 89 critical/high fixable",
+     "text": "nomad_mysql (nomad)           ACT: 96 critical/high fixable",
      "subject": {
       "kind": "module",
       "name": "nomad"
@@ -524,19 +618,117 @@
     },
     {
      "status": "warn",
-     "text": "nomad_redis (nomad)           ACT: 1 critical/high fixable",
-     "subject": {
-      "kind": "module",
-      "name": "nomad"
-     }
-    },
-    {
-     "status": "warn",
-     "text": "openwebui (openwebui)         ACT: 11 critical/high fixable",
+     "text": "openwebui (openwebui)         ACT: 23 critical/high fixable",
      "subject": {
       "kind": "module",
       "name": "openwebui"
      }
+    },
+    {
+     "status": "warn",
+     "text": "vllm (vllm-amd)               ACT: 11 critical/high fixable",
+     "subject": {
+      "kind": "module",
+      "name": "vllm-amd"
+     }
+    }
+   ]
+  },
+  {
+   "name": "signature-status",
+   "status": "pass",
+   "detail": "2 repositories: 0 verified, 2 unsigned, 0 ahead, 0 failed",
+   "findings": []
+  },
+  {
+   "name": "control-plane-trust",
+   "status": "warn",
+   "detail": "2 component(s) from modules: 0 verified, 2 unverified in a foundation manager",
+   "findings": [
+    {
+     "status": "warn",
+     "text": "mikrotik-controller   from Community (module mikrotik), not a verified release — plugs into switch-manager",
+     "subject": {
+      "kind": "module",
+      "name": "mikrotik"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "unifi-controller      from Community (module unifi-os), not a verified release — plugs into switch-manager, ap-manager",
+     "subject": {
+      "kind": "module",
+      "name": "unifi-os"
+     }
+    }
+   ]
+  },
+  {
+   "name": "cmdb",
+   "status": "warn",
+   "detail": "0 drift, 0 from desired, 1 unmanaged, 0 missing, 0 source(s) failed (2026-11-01T08:34:01.582Z)",
+   "findings": [
+    {
+     "status": "warn",
+     "text": "vm/tappaas-nixos            actual without desired",
+     "subject": null
+    }
+   ]
+  },
+  {
+   "name": "conditions",
+   "status": "warn",
+   "detail": "10 beyond the gates — health-manager list",
+   "findings": [
+    {
+     "status": "warn",
+     "text": "app/cluster: RootKeyChanged since 2026-10-29T18:53:50+01:00",
+     "subject": null
+    },
+    {
+     "status": "warn",
+     "text": "app/console: HealthDailyDigest on tappaas-cicd since 2026-10-30T13:03:50Z",
+     "subject": null
+    },
+    {
+     "status": "warn",
+     "text": "app/pve: pve: on no node",
+     "subject": null
+    },
+    {
+     "status": "warn",
+     "text": "device/crs-a: crs-a: VLAN 298 in no zone",
+     "subject": null
+    },
+    {
+     "status": "warn",
+     "text": "device/crs-b: crs-b: VLAN 298 in no zone",
+     "subject": null
+    },
+    {
+     "status": "warn",
+     "text": "device/USW Pro XG 10 PoE: USW Pro XG 10 PoE: VLAN 298 in no zone",
+     "subject": null
+    },
+    {
+     "status": "warn",
+     "text": "disk/dsk-08: dsk-08 (ata-ST8000AS0002-1NA17Z_Z840DMA1): SMART: 2808 reallocated, 632 pending, 632 uncorrectable sectors",
+     "subject": null
+    },
+    {
+     "status": "warn",
+     "text": "disk/dsk-09: dsk-09 (ata-HGST_HDN726050ALE614_NAHW317X): ZFS DEGRADED in tankc1 (errors); SMART: 534 reallocated, 64 pending, 1675 uncorrectable sectors",
+     "subject": null
+    },
+    {
+     "status": "warn",
+     "text": "ssid/TAPPaaS-Test: TAPPaaS-Test: zone swdeepA does not exist",
+     "subject": null
+    },
+    {
+     "status": "warn",
+     "text": "storage-pool/tankc1: tankc1: zfs DEGRADED",
+     "subject": null
     }
    ]
   }

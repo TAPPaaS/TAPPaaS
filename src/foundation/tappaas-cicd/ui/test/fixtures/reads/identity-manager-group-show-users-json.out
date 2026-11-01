@@ -1,0 +1,9 @@
+{
+  "name": "users",
+  "type": "team",
+  "displayName": "Users",
+  "ownerOrg": "rossen",
+  "roles": [
+    "user"
+  ]
+}

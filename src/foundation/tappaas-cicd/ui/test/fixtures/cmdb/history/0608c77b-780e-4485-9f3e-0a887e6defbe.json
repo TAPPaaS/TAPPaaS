@@ -1,0 +1,388 @@
+{
+ "id": "0608c77b-780e-4485-9f3e-0a887e6defbe",
+ "class": "disk",
+ "name": "dsk-03",
+ "created": "2026-10-31T09:50:50.296Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "serial",
+   "value": "S7DSNJ0YB04294X",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "size",
+   "value": 4000787030016,
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "placed",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "health",
+   "value": "PASSED",
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  },
+  {
+   "name": "holds",
+   "value": "nothing",
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  },
+  {
+   "name": "partitions",
+   "value": [
+    {
+     "pool": "tanka1",
+     "size": 4000776716288,
+     "holds": "zfs",
+     "device": "/dev/nvme2n1p1"
+    },
+    {
+     "size": 8388608,
+     "holds": "zfs",
+     "device": "/dev/nvme2n1p9"
+    }
+   ],
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  },
+  {
+   "name": "smart",
+   "value": {
+    "mediaErrors": 0,
+    "powerOnHours": 2629,
+    "criticalWarning": 0
+   },
+   "source": "site-manager",
+   "change": 2276,
+   "from": "2026-10-31T09:52:00.815Z",
+   "to": "2026-10-31T10:59:06.348Z"
+  },
+  {
+   "name": "temperature",
+   "value": 43,
+   "source": "site-manager",
+   "change": 2276,
+   "from": "2026-10-31T09:52:00.815Z",
+   "to": "2026-10-31T10:59:06.348Z"
+  },
+  {
+   "name": "wearout",
+   "value": 99,
+   "source": "site-manager",
+   "change": 2276,
+   "from": "2026-10-31T09:52:00.815Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T09:52:08.978Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "dsk-03 (nvme-Samsung_SSD_990_PRO_with_Heatsink_4TB_S7DSNJ0YB04294X): health PASSED",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T09:52:08.978Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 2316,
+   "from": "2026-10-31T09:52:08.978Z",
+   "to": null
+  },
+  {
+   "name": "smart",
+   "value": {
+    "mediaErrors": 0,
+    "powerOnHours": 2630,
+    "criticalWarning": 0
+   },
+   "source": "site-manager",
+   "change": 2802,
+   "from": "2026-10-31T10:59:06.348Z",
+   "to": "2026-10-31T15:07:49.679Z"
+  },
+  {
+   "name": "temperature",
+   "value": 44,
+   "source": "site-manager",
+   "change": 2802,
+   "from": "2026-10-31T10:59:06.348Z",
+   "to": "2026-10-31T11:03:01.347Z"
+  },
+  {
+   "name": "temperature",
+   "value": 43,
+   "source": "site-manager",
+   "change": 2868,
+   "from": "2026-10-31T11:03:01.347Z",
+   "to": "2026-10-31T11:38:00.928Z"
+  },
+  {
+   "name": "temperature",
+   "value": 44,
+   "source": "site-manager",
+   "change": 3139,
+   "from": "2026-10-31T11:38:00.928Z",
+   "to": "2026-11-01T00:01:17.336Z"
+  },
+  {
+   "name": "smart",
+   "value": {
+    "mediaErrors": 0,
+    "powerOnHours": 2634,
+    "criticalWarning": 0
+   },
+   "source": "site-manager",
+   "change": 4382,
+   "from": "2026-10-31T15:07:49.679Z",
+   "to": "2026-10-31T16:34:36.034Z"
+  },
+  {
+   "name": "smart",
+   "value": {
+    "mediaErrors": 0,
+    "powerOnHours": 2635,
+    "criticalWarning": 0
+   },
+   "source": "site-manager",
+   "change": 4982,
+   "from": "2026-10-31T16:34:36.034Z",
+   "to": "2026-11-01T00:01:17.336Z"
+  },
+  {
+   "name": "smart",
+   "value": {
+    "mediaErrors": 0,
+    "powerOnHours": 2643,
+    "criticalWarning": 0
+   },
+   "source": "site-manager",
+   "change": 7841,
+   "from": "2026-11-01T00:01:17.336Z",
+   "to": "2026-11-01T07:46:08.132Z"
+  },
+  {
+   "name": "temperature",
+   "value": 45,
+   "source": "site-manager",
+   "change": 7841,
+   "from": "2026-11-01T00:01:17.336Z",
+   "to": "2026-11-01T08:02:33.034Z"
+  },
+  {
+   "name": "smart",
+   "value": {
+    "mediaErrors": 0,
+    "powerOnHours": 2651,
+    "criticalWarning": 0
+   },
+   "source": "site-manager",
+   "change": 10723,
+   "from": "2026-11-01T07:46:08.132Z",
+   "to": null
+  },
+  {
+   "name": "temperature",
+   "value": 43,
+   "source": "site-manager",
+   "change": 10885,
+   "from": "2026-11-01T08:02:33.034Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 614,
+   "type": "part-of",
+   "direction": "out",
+   "other": {
+    "id": "f3a464df-94c5-42ce-9a3c-68d0cf2f0302",
+    "class": "server",
+    "name": "srv-01"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "id": 625,
+   "type": "built-on",
+   "direction": "in",
+   "other": {
+    "id": "b635bc37-3033-49ee-9338-f61672b39a5c",
+    "class": "storage-pool",
+    "name": "tanka1"
+   },
+   "attributes": {
+    "redundancyGroup": "tappaas1:tanka1:mirror-0"
+   },
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 2240,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "disk adopt",
+   "actor": "tappaas",
+   "time": "2026-10-31T09:50:50.296Z",
+   "drift": false
+  },
+  {
+   "id": 2241,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:51:07.157Z",
+   "drift": true
+  },
+  {
+   "id": 2276,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:52:00.815Z",
+   "drift": true
+  },
+  {
+   "id": 2316,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:52:08.978Z",
+   "drift": false
+  },
+  {
+   "id": 2802,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T10:59:06.348Z",
+   "drift": true
+  },
+  {
+   "id": 2868,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T11:03:01.347Z",
+   "drift": true
+  },
+  {
+   "id": 3139,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T11:38:00.928Z",
+   "drift": true
+  },
+  {
+   "id": 4382,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T15:07:49.679Z",
+   "drift": false
+  },
+  {
+   "id": 4982,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T16:34:36.034Z",
+   "drift": false
+  },
+  {
+   "id": 7841,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T00:01:17.336Z",
+   "drift": false
+  },
+  {
+   "id": 10723,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:46:08.132Z",
+   "drift": false
+  },
+  {
+   "id": 10885,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:02:33.034Z",
+   "drift": false
+  }
+ ]
+}

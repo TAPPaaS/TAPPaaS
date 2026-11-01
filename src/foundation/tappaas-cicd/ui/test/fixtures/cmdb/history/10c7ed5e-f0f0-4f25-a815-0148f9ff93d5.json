@@ -1,0 +1,403 @@
+{
+ "id": "10c7ed5e-f0f0-4f25-a815-0148f9ff93d5",
+ "class": "storage-pool",
+ "name": "tanka1",
+ "created": "2026-10-30T08:48:29.865Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "used",
+   "value": 351353917440,
+   "source": "storage-manager",
+   "change": 11013,
+   "from": "2026-11-01T08:20:59.267Z",
+   "to": "2026-11-01T08:22:17.638Z"
+  },
+  {
+   "name": "used",
+   "value": 351354097664,
+   "source": "site-manager",
+   "change": 11015,
+   "from": "2026-11-01T08:22:17.638Z",
+   "to": "2026-11-01T08:25:46.746Z"
+  },
+  {
+   "name": "used",
+   "value": 351354224640,
+   "source": "storage-manager",
+   "change": 11045,
+   "from": "2026-11-01T08:25:46.746Z",
+   "to": "2026-11-01T08:27:19.010Z"
+  },
+  {
+   "name": "used",
+   "value": 351354490880,
+   "source": "site-manager",
+   "change": 11049,
+   "from": "2026-11-01T08:27:19.010Z",
+   "to": "2026-11-01T08:28:35.474Z"
+  },
+  {
+   "name": "used",
+   "value": 351354523648,
+   "source": "storage-manager",
+   "change": 11089,
+   "from": "2026-11-01T08:28:35.474Z",
+   "to": "2026-11-01T08:29:42.546Z"
+  },
+  {
+   "name": "used",
+   "value": 351354638336,
+   "source": "storage-manager",
+   "change": 11091,
+   "from": "2026-11-01T08:29:42.546Z",
+   "to": "2026-11-01T08:31:01.113Z"
+  },
+  {
+   "name": "used",
+   "value": 351355211776,
+   "source": "storage-manager",
+   "change": 11114,
+   "from": "2026-11-01T08:31:01.113Z",
+   "to": "2026-11-01T08:32:03.130Z"
+  },
+  {
+   "name": "used",
+   "value": 351354634240,
+   "source": "site-manager",
+   "change": 11119,
+   "from": "2026-11-01T08:32:03.130Z",
+   "to": "2026-11-01T08:32:18.108Z"
+  },
+  {
+   "name": "used",
+   "value": 351354675200,
+   "source": "site-manager",
+   "change": 11130,
+   "from": "2026-11-01T08:32:18.108Z",
+   "to": "2026-11-01T08:33:59.428Z"
+  },
+  {
+   "name": "used",
+   "value": 351354757120,
+   "source": "storage-manager",
+   "change": 11160,
+   "from": "2026-11-01T08:33:59.428Z",
+   "to": "2026-11-01T08:35:43.228Z"
+  },
+  {
+   "name": "used",
+   "value": 351354904576,
+   "source": "storage-manager",
+   "change": 11184,
+   "from": "2026-11-01T08:35:43.228Z",
+   "to": "2026-11-01T08:37:19.940Z"
+  },
+  {
+   "name": "used",
+   "value": 351355121664,
+   "source": "site-manager",
+   "change": 11187,
+   "from": "2026-11-01T08:37:19.940Z",
+   "to": "2026-11-01T08:40:50.764Z"
+  },
+  {
+   "name": "used",
+   "value": 351355203584,
+   "source": "storage-manager",
+   "change": 11215,
+   "from": "2026-11-01T08:40:50.764Z",
+   "to": "2026-11-01T08:42:20.918Z"
+  },
+  {
+   "name": "used",
+   "value": 351355469824,
+   "source": "site-manager",
+   "change": 11217,
+   "from": "2026-11-01T08:42:20.918Z",
+   "to": "2026-11-01T08:45:43.481Z"
+  },
+  {
+   "name": "used",
+   "value": 351356076032,
+   "source": "storage-manager",
+   "change": 11245,
+   "from": "2026-11-01T08:45:43.481Z",
+   "to": "2026-11-01T08:47:16.960Z"
+  },
+  {
+   "name": "used",
+   "value": 351356403712,
+   "source": "site-manager",
+   "change": 11250,
+   "from": "2026-11-01T08:47:16.960Z",
+   "to": "2026-11-01T08:47:38.381Z"
+  },
+  {
+   "name": "used",
+   "value": 351356420096,
+   "source": "storage-manager",
+   "change": 11278,
+   "from": "2026-11-01T08:47:38.381Z",
+   "to": "2026-11-01T08:50:46.727Z"
+  },
+  {
+   "name": "used",
+   "value": 351355514880,
+   "source": "storage-manager",
+   "change": 11279,
+   "from": "2026-11-01T08:50:46.727Z",
+   "to": "2026-11-01T08:52:04.274Z"
+  },
+  {
+   "name": "used",
+   "value": 351355617280,
+   "source": "storage-manager",
+   "change": 11282,
+   "from": "2026-11-01T08:52:04.274Z",
+   "to": "2026-11-01T08:52:19.173Z"
+  },
+  {
+   "name": "used",
+   "value": 351355736064,
+   "source": "site-manager",
+   "change": 11283,
+   "from": "2026-11-01T08:52:19.173Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 335,
+   "type": "runs-on",
+   "direction": "out",
+   "other": {
+    "id": "95727e8e-df12-468f-a03b-8b685140e223",
+    "class": "machine",
+    "name": "tappaas2"
+   },
+   "attributes": {},
+   "source": "storage-manager",
+   "change": 7,
+   "from": "2026-10-30T08:48:29.865Z",
+   "to": null
+  },
+  {
+   "id": 628,
+   "type": "built-on",
+   "direction": "out",
+   "other": {
+    "id": "a8e0f401-3aee-4bca-9ce6-c6525368a758",
+    "class": "disk",
+    "name": "dsk-06"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 11013,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:20:59.267Z",
+   "drift": false
+  },
+  {
+   "id": 11015,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:22:17.638Z",
+   "drift": false
+  },
+  {
+   "id": 11045,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:25:46.746Z",
+   "drift": false
+  },
+  {
+   "id": 11049,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:27:19.010Z",
+   "drift": false
+  },
+  {
+   "id": 11089,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:28:35.474Z",
+   "drift": false
+  },
+  {
+   "id": 11091,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:29:42.546Z",
+   "drift": false
+  },
+  {
+   "id": 11114,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:31:01.113Z",
+   "drift": false
+  },
+  {
+   "id": 11119,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:32:03.130Z",
+   "drift": false
+  },
+  {
+   "id": 11130,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:32:18.108Z",
+   "drift": false
+  },
+  {
+   "id": 11160,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:33:59.428Z",
+   "drift": false
+  },
+  {
+   "id": 11184,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:35:43.228Z",
+   "drift": false
+  },
+  {
+   "id": 11187,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:37:19.940Z",
+   "drift": false
+  },
+  {
+   "id": 11215,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:40:50.764Z",
+   "drift": false
+  },
+  {
+   "id": 11217,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:42:20.918Z",
+   "drift": false
+  },
+  {
+   "id": 11245,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:45:43.481Z",
+   "drift": false
+  },
+  {
+   "id": 11250,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:47:16.960Z",
+   "drift": false
+  },
+  {
+   "id": 11278,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:47:38.381Z",
+   "drift": false
+  },
+  {
+   "id": 11279,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:50:46.727Z",
+   "drift": false
+  },
+  {
+   "id": 11282,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:52:04.274Z",
+   "drift": false
+  },
+  {
+   "id": 11283,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:52:19.173Z",
+   "drift": false
+  }
+ ]
+}

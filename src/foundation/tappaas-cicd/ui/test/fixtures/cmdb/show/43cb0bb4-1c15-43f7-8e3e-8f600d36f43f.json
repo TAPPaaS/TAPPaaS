@@ -1,0 +1,27 @@
+{
+  "id": "43cb0bb4-1c15-43f7-8e3e-8f600d36f43f",
+  "class": "node",
+  "ancestors": [
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "nsw",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T19:33:53.798Z",
+  "ended": null,
+  "lastSeen": null,
+  "seen": {},
+  "at": null,
+  "attributes": {
+    "placeholder": {
+      "value": true,
+      "source": "asset-manager",
+      "since": "2026-10-30T19:33:53.798Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

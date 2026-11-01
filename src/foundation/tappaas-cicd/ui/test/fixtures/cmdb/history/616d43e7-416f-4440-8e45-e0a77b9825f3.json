@@ -1,0 +1,257 @@
+{
+ "id": "616d43e7-416f-4440-8e45-e0a77b9825f3",
+ "class": "disk",
+ "name": "dsk-12",
+ "created": "2026-10-31T09:50:50.296Z",
+ "ended": "2026-10-31T15:19:20.459Z",
+ "attributes": [
+  {
+   "name": "bay",
+   "value": "nvme-Samsung_SSD_990_PRO_2TB_S7HENJ0Y412736V",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "bus",
+   "value": "nvme",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "displayName",
+   "value": "nvme-Samsung_SSD_990_PRO_2TB_S7HENJ0Y412736V",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "faulty",
+   "value": false,
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "kind",
+   "value": "nvme",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "model",
+   "value": "Samsung SSD 990 PRO 2TB",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "serial",
+   "value": "S7HENJ0Y412736V",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "size",
+   "value": 2000398934016,
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "placed",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": "2026-10-31T15:19:20.459Z"
+  },
+  {
+   "name": "health",
+   "value": "PASSED",
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  },
+  {
+   "name": "holds",
+   "value": "nothing",
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  },
+  {
+   "name": "partitions",
+   "value": [
+    {
+     "pool": "tankb1",
+     "size": 2000389406720,
+     "holds": "zfs",
+     "device": "/dev/nvme1n1p1"
+    },
+    {
+     "size": 8388608,
+     "holds": "zfs",
+     "device": "/dev/nvme1n1p9"
+    }
+   ],
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  },
+  {
+   "name": "smart",
+   "value": {
+    "mediaErrors": 0,
+    "powerOnHours": 859,
+    "criticalWarning": 0
+   },
+   "source": "site-manager",
+   "change": 2276,
+   "from": "2026-10-31T09:52:00.815Z",
+   "to": null
+  },
+  {
+   "name": "temperature",
+   "value": 47,
+   "source": "site-manager",
+   "change": 2276,
+   "from": "2026-10-31T09:52:00.815Z",
+   "to": null
+  },
+  {
+   "name": "wearout",
+   "value": 100,
+   "source": "site-manager",
+   "change": 2276,
+   "from": "2026-10-31T09:52:00.815Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T09:52:08.978Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "dsk-12 (nvme-Samsung_SSD_990_PRO_2TB_S7HENJ0Y412736V): health PASSED",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T15:15:02.019Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T09:52:08.978Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T15:15:02.019Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 2316,
+   "from": "2026-10-31T09:52:08.978Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "disposed",
+   "source": "asset-manager",
+   "change": 4478,
+   "from": "2026-10-31T15:19:20.459Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 623,
+   "type": "part-of",
+   "direction": "out",
+   "other": {
+    "id": "f838733f-d890-4e32-af60-eee4a8b68488",
+    "class": "server",
+    "name": "srv-04"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": "2026-10-31T15:19:20.459Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 2240,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "disk adopt",
+   "actor": "tappaas",
+   "time": "2026-10-31T09:50:50.296Z",
+   "drift": false
+  },
+  {
+   "id": 2241,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:51:07.157Z",
+   "drift": true
+  },
+  {
+   "id": 2276,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:52:00.815Z",
+   "drift": true
+  },
+  {
+   "id": 2316,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:52:08.978Z",
+   "drift": false
+  },
+  {
+   "id": 4478,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "disk remove",
+   "actor": "tappaas",
+   "time": "2026-10-31T15:19:20.459Z",
+   "drift": false
+  }
+ ]
+}

@@ -1,0 +1,104 @@
+{
+  "description": "Forgejo — self-hosted Git service and DevOps platform (Gitea fork)",
+  "version": "0.4.0",
+  "releaseDate": "2026-06-01",
+  "installTime": "20261006-20:10:32",
+  "updateTime": "20261101-02:15:32",
+  "maintainer": "@ErikDaniel007",
+  "status": "Testing",
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/devops/forgejo",
+  "environment": "rossen",
+  "vmname": "forgejo",
+  "vmid": 350,
+  "vmtag": "TAPPaaS,Community,Testing",
+  "node": "tappaas2",
+  "zone0": "rossen",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy",
+    "network:rules",
+    "identity:identity"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "provides": [
+    "repo",
+    "oauth"
+  ],
+  "appVersion": "16.0.5",
+  "displayName": "Forgejo",
+  "stack": "devops",
+  "config": {
+    "backup:vm": {
+      "backup": {
+        "enabled": true,
+        "exclude": [],
+        "retention": "7y"
+      }
+    },
+    "cluster:vm": {
+      "bios": "ovmf",
+      "cores": 2,
+      "memory": 2048,
+      "diskSize": "20G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "network:rules": {
+      "firewallType": "opnsense",
+      "ports": [
+        {
+          "port": 3000,
+          "protocol": "TCP",
+          "description": "Web UI and REST API"
+        },
+        {
+          "port": 22,
+          "protocol": "TCP",
+          "description": "SSH git access"
+        }
+      ],
+      "ingress": [
+        {
+          "from": "dmz",
+          "ports": [
+            3000
+          ],
+          "protocol": "TCP",
+          "description": "Caddy reverse proxy forwards HTTPS traffic to Forgejo web UI"
+        }
+      ]
+    },
+    "identity:identity": {
+      "identity": {
+        "adminGroupClaim": "admin",
+        "configureService": "forgejo-configure-oidc.service",
+        "launchPath": "/user/oauth2/authentik",
+        "oidcRedirectPaths": [
+          "/user/oauth2/authentik/callback"
+        ],
+        "providesAdminRole": true,
+        "scopes": [
+          "openid",
+          "email",
+          "profile"
+        ]
+      }
+    },
+    "network:proxy": {
+      "proxyPort": 3000,
+      "proxyAllowedZones": [
+        "home",
+        "work",
+        "mgmt",
+        "internet"
+      ]
+    }
+  }
+}

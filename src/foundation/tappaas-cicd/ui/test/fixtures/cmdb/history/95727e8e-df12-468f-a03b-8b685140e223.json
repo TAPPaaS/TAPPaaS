@@ -1,0 +1,2143 @@
+{
+ "id": "95727e8e-df12-468f-a03b-8b685140e223",
+ "class": "machine",
+ "name": "tappaas2",
+ "created": "2026-10-30T08:47:45.445Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T08:23:56.058Z",
+    "source": "sweep",
+    "desired": {
+     "file": "tappaas2.json"
+    },
+    "attributes": {
+     "zone": {
+      "now": "mgmt",
+      "was": null
+     },
+     "maturity": {
+      "now": "Production",
+      "was": null
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 1730,
+   "from": "2026-10-31T08:23:56.058Z",
+   "to": "2026-10-31T19:21:45.234Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:10:05.207Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T08:25:03.232Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "machine/tappaas2: drift: appeared maturity; machine/tappaas2: drift: appeared zone",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "37.8/123.5G committed, 31%",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "newest restore point 1 day(s) old",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1733,
+   "from": "2026-10-31T08:25:03.232Z",
+   "to": "2026-10-31T09:55:09.015Z"
+  },
+  {
+   "name": "storages",
+   "value": [
+    {
+     "type": "dir",
+     "used": 13144928256,
+     "avail": 82546061312,
+     "total": 100861726720,
+     "active": true,
+     "shared": false,
+     "content": "snippets,iso,backup,vztmpl,import",
+     "enabled": true,
+     "storage": "local"
+    },
+    {
+     "type": "pbs",
+     "used": 461914243072,
+     "avail": 4399867101184,
+     "total": 4861781344256,
+     "active": true,
+     "shared": true,
+     "content": "backup",
+     "enabled": true,
+     "storage": "tappaas_backup"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tankb1"
+    },
+    {
+     "type": "lvmthin",
+     "used": 0,
+     "avail": 362777935872,
+     "total": 362777935872,
+     "active": true,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": true,
+     "storage": "local-lvm"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tankc1"
+    },
+    {
+     "type": "zfspool",
+     "used": 350969905152,
+     "avail": 1630083944448,
+     "total": 1981053849600,
+     "active": true,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": true,
+     "storage": "tanka1"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "local-zfs"
+    }
+   ],
+   "source": "site-manager",
+   "change": 2276,
+   "from": "2026-10-31T09:52:00.815Z",
+   "to": "2026-10-31T10:59:06.348Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:10:05.207Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:05:02.597Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T09:55:09.015Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:55:09.015Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "37.8/123.5G committed, 31%",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:05:02.597Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:05:02.597Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:05:02.597Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "newest restore point 1 day(s) old",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:05:02.597Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 2343,
+   "from": "2026-10-31T09:55:09.015Z",
+   "to": "2026-10-31T20:10:01.133Z"
+  },
+  {
+   "name": "storages",
+   "value": [
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tankb1"
+    },
+    {
+     "type": "lvmthin",
+     "used": 0,
+     "avail": 362777935872,
+     "total": 362777935872,
+     "active": true,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": true,
+     "storage": "local-lvm"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "tankc1"
+    },
+    {
+     "type": "dir",
+     "used": 13131673600,
+     "avail": 82559315968,
+     "total": 100861726720,
+     "active": true,
+     "shared": false,
+     "content": "snippets,backup,vztmpl,iso,import",
+     "enabled": true,
+     "storage": "local"
+    },
+    {
+     "type": "pbs",
+     "used": 461914243072,
+     "avail": 4399867101184,
+     "total": 4861781344256,
+     "active": true,
+     "shared": true,
+     "content": "backup",
+     "enabled": true,
+     "storage": "tappaas_backup"
+    },
+    {
+     "type": "zfspool",
+     "used": 350975098880,
+     "avail": 1630078750720,
+     "total": 1981053849600,
+     "active": true,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": true,
+     "storage": "tanka1"
+    }
+   ],
+   "source": "site-manager",
+   "change": 2802,
+   "from": "2026-10-31T10:59:06.348Z",
+   "to": "2026-10-31T11:03:01.347Z"
+  },
+  {
+   "name": "storages",
+   "value": [
+    {
+     "type": "lvmthin",
+     "used": 0,
+     "avail": 362777935872,
+     "total": 362777935872,
+     "active": true,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": true,
+     "storage": "local-lvm"
+    },
+    {
+     "type": "dir",
+     "used": 13143638016,
+     "avail": 82547351552,
+     "total": 100861726720,
+     "active": true,
+     "shared": false,
+     "content": "backup,snippets,import,vztmpl,iso",
+     "enabled": true,
+     "storage": "local"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tankc1"
+    },
+    {
+     "type": "pbs",
+     "used": 461914243072,
+     "avail": 4399867101184,
+     "total": 4861781344256,
+     "active": true,
+     "shared": true,
+     "content": "backup",
+     "enabled": true,
+     "storage": "tappaas_backup"
+    },
+    {
+     "type": "zfspool",
+     "used": 350976229376,
+     "avail": 1630077620224,
+     "total": 1981053849600,
+     "active": true,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": true,
+     "storage": "tanka1"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tankb1"
+    }
+   ],
+   "source": "site-manager",
+   "change": 2868,
+   "from": "2026-10-31T11:03:01.347Z",
+   "to": "2026-10-31T11:38:00.928Z"
+  },
+  {
+   "name": "storages",
+   "value": [
+    {
+     "type": "lvmthin",
+     "used": 0,
+     "avail": 362777935872,
+     "total": 362777935872,
+     "active": true,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": true,
+     "storage": "local-lvm"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tankb1"
+    },
+    {
+     "type": "pbs",
+     "used": 461914243072,
+     "avail": 4399867101184,
+     "total": 4861781344256,
+     "active": true,
+     "shared": true,
+     "content": "backup",
+     "enabled": true,
+     "storage": "tappaas_backup"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "tankc1"
+    },
+    {
+     "type": "zfspool",
+     "used": 350978523136,
+     "avail": 1630075326464,
+     "total": 1981053849600,
+     "active": true,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": true,
+     "storage": "tanka1"
+    },
+    {
+     "type": "dir",
+     "used": 13171437568,
+     "avail": 82519552000,
+     "total": 100861726720,
+     "active": true,
+     "shared": false,
+     "content": "iso,snippets,backup,import,vztmpl",
+     "enabled": true,
+     "storage": "local"
+    }
+   ],
+   "source": "site-manager",
+   "change": 3139,
+   "from": "2026-10-31T11:38:00.928Z",
+   "to": "2026-10-31T11:41:25.850Z"
+  },
+  {
+   "name": "storages",
+   "value": [
+    {
+     "type": "zfspool",
+     "used": 350978818048,
+     "avail": 1630075031552,
+     "total": 1981053849600,
+     "active": true,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": true,
+     "storage": "tanka1"
+    },
+    {
+     "type": "pbs",
+     "used": 461914243072,
+     "avail": 4399867101184,
+     "total": 4861781344256,
+     "active": true,
+     "shared": true,
+     "content": "backup",
+     "enabled": true,
+     "storage": "tappaas_backup"
+    },
+    {
+     "type": "dir",
+     "used": 13183205376,
+     "avail": 82507784192,
+     "total": 100861726720,
+     "active": true,
+     "shared": false,
+     "content": "backup,import,snippets,vztmpl,iso",
+     "enabled": true,
+     "storage": "local"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tankc1"
+    },
+    {
+     "type": "lvmthin",
+     "used": 0,
+     "avail": 362777935872,
+     "total": 362777935872,
+     "active": true,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": true,
+     "storage": "local-lvm"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tankb1"
+    }
+   ],
+   "source": "site-manager",
+   "change": 3179,
+   "from": "2026-10-31T11:41:25.850Z",
+   "to": "2026-10-31T15:07:49.679Z"
+  },
+  {
+   "name": "storages",
+   "value": [
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tankc1"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "tankb1"
+    },
+    {
+     "type": "zfspool",
+     "used": 350989885440,
+     "avail": 1630063964160,
+     "total": 1981053849600,
+     "active": true,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": true,
+     "storage": "tanka1"
+    },
+    {
+     "type": "dir",
+     "used": 13195583488,
+     "avail": 82495406080,
+     "total": 100861726720,
+     "active": true,
+     "shared": false,
+     "content": "iso,import,backup,vztmpl,snippets",
+     "enabled": true,
+     "storage": "local"
+    },
+    {
+     "type": "lvmthin",
+     "used": 0,
+     "avail": 362777935872,
+     "total": 362777935872,
+     "active": true,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": true,
+     "storage": "local-lvm"
+    },
+    {
+     "type": "pbs",
+     "used": 461914243072,
+     "avail": 4399867363328,
+     "total": 4861781606400,
+     "active": true,
+     "shared": true,
+     "content": "backup",
+     "enabled": true,
+     "storage": "tappaas_backup"
+    }
+   ],
+   "source": "site-manager",
+   "change": 4382,
+   "from": "2026-10-31T15:07:49.679Z",
+   "to": "2026-10-31T16:34:36.034Z"
+  },
+  {
+   "name": "storages",
+   "value": [
+    {
+     "type": "lvmthin",
+     "used": 0,
+     "avail": 362777935872,
+     "total": 362777935872,
+     "active": true,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": true,
+     "storage": "local-lvm"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "local-zfs"
+    },
+    {
+     "type": "pbs",
+     "used": 461914243072,
+     "avail": 4399867232256,
+     "total": 4861781475328,
+     "active": true,
+     "shared": true,
+     "content": "backup",
+     "enabled": true,
+     "storage": "tappaas_backup"
+    },
+    {
+     "type": "dir",
+     "used": 13196255232,
+     "avail": 82494734336,
+     "total": 100861726720,
+     "active": true,
+     "shared": false,
+     "content": "backup,snippets,iso,vztmpl,import",
+     "enabled": true,
+     "storage": "local"
+    },
+    {
+     "type": "zfspool",
+     "used": 350996475904,
+     "avail": 1630057373696,
+     "total": 1981053849600,
+     "active": true,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": true,
+     "storage": "tanka1"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tankc1"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tankb1"
+    }
+   ],
+   "source": "site-manager",
+   "change": 4982,
+   "from": "2026-10-31T16:34:36.034Z",
+   "to": "2026-10-31T16:38:48.885Z"
+  },
+  {
+   "name": "storages",
+   "value": [
+    {
+     "type": "zfspool",
+     "used": 350996832256,
+     "avail": 1630057017344,
+     "total": 1981053849600,
+     "active": true,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": true,
+     "storage": "tanka1"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "local-zfs"
+    },
+    {
+     "type": "dir",
+     "used": 13208072192,
+     "avail": 82482917376,
+     "total": 100861726720,
+     "active": true,
+     "shared": false,
+     "content": "import,vztmpl,snippets,backup,iso",
+     "enabled": true,
+     "storage": "local"
+    },
+    {
+     "type": "lvmthin",
+     "used": 0,
+     "avail": 362777935872,
+     "total": 362777935872,
+     "active": true,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": true,
+     "storage": "local-lvm"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "tankc1"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tankb1"
+    },
+    {
+     "type": "pbs",
+     "used": 461914243072,
+     "avail": 4399867232256,
+     "total": 4861781475328,
+     "active": true,
+     "shared": true,
+     "content": "backup",
+     "enabled": true,
+     "storage": "tappaas_backup"
+    }
+   ],
+   "source": "site-manager",
+   "change": 5050,
+   "from": "2026-10-31T16:38:48.885Z",
+   "to": "2026-11-01T00:01:17.336Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T20:10:01.133Z",
+     "reason": "lan-uplink",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "tappaas2 fencing is armed and lan has one port (enp97s0): a port or switch failure resets this node \u2014 add a second: site-manager node network set tappaas2 --lan-ports <a>,<b> --apply",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:15:02.587Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T09:55:09.015Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:55:09.015Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "37.8/123.5G committed, 31%",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:15:02.587Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:15:02.587Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:15:02.587Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "newest restore point 1 day(s) old",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:15:02.587Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 6408,
+   "from": "2026-10-31T20:10:01.133Z",
+   "to": "2026-10-31T20:20:12.587Z"
+  },
+  {
+   "name": "network",
+   "value": {
+    "live": {
+     "lan": {
+      "mtu": 1500,
+      "bond": "",
+      "mode": "single",
+      "active": "",
+      "bondMtu": null,
+      "members": [
+       {
+        "mac": "38:05:25:33:b5:f7",
+        "mii": "",
+        "mtu": 1500,
+        "usb": false,
+        "lldp": {
+         "name": "USW-Pro-XG-10-PoE",
+         "port": "Port 2",
+         "chassis": "a8:9c:6c:b0:8d:76"
+        },
+        "name": "enp97s0",
+        "speed": 10000,
+        "state": "up",
+        "actorState": -1,
+        "aggregator": "",
+        "partnerState": -1
+       }
+      ],
+      "primary": "",
+      "aggregator": "",
+      "partnerMac": "",
+      "primaryMac": ""
+     },
+     "wan": {
+      "members": []
+     },
+     "node": "tappaas2",
+     "lldpd": "active",
+     "ports": [
+      {
+       "mac": "38:05:25:33:b5:f7",
+       "mii": "",
+       "mtu": 1500,
+       "usb": false,
+       "lldp": {
+        "name": "USW-Pro-XG-10-PoE",
+        "port": "Port 2",
+        "chassis": "a8:9c:6c:b0:8d:76"
+       },
+       "name": "enp97s0",
+       "speed": 10000,
+       "state": "up",
+       "actorState": -1,
+       "aggregator": "",
+       "partnerState": -1
+      },
+      {
+       "mac": "38:05:25:33:b5:f8",
+       "mii": "",
+       "mtu": 1500,
+       "usb": false,
+       "lldp": null,
+       "name": "enp98s0",
+       "speed": -1,
+       "state": "down",
+       "actorState": -1,
+       "aggregator": "",
+       "partnerState": -1
+      },
+      {
+       "mac": "0c:cd:b4:09:57:2d",
+       "mii": "",
+       "mtu": 1500,
+       "usb": false,
+       "lldp": null,
+       "name": "wlp99s0",
+       "speed": -1,
+       "state": "down",
+       "actorState": -1,
+       "aggregator": "",
+       "partnerState": -1
+      }
+     ],
+     "corosync": {
+      "links": 1,
+      "disconnected": 0
+     },
+     "lrmActive": true,
+     "pendingNew": false
+    },
+    "node": "tappaas2",
+    "declared": {
+     "lan": {
+      "mode": "single",
+      "ports": [
+       "38:05:25:33:b5:f7"
+      ]
+     },
+     "wan": {
+      "ports": []
+     }
+    },
+    "findings": [
+     {
+      "text": "fencing is armed and lan has one port (enp97s0): a port or switch failure resets this node \u2014 add a second: site-manager node network set tappaas2 --lan-ports <a>,<b> --apply",
+      "level": "warn"
+     }
+    ]
+   },
+   "source": "site-manager",
+   "change": 6409,
+   "from": "2026-10-31T20:12:21.150Z",
+   "to": "2026-10-31T20:22:23.568Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T20:20:12.587Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T09:55:09.015Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:55:09.015Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "37.8/123.5G committed, 31%",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "newest restore point 1 day(s) old",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 6494,
+   "from": "2026-10-31T20:20:12.587Z",
+   "to": null
+  },
+  {
+   "name": "network",
+   "value": {
+    "live": {
+     "lan": {
+      "mtu": 1500,
+      "bond": "",
+      "mode": "single",
+      "active": "",
+      "bondMtu": null,
+      "members": [
+       {
+        "mac": "38:05:25:33:b5:f7",
+        "mii": "",
+        "mtu": 1500,
+        "usb": false,
+        "lldp": {
+         "name": "USW-Pro-XG-10-PoE",
+         "port": "Port 2",
+         "chassis": "a8:9c:6c:b0:8d:76"
+        },
+        "name": "enp97s0",
+        "speed": 10000,
+        "state": "up",
+        "actorState": -1,
+        "aggregator": "",
+        "partnerState": -1
+       }
+      ],
+      "primary": "",
+      "aggregator": "",
+      "partnerMac": "",
+      "primaryMac": ""
+     },
+     "wan": {
+      "members": []
+     },
+     "node": "tappaas2",
+     "lldpd": "active",
+     "ports": [
+      {
+       "mac": "38:05:25:33:b5:f7",
+       "mii": "",
+       "mtu": 1500,
+       "usb": false,
+       "lldp": {
+        "name": "USW-Pro-XG-10-PoE",
+        "port": "Port 2",
+        "chassis": "a8:9c:6c:b0:8d:76"
+       },
+       "name": "enp97s0",
+       "speed": 10000,
+       "state": "up",
+       "actorState": -1,
+       "aggregator": "",
+       "partnerState": -1
+      },
+      {
+       "mac": "38:05:25:33:b5:f8",
+       "mii": "",
+       "mtu": 1500,
+       "usb": false,
+       "lldp": null,
+       "name": "enp98s0",
+       "speed": -1,
+       "state": "down",
+       "actorState": -1,
+       "aggregator": "",
+       "partnerState": -1
+      },
+      {
+       "mac": "0c:cd:b4:09:57:2d",
+       "mii": "",
+       "mtu": 1500,
+       "usb": false,
+       "lldp": null,
+       "name": "wlp99s0",
+       "speed": -1,
+       "state": "down",
+       "actorState": -1,
+       "aggregator": "",
+       "partnerState": -1
+      }
+     ],
+     "corosync": {
+      "links": 1,
+      "disconnected": 0
+     },
+     "lrmActive": false,
+     "pendingNew": false
+    },
+    "node": "tappaas2",
+    "declared": {
+     "lan": {
+      "mode": "single",
+      "ports": [
+       "38:05:25:33:b5:f7"
+      ]
+     },
+     "wan": {
+      "ports": []
+     }
+    },
+    "findings": []
+   },
+   "source": "site-manager",
+   "change": 6495,
+   "from": "2026-10-31T20:22:23.568Z",
+   "to": null
+  },
+  {
+   "name": "storages",
+   "value": [
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "tankc1"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "tankb1"
+    },
+    {
+     "type": "lvmthin",
+     "used": 0,
+     "avail": 362777935872,
+     "total": 362777935872,
+     "active": true,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": true,
+     "storage": "local-lvm"
+    },
+    {
+     "type": "pbs",
+     "used": 471496261632,
+     "avail": 4390283640832,
+     "total": 4861779902464,
+     "active": true,
+     "shared": true,
+     "content": "backup",
+     "enabled": true,
+     "storage": "tappaas_backup"
+    },
+    {
+     "type": "zfspool",
+     "used": 351143649280,
+     "avail": 1629910200320,
+     "total": 1981053849600,
+     "active": true,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": true,
+     "storage": "tanka1"
+    },
+    {
+     "type": "dir",
+     "used": 12423950336,
+     "avail": 83267039232,
+     "total": 100861726720,
+     "active": true,
+     "shared": false,
+     "content": "snippets,backup,import,vztmpl,iso",
+     "enabled": true,
+     "storage": "local"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "local-zfs"
+    }
+   ],
+   "source": "site-manager",
+   "change": 7841,
+   "from": "2026-11-01T00:01:17.336Z",
+   "to": "2026-11-01T07:46:08.132Z"
+  },
+  {
+   "name": "storages",
+   "value": [
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "local-zfs"
+    },
+    {
+     "type": "zfspool",
+     "used": 351350956032,
+     "avail": 1629702893568,
+     "total": 1981053849600,
+     "active": true,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": true,
+     "storage": "tanka1"
+    },
+    {
+     "type": "lvmthin",
+     "used": 0,
+     "avail": 362777935872,
+     "total": 362777935872,
+     "active": true,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": true,
+     "storage": "local-lvm"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "tankc1"
+    },
+    {
+     "type": "dir",
+     "used": 12520714240,
+     "avail": 83170275328,
+     "total": 100861726720,
+     "active": true,
+     "shared": false,
+     "content": "iso,import,backup,vztmpl,snippets",
+     "enabled": true,
+     "storage": "local"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tankb1"
+    },
+    {
+     "type": "pbs",
+     "used": 467787055104,
+     "avail": 4393990094848,
+     "total": 4861777149952,
+     "active": true,
+     "shared": true,
+     "content": "backup",
+     "enabled": true,
+     "storage": "tappaas_backup"
+    }
+   ],
+   "source": "site-manager",
+   "change": 10723,
+   "from": "2026-11-01T07:46:08.132Z",
+   "to": "2026-11-01T08:02:33.034Z"
+  },
+  {
+   "name": "storages",
+   "value": [
+    {
+     "type": "lvmthin",
+     "used": 0,
+     "avail": 362777935872,
+     "total": 362777935872,
+     "active": true,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": true,
+     "storage": "local-lvm"
+    },
+    {
+     "type": "pbs",
+     "used": 467787055104,
+     "avail": 4393990094848,
+     "total": 4861777149952,
+     "active": true,
+     "shared": true,
+     "content": "backup",
+     "enabled": true,
+     "storage": "tappaas_backup"
+    },
+    {
+     "type": "dir",
+     "used": 12539944960,
+     "avail": 83151044608,
+     "total": 100861726720,
+     "active": true,
+     "shared": false,
+     "content": "import,backup,vztmpl,snippets,iso",
+     "enabled": true,
+     "storage": "local"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tankc1"
+    },
+    {
+     "type": "zfspool",
+     "used": 351352274944,
+     "avail": 1629701574656,
+     "total": 1981053849600,
+     "active": true,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": true,
+     "storage": "tanka1"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tankb1"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "local-zfs"
+    }
+   ],
+   "source": "site-manager",
+   "change": 10885,
+   "from": "2026-11-01T08:02:33.034Z",
+   "to": "2026-11-01T08:27:46.806Z"
+  },
+  {
+   "name": "storages",
+   "value": [
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "local-zfs"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "tankc1"
+    },
+    {
+     "type": "zfspool",
+     "used": 351354490880,
+     "avail": 1629699358720,
+     "total": 1981053849600,
+     "active": true,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": true,
+     "storage": "tanka1"
+    },
+    {
+     "type": "dir",
+     "used": 12506402816,
+     "avail": 83184586752,
+     "total": 100861726720,
+     "active": true,
+     "shared": false,
+     "content": "vztmpl,backup,iso,snippets,import",
+     "enabled": true,
+     "storage": "local"
+    },
+    {
+     "type": "lvmthin",
+     "used": 0,
+     "avail": 362777935872,
+     "total": 362777935872,
+     "active": true,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": true,
+     "storage": "local-lvm"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "tankb1"
+    },
+    {
+     "type": "pbs",
+     "used": 467787055104,
+     "avail": 4393990094848,
+     "total": 4861777149952,
+     "active": true,
+     "shared": true,
+     "content": "backup",
+     "enabled": true,
+     "storage": "tappaas_backup"
+    }
+   ],
+   "source": "site-manager",
+   "change": 11077,
+   "from": "2026-11-01T08:27:46.806Z",
+   "to": "2026-11-01T08:32:03.130Z"
+  },
+  {
+   "name": "storages",
+   "value": [
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "local-zfs"
+    },
+    {
+     "type": "pbs",
+     "used": 467787055104,
+     "avail": 4393990094848,
+     "total": 4861777149952,
+     "active": true,
+     "shared": true,
+     "content": "backup",
+     "enabled": true,
+     "storage": "tappaas_backup"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tankb1"
+    },
+    {
+     "type": "zfspool",
+     "used": 351354634240,
+     "avail": 1629699215360,
+     "total": 1981053849600,
+     "active": true,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": true,
+     "storage": "tanka1"
+    },
+    {
+     "type": "dir",
+     "used": 12518395904,
+     "avail": 83172593664,
+     "total": 100861726720,
+     "active": true,
+     "shared": false,
+     "content": "snippets,import,vztmpl,backup,iso",
+     "enabled": true,
+     "storage": "local"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "tankc1"
+    },
+    {
+     "type": "lvmthin",
+     "used": 0,
+     "avail": 362777935872,
+     "total": 362777935872,
+     "active": true,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": true,
+     "storage": "local-lvm"
+    }
+   ],
+   "source": "site-manager",
+   "change": 11119,
+   "from": "2026-11-01T08:32:03.130Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 4,
+   "type": "member-of",
+   "direction": "out",
+   "other": {
+    "id": "bb8a818c-90a8-47f1-a71d-f33c0f6d8b0f",
+    "class": "environment",
+    "name": "mgmt"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 6,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+    "class": "vm",
+    "name": "deconz-test"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 23,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+    "class": "vm",
+    "name": "litellm"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 8,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+    "class": "vm",
+    "name": "euro-office"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 44,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+    "class": "lxc",
+    "name": "vllm-amd"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 10,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "2514781a-ecfd-4e95-904b-a7b540c29a5b",
+    "class": "vm",
+    "name": "forgejo"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 46,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "3b16e766-0e8a-416a-89dc-a50437ce7519",
+    "class": "vm",
+    "name": "woodpecker"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 31,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "9498d7a1-d225-48a9-94bd-7335701a50e7",
+    "class": "vm",
+    "name": "nextcloud-hpb"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 35,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+    "class": "vm",
+    "name": "openwebui"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 21,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "a7aa4262-bff0-4e17-bf25-faef94fc9178",
+    "class": "vm",
+    "name": "lazysite"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 249,
+   "type": "at",
+   "direction": "out",
+   "other": {
+    "id": "eb8b5e14-af28-46e3-8bf3-fb8de068683b",
+    "class": "location",
+    "name": "knudanchersvej95"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 2,
+   "from": "2026-10-30T08:47:49.432Z",
+   "to": null
+  },
+  {
+   "id": 248,
+   "type": "member-of",
+   "direction": "out",
+   "other": {
+    "id": "e2889041-f305-46d7-a083-d560dfea228e",
+    "class": "cluster",
+    "name": "rossen"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 2,
+   "from": "2026-10-30T08:47:49.432Z",
+   "to": null
+  },
+  {
+   "id": 243,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "ab1b9f8c-cf76-4b1c-ab33-799c8f19847f",
+    "class": "app",
+    "name": "pve"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 2,
+   "from": "2026-10-30T08:47:49.432Z",
+   "to": null
+  },
+  {
+   "id": 330,
+   "type": "backs-up",
+   "direction": "in",
+   "other": {
+    "id": "e5d0d704-4a8a-4cb0-a2eb-84ad8f6dc8f8",
+    "class": "datastore",
+    "name": "tappaas_backup"
+   },
+   "attributes": {},
+   "source": "backup-manager",
+   "change": 6,
+   "from": "2026-10-30T08:47:53.826Z",
+   "to": null
+  },
+  {
+   "id": 335,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "10c7ed5e-f0f0-4f25-a815-0148f9ff93d5",
+    "class": "storage-pool",
+    "name": "tanka1"
+   },
+   "attributes": {},
+   "source": "storage-manager",
+   "change": 7,
+   "from": "2026-10-30T08:48:29.865Z",
+   "to": null
+  },
+  {
+   "id": 458,
+   "type": "allocated-to",
+   "direction": "in",
+   "other": {
+    "id": "131e6e02-127d-4b9f-a02a-0582772e681d",
+    "class": "server",
+    "name": "srv-02"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 16,
+   "from": "2026-10-30T08:49:10.996Z",
+   "to": null
+  },
+  {
+   "id": 673,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "401ee131-c949-4578-b486-814c57849b2d",
+    "class": "vm",
+    "name": "test-hadrift"
+   },
+   "attributes": {},
+   "source": "proxmox-controller",
+   "change": 6403,
+   "from": "2026-10-31T20:08:50.966Z",
+   "to": "2026-10-31T20:10:01.035Z"
+  },
+  {
+   "id": 706,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "ce50b004-2db2-42b6-81d7-42ca82d18ebe",
+    "class": "vm",
+    "name": "test-nfsconsumer"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 6588,
+   "from": "2026-10-31T20:37:20.380Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 2343,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:55:09.015Z",
+   "drift": false
+  },
+  {
+   "id": 2802,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T10:59:06.348Z",
+   "drift": true
+  },
+  {
+   "id": 2868,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T11:03:01.347Z",
+   "drift": true
+  },
+  {
+   "id": 3139,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T11:38:00.928Z",
+   "drift": true
+  },
+  {
+   "id": 3179,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T11:41:25.850Z",
+   "drift": false
+  },
+  {
+   "id": 4382,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T15:07:49.679Z",
+   "drift": false
+  },
+  {
+   "id": 4982,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T16:34:36.034Z",
+   "drift": false
+  },
+  {
+   "id": 5050,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T16:38:48.885Z",
+   "drift": false
+  },
+  {
+   "id": 6068,
+   "kind": "change",
+   "source": "module-manager",
+   "job": null,
+   "verb": "update tappaas2",
+   "actor": "tappaas",
+   "time": "2026-10-31T19:21:45.234Z",
+   "drift": false
+  },
+  {
+   "id": 6403,
+   "kind": "change",
+   "source": "proxmox-controller",
+   "job": null,
+   "verb": "migrate-vm test-hadrift",
+   "actor": "tappaas",
+   "time": "2026-10-31T20:08:50.966Z",
+   "drift": false
+  },
+  {
+   "id": 6408,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T20:10:01.133Z",
+   "drift": false
+  },
+  {
+   "id": 6409,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T20:12:21.150Z",
+   "drift": true
+  },
+  {
+   "id": 6494,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T20:20:12.587Z",
+   "drift": false
+  },
+  {
+   "id": 6495,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T20:22:23.568Z",
+   "drift": false
+  },
+  {
+   "id": 6588,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T20:37:20.380Z",
+   "drift": false
+  },
+  {
+   "id": 7841,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T00:01:17.336Z",
+   "drift": false
+  },
+  {
+   "id": 10723,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:46:08.132Z",
+   "drift": false
+  },
+  {
+   "id": 10885,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:02:33.034Z",
+   "drift": false
+  },
+  {
+   "id": 11077,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:27:46.806Z",
+   "drift": false
+  },
+  {
+   "id": 11119,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:32:03.130Z",
+   "drift": false
+  }
+ ]
+}

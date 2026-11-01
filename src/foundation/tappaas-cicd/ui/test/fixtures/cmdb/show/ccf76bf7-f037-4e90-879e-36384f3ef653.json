@@ -1,0 +1,173 @@
+{
+  "id": "ccf76bf7-f037-4e90-879e-36384f3ef653",
+  "class": "disk",
+  "ancestors": [
+    "disk",
+    "resource",
+    "object"
+  ],
+  "name": "dsk-04",
+  "displayName": "ata-ST12000VN0008-3MH101_ZZ30MJL6",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-31T09:50:50.296Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.621Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.173Z",
+    "asset-manager": "2026-11-01T08:52:20.621Z"
+  },
+  "at": null,
+  "attributes": {
+    "bay": {
+      "value": "ata-ST12000VN0008-3MH101_ZZ30MJL6",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "bus": {
+      "value": "sata",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T09:52:08.978Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "dsk-04 (ata-ST12000VN0008-3MH101_ZZ30MJL6): health PASSED",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T09:52:08.978Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T09:52:08.978Z"
+    },
+    "displayName": {
+      "value": "ata-ST12000VN0008-3MH101_ZZ30MJL6",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "faulty": {
+      "value": false,
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "health": {
+      "value": "PASSED",
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "holds": {
+      "value": "nothing",
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "kind": {
+      "value": "hdd",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "model": {
+      "value": "ST12000VN0008-3MH101",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "partitions": {
+      "value": [
+        {
+          "pool": "tankb1",
+          "size": 12000128139264,
+          "holds": "zfs",
+          "device": "/dev/sda1"
+        },
+        {
+          "size": 8388608,
+          "holds": "zfs",
+          "device": "/dev/sda9"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "serial": {
+      "value": "ZZ30MJL6",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "size": {
+      "value": 12000138625024,
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "smart": {
+      "value": {
+        "pending": 0,
+        "reallocated": 0,
+        "powerOnHours": 2823,
+        "uncorrectable": 0
+      },
+      "source": "site-manager",
+      "since": "2026-11-01T08:27:46.806Z"
+    },
+    "stage": {
+      "value": "placed",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "temperature": {
+      "value": 36,
+      "source": "site-manager",
+      "since": "2026-11-01T08:02:33.034Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 627,
+      "type": "built-on",
+      "direction": "in",
+      "other": {
+        "id": "c4438ab0-0c3a-43bc-9867-775f80c84759",
+        "class": "storage-pool",
+        "name": "tankb1"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    {
+      "id": 615,
+      "type": "part-of",
+      "direction": "out",
+      "other": {
+        "id": "f3a464df-94c5-42ce-9a3c-68d0cf2f0302",
+        "class": "server",
+        "name": "srv-01"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T09:50:50.296Z"
+    }
+  ]
+}

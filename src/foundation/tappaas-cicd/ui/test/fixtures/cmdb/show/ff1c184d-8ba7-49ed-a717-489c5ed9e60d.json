@@ -1,0 +1,91 @@
+{
+  "id": "ff1c184d-8ba7-49ed-a717-489c5ed9e60d",
+  "class": "storage-pool",
+  "ancestors": [
+    "storage-pool",
+    "storage-element",
+    "ci",
+    "object"
+  ],
+  "name": "rpool",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T19:05:42.423Z",
+  "ended": null,
+  "lastSeen": "2026-10-30T19:24:02.956Z",
+  "seen": {
+    "storage-manager": "2026-10-30T19:24:02.956Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-30T19:10:05.207Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "rpool: zfs ONLINE",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-11-01T08:02:41.228Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "flapping": false,
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:02:41.228Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-30T19:10:05.207Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "rpool: 1% used",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-11-01T08:31:40.144Z"
+    },
+    "size": {
+      "value": 482811383808,
+      "source": "storage-manager",
+      "since": "2026-10-30T19:05:42.423Z"
+    },
+    "type": {
+      "value": "zfs",
+      "source": "storage-manager",
+      "since": "2026-10-30T19:05:42.423Z"
+    },
+    "used": {
+      "value": 3521478656,
+      "source": "storage-manager",
+      "since": "2026-10-30T19:24:02.956Z"
+    },
+    "zfsState": {
+      "value": "ONLINE",
+      "source": "storage-manager",
+      "since": "2026-10-30T19:05:42.423Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

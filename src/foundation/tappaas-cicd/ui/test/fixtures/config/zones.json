@@ -1,0 +1,308 @@
+{
+    "_README": {
+        "_comment": "Documentation block, NOT a zone. Keys beginning with '_' are ignored by every consumer: zone-manager and rules-manager skip them on load, and the jq-based bash tooling selects only entries with a state/vlantag. Do not add network fields here.",
+        "isolation_invariant": {
+            "rule": "Tier-4 isolation zones (iotCams, iotUntrust) are defined with 'access-to': [] and MUST NEVER appear in any zone's 'access-to'. Inbound access is granted exclusively per-module, by listing the source zone in the target's 'pinhole-allowed-from' and declaring the specific VM-IP-to-port rule in that module's install.sh.",
+            "mgmt_exception": "mgmt (Tier-0 control plane) is the sole exception: it lists every standard service/client/IoT/DMZ zone, including the Tier-4 zones, in its 'access-to' for full operational visibility. No other zone may.",
+            "rationale": "Adding an isolation zone to a non-mgmt 'access-to' nullifies the pinhole mechanism: every host in the source subnet would gain unconditional, zone-wide reach regardless of any module declaration. iotCams must stay purpose-limited (GDPR Art. 25 - privacy by design); iotUntrust must stay quarantined to prevent lateral movement on compromise.",
+            "review_note": "Three working-tree additions violating this invariant (iotUntrust added to srvHome/home access-to; srvCust added to work access-to) were caught and reverted pre-commit. With the rule written here, a reviewer can distinguish an accidental violation from an intentional design change."
+        },
+        "access_mechanisms": {
+            "access-to": "Baseline reachability set by the zone designer in this file. Grants the ENTIRE source subnet access to the ENTIRE target subnet.",
+            "pinhole-allowed-from": "Lists the zones that MAY open per-module pinholes into this zone. The actual narrow rule (specific source VM IP -> specific port) is declared at install time by the module's install.sh, not here."
+        },
+        "tier_model": [
+            "Tier 0 - Control plane: mgmt. Egress: all zones. Ingress: no inbound pinholes.",
+            "Tier 1 - Service backends: srvHome, srvWork, srvCust, srvDev, srvTest, dmz. Egress: internet (+ declared IoT). Ingress: module pinholes via pinhole-allowed-from.",
+            "Tier 2 - Trusted clients: home, work. Egress: internet + own service zone. Ingress: direct.",
+            "Tier 3 - IoT controlled: iotLocal, iotCloud. Egress: iotCloud=internet, iotLocal=none. Ingress: zone-wide from srvHome/home via access-to.",
+            "Tier 4 - IoT isolated: iotCams, iotUntrust. Egress: iotCams=none, iotUntrust=internet. Ingress: pinhole-only, no exceptions (see isolation_invariant).",
+            "Tier 5 - Untrusted clients: guest. Egress: internet only. Ingress: no inbound pinholes."
+        ],
+        "mdns_policy": "Multicast service discovery (Sonos/SSDP, Chromecast) does not cross VLAN boundaries on its own. Where a trusted client or service zone must discover devices in iotCloud, run udpbroadcastrelay to forward UDP port 1900 (SSDP) between the relevant interfaces. Referenced by iotCloud._comment.",
+        "iot_classification": {
+            "_comment": "Decision aid for placing a new IoT device into iotLocal / iotCloud / iotCams / iotUntrust. Referenced by iotUntrust._comment.",
+            "split_policy_3_questions": [
+                "1. Does the device require internet to function? No -> iotLocal (no egress). Yes -> continue.",
+                "2. Is the firmware/vendor trusted and kept updated? No -> iotUntrust (internet-only, quarantined). Yes -> continue.",
+                "3. Does it capture personal or sensitive data (e.g. cameras)? Yes -> iotCams (no egress, pinhole-only access). No -> iotCloud."
+            ]
+        },
+        "pr_review_checklist": [
+            "No Tier-4 zone (iotCams, iotUntrust) appears in any non-mgmt zone's access-to.",
+            "Every new non-internet access-to entry is justified with a named use case in the PR.",
+            "Isolation-zone access is declared per-module in install.sh (pinhole-allowed-from), not via access-to here.",
+            "Every zone has both _comment and description; operational instructions live in _comment only."
+        ]
+    },
+    "mgmt": {
+        "type": "Management",
+        "state": "Manual",
+        "typeId": "0",
+        "subId": "0",
+        "vlantag": 0,
+        "ip": "10.0.0.0/24",
+        "bridge": "lan",
+        "access-to": [
+            "all",
+            "internet"
+        ],
+        "pinhole-allowed-from": [],
+        "_comment": "Always-on control plane. Full access to all zones for operational control: 'all' is every other standard zone (not Disabled, not Overlay or WAN), expanded when the file is read (#375), so adding or deleting a zone never edits this list. No inbound pinholes — mgmt initiates only.",
+        "description": "Control plane: hypervisors, backup, firewall, identity, cicd",
+        "tier": 0,
+        "environment": "mgmt"
+    },
+    "netbird": {
+        "type": "Overlay",
+        "state": "Manual",
+        "typeId": "7",
+        "subId": "0",
+        "vlantag": 0,
+        "ip": "100.64.0.0/10",
+        "bridge": "lan",
+        "access-to": [],
+        "pinhole-allowed-from": [],
+        "_comment": "NetBird WireGuard overlay (issue #367). NOT a VLAN/interface zone: state=Manual + vlantag=0 mean zone-manager never creates an interface, DHCP, or firewall rules for it (the 'bridge' field is inert, present only to satisfy the schema). It exists so network:proxy access-list.sh can resolve the NetBird peer CIDR and admit tunnel peers through Caddy: peers terminate on OPNsense's OWN interface, so the routing-peer masquerade does NOT rewrite their source — Caddy sees the peer's overlay IP (e.g. 100.70.x.x), which matched no 10.x zone and was 403'd. Per-peer authorization is enforced by NetBird's own access policies (only the Admins group gets the route to OPNsense), so allowing the whole overlay CIDR here is safe. The default 100.64.0.0/10 is NetBird's full CGNAT allocation range and covers any sub-range the management server hands out (e.g. 100.70.0.0/16); narrow it only if you deliberately restrict NetBird to a smaller network. Included in the default Caddy allow-set like mgmt; services with an explicit proxyAllowedZones must add 'netbird' to keep tunnel access.",
+        "description": "NetBird VPN overlay: admin tunnel peers (not a VLAN)"
+    },
+    "edge": {
+        "type": "Overlay",
+        "state": "Manual",
+        "typeId": "7",
+        "subId": "1",
+        "vlantag": 0,
+        "ip": "10.255.0.0/31",
+        "bridge": "lan",
+        "access-to": [],
+        "pinhole-allowed-from": [],
+        "_comment": "ADR-010 satellite WireGuard infra tunnel (NOT a VLAN: state=Manual + vlantag=0, so zone-manager creates no interface/DHCP). The home (OPNsense) end dials OUT to the satellite's public IP; this /31 is the tunnel link. The satellite is a semi-trusted external relay and gets LEAST-PRIVILEGE, ROLE-GATED reach only: edge -> Caddy ingress (reverse-proxy), edge -> OPNsense admin-WG listener (admin-vpn), edge -> home PBS :8007 (backup) — and NOTHING else, never broad mgmt. Those specific-port rules are applied per active satellite role by the satellite module; their exact zones-schema form is TBD (ADR-010 implementation Q6), so access-to/pinhole-allowed-from are empty here.",
+        "description": "ADR-010 satellite infra tunnel (external relay; least-privilege)"
+    },
+    "admin": {
+        "type": "Overlay",
+        "state": "Manual",
+        "typeId": "7",
+        "subId": "2",
+        "vlantag": 0,
+        "ip": "10.255.1.0/24",
+        "bridge": "wireguard",
+        "access-to": [
+            "mgmt"
+        ],
+        "pinhole-allowed-from": [],
+        "_comment": "ADR-010 admin-vpn landing zone (Q3 RESOLVED, validated live 2026-07-01). The operator's admin WireGuard session TERMINATES on OPNsense (a dedicated 'tappaas-admin' WG server on port 51821, tunneladdress 10.255.1.1/24); the satellite only blind-relays the UDP (or the admin device connects direct to the cluster WAN — the OPNsense side is identical). access-to: ['mgmt'] is realised NOT by zone-manager (which skips Overlay/vlantag=0 zones) but by a single explicit least-privilege firewall pass rule on the 'wireguard' interface: 10.255.1.0/24 -> 10.0.0.0/24, created idempotently by 'network-manager wgvpn setup' (network-manager/wgvpn/). NetBird (the 'netbird' overlay) remains independent for many-peer mesh; admin-vpn covers the single-operator case with plain WireGuard and no control plane. Peers are managed with 'network-manager wgvpn add-peer'. Full runbook: tappaas-cicd/manager/network-manager/ADMIN-VPN.md.",
+        "description": "ADR-010 admin-vpn landing (mgmt tunnel; see ADMIN-VPN.md)"
+    },
+    "rossen": {
+        "type": "Service",
+        "state": "Active",
+        "typeId": "2",
+        "subId": "0",
+        "vlantag": 200,
+        "ip": "10.2.0.0/24",
+        "bridge": "lan",
+        "access-to": [
+            "internet"
+        ],
+        "pinhole-allowed-from": [
+            "dmz"
+        ],
+        "_comment": "The single default service zone. `network-manager init core --name <N>` renames this key to <N> (the site's defaultEnvironment) and sets it Active — it is the zone every app module lands in unless its JSON names another. `init iot` adds iotLocal/iotCloud to this zone's access-to so an automation module can reach the devices. Additional service zones come from `environment add --create-zone` or `add --archetype service`, never from dormant template entries.",
+        "description": "Default service zone (renamed to the site's defaultEnvironment at install)",
+        "tier": 1,
+        "ipv6Subnet": 32,
+        "environment": "rossen"
+    },
+    "work": {
+        "type": "Client",
+        "state": "Inactive",
+        "typeId": "3",
+        "subId": "20",
+        "vlantag": 320,
+        "SSID": "<WORK_SSID>",
+        "ip": "10.3.20.0/24",
+        "bridge": "lan",
+        "access-to": [
+            "internet"
+        ],
+        "pinhole-allowed-from": [],
+        "_comment": "Managed corporate devices. Reaches srvWork only. Set state=Disabled for pure-home deployments. For MSP/consultant deployments, srvCust access is opt-in via deployment config.",
+        "description": "Managed corporate devices: laptops, phones, tablets",
+        "ipv6Subnet": 50
+    },
+    "iotLocal": {
+        "type": "IoT",
+        "state": "Active",
+        "typeId": "4",
+        "subId": "10",
+        "vlantag": 410,
+        "SSID": "<IOT_LOCAL_SSID>",
+        "ip": "10.4.10.0/24",
+        "bridge": "lan",
+        "access-to": [],
+        "pinhole-allowed-from": [],
+        "_comment": "Local automation devices: no internet, no LAN egress. Zigbee/Hue/KNX/Shelly. srvHome and home reach zone-wide via access-to; srvHome modules may create VM-specific pinholes via pinhole-allowed-from. mgmt via its access-to. (= The Hook Up's 'NoT'.)",
+        "description": "Local-only IoT: no internet, automation devices",
+        "tier": 6,
+        "ipv6Subnet": 65,
+        "environment": "rossen"
+    },
+    "iotCloud": {
+        "type": "IoT",
+        "state": "Active",
+        "typeId": "4",
+        "subId": "20",
+        "vlantag": 420,
+        "SSID": "<IOT_CLOUD_SSID>",
+        "ip": "10.4.20.0/24",
+        "bridge": "lan",
+        "access-to": [
+            "internet"
+        ],
+        "pinhole-allowed-from": [
+            "home"
+        ],
+        "_comment": "Cloud-connected trusted devices: smart appliances, media (Sonos, Chromecast), HVAC/solar monitoring. srvHome and home reach zone-wide via access-to. mDNS across zones: \"mdns\": true here and on the discovering zone; Sonos/SSDP needs a UDP relay of port 1900 (see _README.mdns_policy).",
+        "description": "Internet-dependent trusted IoT: smart appliances, media, monitoring",
+        "tier": 3,
+        "ipv6Subnet": 66,
+        "environment": "rossen"
+    },
+    "iotCams": {
+        "type": "IoT",
+        "state": "Active",
+        "typeId": "4",
+        "subId": "30",
+        "vlantag": 430,
+        "ip": "10.4.30.0/24",
+        "bridge": "lan",
+        "access-to": [],
+        "pinhole-allowed-from": [],
+        "_comment": "Cameras and NVR. No internet, no LAN egress. NVR module in srvHome or srvWork reaches via explicit pinhole only — never zone-wide access-to (GDPR: access is purpose-limited). Usually wired PoE; no SSID.",
+        "description": "Surveillance: cameras + NVR, fully isolated",
+        "tier": 6,
+        "isolated": true,
+        "ipv6Subnet": 67,
+        "environment": "rossen"
+    },
+    "iotUntrust": {
+        "type": "IoT",
+        "state": "Disabled",
+        "typeId": "4",
+        "subId": "40",
+        "vlantag": 440,
+        "SSID": "<IOT_UNTRUST_SSID>",
+        "ip": "10.4.40.0/24",
+        "bridge": "lan",
+        "access-to": [
+            "internet"
+        ],
+        "pinhole-allowed-from": [],
+        "_comment": "Untrusted internet-required devices (cheap gadgets, unknown firmware). Internet-only; no LAN access; no inbound pinholes. Isolated from iotCloud to prevent lateral movement on compromise. Set state=Active to enable. See _README.iot_classification.split_policy_3_questions.",
+        "description": "Untrusted IoT: internet-only, fully quarantined",
+        "tier": 3,
+        "isolated": true,
+        "ipv6Subnet": 68
+    },
+    "dmz": {
+        "type": "DMZ",
+        "state": "Mandatory",
+        "typeId": "6",
+        "subId": "10",
+        "vlantag": 610,
+        "ip": "10.6.0.0/24",
+        "bridge": "lan",
+        "access-to": [
+            "internet"
+        ],
+        "pinhole-allowed-from": [
+            "internet",
+            "home"
+        ],
+        "_comment": "Reverse proxy and internet-exposed services. Internet-only egress (ACME, upstream calls). Internet inbound via pinhole-allowed-from. Backends (srvWork, srvCust) expose themselves inbound via their own pinhole-allowed-from declarations. home is listed so a dmz module may open a CLIENT-facing pinhole (coturn: Talk clients relay through TURN directly instead of hairpinning via the WAN IP, which NAT reflection does not support). The rule itself is still declared per module, in its ingress.",
+        "description": "Public-facing: reverse proxy (Caddy), internet-exposed services",
+        "tier": 4,
+        "ipv6Subnet": 97
+    },
+    "home": {
+        "type": "Client",
+        "state": "Active",
+        "typeId": "3",
+        "subId": "10",
+        "vlantag": 310,
+        "SSID": "rossen-home",
+        "ip": "10.3.10.0/24",
+        "bridge": "lan",
+        "access-to": [
+            "internet"
+        ],
+        "pinhole-allowed-from": [],
+        "_comment": "Trusted personal devices on the home network. Reaches srvHome and iotLocal/iotCloud zone-wide for consumer app compatibility (Hue, Shelly, Sonos). Does not reach srvWork — use the work zone for managed corporate access.",
+        "description": "Trusted personal devices: laptops, phones, tablets",
+        "tier": 2,
+        "ipv6Subnet": 49,
+        "environment": "rossen"
+    },
+    "guest": {
+        "type": "Guest",
+        "state": "Active",
+        "typeId": "5",
+        "subId": "10",
+        "vlantag": 510,
+        "SSID": "rossen-guest",
+        "ip": "10.5.10.0/24",
+        "bridge": "lan",
+        "access-to": [
+            "internet"
+        ],
+        "pinhole-allowed-from": [],
+        "_comment": "Untrusted visitor devices. Internet-only; no service or device zone access; no inbound pinholes.",
+        "description": "Visitors: internet only, fully isolated",
+        "tier": 3,
+        "ipv6Subnet": 81
+    },
+    "wan": {
+        "type": "WAN",
+        "state": "Manual",
+        "typeId": "1",
+        "subId": "0",
+        "vlantag": 100,
+        "ip": "10.1.0.0/24",
+        "bridge": "lan",
+        "access-to": [],
+        "pinhole-allowed-from": [],
+        "_comment": "ISP hand-off segment, switch-internal ONLY. Exists so the WAN modem and EVERY node's 'wan' bridge NIC share one L2 segment, letting the HA firewall VM (net1 bridge=wan, fixed MAC) keep the ISP lease when it fails over to another node. MUST stay state=Manual: (1) Manual is excluded from vmnet_all_active_tags, so VLAN 100 is never added to a node uplink trunk or a Proxmox VM NIC — the segment stays isolated; (2) Manual is not 'enabled', so zone-manager creates NO OPNsense interface and NO DHCP server — the ISP modem is the only DHCP server on this segment and a second one would break WAN. Do NOT set Active: zone-manager would immediately stand up an interface + DHCP server on the ISP segment. 'ip' is a placeholder for schema conformance; no interface is ever created from it. The switch ports are plain untagged ACCESS ports (switch-manager --type device --zone wan); modem and node NICs are untagged — VLAN 100 exists only inside the switch. Distinct from the 'bridge' field value 'wan', which names the physical WAN interface.",
+        "description": "ISP hand-off L2 segment (modem + node WAN NICs); switch-only, no interface, no DHCP"
+    },
+    "buddy": {
+        "type": "Overlay",
+        "state": "Manual",
+        "typeId": "7",
+        "subId": "3",
+        "vlantag": 0,
+        "ip": "10.255.2.0/24",
+        "bridge": "wireguard",
+        "access-to": [],
+        "pinhole-allowed-from": [],
+        "_comment": "#796 backup-buddy tunnels. The pool that 'backup-manager peer add remote <n> --tunnel serve' carves one /30 per pulled-from relationship out of (.1 = the serving side, .2 = the puller). Each tunnel carries only PBS tcp/8007 to one address: AllowedIPs are /32s, so the two sites' networks are never merged. Change 'ip' here (by hand; network-manager modify keeps it immutable) to move the pool if it collides with something at a buddy site; one tunnel can also be pinned with --tunnel-net. Both ends of a tunnel must agree on its /30, so the dialing side always takes it from the serving side. See backup/BUDDY.md.",
+        "description": "#796 backup-buddy tunnels (one /30 per pull; see backup/BUDDY.md)"
+    },
+    "test": {
+        "type": "Service",
+        "typeId": "2",
+        "subId": "99",
+        "vlantag": 299,
+        "ip": "10.2.99.0/24",
+        "bridge": "lan",
+        "state": "Active",
+        "access-to": [
+            "internet"
+        ],
+        "pinhole-allowed-from": [],
+        "description": "Application/service modules for one environment",
+        "tier": 1,
+        "ipv6Subnet": 1,
+        "environment": "test"
+    }
+}

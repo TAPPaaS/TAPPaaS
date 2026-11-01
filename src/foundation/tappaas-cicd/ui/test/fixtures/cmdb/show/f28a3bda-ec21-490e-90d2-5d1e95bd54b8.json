@@ -1,0 +1,101 @@
+{
+  "id": "f28a3bda-ec21-490e-90d2-5d1e95bd54b8",
+  "class": "device",
+  "ancestors": [
+    "device",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "testcore",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-31T20:19:20.051Z",
+  "ended": "2026-11-01T08:26:58.915Z",
+  "lastSeen": "2026-11-01T08:26:58.915Z",
+  "seen": {
+    "operator": "2026-11-01T08:26:58.915Z",
+    "switch-manager": "2026-10-31T20:19:33.279Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T20:20:12.587Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-11-01T00:04:45.410Z",
+          "reason": "sweep-missing",
+          "source": "health-manager",
+          "status": "critical",
+          "derived": false,
+          "message": "device/testcore: desired without actual",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-11-01T00:04:45.410Z"
+    },
+    "desired": {
+      "value": {
+        "key": "testcore",
+        "file": "switch-configuration-desired.json"
+      },
+      "source": "switch-manager",
+      "since": "2026-10-31T20:19:20.051Z"
+    },
+    "deviceType": {
+      "value": "switch",
+      "source": "switch-manager",
+      "since": "2026-10-31T20:19:20.051Z"
+    },
+    "lags": {
+      "value": [],
+      "source": "switch-manager",
+      "since": "2026-10-31T20:19:20.051Z"
+    },
+    "managed": {
+      "value": "manual",
+      "source": "switch-manager",
+      "since": "2026-10-31T20:19:20.051Z"
+    },
+    "managementAddress": {
+      "value": "10.0.0.99",
+      "source": "switch-manager",
+      "since": "2026-10-31T20:19:20.051Z"
+    },
+    "order": {
+      "value": 0,
+      "source": "switch-manager",
+      "since": "2026-10-31T20:19:20.051Z"
+    },
+    "stage": {
+      "value": "retired",
+      "source": "operator",
+      "since": "2026-11-01T08:26:58.915Z"
+    },
+    "vendor": {
+      "value": "generic",
+      "source": "switch-manager",
+      "since": "2026-10-31T20:19:20.051Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

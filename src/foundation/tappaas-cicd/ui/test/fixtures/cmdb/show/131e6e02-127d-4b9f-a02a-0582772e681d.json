@@ -1,0 +1,579 @@
+{
+  "id": "131e6e02-127d-4b9f-a02a-0582772e681d",
+  "class": "server",
+  "ancestors": [
+    "server",
+    "asset",
+    "resource",
+    "object"
+  ],
+  "name": "srv-02",
+  "displayName": "tappaas2",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-30T08:49:10.799Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.621Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.266Z",
+    "asset-manager": "2026-11-01T08:52:20.621Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T20:20:12.587Z",
+          "reason": "follows",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": true,
+          "message": "follows machine tappaas2",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T11:45:03.903Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T11:45:03.903Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T20:20:12.587Z"
+    },
+    "cpu": {
+      "value": "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S",
+      "source": "site-manager",
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    "disks": {
+      "value": [
+        {
+          "bus": "nvme",
+          "wwn": "eui.0026b73842ad86f5",
+          "name": "nvme-KINGSTON_OM8TAP42048K1-A00_50026B73842AD86F",
+          "size": 2048408248320,
+          "type": "nvme",
+          "holds": "nothing",
+          "model": "KINGSTON OM8TAP42048K1-A00",
+          "device": "/dev/nvme1n1",
+          "health": "PASSED",
+          "serial": "50026B73842AD86F",
+          "vendor": "unknown",
+          "partitions": [
+            {
+              "pool": "tanka1",
+              "size": 2048398458880,
+              "holds": "zfs",
+              "device": "/dev/nvme1n1p1"
+            },
+            {
+              "size": 8388608,
+              "holds": "zfs",
+              "device": "/dev/nvme1n1p9"
+            }
+          ]
+        },
+        {
+          "bus": "nvme",
+          "wwn": "eui.e8238fa6bf530001001b448b4f9c112f",
+          "name": "nvme-SanDisk_SSD_Plus_500GB_A3N_25414A800205",
+          "size": 500107862016,
+          "type": "nvme",
+          "holds": "nothing",
+          "model": "SanDisk SSD Plus 500GB A3N",
+          "device": "/dev/nvme0n1",
+          "health": "PASSED",
+          "serial": "25414A800205",
+          "vendor": "unknown",
+          "partitions": [
+            {
+              "size": 1031168,
+              "holds": "bios-boot",
+              "device": "/dev/nvme0n1p1"
+            },
+            {
+              "size": 1073741824,
+              "holds": "efi",
+              "device": "/dev/nvme0n1p2"
+            },
+            {
+              "size": 499033054720,
+              "holds": "lvm",
+              "device": "/dev/nvme0n1p3"
+            }
+          ]
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T11:38:00.928Z"
+    },
+    "displayName": {
+      "value": "tappaas2",
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    "drift": {
+      "value": {
+        "since": "2026-10-31T09:52:00.815Z",
+        "source": "sweep",
+        "desired": null,
+        "attributes": {
+          "disks": {
+            "now": [
+              {
+                "bus": "nvme",
+                "wwn": "eui.0026b73842ad86f5",
+                "name": "nvme-KINGSTON_OM8TAP42048K1-A00_50026B73842AD86F",
+                "size": 2048408248320,
+                "type": "nvme",
+                "holds": "nothing",
+                "model": "KINGSTON OM8TAP42048K1-A00",
+                "device": "/dev/nvme1n1",
+                "health": "PASSED",
+                "serial": "50026B73842AD86F",
+                "vendor": "unknown",
+                "partitions": [
+                  {
+                    "pool": "tanka1",
+                    "size": 2048398458880,
+                    "holds": "zfs",
+                    "device": "/dev/nvme1n1p1"
+                  },
+                  {
+                    "size": 8388608,
+                    "holds": "zfs",
+                    "device": "/dev/nvme1n1p9"
+                  }
+                ]
+              },
+              {
+                "bus": "nvme",
+                "wwn": "eui.e8238fa6bf530001001b448b4f9c112f",
+                "name": "nvme-SanDisk_SSD_Plus_500GB_A3N_25414A800205",
+                "size": 500107862016,
+                "type": "nvme",
+                "holds": "nothing",
+                "model": "SanDisk SSD Plus 500GB A3N",
+                "device": "/dev/nvme0n1",
+                "health": "PASSED",
+                "serial": "25414A800205",
+                "vendor": "unknown",
+                "partitions": [
+                  {
+                    "size": 1031168,
+                    "holds": "bios-boot",
+                    "device": "/dev/nvme0n1p1"
+                  },
+                  {
+                    "size": 1073741824,
+                    "holds": "efi",
+                    "device": "/dev/nvme0n1p2"
+                  },
+                  {
+                    "size": 499033054720,
+                    "holds": "lvm",
+                    "device": "/dev/nvme0n1p3"
+                  }
+                ]
+              }
+            ],
+            "was": [
+              {
+                "bus": "nvme",
+                "wwn": "eui.e8238fa6bf530001001b448b4f9c112f",
+                "name": "nvme-SanDisk_SSD_Plus_500GB_A3N_25414A800205",
+                "size": 500107862016,
+                "type": "nvme",
+                "holds": "nothing",
+                "model": "SanDisk SSD Plus 500GB A3N",
+                "smart": {
+                  "mediaErrors": 0,
+                  "powerOnHours": 6757,
+                  "criticalWarning": 0
+                },
+                "device": "/dev/nvme0n1",
+                "health": "PASSED",
+                "serial": "25414A800205",
+                "vendor": "unknown",
+                "wearout": 100,
+                "partitions": [
+                  {
+                    "size": 1031168,
+                    "holds": "bios-boot",
+                    "device": "/dev/nvme0n1p1"
+                  },
+                  {
+                    "size": 1073741824,
+                    "holds": "efi",
+                    "device": "/dev/nvme0n1p2"
+                  },
+                  {
+                    "size": 499033054720,
+                    "holds": "lvm",
+                    "device": "/dev/nvme0n1p3"
+                  }
+                ],
+                "temperature": 34
+              },
+              {
+                "bus": "nvme",
+                "wwn": "eui.0026b73842ad86f5",
+                "name": "nvme-KINGSTON_OM8TAP42048K1-A00_50026B73842AD86F",
+                "size": 2048408248320,
+                "type": "nvme",
+                "holds": "nothing",
+                "model": "KINGSTON OM8TAP42048K1-A00",
+                "smart": {
+                  "mediaErrors": 0,
+                  "powerOnHours": 30,
+                  "criticalWarning": 0
+                },
+                "device": "/dev/nvme1n1",
+                "health": "PASSED",
+                "serial": "50026B73842AD86F",
+                "vendor": "unknown",
+                "wearout": 99,
+                "partitions": [
+                  {
+                    "pool": "tanka1",
+                    "size": 2048398458880,
+                    "holds": "zfs",
+                    "device": "/dev/nvme1n1p1"
+                  },
+                  {
+                    "size": 8388608,
+                    "holds": "zfs",
+                    "device": "/dev/nvme1n1p9"
+                  }
+                ],
+                "temperature": 30
+              }
+            ]
+          }
+        }
+      },
+      "source": "cmdb-controller",
+      "since": "2026-10-31T11:39:34.958Z"
+    },
+    "faulty": {
+      "value": false,
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    "memory": {
+      "value": 126431,
+      "source": "site-manager",
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    "nics": {
+      "value": [
+        {
+          "mac": "38:05:25:33:b5:f7",
+          "kind": "rj45",
+          "link": true,
+          "name": "enp97s0",
+          "speed": "10g",
+          "bridge": "lan",
+          "maxMbps": 10000,
+          "linkSpeed": "10g",
+          "operstate": "up"
+        },
+        {
+          "mac": "38:05:25:33:b5:f8",
+          "kind": "rj45",
+          "link": false,
+          "name": "enp98s0",
+          "speed": "10g",
+          "maxMbps": 10000,
+          "operstate": "down"
+        },
+        {
+          "mac": "0c:cd:b4:09:57:2d",
+          "kind": "wifi",
+          "link": false,
+          "name": "wlp99s0",
+          "operstate": "down"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T08:21:43.213Z"
+    },
+    "stage": {
+      "value": "operational",
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    }
+  },
+  "drift": {
+    "since": "2026-10-31T09:52:00.815Z",
+    "source": "sweep",
+    "desired": null,
+    "attributes": {
+      "disks": {
+        "now": [
+          {
+            "bus": "nvme",
+            "wwn": "eui.0026b73842ad86f5",
+            "name": "nvme-KINGSTON_OM8TAP42048K1-A00_50026B73842AD86F",
+            "size": 2048408248320,
+            "type": "nvme",
+            "holds": "nothing",
+            "model": "KINGSTON OM8TAP42048K1-A00",
+            "device": "/dev/nvme1n1",
+            "health": "PASSED",
+            "serial": "50026B73842AD86F",
+            "vendor": "unknown",
+            "partitions": [
+              {
+                "pool": "tanka1",
+                "size": 2048398458880,
+                "holds": "zfs",
+                "device": "/dev/nvme1n1p1"
+              },
+              {
+                "size": 8388608,
+                "holds": "zfs",
+                "device": "/dev/nvme1n1p9"
+              }
+            ]
+          },
+          {
+            "bus": "nvme",
+            "wwn": "eui.e8238fa6bf530001001b448b4f9c112f",
+            "name": "nvme-SanDisk_SSD_Plus_500GB_A3N_25414A800205",
+            "size": 500107862016,
+            "type": "nvme",
+            "holds": "nothing",
+            "model": "SanDisk SSD Plus 500GB A3N",
+            "device": "/dev/nvme0n1",
+            "health": "PASSED",
+            "serial": "25414A800205",
+            "vendor": "unknown",
+            "partitions": [
+              {
+                "size": 1031168,
+                "holds": "bios-boot",
+                "device": "/dev/nvme0n1p1"
+              },
+              {
+                "size": 1073741824,
+                "holds": "efi",
+                "device": "/dev/nvme0n1p2"
+              },
+              {
+                "size": 499033054720,
+                "holds": "lvm",
+                "device": "/dev/nvme0n1p3"
+              }
+            ]
+          }
+        ],
+        "was": [
+          {
+            "bus": "nvme",
+            "wwn": "eui.e8238fa6bf530001001b448b4f9c112f",
+            "name": "nvme-SanDisk_SSD_Plus_500GB_A3N_25414A800205",
+            "size": 500107862016,
+            "type": "nvme",
+            "holds": "nothing",
+            "model": "SanDisk SSD Plus 500GB A3N",
+            "smart": {
+              "mediaErrors": 0,
+              "powerOnHours": 6757,
+              "criticalWarning": 0
+            },
+            "device": "/dev/nvme0n1",
+            "health": "PASSED",
+            "serial": "25414A800205",
+            "vendor": "unknown",
+            "wearout": 100,
+            "partitions": [
+              {
+                "size": 1031168,
+                "holds": "bios-boot",
+                "device": "/dev/nvme0n1p1"
+              },
+              {
+                "size": 1073741824,
+                "holds": "efi",
+                "device": "/dev/nvme0n1p2"
+              },
+              {
+                "size": 499033054720,
+                "holds": "lvm",
+                "device": "/dev/nvme0n1p3"
+              }
+            ],
+            "temperature": 34
+          },
+          {
+            "bus": "nvme",
+            "wwn": "eui.0026b73842ad86f5",
+            "name": "nvme-KINGSTON_OM8TAP42048K1-A00_50026B73842AD86F",
+            "size": 2048408248320,
+            "type": "nvme",
+            "holds": "nothing",
+            "model": "KINGSTON OM8TAP42048K1-A00",
+            "smart": {
+              "mediaErrors": 0,
+              "powerOnHours": 30,
+              "criticalWarning": 0
+            },
+            "device": "/dev/nvme1n1",
+            "health": "PASSED",
+            "serial": "50026B73842AD86F",
+            "vendor": "unknown",
+            "wearout": 99,
+            "partitions": [
+              {
+                "pool": "tanka1",
+                "size": 2048398458880,
+                "holds": "zfs",
+                "device": "/dev/nvme1n1p1"
+              },
+              {
+                "size": 8388608,
+                "holds": "zfs",
+                "device": "/dev/nvme1n1p9"
+              }
+            ],
+            "temperature": 30
+          }
+        ]
+      }
+    }
+  },
+  "relations": [
+    {
+      "id": 458,
+      "type": "allocated-to",
+      "direction": "out",
+      "other": {
+        "id": "95727e8e-df12-468f-a03b-8b685140e223",
+        "class": "machine",
+        "name": "tappaas2"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.996Z"
+    },
+    {
+      "id": 616,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "86130453-5fd2-42af-a7f5-243394d2f326",
+        "class": "disk",
+        "name": "dsk-05"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    {
+      "id": 617,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "a8e0f401-3aee-4bca-9ce6-c6525368a758",
+        "class": "disk",
+        "name": "dsk-06"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    {
+      "id": 475,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "c753f38f-180a-457f-b15d-029d97025b84",
+        "class": "port",
+        "name": "enp97s0"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    {
+      "id": 476,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "ebaa8514-fc1a-4322-bcd2-a799b4a4044a",
+        "class": "port",
+        "name": "enp98s0"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    {
+      "id": 477,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "7029a2de-fbc8-4f5d-a5e0-de39de2a654a",
+        "class": "port",
+        "name": "wlp99s0"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    {
+      "id": 445,
+      "type": "placed-in",
+      "direction": "out",
+      "other": {
+        "id": "73a0f756-f569-4eaa-8508-bec8ac7ac791",
+        "class": "rack",
+        "name": "rack1"
+      },
+      "attributes": {
+        "u": 13,
+        "face": "front",
+        "slot": 0,
+        "width": "third",
+        "height": 6,
+        "faceplate": "generic/server-2u",
+        "description": "placeholder position, set by the operator"
+      },
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    }
+  ]
+}

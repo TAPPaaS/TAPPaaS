@@ -1,0 +1,126 @@
+{
+  "id": "74c60b8b-9bac-41ce-a397-b8b89da91611",
+  "class": "network-device",
+  "ancestors": [
+    "network-device",
+    "asset",
+    "resource",
+    "object"
+  ],
+  "name": "Nano HD",
+  "displayName": null,
+  "physical": true,
+  "recorded": false,
+  "created": "2026-10-30T12:58:05.487Z",
+  "ended": null,
+  "lastSeen": "2026-10-30T12:58:05.559Z",
+  "seen": {
+    "ap-manager": "2026-10-30T12:58:05.559Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "drift",
+          "since": "2026-10-31T00:04:27.092Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T00:04:27.092Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T07:25:02.913Z"
+    },
+    "deviceType": {
+      "value": "access-point",
+      "source": "ap-manager",
+      "since": "2026-10-30T12:58:05.487Z"
+    },
+    "drift": {
+      "value": {
+        "since": "2026-10-30T12:58:06.962Z",
+        "source": "sweep",
+        "desired": null,
+        "attributes": {
+          "→allocated-to device/Nano HD": {
+            "now": null,
+            "was": {}
+          }
+        }
+      },
+      "source": "cmdb-controller",
+      "since": "2026-10-30T14:34:19.677Z"
+    },
+    "model": {
+      "value": "U7NHD",
+      "source": "ap-manager",
+      "since": "2026-10-30T12:58:05.487Z"
+    },
+    "vendor": {
+      "value": "unifi",
+      "source": "ap-manager",
+      "since": "2026-10-30T12:58:05.487Z"
+    }
+  },
+  "drift": {
+    "since": "2026-10-30T12:58:06.962Z",
+    "source": "sweep",
+    "desired": null,
+    "attributes": {
+      "→allocated-to device/Nano HD": {
+        "now": null,
+        "was": {}
+      }
+    }
+  },
+  "relations": [
+    {
+      "id": 490,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "e287907f-b86d-4b90-802e-42365bb28aa5",
+        "class": "port",
+        "name": "uplink"
+      },
+      "attributes": {},
+      "source": "ap-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:05.487Z"
+    },
+    {
+      "id": 491,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "e993bbc6-eecb-41d3-a8ee-4d9edee3e3e3",
+        "class": "port",
+        "name": "wifi"
+      },
+      "attributes": {},
+      "source": "ap-manager",
+      "recorded": false,
+      "since": "2026-10-30T12:58:05.487Z"
+    }
+  ]
+}

@@ -1,0 +1,715 @@
+{
+ "id": "70cbf684-afaf-48d5-a47c-98f601213c89",
+ "class": "site",
+ "name": "t",
+ "created": "2026-10-30T20:08:08.704Z",
+ "ended": "2026-10-31T07:31:38.657Z",
+ "attributes": [
+  {
+   "name": "code",
+   "value": "t",
+   "source": "site-manager",
+   "change": 847,
+   "from": "2026-10-30T20:08:08.704Z",
+   "to": null
+  },
+  {
+   "name": "desired",
+   "value": {
+    "file": "site.json"
+   },
+   "source": "site-manager",
+   "change": 847,
+   "from": "2026-10-30T20:08:08.704Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "operational",
+   "source": "site-manager",
+   "change": 847,
+   "from": "2026-10-30T20:08:08.704Z",
+   "to": "2026-10-31T07:31:38.657Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T20:10:04.387Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "4 of 57 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:00:51.500Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-30T20:10:04.387Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "18 of 135 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:00:51.500Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T20:10:04.387Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "unknown",
+     "derived": true,
+     "message": "1 of 38 unknown",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:00:51.500Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T20:10:04.387Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "11 of 26 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:00:51.500Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T20:10:04.387Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "1 of 25 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:00:51.500Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 900,
+   "from": "2026-10-30T20:10:04.387Z",
+   "to": "2026-10-31T00:04:27.092Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T20:10:04.387Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "4 of 57 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:20:00.400Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "sweep-missing",
+     "source": "health-manager",
+     "status": "critical",
+     "derived": false,
+     "message": "site/t: desired without actual",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:20:00.400Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T20:10:04.387Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "unknown",
+     "derived": true,
+     "message": "1 of 38 unknown",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:20:00.400Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T20:10:04.387Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "11 of 26 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:20:00.400Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T20:10:04.387Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "1 of 25 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:20:00.400Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1080,
+   "from": "2026-10-31T00:04:27.092Z",
+   "to": "2026-10-31T01:25:00.149Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T20:10:04.387Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "4 of 57 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:25:00.149Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "sweep-missing",
+     "source": "health-manager",
+     "status": "critical",
+     "derived": false,
+     "message": "site/t: desired without actual",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:25:00.149Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-31T01:25:00.149Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "critical",
+     "derived": true,
+     "message": "1 of 38 critical",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:25:00.149Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T20:10:04.387Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "11 of 26 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:25:00.149Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T20:10:04.387Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "1 of 25 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:25:00.149Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1145,
+   "from": "2026-10-31T01:25:00.149Z",
+   "to": "2026-10-31T01:30:00.159Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T20:10:04.387Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "4 of 57 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:20:12.904Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "sweep-missing",
+     "source": "health-manager",
+     "status": "critical",
+     "derived": false,
+     "message": "site/t: desired without actual",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:20:12.904Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-31T01:30:00.159Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "unknown",
+     "derived": true,
+     "message": "1 of 38 unknown",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:20:12.904Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T20:10:04.387Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "11 of 26 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:20:12.904Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T20:10:04.387Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "1 of 25 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:20:12.904Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1150,
+   "from": "2026-10-31T01:30:00.159Z",
+   "to": "2026-10-31T07:25:02.913Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T20:10:04.387Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "4 of 57 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:25:02.913Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "sweep-missing",
+     "source": "health-manager",
+     "status": "critical",
+     "derived": false,
+     "message": "site/t: desired without actual",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:25:02.913Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-31T01:30:00.159Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "unknown",
+     "derived": true,
+     "message": "1 of 38 unknown",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:25:02.913Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T20:10:04.387Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "11 of 26 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:25:02.913Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T20:10:04.387Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "1 of 25 warning",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:25:02.913Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": true,
+     "message": "23 of 23 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:25:02.913Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1355,
+   "from": "2026-10-31T07:25:02.913Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "retired",
+   "source": "site-manager",
+   "change": 1380,
+   "from": "2026-10-31T07:31:38.657Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 590,
+   "type": "at",
+   "direction": "out",
+   "other": {
+    "id": "ce79bde5-a80c-4ccf-9281-f78d5da43c78",
+    "class": "location",
+    "name": "rodovre"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 847,
+   "from": "2026-10-30T20:08:08.704Z",
+   "to": "2026-10-30T20:08:09.184Z"
+  },
+  {
+   "id": 591,
+   "type": "at",
+   "direction": "out",
+   "other": {
+    "id": "89b7c866-8cdc-45bc-887e-54bccf2302b9",
+    "class": "location",
+    "name": "hareskov"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 852,
+   "from": "2026-10-30T20:08:09.184Z",
+   "to": "2026-10-30T20:08:09.272Z"
+  },
+  {
+   "id": 592,
+   "type": "at",
+   "direction": "out",
+   "other": {
+    "id": "215c42cf-cb9e-4e6f-9791-2db89c623481",
+    "class": "location",
+    "name": "t"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 854,
+   "from": "2026-10-30T20:08:09.272Z",
+   "to": "2026-10-30T20:08:42.965Z"
+  },
+  {
+   "id": 593,
+   "type": "at",
+   "direction": "out",
+   "other": {
+    "id": "ce79bde5-a80c-4ccf-9281-f78d5da43c78",
+    "class": "location",
+    "name": "rodovre"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 891,
+   "from": "2026-10-30T20:08:42.965Z",
+   "to": "2026-10-30T20:08:43.442Z"
+  },
+  {
+   "id": 594,
+   "type": "at",
+   "direction": "out",
+   "other": {
+    "id": "89b7c866-8cdc-45bc-887e-54bccf2302b9",
+    "class": "location",
+    "name": "hareskov"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 896,
+   "from": "2026-10-30T20:08:43.442Z",
+   "to": "2026-10-30T20:08:43.527Z"
+  },
+  {
+   "id": 595,
+   "type": "at",
+   "direction": "out",
+   "other": {
+    "id": "215c42cf-cb9e-4e6f-9791-2db89c623481",
+    "class": "location",
+    "name": "t"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 898,
+   "from": "2026-10-30T20:08:43.527Z",
+   "to": "2026-10-30T20:18:28.805Z"
+  },
+  {
+   "id": 596,
+   "type": "at",
+   "direction": "out",
+   "other": {
+    "id": "ce79bde5-a80c-4ccf-9281-f78d5da43c78",
+    "class": "location",
+    "name": "rodovre"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 934,
+   "from": "2026-10-30T20:18:28.805Z",
+   "to": "2026-10-30T20:18:29.322Z"
+  },
+  {
+   "id": 597,
+   "type": "at",
+   "direction": "out",
+   "other": {
+    "id": "89b7c866-8cdc-45bc-887e-54bccf2302b9",
+    "class": "location",
+    "name": "hareskov"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 939,
+   "from": "2026-10-30T20:18:29.322Z",
+   "to": "2026-10-30T20:18:29.414Z"
+  },
+  {
+   "id": 598,
+   "type": "at",
+   "direction": "out",
+   "other": {
+    "id": "215c42cf-cb9e-4e6f-9791-2db89c623481",
+    "class": "location",
+    "name": "t"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 941,
+   "from": "2026-10-30T20:18:29.414Z",
+   "to": "2026-10-31T07:31:38.657Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 847,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "location add hetzner-fsn1",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:08:08.704Z",
+   "drift": false
+  },
+  {
+   "id": 852,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "site modify",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:08:09.184Z",
+   "drift": false
+  },
+  {
+   "id": 854,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "site modify",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:08:09.272Z",
+   "drift": false
+  },
+  {
+   "id": 891,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "location add hetzner-fsn1",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:08:42.965Z",
+   "drift": false
+  },
+  {
+   "id": 896,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "site modify",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:08:43.442Z",
+   "drift": false
+  },
+  {
+   "id": 898,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "site modify",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:08:43.527Z",
+   "drift": false
+  },
+  {
+   "id": 900,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T20:10:04.387Z",
+   "drift": false
+  },
+  {
+   "id": 934,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "location add hetzner-fsn1",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:18:28.805Z",
+   "drift": false
+  },
+  {
+   "id": 939,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "site modify",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:18:29.322Z",
+   "drift": false
+  },
+  {
+   "id": 941,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "site modify",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:18:29.414Z",
+   "drift": false
+  },
+  {
+   "id": 1080,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T00:04:27.092Z",
+   "drift": false
+  },
+  {
+   "id": 1145,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T01:25:00.149Z",
+   "drift": false
+  },
+  {
+   "id": 1150,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T01:30:00.159Z",
+   "drift": false
+  },
+  {
+   "id": 1355,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:25:02.913Z",
+   "drift": false
+  },
+  {
+   "id": 1380,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "end test fixtures 2026-10-31",
+   "actor": null,
+   "time": "2026-10-31T07:31:38.657Z",
+   "drift": false
+  }
+ ]
+}

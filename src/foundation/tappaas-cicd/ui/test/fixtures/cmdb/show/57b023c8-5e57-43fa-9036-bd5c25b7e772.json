@@ -1,0 +1,27 @@
+{
+  "id": "57b023c8-5e57-43fa-9036-bd5c25b7e772",
+  "class": "node",
+  "ancestors": [
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "ap-loft",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T19:34:52.800Z",
+  "ended": null,
+  "lastSeen": null,
+  "seen": {},
+  "at": null,
+  "attributes": {
+    "placeholder": {
+      "value": true,
+      "source": "asset-manager",
+      "since": "2026-10-30T19:34:52.800Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

@@ -1,0 +1,9 @@
+{
+  "name": "forgejo-admins",
+  "origin": "module forgejo",
+  "declaredBy": {
+    "file": "forgejo.json",
+    "key": "identity"
+  },
+  "editable": false
+}

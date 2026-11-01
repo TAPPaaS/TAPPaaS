@@ -1,0 +1,163 @@
+{
+  "id": "a2187b22-c7d1-431f-a9d3-f1d0a1320862",
+  "class": "disk",
+  "ancestors": [
+    "disk",
+    "resource",
+    "object"
+  ],
+  "name": "dsk-10",
+  "displayName": "ata-MTFDDAK256MAM-1K12_13180938FDB1",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-31T09:50:50.296Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.621Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.173Z",
+    "asset-manager": "2026-11-01T08:52:20.621Z"
+  },
+  "at": null,
+  "attributes": {
+    "bay": {
+      "value": "ata-MTFDDAK256MAM-1K12_13180938FDB1",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "bus": {
+      "value": "sata",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T09:52:08.978Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "dsk-10 (ata-MTFDDAK256MAM-1K12_13180938FDB1): health PASSED",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T09:52:08.978Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T09:52:08.978Z"
+    },
+    "displayName": {
+      "value": "ata-MTFDDAK256MAM-1K12_13180938FDB1",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "faulty": {
+      "value": false,
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "health": {
+      "value": "PASSED",
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "holds": {
+      "value": "nothing",
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "kind": {
+      "value": "ssd",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "model": {
+      "value": "MTFDDAK256MAM-1K12",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "partitions": {
+      "value": [
+        {
+          "size": 1031168,
+          "holds": "bios-boot",
+          "device": "/dev/sdc1"
+        },
+        {
+          "size": 1073741824,
+          "holds": "efi",
+          "device": "/dev/sdc2"
+        },
+        {
+          "size": 254985707008,
+          "holds": "lvm",
+          "device": "/dev/sdc3"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "serial": {
+      "value": "13180938FDB1",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "size": {
+      "value": 256060514304,
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "smart": {
+      "value": {
+        "pending": 0,
+        "reallocated": 0,
+        "powerOnHours": 1175,
+        "uncorrectable": 0
+      },
+      "source": "site-manager",
+      "since": "2026-11-01T00:01:17.336Z"
+    },
+    "stage": {
+      "value": "placed",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "wearout": {
+      "value": 95,
+      "source": "site-manager",
+      "since": "2026-10-31T09:52:00.815Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 621,
+      "type": "part-of",
+      "direction": "out",
+      "other": {
+        "id": "a82f521b-2cc5-45a5-9cde-aac82a64ee45",
+        "class": "server",
+        "name": "srv-03"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T09:50:50.296Z"
+    }
+  ]
+}

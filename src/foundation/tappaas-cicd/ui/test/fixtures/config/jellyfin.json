@@ -1,0 +1,110 @@
+{
+  "description": "Jellyfin open-source media server for personal movie, TV and music libraries.",
+  "version": "0.3.0",
+  "releaseDate": "2026-06-27",
+  "installTime": "20261005-21:09:45",
+  "updateTime": "20261101-02:37:27",
+  "maintainer": "@AndreasJe",
+  "status": "Testing",
+  "rebootOk": true,
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/home/jellyfin",
+  "environment": "rossen",
+  "vmname": "jellyfin",
+  "vmid": 360,
+  "vmtag": "TAPPaaS,App,Media",
+  "node": "tappaas1",
+  "zone0": "rossen",
+  "dependsOn": [
+    "cluster:vm",
+    "backup:vm",
+    "network:proxy",
+    "network:rules",
+    "storage:nfs",
+    "templates:nixos",
+    "identity:identity"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "provides": [],
+  "appVersion": "12.2",
+  "displayName": "Jellyfin",
+  "stack": "home",
+  "config": {
+    "backup:vm": {
+      "backup": {
+        "enabled": true,
+        "exclude": [],
+        "retention": "7y"
+      }
+    },
+    "cluster:vm": {
+      "bios": "ovmf",
+      "cores": 4,
+      "memory": 2048,
+      "diskSize": "32G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "identity:identity": {
+      "identity": {
+        "adminGroupClaim": "admin",
+        "configureService": "jellyfin-configure-oidc.service",
+        "launchPath": "/sso/OID/start/authentik",
+        "oidcRedirectPaths": [
+          "/sso/OID/redirect/authentik"
+        ],
+        "providesAdminRole": true,
+        "scopes": [
+          "openid",
+          "email",
+          "profile"
+        ]
+      }
+    },
+    "storage:nfs": {
+      "mounts": [
+        {
+          "path": "/media",
+          "share": "media",
+          "subdir": "jellyfin",
+          "access": "rw",
+          "stopUnits": [
+            "jellyfin.service"
+          ]
+        }
+      ]
+    },
+    "network:proxy": {
+      "proxyPort": 8096,
+      "proxyPreserveHost": "true",
+      "proxyAllowedZones": [
+        "home",
+        "netbird",
+        "internet"
+      ],
+      "proxyAccess": [
+        {
+          "paths": [
+            "/metrics*",
+            "/Startup/*",
+            "/System/Restart",
+            "/System/Shutdown",
+            "/System/Logs*",
+            "/Packages*",
+            "/Repositories*",
+            "/ScheduledTasks*",
+            "/Auth/Keys*"
+          ],
+          "zones": [
+            "home",
+            "netbird"
+          ]
+        }
+      ]
+    }
+  }
+}

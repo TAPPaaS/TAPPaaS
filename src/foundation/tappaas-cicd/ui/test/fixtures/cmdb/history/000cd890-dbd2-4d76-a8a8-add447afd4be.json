@@ -1,0 +1,104 @@
+{
+ "id": "000cd890-dbd2-4d76-a8a8-add447afd4be",
+ "class": "other-device",
+ "name": "adr040-probe2",
+ "created": "2026-10-30T09:00:56.772Z",
+ "ended": "2026-10-31T07:32:01.329Z",
+ "attributes": [
+  {
+   "name": "faulty",
+   "value": false,
+   "source": "asset-manager",
+   "change": 105,
+   "from": "2026-10-30T09:00:56.772Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "stock",
+   "source": "asset-manager",
+   "change": 105,
+   "from": "2026-10-30T09:00:56.772Z",
+   "to": "2026-10-31T07:32:01.329Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:30:02.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1355,
+   "from": "2026-10-31T07:25:02.913Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "disposed",
+   "source": "asset-manager",
+   "change": 1384,
+   "from": "2026-10-31T07:32:01.329Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 486,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "bdd74681-e9c1-4441-a568-64acdbfa5544",
+    "class": "port",
+    "name": "1"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 105,
+   "from": "2026-10-30T09:00:56.772Z",
+   "to": "2026-10-31T07:32:01.329Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 105,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261030090049-0bf969",
+   "verb": "asset add",
+   "actor": "lars",
+   "time": "2026-10-30T09:00:56.772Z",
+   "drift": false
+  },
+  {
+   "id": 1355,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:25:02.913Z",
+   "drift": false
+  },
+  {
+   "id": 1384,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "end test fixtures 2026-10-31",
+   "actor": null,
+   "time": "2026-10-31T07:32:01.329Z",
+   "drift": false
+  }
+ ]
+}

@@ -1,0 +1,384 @@
+{
+  "module": "jellyfin",
+  "dependsOn": [
+    "cluster:vm",
+    "backup:vm",
+    "network:proxy",
+    "network:rules",
+    "storage:nfs",
+    "templates:nixos",
+    "identity:identity"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "fields": {
+    "aliasType": {
+      "value": "host",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "appVersion": {
+      "value": "12.2",
+      "defaulted": false,
+      "literal": "12.2",
+      "notTracking": false
+    },
+    "autoInstall": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "backup": {
+      "value": "{\"enabled\":true,\"exclude\":[],\"retention\":\"7y\"}",
+      "defaulted": false,
+      "literal": "{\"enabled\":true,\"exclude\":[],\"retention\":\"7y\"}",
+      "notTracking": true
+    },
+    "bios": {
+      "value": "ovmf",
+      "defaulted": false,
+      "literal": "ovmf",
+      "notTracking": true
+    },
+    "bridge0": {
+      "value": "lan",
+      "defaulted": false,
+      "literal": "lan",
+      "notTracking": false
+    },
+    "bridge1": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "cloudInit": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "cores": {
+      "value": "4",
+      "defaulted": false,
+      "literal": "4",
+      "notTracking": false
+    },
+    "cputype": {
+      "value": "host",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "dependsOn": {
+      "value": "[\"cluster:vm\",\"backup:vm\",\"network:proxy\",\"network:rules\",\"storage:nfs\",\"templates:nixos\",\"identity:identity\"]",
+      "defaulted": false,
+      "literal": "[\"cluster:vm\",\"backup:vm\",\"network:proxy\",\"network:rules\",\"storage:nfs\",\"templates:nixos\",\"identity:identity\"]",
+      "notTracking": false
+    },
+    "description": {
+      "value": "Jellyfin open-source media server for personal movie, TV and music libraries.",
+      "defaulted": false,
+      "literal": "Jellyfin open-source media server for personal movie, TV and music libraries.",
+      "notTracking": false
+    },
+    "diskAutoGrow": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "diskSize": {
+      "value": "32G",
+      "defaulted": false,
+      "literal": "32G",
+      "notTracking": false
+    },
+    "displayName": {
+      "value": "Jellyfin",
+      "defaulted": false,
+      "literal": "Jellyfin",
+      "notTracking": false
+    },
+    "environment": {
+      "value": "rossen",
+      "defaulted": false,
+      "literal": "rossen",
+      "notTracking": true
+    },
+    "firewallType": {
+      "value": "opnsense",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "identity": {
+      "value": "{\"adminGroupClaim\":\"admin\",\"configureService\":\"jellyfin-configure-oidc.service\",\"launchPath\":\"/sso/OID/start/authentik\",\"oidcRedirectPaths\":[\"/sso/OID/redirect/authentik\"],\"providesAdminRole\":true,\"scopes\":[\"openid\",\"email\",\"profile\"]}",
+      "defaulted": false,
+      "literal": "{\"adminGroupClaim\":\"admin\",\"configureService\":\"jellyfin-configure-oidc.service\",\"launchPath\":\"/sso/OID/start/authentik\",\"oidcRedirectPaths\":[\"/sso/OID/redirect/authentik\"],\"providesAdminRole\":true,\"scopes\":[\"openid\",\"email\",\"profile\"]}",
+      "notTracking": true
+    },
+    "image": {
+      "value": "8080",
+      "defaulted": false,
+      "literal": "8080",
+      "notTracking": false
+    },
+    "imageType": {
+      "value": "clone",
+      "defaulted": false,
+      "literal": "clone",
+      "notTracking": false
+    },
+    "installTime": {
+      "value": "20261005-21:09:45",
+      "defaulted": false,
+      "literal": "20261005-21:09:45",
+      "notTracking": true
+    },
+    "integratesWith": {
+      "value": "[\"logging:logs\"]",
+      "defaulted": false,
+      "literal": "[\"logging:logs\"]",
+      "notTracking": false
+    },
+    "kind": {
+      "value": "vm",
+      "defaulted": false,
+      "literal": "vm",
+      "notTracking": false
+    },
+    "maintainer": {
+      "value": "@AndreasJe",
+      "defaulted": false,
+      "literal": "@AndreasJe",
+      "notTracking": false
+    },
+    "management": {
+      "value": "managed",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "memory": {
+      "value": "2048",
+      "defaulted": false,
+      "literal": "2048",
+      "notTracking": false
+    },
+    "moduleSource": {
+      "value": "/home/tappaas/TAPPaaS/src/home/jellyfin",
+      "defaulted": false,
+      "literal": "/home/tappaas/TAPPaaS/src/home/jellyfin",
+      "notTracking": true
+    },
+    "mounts": {
+      "value": "[{\"path\":\"/media\",\"share\":\"media\",\"subdir\":\"jellyfin\",\"access\":\"rw\",\"stopUnits\":[\"jellyfin.service\"]}]",
+      "defaulted": false,
+      "literal": "[{\"path\":\"/media\",\"share\":\"media\",\"subdir\":\"jellyfin\",\"access\":\"rw\",\"stopUnits\":[\"jellyfin.service\"]}]",
+      "notTracking": false
+    },
+    "node": {
+      "value": "tappaas1",
+      "defaulted": false,
+      "literal": "tappaas1",
+      "notTracking": false
+    },
+    "ostype": {
+      "value": "l26",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pauseOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pausePriority": {
+      "value": "50",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pbsStorageName": {
+      "value": "tappaas_backup",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pbsUrl": {
+      "value": "backup.mgmt.internal",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "portSync": {
+      "value": "on",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "provides": {
+      "value": "[]",
+      "defaulted": false,
+      "literal": "[]",
+      "notTracking": false
+    },
+    "proxyAccess": {
+      "value": "[{\"paths\":[\"/metrics*\",\"/Startup/*\",\"/System/Restart\",\"/System/Shutdown\",\"/System/Logs*\",\"/Packages*\",\"/Repositories*\",\"/ScheduledTasks*\",\"/Auth/Keys*\"],\"zones\":[\"home\",\"netbird\"]}]",
+      "defaulted": false,
+      "literal": "[{\"paths\":[\"/metrics*\",\"/Startup/*\",\"/System/Restart\",\"/System/Shutdown\",\"/System/Logs*\",\"/Packages*\",\"/Repositories*\",\"/ScheduledTasks*\",\"/Auth/Keys*\"],\"zones\":[\"home\",\"netbird\"]}]",
+      "notTracking": false
+    },
+    "proxyAllowedZones": {
+      "value": "[\"home\",\"netbird\",\"internet\"]",
+      "defaulted": false,
+      "literal": "[\"home\",\"netbird\",\"internet\"]",
+      "notTracking": false
+    },
+    "proxyPort": {
+      "value": "8096",
+      "defaulted": false,
+      "literal": "8096",
+      "notTracking": false
+    },
+    "proxyPreserveHost": {
+      "value": "true",
+      "defaulted": false,
+      "literal": "true",
+      "notTracking": false
+    },
+    "proxyUpstreamHttp1": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "proxyUpstreamTls": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "rebootOk": {
+      "value": "true",
+      "defaulted": false,
+      "literal": "true",
+      "notTracking": false
+    },
+    "releaseDate": {
+      "value": "2026-06-27",
+      "defaulted": false,
+      "literal": "2026-06-27",
+      "notTracking": false
+    },
+    "source": {
+      "value": "official",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "sshAccess": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "sshKeyOnly": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "stack": {
+      "value": "home",
+      "defaulted": false,
+      "literal": "home",
+      "notTracking": false
+    },
+    "status": {
+      "value": "Testing",
+      "defaulted": false,
+      "literal": "Testing",
+      "notTracking": false
+    },
+    "storage": {
+      "value": "tanka1",
+      "defaulted": false,
+      "literal": "tanka1",
+      "notTracking": false
+    },
+    "suspended": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "suspendedNoUpdate": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "trunks0": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "trunks1": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "updateTime": {
+      "value": "20261101-02:37:27",
+      "defaulted": false,
+      "literal": "20261101-02:37:27",
+      "notTracking": true
+    },
+    "version": {
+      "value": "0.3.0",
+      "defaulted": false,
+      "literal": "0.3.0",
+      "notTracking": false
+    },
+    "vmid": {
+      "value": "360",
+      "defaulted": false,
+      "literal": "360",
+      "notTracking": false
+    },
+    "vmname": {
+      "value": "jellyfin",
+      "defaulted": false,
+      "literal": "jellyfin",
+      "notTracking": false
+    },
+    "vmtag": {
+      "value": "TAPPaaS,App,Media",
+      "defaulted": false,
+      "literal": "TAPPaaS,App,Media",
+      "notTracking": false
+    },
+    "zone0": {
+      "value": "rossen",
+      "defaulted": false,
+      "literal": "rossen",
+      "notTracking": true
+    },
+    "zone1": {
+      "value": "mgmt",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    }
+  },
+  "origAvailable": true
+}

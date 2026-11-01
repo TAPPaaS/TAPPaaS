@@ -1,0 +1,389 @@
+{
+ "id": "86130453-5fd2-42af-a7f5-243394d2f326",
+ "class": "disk",
+ "name": "dsk-05",
+ "created": "2026-10-31T09:50:50.296Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "stage",
+   "value": "placed",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "health",
+   "value": "PASSED",
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  },
+  {
+   "name": "holds",
+   "value": "nothing",
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  },
+  {
+   "name": "partitions",
+   "value": [
+    {
+     "size": 1031168,
+     "holds": "bios-boot",
+     "device": "/dev/nvme0n1p1"
+    },
+    {
+     "size": 1073741824,
+     "holds": "efi",
+     "device": "/dev/nvme0n1p2"
+    },
+    {
+     "size": 499033054720,
+     "holds": "lvm",
+     "device": "/dev/nvme0n1p3"
+    }
+   ],
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  },
+  {
+   "name": "smart",
+   "value": {
+    "mediaErrors": 0,
+    "powerOnHours": 6756,
+    "criticalWarning": 0
+   },
+   "source": "site-manager",
+   "change": 2276,
+   "from": "2026-10-31T09:52:00.815Z",
+   "to": "2026-10-31T10:59:06.348Z"
+  },
+  {
+   "name": "temperature",
+   "value": 34,
+   "source": "site-manager",
+   "change": 2276,
+   "from": "2026-10-31T09:52:00.815Z",
+   "to": "2026-10-31T15:07:49.679Z"
+  },
+  {
+   "name": "wearout",
+   "value": 100,
+   "source": "site-manager",
+   "change": 2276,
+   "from": "2026-10-31T09:52:00.815Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T09:52:08.978Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "dsk-05 (nvme-SanDisk_SSD_Plus_500GB_A3N_25414A800205): health PASSED",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T09:52:08.978Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 2316,
+   "from": "2026-10-31T09:52:08.978Z",
+   "to": null
+  },
+  {
+   "name": "smart",
+   "value": {
+    "mediaErrors": 0,
+    "powerOnHours": 6757,
+    "criticalWarning": 0
+   },
+   "source": "site-manager",
+   "change": 2802,
+   "from": "2026-10-31T10:59:06.348Z",
+   "to": "2026-10-31T15:07:49.679Z"
+  },
+  {
+   "name": "smart",
+   "value": {
+    "mediaErrors": 0,
+    "powerOnHours": 6761,
+    "criticalWarning": 0
+   },
+   "source": "site-manager",
+   "change": 4382,
+   "from": "2026-10-31T15:07:49.679Z",
+   "to": "2026-10-31T16:34:36.034Z"
+  },
+  {
+   "name": "temperature",
+   "value": 33,
+   "source": "site-manager",
+   "change": 4382,
+   "from": "2026-10-31T15:07:49.679Z",
+   "to": "2026-10-31T16:38:48.885Z"
+  },
+  {
+   "name": "smart",
+   "value": {
+    "mediaErrors": 0,
+    "powerOnHours": 6762,
+    "criticalWarning": 0
+   },
+   "source": "site-manager",
+   "change": 4982,
+   "from": "2026-10-31T16:34:36.034Z",
+   "to": "2026-11-01T00:01:17.336Z"
+  },
+  {
+   "name": "temperature",
+   "value": 34,
+   "source": "site-manager",
+   "change": 5050,
+   "from": "2026-10-31T16:38:48.885Z",
+   "to": "2026-11-01T00:01:17.336Z"
+  },
+  {
+   "name": "smart",
+   "value": {
+    "mediaErrors": 0,
+    "powerOnHours": 6770,
+    "criticalWarning": 0
+   },
+   "source": "site-manager",
+   "change": 7841,
+   "from": "2026-11-01T00:01:17.336Z",
+   "to": "2026-11-01T07:46:08.132Z"
+  },
+  {
+   "name": "temperature",
+   "value": 33,
+   "source": "site-manager",
+   "change": 7841,
+   "from": "2026-11-01T00:01:17.336Z",
+   "to": "2026-11-01T08:02:33.034Z"
+  },
+  {
+   "name": "smart",
+   "value": {
+    "mediaErrors": 0,
+    "powerOnHours": 6777,
+    "criticalWarning": 0
+   },
+   "source": "site-manager",
+   "change": 10723,
+   "from": "2026-11-01T07:46:08.132Z",
+   "to": "2026-11-01T08:02:33.034Z"
+  },
+  {
+   "name": "smart",
+   "value": {
+    "mediaErrors": 0,
+    "powerOnHours": 6778,
+    "criticalWarning": 0
+   },
+   "source": "site-manager",
+   "change": 10885,
+   "from": "2026-11-01T08:02:33.034Z",
+   "to": null
+  },
+  {
+   "name": "temperature",
+   "value": 34,
+   "source": "site-manager",
+   "change": 10885,
+   "from": "2026-11-01T08:02:33.034Z",
+   "to": "2026-11-01T08:27:46.806Z"
+  },
+  {
+   "name": "temperature",
+   "value": 33,
+   "source": "site-manager",
+   "change": 11077,
+   "from": "2026-11-01T08:27:46.806Z",
+   "to": "2026-11-01T08:32:03.130Z"
+  },
+  {
+   "name": "temperature",
+   "value": 34,
+   "source": "site-manager",
+   "change": 11119,
+   "from": "2026-11-01T08:32:03.130Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 616,
+   "type": "part-of",
+   "direction": "out",
+   "other": {
+    "id": "131e6e02-127d-4b9f-a02a-0582772e681d",
+    "class": "server",
+    "name": "srv-02"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 2240,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "disk adopt",
+   "actor": "tappaas",
+   "time": "2026-10-31T09:50:50.296Z",
+   "drift": false
+  },
+  {
+   "id": 2241,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:51:07.157Z",
+   "drift": true
+  },
+  {
+   "id": 2276,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:52:00.815Z",
+   "drift": true
+  },
+  {
+   "id": 2316,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:52:08.978Z",
+   "drift": false
+  },
+  {
+   "id": 2802,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T10:59:06.348Z",
+   "drift": true
+  },
+  {
+   "id": 4382,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T15:07:49.679Z",
+   "drift": false
+  },
+  {
+   "id": 4982,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T16:34:36.034Z",
+   "drift": false
+  },
+  {
+   "id": 5050,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T16:38:48.885Z",
+   "drift": false
+  },
+  {
+   "id": 7841,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T00:01:17.336Z",
+   "drift": false
+  },
+  {
+   "id": 10723,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:46:08.132Z",
+   "drift": false
+  },
+  {
+   "id": 10885,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:02:33.034Z",
+   "drift": false
+  },
+  {
+   "id": 11077,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:27:46.806Z",
+   "drift": false
+  },
+  {
+   "id": 11119,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:32:03.130Z",
+   "drift": false
+  }
+ ]
+}

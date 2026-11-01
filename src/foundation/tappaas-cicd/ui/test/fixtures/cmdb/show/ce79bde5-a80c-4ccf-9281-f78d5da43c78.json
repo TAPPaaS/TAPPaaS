@@ -1,0 +1,81 @@
+{
+  "id": "ce79bde5-a80c-4ccf-9281-f78d5da43c78",
+  "class": "location",
+  "ancestors": [
+    "location",
+    "place",
+    "object"
+  ],
+  "name": "rodovre",
+  "displayName": "Rødovre",
+  "physical": true,
+  "recorded": false,
+  "created": "2026-10-30T20:08:06.511Z",
+  "ended": "2026-10-31T07:31:38.657Z",
+  "lastSeen": "2026-10-31T07:31:38.657Z",
+  "seen": {
+    "site-manager": "2026-10-31T07:31:38.657Z"
+  },
+  "at": null,
+  "attributes": {
+    "address": {
+      "value": "Rack 2",
+      "source": "site-manager",
+      "since": "2026-10-30T20:08:08.704Z"
+    },
+    "city": {
+      "value": "Rodovre",
+      "source": "site-manager",
+      "since": "2026-10-30T20:08:06.511Z"
+    },
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T00:00:51.500Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T00:00:51.500Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T00:00:51.500Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T00:00:51.500Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T00:04:27.092Z"
+    },
+    "country": {
+      "value": "DK",
+      "source": "site-manager",
+      "since": "2026-10-30T20:08:06.511Z"
+    },
+    "displayName": {
+      "value": "Rødovre",
+      "source": "site-manager",
+      "since": "2026-10-30T20:08:06.511Z"
+    },
+    "timezone": {
+      "value": "Europe/Copenhagen",
+      "source": "site-manager",
+      "since": "2026-10-30T20:08:06.511Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

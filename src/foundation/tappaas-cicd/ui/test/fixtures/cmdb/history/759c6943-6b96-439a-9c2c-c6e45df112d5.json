@@ -1,0 +1,71 @@
+{
+ "id": "759c6943-6b96-439a-9c2c-c6e45df112d5",
+ "class": "node",
+ "name": "mtA",
+ "created": "2026-10-30T19:34:08.251Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "placeholder",
+   "value": true,
+   "source": "asset-manager",
+   "change": 736,
+   "from": "2026-10-30T19:34:08.251Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 563,
+   "type": "allocated-to",
+   "direction": "in",
+   "other": {
+    "id": "8d4cbe0c-caa1-4e3f-a5ff-0e6863b98c10",
+    "class": "network-device",
+    "name": "sw-06"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 736,
+   "from": "2026-10-30T19:34:08.251Z",
+   "to": "2026-10-30T20:07:06.589Z"
+  },
+  {
+   "id": 587,
+   "type": "allocated-to",
+   "direction": "in",
+   "other": {
+    "id": "8d4cbe0c-caa1-4e3f-a5ff-0e6863b98c10",
+    "class": "network-device",
+    "name": "sw-06"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 818,
+   "from": "2026-10-30T20:07:12.547Z",
+   "to": "2026-10-31T07:32:01.329Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 736,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset allocate",
+   "actor": "tappaas",
+   "time": "2026-10-30T19:34:08.251Z",
+   "drift": false
+  },
+  {
+   "id": 818,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset allocate",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:07:12.547Z",
+   "drift": false
+  }
+ ]
+}

@@ -1,0 +1,2346 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "module-fields.json",
+  "title": "TAPPaaS Module Field Definitions",
+  "description": "Defines the structure and valid values for module configuration JSON files (e.g., myModule.json)",
+  "fieldOrder": [
+    "description",
+    "version",
+    "releaseDate",
+    "installTime",
+    "updateTime",
+    "maintainer",
+    "status",
+    "rebootOk",
+    "sshKeyOnly",
+    "tier",
+    "kind",
+    "management",
+    "source",
+    "moduleSource",
+    "location",
+    "variant",
+    "environment",
+    "vmname",
+    "vmid",
+    "vmtag",
+    "node",
+    "bios",
+    "ostype",
+    "cputype",
+    "cores",
+    "memory",
+    "swap",
+    "diskSize",
+    "storage",
+    "placementState",
+    "pushTarget",
+    "immutableSnapshots",
+    "pbsStorageName",
+    "pbsUrl",
+    "alwaysBackup",
+    "backup",
+    "imageType",
+    "image",
+    "imageLocation",
+    "imageSha256",
+    "os",
+    "cloudInit",
+    "sshAccess",
+    "autoInstall",
+    "HANode",
+    "replicationSchedule",
+    "bridge0",
+    "mac0",
+    "zone0",
+    "trunks0",
+    "bridge1",
+    "mac1",
+    "zone1",
+    "address",
+    "physicalLocation",
+    "uplinks",
+    "storagePools",
+    "bootDisks",
+    "trunks1",
+    "firewallType",
+    "aliasType",
+    "ip",
+    "publicDomain",
+    "proxyDomain",
+    "proxyPort",
+    "proxyUpstreamTls",
+    "proxyUpstreamHttp1",
+    "proxyPreserveHost",
+    "proxyTls",
+    "proxyAllowedZones",
+    "proxyAccess",
+    "proxyRoutes",
+    "discoveryMdns",
+    "discoveryUdpRelay",
+    "ports",
+    "ingress",
+    "egress",
+    "aliases",
+    "natRules",
+    "dependsOn",
+    "integratesWith",
+    "provides",
+    "controllers",
+    "managers"
+  ],
+  "fields": {
+    "suspended": {
+      "description": "The module is paused: its guest is stopped on purpose by 'module-manager suspend' and stays so until 'module-manager resume'. The health check reports it as suspended, not down; the nightly update still patches it after every other module — resumed, updated and suspended again — unless suspendedNoUpdate is set. Written by those two verbs only.",
+      "type": "boolean",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": false,
+      "example": true
+    },
+    "pauseOk": {
+      "description": "May the nightly update suspend this module for a while to make room on a node that is too full — to patch a suspended module, or to move guests off a node it reboots (#891)? Only in the maintenance window (automaticReboot, or --allow-disruption), lowest pausePriority first; the update resumes it once every module is patched and the nodes are rebooted. A foundation module is never paused.",
+      "type": "boolean",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": false,
+      "example": true
+    },
+    "pausePriority": {
+      "description": "Among pauseOk modules, which the update suspends first when it needs room (#891): the lowest number first; equal numbers, the largest memory first.",
+      "type": "integer",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": 50,
+      "example": 10
+    },
+    "suspendedNoUpdate": {
+      "description": "A suspended module the nightly update leaves alone: 'module-manager suspend --no-update' sets it, for a module stopped because it is broken, and 'resume' clears it. Without it a suspended module is patched in the update's closing pass (#890).",
+      "type": "boolean",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": false,
+      "example": true
+    },
+    "displayName": {
+      "description": "The module's name as people see it — the tile on the identity start page (My applications), for example \"Forgejo\" for forgejo. Not declared: the module name.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": "",
+      "example": "Open WebUI"
+    },
+    "icon": {
+      "description": "The module's icon on the identity start page: a file relative to the config directory (the site's own icon, like site.json branding.logo). Not declared: icon.svg (or icon.png) in the module's directory, else a generated tile with the name's initial.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": "",
+      "example": "branding/forgejo.svg"
+    },
+    "description": {
+      "description": "Descriptive text that appears on the Proxmox summary page for the VM",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": "",
+      "example": "Nextcloud file sharing and collaboration platform"
+    },
+    "version": {
+      "description": "Version of the module (not the TAPPaaS system), SemVer x.y.z. Used for tracking running versions and determining if upgrades exist. #248: start at 0.1.0 and stay below 1.0.0 while only the author has run it — 0.x says pre-stable, and claiming 1.0.0 early is the misleading case this rule exists for. 1.0.0 is earned when an install other than the author's is confirmed working, the same step that takes status to Production.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "format": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+      "example": "0.5.3",
+      "note": "Major < 1 indicates the module is not production-ready. The two-part form (0.5) is accepted by the schema for modules written before #248; the classification lint warns and asks for 0.5.0."
+    },
+    "appVersion": {
+      "description": "Upstream application version deployed by this module. Optional but recommended. Distinct from 'version' (module semver). Treated as an informational string — no format enforced.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": "33.0.3",
+      "note": "Use the upstream project's own version string: semver, date-based, or tag (e.g. '33.0.3', '1.85.0', 'nightly')"
+    },
+    "releaseDate": {
+      "description": "Date when this version of the module was released",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "format": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "example": "2026-02-10",
+      "note": "Automatically set to today's date by copy-update-json.sh if not present in source JSON"
+    },
+    "installTime": {
+      "description": "Timestamp when the module was installed, automatically set by copy-update-json.sh",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "format": "^[0-9]{8}-[0-9]{2}:[0-9]{2}:[0-9]{2}$",
+      "example": "20260307-14:30:45",
+      "note": "Automatically set during install. Format: YYYYMMDD-HH:MM:SS (local time)"
+    },
+    "updateTime": {
+      "description": "Timestamp when the module was last updated, automatically set by `module-manager module modify`",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "format": "^[0-9]{8}-[0-9]{2}:[0-9]{2}:[0-9]{2}$",
+      "example": "20260307-14:30:45",
+      "note": "Automatically set on each update. Format: YYYYMMDD-HH:MM:SS (local time)"
+    },
+    "variant": {
+      "description": "RETIRED — superseded by 'environment'. Never write this field. Retained here only so a pre-migration config that still carries it is classified rather than reported as unknown; installs strip it (copy-update-json.sh del(.variant)).",
+      "type": "string",
+      "deprecated": true,
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": "staging",
+      "note": "Was set when --variant <name> was used at install time, and until its retirement was also MIRRORED from --environment for suffixed environments. Everything that read it (provider pairing, name-suffix stripping) now reads 'environment'. A migrated site should carry no .variant at all: strip it with scripts/migrate-drop-variant.sh."
+    },
+    "environment": {
+      "description": "Target environment this module was installed into (ADR-007 P5). Persisted by copy-update-json.sh when --environment <name> is used so `module-manager module modify`/`delete` can resolve the source module file and the environment. Not present for legacy/no-environment installs.",
+      "type": "string",
+      "references": "environments",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": "foo",
+      "note": "Set automatically when --environment <name> is used at install time. Auto-managed by the 3-way merge — never adopted from the release source. The successor to 'variant', which is RETIRED. Also carries the name suffix for a non-default environment (<module>-<environment>.json) and selects the same-environment provider in resolve_provider_module."
+    },
+    "maintainer": {
+      "description": "Maintainer of the module",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": "",
+      "example": "@ErikDaniel007",
+      "note": "Typically a GitHub username prefixed with @"
+    },
+    "status": {
+      "description": "How far the module has got (#248). A maturity the author claims, read by anyone deciding whether to install it — not a state of a deployment. Development → Testing when the author has run test-module.sh against a live install; Testing → Production when at least one install other than the author's is confirmed working. `archived` and `external` are not maturities: they are states a DEPLOYED config carries (ADR-022g moves them to `management`), and a released module naming one fails the classification lint.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": "Development",
+      "values": {
+        "Development": "Module is under active development, not ready for production",
+        "Testing": "Module is being tested, may have issues",
+        "Production": "Module is stable and ready for production use",
+        "Deprecated": "Module is no longer maintained",
+        "archived": "Module's VM was removed via `module-manager module delete --archive` but its config and PBS backups are kept for restore. Set automatically on archive; inspect-cluster.sh shows it as [archived] rather than NOT RUNNING.",
+        "external": "VM/guest that exists on the cluster but is managed OUTSIDE TAPPaaS (e.g. pfsense, hassosova). A minimal config ({vmid, vmname, status:external, description}) registers it as known-but-unmanaged: no install/update/test/delete lifecycle applies, backup:vm ignores it unless explicitly added, and inspect-cluster.sh shows it as [external] rather than NOT IN CONFIG. Mirrors zones.json state=Manual."
+      },
+      "example": "Development"
+    },
+    "rebootOk": {
+      "description": "May an UNATTENDED converge disrupt this module's guest — reboot it, or migrate it offline — in order to apply a declared change (ADR-020 D8)? A field's change class says a change NEEDS disruption; this says whether we are ALLOWED to cause it without a human present. It is therefore a property of the WORKLOAD, not of the field: a stateless front-end can be bounced at 03:00, a database only in a window. Default false, so silence never authorizes downtime.",
+      "type": "boolean",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": false,
+      "example": true,
+      "note": "Disruption is authorized iff '--allow-disruption' was passed (an operator, now: 'module-manager module update <m> --allow-disruption', or 'site-manager update --allow-disruption' for a run), OR rebootOk is true AND the scheduled run has automaticReboot (ADR-020 v0.10 D8). '--force' is a different lever: it proceeds past a refusal and never reboots. When a disruptive change is not authorized the converge applies everything else, prints a machine-parseable 'DEFERRED:' line and still exits 0; update-tappaas collects those into an end-of-sweep summary."
+    },
+    "sshKeyOnly": {
+      "description": "Key-only SSH on a machine TAPPaaS manages (#756, ADR-026 D8.1): sshd refuses password and keyboard-interactive logins for every user, and root logs in by key only — the settings the cluster nodes enforce (#19). The console keeps the root password. Applied when the machine is adopted or provisioned and re-applied by every update, so a password login someone switches back on is closed again; test.sh asserts it from what sshd enforces. false returns the machine to its own sshd_config (TAPPaaS removes only the drop-in it wrote).",
+      "type": "boolean",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": true,
+      "example": false,
+      "note": "Read by kind: machine modules that log in to their machine: debianhost and the satellite (whose update and test run debianhost's). Opt out when adopting: module-manager module adopt <address> --set sshKeyOnly=false; later: module-manager module modify <instance> --set sshKeyOnly=false. Machines adopted before this field existed were given false by migration 0013, which is what adoption promised them then."
+    },
+    "tier": {
+      "description": "RETIRED (ADR-022e, #676) — replaced by scope, which is DERIVED from `stack`: the foundation stack is site-scoped, everything else environment-scoped. No module sets it any more; a deployed config that still carries it loses it on its next update (the release no longer defines it), and until then it is read only when the config has no `stack`. The name `tier` now means `zone.tier` alone (ADR-014).",
+      "type": "string",
+      "requiredOnModule": false,
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "values": {
+        "foundation": "Retired: read as site-scoped only when the config has no stack.",
+        "app": "Retired: read as environment-scoped only when the config has no stack."
+      },
+      "note": "Kept in the schema for one release so a config that still carries it is not reported as holding an unknown field; removed the release after (#676)."
+    },
+    "kind": {
+      "description": "What type of workload the module is (ADR-022f D1) — equivalently, which Controller builds it. AUTHORED in the module's source JSON and adopted by deployments through the 3-way merge. Not what it runs on: that is its Host, named in `node` (ADR-022c D3).",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "values": {
+        "vm": "A virtual machine (KVM/QEMU) on a cluster member.",
+        "lxc": "A Linux container on a cluster member.",
+        "machine": "Its own system with an OS, not a Proxmox guest (ADR-026) — e.g. the satellite.",
+        "application": "Software installed onto a Host, owning no system of its own; names its Host in `node` — e.g. backup.",
+        "device": "Only network reachability is configured — no SSH, no checks.",
+        "module": "LEGACY, never authored: ADR-007's object-type marker, once stamped into every deployed config. Migration 0004 removes it; it survives only where it is a config's sole module signal, so discovery can still find that module."
+      },
+      "example": "vm",
+      "note": "Every official module declares it: `cluster` is an application (it configures the Proxmox cluster on the pvehost machines), `templates` a vm (it owns the template guests) (#669, operator decision 2026-09-19) — interim values until the composite-module ADR, recorded in ADR-022d (#705). A module that declares none and is not official — a Community module — is a vm (lib/ts/src/kind.ts effectiveKind). Before #611 this field was the object-type marker, stamped \"module\" by install-module.sh; that stamping is gone."
+    },
+    "source": {
+      "description": "Origin & trust of the catalog entry (ADR-007b). Answers 'Where does the catalog entry come from?'. Orthogonal to 'tier'. Normally INFERRED at deploy time from the repository the module is catalogued in (sourceMetadata lives in Site → repositories, CR-05); only set explicitly when the module file itself must pin it.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": "official",
+      "values": {
+        "official": "🟢 Verified — TAPPaaS-maintained, signed (tappaas-official repo).",
+        "community": "🟡 Community — peer-reviewed, not officially supported.",
+        "private": "🔵 Private — customer/private repo.",
+        "local": "⚪ Local — local dev, not in any catalog."
+      },
+      "example": "official",
+      "note": "Optional. Defaults to 'official'. Lint rule (validate-module-tier-source.sh, `module validate`): a site-scoped module (stack foundation, ADR-022e) requires source:official unless --allow-fork is given."
+    },
+    "moduleSource": {
+      "description": "Absolute path to the module directory containing install.sh, update.sh, etc.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": "/home/tappaas/TAPPaaS/src/collaboration/nextcloud",
+      "note": "Automatically set by copy-update-json.sh based on the directory where the module JSON resides. Named `location` before #609; migration 0006 renames it."
+    },
+    "location": {
+      "description": "Where a machine is: the name of one of the site's locations (site.json locations{}, site-manager location list). Absent, it is at the primary location. A satellite or any machine away from the site names a location of its own, which is how backup-manager validate tells an off-site copy from an on-site one. Before #609 this field held the module's source directory (now moduleSource): a value with a '/' is that old field, never a place.",
+      "type": "string",
+      "references": "locations",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": "hetzner-hel1",
+      "note": "Given at add or adopt with --location <name>, or with --country/--city/--building, which find the location at that place or add one of kind remote."
+    },
+    "dependsOn": {
+      "description": "List of services this module depends on. Each entry is a 'module:service' pair identifying which module delivers the service.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": [],
+      "items": "string",
+      "format": "^[a-zA-Z][a-zA-Z0-9-]*:[a-zA-Z][a-zA-Z0-9-]*$",
+      "example": [
+        "cluster:vm",
+        "cluster:ha",
+        "network:proxy"
+      ],
+      "note": "The installer validates that each referenced module is installed and provides the named service"
+    },
+    "integratesWith": {
+      "description": "List of OPTIONAL services this module integrates with if present. Same 'module:service' shape as dependsOn and wired by the same install/update/delete-service.sh scripts — but a provider that is not installed is silently ignored rather than blocking. When a provider is later added, its install auto-wires the pre-existing integrators.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": [],
+      "items": "string",
+      "format": "^[a-zA-Z][a-zA-Z0-9-]*:[a-zA-Z][a-zA-Z0-9-]*$",
+      "example": [
+        "vllm-amd:inference"
+      ],
+      "note": "Soft counterpart to dependsOn: missing provider = skip (no error); installed provider = same install-service.sh logic. Do NOT list a coordinate in both dependsOn and integratesWith. The two differ in LIFECYCLE, not reachability (#632): a cross-zone coordinate here earns the same network:rules auto-pinhole a dependsOn entry would."
+    },
+    "provides": {
+      "description": "List of services this module provides. Service names only (the module is implicit from the JSON filename).",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": [],
+      "items": "string",
+      "format": "^[a-zA-Z][a-zA-Z0-9-]*$",
+      "example": [
+        "vm",
+        "ha"
+      ],
+      "note": "Each listed service must have a corresponding services/<service>/install-service.sh and update-service.sh"
+    },
+    "controllers": {
+      "description": "The extended controllers this module contributes to the control plane (ADR-035): code that drives a system for a manager, or reconciles state inside the module's application. Each is {name, path, plugsInto}: `name` is `<application>-controller` (the application it controls, e.g. unifi-controller), `path` its directory in the module (`controller/<name>`, laid out as tappaas-cicd's controllers), `plugsInto` the managers that drive it (e.g. [\"switch-manager\"]). module-manager builds, links and registers each on install and update (config/control-plane.json) and removes it on delete.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": [],
+      "items": "object",
+      "example": [
+        {
+          "name": "unifi-controller",
+          "path": "controller/unifi-controller",
+          "plugsInto": [
+            "switch-manager",
+            "ap-manager"
+          ]
+        }
+      ],
+      "note": "The module's lifecycle scripts (install.sh, update.sh, test.sh, delete.sh, the hooks) are its basic controller and are not listed here. A name another module already registered is refused. Checked by `module-manager validate --blueprint`."
+    },
+    "managers": {
+      "description": "The managers this module contributes to the control plane (ADR-035): the operator's and the console's verbs for a domain no standard manager covers. Each is {name, path}: `name` ends in `-manager` and is first come, first served across the site; `path` is its directory in the module (`manager/<name>`, laid out as tappaas-cicd's managers, answering --help and --help --json). module-manager builds, links and registers each on install and update and removes it on delete.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": [],
+      "items": "object",
+      "example": [
+        {
+          "name": "foo-manager",
+          "path": "manager/foo-manager"
+        }
+      ],
+      "note": "A name already registered, by tappaas-cicd or another module, is refused. Checked by `module-manager validate --blueprint`."
+    },
+    "config": {
+      "description": "Optional Pattern-A nesting (Pattern C hybrid). Groups per-service configuration under the '<module>:<service>' dependency coordinate instead of (or alongside) flat top-level fields. Purely a readability/authoring convenience: TAPPaaS NORMALIZES it to the flat form at deploy (copy-update-json.sh) and at validation (check_json), so all tooling still reads flat top-level fields. A module may be written fully flat (current form), fully Pattern-A, or mixed.",
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "patternProperties": {
+        "^[a-zA-Z][a-zA-Z0-9-]*:[a-zA-Z][a-zA-Z0-9-]*$": {
+          "type": "object",
+          "description": "Configuration for one declared dependency. The fields inside are ordinary module fields (cores, proxyDomain, …) scoped to that service."
+        }
+      },
+      "rules": [
+        "Every key in 'config' must also appear in 'dependsOn' (a config block for an undeclared dependency is an error).",
+        "A field must not appear in both the header and a config block, nor in two config blocks (ambiguous after flattening — rejected).",
+        "Multi-service header fields (e.g. zone0, vmname, vmid) stay at the top level — they are owned by the module, not a single service."
+      ],
+      "example": {
+        "cluster:vm": {
+          "cores": 4,
+          "memory": "4096",
+          "diskSize": "32G"
+        },
+        "network:proxy": {
+          "proxyDomain": "app.example.com",
+          "proxyPort": 8080
+        }
+      },
+      "note": "Convert between forms with module-format.sh (to-flat | to-config). Backward compatible: flat modules are untouched."
+    },
+    "os": {
+      "description": "The operating system a system runs — ADR-022f's OS facet, held as its `id` (the freedesktop os-release ID); the family follows from it: debian, ubuntu, nixos → linux; windows → windows. For a VM it also drives cloud-init bootstrapping (the Debian vendor-data snippet). For a machine, `module adopt` reads it from /etc/os-release, and it selects the machine module (ADR-026 D7).",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general",
+        "cluster:vm"
+      ],
+      "default": "<auto-detected from image filename: debian-*, ubuntu-*, *nixos* -> matching value; else unknown>",
+      "values": {
+        "debian": "Debian-family cloud image (apt). Receives the tappaas-debian vendor-data snippet.",
+        "ubuntu": "Ubuntu-family cloud image (apt). Receives the tappaas-debian vendor-data snippet.",
+        "nixos": "NixOS template VM. No vendor-data snippet.",
+        "windows": "Windows Server clone VM. Create-TAPPaaS-VM.sh builds and attaches a per-VM OOBE answer ISO. No cloud-init.",
+        "unknown": "OS family is unknown. No vendor-data snippet."
+      },
+      "example": "debian",
+      "note": "Optional. If omitted, Create-TAPPaaS-VM.sh falls back to sniffing the 'image' filename. Set explicitly to override the sniff."
+    },
+    "zone0": {
+      "description": "The security zone the FIRST network interface connects to; it must exist in zones.json. For a VM or LXC: which Proxmox bridge VLAN its virtual NIC is attached to. For a machine (kind: machine, ADR-026): which network its first physical NIC is cabled to — recorded, not yet enforced (connecting a machine's port on the switch is its own issue).",
+      "type": "string",
+      "references": "zones",
+      "requiredBy": [],
+      "usedBy": [
+        "general",
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "mgmt",
+      "format": "^[a-z][a-zA-Z0-9]*$",
+      "example": "srvHome",
+      "note": "Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens. ADR-007 P5: when zone0 is unset it DEFAULTS to the target environment's zone (the Service zone in zones.json whose environment names it); pre-cutover (no site.json/environments) it falls back to resolve_default_zone()'s behaviour. An explicit zone0 in the module JSON always wins. #349: a RELEASED module names zone0 only when it must live in a particular kind of zone (dmz, an IoT zone, edge); a foundation module that names none is recorded as mgmt by copy-update-json.sh. Once deployed it is the site's: the update merge keeps it (apply-json-merge.sh rule 1b) — move an install with module modify --set zone0=…"
+    },
+    "zone1": {
+      "description": "The security zone the SECOND network interface connects to, if there is one; it must exist in zones.json. For a VM: which Proxmox bridge VLAN its second virtual NIC is attached to. For a machine: which network its second physical NIC is cabled to — recorded, not yet enforced.",
+      "type": "string",
+      "references": "zones",
+      "requiredBy": [],
+      "usedBy": [
+        "general",
+        "cluster:vm"
+      ],
+      "default": "mgmt",
+      "format": "^[a-z][a-zA-Z0-9]*$",
+      "note": "Only used if bridge1 is defined. Hyphens are NOT allowed — use underscores."
+    },
+    "physicalLocation": {
+      "description": "RETIRED — a machine names its location instead (`location`, a name of the site's locations). Migration 0021 makes each physicalLocation a location of the site and the machine's `location`; read until it has run.",
+      "deprecated": true,
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "properties": {
+        "country": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{2}$"
+        },
+        "city": {
+          "type": "string"
+        },
+        "building": {
+          "type": "string"
+        }
+      }
+    },
+    "uplinks": {
+      "description": "A cluster node's network uplinks (#40, pvehost instances): which physical ports carry its `lan` bridge — one port, or two or more bonded as `lanbond` — and its `wan` bridge. Ports by MAC address, the permanent one, because kernel interface names move. `lan.mode` is `single`, `active-backup` (one leg carries traffic, `primary` when it is up; any switches, any mix of speeds) or `lacp` (802.3ad: equal speeds, and the switch side one LAG). `lan.mtu` when not 1500.",
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "properties": {
+        "lan": {
+          "type": "object",
+          "properties": {
+            "ports": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^([0-9a-f]{2}:){5}[0-9a-f]{2}$"
+              }
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "single",
+                "active-backup",
+                "lacp"
+              ]
+            },
+            "primary": {
+              "type": "string",
+              "pattern": "^([0-9a-f]{2}:){5}[0-9a-f]{2}$"
+            },
+            "mtu": {
+              "type": "integer"
+            }
+          }
+        },
+        "wan": {
+          "type": "object",
+          "properties": {
+            "ports": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^([0-9a-f]{2}:){5}[0-9a-f]{2}$"
+              }
+            }
+          }
+        }
+      },
+      "example": {
+        "lan": {
+          "ports": [
+            "3c:ec:ef:01:02:a0",
+            "3c:ec:ef:01:02:a1"
+          ],
+          "mode": "active-backup",
+          "primary": "3c:ec:ef:01:02:a0"
+        },
+        "wan": {
+          "ports": [
+            "3c:ec:ef:01:02:b0"
+          ]
+        }
+      },
+      "note": "Written by `site-manager node network set` (and, for a node that has none, recorded from the live layout by the cluster update and by `node add`). Changed with that verb, not with `module modify --set`: converging it drains the node and re-carries its lan bridge under a rollback (`node network set <node> --apply`). `health-manager validate` reports a live layout that differs from it (lan-uplink)."
+    },
+    "storagePools": {
+      "description": "The storage pools a cluster node carries (pvehost instances): the `tankXY` zpools on it that hold guest disks, by name. The cluster update's storage reconcile adds the node to each named pool's storage list (`pvesm`), so guests can be placed on it there.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^tank[A-Za-z0-9_-]*$"
+      },
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": [
+        "tanka1",
+        "tankb1"
+      ],
+      "note": "Recorded from the node's zpools when it is registered (`site-manager node add`, `module adopt`), or added with `site-manager node storage add`; a node registered with none gets them filled by `site-manager node reconcile`. Read by the storage reconcile, storage-manager's inventory and the topology."
+    },
+    "bootDisks": {
+      "description": "The disks a cluster node boots from (pvehost instances): the members of its boot pool, by serial — two for a mirrored boot pool. Kernel names are not used because they change between boots.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      },
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": [
+        "S7HENJ0X100001",
+        "S7HENJ0X100002"
+      ],
+      "note": "Recorded by `site-manager node add` once the node has joined (ADR-037 D4). Informational: a disk replacement reads it to know which disk is which."
+    },
+    "stack": {
+      "description": "The one stack a module belongs to (#463): what a catalogue lists it under, and the directory it lives in: src/<stack>/<module> for the purpose stacks and misc, src/foundation/<module> for foundation (#421). An enumerated field, and this schema is the list's owner: every module carries exactly one of the values below, as a field in its own module JSON. Three of them say what a module IS rather than what it is for — `foundation`, `template` and `test`; the rest group application modules by what they are for. `foundation` also decides a module's scope (ADR-022e v1.1): a foundation-stack module is site-scoped — it belongs to the Site, serves every Environment, installs in mgmt, must come from an official source (or --allow-fork) and needs --force to delete; every other module is environment-scoped. A module becomes site-scoped by moving into the foundation stack, and in no other way.",
+      "type": "string",
+      "values": {
+        "foundation": "Part of the platform every site runs.",
+        "ai": "Model serving, inference and AI tooling — e.g. litellm, openwebui, vllm-amd.",
+        "collaboration": "Shared working and communication — e.g. nextcloud, euro-office.",
+        "devops": "Development and delivery tooling — source forges, CI, registries. Declared before this repo has a module in it; Community's forgejo belongs here.",
+        "home": "Home and building automation, and the devices it drives — e.g. hass, deconz, and most of what Community publishes.",
+        "security": "Security and secure access — e.g. vaultwarden, netbird-client.",
+        "misc": "No natural stack yet. The honest fallback, not a description: prefer moving a module out of it to inventing a stack with one member.",
+        "template": "A template to copy, not a module to install — a Proxmox VM template, the module skeleton.",
+        "test": "A fixture the test suites install and remove; never part of a real site."
+      },
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "format": "^[a-z][a-z0-9-]*$",
+      "example": "collaboration",
+      "note": "A repository's catalogue repeats it so `repository list` can group without opening every module file; the catalogue check reports a disagreement. A module with no stack reads as an application module and breaks nothing, but the value is not free-form: use `misc` rather than inventing one, so a catalogue cannot grow a group nobody declared. The list is kept deliberately short — a stack with a single member is usually `misc` in disguise. The list is descriptive — `module-manager validate` does not reject an unlisted value today."
+    },
+    "roles": {
+      "description": "What a machine is for (ADR-022h: a facet, not what it is) — for a satellite, the roles it carries: `reverse-proxy`, `admin-vpn`, and `backup` once it is locked down as a pull vault (ADR-010 §8.4). Given at `module add` as a JSON array, e.g. --roles '[\"reverse-proxy\"]'.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": [
+        "reverse-proxy",
+        "admin-vpn"
+      ],
+      "note": "The module decides which roles it accepts; the satellite refuses `backup` at add — `module modify <instance> --lockdown` sets it."
+    },
+    "address": {
+      "description": "How the mothership reaches a machine (kind: machine, ADR-026 D8.1): an IP address or FQDN, logged into as root with the mothership's key. Written by `module adopt`. A VM or LXC is reached by its name and zone instead and has no `address`.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": "10.0.0.90",
+      "note": "Changing it records where the machine is now; it moves nothing."
+    },
+    "management": {
+      "description": "Whether TAPPaaS runs a lifecycle against this module (ADR-022g): `managed` — it installs, updates, tests and deletes it; `unmanaged` — registered so the Site knows it exists, with no lifecycle. Absent means managed.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": "managed",
+      "values": {
+        "managed": "TAPPaaS runs the module's lifecycle",
+        "unmanaged": "registered only; no install, update, test or delete"
+      },
+      "note": "The sweep skips an `unmanaged` module (logged `management=unmanaged`), as it does `status: archived | external`. A locked-down satellite is the case in use (ADR-010 §8.4.4)."
+    },
+    "publicDomain": {
+      "description": "Public FQDN for a NON-HTTP service the module exposes on the firewall's WAN interface through network:nat (TURN, SMTP, SSH, ...). network:proxy publishes HTTP(S) under proxyDomain; this is the counterpart for raw ports. The operator creates its public A record.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": "turn.example.com",
+      "note": "Optional. A module may derive a default (coturn: turn.<site domain>) and persist it at install so every reader sees the same name."
+    },
+    "discoveryMdns": {
+      "description": "Consumer zones to bridge with zone0 in the mDNS repeater (os-mdns-repeater). zone0 is always included as the provider zone.",
+      "type": "array",
+      "references": "zones",
+      "items": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "network:discovery"
+      ],
+      "default": [],
+      "example": [
+        "home",
+        "srvHome"
+      ],
+      "note": "Requires network:discovery in dependsOn. zone0 and these zones join the one mDNS group, together with every zone that has mdns: true in zones.json; mdns-manager converges the repeater from all of them. Boolean true is deprecated (zone0 only)."
+    },
+    "discoveryUdpRelay": {
+      "description": "UDP broadcast relay instances via os-udpbroadcastrelay. Each entry creates one relay identified by 'tappaas:<module>:<port>'.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "network:discovery"
+      ],
+      "default": [],
+      "items": {
+        "type": "object",
+        "fields": {
+          "port": {
+            "description": "UDP port to relay (e.g. 36549 for Alfen Nucleus discovery).",
+            "type": "integer",
+            "required": true
+          },
+          "zones": {
+            "description": "Zone names whose interfaces receive the relayed broadcast.",
+            "type": "array",
+            "items": "string",
+            "required": true
+          }
+        }
+      },
+      "example": [
+        {
+          "port": 36549,
+          "zones": [
+            "home",
+            "iotCloud"
+          ]
+        }
+      ],
+      "note": "Requires network:discovery in dependsOn. Idempotent: checks description before adding. Reload is triggered only when new entries are added."
+    },
+    "ip": {
+      "description": "Static IPv4 address of the device this module represents. Used by network:dns to create the DNS host override <vmname>.<zone0>.internal -> <ip>. Must be a static reservation OUTSIDE the zone's DHCP pool; network:dns install-service warns (does not fail) if the IP falls inside a configured pool. No default — supply it in the module JSON (typically under config.\"network:dns\".ip) or override at install time with --ip <addr>.",
+      "type": "string",
+      "requiredBy": [
+        "network:dns"
+      ],
+      "usedBy": [
+        "network:dns"
+      ],
+      "format": "^([0-9]{1,3}\\.){3}[0-9]{1,3}$",
+      "example": "10.4.20.25",
+      "note": "Hardware modules (no VM) declare this so their DNS entry is provisioned automatically at install time. The matching static DHCP reservation (MAC-based) remains a manual prerequisite."
+    },
+    "natRules": {
+      "description": "Destination-NAT (port-forward) mappings that expose an internal service port on the firewall's WAN interface. Each entry is compiled into an OPNsense rdr-pass rule (translate + allow in one rule). Use this for non-HTTP ports (e.g. SSH); use network:proxy for HTTP(S). All rules forward to this module's single target (its 'ip', or <vmname>.<zone0>.internal).",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "network:nat"
+      ],
+      "default": [],
+      "items": {
+        "type": "object",
+        "fields": {
+          "externalPort": {
+            "description": "Port exposed on the firewall WAN interface (e.g. 2022).",
+            "type": "integer|string",
+            "required": true,
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "internalPort": {
+            "description": "Service port on the target host. Defaults to externalPort when omitted.",
+            "type": "integer|string",
+            "required": false,
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "protocol": {
+            "description": "Transport protocol for this port-forward.",
+            "type": "string",
+            "values": {
+              "TCP": "TCP only (default)",
+              "UDP": "UDP only",
+              "TCP/UDP": "Both TCP and UDP"
+            },
+            "default": "TCP"
+          },
+          "description": {
+            "description": "Human-readable purpose of this port-forward (audit/documentation). Combined with the module name to form the rule's identity.",
+            "type": "string",
+            "required": false
+          }
+        }
+      },
+      "example": [
+        {
+          "externalPort": 2022,
+          "internalPort": 22,
+          "protocol": "TCP",
+          "description": "SSH"
+        }
+      ],
+      "note": "Activated when network:nat is in dependsOn. Rules are created as rdr-pass on the WAN interface, so no separate network:rules ingress entry is needed for the forwarded port."
+    },
+    "proxyDomain": {
+      "description": "Public domain name for the reverse proxy. Caddy obtains a TLS certificate for this domain.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "network:proxy"
+      ],
+      "default": "<vmname>.<tappaas.domain>",
+      "format": "^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$",
+      "example": "vaultwarden.test.tapaas.org",
+      "note": "If not set, defaults to <vmname>.<domain> from configuration.json"
+    },
+    "proxyPort": {
+      "description": "Target port on the module VM that the reverse proxy forwards traffic to",
+      "type": "integer",
+      "requiredBy": [],
+      "usedBy": [
+        "network:proxy"
+      ],
+      "default": 80,
+      "minimum": 1,
+      "maximum": 65535,
+      "example": 8080,
+      "note": "The port the service listens on inside the VM"
+    },
+    "proxyUpstreamTls": {
+      "description": "Reverse-proxy to an HTTPS upstream instead of plain HTTP. Set true for backends that only speak TLS — e.g. the OPNsense GUI on :8443. network:proxy renders the Caddy upstream as https:// with upstream certificate verification skipped (internal/self-signed backends).",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "network:proxy"
+      ],
+      "default": "false",
+      "values": {
+        "true": "Upstream is HTTPS (skip upstream cert verification)",
+        "false": "Upstream is plain HTTP (default)"
+      }
+    },
+    "proxyUpstreamHttp1": {
+      "description": "Force HTTP/1.1 to the upstream (os-caddy HttpVersion=http1). Required for apps whose UI rides a WebSocket behind a TLS upstream — e.g. the UniFi OS console. Without it, Caddy negotiates HTTP/2 with the upstream, which cannot carry a WebSocket Upgrade and returns 500, so the SPA renders blank.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "network:proxy"
+      ],
+      "default": "false",
+      "values": {
+        "true": "Force HTTP/1.1 to the upstream (WebSocket support)",
+        "false": "Default upstream HTTP versions (HTTP/1.1 + HTTP/2)"
+      }
+    },
+    "proxyPreserveHost": {
+      "description": "Force the upstream Host header to the public domain (Caddy header_up Host <domain>). Needed for apps that validate a WebSocket's Origin against the Host header — e.g. the UniFi OS console: Caddy otherwise sends the upstream's own hostname, so the browser's Origin (the public domain) ≠ Host and the WebSocket upgrade returns 500, leaving the SPA blank after login. Usually paired with proxyUpstreamHttp1 for WebSocket apps behind a TLS upstream.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "network:proxy"
+      ],
+      "default": "false",
+      "values": {
+        "true": "Send Host: <domain> upstream (WebSocket Origin check)",
+        "false": "Caddy default upstream Host"
+      }
+    },
+    "proxyTls": {
+      "description": "How network:proxy obtains the public TLS certificate for this domain. OMIT IT to inherit the environment's domains.dnsMode (config/environments/<env>.json) — that is the normal case and the only way one setting governs a whole environment. Set it only to override that environment-wide choice for this one module. 'dns01' binds the TAPPaaS-wide wildcard certificate issued by os-acme-client (acme-setup.sh) via Caddy's per-domain CustomCertificate, and requires a DNS provider that supports DNS-01 plus the wildcard already being in OPNsense Trust; until it is, the public HTTPS endpoint has no cert while the LAN endpoint still works. 'http01' uses classic ACME HTTP-01: Caddy obtains a per-domain cert via the :80 challenge, so the domain MUST be reachable from the internet on port 80, and no DNS API is needed.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "network:proxy"
+      ],
+      "values": {
+        "dns01": "Wildcard certificate via os-acme-client; bound by refid through Caddy CustomCertificate (no per-module ACME, works for internal-only services)",
+        "http01": "Per-domain ACME HTTP-01 via Caddy itself (no DNS-API needed, but the domain must be reachable from the internet on :80)"
+      }
+    },
+    "proxyAllowedZones": {
+      "description": "Zones (and the literal 'internet') permitted to reach this service through the reverse proxy — or 'none' (no one, except through proxyAccess path rules), or networks named directly, as a.b.c.d/n or x:y::/n: a provider's published caller range, for an endpoint one cloud service must reach without opening it to the whole internet. A malformed network is refused, like an unknown zone. network:proxy compiles this into an os-caddy access list (allow-list by client subnet) attached to the handler; non-matching clients get HTTP 403. On a site with IPv6, each zone's IPv6 network is allowed next to its IPv4 one. Under ADR-021 D2 this is the ONLY place a zone restricts a published service: split-horizon DNS returns the same address (the DMZ gateway) to every caller, so the answer encodes no entitlement and the access list is what narrows it.",
+      "type": "array",
+      "references": "zones",
+      "requiredBy": [],
+      "usedBy": [
+        "network:proxy"
+      ],
+      "default": "<internal default: every Active 'Service' zone plus home, work and mgmt — NOT the internet>",
+      "items": "string",
+      "example": [
+        "mgmt",
+        "home",
+        "198.51.100.0/14"
+      ],
+      "note": "Zero-trust by default: when omitted, a service is reachable only from the internal trusted zones, never the internet. Add 'internet' to publish it publicly (no restriction). Zone names are resolved to subnets via zones.json. Changing this re-applies on the next install/update of the module. TWO values carry real consequence and the rest is belt-and-braces: leaving it UNSET is the normal, correct configuration for a published service, and adding 'internet' is what makes it publicly reachable. Narrowing to a specific list of internal zones filters IN FRONT OF the identity gate, it is not the mechanism protecting the service (ADR-021 Case 1/3) — a zone list that lets someone through still leaves them at an Authentik login, and one that shuts them out only saves them the round trip. Do not use it to separate two populations who are each entitled to a different environment: that binds entitlement to network position, which breaks the moment a legitimate user connects from another zone (the same person on a laptop in home, a phone on guest wifi and the netbird overlay is ONE identity in three zones). Authentik group membership is where that belongs."
+    },
+    "proxyAccess": {
+      "description": "Path exceptions to the route's proxyAllowedZones: a list of rules {paths, zones, identityGate}. A request whose path matches a rule gets that rule's zones; every other path keeps the route's. paths are Caddy path matchers starting with / (a trailing * is a prefix match); zones takes the same values as proxyAllowedZones. identityGate false serves the rule's paths without the Authentik gate, for callers that cannot hold a credential at all — a webhook signed in its payload — and then needs a description saying who calls and why (a machine caller that can send a credential uses a service account through the gate instead, ADR-032 D1). Default: as the route. On a gated route Caddy removes the caller's Authorization header before the app. Allowed on the module (primary route) and on each proxyRoutes entry. With proxyAllowedZones ['none'] a route serves only its rules' paths.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "network:proxy"
+      ],
+      "default": [],
+      "example": [
+        {
+          "paths": [
+            "/api/webhook/*"
+          ],
+          "zones": [
+            "internet"
+          ],
+          "identityGate": false,
+          "description": "Home Assistant Cloud webhooks: authenticated by the secret ID in the URL"
+        }
+      ],
+      "note": "Reachable is not authorized: a public path is protected only by the application (a secret ID in the URL, a signed request). The longest matching path wins. A path of / or /* is refused (set proxyAllowedZones instead), as is the same path in two rules."
+    },
+    "proxyRoutes": {
+      "description": "Additional reverse-proxy routes for a VM that serves several endpoints on different ports. Each entry publishes <name>.<domain> — where <domain> is the environment's primary domain, the same suffix proxyDomain defaults to — forwarding to the module's upstream host on the entry's port. The primary proxyDomain/proxyPort route is unaffected. An entry may set its own proxyAllowedZones (zones, 'internet' or networks) and then gets its own access list; without it the route inherits the primary's. They always inherit the primary route's TLS strategy (proxyTls/dnsMode) and upstream flags (proxyUpstreamTls, proxyUpstreamHttp1, proxyPreserveHost).",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "network:proxy"
+      ],
+      "default": [],
+      "items": "object",
+      "example": [
+        {
+          "name": "admin",
+          "port": 9090
+        },
+        {
+          "name": "hooks",
+          "port": 5678,
+          "proxyAllowedZones": [
+            "internet"
+          ]
+        }
+      ],
+      "note": "Each entry is { name: <DNS label, no dots>, port: <1-65535> }; the FQDN is <name>.<domain>. Each route gets its own Caddy handler keyed by 'TAPPaaS: <module>#<name>'. Adding an entry publishes it on the next install/update; removing one tears its route down."
+    },
+    "ingress": {
+      "description": "Inbound traffic permitted to this module's ports. Each entry is compiled into an OPNsense pass rule and validated against the destination zone's pinhole-allowed-from policy at compile time.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "network:rules"
+      ],
+      "default": [],
+      "items": {
+        "type": "object",
+        "fields": {
+          "from": {
+            "description": "Traffic source. One of: zone name (in zones.json), another module name (resolved to an OPNsense host alias for the module's FQDN), the literal 'internet', or 'alias:<name>' to reference a module-local or global alias.",
+            "type": "string",
+            "required": true,
+            "example": "srvWork"
+          },
+          "ports": {
+            "description": "Destination ports allowed for this source. Each value must also appear in module.ports[].",
+            "type": "array",
+            "items": "integer|string",
+            "required": true,
+            "example": [
+              4000
+            ]
+          },
+          "protocol": {
+            "description": "Transport protocol.",
+            "type": "string",
+            "values": {
+              "TCP": "TCP only (default)",
+              "UDP": "UDP only",
+              "TCP/UDP": "Both TCP and UDP",
+              "ICMP": "ICMP"
+            },
+            "default": "TCP"
+          },
+          "description": {
+            "description": "Audit rationale for permitting this traffic. Required — recorded in the OPNsense rule for traceability.",
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "example": [
+        {
+          "from": "srvWork",
+          "ports": [
+            4000
+          ],
+          "description": "Intra-zone consumers read the API"
+        },
+        {
+          "from": "dmz",
+          "ports": [
+            4000
+          ],
+          "description": "Caddy reverse proxy forwards the public hostname"
+        }
+      ],
+      "note": "Module peer (from = another module name): compiler ensures an OPNsense host alias 'tappaas_module_<peer>' exists, populated with the peer's FQDN; the rule references the alias so DHCP IP changes are absorbed by Unbound resolution. (Underscores: OPNsense alias names cannot contain hyphens.)"
+    },
+    "egress": {
+      "description": "Outbound traffic exceptions beyond what the source zone's access-to already permits. Compiled into OPNsense pass rules on the source-zone interface.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "network:rules"
+      ],
+      "default": [],
+      "items": {
+        "type": "object",
+        "fields": {
+          "to": {
+            "description": "Traffic destination. One of: zone name (in zones.json), another module name (resolved to an OPNsense host alias for the module's FQDN), the literal 'internet', or 'alias:<name>'.",
+            "type": "string",
+            "required": true,
+            "example": "iot-home"
+          },
+          "ports": {
+            "description": "Destination ports.",
+            "type": "array",
+            "items": "integer|string",
+            "required": true,
+            "example": [
+              443
+            ]
+          },
+          "protocol": {
+            "description": "Transport protocol.",
+            "type": "string",
+            "values": {
+              "TCP": "TCP only (default)",
+              "UDP": "UDP only",
+              "TCP/UDP": "Both TCP and UDP",
+              "ICMP": "ICMP"
+            },
+            "default": "TCP"
+          },
+          "description": {
+            "description": "Audit rationale for permitting this egress. Required.",
+            "type": "string",
+            "required": true
+          }
+        }
+      },
+      "example": [
+        {
+          "to": "alias:llm_cloud_providers",
+          "ports": [
+            443
+          ],
+          "description": "Upstream LLM providers"
+        },
+        {
+          "to": "vllm-amd",
+          "ports": [
+            11434
+          ],
+          "description": "Local inference fallback"
+        }
+      ],
+      "note": "Module peer (to = another module name): compiler creates a host alias 'tappaas_module_<peer>' from the peer's FQDN. A warning is emitted when 'to' is a zone not in the source zone's access-to list."
+    },
+    "ports": {
+      "description": "Network ports this module exposes for inbound traffic. Source of truth for ingress validation.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "network:rules"
+      ],
+      "unwired": "documentation",
+      "default": [],
+      "items": {
+        "type": "object",
+        "fields": {
+          "port": {
+            "description": "TCP/UDP port number, or port range as a string (e.g. '8000:8010').",
+            "type": "integer|string",
+            "required": true,
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "protocol": {
+            "description": "Transport protocol for this port.",
+            "type": "string",
+            "values": {
+              "TCP": "TCP only (default)",
+              "UDP": "UDP only",
+              "TCP/UDP": "Both TCP and UDP",
+              "ICMP": "ICMP (port field ignored)"
+            },
+            "default": "TCP"
+          },
+          "description": {
+            "description": "Human-readable purpose of this port (audit/documentation).",
+            "type": "string",
+            "required": false
+          }
+        }
+      },
+      "example": [
+        {
+          "port": 4000,
+          "protocol": "TCP",
+          "description": "Service API"
+        }
+      ],
+      "note": "Ingress entries must reference ports declared here. Activated when network:rules is in dependsOn. On a module that does not wire network:rules (one published through the proxy only, say) it documents what the module listens on, and opens nothing (#683)."
+    },
+    "aliases": {
+      "description": "Module-local OPNsense aliases that this module's ingress/egress rules reference via 'alias:<name>'. Module-local aliases override identically named entries in firewall/aliases.json (a warning is emitted on collision).",
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "network:rules"
+      ],
+      "default": {},
+      "patternProperties": {
+        "^[a-zA-Z][a-zA-Z0-9_-]*$": {
+          "type": "object",
+          "fields": {
+            "type": {
+              "description": "OPNsense alias type.",
+              "type": "string",
+              "values": {
+                "host": "Host alias — IPs or FQDNs (FQDN entries are periodically resolved by Unbound)",
+                "network": "Network alias — CIDR blocks",
+                "port": "Port alias — single ports or ranges",
+                "url": "URL alias — table populated by fetching a URL"
+              },
+              "required": true
+            },
+            "addresses": {
+              "description": "Alias contents (IPs, CIDRs, FQDNs, ports, or URLs depending on type).",
+              "type": "array",
+              "items": "string",
+              "required": true
+            },
+            "description": {
+              "description": "Audit rationale for this alias. Required.",
+              "type": "string",
+              "required": true
+            }
+          }
+        }
+      },
+      "example": {
+        "llm_cloud_providers": {
+          "type": "host",
+          "addresses": [
+            "api.anthropic.com",
+            "api.openai.com"
+          ],
+          "description": "Curated whitelist of approved upstream model providers"
+        }
+      },
+      "note": "Aliases are created in OPNsense before referencing rules are applied, and removed on remove-rules unless still referenced by other modules."
+    },
+    "aliasType": {
+      "description": "OPNsense alias type for the module's firewall alias (tappaas_module_<vmname>). 'host' (default) targets the FQDN <vmname>.<zone0>.internal resolved via Unbound/dnsmasq. 'network' targets the entire zone0 subnet from zones.json — use for modules representing multiple devices with no single resolvable hostname (e.g. an IoT speaker fleet, a set of physical appliances).",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "network:rules"
+      ],
+      "default": "host",
+      "values": {
+        "host": "Host alias → <vmname>.<zone0>.internal FQDN (default, single-VM modules)",
+        "network": "Network alias → zone0 subnet CIDR from zones.json (multi-device modules)"
+      },
+      "example": "network",
+      "note": "When 'network', the alias content is derived from the zone0 subnet — no separate field is needed. The module's zone0 must define an 'ip' (subnet) in zones.json. Owned by network:rules (#704): rules_manager.py builds and validates the alias, and network:proxy never reads this field at all — the old attribution made every device module that declares network:rules and not network:proxy warn as an orphan on each conversion."
+    },
+    "firewallType": {
+      "description": "Type of firewall in use. Set to 'NONE' when the TAPPaaS OPNsense firewall is not deployed (e.g. using pfSense, UniFi, Cisco, or no firewall).",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "network:rules"
+      ],
+      "default": "opnsense",
+      "values": {
+        "opnsense": "TAPPaaS-managed OPNsense firewall (default)",
+        "NONE": "No TAPPaaS firewall — manual reverse proxy and firewall rule configuration required"
+      },
+      "example": "NONE",
+      "note": "When set to 'NONE', network:proxy prints manual configuration instructions instead of calling caddy-manager. Owned by network:rules (#704), which is the only service that reads it from a MODULE's config. network:proxy's delete-service.sh reads a firewallType too, but from the estate's config/firewall.json — a different value in a different place, so it is not a usedBy of the module field."
+    },
+    "snatFrom": {
+      "description": "Zones whose traffic to this module's zone0 is masqueraded to the zone0 gateway address, so the module's device sees a source inside its own subnet. Required by appliances whose firmware rejects sessions originating outside their /24 — the Alfen NG5 charger is the reference case. Each entry becomes one OPNsense source-NAT rule on the zone0 interface. The request is intersected with the target zone's snat-allowed-from gate in zones.json; naming a zone outside that gate is refused, not trimmed, because a module must never widen its own permission.",
+      "type": "array",
+      "references": "zones",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "requiredBy": [
+        "network:snat"
+      ],
+      "usedBy": [
+        "network:snat"
+      ],
+      "example": [
+        "home",
+        "srvHome"
+      ],
+      "note": "Zone names as spelled in zones.json (camelCase). The destination is always this module's zone0 — a module cannot masquerade into a zone it does not live in. An empty list is a no-op, not an error, so a module can carry the dependency without requesting anything yet."
+    },
+    "snatReason": {
+      "description": "Why this module needs masquerade, in the operator's own words. Recorded because source NAT costs the target zone its client attribution: the device, and anything reading its logs, sees the zone gateway address instead of the real client for every masqueraded session. That loss is irreversible downstream, so the reason travels with the rule — it appears in snat list output and in the OPNsense rule description context, where the next operator will actually meet it.",
+      "type": "string",
+      "requiredBy": [
+        "network:snat"
+      ],
+      "usedBy": [
+        "network:snat"
+      ],
+      "example": "Alfen NG5 firmware rejects sessions sourced outside iotCloud",
+      "note": "Required whenever snatFrom is non-empty. Free text, one line; it is documentation, not a key, and nothing parses it."
+    },
+    "gateGroups": {
+      "description": "The Authentik groups whose members pass the module's gate. Unset: the team group `users` is bound, and other bindings an operator made on the gate's application are left as they are. Set: exactly these groups are bound — a binding to any other group is removed, a binding to a user (a service account, ADR-032) stays.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "identity:accessControl"
+      ],
+      "default": "<unset: users, additive>",
+      "items": "string",
+      "example": [
+        "admin"
+      ],
+      "note": "A role reaches Authentik as a group of the same name (identity/USERS.md), so `admin` is everyone with the admin role. Use it for a module whose UI can change the machine it runs on (NOMAD's Command Center starts containers)."
+    },
+    "identity": {
+      "description": "OIDC integration contract for a module that dependsOn identity:identity (ADR-006). Consumed by services/identity/install-service.sh. Omit for forward-auth modules (those use identity:accessControl).",
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "identity:identity"
+      ],
+      "default": {},
+      "fields": {
+        "providesAdminRole": {
+          "description": "Opt-in: create and bind a <module>-admins group (the module name without its -<environment> suffix) so a per-module admin role exists. Default false keeps Authentik uncluttered for modules with no admin concept.",
+          "type": "boolean",
+          "default": false
+        },
+        "adminGroupClaim": {
+          "description": "With providesAdminRole: the OIDC groups claim carries this one group for members of <module>-admins, and nothing for anyone else (a dedicated Authentik scope mapping). For apps that grant admin to one literal group, e.g. Nextcloud: admin. Unset: no groups mapping is added.",
+          "type": "string",
+          "default": null
+        },
+        "oidcRedirectPaths": {
+          "description": "OIDC callback paths, each appended to https://<proxyDomain> to form a redirect URI. Default suits Nextcloud user_oidc.",
+          "type": "array",
+          "items": "string",
+          "default": [
+            "/apps/user_oidc/code"
+          ]
+        },
+        "scopes": {
+          "description": "OIDC scope-mapping names the provider should expose. Default (empty) yields openid/email/profile; Authentik’s profile scope already emits the groups claim.",
+          "type": "array",
+          "items": "string",
+          "default": []
+        },
+        "secretsEnv": {
+          "description": "Absolute path on the module VM where OIDC_CLIENT_ID/OIDC_CLIENT_SECRET/OIDC_DISCOVERY_URI are written (mode 600). Default /etc/secrets/<base-module>.env.",
+          "type": "string",
+          "default": ""
+        },
+        "configureService": {
+          "description": "systemd unit on the module VM to restart after writing the env so the app registers the provider (e.g. nextcloud-configure-oidc.service). Empty defaults to <base>-configure-oidc.service (best-effort restart; warns if absent). Set to \"none\" for modules that register the provider themselves via the app's API (e.g. Portainer on Debian) — no unit is restarted.",
+          "type": "string",
+          "default": ""
+        },
+        "launchPath": {
+          "description": "Absolute path on the module's public domain where Authentik's application list (My applications) opens the app: its SSO entry point, so a user already signed in to Authentik goes straight in instead of landing on the app's own login screen (e.g. Immich /auth/login?autoLaunch=1, Grafana /login/generic_oauth). Unset: Authentik's default, the app's front page.",
+          "type": "string",
+          "required": false,
+          "example": "/auth/login?autoLaunch=1"
+        }
+      }
+    },
+    "dropUnits": {
+      "description": "Units whose journal lines never leave the VM, on top of the platform's generate-.*-secrets.* — the units that read or write the module's own secrets. Unit-name patterns (regex): letters, digits, _ . * @ - only.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "logging:logs"
+      ],
+      "default": [],
+      "items": {
+        "type": "string",
+        "example": "generate-authentik-secrets.*"
+      }
+    },
+    "backup": {
+      "description": "Module-level backup policy (ADR-007 P9). The leaf of the Site -> Environment -> Module backup cascade: backup-manager resolves the effective policy by merging site.json backup.defaultRetention, the environment's backup.retention/residency, then these module overrides. `module-manager module add` persists the resolved policy onto the deployed module config. Does NOT replace the dependsOn backup:vm wiring (which decides whether the VM is in the shared PBS job) — it records the resolved retention/exclude/enabled state.",
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "backup:vm",
+        "backup:filesystem"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "description": "Whether this module is backed up. false disables backup for the module regardless of site/environment policy.",
+          "type": "boolean",
+          "default": true
+        },
+        "retention": {
+          "description": "Module-specific retention period (e.g. 1y). Overrides the environment/site retention in the cascade. Empty/absent inherits.",
+          "type": "string"
+        },
+        "exclude": {
+          "description": "Paths to exclude from this module's backup.",
+          "type": "array",
+          "items": "string",
+          "default": []
+        },
+        "schedule": {
+          "description": "This module's own backup frequency (ADR-012 §3.2) — the leaf of the Site -> Environment -> Module cascade. 'daily' | 'weekly' | 'monthly', or a bare 'HH:MM' (daily at that time); absent inherits the environment's, then the site's, then 'daily'. Typically set to something LESS frequent for a module whose state rarely changes. A sub-daily request is rejected: once a day is the maximum the platform backs anything up. Modules with the same resolved schedule share one cluster backup job (a 'bucket'), so changing this moves the guest between jobs.",
+          "type": "string"
+        },
+        "filesystemPaths": {
+          "description": "Absolute paths inside the guest to capture (ADR-012 §2.7/§3.1). Each becomes one PBS archive in the module's fs/<module> namespace. Only meaningful for a module declaring backup:filesystem, and only supported on guest OS types TAPPaaS knows the layout of (NixOS today) — the service install fails loudly on any other, rather than capturing something half-right. A declared path that does not exist in the guest fails the capture: a backup that silently stopped covering something is the failure this ADR exists to prevent.",
+          "type": "array",
+          "items": "string",
+          "default": [],
+          "example": [
+            "/home/tappaas/config",
+            "/etc/secrets"
+          ]
+        }
+      },
+      "example": {
+        "enabled": true,
+        "retention": "1y",
+        "schedule": "weekly",
+        "exclude": [
+          "/var/cache"
+        ],
+        "filesystemPaths": [
+          "/home/tappaas/config"
+        ]
+      },
+      "note": "Authored optionally on any module, alongside the dependsOn/integratesWith relationship that opts it into backup. The resolved (cascaded) value is written back into /home/tappaas/config/<name>.json at install time. filesystemPaths is meaningful only for a module declaring backup:filesystem; the other sub-fields apply to both capabilities."
+    },
+    "alwaysBackup": {
+      "description": "DEPRECATED (ADR-012 §2.7) — being replaced by 'integratesWith: [\"backup:vm\"]' on the foundation modules that bootstrap before the backup server. Read for one release, then the field and its code path are removed; backup stays opt-in. Set only on the backup module. List of module names whose VMs are always added to the PBS backup job, even though they do not (and cannot) declare dependsOn backup:vm — typically foundation VMs that bootstrap before the backup server (firewall, tappaas-cicd).",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "backup:vm"
+      ],
+      "default": [],
+      "example": [
+        "firewall",
+        "tappaas-cicd"
+      ],
+      "note": "Each entry is a module/VM name resolved to its VMID via /home/tappaas/config/<name>.json. Registered when the backup module installs/updates."
+    },
+    "pbsStorageName": {
+      "description": "Name of the Proxmox Backup Server datastore / Proxmox storage used for backups. Set on the backup module; read by backup:vm scripts (install/test/restore/backup-manage).",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "backup:vm"
+      ],
+      "default": "tappaas_backup",
+      "example": "tappaas_backup",
+      "note": "Allows environments whose PBS storage uses a different name (e.g. 'pbs') to override the default. Used as both the PBS datastore name and the Proxmox storage name."
+    },
+    "immutableSnapshots": {
+      "description": "Backup module, optional WORM-ish immutability (ADR-012 §3.5 / ADR-010 §7.3). When enabled, periodic read-only ZFS snapshots of the datastore dataset are taken on the PBS node and pruned to `keep`, so backup history cannot be rewritten by a sync/push credential holder or PBS prune/GC — only by node-local root. The weaker of the two tiers; S3 Object Lock (ADR-010 satellite) is the stronger one and is provisioned satellite-side.",
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "backup:vm"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "description": "Enable ZFS-snapshot immutability for the local datastore.",
+          "type": "boolean",
+          "default": false
+        },
+        "schedule": {
+          "description": "systemd OnCalendar value or a friendly word (hourly|daily|weekly).",
+          "type": "string",
+          "default": "daily"
+        },
+        "keep": {
+          "description": "Number of newest immutable snapshots to retain (older pruned).",
+          "type": "integer",
+          "default": 30
+        }
+      },
+      "default": {},
+      "example": {
+        "enabled": true,
+        "schedule": "daily",
+        "keep": 30
+      },
+      "note": "Set only on the backup module. ZFS snapshots protect against credential-holder/prune tampering, not node-root compromise (use S3 Object Lock on a satellite for that)."
+    },
+    "placementState": {
+      "description": "Resolved backup placement (ADR-012 §2.1) and the single source of truth for where PBS lives. Ships EMPTY on the released module; backup/install.sh resolves it once and writes it back. Values: 'node' (PBS software + datastore realized on the Host named by .node — a cluster node or a kind: machine instance; ADR-012 §2.1, #600), 'shim' (no datastore anywhere — still satisfies dependsOn:backup:vm, promoted in place by `module-manager module update backup` once storage appears), 'external' (an externally-managed PBS at .pbsUrl is consumed; nothing is provisioned — set at install time and sticky thereafter — left only by `backup-manager placement reset`, #607). The legacy values 'local' and 'remote-only' are accepted for one release and migrated in place by update.sh to 'node' / 'external' (§4.1); the pre-#600 'node:<name>' is read until migration 0007 rewrites it to 'node' + .node.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "backup:vm"
+      ],
+      "pattern": "^$|^(shim|external|node|node:.+|local|remote-only)$",
+      "example": "node",
+      "note": "Set only on the backup module, at install/update time — never hand-authored. The resolved NODE is carried by this state; .node is only the discovery constraint."
+    },
+    "pushTarget": {
+      "description": "DEPRECATED (ADR-012 v0.3) — subsumed by placementState:'external' + pbsUrl, which name the external PBS clients push to directly. Read for one release (update.sh seeds pbsUrl from this target's remoteHost when migrating a legacy remote-only install), then removed. Backup module, remote-only placement only (ADR-012 P4). Name of the default off-site push target — a config/push-<name>.json describing a REMOTE PBS this cluster pushes its VM backups to when there is no local PBS. Empty/absent means no default; onboard with `backup-manager peer add push <name> …`.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "backup:vm"
+      ],
+      "default": "",
+      "example": "offsite",
+      "note": "Set only on the backup module. The push credential is prompted at onboarding, never stored."
+    },
+    "pbsUrl": {
+      "description": "The PBS that backup clients push their snapshots to (ADR-012 §1.4/§2.1). Defaults to the local PBS DNS name; overridden to the externally-managed PBS's URL (a satellite's tunnel address, a public host, or a pre-existing LAN PBS) when placementState is 'external'. The credential for it is prompted at onboarding and never stored here.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "backup:vm"
+      ],
+      "default": "backup.mgmt.internal",
+      "example": "pbs.offsite.example",
+      "note": "Set only on the backup module. Required (non-default) when placementState is 'external'."
+    },
+    "vmname": {
+      "description": "Name of the VM, also used as module name and OS hostname",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "<computed from module name + environment>",
+      "pattern": "^[a-zA-Z][a-zA-Z0-9-]*$",
+      "example": "nextcloud",
+      "note": "ADR-007 P5: vmname is COMPUTED at install time and need not be authored in the module JSON. The installer derives it from the module name and the target environment: '<module>' when the environment is the default environment, else '<module>-<environment>'. An explicit vmname in the JSON still wins (back-compat). The field is retained in the schema for legacy module configs."
+    },
+    "vmid": {
+      "description": "Unique VM ID across all TAPPaaS nodes",
+      "type": "integer",
+      "requiredBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "minimum": 100,
+      "maximum": 999999,
+      "example": 200
+    },
+    "vmtag": {
+      "description": "Proxmox tags for the VM. Comma-separated list, no spaces.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "TAPPaaS",
+      "format": "^[a-zA-Z0-9]+(,[a-zA-Z0-9]+)*$",
+      "example": "TAPPaaS,Foundation",
+      "common_values": {
+        "TAPPaaS": "Standard TAPPaaS module",
+        "TAPPaaS,Foundation": "Core infrastructure module",
+        "TAPPaaS,Test": "Test/development module"
+      }
+    },
+    "node": {
+      "description": "Name of the Proxmox/TAPPaaS node where the module should be installed. If null, defaults to the first node in configuration.json.",
+      "type": "string",
+      "references": "nodes",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": null,
+      "example": "tappaas1"
+    },
+    "cores": {
+      "description": "Number of CPU cores allocated to the VM",
+      "type": "integer",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": 2,
+      "minimum": 1,
+      "maximum": 128,
+      "example": 4
+    },
+    "memory": {
+      "description": "RAM allocation in megabytes",
+      "type": "integer",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": 4096,
+      "minimum": 512,
+      "example": 8192,
+      "note": "Value in MB (e.g., 4096 = 4GB)"
+    },
+    "diskSize": {
+      "description": "Disk size with unit suffix",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "8G",
+      "pattern": "^[0-9]+[GMK]$",
+      "example": "32G",
+      "note": "G=gigabytes, M=megabytes, K=kilobytes"
+    },
+    "storage": {
+      "description": "Name of the storage pool for the module. Left undeclared, the pool is resolved against the target node at create time: 'tanka1' when that node has it, otherwise the node's first ZFS pool that can hold VM disks (#692).",
+      "type": "string",
+      "references": "storage",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "tanka1",
+      "example": "tanka1",
+      "note": "Must exist on the target node. A declared pool the node does not have is refused before the image is downloaded, naming the pools it does have (#692) — it is not silently replaced, because a declared pool is the operator's word."
+    },
+    "imageType": {
+      "description": "How the guest's image/rootfs is sourced. Applies to both VMs (cluster:vm) and containers (cluster:lxc); whether the guest is a VM or an LXC is determined by dependsOn (cluster:vm vs cluster:lxc), not by this field.",
+      "type": "string",
+      "requiredBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "clone",
+      "values": {
+        "clone": {
+          "description": "cluster:vm — VM cloned from an existing Proxmox VM template. cluster:lxc — container created (pct create) from a CT template in local:vztmpl, downloaded via pveam if absent.",
+          "image_field": "cluster:vm: VMID of the template to clone. cluster:lxc: CT template filename (e.g. debian-12-standard_12.12-1_amd64.tar.zst)"
+        },
+        "iso": {
+          "description": "VM is created with a CD-ROM drive attached to the ISO. ISO is downloaded and placed in local:iso. (VM only.)",
+          "image_field": "Name of the ISO file",
+          "requires": "imageLocation"
+        },
+        "img": {
+          "description": "VM disk imports the image (downloaded and unzipped if compressed). Image is discarded after import. (VM only.)",
+          "image_field": "Name of the image file",
+          "requires": "imageLocation"
+        },
+        "apt": {
+          "description": "Package is a simple apt package to be installed",
+          "image_field": "Name of the apt package(s) to install"
+        }
+      }
+    },
+    "image": {
+      "description": "Image identifier. Interpretation depends on imageType.",
+      "type": "string",
+      "requiredBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "by_imageType": {
+        "clone": "cluster:vm — VMID of the Proxmox template to clone. cluster:lxc — CT template filename (downloaded via pveam if absent)",
+        "iso": "Filename of the ISO image",
+        "img": "Filename of the disk image",
+        "apt": "Name of apt package(s) to install"
+      },
+      "examples": {
+        "clone": "9000 (VM) or debian-12-standard_12.12-1_amd64.tar.zst (LXC)",
+        "iso": "ubuntu-24.04-live-server-amd64.iso",
+        "img": "OPNsense-25.7-nano-amd64.img.bz2",
+        "apt": "nginx"
+      }
+    },
+    "bridge0": {
+      "description": "Proxmox bridge for the VM's first network interface (net0)",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "lan",
+      "example": "lan"
+    },
+    "mac0": {
+      "description": "MAC address for the net0 network port",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "<randomly generated>",
+      "format": "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$",
+      "example": "BC:24:11:00:01:10"
+    },
+    "trunks0": {
+      "description": "Semicolon-separated list of additional zone names to trunk on net0. Zone names are resolved to VLAN tags. Used when a VM needs to see traffic from multiple VLANs on a single NIC (e.g., the firewall).",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": "NONE",
+      "format": "^([a-z][a-zA-Z0-9]*(;[a-z][a-zA-Z0-9]*)*|ALL|\\*|NONE)$",
+      "example": "srv;iot;dmz",
+      "note": "Zone names must exist in zones.json, camelCase only [a-zA-Z0-9]. Semicolon-delimited, no spaces. Sentinels: ALL/* expand to every Active zone; NONE = empty."
+    },
+    "HANode": {
+      "description": "Secondary node for High Availability. Defaults to the first node in configuration.json that differs from 'node'. Must be different from 'node' and have the same storage defined. HA is only active when 'cluster:ha' is in dependsOn.",
+      "type": "string",
+      "references": "nodes",
+      "usedBy": [
+        "cluster:ha"
+      ],
+      "default": null
+    },
+    "replicationSchedule": {
+      "description": "Cron-style schedule for HA replication interval",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:ha"
+      ],
+      "default": "*/15",
+      "example": "*/15",
+      "note": "Default is every 15 minutes"
+    },
+    "haCpu": {
+      "description": "The CPU model the HA guest runs. 'common': the richest x86-64 level its node and HANode both offer (config/cluster-cpu.json) — 'host' when both offer the same features — so every move between them is live-safe; a newer CPU's extra instructions (AVX-512 …) are not used. 'host': the full CPU of the node it starts on; then a move between nodes with different CPUs is a stop and start (HA failback off, node drains relocate it), never a live migration.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:ha"
+      ],
+      "default": "common",
+      "values": {
+        "common": "Live-safe moves; the instructions both nodes share",
+        "host": "The node's full CPU; moves between unlike CPUs stop and start the guest"
+      },
+      "example": "host"
+    },
+    "swap": {
+      "description": "Swap in MB for an LXC container. A container has no BIOS and no virtual disk controller, so its memory pressure is handled differently from a VM's — 0 means the container may not swap at all, which is the TAPPaaS default.",
+      "type": "integer",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:lxc"
+      ],
+      "default": 0,
+      "minimum": 0,
+      "example": 512,
+      "note": "cluster:lxc's update-service.sh has always read this from config with a default of 0; it was simply never declared here, so no path could report or classify it. Declared in ADR-020 P5."
+    },
+    "cputype": {
+      "description": "CPU type emulation for the VM",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm"
+      ],
+      "default": "host",
+      "example": "host",
+      "note": "Use 'host' for best performance, or a specific CPU model for migration compatibility"
+    },
+    "bridge1": {
+      "description": "Proxmox bridge for the VM's second network interface (net1). The sentinel 'NONE' — which is also what an absent bridge1 resolves to — means the VM has only one NIC.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm"
+      ],
+      "default": "NONE",
+      "example": "lan",
+      "note": "cluster:vm only — a container has ONE NIC in TAPPaaS: neither Create-TAPPaaS-LXC.sh nor cluster:lxc's install/update service mentions net1, so the cluster:lxc claim these fields used to carry (bridge1/mac1/zone1/trunks1) was ownership that did not exist, removed in ADR-020 P5. Only used if a second network interface is needed. The default was 'lan' until ADR-020 P1, which contradicted both acting paths — Create-TAPPaaS-VM.sh and cluster:vm/update-service.sh have always read it as 'NONE' — and made the drift report claim a desired second NIC that nothing would ever create. Declaring a bridge1 on a VM that has none ADDS the NIC; removing it (back to the 'NONE' default) DELETES the live net1, which reboots the guest."
+    },
+    "mac1": {
+      "description": "MAC address for the net1 network port",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm"
+      ],
+      "default": "<randomly generated>",
+      "format": "^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$"
+    },
+    "trunks1": {
+      "description": "Semicolon-separated list of additional zone names to trunk on net1. Same format as trunks0.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm"
+      ],
+      "default": "NONE",
+      "format": "^([a-z][a-zA-Z0-9]*(;[a-z][a-zA-Z0-9]*)*|ALL|\\*|NONE)$",
+      "example": "srv;iot;dmz",
+      "note": "Only used if bridge1 is defined. Zone names must exist in zones.json, camelCase only [a-zA-Z0-9]."
+    },
+    "diskAutoGrow": {
+      "description": "Grow this guest's disk automatically when its / fills up (site.json diskAutoGrow sets when and by how much). false: never — the disk is only grown by hand.",
+      "type": "boolean",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm"
+      ],
+      "default": true,
+      "example": false
+    },
+    "diskSizeMax": {
+      "description": "The largest size automatic growth takes this guest's disk to. Not declared: no cap beyond the pool's room.",
+      "type": "string",
+      "pattern": "^[0-9]+[GMKT]$",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm"
+      ],
+      "default": null,
+      "example": "200G"
+    },
+    "thinDisk": {
+      "description": "Thin-provision the guest's ZFS disks (#773): every zvol gets refreservation=none, so a disk takes pool space as it fills instead of reserving its full size on day one — on the HA node too, since replication carries the property. Opt-in per module: a thin disk can overcommit its pool, and a full pool fails writes for every guest on it, so choose it for disks that fill slowly from empty (immich's photo library) and watch the pool. Not declared = not managed: the guest keeps what its storage creates (thick on the tank pools).",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm"
+      ],
+      "default": null,
+      "example": "true",
+      "values": {
+        "true": "Thin — refreservation=none on every zvol (the cloud-init drive excepted)",
+        "false": "Thick — refreservation=auto, the full size reserved; refused by ZFS when the pool cannot hold it"
+      },
+      "note": "ZFS storage only. A guest with no zvol does not report the field, so declaring it there is a no-op, not drift."
+    },
+    "bios": {
+      "description": "BIOS type for VM creation",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm"
+      ],
+      "default": "ovmf",
+      "values": {
+        "ovmf": "UEFI firmware (recommended for modern OSes)",
+        "seabios": "Legacy BIOS (for older OSes or special cases)"
+      }
+    },
+    "ostype": {
+      "description": "Proxmox guest OS profile. Controls QEMU clock, ACPI, and balloon-driver behaviour — it does NOT install the OS. The letter in 'l26' is a lowercase L (Linux), not the digit 1.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm"
+      ],
+      "default": "l26",
+      "note": "Pick the value that matches your guest OS. It also decides how the guest reads the emulated hardware clock: a Windows ostype gets Proxmox's localtime=1, everything else keeps the RTC in UTC (#699). A wrong ostype therefore boots the guest a whole timezone offset away from real time until NTP walks it back, and changes power-management behaviour, but does not prevent the VM from booting.",
+      "values": {
+        "l26": "Linux kernel 2.6 and later — NixOS, Debian, Ubuntu, and any modern Linux distro. Enables KVM paravirtual clock, assumes UTC hardware clock. USE THIS for all TAPPaaS NixOS and Debian/Ubuntu VMs.",
+        "l24": "Linux kernel 2.4 — legacy, rarely needed.",
+        "win11": "Windows 11 / Windows Server 2022 / Windows Server 2025. Enables Windows-specific ACPI, local-time hardware clock, Hyper-V enlightenments, and TPM 2.0 support. USE THIS for all Windows Server 2025 VMs.",
+        "win10": "Windows 10 / Windows Server 2016 / Windows Server 2019. Same Windows treatment as win11 but with an earlier ACPI profile.",
+        "win8": "Windows 8.x / Windows Server 2012 / Server 2012 R2.",
+        "win7": "Windows 7 / Windows Server 2008 R2.",
+        "win2k25": "Explicit alias for Windows Server 2025. Equivalent to win11 in Proxmox — win11 is preferred.",
+        "win2k22": "Explicit alias for Windows Server 2022. Equivalent to win11 in Proxmox — win11 is preferred.",
+        "win2k19": "Explicit alias for Windows Server 2019. Equivalent to win10 in Proxmox — win10 is preferred.",
+        "other": "Generic / unknown OS — minimal hypervisor optimisation.",
+        "solaris": "Solaris / OpenSolaris / OpenIndiana."
+      }
+    },
+    "autoInstall": {
+      "description": "Whether this template can be built fully automatically without operator input. Used by cluster:vm/install-service.sh when a required template is missing — if true, the template is auto-built before the clone proceeds; if false, the operator must build it manually first.",
+      "type": "boolean",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm"
+      ],
+      "default": false,
+      "values": {
+        "true": "Fully unattended build — no console interaction required (e.g. tappaas-winserver with autounattend.xml)",
+        "false": "Requires manual installation — operator must run `module-manager module add` and complete the setup (e.g. tappaas-nixos graphical installer)"
+      }
+    },
+    "sshAccess": {
+      "description": "Whether TAPPaaS can manage this guest over SSH. Set false for sealed appliance images that expose no login shell (e.g. Home Assistant OS). When false, cluster:vm test-service skips its SSH-based health checks (connectivity, disk, memory) and relies on the module's own test.sh for app-level health — so a working appliance is not falsely reported as failing (which would otherwise abort updates).",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm"
+      ],
+      "default": "true",
+      "values": {
+        "true": "TAPPaaS manages the guest over SSH (NixOS VMs, OPNsense as root)",
+        "false": "Unmanaged appliance — no SSH; skip SSH-based cluster:vm tests"
+      }
+    },
+    "imageLocation": {
+      "description": "URL or local path where the image file is located. For images already on the Proxmox node use the local directory path (e.g. '/var/lib/vz/template/iso/'). For remote images use an https:// URL.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm"
+      ],
+      "format": "^(https?://.+|/.+)$",
+      "example": "https://releases.ubuntu.com/24.04/",
+      "note": "For apt, if present, names an additional package repository to add"
+    },
+    "imageSha256": {
+      "description": "SHA-256 of the file downloaded from imageLocation. A download that does not match is removed and not imported. Written by release/bump-version.sh for TAPPaaS-built images; for any other image, the hash its publisher states. Without it the download is used unchecked, with a warning.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm"
+      ],
+      "format": "^(sha256:)?[0-9a-fA-F]{64}$",
+      "example": "4e522d9011118f0bbeaea0df58ff517a45c71e6138a22af32a2151749ea87083"
+    },
+    "cloudInit": {
+      "description": "Whether the VM supports cloud-init for initial configuration",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm"
+      ],
+      "default": "true",
+      "values": {
+        "true": "VM supports cloud-init (SSH keys, hostname, etc.)",
+        "false": "VM does not use cloud-init"
+      }
+    },
+    "windows": {
+      "description": "Windows-specific configuration options for Windows Server clone VMs.",
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "templates:windows"
+      ],
+      "default": null,
+      "fields": {
+        "enableRDP": {
+          "description": "Enable Remote Desktop Protocol. SSH over OpenSSH is always the primary access method.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "example": {
+        "enableRDP": false
+      }
+    },
+    "mounts": {
+      "description": "The NFS shares this guest mounts (ADR-029 v0.9 D3). Each entry: {path, share, subdir?, access?, required?, stopUnits?, stopCommand?, startCommand?}. share is a Site-unique share NAME — never the machine that carries it; it is reached through its DNS alias nfs-<share>.mgmt.internal — or <ip-or-host>:/<path> for an unmodelled server. A share not declared in config/shares.json leaves the mount pending: the directory stays local, and is migrated into once the share appears (with consent).",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "storage:nfs"
+      ],
+      "default": [],
+      "items": {
+        "type": "object",
+        "fields": {
+          "path": {
+            "description": "Absolute directory in the guest. Not /, /etc, /nix, /var, /usr, /boot or a system path.",
+            "type": "string",
+            "required": true,
+            "example": "/var/lib/jellyfin/media"
+          },
+          "share": {
+            "description": "A Site-unique share name (reached through nfs-<share>.mgmt.internal, ADR-029 D2b), or <ip-or-host>:/<path> for an unmodelled server. The <instance>:<name> form of v0.1–v0.7 is withdrawn.",
+            "type": "string",
+            "required": true,
+            "example": "media"
+          },
+          "subdir": {
+            "description": "A directory inside the share to mount instead of its root (ADR-029 D15). Relative, no . or ..; created on first use, owned by the share's owner. Organisation, not isolation: the grant is per share.",
+            "type": "string",
+            "example": "jellyfin"
+          },
+          "access": {
+            "description": "What the consumer asks for. Must not exceed the export's grant.",
+            "type": "string",
+            "values": {
+              "ro": "read-only (default)",
+              "rw": "read-write"
+            },
+            "default": "ro"
+          },
+          "required": {
+            "description": "false: nofail + automount — the guest boots and the app starts without the share. true: the mount is required at boot.",
+            "type": "boolean",
+            "default": false
+          },
+          "stopUnits": {
+            "description": "systemd units in the guest to stop while the directory is migrated into its share, and start again after (ADR-029 D14). An open-files guard aborts the migration if anything else still holds the directory.",
+            "type": "array",
+            "items": "string",
+            "default": [],
+            "example": [
+              "jellyfin.service"
+            ]
+          },
+          "stopCommand": {
+            "description": "A command run in the guest (sudo) before stopUnits stop, for what is not a systemd unit (ADR-029 D14).",
+            "type": "string"
+          },
+          "startCommand": {
+            "description": "A command run in the guest (sudo) after stopUnits start again (ADR-029 D14).",
+            "type": "string"
+          }
+        }
+      },
+      "example": [
+        {
+          "path": "/media",
+          "share": "media",
+          "subdir": "jellyfin",
+          "access": "rw",
+          "stopUnits": [
+            "jellyfin.service"
+          ]
+        }
+      ]
+    },
+    "assistantModel": {
+      "description": "The LiteLLM model the console's assistant asks for (ADR-034 D7, O3). Absent: LiteLLM's model named `default` when the console's key may use one, else the first model LiteLLM lists for the key.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": "vllm"
+    },
+    "connector": {
+      "description": "The Nextcloud integration this consumer provides. update-service.sh re-applies 'onlyoffice' (the ADR-COM-0002 document-server wiring for euro-office); 'talk' (coturn) and 'hpb' (nextcloud-hpb) name the consumer's role and are not re-applied by this service.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "nextcloud:fileservice"
+      ],
+      "default": null,
+      "format": "^(onlyoffice|talk|hpb)$",
+      "example": "onlyoffice",
+      "values": {
+        "onlyoffice": "Document editor (euro-office): DocumentServerUrl/StorageUrl + JWT into the onlyoffice app.",
+        "talk": "TURN/STUN relay (coturn): the shared TURN secret and the coturn turnHost into Talk's stun/turn servers (/etc/secrets/talk.env → nextcloud-configure-talk-turn.service).",
+        "hpb": "Talk High-Performance Backend (nextcloud-hpb): the signaling secret and wss:// URL into Talk's signaling servers (/etc/secrets/hpb.env → nextcloud-configure-hpb.service)."
+      }
+    },
+    "nextcloudPublicUrl": {
+      "description": "Nextcloud's PUBLIC base URL (https://<proxyDomain>), stamped into the consumer's deployed config by nextcloud:fileservice so the consumer's .nix can read it from its companion JSON. The HPB's signaling server validates Talk against this exact URL (an internal name is rejected with invalid_backend).",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "nextcloud:fileservice"
+      ],
+      "default": "<derived: https://<Nextcloud proxyDomain>>",
+      "example": "https://nextcloud.example.com",
+      "note": "Stamped, never authored. Re-derived on every update of the consumer."
+    },
+    "turnHost": {
+      "description": "host:port of the TURN relay EXTERNAL clients use: coturn's publicDomain, which public DNS resolves to the WAN IP. A site's wildcard split-horizon answers that same name with the reverse proxy internally, which runs no TURN, so consumers advertise this alongside turnHostInternal and let ICE choose.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "coturn:turn"
+      ],
+      "default": "<derived: coturn publicDomain or internal FQDN, port 3478>",
+      "example": "turn.example.com:3478",
+      "note": "Stamped, never authored. Re-derived on every update of the consumer, so a coturn publicDomain change propagates on the next sweep."
+    },
+    "turnHostInternal": {
+      "description": "host:port of the TURN relay for INTERNAL clients and server-side consumers (a Janus SFU): coturn's <vmname>.<zone0>.internal. Reachable from any zone with a pinhole into the DMZ.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "coturn:turn"
+      ],
+      "default": "<derived: coturn <vmname>.<zone0>.internal, port 3478>",
+      "example": "coturn.dmz.internal:3478",
+      "note": "Stamped, never authored."
+    },
+    "sshPort": {
+      "description": "SSH to the mothership through the satellite (ADR-010 §4.4.2): the satellite's public TCP port that passes, blind, to tappaas-cicd:22 — for a Site with no public address, a shell on the mothership without a WireGuard client. Absent or 0: off. Needs sshAllow; only those sources are admitted. Log in as `ssh -p <sshPort> tappaas@<satellite>`; key-only, as the mothership's sshd always is.",
+      "type": "integer",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": 2222,
+      "note": "Not a port the satellite uses itself: 22 (its own sshd, the operator's out-of-band login), 80, 443, the tunnel's 51820, the admin VPN's 51821 or 8007. Refused on a locked-down satellite. Turn it on: module-manager module modify <instance> --set sshPort=2222 --set 'sshAllow=[\"198.51.100.7\"]'; off: --set sshPort=0."
+    },
+    "sshAllow": {
+      "description": "The sources sshPort admits: IPv4 addresses or networks (`198.51.100.7`, `198.51.100.0/24`), enforced on the satellite by its firewall and by nginx, which sees the real client. Required, non-empty, while sshPort is set; everyone else is refused.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": [
+        "198.51.100.7"
+      ],
+      "note": "No 0.0.0.0/0 and no network with host bits set. A changing home or mobile address needs the list updated — or the admin WireGuard, which needs no list."
+    },
+    "name": {
+      "description": "The name the firewall knows the satellite by (server tappaas-edge-<name>, peer tappaas-<name>); defaults to the instance name. A satellite from before ADR-010 §8.4 keeps its own (e.g. satellite1).",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": "satellite1"
+    },
+    "host": {
+      "description": "The VPS itself: publicIp, sshUser and operatorSshKeys (the operator's out-of-band keys, recorded at install). Each key is described in schemas/satellite-fields.json.",
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": {
+        "publicIp": "198.51.100.4",
+        "sshUser": "root"
+      }
+    },
+    "provider": {
+      "description": "Where the VPS comes from: type (hetzner), allocation (portal or api) and, for api, location and serverType. Each key is described in schemas/satellite-fields.json.",
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": {
+        "type": "hetzner",
+        "allocation": "portal"
+      }
+    },
+    "oauthRedirectPaths": {
+      "description": "The paths on the consumer's address Forgejo may redirect to after a sign-in (the OAuth2 redirect URIs, without the address). The address is the consumer's published name (https) when the proxy serves it, else <vmname>.<zone>.internal:<proxyPort>.",
+      "type": "array",
+      "requiredBy": [
+        "forgejo:oauth"
+      ],
+      "usedBy": [
+        "forgejo:oauth"
+      ],
+      "default": [],
+      "example": [
+        "/authorize"
+      ],
+      "note": "Set by the consumer's module JSON (Woodpecker's is /authorize); an operator rarely changes it."
+    },
+    "repoEditors": {
+      "description": "Forgejo usernames given write access to the consumer's repository. A person signs in to Forgejo once (with Authentik) before they can be added; until then the service warns and adds them on a later update.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "forgejo:repo"
+      ],
+      "default": [],
+      "example": [
+        "lars"
+      ],
+      "note": "Forgejo admins (Authentik group forgejo-admins) reach every repository already. Removing a name from the list does not take access away; do that in Forgejo."
+    },
+    "woodpeckerAdmins": {
+      "description": "Forgejo usernames that are Woodpecker administrators: they see every repository, manage agents and the site-wide secrets. Anyone else with a Forgejo account may sign in and run the pipelines of the repositories they can write to.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": [],
+      "example": [
+        "lars"
+      ]
+    },
+    "vpn": {
+      "description": "Optional: send qBittorrent's traffic through a WireGuard VPN, with a kill switch. Absent (the default): no VPN, torrents use the site's WAN address.",
+      "type": "object",
+      "usedBy": [],
+      "requiredBy": [],
+      "default": {},
+      "fields": {
+        "provider": {
+          "description": "Turns the VPN on, and decides how the incoming port is obtained.",
+          "type": "string",
+          "values": {
+            "proton": "Proton VPN: the port is leased over NAT-PMP every 45 seconds and handed to qBittorrent",
+            "airvpn": "AirVPN: the port reserved in its client area, given as forwardedPort",
+            "privado": "PrivadoVPN: no forwarded port; its WireGuard config expires after 30 days, so update warns from day 25",
+            "other": "Any WireGuard provider: forwardedPort if it has one, else no incoming port"
+          }
+        },
+        "forwardedPort": {
+          "description": "The provider's forwarded port (airvpn, other). Not used for proton or privado.",
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535
+        }
+      },
+      "example": {
+        "provider": "proton"
+      },
+      "note": "The WireGuard config itself is a secret and never goes in the module config: put the provider's .conf at /etc/secrets/vpn-wireguard.conf on the VM. Until it is there, qBittorrent stays stopped, so nothing leaks. Remove natRules when the VPN is on: the home port is then closed anyway."
+    },
+    "portSync": {
+      "description": "What port-sync.sh does with the game ports AMP's instances use: forward them on the firewall's WAN interface, only report what it would forward, or nothing.",
+      "type": "string",
+      "values": {
+        "on": "Forward each instance's game ports; remove forwards of deleted or stopped instances",
+        "dry-run": "Print AMP's port data and the forwards it would create; change nothing",
+        "off": "Remove every AMP forward: game servers are LAN-only"
+      },
+      "usedBy": [],
+      "requiredBy": [],
+      "default": "on",
+      "example": "on",
+      "note": "LAN players reach every game port through the module's ingress rule from home, whatever this is set to."
+    }
+  },
+  "module_structure": {
+    "description": "Standard files in a TAPPaaS module directory",
+    "files": {
+      "<module>.json": {
+        "description": "Module configuration file",
+        "required": true
+      },
+      "install.sh": {
+        "description": "Installation script called with module name as argument",
+        "required": true
+      },
+      "update.sh": {
+        "description": "Update script called periodically to keep module updated",
+        "required": true
+      },
+      "<module>.nix": {
+        "description": "NixOS configuration for NixOS-based modules",
+        "required": false
+      },
+      "<module>.meta.json": {
+        "description": "Optional, cluster:lxc only. Carries LXC-specific provisioning details that are intentionally NOT validated against this schema (so device/passthrough config stays flexible). Read by cluster:lxc Create-TAPPaaS-LXC.sh. A module declares cluster:lxc (not cluster:vm) in dependsOn; declaring both is rejected by install-module.sh.",
+        "required": "if cluster:lxc and the container needs passthrough/bind-mounts/non-default lxc options",
+        "schema": {
+          "gpu": {
+            "description": "Optional. GPU device passthrough. When present, the provisioner emits lxc.cgroup2.devices.allow entries and bind-mounts /dev/kfd and the render node into the container.",
+            "type": "object",
+            "fields": {
+              "kfd_major": {
+                "type": "integer",
+                "description": "Major number of /dev/kfd"
+              },
+              "kfd_minor": {
+                "type": "integer",
+                "description": "Minor number of /dev/kfd"
+              },
+              "render_node": {
+                "type": "string",
+                "description": "DRI render node name, e.g. renderD128"
+              },
+              "render_major": {
+                "type": "integer",
+                "description": "Major number of /dev/dri/<render_node>"
+              },
+              "render_minor": {
+                "type": "integer",
+                "description": "Minor number of /dev/dri/<render_node>"
+              }
+            }
+          },
+          "bindMounts": {
+            "description": "Optional. Host directories bind-mounted into the container as mpN entries. NOTE: containers with bind mounts cannot use pct snapshot — rollback is unavailable for these modules.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "fields": {
+                "src": {
+                  "type": "string",
+                  "description": "Host path (created if absent)",
+                  "required": true
+                },
+                "dst": {
+                  "type": "string",
+                  "description": "Mount point inside the container",
+                  "required": true
+                }
+              }
+            },
+            "example": [
+              {
+                "src": "/mnt/models",
+                "dst": "/opt/models"
+              }
+            ]
+          },
+          "lxcOptions": {
+            "description": "Optional. Overrides for pct create defaults.",
+            "type": "object",
+            "fields": {
+              "unprivileged": {
+                "type": "integer",
+                "description": "0 = privileged (required for GPU passthrough), 1 = unprivileged. Default 1.",
+                "default": 1
+              },
+              "features": {
+                "type": "string",
+                "description": "pct --features value, e.g. 'nesting=1'",
+                "default": "nesting=1"
+              },
+              "swap": {
+                "type": "integer",
+                "description": "Swap in MB. Default 0.",
+                "default": 0
+              }
+            }
+          }
+        }
+      },
+      "README.md": {
+        "description": "Module documentation",
+        "required": true
+      },
+      "services/<service-name>/install-service.sh": {
+        "description": "Script called when a module consuming this service is installed. Called with the consuming module name as argument.",
+        "required": "if module provides services"
+      },
+      "services/<service-name>/update-service.sh": {
+        "description": "Script called when a module consuming this service is updated. Called with the consuming module name as argument.",
+        "required": "if module provides services"
+      },
+      "services/<service-name>/pinhole.json": {
+        "description": "Declares the network ports a service exposes. When a consumer module depends on this service across zones, network:rules synthesises an auto-pinhole rule per declared port (subject to the destination zone's pinhole-allowed-from policy). Issue #173.",
+        "required": false,
+        "schema": {
+          "ports": {
+            "description": "Network ports this service exposes for consumers in other zones.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "fields": {
+                "port": {
+                  "description": "TCP/UDP port number, or port range as a string (e.g. '8000:8010').",
+                  "type": "integer|string",
+                  "required": true,
+                  "minimum": 1,
+                  "maximum": 65535
+                },
+                "protocol": {
+                  "description": "Transport protocol.",
+                  "type": "string",
+                  "values": {
+                    "TCP": "TCP only (default)",
+                    "UDP": "UDP only",
+                    "TCP/UDP": "Both TCP and UDP",
+                    "ICMP": "ICMP (port field ignored)"
+                  },
+                  "default": "TCP"
+                },
+                "description": {
+                  "description": "Human-readable purpose of this port (audit/documentation).",
+                  "type": "string",
+                  "required": false
+                }
+              }
+            },
+            "example": [
+              {
+                "port": 4000,
+                "protocol": "TCP",
+                "description": "LiteLLM API"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "naming_conventions": {
+    "module_name": "Typically the main software product or capability being delivered",
+    "vm_name": "Same as module name by default",
+    "hostname": "Same as module name by default",
+    "config_file": "<module>.json"
+  }
+}

@@ -1,0 +1,1045 @@
+{
+  "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+  "class": "site",
+  "ancestors": [
+    "site",
+    "collection",
+    "ci",
+    "object"
+  ],
+  "name": "rossen",
+  "displayName": "Rossen Production Cluster",
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T08:47:49.432Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:19.173Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.173Z"
+  },
+  "at": null,
+  "attributes": {
+    "assessment": {
+      "value": {
+        "time": "2026-11-01T08:50:02.363Z",
+        "gates": [
+          {
+            "name": "service-liveness",
+            "detail": "21 managed module(s) running",
+            "status": "pass"
+          },
+          {
+            "name": "disk-threshold",
+            "detail": "20 guest(s) under 80%",
+            "status": "pass"
+          },
+          {
+            "name": "memory-commitment",
+            "detail": "tappaas1 42.0/61.8G 68%; tappaas2 37.8/123.5G 31%; tappaas3 13.5/30.8G 44%; tappaas4 0.0/31.3G 0%",
+            "status": "pass",
+            "findings": [
+              {
+                "text": "42.0/61.8G committed, 68%",
+                "status": "pass",
+                "subject": {
+                  "kind": "node",
+                  "name": "tappaas1"
+                }
+              },
+              {
+                "text": "37.8/123.5G committed, 31%",
+                "status": "pass",
+                "subject": {
+                  "kind": "node",
+                  "name": "tappaas2"
+                }
+              },
+              {
+                "text": "13.5/30.8G committed, 44%",
+                "status": "pass",
+                "subject": {
+                  "kind": "node",
+                  "name": "tappaas3"
+                }
+              },
+              {
+                "text": "0.0/31.3G committed, 0%",
+                "status": "pass",
+                "subject": {
+                  "kind": "node",
+                  "name": "tappaas4"
+                }
+              }
+            ]
+          },
+          {
+            "name": "storage-pools",
+            "rows": [
+              {
+                "text": "tappaas1/local: 17% used (16.0/93.9G)",
+                "status": "pass",
+                "subject": {
+                  "kind": "pool",
+                  "name": "tappaas1/local"
+                }
+              },
+              {
+                "text": "tappaas1/local-lvm: 0% used (0.0/794.3G)",
+                "status": "pass",
+                "subject": {
+                  "kind": "pool",
+                  "name": "tappaas1/local-lvm"
+                }
+              },
+              {
+                "text": "tappaas1/tanka1: 12% used (431.0/3596.5G)",
+                "status": "pass",
+                "subject": {
+                  "kind": "pool",
+                  "name": "tappaas1/tanka1"
+                }
+              },
+              {
+                "text": "tappaas1/tankb1: 0% used (0.0/11040.0G)",
+                "status": "pass",
+                "subject": {
+                  "kind": "pool",
+                  "name": "tappaas1/tankb1"
+                }
+              },
+              {
+                "text": "tappaas2/local: 12% used (11.7/93.9G)",
+                "status": "pass",
+                "subject": {
+                  "kind": "pool",
+                  "name": "tappaas2/local"
+                }
+              },
+              {
+                "text": "tappaas2/local-lvm: 0% used (0.0/337.9G)",
+                "status": "pass",
+                "subject": {
+                  "kind": "pool",
+                  "name": "tappaas2/local-lvm"
+                }
+              },
+              {
+                "text": "tappaas2/tanka1: 18% used (327.2/1845.0G)",
+                "status": "pass",
+                "subject": {
+                  "kind": "pool",
+                  "name": "tappaas2/tanka1"
+                }
+              },
+              {
+                "text": "tappaas3/local: 17% used (11.3/67.7G)",
+                "status": "pass",
+                "subject": {
+                  "kind": "pool",
+                  "name": "tappaas3/local"
+                }
+              },
+              {
+                "text": "tappaas3/local-lvm: 0% used (0.0/141.2G)",
+                "status": "pass",
+                "subject": {
+                  "kind": "pool",
+                  "name": "tappaas3/local-lvm"
+                }
+              },
+              {
+                "text": "tappaas3/tanka1: 50% used (461.0/922.5G)",
+                "status": "pass",
+                "subject": {
+                  "kind": "pool",
+                  "name": "tappaas3/tanka1"
+                }
+              },
+              {
+                "text": "tappaas3/tankc1: 10% used (435.8/4528.0G)",
+                "status": "pass",
+                "subject": {
+                  "kind": "pool",
+                  "name": "tappaas3/tankc1"
+                }
+              },
+              {
+                "text": "tappaas4/local: 0% used (0.0/446.3G)",
+                "status": "pass",
+                "subject": {
+                  "kind": "pool",
+                  "name": "tappaas4/local"
+                }
+              },
+              {
+                "text": "tappaas4/local-zfs: 0% used (0.0/446.3G)",
+                "status": "pass",
+                "subject": {
+                  "kind": "pool",
+                  "name": "tappaas4/local-zfs"
+                }
+              },
+              {
+                "text": "tappaas4/tanka1: 0% used (0.0/1798.5G)",
+                "status": "pass",
+                "subject": {
+                  "kind": "pool",
+                  "name": "tappaas4/tanka1"
+                }
+              }
+            ],
+            "detail": "14 pool(s) under 80%",
+            "status": "pass"
+          },
+          {
+            "name": "storage-replication",
+            "detail": "5 replication job(s) on 4 node(s) on schedule",
+            "status": "pass"
+          },
+          {
+            "name": "cpu-impact",
+            "rows": [
+              {
+                "text": "identity: its CPU offers no AVX-512 now — x86-64-v3 takes nothing it uses",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "identity"
+                }
+              },
+              {
+                "text": "immich: haCpu host — keeps its node's full CPU",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "immich"
+                }
+              },
+              {
+                "text": "network: not measured (no answer from network.mgmt.internal) — x86-64-v3 drops AVX-512",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "network"
+                }
+              },
+              {
+                "text": "tappaas-cicd: its CPU offers no AVX-512 now — x86-64-v3 takes nothing it uses",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "tappaas-cicd"
+                }
+              },
+              {
+                "text": "vaultwarden: its CPU offers no AVX-512 now — x86-64-v3 takes nothing it uses",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "vaultwarden"
+                }
+              }
+            ],
+            "detail": "5 HA guest(s): no measurable loss",
+            "status": "pass"
+          },
+          {
+            "name": "guest-memory",
+            "rows": [
+              {
+                "text": "tappaas-cicd    8.0G    7.9G    0.9G      12% of declared, gap 7.0G, cache 5.4G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "tappaas-cicd"
+                }
+              },
+              {
+                "text": "immich          8.0G    8.0G    1.3G      16% of declared, gap 6.7G, cache 6.4G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "immich"
+                }
+              },
+              {
+                "text": "euro-office     8.0G    4.9G    1.3G      16% of declared, gap 3.6G, cache 3.4G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "euro-office"
+                }
+              },
+              {
+                "text": "openwebui       4.0G    4.0G    1.2G      29% of declared, gap 2.8G, cache 2.7G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "openwebui"
+                }
+              },
+              {
+                "text": "litellm         6.0G    5.7G    3.2G      54% of declared, gap 2.5G, cache 2.4G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "litellm"
+                }
+              },
+              {
+                "text": "identity        4.0G    4.0G    1.5G      38% of declared, gap 2.5G, cache 2.4G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "identity"
+                }
+              },
+              {
+                "text": "nextcloud       8.0G    3.3G    0.8G      10% of declared, gap 2.4G, cache 2.3G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "nextcloud"
+                }
+              },
+              {
+                "text": "nomad           4.0G    3.5G    1.2G      30% of declared, gap 2.3G, cache 2.3G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "nomad"
+                }
+              },
+              {
+                "text": "karakeep        3.0G    3.0G    1.0G      32% of declared, gap 2.0G, cache 2.0G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "karakeep"
+                }
+              },
+              {
+                "text": "deconz-test     4.0G    2.4G    0.5G      13% of declared, gap 1.9G, cache 1.8G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "deconz-test"
+                }
+              },
+              {
+                "text": "woodpecker      4.0G    2.3G    0.5G      13% of declared, gap 1.8G, cache 1.7G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "woodpecker"
+                }
+              },
+              {
+                "text": "nextcloud-hpb   4.0G    2.2G    0.4G      11% of declared, gap 1.8G, cache 1.7G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "nextcloud-hpb"
+                }
+              },
+              {
+                "text": "coturn          2.0G    2.0G    0.3G      16% of declared, gap 1.7G, cache 1.6G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "coturn"
+                }
+              },
+              {
+                "text": "unifi-os        5.0G    3.6G    2.0G      40% of declared, gap 1.6G, cache 1.5G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "unifi-os"
+                }
+              },
+              {
+                "text": "forgejo         2.0G    2.0G    0.4G      20% of declared, gap 1.6G, cache 1.5G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "forgejo"
+                }
+              },
+              {
+                "text": "jellyfin        2.0G    2.0G    0.5G      24% of declared, gap 1.5G, cache 1.5G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "jellyfin"
+                }
+              },
+              {
+                "text": "vaultwarden     1.5G    1.5G    0.3G      19% of declared, gap 1.3G, cache 1.2G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "vaultwarden"
+                }
+              },
+              {
+                "text": "logging         2.0G    2.0G    1.1G      57% of declared, gap 0.9G, cache 0.8G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "logging"
+                }
+              },
+              {
+                "text": "lazysite        1.0G    1.0G    0.3G      31% of declared, gap 0.7G, cache 0.7G",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "lazysite"
+                }
+              },
+              {
+                "text": "vllm-amd        46.0G   0.0G    3.0G      6% of its LXC limit",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "vllm-amd"
+                }
+              },
+              {
+                "text": "network         8.0G    8.0G    unmeasured  usage figure is the host's, not the guest's",
+                "status": "skip",
+                "subject": {
+                  "kind": "module",
+                  "name": "network"
+                }
+              },
+              {
+                "text": "── VM totals    88.5G   73.4G   18.8G     reclaimable 46.6G",
+                "status": "pass"
+              },
+              {
+                "text": "── LXC totals   46.0G   0.0G    3.0G      declared is a limit, not an allocation",
+                "status": "pass"
+              }
+            ],
+            "detail": "declared / allocated / used, largest gap first",
+            "status": "pass"
+          },
+          {
+            "name": "backup-status",
+            "detail": "30 module(s) covered",
+            "status": "pass"
+          },
+          {
+            "name": "backup-keys",
+            "detail": "the key stick of 2026-10-28 holds all 7 key(s)",
+            "status": "pass"
+          },
+          {
+            "name": "pending-reboot",
+            "rows": [
+              {
+                "text": "tappaas-cicd    booted 26.05.20261025.1f607aa, next boot 26.05.20261025.1f607aa",
+                "status": "warn",
+                "subject": {
+                  "kind": "module",
+                  "name": "tappaas-cicd"
+                }
+              }
+            ],
+            "detail": "1 of 20 guest(s) waiting for a reboot — health-manager reboot <module>",
+            "status": "warn"
+          },
+          {
+            "name": "site-timezone",
+            "detail": "23 node(s)/guest(s) on Europe/Copenhagen",
+            "status": "pass"
+          },
+          {
+            "name": "quorum",
+            "detail": "4 vote(s)",
+            "status": "pass"
+          },
+          {
+            "name": "lan-uplink",
+            "rows": [
+              {
+                "text": "tappaas3        every leg reaches the same switch (USW-Pro-XG-10-PoE) — redundant ports, not redundant switches",
+                "status": "warn",
+                "subject": {
+                  "kind": "node",
+                  "name": "tappaas3"
+                }
+              }
+            ],
+            "detail": "1 finding(s) on 4 node(s) — site-manager node network show <node>",
+            "status": "warn"
+          },
+          {
+            "name": "ipv6-egress",
+            "detail": "default route via fe80::47:ff:fe00:168, prefix 2001:db8:3:4500::/56; 2606:4700:4700::1111 answers from deconz-test",
+            "status": "pass"
+          },
+          {
+            "name": "switch-ports",
+            "detail": "46 port(s) on 3 switch(es) as recorded, 26 parked, read 7 h ago",
+            "status": "pass"
+          },
+          {
+            "name": "mlag-pairs",
+            "detail": "1 MLAG pair(s), 2 LAG(s) across them",
+            "status": "pass"
+          },
+          {
+            "name": "pulse",
+            "detail": "down: pulled-by-rasmus — backup-manager pulse",
+            "status": "warn",
+            "findings": [
+              {
+                "text": "uplink up",
+                "status": "pass",
+                "subject": {
+                  "kind": "site",
+                  "name": "uplink"
+                }
+              },
+              {
+                "text": "firewall up",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "network"
+                }
+              },
+              {
+                "text": "mothership up",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "tappaas-cicd"
+                }
+              },
+              {
+                "text": "pbs up",
+                "status": "pass",
+                "subject": {
+                  "kind": "module",
+                  "name": "backup"
+                }
+              },
+              {
+                "text": "pulled-by-rasmus DOWN",
+                "status": "warn",
+                "subject": {
+                  "kind": "peer",
+                  "name": "rasmus"
+                }
+              }
+            ]
+          },
+          {
+            "name": "open-alerts",
+            "rows": [
+              {
+                "text": "open   DiskErrors on tappaas3  since 2026-10-31T15:48:00.000Z  [pvehost]",
+                "status": "warn",
+                "subject": {
+                  "kind": "node",
+                  "name": "tappaas3"
+                }
+              }
+            ],
+            "detail": "1 open alert(s) — health-manager alerts",
+            "status": "warn"
+          },
+          {
+            "name": "cve-status",
+            "rows": [
+              {
+                "text": "diyhue (deconz-test)          ACT: 1 critical/high fixable",
+                "status": "warn",
+                "subject": {
+                  "kind": "module",
+                  "name": "deconz-test"
+                }
+              },
+              {
+                "text": "euro-office (euro-office)     ACT: 1 critical/high fixable",
+                "status": "warn",
+                "subject": {
+                  "kind": "module",
+                  "name": "euro-office"
+                }
+              },
+              {
+                "text": "authentik-server, authentik-… ACT: 14 critical/high fixable",
+                "status": "warn",
+                "subject": {
+                  "kind": "module",
+                  "name": "identity"
+                }
+              },
+              {
+                "text": "karakeep_chrome (karakeep)    ACT: 2 critical/high fixable",
+                "status": "warn",
+                "subject": {
+                  "kind": "module",
+                  "name": "karakeep"
+                }
+              },
+              {
+                "text": "karakeep_web (karakeep)       ACT: 31 critical/high fixable",
+                "status": "warn",
+                "subject": {
+                  "kind": "module",
+                  "name": "karakeep"
+                }
+              },
+              {
+                "text": "litellm (litellm)             ACT: 17 critical/high fixable",
+                "status": "warn",
+                "subject": {
+                  "kind": "module",
+                  "name": "litellm"
+                }
+              },
+              {
+                "text": "nomad_admin (nomad)           ACT: 125 critical/high fixable",
+                "status": "warn",
+                "subject": {
+                  "kind": "module",
+                  "name": "nomad"
+                }
+              },
+              {
+                "text": "nomad_mysql (nomad)           ACT: 96 critical/high fixable",
+                "status": "warn",
+                "subject": {
+                  "kind": "module",
+                  "name": "nomad"
+                }
+              },
+              {
+                "text": "openwebui (openwebui)         ACT: 23 critical/high fixable",
+                "status": "warn",
+                "subject": {
+                  "kind": "module",
+                  "name": "openwebui"
+                }
+              },
+              {
+                "text": "vllm (vllm-amd)               ACT: 11 critical/high fixable",
+                "status": "warn",
+                "subject": {
+                  "kind": "module",
+                  "name": "vllm-amd"
+                }
+              }
+            ],
+            "detail": "38 target(s): 10 act, 0 failed, 18 triage, 10 watch — scanned 0 day(s) ago; health-manager report security",
+            "status": "warn"
+          },
+          {
+            "name": "signature-status",
+            "rows": [],
+            "detail": "2 repositories: 0 verified, 2 unsigned, 0 ahead, 0 failed",
+            "status": "pass"
+          },
+          {
+            "name": "control-plane-trust",
+            "rows": [
+              {
+                "text": "mikrotik-controller   from Community (module mikrotik), not a verified release — plugs into switch-manager",
+                "status": "warn",
+                "subject": {
+                  "kind": "module",
+                  "name": "mikrotik"
+                }
+              },
+              {
+                "text": "unifi-controller      from Community (module unifi-os), not a verified release — plugs into switch-manager, ap-manager",
+                "status": "warn",
+                "subject": {
+                  "kind": "module",
+                  "name": "unifi-os"
+                }
+              }
+            ],
+            "detail": "2 component(s) from modules: 0 verified, 2 unverified in a foundation manager",
+            "status": "warn"
+          },
+          {
+            "name": "cmdb",
+            "rows": [
+              {
+                "text": "vm/tappaas-nixos            actual without desired",
+                "status": "warn"
+              }
+            ],
+            "detail": "0 drift, 0 from desired, 1 unmanaged, 0 missing, 0 source(s) failed (2026-11-01T08:34:01.582Z)",
+            "status": "warn"
+          }
+        ]
+      },
+      "source": "health-manager",
+      "since": "2026-10-30T09:40:04.146Z"
+    },
+    "code": {
+      "value": "rossen",
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T20:25:02.581Z",
+          "reason": "guest-stopped",
+          "source": "health-manager",
+          "status": "critical",
+          "derived": false,
+          "message": "not running",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T21:05:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-11-01T08:30:20.481Z",
+          "reason": "roll-up",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": true,
+          "message": "5 of 218 members warning",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-31T20:05:02.597Z",
+          "reason": "disk-full",
+          "source": "health-manager",
+          "status": "critical",
+          "derived": false,
+          "message": "/ at 93%, over 80%",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T20:05:02.597Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "security",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "roll-up",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": true,
+          "message": "11 of 26 warning",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T20:55:02.584Z",
+          "reason": "reboot-pending",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": false,
+          "message": "test-deb-nonode the OS asks for a reboot",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T21:00:02.583Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "backup",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "23 of 23 ok",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T07:25:02.913Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "impact",
+          "since": "2026-11-01T00:04:45.410Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": true,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-11-01T08:30:20.481Z"
+    },
+    "desired": {
+      "value": {
+        "file": "site.json"
+      },
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "displayName": {
+      "value": "Rossen Production Cluster",
+      "source": "site-manager",
+      "since": "2026-10-31T00:00:32.049Z"
+    },
+    "drift": {
+      "value": {
+        "since": "2026-10-31T00:00:32.049Z",
+        "source": "sweep",
+        "desired": {
+          "file": "site.json"
+        },
+        "attributes": {
+          "isp": {
+            "now": "Netnørden",
+            "was": null
+          },
+          "ipv6": {
+            "now": true,
+            "was": null
+          },
+          "version": {
+            "now": "2.3.3+435",
+            "was": "2.3.3+418"
+          },
+          "publicIp": {
+            "now": "auto",
+            "was": null
+          },
+          "displayName": {
+            "now": "Rossen Production Cluster",
+            "was": "Rossen"
+          },
+          "primaryLocation": {
+            "now": "eb8b5e14-af28-46e3-8bf3-fb8de068683b",
+            "was": "ce79bde5-a80c-4ccf-9281-f78d5da43c78"
+          }
+        }
+      },
+      "source": "cmdb-controller",
+      "since": "2026-10-31T11:00:40.204Z"
+    },
+    "ipv6": {
+      "value": true,
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    },
+    "isp": {
+      "value": "Netnørden",
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    },
+    "publicIp": {
+      "value": "auto",
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    },
+    "rootCauses": {
+      "value": [
+        {
+          "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+          "type": "operational",
+          "impactedCount": 2
+        },
+        {
+          "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+          "type": "security",
+          "impactedCount": 0
+        },
+        {
+          "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+          "type": "security",
+          "impactedCount": 0
+        },
+        {
+          "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+          "type": "security",
+          "impactedCount": 0
+        },
+        {
+          "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+          "type": "security",
+          "impactedCount": 0
+        },
+        {
+          "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+          "type": "security",
+          "impactedCount": 0
+        },
+        {
+          "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+          "type": "security",
+          "impactedCount": 0
+        },
+        {
+          "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+          "type": "drift",
+          "impactedCount": 0
+        },
+        {
+          "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+          "type": "security",
+          "impactedCount": 0
+        },
+        {
+          "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+          "type": "security",
+          "impactedCount": 0
+        },
+        {
+          "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+          "type": "operational",
+          "impactedCount": 0
+        },
+        {
+          "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+          "type": "security",
+          "impactedCount": 0
+        },
+        {
+          "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+          "type": "security",
+          "impactedCount": 0
+        },
+        {
+          "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+          "type": "security",
+          "impactedCount": 0
+        },
+        {
+          "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+          "type": "operational",
+          "impactedCount": 0
+        },
+        {
+          "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+          "type": "operational",
+          "impactedCount": 0
+        },
+        {
+          "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+          "type": "drift",
+          "impactedCount": 0
+        },
+        {
+          "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+          "type": "drift",
+          "impactedCount": 0
+        },
+        {
+          "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+          "type": "drift",
+          "impactedCount": 0
+        },
+        {
+          "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+          "type": "operational",
+          "impactedCount": 0
+        },
+        {
+          "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+          "type": "maintenance",
+          "impactedCount": 0
+        },
+        {
+          "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+          "type": "capacity",
+          "impactedCount": 0
+        },
+        {
+          "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+          "type": "operational",
+          "impactedCount": 0
+        },
+        {
+          "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+          "type": "maintenance",
+          "impactedCount": 0
+        },
+        {
+          "id": "247b3ada-42ab-4fbd-b57f-91eaf7939874",
+          "type": "operational",
+          "impactedCount": 0
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-11-01T08:35:02.579Z"
+    },
+    "stage": {
+      "value": "operational",
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "version": {
+      "value": "2.3.3+515",
+      "source": "site-manager",
+      "since": "2026-11-01T08:27:19.010Z"
+    }
+  },
+  "drift": {
+    "since": "2026-10-31T00:00:32.049Z",
+    "source": "sweep",
+    "desired": {
+      "file": "site.json"
+    },
+    "attributes": {
+      "isp": {
+        "now": "Netnørden",
+        "was": null
+      },
+      "ipv6": {
+        "now": true,
+        "was": null
+      },
+      "version": {
+        "now": "2.3.3+435",
+        "was": "2.3.3+418"
+      },
+      "publicIp": {
+        "now": "auto",
+        "was": null
+      },
+      "displayName": {
+        "now": "Rossen Production Cluster",
+        "was": "Rossen"
+      },
+      "primaryLocation": {
+        "now": "eb8b5e14-af28-46e3-8bf3-fb8de068683b",
+        "was": "ce79bde5-a80c-4ccf-9281-f78d5da43c78"
+      }
+    }
+  },
+  "relations": [
+    {
+      "id": 599,
+      "type": "at",
+      "direction": "out",
+      "other": {
+        "id": "eb8b5e14-af28-46e3-8bf3-fb8de068683b",
+        "class": "location",
+        "name": "knudanchersvej95"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-31T00:00:32.049Z"
+    }
+  ]
+}

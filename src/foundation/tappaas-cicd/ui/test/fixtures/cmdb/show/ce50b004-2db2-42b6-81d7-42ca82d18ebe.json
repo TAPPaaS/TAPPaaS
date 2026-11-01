@@ -1,0 +1,159 @@
+{
+  "id": "ce50b004-2db2-42b6-81d7-42ca82d18ebe",
+  "class": "vm",
+  "ancestors": [
+    "vm",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "test-nfsconsumer",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-31T20:37:20.380Z",
+  "ended": "2026-11-01T08:26:58.915Z",
+  "lastSeen": "2026-11-01T08:26:58.915Z",
+  "seen": {
+    "operator": "2026-11-01T08:26:58.915Z",
+    "site-manager": "2026-10-31T20:42:21.030Z",
+    "module-manager": "2026-10-31T20:42:21.967Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T20:40:00.338Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-11-01T00:04:45.410Z",
+          "reason": "sweep-missing",
+          "source": "health-manager",
+          "status": "critical",
+          "derived": false,
+          "message": "vm/test-nfsconsumer: desired without actual",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-31T20:40:00.338Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T20:45:00.343Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T20:40:00.338Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T20:40:00.338Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-11-01T00:04:45.410Z"
+    },
+    "cores": {
+      "value": 2,
+      "source": "site-manager",
+      "since": "2026-10-31T20:37:20.380Z"
+    },
+    "description": {
+      "value": "Test fixture: storage:nfs consumer for storage/test.sh --deep (ADR-029). Disposable NixOS clone; safe to delete. The deep suite sets vmid, node and zone0 on its own copy.",
+      "source": "site-manager",
+      "since": "2026-10-31T20:37:20.380Z"
+    },
+    "desired": {
+      "value": {
+        "file": "test-nfsconsumer.json"
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T20:37:20.380Z"
+    },
+    "disks": {
+      "value": [
+        {
+          "size": "528K",
+          "storage": "tanka1"
+        },
+        {
+          "size": "24G",
+          "storage": "tanka1"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T20:37:20.380Z"
+    },
+    "maturity": {
+      "value": "Development",
+      "source": "site-manager",
+      "since": "2026-10-31T20:37:20.380Z"
+    },
+    "memory": {
+      "value": 2048,
+      "source": "site-manager",
+      "since": "2026-10-31T20:37:20.380Z"
+    },
+    "release": {
+      "value": {
+        "module": "test-nfsconsumer",
+        "version": "0.1.0"
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T20:37:20.380Z"
+    },
+    "stack": {
+      "value": "foundation",
+      "source": "site-manager",
+      "since": "2026-10-31T20:37:20.380Z"
+    },
+    "stage": {
+      "value": "retired",
+      "source": "operator",
+      "since": "2026-11-01T08:26:58.915Z"
+    },
+    "state": {
+      "value": "running",
+      "source": "site-manager",
+      "since": "2026-10-31T20:37:20.380Z"
+    },
+    "vmid": {
+      "value": 990,
+      "source": "site-manager",
+      "since": "2026-10-31T20:37:20.380Z"
+    },
+    "zone": {
+      "value": "rossen",
+      "source": "site-manager",
+      "since": "2026-10-31T20:37:20.380Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

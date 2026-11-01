@@ -1,0 +1,304 @@
+{
+ "id": "40d16eb0-cce4-40df-8fa2-ab5f13e9dfa9",
+ "class": "lxc",
+ "name": "test-lxcdrift",
+ "created": "2026-10-31T20:12:21.150Z",
+ "ended": "2026-11-01T08:26:58.915Z",
+ "attributes": [
+  {
+   "name": "cores",
+   "value": 2,
+   "source": "site-manager",
+   "change": 6409,
+   "from": "2026-10-31T20:12:21.150Z",
+   "to": null
+  },
+  {
+   "name": "description",
+   "value": "Test fixture: cluster:lxc provisioner + drift reconciler (issue #203). Disposable plain-Debian container (no GPU) used by ../test.sh --deep; safe to delete. zone0=srv-home (VLAN 210) \u2014 the only test VLAN this switch trunks cross-node.",
+   "source": "site-manager",
+   "change": 6409,
+   "from": "2026-10-31T20:12:21.150Z",
+   "to": null
+  },
+  {
+   "name": "desired",
+   "value": {
+    "file": "test-lxcdrift.json"
+   },
+   "source": "site-manager",
+   "change": 6409,
+   "from": "2026-10-31T20:12:21.150Z",
+   "to": null
+  },
+  {
+   "name": "memory",
+   "value": 1536,
+   "source": "site-manager",
+   "change": 6409,
+   "from": "2026-10-31T20:12:21.150Z",
+   "to": null
+  },
+  {
+   "name": "release",
+   "value": {
+    "module": "test-lxcdrift",
+    "version": "0.1.0"
+   },
+   "source": "site-manager",
+   "change": 6409,
+   "from": "2026-10-31T20:12:21.150Z",
+   "to": null
+  },
+  {
+   "name": "rootfs",
+   "value": "tanka1:subvol-922-disk-0",
+   "source": "site-manager",
+   "change": 6409,
+   "from": "2026-10-31T20:12:21.150Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "operational",
+   "source": "site-manager",
+   "change": 6409,
+   "from": "2026-10-31T20:12:21.150Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "name": "state",
+   "value": "running",
+   "source": "site-manager",
+   "change": 6409,
+   "from": "2026-10-31T20:12:21.150Z",
+   "to": null
+  },
+  {
+   "name": "unprivileged",
+   "value": true,
+   "source": "site-manager",
+   "change": 6409,
+   "from": "2026-10-31T20:12:21.150Z",
+   "to": null
+  },
+  {
+   "name": "vmid",
+   "value": 922,
+   "source": "site-manager",
+   "change": 6409,
+   "from": "2026-10-31T20:12:21.150Z",
+   "to": null
+  },
+  {
+   "name": "zone",
+   "value": "rossen",
+   "source": "site-manager",
+   "change": 6409,
+   "from": "2026-10-31T20:12:21.150Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T20:15:02.587Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T00:01:26.213Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 6438,
+   "from": "2026-10-31T20:15:02.587Z",
+   "to": "2026-11-01T00:04:45.410Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-11-01T00:03:16.092Z",
+    "source": "sweep",
+    "desired": {
+     "file": "test-lxcdrift.json"
+    },
+    "attributes": {
+     "\u2192runs-on machine/tappaas1": {
+      "now": {},
+      "was": null
+     },
+     "\u2192member-of environment/rossen": {
+      "now": {},
+      "was": null
+     },
+     "\u2192depends-on service/cluster:lxc": {
+      "now": {},
+      "was": null
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 7905,
+   "from": "2026-11-01T00:03:16.092Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T20:15:02.587Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:25:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T00:04:45.410Z",
+     "reason": "sweep-missing",
+     "source": "health-manager",
+     "status": "critical",
+     "derived": false,
+     "message": "lxc/test-lxcdrift: desired without actual",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:25:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 7907,
+   "from": "2026-11-01T00:04:45.410Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "retired",
+   "source": "operator",
+   "change": 11047,
+   "from": "2026-11-01T08:26:58.915Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 675,
+   "type": "member-of",
+   "direction": "out",
+   "other": {
+    "id": "9a883fd4-b028-4492-b870-4e8a16b7393c",
+    "class": "environment",
+    "name": "rossen"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 6409,
+   "from": "2026-10-31T20:12:21.150Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 676,
+   "type": "runs-on",
+   "direction": "out",
+   "other": {
+    "id": "c11c3e17-fe34-4bd7-bed6-6f8b259469c8",
+    "class": "machine",
+    "name": "tappaas1"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 6409,
+   "from": "2026-10-31T20:12:21.150Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 677,
+   "type": "depends-on",
+   "direction": "out",
+   "other": {
+    "id": "bb6e1fc2-ed12-4b03-a3de-42e8f0b803eb",
+    "class": "service",
+    "name": "cluster:lxc"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 6414,
+   "from": "2026-10-31T20:12:21.976Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 6409,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T20:12:21.150Z",
+   "drift": true
+  },
+  {
+   "id": 6414,
+   "kind": "observation",
+   "source": "module-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T20:12:21.976Z",
+   "drift": false
+  },
+  {
+   "id": 6438,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T20:15:02.587Z",
+   "drift": false
+  },
+  {
+   "id": 7905,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-11-01T00:03:16.092Z",
+   "drift": true
+  },
+  {
+   "id": 7907,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T00:04:45.410Z",
+   "drift": false
+  },
+  {
+   "id": 11047,
+   "kind": "change",
+   "source": "operator",
+   "job": null,
+   "verb": "retire deep-test leftovers",
+   "actor": null,
+   "time": "2026-11-01T08:26:58.915Z",
+   "drift": false
+  }
+ ]
+}

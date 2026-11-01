@@ -1,1 +1,32 @@
-[]
+[
+  {
+    "name": "rossen-home",
+    "zone": "home",
+    "vlan": 310,
+    "security": "wpa2-personal",
+    "radius": null,
+    "captive": false,
+    "disabled": false,
+    "broadcastOn": "all",
+    "accessPoints": [
+      "Nano HD"
+    ],
+    "passphraseChanged": false,
+    "passphrase": "set"
+  },
+  {
+    "name": "rossen-guest",
+    "zone": "guest",
+    "vlan": 510,
+    "security": "wpa2-personal",
+    "radius": null,
+    "captive": false,
+    "disabled": false,
+    "broadcastOn": "all",
+    "accessPoints": [
+      "Nano HD"
+    ],
+    "passphraseChanged": false,
+    "passphrase": "set"
+  }
+]

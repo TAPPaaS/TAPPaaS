@@ -1,0 +1,42 @@
+{
+  "id": "47441f14-1d50-4cf9-89e2-3610fe921631",
+  "class": "node",
+  "ancestors": [
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "patchpanel1",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T08:49:10.981Z",
+  "ended": null,
+  "lastSeen": null,
+  "seen": {},
+  "at": null,
+  "attributes": {
+    "placeholder": {
+      "value": true,
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.981Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 456,
+      "type": "allocated-to",
+      "direction": "in",
+      "other": {
+        "id": "740ea0f1-a609-4d01-9199-2f70312b0028",
+        "class": "passive-device",
+        "name": "patchpanel1"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.981Z"
+    }
+  ]
+}

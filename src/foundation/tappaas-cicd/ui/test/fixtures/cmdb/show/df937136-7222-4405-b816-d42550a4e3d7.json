@@ -1,0 +1,44 @@
+{
+  "id": "df937136-7222-4405-b816-d42550a4e3d7",
+  "class": "location",
+  "ancestors": [
+    "location",
+    "place",
+    "object"
+  ],
+  "name": "hetzner-fsn1",
+  "displayName": null,
+  "physical": true,
+  "recorded": false,
+  "created": "2026-10-30T20:08:42.965Z",
+  "ended": "2026-10-30T20:08:43.289Z",
+  "lastSeen": "2026-10-30T20:08:43.289Z",
+  "seen": {
+    "site-manager": "2026-10-30T20:08:43.289Z"
+  },
+  "at": null,
+  "attributes": {
+    "address": {
+      "value": "Hetzner FSN1-DC14",
+      "source": "site-manager",
+      "since": "2026-10-30T20:08:42.965Z"
+    },
+    "city": {
+      "value": "Falkenstein",
+      "source": "site-manager",
+      "since": "2026-10-30T20:08:42.965Z"
+    },
+    "country": {
+      "value": "DE",
+      "source": "site-manager",
+      "since": "2026-10-30T20:08:42.965Z"
+    },
+    "timezone": {
+      "value": "Europe/Berlin",
+      "source": "site-manager",
+      "since": "2026-10-30T20:08:43.081Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

@@ -1,0 +1,371 @@
+{
+ "id": "6348879f-cd95-4292-90be-a280b2312731",
+ "class": "vm",
+ "name": "test-fw-iot",
+ "created": "2026-10-31T20:27:22.087Z",
+ "ended": "2026-11-01T08:26:58.915Z",
+ "attributes": [
+  {
+   "name": "description",
+   "value": "Source-NAT test VM \u2014 subnet-filtering device in the testIot zone (network/test.sh --deep, ADR-016)",
+   "source": "module-manager",
+   "change": 6530,
+   "from": "2026-10-31T20:27:22.087Z",
+   "to": null
+  },
+  {
+   "name": "desired",
+   "value": {
+    "file": "test-fw-iot.json"
+   },
+   "source": "module-manager",
+   "change": 6530,
+   "from": "2026-10-31T20:27:22.087Z",
+   "to": null
+  },
+  {
+   "name": "release",
+   "value": {
+    "module": "tmp.Lq53pKR0Ha",
+    "version": "0.1"
+   },
+   "source": "module-manager",
+   "change": 6530,
+   "from": "2026-10-31T20:27:22.087Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "operational",
+   "source": "module-manager",
+   "change": 6530,
+   "from": "2026-10-31T20:27:22.087Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "name": "state",
+   "value": "unknown",
+   "source": "module-manager",
+   "change": 6530,
+   "from": "2026-10-31T20:27:22.087Z",
+   "to": null
+  },
+  {
+   "name": "vmid",
+   "value": 924,
+   "source": "module-manager",
+   "change": 6530,
+   "from": "2026-10-31T20:27:22.087Z",
+   "to": null
+  },
+  {
+   "name": "zone",
+   "value": "testIot",
+   "source": "module-manager",
+   "change": 6530,
+   "from": "2026-10-31T20:27:22.087Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T20:30:00.750Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T00:01:26.213Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-31T20:30:00.750Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:30:00.750Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T20:30:00.750Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:30:00.750Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 6554,
+   "from": "2026-10-31T20:30:00.750Z",
+   "to": "2026-11-01T00:04:45.410Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-11-01T00:03:16.092Z",
+    "source": "sweep",
+    "desired": {
+     "file": "test-fw-iot.json"
+    },
+    "attributes": {
+     "\u2192runs-on machine/tappaas1": {
+      "now": {},
+      "was": null
+     },
+     "\u2192member-of environment/rossen": {
+      "now": {},
+      "was": null
+     },
+     "\u2192depends-on service/cluster:vm": {
+      "now": {},
+      "was": null
+     },
+     "\u2192depends-on service/network:snat": {
+      "now": {},
+      "was": null
+     },
+     "\u2192depends-on service/network:rules": {
+      "now": {},
+      "was": null
+     },
+     "\u2192depends-on service/templates:nixos": {
+      "now": {},
+      "was": null
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 7905,
+   "from": "2026-11-01T00:03:16.092Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T20:30:00.750Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:25:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T00:04:45.410Z",
+     "reason": "sweep-missing",
+     "source": "health-manager",
+     "status": "critical",
+     "derived": false,
+     "message": "vm/test-fw-iot: desired without actual",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:25:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-31T20:30:00.750Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:30:00.750Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T20:30:00.750Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:30:00.750Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 7907,
+   "from": "2026-11-01T00:04:45.410Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "retired",
+   "source": "operator",
+   "change": 11047,
+   "from": "2026-11-01T08:26:58.915Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 699,
+   "type": "depends-on",
+   "direction": "out",
+   "other": {
+    "id": "a0744357-5768-4dc1-bd83-4abca98d3596",
+    "class": "service",
+    "name": "network:rules"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 6530,
+   "from": "2026-10-31T20:27:22.087Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 698,
+   "type": "depends-on",
+   "direction": "out",
+   "other": {
+    "id": "b35b1a55-2887-453f-acb5-88c367f31d90",
+    "class": "service",
+    "name": "templates:nixos"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 6530,
+   "from": "2026-10-31T20:27:22.087Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 697,
+   "type": "depends-on",
+   "direction": "out",
+   "other": {
+    "id": "fc39fc51-1a56-4551-8566-53e2eaf17862",
+    "class": "service",
+    "name": "cluster:vm"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 6530,
+   "from": "2026-10-31T20:27:22.087Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 700,
+   "type": "depends-on",
+   "direction": "out",
+   "other": {
+    "id": "caa2fb9a-e241-44c9-96ef-9c4270af9c43",
+    "class": "service",
+    "name": "network:snat"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 6530,
+   "from": "2026-10-31T20:27:22.087Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 695,
+   "type": "member-of",
+   "direction": "out",
+   "other": {
+    "id": "9a883fd4-b028-4492-b870-4e8a16b7393c",
+    "class": "environment",
+    "name": "rossen"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 6530,
+   "from": "2026-10-31T20:27:22.087Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 696,
+   "type": "runs-on",
+   "direction": "out",
+   "other": {
+    "id": "c11c3e17-fe34-4bd7-bed6-6f8b259469c8",
+    "class": "machine",
+    "name": "tappaas1"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 6530,
+   "from": "2026-10-31T20:27:22.087Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 6530,
+   "kind": "observation",
+   "source": "module-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T20:27:22.087Z",
+   "drift": false
+  },
+  {
+   "id": 6554,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T20:30:00.750Z",
+   "drift": false
+  },
+  {
+   "id": 7905,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-11-01T00:03:16.092Z",
+   "drift": true
+  },
+  {
+   "id": 7907,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T00:04:45.410Z",
+   "drift": false
+  },
+  {
+   "id": 11047,
+   "kind": "change",
+   "source": "operator",
+   "job": null,
+   "verb": "retire deep-test leftovers",
+   "actor": null,
+   "time": "2026-11-01T08:26:58.915Z",
+   "drift": false
+  }
+ ]
+}

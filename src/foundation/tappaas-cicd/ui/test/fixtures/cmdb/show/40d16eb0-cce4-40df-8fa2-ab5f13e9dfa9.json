@@ -1,0 +1,119 @@
+{
+  "id": "40d16eb0-cce4-40df-8fa2-ab5f13e9dfa9",
+  "class": "lxc",
+  "ancestors": [
+    "lxc",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "test-lxcdrift",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-31T20:12:21.150Z",
+  "ended": "2026-11-01T08:26:58.915Z",
+  "lastSeen": "2026-11-01T08:26:58.915Z",
+  "seen": {
+    "operator": "2026-11-01T08:26:58.915Z",
+    "site-manager": "2026-10-31T20:12:21.150Z",
+    "module-manager": "2026-10-31T20:12:21.976Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T20:15:02.587Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-11-01T00:04:45.410Z",
+          "reason": "sweep-missing",
+          "source": "health-manager",
+          "status": "critical",
+          "derived": false,
+          "message": "lxc/test-lxcdrift: desired without actual",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-11-01T00:04:45.410Z"
+    },
+    "cores": {
+      "value": 2,
+      "source": "site-manager",
+      "since": "2026-10-31T20:12:21.150Z"
+    },
+    "description": {
+      "value": "Test fixture: cluster:lxc provisioner + drift reconciler (issue #203). Disposable plain-Debian container (no GPU) used by ../test.sh --deep; safe to delete. zone0=srv-home (VLAN 210) — the only test VLAN this switch trunks cross-node.",
+      "source": "site-manager",
+      "since": "2026-10-31T20:12:21.150Z"
+    },
+    "desired": {
+      "value": {
+        "file": "test-lxcdrift.json"
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T20:12:21.150Z"
+    },
+    "memory": {
+      "value": 1536,
+      "source": "site-manager",
+      "since": "2026-10-31T20:12:21.150Z"
+    },
+    "release": {
+      "value": {
+        "module": "test-lxcdrift",
+        "version": "0.1.0"
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T20:12:21.150Z"
+    },
+    "rootfs": {
+      "value": "tanka1:subvol-922-disk-0",
+      "source": "site-manager",
+      "since": "2026-10-31T20:12:21.150Z"
+    },
+    "stage": {
+      "value": "retired",
+      "source": "operator",
+      "since": "2026-11-01T08:26:58.915Z"
+    },
+    "state": {
+      "value": "running",
+      "source": "site-manager",
+      "since": "2026-10-31T20:12:21.150Z"
+    },
+    "unprivileged": {
+      "value": true,
+      "source": "site-manager",
+      "since": "2026-10-31T20:12:21.150Z"
+    },
+    "vmid": {
+      "value": 922,
+      "source": "site-manager",
+      "since": "2026-10-31T20:12:21.150Z"
+    },
+    "zone": {
+      "value": "rossen",
+      "source": "site-manager",
+      "since": "2026-10-31T20:12:21.150Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

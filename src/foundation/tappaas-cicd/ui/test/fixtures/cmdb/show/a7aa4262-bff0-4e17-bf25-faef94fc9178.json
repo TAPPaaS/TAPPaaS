@@ -1,0 +1,289 @@
+{
+  "id": "a7aa4262-bff0-4e17-bf25-faef94fc9178",
+  "class": "vm",
+  "ancestors": [
+    "vm",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "lazysite",
+  "displayName": "lazysite",
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T08:47:45.445Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.004Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.173Z",
+    "health-manager": "2026-10-30T09:04:04.197Z",
+    "module-manager": "2026-11-01T08:52:20.004Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T09:55:09.015Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T09:55:09.015Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-30T14:15:00.202Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "security",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T09:55:09.015Z"
+    },
+    "cores": {
+      "value": 1,
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "description": {
+      "value": "lazysite — the site owner's public website: Markdown pages in a Forgejo repository, served as HTML, with no build step or database.",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "desired": {
+      "value": {
+        "file": "lazysite.json"
+      },
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "disks": {
+      "value": [
+        {
+          "size": "528K",
+          "storage": "tanka1"
+        },
+        {
+          "size": "16G",
+          "storage": "tanka1"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "displayName": {
+      "value": "lazysite",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "maturity": {
+      "value": "Development",
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    },
+    "memory": {
+      "value": 1024,
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "nics": {
+      "value": [
+        {
+          "mac": "02:2f:0c:55:05:69",
+          "tag": 610,
+          "name": "net0",
+          "model": "virtio",
+          "bridge": "lan"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    "release": {
+      "value": {
+        "module": "lazysite",
+        "version": "0.1.1"
+      },
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "stack": {
+      "value": "collaboration",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "stage": {
+      "value": "operational",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "state": {
+      "value": "running",
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    },
+    "vmid": {
+      "value": 380,
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "zone": {
+      "value": "dmz",
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 174,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "fc39fc51-1a56-4551-8566-53e2eaf17862",
+        "class": "service",
+        "name": "cluster:vm"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 178,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "05b54d2a-5333-4616-92a8-232989876355",
+        "class": "service",
+        "name": "forgejo:repo"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 176,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "ee9a7b62-e204-4565-8084-48a003b5b83d",
+        "class": "service",
+        "name": "network:proxy"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 177,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "a0744357-5768-4dc1-bd83-4abca98d3596",
+        "class": "service",
+        "name": "network:rules"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 175,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "b35b1a55-2887-453f-acb5-88c367f31d90",
+        "class": "service",
+        "name": "templates:nixos"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 20,
+      "type": "member-of",
+      "direction": "out",
+      "other": {
+        "id": "9a883fd4-b028-4492-b870-4e8a16b7393c",
+        "class": "environment",
+        "name": "rossen"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 21,
+      "type": "runs-on",
+      "direction": "out",
+      "other": {
+        "id": "95727e8e-df12-468f-a03b-8b685140e223",
+        "class": "machine",
+        "name": "tappaas2"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    }
+  ]
+}

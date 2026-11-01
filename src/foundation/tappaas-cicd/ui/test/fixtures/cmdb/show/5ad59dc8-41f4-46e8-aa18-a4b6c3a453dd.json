@@ -1,0 +1,27 @@
+{
+  "id": "5ad59dc8-41f4-46e8-aa18-a4b6c3a453dd",
+  "class": "node",
+  "ancestors": [
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "mtB",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T19:34:22.290Z",
+  "ended": null,
+  "lastSeen": null,
+  "seen": {},
+  "at": null,
+  "attributes": {
+    "placeholder": {
+      "value": true,
+      "source": "asset-manager",
+      "since": "2026-10-30T19:34:22.290Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

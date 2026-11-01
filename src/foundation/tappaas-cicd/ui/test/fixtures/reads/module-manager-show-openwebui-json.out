@@ -1,0 +1,72 @@
+{
+  "description": "Open WebUI chat interface — private AI chat for your users, with conversation history and RAG, through the LiteLLM gateway.",
+  "version": "0.8.2",
+  "releaseDate": "2026-07-02",
+  "installTime": "20260823-15:51:07",
+  "updateTime": "20261101-02:35:31",
+  "maintainer": "@ErikDaniel007",
+  "status": "Development",
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/ai/openwebui",
+  "environment": "rossen",
+  "vmname": "openwebui",
+  "vmid": 311,
+  "vmtag": "TAPPaaS,App",
+  "node": "tappaas2",
+  "zone0": "rossen",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy",
+    "litellm:models",
+    "network:rules",
+    "identity:identity"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "provides": [],
+  "appVersion": "0.11.4",
+  "displayName": "Open WebUI",
+  "stack": "ai",
+  "config": {
+    "backup:vm": {
+      "backup": {
+        "enabled": true,
+        "exclude": [],
+        "retention": "7y"
+      }
+    },
+    "cluster:vm": {
+      "cores": 2,
+      "memory": 4096,
+      "diskSize": "32G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "identity:identity": {
+      "identity": {
+        "configureService": "openwebui-integrations.service",
+        "launchPath": "/oauth/oidc/login",
+        "oidcRedirectPaths": [
+          "/oauth/oidc/callback"
+        ],
+        "scopes": [
+          "openid",
+          "email",
+          "profile"
+        ],
+        "secretsEnv": "/etc/secrets/openwebui-oidc.env"
+      }
+    },
+    "network:proxy": {
+      "proxyPort": 8080,
+      "proxyAllowedZones": [
+        "internet"
+      ]
+    }
+  }
+}

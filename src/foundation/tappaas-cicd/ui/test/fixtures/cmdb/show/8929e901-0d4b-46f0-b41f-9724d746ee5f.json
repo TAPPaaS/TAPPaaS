@@ -1,0 +1,111 @@
+{
+  "id": "8929e901-0d4b-46f0-b41f-9724d746ee5f",
+  "class": "machine",
+  "ancestors": [
+    "machine",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "tappaas4",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T19:05:42.423Z",
+  "ended": "2026-10-30T19:25:01.948Z",
+  "lastSeen": "2026-10-30T19:25:01.948Z",
+  "seen": {
+    "site-manager": "2026-10-30T19:09:38.017Z",
+    "module-manager": "2026-10-30T19:25:01.948Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-30T19:10:05.207Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-30T19:20:01.652Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-30T19:10:05.207Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "0.0/31.3G committed, 0%",
+          "rootCause": null,
+          "lastChecked": "2026-10-30T19:20:01.652Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-30T19:10:05.207Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-30T19:20:01.652Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-30T19:10:05.207Z"
+    },
+    "description": {
+      "value": "A Proxmox VE cluster node as a module: registered, visible and tested; serves the NFS shares config/shares.json declares for it, through its server hook (ADR-029 v0.9); its OS is still patched by the cluster module (ADR-026 D4 stage 1)",
+      "source": "site-manager",
+      "since": "2026-10-30T19:09:38.017Z"
+    },
+    "desired": {
+      "value": {
+        "file": "tappaas4.json"
+      },
+      "source": "site-manager",
+      "since": "2026-10-30T19:09:38.017Z"
+    },
+    "hostname": {
+      "value": "tappaas4.mgmt.internal",
+      "source": "site-manager",
+      "since": "2026-10-30T19:09:38.017Z"
+    },
+    "management": {
+      "value": "managed",
+      "source": "site-manager",
+      "since": "2026-10-30T19:09:38.017Z"
+    },
+    "release": {
+      "value": {
+        "module": "pvehost",
+        "version": "0.3.0"
+      },
+      "source": "site-manager",
+      "since": "2026-10-30T19:09:38.017Z"
+    },
+    "stack": {
+      "value": "foundation",
+      "source": "site-manager",
+      "since": "2026-10-30T19:09:38.017Z"
+    },
+    "stage": {
+      "value": "retired",
+      "source": "module-manager",
+      "since": "2026-10-30T19:25:01.948Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

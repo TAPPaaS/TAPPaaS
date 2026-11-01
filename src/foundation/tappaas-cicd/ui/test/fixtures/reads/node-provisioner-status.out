@@ -1,0 +1,3 @@
+PXE: disabled (no TAPPaaS boot entries; zone 'mgmt')
+units: tappaas-pxe.service=inactive tappaas-pxe-tftp.service=inactive tappaas-pxe-ttl.timer=inactive
+pending registrations: none

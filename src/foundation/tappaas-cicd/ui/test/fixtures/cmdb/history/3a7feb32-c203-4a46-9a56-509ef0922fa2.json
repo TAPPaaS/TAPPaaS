@@ -1,0 +1,1194 @@
+{
+ "id": "3a7feb32-c203-4a46-9a56-509ef0922fa2",
+ "class": "machine",
+ "name": "tappaas4",
+ "created": "2026-10-30T19:48:31.009Z",
+ "ended": "2026-10-31T10:30:09.873Z",
+ "attributes": [
+  {
+   "name": "addresses",
+   "value": [
+    "10.0.0.13"
+   ],
+   "source": "site-manager",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": null
+  },
+  {
+   "name": "clusterMember",
+   "value": true,
+   "source": "site-manager",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": null
+  },
+  {
+   "name": "cpus",
+   "value": 8,
+   "source": "site-manager",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": null
+  },
+  {
+   "name": "os",
+   "value": "debian",
+   "source": "site-manager",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": null
+  },
+  {
+   "name": "osVersion",
+   "value": "13",
+   "source": "site-manager",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": null
+  },
+  {
+   "name": "pciDevices",
+   "value": [
+    {
+     "id": "0000:00:05.0",
+     "class": "0x080700",
+     "device": "Atom Processor C3000 Series Root Complex Event Collector",
+     "vendor": "Intel Corporation",
+     "iommuGroup": 2
+    },
+    {
+     "id": "0000:00:12.0",
+     "class": "0x088000",
+     "device": "Atom Processor C3000 Series SMBus Contoller - Host",
+     "vendor": "Intel Corporation",
+     "iommuGroup": 12
+    },
+    {
+     "id": "0000:00:13.0",
+     "class": "0x010601",
+     "device": "Atom Processor C3000 Series SATA Controller 0",
+     "vendor": "Intel Corporation",
+     "iommuGroup": 13
+    },
+    {
+     "id": "0000:00:14.0",
+     "class": "0x010601",
+     "device": "Atom Processor C3000 Series SATA Controller 1",
+     "vendor": "Intel Corporation",
+     "iommuGroup": 14
+    },
+    {
+     "id": "0000:00:15.0",
+     "class": "0x0c0330",
+     "device": "Atom Processor C3000 Series USB 3.0 xHCI Controller",
+     "vendor": "Intel Corporation",
+     "iommuGroup": 15
+    },
+    {
+     "id": "0000:00:18.0",
+     "class": "0x078000",
+     "device": "Atom Processor C3000 Series ME HECI 1",
+     "vendor": "Intel Corporation",
+     "iommuGroup": 18
+    },
+    {
+     "id": "0000:00:1a.0",
+     "class": "0x070002",
+     "device": "Atom Processor C3000 Series HSUART Controller",
+     "vendor": "Intel Corporation",
+     "iommuGroup": 19
+    },
+    {
+     "id": "0000:00:1f.4",
+     "class": "0x0c0500",
+     "device": "Atom Processor C3000 Series SMBus controller",
+     "vendor": "Intel Corporation",
+     "iommuGroup": 20
+    },
+    {
+     "id": "0000:00:1f.5",
+     "class": "0x0c8000",
+     "device": "Atom Processor C3000 Series SPI Controller",
+     "vendor": "Intel Corporation",
+     "iommuGroup": 20
+    },
+    {
+     "id": "0000:02:00.0",
+     "class": "0x010802",
+     "device": "NVMe SSD Controller S4LV008[Pascal]",
+     "vendor": "Samsung Electronics Co Ltd",
+     "iommuGroup": 22
+    },
+    {
+     "id": "0000:03:00.0",
+     "class": "0x010802",
+     "device": "NVMe SSD Controller S4LV008[Pascal]",
+     "vendor": "Samsung Electronics Co Ltd",
+     "iommuGroup": 23
+    },
+    {
+     "id": "0000:04:00.0",
+     "class": "0x020000",
+     "device": "Ethernet Controller I226-V",
+     "vendor": "Intel Corporation",
+     "iommuGroup": 24
+    },
+    {
+     "id": "0000:05:00.0",
+     "class": "0x020000",
+     "device": "Ethernet Controller I226-V",
+     "vendor": "Intel Corporation",
+     "iommuGroup": 25
+    },
+    {
+     "id": "0000:06:00.0",
+     "class": "0x020000",
+     "device": "Ethernet Controller I226-V",
+     "vendor": "Intel Corporation",
+     "iommuGroup": 26
+    },
+    {
+     "id": "0000:07:00.0",
+     "class": "0x020000",
+     "device": "Ethernet Controller I226-V",
+     "vendor": "Intel Corporation",
+     "iommuGroup": 27
+    },
+    {
+     "id": "0000:08:00.0",
+     "class": "0x020000",
+     "device": "Ethernet Controller I226-V",
+     "vendor": "Intel Corporation",
+     "iommuGroup": 28
+    },
+    {
+     "id": "0000:0a:00.0",
+     "class": "0x030000",
+     "device": "ASPEED Graphics Family",
+     "vendor": "ASPEED Technology, Inc.",
+     "iommuGroup": 29
+    },
+    {
+     "id": "0000:0b:00.0",
+     "class": "0x020000",
+     "device": "Ethernet Connection X553 10 GbE SFP+",
+     "vendor": "Intel Corporation",
+     "iommuGroup": 30
+    },
+    {
+     "id": "0000:0b:00.1",
+     "class": "0x020000",
+     "device": "Ethernet Connection X553 10 GbE SFP+",
+     "vendor": "Intel Corporation",
+     "iommuGroup": 31
+    },
+    {
+     "id": "0000:0c:00.0",
+     "class": "0x020000",
+     "device": "Ethernet Connection X553 10 GbE SFP+",
+     "vendor": "Intel Corporation",
+     "iommuGroup": 32
+    },
+    {
+     "id": "0000:0c:00.1",
+     "class": "0x020000",
+     "device": "Ethernet Connection X553 10 GbE SFP+",
+     "vendor": "Intel Corporation",
+     "iommuGroup": 33
+    }
+   ],
+   "source": "site-manager",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "operational",
+   "source": "site-manager",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": "2026-10-31T10:30:09.873Z"
+  },
+  {
+   "name": "storagePools",
+   "value": [],
+   "source": "site-manager",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": null
+  },
+  {
+   "name": "storages",
+   "value": [
+    {
+     "type": "dir",
+     "used": 262144,
+     "avail": 479268831232,
+     "total": 479269093376,
+     "active": true,
+     "shared": false,
+     "content": "backup,snippets,import,iso,vztmpl",
+     "enabled": true,
+     "storage": "local"
+    },
+    {
+     "type": "pbs",
+     "used": 467059343360,
+     "avail": 4394725801984,
+     "total": 4861785145344,
+     "active": true,
+     "shared": true,
+     "content": "backup",
+     "enabled": true,
+     "storage": "tappaas_backup"
+    },
+    {
+     "type": "lvmthin",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "local-lvm"
+    },
+    {
+     "type": "zfspool",
+     "used": 98304,
+     "avail": 479268896768,
+     "total": 479268995072,
+     "active": true,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": true,
+     "storage": "local-zfs"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "tanka1"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "tankb1"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "tankc1"
+    }
+   ],
+   "source": "site-manager",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": "2026-10-31T08:21:43.213Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T00:02:57.507Z",
+    "source": "sweep",
+    "desired": {
+     "file": "tappaas4.json"
+    },
+    "attributes": {
+     "\u2192member-of cluster/rossen": {
+      "now": {},
+      "was": null
+     },
+     "\u2192at location/knudanchersvej95": {
+      "now": {},
+      "was": null
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 1078,
+   "from": "2026-10-31T00:02:57.507Z",
+   "to": "2026-10-31T01:05:48.371Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:55:15.330Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:40:00.405Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "machine/tappaas4: drift: appeared \u2192at location/knudanchersvej95; machine/tappaas4: drift: appeared \u2192member-of cluster/rossen",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:40:00.405Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:55:15.330Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "0.0/31.3G committed, 0%",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:40:00.405Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T19:55:15.330Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T01:40:00.405Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1080,
+   "from": "2026-10-31T00:04:27.092Z",
+   "to": "2026-10-31T01:45:00.475Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:55:15.330Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "machine/tappaas4: drift: appeared \u2192at location/knudanchersvej95; machine/tappaas4: drift: appeared \u2192member-of cluster/rossen",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:55:15.330Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "0.0/31.3G committed, 0%",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-31T01:45:00.475Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T19:55:15.330Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1171,
+   "from": "2026-10-31T01:45:00.475Z",
+   "to": "2026-10-31T09:55:09.015Z"
+  },
+  {
+   "name": "maturity",
+   "value": "Production",
+   "source": "site-manager",
+   "change": 1330,
+   "from": "2026-10-31T07:24:25.263Z",
+   "to": null
+  },
+  {
+   "name": "network",
+   "value": {
+    "live": {
+     "lan": {
+      "mtu": 1500,
+      "bond": "",
+      "mode": "single",
+      "active": "",
+      "bondMtu": null,
+      "members": [
+       {
+        "mac": "20:7c:14:f4:d0:87",
+        "mii": "",
+        "mtu": 1500,
+        "usb": false,
+        "lldp": {
+         "name": "USW-Pro-XG-10-PoE",
+         "port": "Port 1",
+         "chassis": "a8:9c:6c:b0:8d:76"
+        },
+        "name": "enp4s0",
+        "speed": 2500,
+        "state": "up",
+        "actorState": -1,
+        "aggregator": "",
+        "partnerState": -1
+       }
+      ],
+      "primary": "",
+      "aggregator": "",
+      "partnerMac": "",
+      "primaryMac": ""
+     },
+     "wan": {
+      "members": []
+     },
+     "node": "tappaas4",
+     "lldpd": "active",
+     "ports": [
+      {
+       "mac": "20:7c:14:f4:d0:8c",
+       "mii": "",
+       "mtu": 1500,
+       "usb": false,
+       "lldp": null,
+       "name": "eno1",
+       "speed": -1,
+       "state": "down",
+       "actorState": -1,
+       "aggregator": "",
+       "partnerState": -1
+      },
+      {
+       "mac": "20:7c:14:f4:d0:8d",
+       "mii": "",
+       "mtu": 1500,
+       "usb": false,
+       "lldp": null,
+       "name": "eno2",
+       "speed": -1,
+       "state": "down",
+       "actorState": -1,
+       "aggregator": "",
+       "partnerState": -1
+      },
+      {
+       "mac": "20:7c:14:f4:d0:8e",
+       "mii": "",
+       "mtu": 1500,
+       "usb": false,
+       "lldp": null,
+       "name": "eno3",
+       "speed": -1,
+       "state": "down",
+       "actorState": -1,
+       "aggregator": "",
+       "partnerState": -1
+      },
+      {
+       "mac": "20:7c:14:f4:d0:8f",
+       "mii": "",
+       "mtu": 1500,
+       "usb": false,
+       "lldp": null,
+       "name": "eno4",
+       "speed": -1,
+       "state": "down",
+       "actorState": -1,
+       "aggregator": "",
+       "partnerState": -1
+      },
+      {
+       "mac": "20:7c:14:f4:d0:87",
+       "mii": "",
+       "mtu": 1500,
+       "usb": false,
+       "lldp": {
+        "name": "USW-Pro-XG-10-PoE",
+        "port": "Port 1",
+        "chassis": "a8:9c:6c:b0:8d:76"
+       },
+       "name": "enp4s0",
+       "speed": 2500,
+       "state": "up",
+       "actorState": -1,
+       "aggregator": "",
+       "partnerState": -1
+      },
+      {
+       "mac": "20:7c:14:f4:d0:88",
+       "mii": "",
+       "mtu": 1500,
+       "usb": false,
+       "lldp": null,
+       "name": "enp5s0",
+       "speed": -1,
+       "state": "down",
+       "actorState": -1,
+       "aggregator": "",
+       "partnerState": -1
+      },
+      {
+       "mac": "20:7c:14:f4:d0:89",
+       "mii": "",
+       "mtu": 1500,
+       "usb": false,
+       "lldp": null,
+       "name": "enp6s0",
+       "speed": -1,
+       "state": "down",
+       "actorState": -1,
+       "aggregator": "",
+       "partnerState": -1
+      },
+      {
+       "mac": "20:7c:14:f4:d0:8a",
+       "mii": "",
+       "mtu": 1500,
+       "usb": false,
+       "lldp": null,
+       "name": "enp7s0",
+       "speed": -1,
+       "state": "down",
+       "actorState": -1,
+       "aggregator": "",
+       "partnerState": -1
+      },
+      {
+       "mac": "20:7c:14:f4:d0:8b",
+       "mii": "",
+       "mtu": 1500,
+       "usb": false,
+       "lldp": null,
+       "name": "enp8s0",
+       "speed": -1,
+       "state": "down",
+       "actorState": -1,
+       "aggregator": "",
+       "partnerState": -1
+      }
+     ],
+     "corosync": {
+      "links": 1,
+      "disconnected": 0
+     },
+     "lrmActive": false,
+     "pendingNew": false
+    },
+    "node": "tappaas4",
+    "declared": {
+     "lan": {
+      "mode": "single",
+      "ports": [
+       "20:7c:14:f4:d0:87"
+      ]
+     },
+     "wan": {
+      "ports": []
+     }
+    },
+    "findings": []
+   },
+   "source": "site-manager",
+   "change": 1330,
+   "from": "2026-10-31T07:24:25.263Z",
+   "to": null
+  },
+  {
+   "name": "zone",
+   "value": "mgmt",
+   "source": "site-manager",
+   "change": 1330,
+   "from": "2026-10-31T07:24:25.263Z",
+   "to": null
+  },
+  {
+   "name": "storages",
+   "value": [
+    {
+     "type": "zfspool",
+     "used": 98304,
+     "avail": 479219847168,
+     "total": 479219945472,
+     "active": true,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": true,
+     "storage": "local-zfs"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tanka1"
+    },
+    {
+     "type": "lvmthin",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "local-lvm"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "tankc1"
+    },
+    {
+     "type": "pbs",
+     "used": 461914243072,
+     "avail": 4399867101184,
+     "total": 4861781344256,
+     "active": true,
+     "shared": true,
+     "content": "backup",
+     "enabled": true,
+     "storage": "tappaas_backup"
+    },
+    {
+     "type": "dir",
+     "used": 262144,
+     "avail": 479219810304,
+     "total": 479220072448,
+     "active": true,
+     "shared": false,
+     "content": "backup,iso,import,vztmpl,snippets",
+     "enabled": true,
+     "storage": "local"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": false,
+     "storage": "tankb1"
+    }
+   ],
+   "source": "site-manager",
+   "change": 1674,
+   "from": "2026-10-31T08:21:43.213Z",
+   "to": "2026-10-31T09:52:00.815Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T08:23:56.058Z",
+    "source": "sweep",
+    "desired": {
+     "file": "tappaas4.json"
+    },
+    "attributes": {
+     "zone": {
+      "now": "mgmt",
+      "was": null
+     },
+     "maturity": {
+      "now": "Production",
+      "was": null
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 1730,
+   "from": "2026-10-31T08:23:56.058Z",
+   "to": "2026-10-31T10:30:09.873Z"
+  },
+  {
+   "name": "storages",
+   "value": [
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tankc1"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tanka1"
+    },
+    {
+     "type": "dir",
+     "used": 262144,
+     "avail": 479209717760,
+     "total": 479209979904,
+     "active": true,
+     "shared": false,
+     "content": "backup,vztmpl,iso,import,snippets",
+     "enabled": true,
+     "storage": "local"
+    },
+    {
+     "type": "lvmthin",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "local-lvm"
+    },
+    {
+     "type": "pbs",
+     "used": 461914243072,
+     "avail": 4399867101184,
+     "total": 4861781344256,
+     "active": true,
+     "shared": true,
+     "content": "backup",
+     "enabled": true,
+     "storage": "tappaas_backup"
+    },
+    {
+     "type": "zfspool",
+     "used": 0,
+     "avail": 0,
+     "total": 0,
+     "active": false,
+     "shared": false,
+     "content": "rootdir,images",
+     "enabled": false,
+     "storage": "tankb1"
+    },
+    {
+     "type": "zfspool",
+     "used": 98304,
+     "avail": 479209836544,
+     "total": 479209934848,
+     "active": true,
+     "shared": false,
+     "content": "images,rootdir",
+     "enabled": true,
+     "storage": "local-zfs"
+    }
+   ],
+   "source": "site-manager",
+   "change": 2276,
+   "from": "2026-10-31T09:52:00.815Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:55:15.330Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T10:25:04.446Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T09:55:09.015Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:55:09.015Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:55:15.330Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "0.0/31.3G committed, 0%",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T10:25:04.446Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-31T01:45:00.475Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T10:25:04.446Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T19:55:15.330Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T10:25:04.446Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 2343,
+   "from": "2026-10-31T09:55:09.015Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "retired",
+   "source": "module-manager",
+   "change": 2590,
+   "from": "2026-10-31T10:30:09.873Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 571,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "ffcae78f-b85c-434a-a1aa-b3cf547c326f",
+    "class": "storage-pool",
+    "name": "rpool"
+   },
+   "attributes": {},
+   "source": "storage-manager",
+   "change": 768,
+   "from": "2026-10-30T19:48:31.009Z",
+   "to": "2026-10-31T10:30:09.873Z"
+  },
+  {
+   "id": 572,
+   "type": "member-of",
+   "direction": "out",
+   "other": {
+    "id": "bb8a818c-90a8-47f1-a71d-f33c0f6d8b0f",
+    "class": "environment",
+    "name": "mgmt"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 774,
+   "from": "2026-10-30T19:52:17.204Z",
+   "to": "2026-10-31T10:30:09.873Z"
+  },
+  {
+   "id": 583,
+   "type": "allocated-to",
+   "direction": "in",
+   "other": {
+    "id": "f838733f-d890-4e32-af60-eee4a8b68488",
+    "class": "server",
+    "name": "srv-04"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 786,
+   "from": "2026-10-30T19:52:30.676Z",
+   "to": "2026-10-31T10:30:09.873Z"
+  },
+  {
+   "id": 602,
+   "type": "at",
+   "direction": "out",
+   "other": {
+    "id": "eb8b5e14-af28-46e3-8bf3-fb8de068683b",
+    "class": "location",
+    "name": "knudanchersvej95"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": "2026-10-31T10:30:09.873Z"
+  },
+  {
+   "id": 601,
+   "type": "member-of",
+   "direction": "out",
+   "other": {
+    "id": "e2889041-f305-46d7-a083-d560dfea228e",
+    "class": "cluster",
+    "name": "rossen"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": "2026-10-31T10:30:09.873Z"
+  },
+  {
+   "id": 600,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+    "class": "app",
+    "name": "pve"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": "2026-10-31T10:30:09.873Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 768,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T19:48:31.009Z",
+   "drift": false
+  },
+  {
+   "id": 774,
+   "kind": "change",
+   "source": "site-manager",
+   "job": "20261030192827-8723f1",
+   "verb": "node add tappaas4",
+   "actor": "lars",
+   "time": "2026-10-30T19:52:17.204Z",
+   "drift": false
+  },
+  {
+   "id": 786,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261030192827-8723f1",
+   "verb": "asset allocate",
+   "actor": "lars",
+   "time": "2026-10-30T19:52:30.676Z",
+   "drift": false
+  },
+  {
+   "id": 790,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T19:55:15.330Z",
+   "drift": false
+  },
+  {
+   "id": 1046,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T00:00:32.049Z",
+   "drift": true
+  },
+  {
+   "id": 1078,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-31T00:02:57.507Z",
+   "drift": true
+  },
+  {
+   "id": 1080,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T00:04:27.092Z",
+   "drift": false
+  },
+  {
+   "id": 1114,
+   "kind": "change",
+   "source": "module-manager",
+   "job": null,
+   "verb": "update tappaas4",
+   "actor": "tappaas",
+   "time": "2026-10-31T01:05:48.371Z",
+   "drift": false
+  },
+  {
+   "id": 1171,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T01:45:00.475Z",
+   "drift": false
+  },
+  {
+   "id": 1330,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:24:25.263Z",
+   "drift": true
+  },
+  {
+   "id": 1674,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T08:21:43.213Z",
+   "drift": false
+  },
+  {
+   "id": 1730,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-31T08:23:56.058Z",
+   "drift": true
+  },
+  {
+   "id": 2276,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:52:00.815Z",
+   "drift": true
+  },
+  {
+   "id": 2343,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:55:09.015Z",
+   "drift": false
+  },
+  {
+   "id": 2590,
+   "kind": "change",
+   "source": "module-manager",
+   "job": "20261031102900-f158b0",
+   "verb": "delete tappaas4",
+   "actor": "lars",
+   "time": "2026-10-31T10:30:09.873Z",
+   "drift": false
+  }
+ ]
+}

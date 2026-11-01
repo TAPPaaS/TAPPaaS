@@ -1,0 +1,27 @@
+{
+  "id": "20689a4e-8826-48ad-8e78-a07dc257489c",
+  "class": "node",
+  "ancestors": [
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "usw",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T19:33:05.436Z",
+  "ended": null,
+  "lastSeen": null,
+  "seen": {},
+  "at": null,
+  "attributes": {
+    "placeholder": {
+      "value": true,
+      "source": "asset-manager",
+      "since": "2026-10-30T19:33:05.436Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

@@ -1,0 +1,525 @@
+{
+  "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+  "class": "vm",
+  "ancestors": [
+    "vm",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "tappaas-cicd",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T08:47:45.445Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.004Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.173Z",
+    "health-manager": "2026-10-30T09:04:04.197Z",
+    "module-manager": "2026-11-01T08:52:20.004Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T16:40:02.581Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T16:40:02.581Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-30T14:15:00.202Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "security",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T16:35:02.578Z",
+          "reason": "reboot-pending",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": false,
+          "message": "tappaas-cicd booted 26.05.20261025.1f607aa, next boot 26.05.20261025.1f607aa",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "backup",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "newest restore point 0 day(s) old",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T16:40:02.581Z"
+    },
+    "cores": {
+      "value": 4,
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "description": {
+      "value": "The TAPPaaS mothership VM",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "desired": {
+      "value": {
+        "file": "tappaas-cicd.json"
+      },
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "disks": {
+      "value": [
+        {
+          "size": "528K",
+          "storage": "tanka1"
+        },
+        {
+          "size": "64G",
+          "storage": "tanka1"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "haPolicy": {
+      "value": "started",
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "maturity": {
+      "value": "Production",
+      "source": "module-manager",
+      "since": "2026-10-31T07:24:00.413Z"
+    },
+    "memory": {
+      "value": 8192,
+      "source": "site-manager",
+      "since": "2026-10-31T15:07:09.761Z"
+    },
+    "nics": {
+      "value": [
+        {
+          "mac": "02:79:7c:40:fc:c1",
+          "name": "net0",
+          "model": "virtio",
+          "bridge": "lan"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-30T08:49:32.595Z"
+    },
+    "release": {
+      "value": {
+        "module": "tappaas-cicd",
+        "version": "1.0.1"
+      },
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "stack": {
+      "value": "foundation",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "stage": {
+      "value": "operational",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "state": {
+      "value": "running",
+      "source": "site-manager",
+      "since": "2026-10-31T07:24:25.263Z"
+    },
+    "vmid": {
+      "value": 130,
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "zone": {
+      "value": "mgmt",
+      "source": "module-manager",
+      "since": "2026-10-31T07:24:00.413Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 310,
+      "type": "backs-up",
+      "direction": "in",
+      "other": {
+        "id": "e5d0d704-4a8a-4cb0-a2eb-84ad8f6dc8f8",
+        "class": "datastore",
+        "name": "tappaas_backup"
+      },
+      "attributes": {},
+      "source": "backup-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:53.826Z"
+    },
+    {
+      "id": 219,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "b6a3d15e-cb28-4fc3-a91b-5de5425d9484",
+        "class": "service",
+        "name": "cluster:ha"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 218,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "fc39fc51-1a56-4551-8566-53e2eaf17862",
+        "class": "service",
+        "name": "cluster:vm"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 220,
+      "type": "depends-on",
+      "direction": "out",
+      "other": {
+        "id": "5c8fcae4-69cd-4e68-96f8-a6307e3cea5c",
+        "class": "service",
+        "name": "network:nat"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 36,
+      "type": "member-of",
+      "direction": "out",
+      "other": {
+        "id": "bb8a818c-90a8-47f1-a71d-f33c0f6d8b0f",
+        "class": "environment",
+        "name": "mgmt"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 87,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "7e55b0c5-3f06-4c25-862f-77bdecf56156",
+        "class": "manager",
+        "name": "ap-manager"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 86,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "3b75456e-ce4e-4601-982a-46a16a57dbab",
+        "class": "manager",
+        "name": "asset-manager"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 90,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "142b5831-3cd8-4a31-a2e4-a5ec29d11261",
+        "class": "controller",
+        "name": "authentik-controller"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 83,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "cefdd86a-eacf-471e-87e6-3f89ed48d855",
+        "class": "manager",
+        "name": "backup-manager"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 94,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "9fdc10d6-5acd-43ad-be3c-2121a39d08fe",
+        "class": "controller",
+        "name": "cmdb-controller"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 81,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "084cc578-4943-480c-bf7c-4506612275e0",
+        "class": "manager",
+        "name": "environment-manager"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 84,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "a0e4b194-ea92-42c0-b0a1-715007a5c007",
+        "class": "manager",
+        "name": "health-manager"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 82,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "3e22e490-90a6-41f1-9977-812cf4a1eaf9",
+        "class": "manager",
+        "name": "identity-manager"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 78,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "0019ef59-4d2a-4046-bada-53a354f4a1a2",
+        "class": "manager",
+        "name": "module-manager"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 80,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "3ba9eff5-f1ee-4270-802c-5b3ab5693ea3",
+        "class": "manager",
+        "name": "network-manager"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 91,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "d66c5e81-a145-436e-8cd2-40e6d339748e",
+        "class": "controller",
+        "name": "node-provisioner"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 92,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "33db8c6f-5ba5-4964-933d-bc800a9e973a",
+        "class": "controller",
+        "name": "opnsense-controller"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 89,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "323919db-8912-4551-8f43-0f35e48004ab",
+        "class": "controller",
+        "name": "pbs-controller"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 93,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "78198731-a10d-4cbc-94c8-996c34e19ee3",
+        "class": "controller",
+        "name": "proxmox-controller"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 79,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "05e75fd6-7d94-4910-9c95-179c42389caf",
+        "class": "manager",
+        "name": "site-manager"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 85,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "df841a6d-2ef7-466e-b88b-db7994ac4821",
+        "class": "manager",
+        "name": "storage-manager"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 88,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "a7ce61ac-7630-49dd-bb50-fa9b934c4149",
+        "class": "manager",
+        "name": "switch-manager"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 37,
+      "type": "runs-on",
+      "direction": "out",
+      "other": {
+        "id": "c11c3e17-fe34-4bd7-bed6-6f8b259469c8",
+        "class": "machine",
+        "name": "tappaas1"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    }
+  ]
+}

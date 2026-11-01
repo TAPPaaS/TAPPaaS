@@ -1,0 +1,247 @@
+{
+  "id": "eb8b5e14-af28-46e3-8bf3-fb8de068683b",
+  "class": "location",
+  "ancestors": [
+    "location",
+    "place",
+    "object"
+  ],
+  "name": "knudanchersvej95",
+  "displayName": "KnudAnchersVej95",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-30T08:47:49.432Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.621Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.173Z",
+    "asset-manager": "2026-11-01T08:52:20.621Z"
+  },
+  "at": null,
+  "attributes": {
+    "address": {
+      "value": "Knud Anchers Vej 95",
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "city": {
+      "value": "Rodovre",
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T20:25:02.581Z",
+          "reason": "roll-up",
+          "source": "health-manager",
+          "status": "critical",
+          "derived": true,
+          "message": "1 of 18 members critical",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-11-01T08:30:20.481Z",
+          "reason": "roll-up",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": true,
+          "message": "3 of 17 members warning",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-31T20:05:02.597Z",
+          "reason": "roll-up",
+          "source": "health-manager",
+          "status": "critical",
+          "derived": true,
+          "message": "1 of 7 members critical",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "security",
+          "since": "2026-10-30T09:40:04.146Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "3 of 3 ok",
+          "rootCause": null,
+          "lastChecked": "2026-10-30T09:40:04.146Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T20:20:12.587Z",
+          "reason": "roll-up",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": true,
+          "message": "1 of 19 members warning",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "backup",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "3 of 3 ok",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T07:25:02.913Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-11-01T08:30:20.481Z"
+    },
+    "country": {
+      "value": "DK",
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "displayName": {
+      "value": "KnudAnchersVej95",
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    "timezone": {
+      "value": "Europe/Copenhagen",
+      "source": "site-manager",
+      "since": "2026-10-30T08:47:49.432Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 338,
+      "type": "at",
+      "direction": "in",
+      "other": {
+        "id": "3f835640-96ae-430e-91d5-3fd2355326cf",
+        "class": "room",
+        "name": "basement"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 667,
+      "type": "at",
+      "direction": "in",
+      "other": {
+        "id": "46cd4dd6-0000-4531-a45c-1d1654eb661a",
+        "class": "room",
+        "name": "diningroom"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T16:46:48.023Z"
+    },
+    {
+      "id": 599,
+      "type": "at",
+      "direction": "in",
+      "other": {
+        "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+        "class": "site",
+        "name": "rossen"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-31T00:00:32.049Z"
+    },
+    {
+      "id": 339,
+      "type": "at",
+      "direction": "in",
+      "other": {
+        "id": "c2915fa3-ac0c-4647-994e-46ae1524cb41",
+        "class": "room",
+        "name": "stue"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 247,
+      "type": "at",
+      "direction": "in",
+      "other": {
+        "id": "c11c3e17-fe34-4bd7-bed6-6f8b259469c8",
+        "class": "machine",
+        "name": "tappaas1"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    {
+      "id": 249,
+      "type": "at",
+      "direction": "in",
+      "other": {
+        "id": "95727e8e-df12-468f-a03b-8b685140e223",
+        "class": "machine",
+        "name": "tappaas2"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    {
+      "id": 251,
+      "type": "at",
+      "direction": "in",
+      "other": {
+        "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+        "class": "machine",
+        "name": "tappaas3"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:49.432Z"
+    },
+    {
+      "id": 643,
+      "type": "at",
+      "direction": "in",
+      "other": {
+        "id": "434b8354-7cf8-4354-afa4-596852eac5cd",
+        "class": "machine",
+        "name": "tappaas4"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-31T15:47:18.648Z"
+    }
+  ]
+}

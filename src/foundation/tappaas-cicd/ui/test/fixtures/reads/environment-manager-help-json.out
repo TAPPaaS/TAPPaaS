@@ -1,0 +1,580 @@
+{
+  "manifest": 1,
+  "name": "environment-manager",
+  "version": "0.1.0",
+  "tagline": "TAPPaaS Environment manager",
+  "common": [
+    {
+      "flag": "--config-dir",
+      "takesValue": true,
+      "arg": "DIR",
+      "choices": null,
+      "repeatable": false,
+      "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+    },
+    {
+      "flag": "--json",
+      "takesValue": false,
+      "arg": null,
+      "choices": null,
+      "repeatable": false,
+      "description": "Machine-readable output (list/show)."
+    }
+  ],
+  "verbs": [
+    {
+      "verb": "list",
+      "keys": [
+        [
+          "list"
+        ]
+      ],
+      "usage": "list [--json]",
+      "note": null,
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list/show)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "show",
+      "keys": [
+        [
+          "show"
+        ]
+      ],
+      "usage": "show <env> [--json]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "env",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list/show)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "validate",
+      "keys": [
+        [
+          "validate"
+        ]
+      ],
+      "usage": "validate [<file|dir>] [--schema-dir P] [--zones F] [--quiet]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "file|dir",
+          "optional": true,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--schema-dir",
+          "takesValue": true,
+          "arg": "P",
+          "choices": null,
+          "repeatable": false,
+          "description": "Directory holding environment-fields.json (default: derived)."
+        },
+        {
+          "flag": "--zones",
+          "takesValue": true,
+          "arg": "F",
+          "choices": null,
+          "repeatable": false,
+          "description": "Path to zones.json (default: <config-dir>/zones.json)."
+        },
+        {
+          "flag": "--quiet",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Only output errors/warnings."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list/show)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "add",
+      "keys": [
+        [
+          "add"
+        ]
+      ],
+      "usage": "add [<env>] [--name N] [--domain D] [--owner ORG] [--zone Z] [--create-zone] [--display D] [--dns-mode M] [--force]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "env",
+          "optional": true,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--name",
+          "takesValue": true,
+          "arg": "N",
+          "choices": null,
+          "repeatable": false,
+          "description": "Without <env>: the name of the site's default environment to seed (default: site.json .defaultEnvironment)."
+        },
+        {
+          "flag": "--domain",
+          "takesValue": true,
+          "arg": "D",
+          "choices": null,
+          "repeatable": false,
+          "description": "The environment's public primary domain. Left out: no public domain (reached inside only)."
+        },
+        {
+          "flag": "--owner",
+          "takesValue": true,
+          "arg": "ORG",
+          "choices": null,
+          "repeatable": false,
+          "description": "The organization that owns the environment (default: the first organization, by name)."
+        },
+        {
+          "flag": "--zone",
+          "takesValue": true,
+          "arg": "Z",
+          "choices": null,
+          "repeatable": false,
+          "description": "The Service zone its modules run in (default: a zone named like the environment).\n                   The zone is linked to the environment (network-manager bind)."
+        },
+        {
+          "flag": "--create-zone",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Create that zone as a Service zone first if it does not exist, so one\n                   command yields the environment and its zone. Off unless asked, so a\n                   mistyped --zone cannot create a stray zone."
+        },
+        {
+          "flag": "--display",
+          "takesValue": true,
+          "arg": "D",
+          "choices": null,
+          "repeatable": false,
+          "description": "The name people see (default: the environment's name, capitalised)."
+        },
+        {
+          "flag": "--dns-mode",
+          "takesValue": true,
+          "arg": "M",
+          "choices": null,
+          "repeatable": false,
+          "description": "How its certificates are issued: per-service (default: Caddy gets one per host)\n                   or wildcard (one *.<domain> certificate on the firewall)."
+        },
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Overwrite an environment that already exists."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list/show)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "writes config/environments/<env>.json (with --create-zone also a zone); environment-manager reconcile <env> --apply makes it live"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "Overwrite an environment that already exists."
+        }
+      ]
+    },
+    {
+      "verb": "modify",
+      "keys": [
+        [
+          "modify"
+        ]
+      ],
+      "usage": "modify <env> [--set <field>=<value>]... [--domain D] [--owner ORG] [--zone Z] [--display D] [--dns-mode M]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "env",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--set",
+          "takesValue": true,
+          "arg": "<field>=<value>",
+          "choices": null,
+          "repeatable": true,
+          "description": "Set a field by its name: displayName, ownerOrg, zone, domains.primary,\n                   domains.dnsMode; repeat it. The options below are shortcuts, one field\n                   each (ADR-020 D11)."
+        },
+        {
+          "flag": "--domain",
+          "takesValue": true,
+          "arg": "D",
+          "choices": null,
+          "repeatable": false,
+          "description": "The environment's public primary domain."
+        },
+        {
+          "flag": "--owner",
+          "takesValue": true,
+          "arg": "ORG",
+          "choices": null,
+          "repeatable": false,
+          "description": "The organization that owns the environment."
+        },
+        {
+          "flag": "--zone",
+          "takesValue": true,
+          "arg": "Z",
+          "choices": null,
+          "repeatable": false,
+          "description": "Move the environment to this Service zone: it is linked to the environment\n                   and the old zone's link is cleared (network-manager bind)."
+        },
+        {
+          "flag": "--display",
+          "takesValue": true,
+          "arg": "D",
+          "choices": null,
+          "repeatable": false,
+          "description": "The name people see."
+        },
+        {
+          "flag": "--dns-mode",
+          "takesValue": true,
+          "arg": "M",
+          "choices": null,
+          "repeatable": false,
+          "description": "How its certificates are issued: per-service (Caddy gets one per host)\n                   or wildcard (one *.<domain> certificate on the firewall)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list/show)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "writes config/environments/<env>.json; environment-manager reconcile <env> --apply makes it live"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "delete",
+      "keys": [
+        [
+          "delete"
+        ]
+      ],
+      "usage": "delete <env> [--force] [--check]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "env",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Delete even mgmt, the default environment, or one modules still use."
+        },
+        {
+          "flag": "--check",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Show what would be removed; change nothing."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list/show)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "dry-run-flag",
+        "flag": "--check"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "Delete even mgmt, the default environment, or one modules still use."
+        }
+      ]
+    },
+    {
+      "verb": "report",
+      "keys": [
+        [
+          "report"
+        ]
+      ],
+      "usage": "report [--json] [--discover]",
+      "note": "(ADR-040: send every environment, its owner and the zones serving it to the CMDB)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the report instead of sending it."
+        },
+        {
+          "flag": "--discover",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Accepted for the sweep (D15): what this plane holds is all report sends."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "reconcile",
+      "keys": [
+        [
+          "reconcile"
+        ]
+      ],
+      "usage": "reconcile <env> [--deep] [--apply] [--skip-network]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "env",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--deep",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Also reconcile every module in this environment."
+        },
+        {
+          "flag": "--apply",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Make the changes (without it: a preview of what would change)."
+        },
+        {
+          "flag": "--skip-network",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Leave out the site-wide network pass (the caller already ran it)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list/show)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "apply-flag",
+        "flag": "--apply"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    }
+  ]
+}

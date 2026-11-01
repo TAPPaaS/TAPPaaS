@@ -1,0 +1,411 @@
+{
+ "id": "ce50b004-2db2-42b6-81d7-42ca82d18ebe",
+ "class": "vm",
+ "name": "test-nfsconsumer",
+ "created": "2026-10-31T20:37:20.380Z",
+ "ended": "2026-11-01T08:26:58.915Z",
+ "attributes": [
+  {
+   "name": "cores",
+   "value": 2,
+   "source": "site-manager",
+   "change": 6588,
+   "from": "2026-10-31T20:37:20.380Z",
+   "to": null
+  },
+  {
+   "name": "description",
+   "value": "Test fixture: storage:nfs consumer for storage/test.sh --deep (ADR-029). Disposable NixOS clone; safe to delete. The deep suite sets vmid, node and zone0 on its own copy.",
+   "source": "site-manager",
+   "change": 6588,
+   "from": "2026-10-31T20:37:20.380Z",
+   "to": null
+  },
+  {
+   "name": "desired",
+   "value": {
+    "file": "test-nfsconsumer.json"
+   },
+   "source": "site-manager",
+   "change": 6588,
+   "from": "2026-10-31T20:37:20.380Z",
+   "to": null
+  },
+  {
+   "name": "disks",
+   "value": [
+    {
+     "size": "528K",
+     "storage": "tanka1"
+    },
+    {
+     "size": "24G",
+     "storage": "tanka1"
+    }
+   ],
+   "source": "site-manager",
+   "change": 6588,
+   "from": "2026-10-31T20:37:20.380Z",
+   "to": null
+  },
+  {
+   "name": "maturity",
+   "value": "Development",
+   "source": "site-manager",
+   "change": 6588,
+   "from": "2026-10-31T20:37:20.380Z",
+   "to": null
+  },
+  {
+   "name": "memory",
+   "value": 2048,
+   "source": "site-manager",
+   "change": 6588,
+   "from": "2026-10-31T20:37:20.380Z",
+   "to": null
+  },
+  {
+   "name": "release",
+   "value": {
+    "module": "test-nfsconsumer",
+    "version": "0.1.0"
+   },
+   "source": "site-manager",
+   "change": 6588,
+   "from": "2026-10-31T20:37:20.380Z",
+   "to": null
+  },
+  {
+   "name": "stack",
+   "value": "foundation",
+   "source": "site-manager",
+   "change": 6588,
+   "from": "2026-10-31T20:37:20.380Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "operational",
+   "source": "site-manager",
+   "change": 6588,
+   "from": "2026-10-31T20:37:20.380Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "name": "state",
+   "value": "running",
+   "source": "site-manager",
+   "change": 6588,
+   "from": "2026-10-31T20:37:20.380Z",
+   "to": null
+  },
+  {
+   "name": "vmid",
+   "value": 990,
+   "source": "site-manager",
+   "change": 6588,
+   "from": "2026-10-31T20:37:20.380Z",
+   "to": null
+  },
+  {
+   "name": "zone",
+   "value": "rossen",
+   "source": "site-manager",
+   "change": 6588,
+   "from": "2026-10-31T20:37:20.380Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T20:40:00.338Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T00:01:26.213Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-31T20:40:00.338Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:45:00.343Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T20:40:00.338Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:40:00.338Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 6617,
+   "from": "2026-10-31T20:40:00.338Z",
+   "to": "2026-11-01T00:04:45.410Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-11-01T00:03:16.092Z",
+    "source": "sweep",
+    "desired": {
+     "file": "test-nfsconsumer.json"
+    },
+    "attributes": {
+     "\u2192runs-on machine/tappaas2": {
+      "now": {},
+      "was": null
+     },
+     "\u2192member-of environment/mgmt": {
+      "now": {},
+      "was": null
+     },
+     "\u2192depends-on service/cluster:vm": {
+      "now": {},
+      "was": null
+     },
+     "\u2192depends-on service/storage:nfs": {
+      "now": {},
+      "was": null
+     },
+     "\u2192depends-on service/network:rules": {
+      "now": {},
+      "was": null
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 7905,
+   "from": "2026-11-01T00:03:16.092Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T20:40:00.338Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:25:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T00:04:45.410Z",
+     "reason": "sweep-missing",
+     "source": "health-manager",
+     "status": "critical",
+     "derived": false,
+     "message": "vm/test-nfsconsumer: desired without actual",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:25:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-31T20:40:00.338Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:45:00.343Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T20:40:00.338Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:40:00.338Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 7907,
+   "from": "2026-11-01T00:04:45.410Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "retired",
+   "source": "operator",
+   "change": 11047,
+   "from": "2026-11-01T08:26:58.915Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 705,
+   "type": "member-of",
+   "direction": "out",
+   "other": {
+    "id": "bb8a818c-90a8-47f1-a71d-f33c0f6d8b0f",
+    "class": "environment",
+    "name": "mgmt"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 6588,
+   "from": "2026-10-31T20:37:20.380Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 706,
+   "type": "runs-on",
+   "direction": "out",
+   "other": {
+    "id": "95727e8e-df12-468f-a03b-8b685140e223",
+    "class": "machine",
+    "name": "tappaas2"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 6588,
+   "from": "2026-10-31T20:37:20.380Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 708,
+   "type": "depends-on",
+   "direction": "out",
+   "other": {
+    "id": "a0744357-5768-4dc1-bd83-4abca98d3596",
+    "class": "service",
+    "name": "network:rules"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 6593,
+   "from": "2026-10-31T20:37:21.240Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 707,
+   "type": "depends-on",
+   "direction": "out",
+   "other": {
+    "id": "fc39fc51-1a56-4551-8566-53e2eaf17862",
+    "class": "service",
+    "name": "cluster:vm"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 6593,
+   "from": "2026-10-31T20:37:21.240Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 709,
+   "type": "depends-on",
+   "direction": "out",
+   "other": {
+    "id": "abcd3905-506c-4409-a2c2-f3d0bde1b867",
+    "class": "service",
+    "name": "storage:nfs"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 6593,
+   "from": "2026-10-31T20:37:21.240Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 6588,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T20:37:20.380Z",
+   "drift": false
+  },
+  {
+   "id": 6593,
+   "kind": "observation",
+   "source": "module-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T20:37:21.240Z",
+   "drift": false
+  },
+  {
+   "id": 6617,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T20:40:00.338Z",
+   "drift": false
+  },
+  {
+   "id": 7905,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-11-01T00:03:16.092Z",
+   "drift": true
+  },
+  {
+   "id": 7907,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T00:04:45.410Z",
+   "drift": false
+  },
+  {
+   "id": 11047,
+   "kind": "change",
+   "source": "operator",
+   "job": null,
+   "verb": "retire deep-test leftovers",
+   "actor": null,
+   "time": "2026-11-01T08:26:58.915Z",
+   "drift": false
+  }
+ ]
+}

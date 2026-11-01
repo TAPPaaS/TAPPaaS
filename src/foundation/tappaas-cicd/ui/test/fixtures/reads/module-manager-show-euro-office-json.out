@@ -1,0 +1,57 @@
+{
+  "description": "Euro-Office DocumentServer — collaborative document editing for Nextcloud.",
+  "version": "0.2.4",
+  "releaseDate": "2026-06-12",
+  "installTime": "20260823-14:23:32",
+  "updateTime": "20261101-02:29:29",
+  "maintainer": "@ErikDaniel007",
+  "status": "Testing",
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/collaboration/euro-office",
+  "environment": "rossen",
+  "vmname": "euro-office",
+  "vmid": 343,
+  "vmtag": "TAPPaaS,App",
+  "node": "tappaas2",
+  "zone0": "rossen",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy",
+    "network:rules",
+    "nextcloud:fileservice"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "provides": [],
+  "appVersion": "9.3.5",
+  "stack": "collaboration",
+  "config": {
+    "backup:vm": {
+      "backup": {
+        "enabled": true,
+        "exclude": [],
+        "retention": "7y"
+      }
+    },
+    "cluster:vm": {
+      "cores": 4,
+      "memory": 8192,
+      "diskSize": "32G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "nextcloud:fileservice": {
+      "connector": "onlyoffice"
+    },
+    "network:proxy": {
+      "proxyAllowedZones": [
+        "internet"
+      ]
+    }
+  }
+}

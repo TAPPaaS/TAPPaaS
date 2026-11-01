@@ -1,0 +1,78 @@
+[
+  {
+    "name": "tappaas1",
+    "address": "tappaas1.mgmt.internal",
+    "storagePools": [
+      "tanka1",
+      "tankb1"
+    ],
+    "uplinks": {
+      "lan": {
+        "mode": "lacp",
+        "ports": [
+          "00:07:43:38:aa:f0",
+          "00:07:43:38:aa:f8"
+        ]
+      }
+    }
+  },
+  {
+    "name": "tappaas2",
+    "address": "tappaas2.mgmt.internal",
+    "storagePools": [
+      "tanka1"
+    ],
+    "uplinks": {
+      "lan": {
+        "mode": "single",
+        "ports": [
+          "38:05:25:33:b5:f7"
+        ]
+      },
+      "wan": {
+        "ports": []
+      }
+    }
+  },
+  {
+    "name": "tappaas3",
+    "address": "tappaas3.mgmt.internal",
+    "storagePools": [
+      "tanka1",
+      "tankc1"
+    ],
+    "uplinks": {
+      "lan": {
+        "mode": "active-backup",
+        "ports": [
+          "c8:ff:bf:05:0d:30",
+          "00:e0:4c:68:00:d1"
+        ],
+        "primary": "c8:ff:bf:05:0d:30"
+      },
+      "wan": {
+        "ports": [
+          "c8:ff:bf:05:0d:31"
+        ]
+      }
+    }
+  },
+  {
+    "name": "tappaas4",
+    "address": "tappaas4.mgmt.internal",
+    "storagePools": [
+      "tanka1"
+    ],
+    "uplinks": {
+      "lan": {
+        "mode": "single",
+        "ports": [
+          "20:7c:14:f4:d0:87"
+        ]
+      },
+      "wan": {
+        "ports": []
+      }
+    }
+  }
+]

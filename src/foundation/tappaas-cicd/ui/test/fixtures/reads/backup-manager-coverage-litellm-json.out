@@ -1,0 +1,14 @@
+{
+  "reachable": true,
+  "module": "litellm",
+  "jobs": [
+    {
+      "jobId": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "how": "explicit",
+      "storage": "tappaas_backup",
+      "schedule": "21:00",
+      "enabled": true,
+      "managed": true
+    }
+  ]
+}

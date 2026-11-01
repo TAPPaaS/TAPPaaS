@@ -1,0 +1,217 @@
+{
+ "id": "8d4cbe0c-caa1-4e3f-a5ff-0e6863b98c10",
+ "class": "network-device",
+ "name": "sw-06",
+ "created": "2026-10-30T19:34:01.285Z",
+ "ended": "2026-10-31T07:32:01.329Z",
+ "attributes": [
+  {
+   "name": "deviceType",
+   "value": "switch",
+   "source": "asset-manager",
+   "change": 734,
+   "from": "2026-10-30T19:34:01.285Z",
+   "to": null
+  },
+  {
+   "name": "displayName",
+   "value": "mtA",
+   "source": "asset-manager",
+   "change": 734,
+   "from": "2026-10-30T19:34:01.285Z",
+   "to": null
+  },
+  {
+   "name": "faulty",
+   "value": false,
+   "source": "asset-manager",
+   "change": 734,
+   "from": "2026-10-30T19:34:01.285Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "stock",
+   "source": "asset-manager",
+   "change": 734,
+   "from": "2026-10-30T19:34:01.285Z",
+   "to": "2026-10-30T19:34:08.241Z"
+  },
+  {
+   "name": "vendor",
+   "value": "mtk",
+   "source": "asset-manager",
+   "change": 734,
+   "from": "2026-10-30T19:34:01.285Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "operational",
+   "source": "asset-manager",
+   "change": 735,
+   "from": "2026-10-30T19:34:08.241Z",
+   "to": "2026-10-30T20:07:06.589Z"
+  },
+  {
+   "name": "stage",
+   "value": "stock",
+   "source": "asset-manager",
+   "change": 816,
+   "from": "2026-10-30T20:07:06.589Z",
+   "to": "2026-10-30T20:07:12.537Z"
+  },
+  {
+   "name": "stage",
+   "value": "operational",
+   "source": "asset-manager",
+   "change": 817,
+   "from": "2026-10-30T20:07:12.537Z",
+   "to": "2026-10-31T07:32:01.329Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:30:02.146Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1355,
+   "from": "2026-10-31T07:25:02.913Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "disposed",
+   "source": "asset-manager",
+   "change": 1384,
+   "from": "2026-10-31T07:32:01.329Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 563,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "759c6943-6b96-439a-9c2c-c6e45df112d5",
+    "class": "node",
+    "name": "mtA"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 736,
+   "from": "2026-10-30T19:34:08.251Z",
+   "to": "2026-10-30T20:07:06.589Z"
+  },
+  {
+   "id": 587,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "759c6943-6b96-439a-9c2c-c6e45df112d5",
+    "class": "node",
+    "name": "mtA"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 818,
+   "from": "2026-10-30T20:07:12.547Z",
+   "to": "2026-10-31T07:32:01.329Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 734,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset add",
+   "actor": "tappaas",
+   "time": "2026-10-30T19:34:01.285Z",
+   "drift": false
+  },
+  {
+   "id": 735,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset allocate",
+   "actor": "tappaas",
+   "time": "2026-10-30T19:34:08.241Z",
+   "drift": false
+  },
+  {
+   "id": 736,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset allocate",
+   "actor": "tappaas",
+   "time": "2026-10-30T19:34:08.251Z",
+   "drift": false
+  },
+  {
+   "id": 816,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset add",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:07:06.589Z",
+   "drift": false
+  },
+  {
+   "id": 817,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset allocate",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:07:12.537Z",
+   "drift": false
+  },
+  {
+   "id": 818,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset allocate",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:07:12.547Z",
+   "drift": false
+  },
+  {
+   "id": 1355,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:25:02.913Z",
+   "drift": false
+  },
+  {
+   "id": 1384,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "end test fixtures 2026-10-31",
+   "actor": null,
+   "time": "2026-10-31T07:32:01.329Z",
+   "drift": false
+  }
+ ]
+}

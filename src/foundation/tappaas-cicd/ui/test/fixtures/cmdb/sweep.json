@@ -1,0 +1,100 @@
+{
+  "id": 11183,
+  "time": "2026-11-01T08:34:01.582Z",
+  "since": "2026-11-01T08:29:44.963Z",
+  "counts": {
+    "new": 0,
+    "drift": 0,
+    "words": 0,
+    "unread": 0,
+    "desired": 0,
+    "missing": 0,
+    "expected": 0,
+    "unmanaged": 1,
+    "sourcesFailed": 0
+  },
+  "status": "warning",
+  "sources": [
+    {
+      "ok": true,
+      "source": "module-manager",
+      "seconds": 0.9,
+      "exitCode": 0
+    },
+    {
+      "ok": true,
+      "source": "site-manager",
+      "seconds": 46.6,
+      "exitCode": 0
+    },
+    {
+      "ok": true,
+      "source": "network-manager",
+      "seconds": 3.4,
+      "exitCode": 0
+    },
+    {
+      "ok": true,
+      "source": "environment-manager",
+      "seconds": 0.1,
+      "exitCode": 0
+    },
+    {
+      "ok": true,
+      "source": "identity-manager",
+      "seconds": 0.9,
+      "exitCode": 0
+    },
+    {
+      "ok": true,
+      "source": "backup-manager",
+      "seconds": 3.4,
+      "exitCode": 0
+    },
+    {
+      "ok": true,
+      "source": "health-manager",
+      "seconds": 80.8,
+      "exitCode": 0
+    },
+    {
+      "ok": true,
+      "source": "storage-manager",
+      "seconds": 27.5,
+      "exitCode": 0
+    },
+    {
+      "ok": true,
+      "source": "asset-manager",
+      "seconds": 0.3,
+      "exitCode": 0,
+      "fallback": true
+    },
+    {
+      "ok": true,
+      "source": "ap-manager",
+      "seconds": 0.3,
+      "exitCode": 0
+    },
+    {
+      "ok": true,
+      "source": "switch-manager",
+      "seconds": 1.5,
+      "exitCode": 0
+    }
+  ],
+  "exitCode": 1,
+  "differences": [
+    {
+      "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+      "kind": "unmanaged",
+      "name": "tappaas-nixos",
+      "after": null,
+      "class": "vm",
+      "before": null,
+      "source": "site-manager",
+      "expected": false,
+      "attribute": null
+    }
+  ]
+}

@@ -1,0 +1,788 @@
+{
+  "version": 1,
+  "rooms": {
+    "basement": {
+      "displayName": "Basement",
+      "location": "knudanchersvej95"
+    },
+    "stue": {
+      "displayName": "LivingRoom",
+      "location": "knudanchersvej95"
+    },
+    "diningroom": {
+      "displayName": "DiningRoom"
+    }
+  },
+  "racks": {
+    "rack1": {
+      "units": 37,
+      "width": "19in",
+      "numbering": "bottom-up",
+      "description": "primary TAPPaaS rack",
+      "room": "basement"
+    }
+  },
+  "placements": {
+    "tappaas1": {
+      "rack": "rack1",
+      "u": 1,
+      "height": 11,
+      "width": "half",
+      "face": "front",
+      "faceplate": "generic/server-2u",
+      "description": "placeholder position, set by the operator",
+      "slot": 0
+    },
+    "tappaas2": {
+      "rack": "rack1",
+      "u": 13,
+      "height": 6,
+      "width": "third",
+      "face": "front",
+      "faceplate": "generic/server-2u",
+      "description": "placeholder position, set by the operator",
+      "slot": 0
+    },
+    "tappaas3": {
+      "rack": "rack1",
+      "u": 13,
+      "height": 6,
+      "width": "third",
+      "face": "front",
+      "faceplate": "generic/server-2u",
+      "description": "placeholder position, set by the operator",
+      "slot": 2
+    },
+    "USW Pro XG 10 PoE": {
+      "rack": "rack1",
+      "u": 23,
+      "height": 1,
+      "width": "full",
+      "face": "front",
+      "faceplate": "unifi/usw-pro-xg-10-poe",
+      "description": "placeholder position, set by the operator"
+    },
+    "crs-a": {
+      "rack": "rack1",
+      "u": 24,
+      "height": 1,
+      "width": "full",
+      "face": "front",
+      "faceplate": "mikrotik/crs317-1g-16s",
+      "description": "placeholder position, set by the operator"
+    },
+    "crs-b": {
+      "rack": "rack1",
+      "u": 25,
+      "height": 1,
+      "width": "full",
+      "face": "front",
+      "faceplate": "mikrotik/crs317-1g-16s",
+      "description": "placeholder position, set by the operator"
+    },
+    "ISP modem": {
+      "height": 1,
+      "width": "third",
+      "face": "front",
+      "rack": "rack1",
+      "u": 12,
+      "slot": 0
+    },
+    "Nano HD": {
+      "room": "stue"
+    },
+    "patchpanel1": {
+      "rack": "rack1",
+      "u": 20,
+      "height": 1,
+      "width": "full",
+      "face": "front"
+    },
+    "patchpanel 2": {
+      "rack": "rack1",
+      "u": 22,
+      "height": 1,
+      "width": "full",
+      "face": "front",
+      "faceplate": "generic/patch-panel-24"
+    },
+    "dsk-01": {
+      "in": "srv-01",
+      "bay": "nvme-WD_BLACK_SN7100_1TB_260923802321"
+    },
+    "dsk-02": {
+      "in": "srv-01",
+      "bay": "nvme-Samsung_SSD_990_PRO_4TB_S7DPNU0YA10709Z"
+    },
+    "dsk-03": {
+      "in": "srv-01",
+      "bay": "nvme-Samsung_SSD_990_PRO_with_Heatsink_4TB_S7DSNJ0YB04294X"
+    },
+    "dsk-04": {
+      "in": "srv-01",
+      "bay": "ata-ST12000VN0008-3MH101_ZZ30MJL6"
+    },
+    "dsk-05": {
+      "in": "srv-02",
+      "bay": "nvme-SanDisk_SSD_Plus_500GB_A3N_25414A800205"
+    },
+    "dsk-06": {
+      "in": "srv-02",
+      "bay": "nvme-KINGSTON_OM8TAP42048K1-A00_50026B73842AD86F"
+    },
+    "dsk-07": {
+      "in": "srv-03",
+      "bay": "nvme-ASint_AS806_1TB_8061TBFDHY25F220056"
+    },
+    "dsk-08": {
+      "in": "srv-03",
+      "bay": "ata-ST8000AS0002-1NA17Z_Z840DMA1"
+    },
+    "dsk-09": {
+      "in": "srv-03",
+      "bay": "ata-HGST_HDN726050ALE614_NAHW317X"
+    },
+    "dsk-10": {
+      "in": "srv-03",
+      "bay": "ata-MTFDDAK256MAM-1K12_13180938FDB1"
+    },
+    "dsk-11": {
+      "in": "srv-04",
+      "bay": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N"
+    },
+    "dsk-12": {
+      "in": "srv-04",
+      "bay": "nvme-Samsung_SSD_990_PRO_2TB_S7DNNU0X545837K"
+    },
+    "dsk-13": {
+      "in": "srv-04",
+      "bay": "nvme-Samsung_SSD_990_PRO_2TB_S7HENJ0Y412736V"
+    },
+    "tappaas4": {
+      "faceplate": "generic/server-1u",
+      "height": 1,
+      "width": "full",
+      "face": "front",
+      "rack": "rack1",
+      "u": 19
+    }
+  },
+  "assets": {
+    "ISP modem": {
+      "kind": "modem",
+      "model": "generic/isp-modem",
+      "stage": "placed",
+      "role": "ISP modem"
+    },
+    "patchpanel1": {
+      "kind": "patch-panel",
+      "ports": [
+        {
+          "name": "1",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "2",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "3",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "4",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "5",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "6",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "7",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "8",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "9",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "10",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "11",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "12",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "13",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "14",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "15",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "16",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "17",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "18",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "19",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "20",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "21",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "22",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "23",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "24",
+          "kind": "rj45",
+          "speed": "1g"
+        }
+      ],
+      "stage": "placed",
+      "role": "patchpanel1"
+    },
+    "patchpanel 2": {
+      "kind": "patch-panel",
+      "location": "knudanchersvej95",
+      "ports": [
+        {
+          "name": "1",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "2",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "3",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "4",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "5",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "6",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "7",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "8",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "9",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "10",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "11",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "12",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "13",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "14",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "15",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "16",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "17",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "18",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "19",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "20",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "21",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "22",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "23",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "24",
+          "kind": "rj45",
+          "speed": "1g"
+        }
+      ],
+      "stage": "placed",
+      "role": "patchpanel 2"
+    },
+    "srv-01": {
+      "kind": "server",
+      "displayName": "tappaas1",
+      "stage": "placed",
+      "role": "tappaas1"
+    },
+    "srv-02": {
+      "kind": "server",
+      "displayName": "tappaas2",
+      "stage": "placed",
+      "role": "tappaas2",
+      "ports": [
+        {
+          "name": "enp97s0",
+          "kind": "rj45",
+          "speed": "10g",
+          "mac": "38:05:25:33:b5:f7"
+        }
+      ]
+    },
+    "srv-03": {
+      "kind": "server",
+      "displayName": "tappaas3",
+      "stage": "placed",
+      "role": "tappaas3",
+      "ports": [
+        {
+          "name": "eno1",
+          "kind": "rj45",
+          "speed": "2.5g",
+          "mac": "c8:ff:bf:05:0d:30"
+        }
+      ]
+    },
+    "sw-01": {
+      "kind": "switch",
+      "displayName": "USW Pro XG 10 PoE",
+      "vendor": "unifi",
+      "model": "USWED77",
+      "stage": "placed",
+      "role": "USW Pro XG 10 PoE"
+    },
+    "sw-02": {
+      "kind": "switch",
+      "displayName": "crs-a",
+      "vendor": "mikrotik",
+      "model": "CRS317-1G-16S+",
+      "stage": "placed",
+      "role": "crs-a"
+    },
+    "sw-03": {
+      "kind": "switch",
+      "displayName": "crs-b",
+      "vendor": "mikrotik",
+      "model": "CRS317-1G-16S+",
+      "stage": "placed",
+      "role": "crs-b"
+    },
+    "ap-01": {
+      "kind": "access-point",
+      "displayName": "Nano HD",
+      "vendor": "unifi",
+      "model": "U7NHD",
+      "stage": "placed",
+      "role": "Nano HD"
+    },
+    "dsk-01": {
+      "kind": "disk",
+      "stage": "placed",
+      "displayName": "nvme-WD_BLACK_SN7100_1TB_260923802321",
+      "serial": "260923802321",
+      "model": "WD_BLACK SN7100 1TB",
+      "disk": {
+        "kind": "nvme",
+        "size": 1000204886016,
+        "bus": "nvme"
+      }
+    },
+    "dsk-02": {
+      "kind": "disk",
+      "stage": "placed",
+      "displayName": "nvme-Samsung_SSD_990_PRO_4TB_S7DPNU0YA10709Z",
+      "serial": "S7DPNU0YA10709Z",
+      "model": "Samsung SSD 990 PRO 4TB",
+      "disk": {
+        "kind": "nvme",
+        "size": 4000787030016,
+        "bus": "nvme"
+      }
+    },
+    "dsk-03": {
+      "kind": "disk",
+      "stage": "placed",
+      "displayName": "nvme-Samsung_SSD_990_PRO_with_Heatsink_4TB_S7DSNJ0YB04294X",
+      "serial": "S7DSNJ0YB04294X",
+      "model": "Samsung SSD 990 PRO with Heatsink 4TB",
+      "disk": {
+        "kind": "nvme",
+        "size": 4000787030016,
+        "bus": "nvme"
+      }
+    },
+    "dsk-04": {
+      "kind": "disk",
+      "stage": "placed",
+      "displayName": "ata-ST12000VN0008-3MH101_ZZ30MJL6",
+      "serial": "ZZ30MJL6",
+      "model": "ST12000VN0008-3MH101",
+      "disk": {
+        "kind": "hdd",
+        "size": 12000138625024,
+        "bus": "sata"
+      }
+    },
+    "dsk-05": {
+      "kind": "disk",
+      "stage": "placed",
+      "displayName": "nvme-SanDisk_SSD_Plus_500GB_A3N_25414A800205",
+      "serial": "25414A800205",
+      "model": "SanDisk SSD Plus 500GB A3N",
+      "disk": {
+        "kind": "nvme",
+        "size": 500107862016,
+        "bus": "nvme"
+      }
+    },
+    "dsk-06": {
+      "kind": "disk",
+      "stage": "placed",
+      "displayName": "nvme-KINGSTON_OM8TAP42048K1-A00_50026B73842AD86F",
+      "serial": "50026B73842AD86F",
+      "model": "KINGSTON OM8TAP42048K1-A00",
+      "disk": {
+        "kind": "nvme",
+        "size": 2048408248320,
+        "bus": "nvme"
+      }
+    },
+    "dsk-07": {
+      "kind": "disk",
+      "stage": "placed",
+      "displayName": "nvme-ASint_AS806_1TB_8061TBFDHY25F220056",
+      "serial": "8061TBFDHY25F220056",
+      "model": "ASint AS806 1TB",
+      "disk": {
+        "kind": "nvme",
+        "size": 1024209543168,
+        "bus": "nvme"
+      }
+    },
+    "dsk-08": {
+      "kind": "disk",
+      "stage": "placed",
+      "displayName": "ata-ST8000AS0002-1NA17Z_Z840DMA1",
+      "serial": "Z840DMA1",
+      "model": "ST8000AS0002-1NA17Z",
+      "disk": {
+        "kind": "hdd",
+        "size": 8001563222016,
+        "bus": "sata"
+      }
+    },
+    "dsk-09": {
+      "kind": "disk",
+      "stage": "placed",
+      "displayName": "ata-HGST_HDN726050ALE614_NAHW317X",
+      "serial": "NAHW317X",
+      "model": "HGST_HDN726050ALE614",
+      "disk": {
+        "kind": "hdd",
+        "size": 5000981078016,
+        "bus": "sata"
+      }
+    },
+    "dsk-10": {
+      "kind": "disk",
+      "stage": "placed",
+      "displayName": "ata-MTFDDAK256MAM-1K12_13180938FDB1",
+      "serial": "13180938FDB1",
+      "model": "MTFDDAK256MAM-1K12",
+      "disk": {
+        "kind": "ssd",
+        "size": 256060514304,
+        "bus": "sata"
+      }
+    },
+    "srv-04": {
+      "kind": "server",
+      "stage": "placed",
+      "displayName": "tappaas4",
+      "model": "QDNV01",
+      "ports": [
+        {
+          "name": "enp4s0",
+          "kind": "rj45",
+          "mac": "20:7c:14:f4:d0:87",
+          "speed": "1g"
+        },
+        {
+          "name": "enp5s0",
+          "kind": "rj45",
+          "mac": "20:7c:14:f4:d0:88",
+          "speed": "1g"
+        },
+        {
+          "name": "enp6s0",
+          "kind": "rj45",
+          "mac": "20:7c:14:f4:d0:89",
+          "speed": "1g"
+        },
+        {
+          "name": "enp7s0",
+          "kind": "rj45",
+          "mac": "20:7c:14:f4:d0:8a",
+          "speed": "1g"
+        },
+        {
+          "name": "enp8s0",
+          "kind": "rj45",
+          "mac": "20:7c:14:f4:d0:8b",
+          "speed": "1g"
+        },
+        {
+          "name": "eno1",
+          "kind": "rj45",
+          "mac": "20:7c:14:f4:d0:8c",
+          "speed": "1g"
+        },
+        {
+          "name": "eno2",
+          "kind": "rj45",
+          "mac": "20:7c:14:f4:d0:8d",
+          "speed": "1g"
+        },
+        {
+          "name": "eno3",
+          "kind": "rj45",
+          "mac": "20:7c:14:f4:d0:8e",
+          "speed": "1g"
+        },
+        {
+          "name": "eno4",
+          "kind": "rj45",
+          "mac": "20:7c:14:f4:d0:8f",
+          "speed": "1g"
+        }
+      ],
+      "role": "tappaas4"
+    },
+    "dsk-11": {
+      "kind": "disk",
+      "stage": "placed",
+      "displayName": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N",
+      "serial": "S6PYNL0Y209497N",
+      "model": "Samsung SSD 870 EVO 500GB",
+      "disk": {
+        "kind": "ssd",
+        "size": 500107862016,
+        "wwn": "0x5002538f55208720",
+        "bus": "sata"
+      }
+    },
+    "dsk-12": {
+      "kind": "disk",
+      "stage": "placed",
+      "displayName": "nvme-Samsung_SSD_990_PRO_2TB_S7DNNU0X545837K",
+      "serial": "S7DNNU0X545837K",
+      "model": "Samsung SSD 990 PRO 2TB",
+      "disk": {
+        "kind": "nvme",
+        "size": 2000398934016,
+        "wwn": "eui.0025384541a2503d",
+        "bus": "nvme"
+      }
+    },
+    "dsk-13": {
+      "kind": "disk",
+      "stage": "placed",
+      "displayName": "nvme-Samsung_SSD_990_PRO_2TB_S7HENJ0Y412736V",
+      "serial": "S7HENJ0Y412736V",
+      "model": "Samsung SSD 990 PRO 2TB",
+      "disk": {
+        "kind": "nvme",
+        "size": 2000398934016,
+        "wwn": "eui.002538445140830c",
+        "bus": "nvme"
+      }
+    }
+  },
+  "cables": [
+    {
+      "from": {
+        "device": "USW Pro XG 10 PoE",
+        "port": "5"
+      },
+      "to": {
+        "device": "ISP modem",
+        "port": "LAN 1",
+        "faceplate": "generic/isp-modem"
+      },
+      "kind": "uplink",
+      "label": "ISP hand-off"
+    },
+    {
+      "from": {
+        "device": "USW Pro XG 10 PoE",
+        "port": "2"
+      },
+      "to": {
+        "device": "patchpanel1",
+        "port": "9",
+        "side": "front"
+      },
+      "kind": "patch",
+      "origin": "seen"
+    },
+    {
+      "from": {
+        "device": "patchpanel1",
+        "port": "9",
+        "side": "rear"
+      },
+      "to": {
+        "device": "tappaas2",
+        "port": "enp97s0"
+      },
+      "kind": "patch",
+      "origin": "seen"
+    },
+    {
+      "from": {
+        "device": "USW Pro XG 10 PoE",
+        "port": "3"
+      },
+      "to": {
+        "device": "patchpanel1",
+        "port": "6",
+        "side": "front"
+      },
+      "kind": "patch",
+      "origin": "seen"
+    },
+    {
+      "from": {
+        "device": "patchpanel1",
+        "port": "6",
+        "side": "rear"
+      },
+      "to": {
+        "device": "tappaas3",
+        "port": "eno1"
+      },
+      "kind": "patch",
+      "origin": "seen"
+    }
+  ]
+}

@@ -1,0 +1,522 @@
+{
+ "id": "2275a710-a14d-41bb-988a-5a9a733af268",
+ "class": "network-device",
+ "name": "crs-a",
+ "created": "2026-10-30T12:58:06.772Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "deviceType",
+   "value": "switch",
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "name": "model",
+   "value": "CRS317-1G-16S+",
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "name": "ports",
+   "value": 17,
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "name": "vendor",
+   "value": "mikrotik",
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-30T12:58:06.962Z",
+    "source": "sweep",
+    "desired": null,
+    "attributes": {
+     "\u2192allocated-to device/crs-a": {
+      "now": {},
+      "was": null
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 305,
+   "from": "2026-10-30T12:58:06.962Z",
+   "to": "2026-10-30T14:34:19.677Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-30T12:59:36.103Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "network-device/crs-a: drift: appeared; network-device/crs-a: drift: appeared \u2192allocated-to device/crs-a",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T14:32:46.038Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 307,
+   "from": "2026-10-30T12:59:36.103Z",
+   "to": "2026-10-30T14:35:49.161Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-30T12:58:06.962Z",
+    "source": "sweep",
+    "desired": null,
+    "attributes": {
+     "\u2192allocated-to device/crs-a": {
+      "now": null,
+      "was": {}
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 412,
+   "from": "2026-10-30T14:34:19.677Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-30T14:35:49.161Z",
+     "reason": "sweep-gone",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "network-device/crs-a: drift: gone \u2192allocated-to device/crs-a",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:00:51.500Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 414,
+   "from": "2026-10-30T14:35:49.161Z",
+   "to": "2026-10-31T00:04:27.092Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:04:27.092Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1080,
+   "from": "2026-10-31T00:04:27.092Z",
+   "to": "2026-10-31T07:25:02.913Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:04:27.092Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1355,
+   "from": "2026-10-31T07:25:02.913Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 542,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+    "class": "device",
+    "name": "crs-a"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": "2026-10-30T14:32:14.815Z"
+  },
+  {
+   "id": 508,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "9f496a15-6e35-4355-8c25-14ff3beb363d",
+    "class": "port",
+    "name": "sfp-sfpplus1"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 510,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "d90c445d-7a56-48e5-9684-91506ba2b0e1",
+    "class": "port",
+    "name": "sfp-sfpplus3"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 511,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "d00df81c-fcfd-437e-9357-25a613c9d2c6",
+    "class": "port",
+    "name": "sfp-sfpplus4"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 512,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "149bed03-cb51-4eb5-8323-a28712c669dc",
+    "class": "port",
+    "name": "sfp-sfpplus5"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 513,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "806189cc-96af-4ca1-8481-d44a724ab4a7",
+    "class": "port",
+    "name": "sfp-sfpplus6"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 514,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "9c374194-c892-4194-951b-aea987874fd4",
+    "class": "port",
+    "name": "sfp-sfpplus7"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 515,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "1b7d473a-0a5c-4f2e-91c2-d14b6c3d3851",
+    "class": "port",
+    "name": "sfp-sfpplus8"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 516,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "b00fb55c-74fb-425e-bc7a-024a45404f9d",
+    "class": "port",
+    "name": "sfp-sfpplus9"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 507,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "cc4f3347-ac58-47b5-814b-4f9def19b5ac",
+    "class": "port",
+    "name": "ether1"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 518,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "92a89e79-c32f-405d-8710-6083fc487ac6",
+    "class": "port",
+    "name": "sfp-sfpplus11"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 519,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "2c7bdfb5-760f-478c-b80f-846324ff9b0f",
+    "class": "port",
+    "name": "sfp-sfpplus12"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 520,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "aa1e785e-7824-47a1-956f-784f07337e03",
+    "class": "port",
+    "name": "sfp-sfpplus13"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 521,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "b3db766a-3d1e-42ac-a0c2-0b636242ecb3",
+    "class": "port",
+    "name": "sfp-sfpplus14"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 522,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "61c9e074-67ee-4105-8a6c-80f313c0e4d2",
+    "class": "port",
+    "name": "sfp-sfpplus15"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 523,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "f36aafd0-3029-406a-84f4-f31c546a9db6",
+    "class": "port",
+    "name": "sfp-sfpplus16"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 509,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "d72940b4-577c-4780-82cc-2c08f1800696",
+    "class": "port",
+    "name": "sfp-sfpplus2"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 517,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "d0f84821-6130-4891-8310-97c26239e251",
+    "class": "port",
+    "name": "sfp-sfpplus10"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 303,
+   "kind": "observation",
+   "source": "switch-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T12:58:06.772Z",
+   "drift": false
+  },
+  {
+   "id": 305,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-30T12:58:06.962Z",
+   "drift": true
+  },
+  {
+   "id": 307,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T12:59:36.103Z",
+   "drift": false
+  },
+  {
+   "id": 412,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-30T14:34:19.677Z",
+   "drift": true
+  },
+  {
+   "id": 414,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T14:35:49.161Z",
+   "drift": false
+  },
+  {
+   "id": 1080,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T00:04:27.092Z",
+   "drift": false
+  },
+  {
+   "id": 1355,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:25:02.913Z",
+   "drift": false
+  }
+ ]
+}

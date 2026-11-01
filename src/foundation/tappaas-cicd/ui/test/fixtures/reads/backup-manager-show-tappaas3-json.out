@@ -1,0 +1,19 @@
+{
+  "module": "tappaas3",
+  "environment": "mgmt",
+  "enabled": true,
+  "retention": "7y",
+  "residency": "eu-only",
+  "schedule": "daily",
+  "scheduleBucket": "daily",
+  "target": "backup.mgmt.internal",
+  "offsite": null,
+  "exclude": [
+    "/root/*.iso"
+  ],
+  "optedIn": false,
+  "archived": false,
+  "inPbsJob": false,
+  "jobBucket": null,
+  "membershipSource": "job"
+}

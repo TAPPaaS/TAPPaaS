@@ -5,12 +5,12 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { EnvLike, ModuleLike, ZoneLike, envCards } from "../../web/src/envcards";
 import { check, done } from "./check";
-import { FIX } from "./fake-site";
+import { FIX, pinned } from "./fake-site";
 
 const read = <T>(f: string): T => JSON.parse(readFileSync(join(FIX, f), "utf8")) as T;
-const envs = read<EnvLike[]>("environments.json");
+const envs = pinned<EnvLike[]>("environments.json");
 const zones = read<ZoneLike[]>("zones.json");
-const modules = read<{ modules: ModuleLike[] }>("modules.json").modules;
+const modules = pinned<{ modules: ModuleLike[] }>("modules.json").modules;
 const cards = envCards(envs, zones, modules, "rossen");
 const card = (n: string) => cards.find((c) => c.env.name === n)!;
 const boxes = (n: string) => card(n).boxes.map((b) => `${b.zone ?? "-"}${b.own ? "" : "*"}`).join(" ");

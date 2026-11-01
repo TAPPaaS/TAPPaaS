@@ -1,0 +1,1109 @@
+{
+ "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+ "class": "vm",
+ "name": "deconz-test",
+ "created": "2026-10-30T08:47:45.445Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "health",
+   "value": {
+    "time": "2026-10-30T08:53:59.480Z",
+    "check": "cve-status",
+    "status": "warning"
+   },
+   "source": "health-manager",
+   "change": 74,
+   "from": "2026-10-30T08:53:59.496Z",
+   "to": "2026-10-30T08:56:44.034Z"
+  },
+  {
+   "name": "health",
+   "value": {
+    "time": "2026-10-30T08:56:44.020Z",
+    "check": "cve-status",
+    "status": "warning"
+   },
+   "source": "health-manager",
+   "change": 100,
+   "from": "2026-10-30T08:56:44.034Z",
+   "to": "2026-10-30T09:01:17.223Z"
+  },
+  {
+   "name": "description",
+   "value": "deCONZ test (adr040 probe)",
+   "source": "module-manager",
+   "change": 101,
+   "from": "2026-10-30T08:59:40.989Z",
+   "to": "2026-10-30T09:00:58.440Z"
+  },
+  {
+   "name": "description",
+   "value": "Zigbee gateway \u2014 deCONZ engine (ConBee II, native zigbee for HA) + diyHue front-end (hue-bridge for free@home/SysAP). See README.md / INSTALL.md.",
+   "source": "module-manager",
+   "change": 106,
+   "from": "2026-10-30T09:00:58.440Z",
+   "to": null
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-30T09:00:58.440Z",
+    "source": "module-manager",
+    "desired": {
+     "file": "deconz-test.json"
+    },
+    "attributes": {
+     "description": {
+      "now": "Zigbee gateway \u2014 deCONZ engine (ConBee II, native zigbee for HA) + diyHue front-end (hue-bridge for free@home/SysAP). See README.md / INSTALL.md.",
+      "was": "deCONZ test (adr040 probe)"
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 106,
+   "from": "2026-10-30T09:00:58.440Z",
+   "to": "2026-10-30T09:59:39.559Z"
+  },
+  {
+   "name": "health",
+   "value": {
+    "time": "2026-10-30T09:01:17.208Z",
+    "check": "cve-status",
+    "status": "warning"
+   },
+   "source": "health-manager",
+   "change": 112,
+   "from": "2026-10-30T09:01:17.223Z",
+   "to": "2026-10-30T09:02:18.503Z"
+  },
+  {
+   "name": "health",
+   "value": {
+    "time": "2026-10-30T09:02:18.489Z",
+    "check": "cve-status",
+    "status": "warning"
+   },
+   "source": "health-manager",
+   "change": 116,
+   "from": "2026-10-30T09:02:18.503Z",
+   "to": "2026-10-30T09:04:04.197Z"
+  },
+  {
+   "name": "health",
+   "value": {
+    "time": "2026-10-30T09:04:04.183Z",
+    "check": "cve-status",
+    "status": "warning"
+   },
+   "source": "health-manager",
+   "change": 141,
+   "from": "2026-10-30T09:04:04.197Z",
+   "to": "2026-10-30T09:40:01.527Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:58:22.945Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:58:22.945Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "cve-act",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "diyhue (deconz-test): 1 fixable",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:58:22.945Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T09:58:22.945Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 143,
+   "from": "2026-10-30T09:40:04.146Z",
+   "to": "2026-10-30T10:01:08.831Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-30T09:00:58.440Z",
+    "source": "sweep",
+    "desired": {
+     "file": "deconz-test.json"
+    },
+    "attributes": {
+     "health": {
+      "now": null,
+      "was": {
+       "time": "2026-10-30T09:02:18.489Z",
+       "check": "cve-status",
+       "status": "warning"
+      }
+     },
+     "description": {
+      "now": "Zigbee gateway \u2014 deCONZ engine (ConBee II, native zigbee for HA) + diyHue front-end (hue-bridge for free@home/SysAP). See README.md / INSTALL.md.",
+      "was": "deCONZ test (adr040 probe)"
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 212,
+   "from": "2026-10-30T09:59:39.559Z",
+   "to": "2026-10-30T16:29:33.855Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:03:57.945Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-30T10:01:08.831Z",
+     "reason": "sweep-gone",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "vm/deconz-test: drift: gone health",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:03:57.945Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:03:57.945Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "cve-act",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "diyhue (deconz-test): 1 fixable",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:03:57.945Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:03:57.945Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 214,
+   "from": "2026-10-30T10:01:08.831Z",
+   "to": "2026-10-30T10:06:43.603Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:06:43.603Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-30T10:06:43.603Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:06:43.603Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:06:43.603Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "cve-act",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "diyhue (deconz-test): 1 fixable",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:06:43.603Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:06:43.603Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 258,
+   "from": "2026-10-30T10:06:43.603Z",
+   "to": "2026-10-30T10:07:04.671Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:20:12.904Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-30T10:07:04.671Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:07:04.671Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:20:12.904Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "cve-act",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "diyhue (deconz-test): 1 fixable",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:20:12.904Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:20:12.904Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 259,
+   "from": "2026-10-30T10:07:04.671Z",
+   "to": "2026-10-31T07:25:02.913Z"
+  },
+  {
+   "name": "maturity",
+   "value": "Development",
+   "source": "site-manager",
+   "change": 1330,
+   "from": "2026-10-31T07:24:25.263Z",
+   "to": null
+  },
+  {
+   "name": "state",
+   "value": "running",
+   "source": "site-manager",
+   "change": 1330,
+   "from": "2026-10-31T07:24:25.263Z",
+   "to": null
+  },
+  {
+   "name": "zone",
+   "value": "test",
+   "source": "site-manager",
+   "change": 1330,
+   "from": "2026-10-31T07:24:25.263Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T08:21:51.484Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-30T10:07:04.671Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T10:07:04.671Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T08:21:51.484Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "cve-act",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "diyhue (deconz-test): 1 fixable",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T08:21:51.484Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T08:21:51.484Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "newest restore point 0 day(s) old",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T08:21:51.484Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1355,
+   "from": "2026-10-31T07:25:02.913Z",
+   "to": "2026-10-31T08:25:03.232Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T08:23:56.058Z",
+    "source": "sweep",
+    "desired": {
+     "file": "deconz-test.json"
+    },
+    "attributes": {
+     "zone": {
+      "now": "test",
+      "was": null
+     },
+     "maturity": {
+      "now": "Development",
+      "was": null
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 1730,
+   "from": "2026-10-31T08:23:56.058Z",
+   "to": "2026-10-31T19:31:05.146Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T08:25:03.232Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "vm/deconz-test: drift: appeared maturity; vm/deconz-test: drift: appeared zone",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "cve-act",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "diyhue (deconz-test): 1 fixable",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "newest restore point 0 day(s) old",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1733,
+   "from": "2026-10-31T08:25:03.232Z",
+   "to": "2026-10-31T09:55:09.015Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T09:55:09.015Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:55:09.015Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "cve-act",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "diyhue (deconz-test): 1 fixable",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "newest restore point 0 day(s) old",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 2343,
+   "from": "2026-10-31T09:55:09.015Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 133,
+   "type": "depends-on",
+   "direction": "out",
+   "other": {
+    "id": "b35b1a55-2887-453f-acb5-88c367f31d90",
+    "class": "service",
+    "name": "templates:nixos"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 132,
+   "type": "depends-on",
+   "direction": "out",
+   "other": {
+    "id": "fc39fc51-1a56-4551-8566-53e2eaf17862",
+    "class": "service",
+    "name": "cluster:vm"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 134,
+   "type": "depends-on",
+   "direction": "out",
+   "other": {
+    "id": "39c19eed-d1ab-44dd-a45f-15d0bc214ba7",
+    "class": "service",
+    "name": "backup:vm"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 135,
+   "type": "depends-on",
+   "direction": "out",
+   "other": {
+    "id": "ee9a7b62-e204-4565-8084-48a003b5b83d",
+    "class": "service",
+    "name": "network:proxy"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 136,
+   "type": "depends-on",
+   "direction": "out",
+   "other": {
+    "id": "a0744357-5768-4dc1-bd83-4abca98d3596",
+    "class": "service",
+    "name": "network:rules"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 5,
+   "type": "member-of",
+   "direction": "out",
+   "other": {
+    "id": "b3eb7524-92fa-4664-9703-c5f04287dc9e",
+    "class": "environment",
+    "name": "test"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 103,
+   "type": "provides",
+   "direction": "out",
+   "other": {
+    "id": "e7e5c2aa-550f-4e13-bdde-b5e4d963aebb",
+    "class": "service",
+    "name": "deconz:hue-bridge"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 104,
+   "type": "provides",
+   "direction": "out",
+   "other": {
+    "id": "572e6c7a-68cb-4850-b37d-b7c74164f976",
+    "class": "service",
+    "name": "deconz:zigbee"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 6,
+   "type": "runs-on",
+   "direction": "out",
+   "other": {
+    "id": "95727e8e-df12-468f-a03b-8b685140e223",
+    "class": "machine",
+    "name": "tappaas2"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 58,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "e7e5c2aa-550f-4e13-bdde-b5e4d963aebb",
+    "class": "service",
+    "name": "deconz:hue-bridge"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 59,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "572e6c7a-68cb-4850-b37d-b7c74164f976",
+    "class": "service",
+    "name": "deconz:zigbee"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 313,
+   "type": "backs-up",
+   "direction": "in",
+   "other": {
+    "id": "e5d0d704-4a8a-4cb0-a2eb-84ad8f6dc8f8",
+    "class": "datastore",
+    "name": "tappaas_backup"
+   },
+   "attributes": {},
+   "source": "backup-manager",
+   "change": 6,
+   "from": "2026-10-30T08:47:53.826Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 62,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:51:13.574Z",
+   "drift": false
+  },
+  {
+   "id": 74,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:53:59.496Z",
+   "drift": false
+  },
+  {
+   "id": 100,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:56:44.034Z",
+   "drift": false
+  },
+  {
+   "id": 101,
+   "kind": "change",
+   "source": "module-manager",
+   "job": "20261030085756-ae89fd",
+   "verb": "modify deconz-test",
+   "actor": "lars",
+   "time": "2026-10-30T08:59:40.989Z",
+   "drift": false
+  },
+  {
+   "id": 106,
+   "kind": "observation",
+   "source": "module-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T09:00:58.440Z",
+   "drift": true
+  },
+  {
+   "id": 112,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T09:01:17.223Z",
+   "drift": false
+  },
+  {
+   "id": 116,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T09:02:18.503Z",
+   "drift": false
+  },
+  {
+   "id": 141,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T09:04:04.197Z",
+   "drift": false
+  },
+  {
+   "id": 143,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T09:40:04.146Z",
+   "drift": false
+  },
+  {
+   "id": 212,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-30T09:59:39.559Z",
+   "drift": true
+  },
+  {
+   "id": 214,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T10:01:08.831Z",
+   "drift": false
+  },
+  {
+   "id": 258,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T10:06:43.603Z",
+   "drift": false
+  },
+  {
+   "id": 259,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T10:07:04.671Z",
+   "drift": false
+  },
+  {
+   "id": 494,
+   "kind": "change",
+   "source": "module-manager",
+   "job": null,
+   "verb": "update deconz-test",
+   "actor": "tappaas",
+   "time": "2026-10-30T16:29:33.855Z",
+   "drift": false
+  },
+  {
+   "id": 1330,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:24:25.263Z",
+   "drift": true
+  },
+  {
+   "id": 1355,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:25:02.913Z",
+   "drift": false
+  },
+  {
+   "id": 1730,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-31T08:23:56.058Z",
+   "drift": true
+  },
+  {
+   "id": 1733,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T08:25:03.232Z",
+   "drift": false
+  },
+  {
+   "id": 2343,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:55:09.015Z",
+   "drift": false
+  },
+  {
+   "id": 6139,
+   "kind": "change",
+   "source": "module-manager",
+   "job": null,
+   "verb": "update deconz-test",
+   "actor": "tappaas",
+   "time": "2026-10-31T19:31:05.146Z",
+   "drift": false
+  }
+ ]
+}

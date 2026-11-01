@@ -1,0 +1,152 @@
+{
+  "module": "cluster",
+  "dependsOn": [],
+  "integratesWith": [],
+  "fields": {
+    "dependsOn": {
+      "value": "[]",
+      "defaulted": false,
+      "literal": "[]",
+      "notTracking": false
+    },
+    "description": {
+      "value": "TAPPaaS Proxmox Cluster - provides VM, LXC and HA services",
+      "defaulted": false,
+      "literal": "TAPPaaS Proxmox Cluster - provides VM, LXC and HA services",
+      "notTracking": false
+    },
+    "environment": {
+      "value": "mgmt",
+      "defaulted": false,
+      "literal": "mgmt",
+      "notTracking": false
+    },
+    "installTime": {
+      "value": "20260731-22:21:33",
+      "defaulted": false,
+      "literal": "20260731-22:21:33",
+      "notTracking": true
+    },
+    "kind": {
+      "value": "application",
+      "defaulted": false,
+      "literal": "application",
+      "notTracking": false
+    },
+    "maintainer": {
+      "value": "@TAPPaaS",
+      "defaulted": false,
+      "literal": "@TAPPaaS",
+      "notTracking": false
+    },
+    "management": {
+      "value": "managed",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "moduleSource": {
+      "value": "/home/tappaas/TAPPaaS/src/foundation/cluster",
+      "defaulted": false,
+      "literal": "/home/tappaas/TAPPaaS/src/foundation/cluster",
+      "notTracking": true
+    },
+    "pauseOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pausePriority": {
+      "value": "50",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "portSync": {
+      "value": "on",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "provides": {
+      "value": "[\"vm\",\"lxc\",\"ha\"]",
+      "defaulted": false,
+      "literal": "[\"vm\",\"lxc\",\"ha\"]",
+      "notTracking": false
+    },
+    "rebootOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "releaseDate": {
+      "value": "2026-07-31",
+      "defaulted": false,
+      "literal": "2026-07-31",
+      "notTracking": true
+    },
+    "source": {
+      "value": "official",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "sshKeyOnly": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "stack": {
+      "value": "foundation",
+      "defaulted": false,
+      "literal": "foundation",
+      "notTracking": false
+    },
+    "status": {
+      "value": "Production",
+      "defaulted": false,
+      "literal": "Production",
+      "notTracking": false
+    },
+    "suspended": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "suspendedNoUpdate": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "updateTime": {
+      "value": "20261101-02:04:19",
+      "defaulted": false,
+      "literal": "20261101-02:04:19",
+      "notTracking": true
+    },
+    "version": {
+      "value": "0.8.0",
+      "defaulted": false,
+      "literal": "0.8.0",
+      "notTracking": false
+    },
+    "zone0": {
+      "value": "mgmt",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "zone1": {
+      "value": "mgmt",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    }
+  },
+  "origAvailable": true
+}

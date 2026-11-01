@@ -1,0 +1,390 @@
+{
+  "module": "immich",
+  "dependsOn": [
+    "cluster:vm",
+    "cluster:ha",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy",
+    "network:rules",
+    "identity:identity"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "fields": {
+    "aliasType": {
+      "value": "host",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "appVersion": {
+      "value": "3.2.4",
+      "defaulted": false,
+      "literal": "3.2.4",
+      "notTracking": false
+    },
+    "autoInstall": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "backup": {
+      "value": "{\"enabled\":true,\"exclude\":[],\"retention\":\"7y\"}",
+      "defaulted": false,
+      "literal": "{\"enabled\":true,\"exclude\":[],\"retention\":\"7y\"}",
+      "notTracking": true
+    },
+    "bios": {
+      "value": "ovmf",
+      "defaulted": false,
+      "literal": "ovmf",
+      "notTracking": true
+    },
+    "bridge0": {
+      "value": "lan",
+      "defaulted": false,
+      "literal": "lan",
+      "notTracking": false
+    },
+    "bridge1": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "cloudInit": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "cores": {
+      "value": "4",
+      "defaulted": false,
+      "literal": "4",
+      "notTracking": false
+    },
+    "cputype": {
+      "value": "host",
+      "defaulted": false,
+      "literal": "host",
+      "notTracking": true
+    },
+    "dependsOn": {
+      "value": "[\"cluster:vm\",\"cluster:ha\",\"templates:nixos\",\"backup:vm\",\"network:proxy\",\"network:rules\",\"identity:identity\"]",
+      "defaulted": false,
+      "literal": "[\"cluster:vm\",\"cluster:ha\",\"templates:nixos\",\"backup:vm\",\"network:proxy\",\"network:rules\",\"identity:identity\"]",
+      "notTracking": false
+    },
+    "description": {
+      "value": "Immich self-hosted photo and video backup with ML-powered search, face recognition and mobile auto-upload.",
+      "defaulted": false,
+      "literal": "Immich self-hosted photo and video backup with ML-powered search, face recognition and mobile auto-upload.",
+      "notTracking": false
+    },
+    "diskAutoGrow": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "diskSize": {
+      "value": "500G",
+      "defaulted": false,
+      "literal": "500G",
+      "notTracking": false
+    },
+    "displayName": {
+      "value": "Immich",
+      "defaulted": false,
+      "literal": "Immich",
+      "notTracking": false
+    },
+    "environment": {
+      "value": "rossen",
+      "defaulted": false,
+      "literal": "rossen",
+      "notTracking": true
+    },
+    "firewallType": {
+      "value": "opnsense",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "haCpu": {
+      "value": "host",
+      "defaulted": false,
+      "literal": "host",
+      "notTracking": true
+    },
+    "identity": {
+      "value": "{\"configureService\":\"immich-configure-oidc.service\",\"launchPath\":\"/auth/login?autoLaunch=1\",\"oidcRedirectPaths\":[\"/auth/login\",\"/user-settings\",\"/api/oauth/mobile-redirect\"]}",
+      "defaulted": false,
+      "literal": "{\"configureService\":\"immich-configure-oidc.service\",\"launchPath\":\"/auth/login?autoLaunch=1\",\"oidcRedirectPaths\":[\"/auth/login\",\"/user-settings\",\"/api/oauth/mobile-redirect\"]}",
+      "notTracking": true
+    },
+    "image": {
+      "value": "8080",
+      "defaulted": false,
+      "literal": "8080",
+      "notTracking": false
+    },
+    "imageType": {
+      "value": "clone",
+      "defaulted": false,
+      "literal": "clone",
+      "notTracking": false
+    },
+    "installTime": {
+      "value": "20261006-08:46:17",
+      "defaulted": false,
+      "literal": "20261006-08:46:17",
+      "notTracking": true
+    },
+    "integratesWith": {
+      "value": "[\"logging:logs\"]",
+      "defaulted": false,
+      "literal": "[\"logging:logs\"]",
+      "notTracking": false
+    },
+    "kind": {
+      "value": "vm",
+      "defaulted": false,
+      "literal": "vm",
+      "notTracking": false
+    },
+    "maintainer": {
+      "value": "@AndreasJe",
+      "defaulted": false,
+      "literal": "@AndreasJe",
+      "notTracking": false
+    },
+    "management": {
+      "value": "managed",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "memory": {
+      "value": "8192",
+      "defaulted": false,
+      "literal": "8192",
+      "notTracking": false
+    },
+    "moduleSource": {
+      "value": "/home/tappaas/TAPPaaS/src/home/immich",
+      "defaulted": false,
+      "literal": "/home/tappaas/TAPPaaS/src/home/immich",
+      "notTracking": true
+    },
+    "node": {
+      "value": "tappaas1",
+      "defaulted": false,
+      "literal": "tappaas1",
+      "notTracking": false
+    },
+    "ostype": {
+      "value": "l26",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pauseOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pausePriority": {
+      "value": "50",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pbsStorageName": {
+      "value": "tappaas_backup",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pbsUrl": {
+      "value": "backup.mgmt.internal",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "portSync": {
+      "value": "on",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "provides": {
+      "value": "[]",
+      "defaulted": false,
+      "literal": "[]",
+      "notTracking": false
+    },
+    "proxyAllowedZones": {
+      "value": "[\"home\",\"netbird\",\"internet\"]",
+      "defaulted": false,
+      "literal": "[\"home\",\"netbird\",\"internet\"]",
+      "notTracking": false
+    },
+    "proxyPort": {
+      "value": "2283",
+      "defaulted": false,
+      "literal": "2283",
+      "notTracking": false
+    },
+    "proxyPreserveHost": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "proxyUpstreamHttp1": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "proxyUpstreamTls": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "rebootOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "releaseDate": {
+      "value": "2026-07-19",
+      "defaulted": false,
+      "literal": "2026-07-19",
+      "notTracking": true
+    },
+    "replicationSchedule": {
+      "value": "*/15",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "source": {
+      "value": "official",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "sshAccess": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "sshKeyOnly": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "stack": {
+      "value": "home",
+      "defaulted": false,
+      "literal": "home",
+      "notTracking": false
+    },
+    "status": {
+      "value": "Testing",
+      "defaulted": false,
+      "literal": "Testing",
+      "notTracking": false
+    },
+    "storage": {
+      "value": "tanka1",
+      "defaulted": false,
+      "literal": "tanka1",
+      "notTracking": false
+    },
+    "suspended": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "suspendedNoUpdate": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "thinDisk": {
+      "value": "true",
+      "defaulted": false,
+      "literal": "true",
+      "notTracking": false
+    },
+    "trunks0": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "trunks1": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "updateTime": {
+      "value": "20261101-02:17:25",
+      "defaulted": false,
+      "literal": "20261101-02:17:25",
+      "notTracking": true
+    },
+    "version": {
+      "value": "0.2.1",
+      "defaulted": false,
+      "literal": "0.2.1",
+      "notTracking": false
+    },
+    "vmid": {
+      "value": "361",
+      "defaulted": false,
+      "literal": "361",
+      "notTracking": false
+    },
+    "vmname": {
+      "value": "immich",
+      "defaulted": false,
+      "literal": "immich",
+      "notTracking": false
+    },
+    "vmtag": {
+      "value": "TAPPaaS,App,Photos",
+      "defaulted": false,
+      "literal": "TAPPaaS,App,Photos",
+      "notTracking": false
+    },
+    "zone0": {
+      "value": "rossen",
+      "defaulted": false,
+      "literal": "rossen",
+      "notTracking": true
+    },
+    "zone1": {
+      "value": "mgmt",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    }
+  },
+  "origAvailable": true
+}

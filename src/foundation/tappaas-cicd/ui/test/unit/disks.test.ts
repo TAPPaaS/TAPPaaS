@@ -15,8 +15,8 @@ import { adoptOffer, bayRow, diskAssetOf, diskText, disksOf, healthText, hostCho
 import { STORAGE_GATES, diskKey, poolMembers, storageNotes } from "../../web/src/physical/storage";
 import { AssetTree, Gate, StorageInventory } from "../../web/src/types";
 import { check, done } from "./check";
+import { PIN } from "./fake-site";
 
-const FIX = process.env.CONSOLE_FIXTURES ?? "test/fixtures";
 
 // ── the tree ─────────────────────────────────────────────────────────────
 
@@ -135,7 +135,7 @@ check(selDetails({ kind: "disk", id: "/dev/sdb", node: "tappaas3" }, { modules: 
 
 // ── the Storage view: the gates, a pool's members ────────────────────────
 
-const inv = JSON.parse(readFileSync(join(FIX, "storage-inventory.json"), "utf8")) as StorageInventory;
+const inv = JSON.parse(readFileSync(join(PIN, "storage-inventory.json"), "utf8")) as StorageInventory;
 check(STORAGE_GATES.join(",") === "storage-pools,storage-replication", "the storage gates: pools and replication; disks are judged on their CIs");
 const gates: Gate[] = [
   { name: "storage-replication", status: "warn", detail: "", findings: [{ status: "warn", text: "nextcloud → tappaas2 behind", subject: { kind: "node", name: "tappaas1" } }] },

@@ -1,0 +1,191 @@
+{
+ "id": "215c42cf-cb9e-4e6f-9791-2db89c623481",
+ "class": "location",
+ "name": "t",
+ "created": "2026-10-30T20:08:09.272Z",
+ "ended": "2026-10-31T07:31:38.657Z",
+ "attributes": [
+  {
+   "name": "country",
+   "value": "DK",
+   "source": "site-manager",
+   "change": 854,
+   "from": "2026-10-30T20:08:09.272Z",
+   "to": null
+  },
+  {
+   "name": "timezone",
+   "value": "Europe/Copenhagen",
+   "source": "site-manager",
+   "change": 854,
+   "from": "2026-10-30T20:08:09.272Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "critical",
+     "derived": true,
+     "message": "1 of 1 critical",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:20:12.904Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1080,
+   "from": "2026-10-31T00:04:27.092Z",
+   "to": "2026-10-31T07:25:02.913Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": true,
+     "message": "1 of 1 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:25:02.913Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "critical",
+     "derived": true,
+     "message": "1 of 1 critical",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:25:02.913Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1355,
+   "from": "2026-10-31T07:25:02.913Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 592,
+   "type": "at",
+   "direction": "in",
+   "other": {
+    "id": "70cbf684-afaf-48d5-a47c-98f601213c89",
+    "class": "site",
+    "name": "t"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 854,
+   "from": "2026-10-30T20:08:09.272Z",
+   "to": "2026-10-30T20:08:42.965Z"
+  },
+  {
+   "id": 595,
+   "type": "at",
+   "direction": "in",
+   "other": {
+    "id": "70cbf684-afaf-48d5-a47c-98f601213c89",
+    "class": "site",
+    "name": "t"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 898,
+   "from": "2026-10-30T20:08:43.527Z",
+   "to": "2026-10-30T20:18:28.805Z"
+  },
+  {
+   "id": 598,
+   "type": "at",
+   "direction": "in",
+   "other": {
+    "id": "70cbf684-afaf-48d5-a47c-98f601213c89",
+    "class": "site",
+    "name": "t"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 941,
+   "from": "2026-10-30T20:18:29.414Z",
+   "to": "2026-10-31T07:31:38.657Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 854,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "site modify",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:08:09.272Z",
+   "drift": false
+  },
+  {
+   "id": 898,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "site modify",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:08:43.527Z",
+   "drift": false
+  },
+  {
+   "id": 941,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "site modify",
+   "actor": "tappaas",
+   "time": "2026-10-30T20:18:29.414Z",
+   "drift": false
+  },
+  {
+   "id": 1080,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T00:04:27.092Z",
+   "drift": false
+  },
+  {
+   "id": 1355,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:25:02.913Z",
+   "drift": false
+  },
+  {
+   "id": 1380,
+   "kind": "change",
+   "source": "site-manager",
+   "job": null,
+   "verb": "end test fixtures 2026-10-31",
+   "actor": null,
+   "time": "2026-10-31T07:31:38.657Z",
+   "drift": false
+  }
+ ]
+}

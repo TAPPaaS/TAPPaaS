@@ -1,0 +1,343 @@
+{
+ "id": "217e1b9d-68a6-4120-a170-13cda77e6b32",
+ "class": "disk",
+ "name": "dsk-11",
+ "created": "2026-10-31T15:51:27.139Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "bus",
+   "value": "sata",
+   "source": "asset-manager",
+   "change": 4675,
+   "from": "2026-10-31T15:51:27.139Z",
+   "to": null
+  },
+  {
+   "name": "displayName",
+   "value": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N",
+   "source": "asset-manager",
+   "change": 4675,
+   "from": "2026-10-31T15:51:27.139Z",
+   "to": null
+  },
+  {
+   "name": "faulty",
+   "value": false,
+   "source": "asset-manager",
+   "change": 4675,
+   "from": "2026-10-31T15:51:27.139Z",
+   "to": null
+  },
+  {
+   "name": "kind",
+   "value": "ssd",
+   "source": "asset-manager",
+   "change": 4675,
+   "from": "2026-10-31T15:51:27.139Z",
+   "to": null
+  },
+  {
+   "name": "model",
+   "value": "Samsung SSD 870 EVO 500GB",
+   "source": "asset-manager",
+   "change": 4675,
+   "from": "2026-10-31T15:51:27.139Z",
+   "to": null
+  },
+  {
+   "name": "serial",
+   "value": "S6PYNL0Y209497N",
+   "source": "asset-manager",
+   "change": 4675,
+   "from": "2026-10-31T15:51:27.139Z",
+   "to": null
+  },
+  {
+   "name": "size",
+   "value": 500107862016,
+   "source": "asset-manager",
+   "change": 4675,
+   "from": "2026-10-31T15:51:27.139Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "placed",
+   "source": "asset-manager",
+   "change": 4675,
+   "from": "2026-10-31T15:51:27.139Z",
+   "to": null
+  },
+  {
+   "name": "wwn",
+   "value": "0x5002538f55208720",
+   "source": "asset-manager",
+   "change": 4675,
+   "from": "2026-10-31T15:51:27.139Z",
+   "to": null
+  },
+  {
+   "name": "health",
+   "value": "PASSED",
+   "source": "site-manager",
+   "change": 4679,
+   "from": "2026-10-31T15:52:19.076Z",
+   "to": null
+  },
+  {
+   "name": "holds",
+   "value": "nothing",
+   "source": "site-manager",
+   "change": 4679,
+   "from": "2026-10-31T15:52:19.076Z",
+   "to": null
+  },
+  {
+   "name": "partitions",
+   "value": [
+    {
+     "size": 1031168,
+     "holds": "bios-boot",
+     "device": "/dev/sda1"
+    },
+    {
+     "size": 1073741824,
+     "holds": "efi",
+     "device": "/dev/sda2"
+    },
+    {
+     "pool": "rpool",
+     "size": 499033054720,
+     "holds": "zfs",
+     "device": "/dev/sda3"
+    }
+   ],
+   "source": "site-manager",
+   "change": 4679,
+   "from": "2026-10-31T15:52:19.076Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T15:55:02.577Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "dsk-11 (ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N): health PASSED",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T15:55:02.577Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 4711,
+   "from": "2026-10-31T15:55:02.577Z",
+   "to": null
+  },
+  {
+   "name": "smart",
+   "value": {
+    "reallocated": 0,
+    "powerOnHours": 10309,
+    "uncorrectable": 0
+   },
+   "source": "site-manager",
+   "change": 4982,
+   "from": "2026-10-31T16:34:36.034Z",
+   "to": "2026-11-01T00:01:17.336Z"
+  },
+  {
+   "name": "temperature",
+   "value": 33,
+   "source": "site-manager",
+   "change": 4982,
+   "from": "2026-10-31T16:34:36.034Z",
+   "to": "2026-11-01T08:32:03.130Z"
+  },
+  {
+   "name": "wearout",
+   "value": 99,
+   "source": "site-manager",
+   "change": 4982,
+   "from": "2026-10-31T16:34:36.034Z",
+   "to": null
+  },
+  {
+   "name": "smart",
+   "value": {
+    "reallocated": 0,
+    "powerOnHours": 10316,
+    "uncorrectable": 0
+   },
+   "source": "site-manager",
+   "change": 7841,
+   "from": "2026-11-01T00:01:17.336Z",
+   "to": "2026-11-01T07:46:08.132Z"
+  },
+  {
+   "name": "smart",
+   "value": {
+    "reallocated": 0,
+    "powerOnHours": 10324,
+    "uncorrectable": 0
+   },
+   "source": "site-manager",
+   "change": 10723,
+   "from": "2026-11-01T07:46:08.132Z",
+   "to": "2026-11-01T08:27:46.806Z"
+  },
+  {
+   "name": "smart",
+   "value": {
+    "reallocated": 0,
+    "powerOnHours": 10325,
+    "uncorrectable": 0
+   },
+   "source": "site-manager",
+   "change": 11077,
+   "from": "2026-11-01T08:27:46.806Z",
+   "to": null
+  },
+  {
+   "name": "temperature",
+   "value": 35,
+   "source": "site-manager",
+   "change": 11119,
+   "from": "2026-11-01T08:32:03.130Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 654,
+   "type": "part-of",
+   "direction": "out",
+   "other": {
+    "id": "6c58178e-f591-40cd-9161-b6808856b127",
+    "class": "server",
+    "name": "srv-04"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 4675,
+   "from": "2026-10-31T15:51:27.139Z",
+   "to": null
+  },
+  {
+   "id": 658,
+   "type": "built-on",
+   "direction": "in",
+   "other": {
+    "id": "42917e59-c0c4-4293-a877-7f3bb4e6a034",
+    "class": "storage-pool",
+    "name": "rpool"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 4679,
+   "from": "2026-10-31T15:52:19.076Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 4675,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031153411-02719e",
+   "verb": "disk add",
+   "actor": "lars",
+   "time": "2026-10-31T15:51:27.139Z",
+   "drift": false
+  },
+  {
+   "id": 4679,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T15:52:19.076Z",
+   "drift": true
+  },
+  {
+   "id": 4711,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T15:55:02.577Z",
+   "drift": false
+  },
+  {
+   "id": 4982,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T16:34:36.034Z",
+   "drift": false
+  },
+  {
+   "id": 7841,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T00:01:17.336Z",
+   "drift": false
+  },
+  {
+   "id": 10723,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:46:08.132Z",
+   "drift": false
+  },
+  {
+   "id": 11077,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:27:46.806Z",
+   "drift": false
+  },
+  {
+   "id": 11119,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:32:03.130Z",
+   "drift": false
+  }
+ ]
+}

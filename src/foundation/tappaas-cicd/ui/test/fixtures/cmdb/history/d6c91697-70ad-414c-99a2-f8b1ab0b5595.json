@@ -1,0 +1,46 @@
+{
+ "id": "d6c91697-70ad-414c-99a2-f8b1ab0b5595",
+ "class": "node",
+ "name": "ap-stub",
+ "created": "2026-10-30T19:35:22.818Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "placeholder",
+   "value": true,
+   "source": "asset-manager",
+   "change": 752,
+   "from": "2026-10-30T19:35:22.818Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 568,
+   "type": "allocated-to",
+   "direction": "in",
+   "other": {
+    "id": "39ffa44f-26bf-4666-abe2-2342587af664",
+    "class": "network-device",
+    "name": "ap-03"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 752,
+   "from": "2026-10-30T19:35:22.818Z",
+   "to": "2026-10-30T19:35:23.542Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 752,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset allocate",
+   "actor": "tappaas",
+   "time": "2026-10-30T19:35:22.818Z",
+   "drift": false
+  }
+ ]
+}

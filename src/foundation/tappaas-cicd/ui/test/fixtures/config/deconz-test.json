@@ -1,0 +1,97 @@
+{
+  "description": "Zigbee gateway — deCONZ engine (ConBee II, native zigbee for HA) + diyHue front-end (hue-bridge for free@home/SysAP). See README.md / INSTALL.md.",
+  "version": "0.3.1",
+  "releaseDate": "2026-07-02",
+  "installTime": "20261009-12:45:54",
+  "updateTime": "20261101-02:14:04",
+  "maintainer": "@ErikDaniel007",
+  "status": "Development",
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/home/deconz",
+  "environment": "test",
+  "vmname": "deconz-test",
+  "vmid": 213,
+  "vmtag": "TAPPaaS,App,HomeAutomation",
+  "node": "tappaas2",
+  "zone0": "test",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy",
+    "network:rules"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "provides": [
+    "zigbee",
+    "hue-bridge"
+  ],
+  "appVersion": "nixpkgs-pinned",
+  "stack": "home",
+  "config": {
+    "backup:vm": {
+      "backup": {
+        "enabled": true,
+        "exclude": [],
+        "retention": "7y"
+      }
+    },
+    "cluster:vm": {
+      "bios": "ovmf",
+      "cores": 2,
+      "memory": 4096,
+      "diskSize": "16G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "network:rules": {
+      "ports": [
+        {
+          "port": 8080,
+          "protocol": "TCP",
+          "description": "deCONZ REST (zigbee) — HA cross-zone srvHome->iotCloud + diyHue@localhost + Phoscon via mgmt proxy. NOT exposed to SysAP."
+        },
+        {
+          "port": 8443,
+          "protocol": "TCP",
+          "description": "deCONZ websocket (zigbee) — HA deconz integration live events, cross-zone srvHome->iotCloud"
+        },
+        {
+          "port": 80,
+          "protocol": "TCP",
+          "description": "diyHue Hue API (hue-bridge) — SysAP/free@home control, INTRA-zone iotCloud"
+        },
+        {
+          "port": 443,
+          "protocol": "TCP",
+          "description": "diyHue Hue API TLS (hue-bridge) — genuine Hue-grade endpoint for SysAP, INTRA-zone iotCloud"
+        },
+        {
+          "port": 1900,
+          "protocol": "UDP",
+          "description": "SSDP discovery (hue-bridge) — diyHue advertises the bridge to the SysAP, INTRA-zone iotCloud"
+        },
+        {
+          "port": 2100,
+          "protocol": "UDP",
+          "description": "diyHue Hue Entertainment streaming (hue-bridge)"
+        },
+        {
+          "port": 1982,
+          "protocol": "UDP",
+          "description": "diyHue (hue-bridge)"
+        }
+      ]
+    },
+    "network:proxy": {
+      "proxyPort": 8080,
+      "proxyAllowedZones": [
+        "mgmt"
+      ]
+    }
+  }
+}

@@ -1,0 +1,1242 @@
+{
+ "id": "ffcae78f-b85c-434a-a1aa-b3cf547c326f",
+ "class": "storage-pool",
+ "name": "rpool",
+ "created": "2026-10-30T19:48:31.009Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T04:25:02.579Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T04:15:02.578Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T04:15:02.578Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T04:25:02.579Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 9458,
+   "from": "2026-11-01T04:15:02.578Z",
+   "to": "2026-11-01T04:30:14.579Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T04:30:14.579Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T04:30:14.579Z",
+     "reason": "sweep-changed",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "storage-pool/rpool: drift: changed size",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T04:30:14.579Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T04:30:14.579Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 9549,
+   "from": "2026-11-01T04:30:14.579Z",
+   "to": "2026-11-01T04:35:02.578Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T04:50:15.557Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T04:35:02.578Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T04:35:02.578Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T04:50:15.557Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 9579,
+   "from": "2026-11-01T04:35:02.578Z",
+   "to": "2026-11-01T04:55:02.579Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T04:55:02.579Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T04:55:02.579Z",
+     "reason": "sweep-changed",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "storage-pool/rpool: drift: changed size",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T04:55:02.579Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T04:55:02.579Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 9699,
+   "from": "2026-11-01T04:55:02.579Z",
+   "to": "2026-11-01T05:00:12.579Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T05:05:02.580Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T05:00:12.579Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T05:00:12.579Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T05:05:02.580Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 9729,
+   "from": "2026-11-01T05:00:12.579Z",
+   "to": "2026-11-01T05:10:01.783Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T05:10:01.783Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T05:10:01.783Z",
+     "reason": "sweep-changed",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "storage-pool/rpool: drift: changed size",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T05:10:01.783Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T05:10:01.783Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 9790,
+   "from": "2026-11-01T05:10:01.783Z",
+   "to": "2026-11-01T05:15:02.580Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T05:50:02.335Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T05:15:02.580Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T05:15:02.580Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T05:50:02.335Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 9820,
+   "from": "2026-11-01T05:15:02.580Z",
+   "to": "2026-11-01T05:55:02.579Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T05:55:02.579Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T05:55:02.579Z",
+     "reason": "sweep-changed",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "storage-pool/rpool: drift: changed size",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T05:55:02.579Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T05:55:02.579Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 10061,
+   "from": "2026-11-01T05:55:02.579Z",
+   "to": "2026-11-01T06:00:10.544Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T06:05:02.578Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T06:00:10.544Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T06:00:10.544Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T06:05:02.578Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 10091,
+   "from": "2026-11-01T06:00:10.544Z",
+   "to": "2026-11-01T06:10:02.575Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T06:10:02.575Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T06:10:02.575Z",
+     "reason": "sweep-changed",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "storage-pool/rpool: drift: changed size",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T06:10:02.575Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T06:10:02.575Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 10151,
+   "from": "2026-11-01T06:10:02.575Z",
+   "to": "2026-11-01T06:15:02.580Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T06:20:24.515Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T06:15:02.580Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T06:15:02.580Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T06:20:24.515Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 10181,
+   "from": "2026-11-01T06:15:02.580Z",
+   "to": "2026-11-01T06:25:02.591Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T06:25:02.591Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T06:25:02.591Z",
+     "reason": "sweep-changed",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "storage-pool/rpool: drift: changed size",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T06:25:02.591Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T06:25:02.591Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 10241,
+   "from": "2026-11-01T06:25:02.591Z",
+   "to": "2026-11-01T06:30:01.103Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T06:50:14.977Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T06:30:01.103Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T06:30:01.103Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T06:50:14.977Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 10271,
+   "from": "2026-11-01T06:30:01.103Z",
+   "to": "2026-11-01T06:55:02.579Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T06:55:02.579Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T06:55:02.579Z",
+     "reason": "sweep-changed",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "storage-pool/rpool: drift: changed size",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T06:55:02.579Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T06:55:02.579Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 10422,
+   "from": "2026-11-01T06:55:02.579Z",
+   "to": "2026-11-01T07:00:08.581Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T07:05:02.579Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T07:00:08.581Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T07:00:08.581Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T07:05:02.579Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 10452,
+   "from": "2026-11-01T07:00:08.581Z",
+   "to": "2026-11-01T07:10:00.624Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T07:10:00.624Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T07:10:00.624Z",
+     "reason": "sweep-changed",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "storage-pool/rpool: drift: changed size",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T07:10:00.624Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T07:10:00.624Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 10512,
+   "from": "2026-11-01T07:10:00.624Z",
+   "to": "2026-11-01T07:15:02.578Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T07:25:02.587Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T07:15:02.578Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T07:15:02.578Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T07:25:02.587Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 10542,
+   "from": "2026-11-01T07:15:02.578Z",
+   "to": "2026-11-01T07:30:15.026Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T07:30:15.026Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T07:30:15.026Z",
+     "reason": "sweep-changed",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "storage-pool/rpool: drift: changed size",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T07:30:15.026Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T07:30:15.026Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 10632,
+   "from": "2026-11-01T07:30:15.026Z",
+   "to": "2026-11-01T07:35:02.582Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:35:02.579Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T07:35:02.582Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": true,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T07:35:02.582Z",
+     "maintenance": null,
+     "acknowledged": null,
+     "flappingHeld": "warning"
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:35:02.579Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 10662,
+   "from": "2026-11-01T07:35:02.582Z",
+   "to": "2026-11-01T08:36:23.484Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: zfs ONLINE",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T07:35:02.582Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "flapping": false,
+     "rootCause": null,
+     "lastChecked": "2026-11-01T07:35:02.582Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-30T19:50:00.102Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "rpool: 1% used",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 11186,
+   "from": "2026-11-01T08:36:23.484Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 571,
+   "type": "runs-on",
+   "direction": "out",
+   "other": {
+    "id": "3a7feb32-c203-4a46-9a56-509ef0922fa2",
+    "class": "machine",
+    "name": "tappaas4"
+   },
+   "attributes": {},
+   "source": "storage-manager",
+   "change": 768,
+   "from": "2026-10-30T19:48:31.009Z",
+   "to": "2026-10-31T10:30:09.873Z"
+  },
+  {
+   "id": 631,
+   "type": "built-on",
+   "direction": "out",
+   "other": {
+    "id": "3575b39b-f840-4338-9f11-ea3fbf347538",
+    "class": "disk",
+    "name": "dsk-13"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": "2026-10-31T15:19:20.505Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 9458,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T04:15:02.578Z",
+   "drift": false
+  },
+  {
+   "id": 9549,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T04:30:14.579Z",
+   "drift": false
+  },
+  {
+   "id": 9579,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T04:35:02.578Z",
+   "drift": false
+  },
+  {
+   "id": 9699,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T04:55:02.579Z",
+   "drift": false
+  },
+  {
+   "id": 9729,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T05:00:12.579Z",
+   "drift": false
+  },
+  {
+   "id": 9790,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T05:10:01.783Z",
+   "drift": false
+  },
+  {
+   "id": 9820,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T05:15:02.580Z",
+   "drift": false
+  },
+  {
+   "id": 10061,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T05:55:02.579Z",
+   "drift": false
+  },
+  {
+   "id": 10091,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T06:00:10.544Z",
+   "drift": false
+  },
+  {
+   "id": 10151,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T06:10:02.575Z",
+   "drift": false
+  },
+  {
+   "id": 10181,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T06:15:02.580Z",
+   "drift": false
+  },
+  {
+   "id": 10241,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T06:25:02.591Z",
+   "drift": false
+  },
+  {
+   "id": 10271,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T06:30:01.103Z",
+   "drift": false
+  },
+  {
+   "id": 10422,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T06:55:02.579Z",
+   "drift": false
+  },
+  {
+   "id": 10452,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:00:08.581Z",
+   "drift": false
+  },
+  {
+   "id": 10512,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:10:00.624Z",
+   "drift": false
+  },
+  {
+   "id": 10542,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:15:02.578Z",
+   "drift": false
+  },
+  {
+   "id": 10632,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:30:15.026Z",
+   "drift": false
+  },
+  {
+   "id": 10662,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:35:02.582Z",
+   "drift": false
+  },
+  {
+   "id": 11186,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:36:23.484Z",
+   "drift": false
+  }
+ ]
+}

@@ -1,0 +1,30 @@
+{
+  "id": "3c312a7d-e278-4aa2-b184-f8922f7d5d1c",
+  "class": "other-device",
+  "ancestors": [
+    "other-device",
+    "asset",
+    "resource",
+    "object"
+  ],
+  "name": "adr041-a",
+  "displayName": null,
+  "physical": true,
+  "recorded": false,
+  "created": "2026-10-30T09:47:09.050Z",
+  "ended": "2026-10-30T09:49:36.428Z",
+  "lastSeen": "2026-10-30T09:49:36.428Z",
+  "seen": {
+    "adr041-test": "2026-10-30T09:49:36.428Z"
+  },
+  "at": null,
+  "attributes": {
+    "stage": {
+      "value": "disposed",
+      "source": "adr041-test",
+      "since": "2026-10-30T09:49:36.428Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

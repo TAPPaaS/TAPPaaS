@@ -1,0 +1,528 @@
+{
+  "module": "backup",
+  "fields": [
+    {
+      "field": "address",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "alwaysBackup",
+      "coordinate": "backup:vm",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "appVersion",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": null
+    },
+    {
+      "field": "assistantModel",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "backup",
+      "coordinate": "backup:vm",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "{\"enabled\":true,\"exclude\":[],\"retention\":\"7y\"}"
+    },
+    {
+      "field": "backup",
+      "coordinate": "backup:filesystem",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "{\"enabled\":true,\"exclude\":[],\"retention\":\"7y\"}"
+    },
+    {
+      "field": "bootDisks",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "config",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "controllers",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "dependsOn",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": "[]"
+    },
+    {
+      "field": "description",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "TAPPaaS Proxmox Backup Server configuration"
+    },
+    {
+      "field": "displayName",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "environment",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "mgmt"
+    },
+    {
+      "field": "host",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "icon",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "immutableSnapshots",
+      "coordinate": "backup:vm",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "installTime",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "20260809-20:54:17"
+    },
+    {
+      "field": "integratesWith",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "kind",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "application"
+    },
+    {
+      "field": "location",
+      "coordinate": "",
+      "class": "refused",
+      "apply": null,
+      "settable": false,
+      "reason": "'backup' is a application, not a machine — a guest is where its node is",
+      "value": null
+    },
+    {
+      "field": "maintainer",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": null
+    },
+    {
+      "field": "management",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "managed"
+    },
+    {
+      "field": "managers",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "moduleSource",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "/home/tappaas/TAPPaaS/src/foundation/backup"
+    },
+    {
+      "field": "name",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "os",
+      "coordinate": "",
+      "class": "refused",
+      "apply": null,
+      "settable": false,
+      "reason": "schemas/fields.json declares no change class for it — what changing it costs is unknown; declare one before it can be set",
+      "value": null
+    },
+    {
+      "field": "pauseOk",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "false"
+    },
+    {
+      "field": "pausePriority",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "50"
+    },
+    {
+      "field": "pbsStorageName",
+      "coordinate": "backup:vm",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "tappaas_backup"
+    },
+    {
+      "field": "pbsUrl",
+      "coordinate": "backup:vm",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "backup.mgmt.internal"
+    },
+    {
+      "field": "physicalLocation",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": null
+    },
+    {
+      "field": "placementState",
+      "coordinate": "backup:vm",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": "node"
+    },
+    {
+      "field": "portSync",
+      "coordinate": "",
+      "class": "refused",
+      "apply": null,
+      "settable": false,
+      "reason": "schemas/fields.json declares no change class for it — what changing it costs is unknown; declare one before it can be set",
+      "value": "on"
+    },
+    {
+      "field": "provider",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "provides",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": "[\"vm\",\"filesystem\"]"
+    },
+    {
+      "field": "publicDomain",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "pushTarget",
+      "coordinate": "backup:vm",
+      "class": "in-place",
+      "apply": "reconcile",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "rebootOk",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "false"
+    },
+    {
+      "field": "releaseDate",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "2026-08-09"
+    },
+    {
+      "field": "roles",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "source",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "official"
+    },
+    {
+      "field": "sshAllow",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "sshKeyOnly",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": "true"
+    },
+    {
+      "field": "sshPort",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "stack",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "foundation"
+    },
+    {
+      "field": "status",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "Testing"
+    },
+    {
+      "field": "storagePools",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "suspended",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "false"
+    },
+    {
+      "field": "suspendedNoUpdate",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "false"
+    },
+    {
+      "field": "tier",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": null
+    },
+    {
+      "field": "updateTime",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "20261101-02:08:49"
+    },
+    {
+      "field": "uplinks",
+      "coordinate": "",
+      "class": "manual",
+      "apply": null,
+      "settable": false,
+      "reason": "manual — a wiring field: setting it alone would declare a dependency without wiring anything. Change it in the module's own JSON and update the module, which wires it",
+      "value": null
+    },
+    {
+      "field": "variant",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": null
+    },
+    {
+      "field": "version",
+      "coordinate": "",
+      "class": "immutable",
+      "apply": null,
+      "settable": false,
+      "reason": "immutable — the tooling writes it (install, update, the environment); it is not set by hand",
+      "value": "1.0.0"
+    },
+    {
+      "field": "vpn",
+      "coordinate": "",
+      "class": "refused",
+      "apply": null,
+      "settable": false,
+      "reason": "schemas/fields.json declares no change class for it — what changing it costs is unknown; declare one before it can be set",
+      "value": null
+    },
+    {
+      "field": "woodpeckerAdmins",
+      "coordinate": "",
+      "class": "in-place",
+      "apply": "none",
+      "settable": true,
+      "reason": null,
+      "value": null
+    },
+    {
+      "field": "zone0",
+      "coordinate": "",
+      "class": "refused",
+      "apply": null,
+      "settable": false,
+      "reason": "schemas/fields.json declares no change class for it — what changing it costs is unknown; declare one before it can be set",
+      "value": "mgmt"
+    },
+    {
+      "field": "zone1",
+      "coordinate": "",
+      "class": "refused",
+      "apply": null,
+      "settable": false,
+      "reason": "schemas/fields.json declares no change class for it — what changing it costs is unknown; declare one before it can be set",
+      "value": "mgmt"
+    }
+  ],
+  "warnings": []
+}

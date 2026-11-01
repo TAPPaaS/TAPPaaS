@@ -1,0 +1,155 @@
+{
+  "node": "tappaas3",
+  "live": {
+    "node": "tappaas3",
+    "ports": [
+      {
+        "name": "eno1",
+        "mac": "c8:ff:bf:05:0d:30",
+        "state": "up",
+        "speed": 2500,
+        "mtu": 1500,
+        "mii": "up",
+        "aggregator": "",
+        "usb": false,
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": {
+          "chassis": "a8:9c:6c:b0:8d:76",
+          "name": "USW-Pro-XG-10-PoE",
+          "port": "Port 3"
+        }
+      },
+      {
+        "name": "enp3s0",
+        "mac": "c8:ff:bf:05:0d:31",
+        "state": "up",
+        "speed": 2500,
+        "mtu": 1500,
+        "mii": "",
+        "aggregator": "",
+        "usb": false,
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": {
+          "chassis": "a8:9c:6c:b0:8d:76",
+          "name": "USW-Pro-XG-10-PoE",
+          "port": "Port 7"
+        }
+      },
+      {
+        "name": "usblan0",
+        "mac": "00:e0:4c:68:00:d1",
+        "state": "up",
+        "speed": 2500,
+        "mtu": 1500,
+        "mii": "up",
+        "aggregator": "",
+        "usb": true,
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": {
+          "chassis": "a8:9c:6c:b0:8d:76",
+          "name": "USW-Pro-XG-10-PoE",
+          "port": "Port 4"
+        }
+      }
+    ],
+    "lan": {
+      "mtu": 1500,
+      "bond": "lanbond",
+      "mode": "active-backup",
+      "active": "eno1",
+      "primary": "eno1",
+      "primaryMac": "c8:ff:bf:05:0d:30",
+      "aggregator": "",
+      "partnerMac": "",
+      "bondMtu": 1500,
+      "members": [
+        {
+          "name": "eno1",
+          "mac": "c8:ff:bf:05:0d:30",
+          "state": "up",
+          "speed": 2500,
+          "mtu": 1500,
+          "mii": "up",
+          "aggregator": "",
+          "usb": false,
+          "actorState": -1,
+          "partnerState": -1,
+          "lldp": {
+            "chassis": "a8:9c:6c:b0:8d:76",
+            "name": "USW-Pro-XG-10-PoE",
+            "port": "Port 3"
+          }
+        },
+        {
+          "name": "usblan0",
+          "mac": "00:e0:4c:68:00:d1",
+          "state": "up",
+          "speed": 2500,
+          "mtu": 1500,
+          "mii": "up",
+          "aggregator": "",
+          "usb": true,
+          "actorState": -1,
+          "partnerState": -1,
+          "lldp": {
+            "chassis": "a8:9c:6c:b0:8d:76",
+            "name": "USW-Pro-XG-10-PoE",
+            "port": "Port 4"
+          }
+        }
+      ]
+    },
+    "wan": {
+      "members": [
+        {
+          "name": "enp3s0",
+          "mac": "c8:ff:bf:05:0d:31",
+          "state": "up",
+          "speed": 2500,
+          "mtu": 1500,
+          "mii": "",
+          "aggregator": "",
+          "usb": false,
+          "actorState": -1,
+          "partnerState": -1,
+          "lldp": {
+            "chassis": "a8:9c:6c:b0:8d:76",
+            "name": "USW-Pro-XG-10-PoE",
+            "port": "Port 7"
+          }
+        }
+      ]
+    },
+    "lrmActive": true,
+    "corosync": {
+      "links": 1,
+      "disconnected": 0
+    },
+    "lldpd": "active",
+    "pendingNew": false
+  },
+  "declared": {
+    "lan": {
+      "mode": "active-backup",
+      "ports": [
+        "c8:ff:bf:05:0d:30",
+        "00:e0:4c:68:00:d1"
+      ],
+      "primary": "c8:ff:bf:05:0d:30"
+    },
+    "wan": {
+      "ports": [
+        "c8:ff:bf:05:0d:31"
+      ]
+    }
+  },
+  "findings": [
+    {
+      "level": "warn",
+      "text": "every leg reaches the same switch (USW-Pro-XG-10-PoE) — redundant ports, not redundant switches"
+    }
+  ]
+}

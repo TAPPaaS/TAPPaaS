@@ -1,0 +1,1514 @@
+{
+ "id": "f838733f-d890-4e32-af60-eee4a8b68488",
+ "class": "server",
+ "name": "srv-04",
+ "created": "2026-10-30T19:52:23.768Z",
+ "ended": "2026-10-31T15:19:20.549Z",
+ "attributes": [
+  {
+   "name": "model",
+   "value": "QDNV01",
+   "source": "asset-manager",
+   "change": 775,
+   "from": "2026-10-30T19:52:23.768Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "stock",
+   "source": "asset-manager",
+   "change": 775,
+   "from": "2026-10-30T19:52:23.768Z",
+   "to": "2026-10-30T19:52:30.663Z"
+  },
+  {
+   "name": "vendor",
+   "value": "Default string",
+   "source": "asset-manager",
+   "change": 775,
+   "from": "2026-10-30T19:52:23.768Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "operational",
+   "source": "asset-manager",
+   "change": 785,
+   "from": "2026-10-30T19:52:30.663Z",
+   "to": "2026-10-31T10:30:09.928Z"
+  },
+  {
+   "name": "cpu",
+   "value": "Intel(R) Atom(TM) CPU C3758R @ 2.40GHz",
+   "source": "site-manager",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": null
+  },
+  {
+   "name": "disks",
+   "value": [
+    {
+     "bus": "nvme",
+     "name": "nvme-Samsung_SSD_990_PRO_2TB_S7DNNU0X545837K",
+     "size": 2000398934016,
+     "type": "nvme",
+     "holds": "nothing",
+     "model": "Samsung SSD 990 PRO 2TB",
+     "device": "/dev/nvme0n1",
+     "health": "PASSED",
+     "serial": "S7DNNU0X545837K",
+     "partitions": [
+      {
+       "pool": "tanka1",
+       "size": 2000389406720,
+       "holds": "zfs",
+       "device": "/dev/nvme0n1p1"
+      },
+      {
+       "size": 8388608,
+       "holds": "zfs",
+       "device": "/dev/nvme0n1p9"
+      }
+     ]
+    },
+    {
+     "bus": "nvme",
+     "name": "nvme-Samsung_SSD_990_PRO_2TB_S7HENJ0Y412736V",
+     "size": 2000398934016,
+     "type": "nvme",
+     "holds": "nothing",
+     "model": "Samsung SSD 990 PRO 2TB",
+     "device": "/dev/nvme1n1",
+     "health": "PASSED",
+     "serial": "S7HENJ0Y412736V",
+     "partitions": [
+      {
+       "pool": "tankb1",
+       "size": 2000389406720,
+       "holds": "zfs",
+       "device": "/dev/nvme1n1p1"
+      },
+      {
+       "size": 8388608,
+       "holds": "zfs",
+       "device": "/dev/nvme1n1p9"
+      }
+     ]
+    },
+    {
+     "bus": "sata",
+     "name": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N",
+     "size": 500107862016,
+     "type": "ssd",
+     "holds": "nothing",
+     "model": "Samsung_SSD_870_EVO_500GB",
+     "device": "/dev/sda",
+     "health": "PASSED",
+     "serial": "S6PYNL0Y209497N",
+     "partitions": [
+      {
+       "size": 1031168,
+       "holds": "bios-boot",
+       "device": "/dev/sda1"
+      },
+      {
+       "size": 1073741824,
+       "holds": "efi",
+       "device": "/dev/sda2"
+      },
+      {
+       "pool": "rpool",
+       "size": 499033054720,
+       "holds": "zfs",
+       "device": "/dev/sda3"
+      }
+     ]
+    }
+   ],
+   "source": "site-manager",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": "2026-10-31T09:52:00.815Z"
+  },
+  {
+   "name": "memory",
+   "value": 32063,
+   "source": "site-manager",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": null
+  },
+  {
+   "name": "nics",
+   "value": [
+    {
+     "mac": "20:7c:14:f4:d0:8c",
+     "kind": "sfp",
+     "link": false,
+     "name": "eno1",
+     "speed": "10g",
+     "maxMbps": 10000,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:8d",
+     "kind": "sfp",
+     "link": false,
+     "name": "eno2",
+     "speed": "10g",
+     "maxMbps": 10000,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:8e",
+     "kind": "sfp",
+     "link": false,
+     "name": "eno3",
+     "speed": "10g",
+     "maxMbps": 10000,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:8f",
+     "kind": "sfp",
+     "link": false,
+     "name": "eno4",
+     "speed": "10g",
+     "maxMbps": 10000,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:87",
+     "kind": "rj45",
+     "link": true,
+     "name": "enp4s0",
+     "speed": "2.5g",
+     "bridge": "lan",
+     "maxMbps": 2500,
+     "operstate": "up"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:88",
+     "kind": "rj45",
+     "link": false,
+     "name": "enp5s0",
+     "speed": "2.5g",
+     "maxMbps": 2500,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:89",
+     "kind": "rj45",
+     "link": false,
+     "name": "enp6s0",
+     "speed": "2.5g",
+     "maxMbps": 2500,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:8a",
+     "kind": "rj45",
+     "link": false,
+     "name": "enp7s0",
+     "speed": "2.5g",
+     "maxMbps": 2500,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:8b",
+     "kind": "rj45",
+     "link": false,
+     "name": "enp8s0",
+     "speed": "2.5g",
+     "maxMbps": 2500,
+     "operstate": "down"
+    }
+   ],
+   "source": "site-manager",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": "2026-10-31T08:21:43.213Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "follows",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": true,
+     "message": "follows machine tappaas4",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1355,
+   "from": "2026-10-31T07:25:02.913Z",
+   "to": "2026-10-31T09:55:09.015Z"
+  },
+  {
+   "name": "nics",
+   "value": [
+    {
+     "mac": "20:7c:14:f4:d0:8c",
+     "kind": "sfp",
+     "link": false,
+     "name": "eno1",
+     "speed": "10g",
+     "maxMbps": 10000,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:8d",
+     "kind": "sfp",
+     "link": false,
+     "name": "eno2",
+     "speed": "10g",
+     "maxMbps": 10000,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:8e",
+     "kind": "sfp",
+     "link": false,
+     "name": "eno3",
+     "speed": "10g",
+     "maxMbps": 10000,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:8f",
+     "kind": "sfp",
+     "link": false,
+     "name": "eno4",
+     "speed": "10g",
+     "maxMbps": 10000,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:87",
+     "kind": "rj45",
+     "link": true,
+     "name": "enp4s0",
+     "speed": "2.5g",
+     "bridge": "lan",
+     "maxMbps": 2500,
+     "linkSpeed": "2.5g",
+     "operstate": "up"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:88",
+     "kind": "rj45",
+     "link": false,
+     "name": "enp5s0",
+     "speed": "2.5g",
+     "maxMbps": 2500,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:89",
+     "kind": "rj45",
+     "link": false,
+     "name": "enp6s0",
+     "speed": "2.5g",
+     "maxMbps": 2500,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:8a",
+     "kind": "rj45",
+     "link": false,
+     "name": "enp7s0",
+     "speed": "2.5g",
+     "maxMbps": 2500,
+     "operstate": "down"
+    },
+    {
+     "mac": "20:7c:14:f4:d0:8b",
+     "kind": "rj45",
+     "link": false,
+     "name": "enp8s0",
+     "speed": "2.5g",
+     "maxMbps": 2500,
+     "operstate": "down"
+    }
+   ],
+   "source": "site-manager",
+   "change": 1674,
+   "from": "2026-10-31T08:21:43.213Z",
+   "to": null
+  },
+  {
+   "name": "disks",
+   "value": [
+    {
+     "bus": "nvme",
+     "wwn": "eui.0025384541a2503d",
+     "name": "nvme-Samsung_SSD_990_PRO_2TB_S7DNNU0X545837K",
+     "size": 2000398934016,
+     "type": "nvme",
+     "holds": "nothing",
+     "model": "Samsung SSD 990 PRO 2TB",
+     "smart": {
+      "mediaErrors": 0,
+      "powerOnHours": 6450,
+      "criticalWarning": 0
+     },
+     "device": "/dev/nvme0n1",
+     "health": "PASSED",
+     "serial": "S7DNNU0X545837K",
+     "vendor": "unknown",
+     "wearout": 99,
+     "partitions": [
+      {
+       "pool": "tanka1",
+       "size": 2000389406720,
+       "holds": "zfs",
+       "device": "/dev/nvme0n1p1"
+      },
+      {
+       "size": 8388608,
+       "holds": "zfs",
+       "device": "/dev/nvme0n1p9"
+      }
+     ],
+     "temperature": 48
+    },
+    {
+     "bus": "nvme",
+     "wwn": "eui.002538445140830c",
+     "name": "nvme-Samsung_SSD_990_PRO_2TB_S7HENJ0Y412736V",
+     "size": 2000398934016,
+     "type": "nvme",
+     "holds": "nothing",
+     "model": "Samsung SSD 990 PRO 2TB",
+     "smart": {
+      "mediaErrors": 0,
+      "powerOnHours": 859,
+      "criticalWarning": 0
+     },
+     "device": "/dev/nvme1n1",
+     "health": "PASSED",
+     "serial": "S7HENJ0Y412736V",
+     "vendor": "unknown",
+     "wearout": 100,
+     "partitions": [
+      {
+       "pool": "tankb1",
+       "size": 2000389406720,
+       "holds": "zfs",
+       "device": "/dev/nvme1n1p1"
+      },
+      {
+       "size": 8388608,
+       "holds": "zfs",
+       "device": "/dev/nvme1n1p9"
+      }
+     ],
+     "temperature": 47
+    },
+    {
+     "bus": "sata",
+     "wwn": "0x5002538f55208720",
+     "name": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N",
+     "size": 500107862016,
+     "type": "ssd",
+     "holds": "nothing",
+     "model": "Samsung_SSD_870_EVO_500GB",
+     "smart": {
+      "reallocated": 0,
+      "powerOnHours": 10306,
+      "uncorrectable": 0
+     },
+     "device": "/dev/sda",
+     "health": "PASSED",
+     "serial": "S6PYNL0Y209497N",
+     "vendor": "ATA",
+     "wearout": 99,
+     "partitions": [
+      {
+       "size": 1031168,
+       "holds": "bios-boot",
+       "device": "/dev/sda1"
+      },
+      {
+       "size": 1073741824,
+       "holds": "efi",
+       "device": "/dev/sda2"
+      },
+      {
+       "pool": "rpool",
+       "size": 499033054720,
+       "holds": "zfs",
+       "device": "/dev/sda3"
+      }
+     ],
+     "temperature": 33
+    }
+   ],
+   "source": "site-manager",
+   "change": 2276,
+   "from": "2026-10-31T09:52:00.815Z",
+   "to": null
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T09:52:00.815Z",
+    "source": "site-manager",
+    "desired": null,
+    "attributes": {
+     "disks": {
+      "now": [
+       {
+        "bus": "nvme",
+        "wwn": "eui.0025384541a2503d",
+        "name": "nvme-Samsung_SSD_990_PRO_2TB_S7DNNU0X545837K",
+        "size": 2000398934016,
+        "type": "nvme",
+        "holds": "nothing",
+        "model": "Samsung SSD 990 PRO 2TB",
+        "smart": {
+         "mediaErrors": 0,
+         "powerOnHours": 6450,
+         "criticalWarning": 0
+        },
+        "device": "/dev/nvme0n1",
+        "health": "PASSED",
+        "serial": "S7DNNU0X545837K",
+        "vendor": "unknown",
+        "wearout": 99,
+        "partitions": [
+         {
+          "pool": "tanka1",
+          "size": 2000389406720,
+          "holds": "zfs",
+          "device": "/dev/nvme0n1p1"
+         },
+         {
+          "size": 8388608,
+          "holds": "zfs",
+          "device": "/dev/nvme0n1p9"
+         }
+        ],
+        "temperature": 48
+       },
+       {
+        "bus": "nvme",
+        "wwn": "eui.002538445140830c",
+        "name": "nvme-Samsung_SSD_990_PRO_2TB_S7HENJ0Y412736V",
+        "size": 2000398934016,
+        "type": "nvme",
+        "holds": "nothing",
+        "model": "Samsung SSD 990 PRO 2TB",
+        "smart": {
+         "mediaErrors": 0,
+         "powerOnHours": 859,
+         "criticalWarning": 0
+        },
+        "device": "/dev/nvme1n1",
+        "health": "PASSED",
+        "serial": "S7HENJ0Y412736V",
+        "vendor": "unknown",
+        "wearout": 100,
+        "partitions": [
+         {
+          "pool": "tankb1",
+          "size": 2000389406720,
+          "holds": "zfs",
+          "device": "/dev/nvme1n1p1"
+         },
+         {
+          "size": 8388608,
+          "holds": "zfs",
+          "device": "/dev/nvme1n1p9"
+         }
+        ],
+        "temperature": 47
+       },
+       {
+        "bus": "sata",
+        "wwn": "0x5002538f55208720",
+        "name": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N",
+        "size": 500107862016,
+        "type": "ssd",
+        "holds": "nothing",
+        "model": "Samsung_SSD_870_EVO_500GB",
+        "smart": {
+         "reallocated": 0,
+         "powerOnHours": 10306,
+         "uncorrectable": 0
+        },
+        "device": "/dev/sda",
+        "health": "PASSED",
+        "serial": "S6PYNL0Y209497N",
+        "vendor": "ATA",
+        "wearout": 99,
+        "partitions": [
+         {
+          "size": 1031168,
+          "holds": "bios-boot",
+          "device": "/dev/sda1"
+         },
+         {
+          "size": 1073741824,
+          "holds": "efi",
+          "device": "/dev/sda2"
+         },
+         {
+          "pool": "rpool",
+          "size": 499033054720,
+          "holds": "zfs",
+          "device": "/dev/sda3"
+         }
+        ],
+        "temperature": 33
+       }
+      ],
+      "was": [
+       {
+        "bus": "nvme",
+        "name": "nvme-Samsung_SSD_990_PRO_2TB_S7DNNU0X545837K",
+        "size": 2000398934016,
+        "type": "nvme",
+        "holds": "nothing",
+        "model": "Samsung SSD 990 PRO 2TB",
+        "device": "/dev/nvme0n1",
+        "health": "PASSED",
+        "serial": "S7DNNU0X545837K",
+        "partitions": [
+         {
+          "pool": "tanka1",
+          "size": 2000389406720,
+          "holds": "zfs",
+          "device": "/dev/nvme0n1p1"
+         },
+         {
+          "size": 8388608,
+          "holds": "zfs",
+          "device": "/dev/nvme0n1p9"
+         }
+        ]
+       },
+       {
+        "bus": "nvme",
+        "name": "nvme-Samsung_SSD_990_PRO_2TB_S7HENJ0Y412736V",
+        "size": 2000398934016,
+        "type": "nvme",
+        "holds": "nothing",
+        "model": "Samsung SSD 990 PRO 2TB",
+        "device": "/dev/nvme1n1",
+        "health": "PASSED",
+        "serial": "S7HENJ0Y412736V",
+        "partitions": [
+         {
+          "pool": "tankb1",
+          "size": 2000389406720,
+          "holds": "zfs",
+          "device": "/dev/nvme1n1p1"
+         },
+         {
+          "size": 8388608,
+          "holds": "zfs",
+          "device": "/dev/nvme1n1p9"
+         }
+        ]
+       },
+       {
+        "bus": "sata",
+        "name": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N",
+        "size": 500107862016,
+        "type": "ssd",
+        "holds": "nothing",
+        "model": "Samsung_SSD_870_EVO_500GB",
+        "device": "/dev/sda",
+        "health": "PASSED",
+        "serial": "S6PYNL0Y209497N",
+        "partitions": [
+         {
+          "size": 1031168,
+          "holds": "bios-boot",
+          "device": "/dev/sda1"
+         },
+         {
+          "size": 1073741824,
+          "holds": "efi",
+          "device": "/dev/sda2"
+         },
+         {
+          "pool": "rpool",
+          "size": 499033054720,
+          "holds": "zfs",
+          "device": "/dev/sda3"
+         }
+        ]
+       }
+      ]
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 2276,
+   "from": "2026-10-31T09:52:00.815Z",
+   "to": "2026-10-31T09:53:59.172Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T09:52:00.815Z",
+    "source": "sweep",
+    "desired": null,
+    "attributes": {
+     "disks": {
+      "now": [
+       {
+        "bus": "nvme",
+        "wwn": "eui.0025384541a2503d",
+        "name": "nvme-Samsung_SSD_990_PRO_2TB_S7DNNU0X545837K",
+        "size": 2000398934016,
+        "type": "nvme",
+        "holds": "nothing",
+        "model": "Samsung SSD 990 PRO 2TB",
+        "smart": {
+         "mediaErrors": 0,
+         "powerOnHours": 6450,
+         "criticalWarning": 0
+        },
+        "device": "/dev/nvme0n1",
+        "health": "PASSED",
+        "serial": "S7DNNU0X545837K",
+        "vendor": "unknown",
+        "wearout": 99,
+        "partitions": [
+         {
+          "pool": "tanka1",
+          "size": 2000389406720,
+          "holds": "zfs",
+          "device": "/dev/nvme0n1p1"
+         },
+         {
+          "size": 8388608,
+          "holds": "zfs",
+          "device": "/dev/nvme0n1p9"
+         }
+        ],
+        "temperature": 48
+       },
+       {
+        "bus": "nvme",
+        "wwn": "eui.002538445140830c",
+        "name": "nvme-Samsung_SSD_990_PRO_2TB_S7HENJ0Y412736V",
+        "size": 2000398934016,
+        "type": "nvme",
+        "holds": "nothing",
+        "model": "Samsung SSD 990 PRO 2TB",
+        "smart": {
+         "mediaErrors": 0,
+         "powerOnHours": 859,
+         "criticalWarning": 0
+        },
+        "device": "/dev/nvme1n1",
+        "health": "PASSED",
+        "serial": "S7HENJ0Y412736V",
+        "vendor": "unknown",
+        "wearout": 100,
+        "partitions": [
+         {
+          "pool": "tankb1",
+          "size": 2000389406720,
+          "holds": "zfs",
+          "device": "/dev/nvme1n1p1"
+         },
+         {
+          "size": 8388608,
+          "holds": "zfs",
+          "device": "/dev/nvme1n1p9"
+         }
+        ],
+        "temperature": 47
+       },
+       {
+        "bus": "sata",
+        "wwn": "0x5002538f55208720",
+        "name": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N",
+        "size": 500107862016,
+        "type": "ssd",
+        "holds": "nothing",
+        "model": "Samsung_SSD_870_EVO_500GB",
+        "smart": {
+         "reallocated": 0,
+         "powerOnHours": 10306,
+         "uncorrectable": 0
+        },
+        "device": "/dev/sda",
+        "health": "PASSED",
+        "serial": "S6PYNL0Y209497N",
+        "vendor": "ATA",
+        "wearout": 99,
+        "partitions": [
+         {
+          "size": 1031168,
+          "holds": "bios-boot",
+          "device": "/dev/sda1"
+         },
+         {
+          "size": 1073741824,
+          "holds": "efi",
+          "device": "/dev/sda2"
+         },
+         {
+          "pool": "rpool",
+          "size": 499033054720,
+          "holds": "zfs",
+          "device": "/dev/sda3"
+         }
+        ],
+        "temperature": 33
+       }
+      ],
+      "was": [
+       {
+        "bus": "nvme",
+        "name": "nvme-Samsung_SSD_990_PRO_2TB_S7DNNU0X545837K",
+        "size": 2000398934016,
+        "type": "nvme",
+        "holds": "nothing",
+        "model": "Samsung SSD 990 PRO 2TB",
+        "device": "/dev/nvme0n1",
+        "health": "PASSED",
+        "serial": "S7DNNU0X545837K",
+        "partitions": [
+         {
+          "pool": "tanka1",
+          "size": 2000389406720,
+          "holds": "zfs",
+          "device": "/dev/nvme0n1p1"
+         },
+         {
+          "size": 8388608,
+          "holds": "zfs",
+          "device": "/dev/nvme0n1p9"
+         }
+        ]
+       },
+       {
+        "bus": "nvme",
+        "name": "nvme-Samsung_SSD_990_PRO_2TB_S7HENJ0Y412736V",
+        "size": 2000398934016,
+        "type": "nvme",
+        "holds": "nothing",
+        "model": "Samsung SSD 990 PRO 2TB",
+        "device": "/dev/nvme1n1",
+        "health": "PASSED",
+        "serial": "S7HENJ0Y412736V",
+        "partitions": [
+         {
+          "pool": "tankb1",
+          "size": 2000389406720,
+          "holds": "zfs",
+          "device": "/dev/nvme1n1p1"
+         },
+         {
+          "size": 8388608,
+          "holds": "zfs",
+          "device": "/dev/nvme1n1p9"
+         }
+        ]
+       },
+       {
+        "bus": "sata",
+        "name": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N",
+        "size": 500107862016,
+        "type": "ssd",
+        "holds": "nothing",
+        "model": "Samsung_SSD_870_EVO_500GB",
+        "device": "/dev/sda",
+        "health": "PASSED",
+        "serial": "S6PYNL0Y209497N",
+        "partitions": [
+         {
+          "size": 1031168,
+          "holds": "bios-boot",
+          "device": "/dev/sda1"
+         },
+         {
+          "size": 1073741824,
+          "holds": "efi",
+          "device": "/dev/sda2"
+         },
+         {
+          "pool": "rpool",
+          "size": 499033054720,
+          "holds": "zfs",
+          "device": "/dev/sda3"
+         }
+        ]
+       }
+      ]
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 2340,
+   "from": "2026-10-31T09:53:59.172Z",
+   "to": "2026-10-31T10:30:09.928Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "follows",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": true,
+     "message": "follows machine tappaas4",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T10:30:08.145Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T09:55:09.015Z",
+     "reason": "sweep-changed",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "server/srv-04: drift: changed disks",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T10:30:08.145Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T10:30:08.145Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 2343,
+   "from": "2026-10-31T09:55:09.015Z",
+   "to": "2026-10-31T10:31:25.084Z"
+  },
+  {
+   "name": "stage",
+   "value": "placed",
+   "source": "asset-manager",
+   "change": 2592,
+   "from": "2026-10-31T10:30:09.928Z",
+   "to": "2026-10-31T10:30:09.975Z"
+  },
+  {
+   "name": "stage",
+   "value": "stock",
+   "source": "asset-manager",
+   "change": 2593,
+   "from": "2026-10-31T10:30:09.975Z",
+   "to": "2026-10-31T15:19:20.549Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T10:31:25.084Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": true,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T10:31:25.084Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T09:55:09.015Z",
+     "reason": "sweep-changed",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "server/srv-04: drift: changed disks",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T10:30:08.145Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T10:30:08.145Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 2600,
+   "from": "2026-10-31T10:31:25.084Z",
+   "to": "2026-10-31T10:35:14.354Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T10:31:25.084Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T10:31:25.084Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T09:55:09.015Z",
+     "reason": "sweep-changed",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "server/srv-04: drift: changed disks",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T11:00:14.583Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T11:00:14.583Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 2628,
+   "from": "2026-10-31T10:35:14.354Z",
+   "to": "2026-10-31T11:03:09.123Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T10:31:25.084Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T10:31:25.084Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T11:03:09.123Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T11:03:09.123Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T15:15:02.019Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 2879,
+   "from": "2026-10-31T11:03:09.123Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "disposed",
+   "source": "asset-manager",
+   "change": 4480,
+   "from": "2026-10-31T15:19:20.549Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 573,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "d06fe0d8-ca08-4f01-b2f8-cf17026a3290",
+    "class": "port",
+    "name": "eno1"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 776,
+   "from": "2026-10-30T19:52:23.821Z",
+   "to": "2026-10-31T15:19:20.549Z"
+  },
+  {
+   "id": 574,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "8f2a91c3-31ae-4d17-83a3-64db66ba125e",
+    "class": "port",
+    "name": "eno2"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 777,
+   "from": "2026-10-30T19:52:23.873Z",
+   "to": "2026-10-31T15:19:20.549Z"
+  },
+  {
+   "id": 575,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "62f828f0-1e5a-48fa-acee-cd178997cce2",
+    "class": "port",
+    "name": "eno3"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 778,
+   "from": "2026-10-30T19:52:23.926Z",
+   "to": "2026-10-31T15:19:20.549Z"
+  },
+  {
+   "id": 576,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "d32eb21c-5c7a-4ea4-bad7-3e11d82496f2",
+    "class": "port",
+    "name": "eno4"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 779,
+   "from": "2026-10-30T19:52:23.975Z",
+   "to": "2026-10-31T15:19:20.549Z"
+  },
+  {
+   "id": 577,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "f0ead777-e254-49dd-8d4f-32a8728d0ea7",
+    "class": "port",
+    "name": "enp4s0"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 780,
+   "from": "2026-10-30T19:52:24.025Z",
+   "to": "2026-10-31T15:19:20.549Z"
+  },
+  {
+   "id": 578,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "68a77e79-d632-4f9f-a4b7-0ba479000e2a",
+    "class": "port",
+    "name": "enp5s0"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 781,
+   "from": "2026-10-30T19:52:24.077Z",
+   "to": "2026-10-31T15:19:20.549Z"
+  },
+  {
+   "id": 579,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "4891cfe3-def5-48d4-b10a-38237b7f08cf",
+    "class": "port",
+    "name": "enp6s0"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 782,
+   "from": "2026-10-30T19:52:24.130Z",
+   "to": "2026-10-31T15:19:20.549Z"
+  },
+  {
+   "id": 580,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "c40b942c-a26a-432a-8127-9f809c18103e",
+    "class": "port",
+    "name": "enp7s0"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 783,
+   "from": "2026-10-30T19:52:24.180Z",
+   "to": "2026-10-31T15:19:20.549Z"
+  },
+  {
+   "id": 581,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "18cdf0bb-8217-4a72-9ba9-d8cc03a23c2a",
+    "class": "port",
+    "name": "enp8s0"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 784,
+   "from": "2026-10-30T19:52:24.231Z",
+   "to": "2026-10-31T15:19:20.549Z"
+  },
+  {
+   "id": 582,
+   "type": "placed-in",
+   "direction": "out",
+   "other": {
+    "id": "73a0f756-f569-4eaa-8508-bec8ac7ac791",
+    "class": "rack",
+    "name": "rack1"
+   },
+   "attributes": {
+    "u": 19,
+    "face": "front",
+    "slot": 0,
+    "label": "test ATOM server",
+    "width": "full",
+    "height": 1,
+    "faceplate": "generic/server-1u"
+   },
+   "source": "asset-manager",
+   "change": 785,
+   "from": "2026-10-30T19:52:30.663Z",
+   "to": "2026-10-31T10:30:09.975Z"
+  },
+  {
+   "id": 583,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "3a7feb32-c203-4a46-9a56-509ef0922fa2",
+    "class": "machine",
+    "name": "tappaas4"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 786,
+   "from": "2026-10-30T19:52:30.676Z",
+   "to": "2026-10-31T10:30:09.873Z"
+  },
+  {
+   "id": 624,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "3575b39b-f840-4338-9f11-ea3fbf347538",
+    "class": "disk",
+    "name": "dsk-13"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": "2026-10-31T15:19:20.505Z"
+  },
+  {
+   "id": 623,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "616d43e7-416f-4440-8e45-e0a77b9825f3",
+    "class": "disk",
+    "name": "dsk-12"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": "2026-10-31T15:19:20.459Z"
+  },
+  {
+   "id": 622,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "4c6622da-6df6-4037-b320-be6040b13464",
+    "class": "disk",
+    "name": "dsk-11"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": "2026-10-31T15:19:20.413Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 780,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261030192827-8723f1",
+   "verb": "port add",
+   "actor": "lars",
+   "time": "2026-10-30T19:52:24.025Z",
+   "drift": false
+  },
+  {
+   "id": 781,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261030192827-8723f1",
+   "verb": "port add",
+   "actor": "lars",
+   "time": "2026-10-30T19:52:24.077Z",
+   "drift": false
+  },
+  {
+   "id": 782,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261030192827-8723f1",
+   "verb": "port add",
+   "actor": "lars",
+   "time": "2026-10-30T19:52:24.130Z",
+   "drift": false
+  },
+  {
+   "id": 783,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261030192827-8723f1",
+   "verb": "port add",
+   "actor": "lars",
+   "time": "2026-10-30T19:52:24.180Z",
+   "drift": false
+  },
+  {
+   "id": 784,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261030192827-8723f1",
+   "verb": "port add",
+   "actor": "lars",
+   "time": "2026-10-30T19:52:24.231Z",
+   "drift": false
+  },
+  {
+   "id": 785,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261030192827-8723f1",
+   "verb": "asset allocate",
+   "actor": "lars",
+   "time": "2026-10-30T19:52:30.663Z",
+   "drift": false
+  },
+  {
+   "id": 786,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261030192827-8723f1",
+   "verb": "asset allocate",
+   "actor": "lars",
+   "time": "2026-10-30T19:52:30.676Z",
+   "drift": false
+  },
+  {
+   "id": 1046,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T00:00:32.049Z",
+   "drift": true
+  },
+  {
+   "id": 1355,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:25:02.913Z",
+   "drift": false
+  },
+  {
+   "id": 1674,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T08:21:43.213Z",
+   "drift": false
+  },
+  {
+   "id": 2240,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "disk adopt",
+   "actor": "tappaas",
+   "time": "2026-10-31T09:50:50.296Z",
+   "drift": false
+  },
+  {
+   "id": 2276,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:52:00.815Z",
+   "drift": true
+  },
+  {
+   "id": 2340,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-31T09:53:59.172Z",
+   "drift": true
+  },
+  {
+   "id": 2343,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:55:09.015Z",
+   "drift": false
+  },
+  {
+   "id": 2592,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031102900-f158b0",
+   "verb": "asset release",
+   "actor": "lars",
+   "time": "2026-10-31T10:30:09.928Z",
+   "drift": false
+  },
+  {
+   "id": 2593,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031102900-f158b0",
+   "verb": "unplace",
+   "actor": "lars",
+   "time": "2026-10-31T10:30:09.975Z",
+   "drift": false
+  },
+  {
+   "id": 2600,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T10:31:25.084Z",
+   "drift": false
+  },
+  {
+   "id": 2628,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T10:35:14.354Z",
+   "drift": false
+  },
+  {
+   "id": 2879,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T11:03:09.123Z",
+   "drift": false
+  },
+  {
+   "id": 4480,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset remove",
+   "actor": "tappaas",
+   "time": "2026-10-31T15:19:20.549Z",
+   "drift": false
+  }
+ ]
+}

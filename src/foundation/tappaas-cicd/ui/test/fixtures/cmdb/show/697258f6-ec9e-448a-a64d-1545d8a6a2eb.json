@@ -1,0 +1,196 @@
+{
+  "id": "697258f6-ec9e-448a-a64d-1545d8a6a2eb",
+  "class": "vm",
+  "ancestors": [
+    "vm",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "templates",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T08:47:45.445Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.004Z",
+  "seen": {
+    "module-manager": "2026-11-01T08:52:20.004Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T09:55:09.015Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T09:55:09.015Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T09:55:09.015Z"
+    },
+    "description": {
+      "value": "The TAPPaaS VM Template (NixOS and Debian)",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "desired": {
+      "value": {
+        "file": "templates.json"
+      },
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "maturity": {
+      "value": "Production",
+      "source": "module-manager",
+      "since": "2026-10-31T07:24:26.043Z"
+    },
+    "release": {
+      "value": {
+        "module": "templates",
+        "version": "1.1.0"
+      },
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "stack": {
+      "value": "foundation",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "stage": {
+      "value": "created",
+      "source": "module-manager",
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    "state": {
+      "value": "stopped",
+      "source": "module-manager",
+      "since": "2026-10-31T07:24:26.043Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 38,
+      "type": "member-of",
+      "direction": "out",
+      "other": {
+        "id": "bb8a818c-90a8-47f1-a71d-f33c0f6d8b0f",
+        "class": "environment",
+        "name": "mgmt"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 119,
+      "type": "provides",
+      "direction": "out",
+      "other": {
+        "id": "eca7f88d-aa5f-4a17-8b62-52393f4af4b2",
+        "class": "service",
+        "name": "templates:debian"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 120,
+      "type": "provides",
+      "direction": "out",
+      "other": {
+        "id": "b35b1a55-2887-453f-acb5-88c367f31d90",
+        "class": "service",
+        "name": "templates:nixos"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 121,
+      "type": "provides",
+      "direction": "out",
+      "other": {
+        "id": "9bfef413-6887-40aa-81bb-87d1668420a1",
+        "class": "service",
+        "name": "templates:windows"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 74,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "eca7f88d-aa5f-4a17-8b62-52393f4af4b2",
+        "class": "service",
+        "name": "templates:debian"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 75,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "b35b1a55-2887-453f-acb5-88c367f31d90",
+        "class": "service",
+        "name": "templates:nixos"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    },
+    {
+      "id": 76,
+      "type": "runs-on",
+      "direction": "in",
+      "other": {
+        "id": "9bfef413-6887-40aa-81bb-87d1668420a1",
+        "class": "service",
+        "name": "templates:windows"
+      },
+      "attributes": {},
+      "source": "module-manager",
+      "recorded": false,
+      "since": "2026-10-30T08:47:45.445Z"
+    }
+  ]
+}

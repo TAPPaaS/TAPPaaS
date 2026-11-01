@@ -1,0 +1,152 @@
+{
+  "module": "storage",
+  "dependsOn": [],
+  "integratesWith": [],
+  "fields": {
+    "dependsOn": {
+      "value": "[]",
+      "defaulted": false,
+      "literal": "[]",
+      "notTracking": false
+    },
+    "description": {
+      "value": "Storage for consumer modules (ADR-029): NFS shares declared in config/shares.json through storage-manager, served by the cluster nodes, mounted into consumer guests by storage:nfs. A virtual module, like cluster — nothing of its own to install.",
+      "defaulted": false,
+      "literal": "Storage for consumer modules (ADR-029): NFS shares declared in config/shares.json through storage-manager, served by the cluster nodes, mounted into consumer guests by storage:nfs. A virtual module, like cluster — nothing of its own to install.",
+      "notTracking": false
+    },
+    "environment": {
+      "value": "mgmt",
+      "defaulted": false,
+      "literal": "mgmt",
+      "notTracking": true
+    },
+    "installTime": {
+      "value": "20261005-16:48:36",
+      "defaulted": false,
+      "literal": "20261005-16:48:36",
+      "notTracking": true
+    },
+    "kind": {
+      "value": "application",
+      "defaulted": false,
+      "literal": "application",
+      "notTracking": false
+    },
+    "maintainer": {
+      "value": "@TAPPaaS",
+      "defaulted": false,
+      "literal": "@TAPPaaS",
+      "notTracking": false
+    },
+    "management": {
+      "value": "managed",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "moduleSource": {
+      "value": "/home/tappaas/TAPPaaS/src/foundation/storage",
+      "defaulted": false,
+      "literal": "/home/tappaas/TAPPaaS/src/foundation/storage",
+      "notTracking": true
+    },
+    "pauseOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pausePriority": {
+      "value": "50",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "portSync": {
+      "value": "on",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "provides": {
+      "value": "[\"nfs\"]",
+      "defaulted": false,
+      "literal": "[\"nfs\"]",
+      "notTracking": false
+    },
+    "rebootOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "releaseDate": {
+      "value": "2026-10-05",
+      "defaulted": false,
+      "literal": "2026-10-05",
+      "notTracking": false
+    },
+    "source": {
+      "value": "official",
+      "defaulted": false,
+      "literal": "official",
+      "notTracking": false
+    },
+    "sshKeyOnly": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "stack": {
+      "value": "foundation",
+      "defaulted": false,
+      "literal": "foundation",
+      "notTracking": false
+    },
+    "status": {
+      "value": "Development",
+      "defaulted": false,
+      "literal": "Development",
+      "notTracking": false
+    },
+    "suspended": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "suspendedNoUpdate": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "updateTime": {
+      "value": "20261101-02:35:39",
+      "defaulted": false,
+      "literal": "20261101-02:35:39",
+      "notTracking": true
+    },
+    "version": {
+      "value": "0.1.0",
+      "defaulted": false,
+      "literal": "0.1.0",
+      "notTracking": false
+    },
+    "zone0": {
+      "value": "mgmt",
+      "defaulted": false,
+      "literal": "mgmt",
+      "notTracking": true
+    },
+    "zone1": {
+      "value": "mgmt",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    }
+  },
+  "origAvailable": true
+}

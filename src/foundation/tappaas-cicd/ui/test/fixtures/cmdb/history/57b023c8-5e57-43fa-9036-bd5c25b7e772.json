@@ -1,0 +1,46 @@
+{
+ "id": "57b023c8-5e57-43fa-9036-bd5c25b7e772",
+ "class": "node",
+ "name": "ap-loft",
+ "created": "2026-10-30T19:34:52.800Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "placeholder",
+   "value": true,
+   "source": "asset-manager",
+   "change": 745,
+   "from": "2026-10-30T19:34:52.800Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 566,
+   "type": "allocated-to",
+   "direction": "in",
+   "other": {
+    "id": "8e354df7-9c7f-4e42-8e2c-6cec49ae361b",
+    "class": "network-device",
+    "name": "ap-02"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 745,
+   "from": "2026-10-30T19:34:52.800Z",
+   "to": "2026-10-30T19:34:53.192Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 745,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset allocate",
+   "actor": "tappaas",
+   "time": "2026-10-30T19:34:52.800Z",
+   "drift": false
+  }
+ ]
+}

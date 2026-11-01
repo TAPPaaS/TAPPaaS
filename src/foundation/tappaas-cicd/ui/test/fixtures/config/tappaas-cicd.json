@@ -1,0 +1,67 @@
+{
+  "description": "The TAPPaaS mothership VM",
+  "version": "1.0.1",
+  "releaseDate": "2026-07-31",
+  "installTime": "20260731-22:21:34",
+  "updateTime": "20261101-09:24:24",
+  "status": "Production",
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd",
+  "environment": "mgmt",
+  "vmname": "tappaas-cicd",
+  "vmid": 130,
+  "vmtag": "TAPPaaS,Foundation",
+  "node": "tappaas1",
+  "backup": {
+    "filesystemPaths": [
+      "/home/tappaas/config",
+      "/home/tappaas/secrets",
+      "/home/tappaas/.loki-push",
+      "/etc/secrets",
+      "/var/lib/cmdb/dump"
+    ]
+  },
+  "zone0": "mgmt",
+  "dependsOn": [
+    "cluster:vm",
+    "cluster:ha",
+    "network:nat"
+  ],
+  "integratesWith": [
+    "backup:vm",
+    "backup:filesystem",
+    "logging:logs"
+  ],
+  "provides": [],
+  "dropUnits": [
+    "opnsense-controller.*",
+    "setup-caddy.*"
+  ],
+  "stack": "foundation",
+  "config": {
+    "cluster:ha": {
+      "HANode": "tappaas3",
+      "replicationSchedule": "*/15"
+    },
+    "cluster:vm": {
+      "cputype": "x86-64-v3",
+      "cores": 4,
+      "memory": 8192,
+      "diskSize": "64G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "network:nat": {
+      "natRules": [
+        {
+          "externalPort": 22,
+          "internalPort": 22,
+          "protocol": "TCP",
+          "description": "SSH"
+        }
+      ]
+    }
+  }
+}

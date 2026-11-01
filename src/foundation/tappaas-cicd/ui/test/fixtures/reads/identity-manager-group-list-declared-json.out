@@ -1,0 +1,54 @@
+[
+  {
+    "name": "authentik Agent-Users",
+    "origin": "Authentik built-in",
+    "declaredBy": {
+      "file": "identity.json",
+      "key": "bootstrap"
+    }
+  },
+  {
+    "name": "authentik Read-only",
+    "origin": "Authentik built-in",
+    "declaredBy": {
+      "file": "identity.json",
+      "key": "bootstrap"
+    }
+  },
+  {
+    "name": "forgejo-admins",
+    "origin": "module forgejo",
+    "module": "forgejo",
+    "declaredBy": {
+      "file": "forgejo.json",
+      "key": "identity"
+    }
+  },
+  {
+    "name": "jellyfin-admins",
+    "origin": "module jellyfin",
+    "module": "jellyfin",
+    "declaredBy": {
+      "file": "jellyfin.json",
+      "key": "identity"
+    }
+  },
+  {
+    "name": "logging-admins",
+    "origin": "module logging",
+    "module": "logging",
+    "declaredBy": {
+      "file": "logging.json",
+      "key": "identity"
+    }
+  },
+  {
+    "name": "nextcloud-admins",
+    "origin": "module nextcloud",
+    "module": "nextcloud",
+    "declaredBy": {
+      "file": "nextcloud.json",
+      "key": "identity"
+    }
+  }
+]

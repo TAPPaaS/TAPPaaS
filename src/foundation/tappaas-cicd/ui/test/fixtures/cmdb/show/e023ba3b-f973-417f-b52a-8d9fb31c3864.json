@@ -1,0 +1,179 @@
+{
+  "id": "e023ba3b-f973-417f-b52a-8d9fb31c3864",
+  "class": "disk",
+  "ancestors": [
+    "disk",
+    "resource",
+    "object"
+  ],
+  "name": "dsk-02",
+  "displayName": "nvme-Samsung_SSD_990_PRO_4TB_S7DPNU0YA10709Z",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-31T09:50:50.296Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.621Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.173Z",
+    "asset-manager": "2026-11-01T08:52:20.621Z"
+  },
+  "at": null,
+  "attributes": {
+    "bay": {
+      "value": "nvme-Samsung_SSD_990_PRO_4TB_S7DPNU0YA10709Z",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "bus": {
+      "value": "nvme",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T09:52:08.978Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "dsk-02 (nvme-Samsung_SSD_990_PRO_4TB_S7DPNU0YA10709Z): health PASSED",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T09:52:08.978Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T09:52:08.978Z"
+    },
+    "displayName": {
+      "value": "nvme-Samsung_SSD_990_PRO_4TB_S7DPNU0YA10709Z",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "faulty": {
+      "value": false,
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "health": {
+      "value": "PASSED",
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "holds": {
+      "value": "nothing",
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "kind": {
+      "value": "nvme",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "model": {
+      "value": "Samsung SSD 990 PRO 4TB",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "partitions": {
+      "value": [
+        {
+          "pool": "tanka1",
+          "size": 4000776716288,
+          "holds": "zfs",
+          "device": "/dev/nvme1n1p1"
+        },
+        {
+          "size": 8388608,
+          "holds": "zfs",
+          "device": "/dev/nvme1n1p9"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "serial": {
+      "value": "S7DPNU0YA10709Z",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "size": {
+      "value": 4000787030016,
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "smart": {
+      "value": {
+        "mediaErrors": 0,
+        "powerOnHours": 2545,
+        "criticalWarning": 0
+      },
+      "source": "site-manager",
+      "since": "2026-11-01T08:27:46.806Z"
+    },
+    "stage": {
+      "value": "placed",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "temperature": {
+      "value": 44,
+      "source": "site-manager",
+      "since": "2026-11-01T08:32:03.130Z"
+    },
+    "wearout": {
+      "value": 99,
+      "source": "site-manager",
+      "since": "2026-10-31T09:52:00.815Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 626,
+      "type": "built-on",
+      "direction": "in",
+      "other": {
+        "id": "b635bc37-3033-49ee-9338-f61672b39a5c",
+        "class": "storage-pool",
+        "name": "tanka1"
+      },
+      "attributes": {
+        "redundancyGroup": "tappaas1:tanka1:mirror-0"
+      },
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    {
+      "id": 613,
+      "type": "part-of",
+      "direction": "out",
+      "other": {
+        "id": "f3a464df-94c5-42ce-9a3c-68d0cf2f0302",
+        "class": "server",
+        "name": "srv-01"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T09:50:50.296Z"
+    }
+  ]
+}

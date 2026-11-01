@@ -1,0 +1,403 @@
+{
+ "id": "0a7d1804-da8c-415e-879c-b077276ae2cd",
+ "class": "storage-pool",
+ "name": "tankc1",
+ "created": "2026-10-30T08:48:29.865Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "used",
+   "value": 471607660544,
+   "source": "storage-manager",
+   "change": 8913,
+   "from": "2026-11-01T02:45:44.426Z",
+   "to": "2026-11-01T02:47:20.165Z"
+  },
+  {
+   "name": "used",
+   "value": 471607238656,
+   "source": "site-manager",
+   "change": 8915,
+   "from": "2026-11-01T02:47:20.165Z",
+   "to": "2026-11-01T02:50:57.694Z"
+  },
+  {
+   "name": "used",
+   "value": 470700179456,
+   "source": "storage-manager",
+   "change": 8943,
+   "from": "2026-11-01T02:50:57.694Z",
+   "to": "2026-11-01T02:52:31.389Z"
+  },
+  {
+   "name": "used",
+   "value": 470205968384,
+   "source": "site-manager",
+   "change": 8945,
+   "from": "2026-11-01T02:52:31.389Z",
+   "to": "2026-11-01T02:55:47.317Z"
+  },
+  {
+   "name": "used",
+   "value": 469340782592,
+   "source": "storage-manager",
+   "change": 8973,
+   "from": "2026-11-01T02:55:47.317Z",
+   "to": "2026-11-01T02:57:20.634Z"
+  },
+  {
+   "name": "used",
+   "value": 468968099840,
+   "source": "site-manager",
+   "change": 8975,
+   "from": "2026-11-01T02:57:20.634Z",
+   "to": "2026-11-01T03:00:47.101Z"
+  },
+  {
+   "name": "used",
+   "value": 468383105024,
+   "source": "storage-manager",
+   "change": 9003,
+   "from": "2026-11-01T03:00:47.101Z",
+   "to": "2026-11-01T03:02:23.714Z"
+  },
+  {
+   "name": "used",
+   "value": 468265398272,
+   "source": "site-manager",
+   "change": 9005,
+   "from": "2026-11-01T03:02:23.714Z",
+   "to": "2026-11-01T03:05:47.891Z"
+  },
+  {
+   "name": "used",
+   "value": 468044214272,
+   "source": "storage-manager",
+   "change": 9033,
+   "from": "2026-11-01T03:05:47.891Z",
+   "to": "2026-11-01T03:07:20.685Z"
+  },
+  {
+   "name": "used",
+   "value": 467933114368,
+   "source": "site-manager",
+   "change": 9035,
+   "from": "2026-11-01T03:07:20.685Z",
+   "to": "2026-11-01T03:11:13.581Z"
+  },
+  {
+   "name": "used",
+   "value": 467912957952,
+   "source": "storage-manager",
+   "change": 9063,
+   "from": "2026-11-01T03:11:13.581Z",
+   "to": "2026-11-01T03:12:32.500Z"
+  },
+  {
+   "name": "used",
+   "value": 467912953856,
+   "source": "site-manager",
+   "change": 9066,
+   "from": "2026-11-01T03:12:32.500Z",
+   "to": "2026-11-01T03:15:44.919Z"
+  },
+  {
+   "name": "used",
+   "value": 467912380416,
+   "source": "storage-manager",
+   "change": 9094,
+   "from": "2026-11-01T03:15:44.919Z",
+   "to": "2026-11-01T03:17:20.372Z"
+  },
+  {
+   "name": "used",
+   "value": 467912536064,
+   "source": "site-manager",
+   "change": 9096,
+   "from": "2026-11-01T03:17:20.372Z",
+   "to": "2026-11-01T03:20:51.261Z"
+  },
+  {
+   "name": "used",
+   "value": 467912687616,
+   "source": "storage-manager",
+   "change": 9124,
+   "from": "2026-11-01T03:20:51.261Z",
+   "to": "2026-11-01T03:22:24.646Z"
+  },
+  {
+   "name": "used",
+   "value": 467912814592,
+   "source": "site-manager",
+   "change": 9126,
+   "from": "2026-11-01T03:22:24.646Z",
+   "to": "2026-11-01T03:25:46.768Z"
+  },
+  {
+   "name": "used",
+   "value": 467912826880,
+   "source": "storage-manager",
+   "change": 9154,
+   "from": "2026-11-01T03:25:46.768Z",
+   "to": "2026-11-01T07:30:59.439Z"
+  },
+  {
+   "name": "used",
+   "value": 467912781824,
+   "source": "storage-manager",
+   "change": 10631,
+   "from": "2026-11-01T07:30:59.439Z",
+   "to": "2026-11-01T08:25:46.746Z"
+  },
+  {
+   "name": "used",
+   "value": 467912810496,
+   "source": "storage-manager",
+   "change": 11045,
+   "from": "2026-11-01T08:25:46.746Z",
+   "to": "2026-11-01T08:40:50.764Z"
+  },
+  {
+   "name": "used",
+   "value": 467912818688,
+   "source": "storage-manager",
+   "change": 11215,
+   "from": "2026-11-01T08:40:50.764Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 337,
+   "type": "runs-on",
+   "direction": "out",
+   "other": {
+    "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+    "class": "machine",
+    "name": "tappaas3"
+   },
+   "attributes": {},
+   "source": "storage-manager",
+   "change": 7,
+   "from": "2026-10-30T08:48:29.865Z",
+   "to": null
+  },
+  {
+   "id": 630,
+   "type": "built-on",
+   "direction": "out",
+   "other": {
+    "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+    "class": "disk",
+    "name": "dsk-09"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 8913,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T02:45:44.426Z",
+   "drift": false
+  },
+  {
+   "id": 8915,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T02:47:20.165Z",
+   "drift": false
+  },
+  {
+   "id": 8943,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T02:50:57.694Z",
+   "drift": false
+  },
+  {
+   "id": 8945,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T02:52:31.389Z",
+   "drift": false
+  },
+  {
+   "id": 8973,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T02:55:47.317Z",
+   "drift": false
+  },
+  {
+   "id": 8975,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T02:57:20.634Z",
+   "drift": false
+  },
+  {
+   "id": 9003,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T03:00:47.101Z",
+   "drift": false
+  },
+  {
+   "id": 9005,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T03:02:23.714Z",
+   "drift": false
+  },
+  {
+   "id": 9033,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T03:05:47.891Z",
+   "drift": false
+  },
+  {
+   "id": 9035,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T03:07:20.685Z",
+   "drift": false
+  },
+  {
+   "id": 9063,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T03:11:13.581Z",
+   "drift": false
+  },
+  {
+   "id": 9066,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T03:12:32.500Z",
+   "drift": false
+  },
+  {
+   "id": 9094,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T03:15:44.919Z",
+   "drift": false
+  },
+  {
+   "id": 9096,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T03:17:20.372Z",
+   "drift": false
+  },
+  {
+   "id": 9124,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T03:20:51.261Z",
+   "drift": false
+  },
+  {
+   "id": 9126,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T03:22:24.646Z",
+   "drift": false
+  },
+  {
+   "id": 9154,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T03:25:46.768Z",
+   "drift": false
+  },
+  {
+   "id": 10631,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:30:59.439Z",
+   "drift": false
+  },
+  {
+   "id": 11045,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:25:46.746Z",
+   "drift": false
+  },
+  {
+   "id": 11215,
+   "kind": "observation",
+   "source": "storage-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:40:50.764Z",
+   "drift": false
+  }
+ ]
+}

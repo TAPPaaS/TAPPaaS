@@ -1,0 +1,56 @@
+{
+ "id": "3c312a7d-e278-4aa2-b184-f8922f7d5d1c",
+ "class": "other-device",
+ "name": "adr041-a",
+ "created": "2026-10-30T09:47:09.050Z",
+ "ended": "2026-10-30T09:49:36.428Z",
+ "attributes": [
+  {
+   "name": "stage",
+   "value": "disposed",
+   "source": "adr041-test",
+   "change": 166,
+   "from": "2026-10-30T09:49:36.428Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 487,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "efda4d12-a839-4c2a-abf2-7e6d6522ee89",
+    "class": "port",
+    "name": "p1"
+   },
+   "attributes": {},
+   "source": "adr041-test",
+   "change": 156,
+   "from": "2026-10-30T09:47:09.050Z",
+   "to": "2026-10-30T09:49:36.428Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 156,
+   "kind": "observation",
+   "source": "adr041-test",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T09:47:09.050Z",
+   "drift": false
+  },
+  {
+   "id": 166,
+   "kind": "observation",
+   "source": "adr041-test",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T09:49:36.428Z",
+   "drift": false
+  }
+ ]
+}

@@ -1,0 +1,395 @@
+{
+ "id": "740ea0f1-a609-4d01-9199-2f70312b0028",
+ "class": "passive-device",
+ "name": "patchpanel1",
+ "created": "2026-10-30T08:49:10.799Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "deviceType",
+   "value": "patch-panel",
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "name": "faulty",
+   "value": false,
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "operational",
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1355,
+   "from": "2026-10-31T07:25:02.913Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 373,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "12b6156e-82e7-48f6-b72d-7ece13eba7ac",
+    "class": "port",
+    "name": "4"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 374,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "30565e27-2fb5-4e3c-9ad7-fef07d1a4a05",
+    "class": "port",
+    "name": "5"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 375,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "a8a1b8a6-757f-4102-8883-318cc837e014",
+    "class": "port",
+    "name": "6"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 376,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "5a2c694d-c8bb-40b8-9878-e07154cf4db7",
+    "class": "port",
+    "name": "7"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 377,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "69058e60-f868-404c-aed5-3259d7de9aba",
+    "class": "port",
+    "name": "8"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 378,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "2767c08b-0ed8-4350-b66d-24a05199af85",
+    "class": "port",
+    "name": "9"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 379,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "098e7bd4-3e37-4534-85a4-f88836fbe79c",
+    "class": "port",
+    "name": "10"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 386,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "c5696f8e-259c-464f-b5b7-62e47cb92233",
+    "class": "port",
+    "name": "17"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 387,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "db084c01-2a08-4320-b15b-23f79ce57639",
+    "class": "port",
+    "name": "18"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 384,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "74bb57c6-dad4-41df-b630-b6acde0ebd0b",
+    "class": "port",
+    "name": "15"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 385,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "066ec8ea-c728-468a-93cc-51021fd0ffa8",
+    "class": "port",
+    "name": "16"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 388,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "466b633f-5e1b-4f39-ab5c-5ad1645a6a09",
+    "class": "port",
+    "name": "19"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 381,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "f5381215-dbca-4a45-b1c8-e7b5a91099df",
+    "class": "port",
+    "name": "12"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 380,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "5c66c343-eeb2-4c0b-9e53-8f30cae9dc73",
+    "class": "port",
+    "name": "11"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 382,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "3fb4420a-387d-4964-8c81-457384085f41",
+    "class": "port",
+    "name": "13"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 389,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "03c55115-d5da-4753-8254-175744ba7359",
+    "class": "port",
+    "name": "20"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 390,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "de687b20-3257-4ef0-b742-5fedf2b59cd2",
+    "class": "port",
+    "name": "21"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 391,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "8a8803d4-aff9-4a6a-9686-c92c074db45c",
+    "class": "port",
+    "name": "22"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 443,
+   "type": "placed-in",
+   "direction": "out",
+   "other": {
+    "id": "73a0f756-f569-4eaa-8508-bec8ac7ac791",
+    "class": "rack",
+    "name": "rack1"
+   },
+   "attributes": {
+    "u": 20,
+    "face": "front",
+    "slot": 0,
+    "width": "full",
+    "height": 1
+   },
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "id": 456,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "47441f14-1d50-4cf9-89e2-3610fe921631",
+    "class": "node",
+    "name": "patchpanel1"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 14,
+   "from": "2026-10-30T08:49:10.981Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 10,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:49:10.799Z",
+   "drift": false
+  },
+  {
+   "id": 14,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:49:10.981Z",
+   "drift": false
+  },
+  {
+   "id": 1355,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:25:02.913Z",
+   "drift": false
+  }
+ ]
+}

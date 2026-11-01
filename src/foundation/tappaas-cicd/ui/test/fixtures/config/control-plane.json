@@ -1,0 +1,330 @@
+{
+  "version": 1,
+  "generated": "2026-11-01T08:23:18Z",
+  "components": [
+    {
+      "name": "module-manager",
+      "kind": "manager",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/module-manager",
+      "language": "typescript",
+      "package": "module-manager",
+      "manifest": "help-json",
+      "aliases": [],
+      "plugsInto": [],
+      "cmdbSource": true,
+      "instances": []
+    },
+    {
+      "name": "site-manager",
+      "kind": "manager",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/site-manager",
+      "language": "typescript",
+      "package": "site-manager",
+      "manifest": "help-json",
+      "aliases": [],
+      "plugsInto": [],
+      "cmdbSource": true,
+      "instances": []
+    },
+    {
+      "name": "network-manager",
+      "kind": "manager",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/network-manager",
+      "language": "typescript",
+      "package": "network-manager",
+      "manifest": "help-json",
+      "aliases": [],
+      "plugsInto": [],
+      "cmdbSource": true,
+      "instances": []
+    },
+    {
+      "name": "environment-manager",
+      "kind": "manager",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/environment-manager",
+      "language": "typescript",
+      "package": "environment-manager",
+      "manifest": "help-json",
+      "aliases": [],
+      "plugsInto": [],
+      "cmdbSource": true,
+      "instances": []
+    },
+    {
+      "name": "identity-manager",
+      "kind": "manager",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/identity-manager",
+      "language": "typescript",
+      "package": "identity-manager",
+      "manifest": "help-json",
+      "aliases": [],
+      "plugsInto": [],
+      "cmdbSource": true,
+      "instances": []
+    },
+    {
+      "name": "backup-manager",
+      "kind": "manager",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/backup-manager",
+      "language": "typescript",
+      "package": "backup-manager",
+      "manifest": "help-json",
+      "aliases": [],
+      "plugsInto": [],
+      "cmdbSource": true,
+      "instances": []
+    },
+    {
+      "name": "health-manager",
+      "kind": "manager",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/health-manager",
+      "language": "typescript",
+      "package": "health-manager",
+      "manifest": "help-json",
+      "aliases": [],
+      "plugsInto": [],
+      "cmdbSource": true,
+      "instances": []
+    },
+    {
+      "name": "storage-manager",
+      "kind": "manager",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/storage-manager",
+      "language": "typescript",
+      "package": "storage-manager",
+      "manifest": "help-json",
+      "aliases": [],
+      "plugsInto": [],
+      "cmdbSource": true,
+      "instances": []
+    },
+    {
+      "name": "asset-manager",
+      "kind": "manager",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/asset-manager",
+      "language": "typescript",
+      "package": "asset-manager",
+      "manifest": "help-json",
+      "aliases": [
+        "position-manager",
+        "rack-manager"
+      ],
+      "plugsInto": [],
+      "cmdbSource": true,
+      "instances": []
+    },
+    {
+      "name": "ap-manager",
+      "kind": "manager",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/ap-manager",
+      "language": "bash",
+      "package": null,
+      "manifest": null,
+      "aliases": [
+        "ap-controller"
+      ],
+      "plugsInto": [],
+      "cmdbSource": true,
+      "instances": []
+    },
+    {
+      "name": "switch-manager",
+      "kind": "manager",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/switch-manager",
+      "language": "bash",
+      "package": null,
+      "manifest": null,
+      "aliases": [
+        "switch-controller"
+      ],
+      "plugsInto": [],
+      "cmdbSource": true,
+      "instances": []
+    },
+    {
+      "name": "pbs-controller",
+      "kind": "controller",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/controller/pbs-controller",
+      "language": "bash",
+      "package": null,
+      "manifest": null,
+      "aliases": [
+        "backup-controller"
+      ],
+      "plugsInto": [],
+      "cmdbSource": false,
+      "instances": []
+    },
+    {
+      "name": "authentik-controller",
+      "kind": "controller",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/controller/authentik-controller",
+      "language": "python",
+      "package": "authentik-controller",
+      "manifest": null,
+      "aliases": [
+        "authentik-manager",
+        "identity-controller"
+      ],
+      "plugsInto": [],
+      "cmdbSource": false,
+      "instances": []
+    },
+    {
+      "name": "node-provisioner",
+      "kind": "controller",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/controller/node-provisioner",
+      "language": "python",
+      "package": "node-provisioner",
+      "manifest": null,
+      "aliases": [],
+      "plugsInto": [],
+      "cmdbSource": false,
+      "instances": []
+    },
+    {
+      "name": "opnsense-controller",
+      "kind": "controller",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/controller/opnsense-controller",
+      "language": "python",
+      "package": "opnsense-controller",
+      "manifest": null,
+      "aliases": [],
+      "plugsInto": [],
+      "cmdbSource": false,
+      "instances": []
+    },
+    {
+      "name": "proxmox-controller",
+      "kind": "controller",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/controller/proxmox-controller",
+      "language": "bash",
+      "package": null,
+      "manifest": null,
+      "aliases": [],
+      "plugsInto": [],
+      "cmdbSource": false,
+      "instances": []
+    },
+    {
+      "name": "cmdb-controller",
+      "kind": "controller",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/controller/cmdb-controller",
+      "language": "typescript",
+      "package": "cmdb-controller",
+      "manifest": null,
+      "aliases": [],
+      "plugsInto": [],
+      "cmdbSource": false,
+      "instances": []
+    },
+    {
+      "name": "update-tappaas",
+      "kind": "service",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/update-tappaas",
+      "language": "python",
+      "package": "update-tappaas",
+      "manifest": null,
+      "aliases": [],
+      "plugsInto": [],
+      "cmdbSource": false,
+      "instances": []
+    },
+    {
+      "name": "console",
+      "kind": "service",
+      "module": "tappaas-cicd",
+      "repository": "TAPPaaS",
+      "source": "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/ui",
+      "language": "typescript",
+      "package": "console",
+      "manifest": null,
+      "aliases": [],
+      "plugsInto": [],
+      "cmdbSource": false,
+      "instances": []
+    },
+    {
+      "name": "mikrotik-controller",
+      "kind": "controller",
+      "module": "mikrotik",
+      "repository": "Community",
+      "verified": false,
+      "source": "/home/tappaas/Community/src/larsrossen/network/mikrotik/controller/mikrotik-controller",
+      "language": "bash",
+      "package": null,
+      "manifest": null,
+      "aliases": [],
+      "plugsInto": [
+        "switch-manager"
+      ],
+      "contracts": [
+        "switch/1"
+      ],
+      "version": "0.1.0",
+      "instances": [
+        "mikrotik"
+      ]
+    },
+    {
+      "name": "unifi-controller",
+      "kind": "controller",
+      "module": "unifi-os",
+      "repository": "Community",
+      "verified": false,
+      "source": "/home/tappaas/Community/src/larsrossen/network/unifi-os/controller/unifi-controller",
+      "language": "bash",
+      "package": null,
+      "manifest": null,
+      "aliases": [],
+      "plugsInto": [
+        "switch-manager",
+        "ap-manager"
+      ],
+      "contracts": [
+        "switch/1",
+        "ap/1"
+      ],
+      "version": "0.2.0",
+      "instances": [
+        "unifi-os"
+      ]
+    }
+  ]
+}

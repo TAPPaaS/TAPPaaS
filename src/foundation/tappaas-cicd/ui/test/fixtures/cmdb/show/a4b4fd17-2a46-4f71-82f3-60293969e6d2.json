@@ -1,0 +1,79 @@
+{
+  "id": "a4b4fd17-2a46-4f71-82f3-60293969e6d2",
+  "class": "network-device",
+  "ancestors": [
+    "network-device",
+    "asset",
+    "resource",
+    "object"
+  ],
+  "name": "testcore",
+  "displayName": null,
+  "physical": true,
+  "recorded": false,
+  "created": "2026-10-31T20:19:20.051Z",
+  "ended": "2026-11-01T08:26:58.915Z",
+  "lastSeen": "2026-11-01T08:26:58.915Z",
+  "seen": {
+    "operator": "2026-11-01T08:26:58.915Z",
+    "ap-manager": "2026-10-31T20:19:33.714Z",
+    "switch-manager": "2026-10-31T20:19:33.279Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T20:20:12.587Z",
+          "reason": "follows",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": true,
+          "message": "follows device testcore",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T20:20:12.587Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T20:20:12.587Z"
+    },
+    "deviceType": {
+      "value": "switch",
+      "source": "switch-manager",
+      "since": "2026-10-31T20:19:20.051Z"
+    },
+    "ports": {
+      "value": 3,
+      "source": "switch-manager",
+      "since": "2026-10-31T20:19:33.279Z"
+    },
+    "stage": {
+      "value": "disposed",
+      "source": "operator",
+      "since": "2026-11-01T08:26:58.915Z"
+    },
+    "vendor": {
+      "value": "generic",
+      "source": "switch-manager",
+      "since": "2026-10-31T20:19:20.051Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

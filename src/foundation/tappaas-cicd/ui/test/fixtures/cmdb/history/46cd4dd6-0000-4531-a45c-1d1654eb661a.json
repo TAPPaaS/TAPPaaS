@@ -1,0 +1,46 @@
+{
+ "id": "46cd4dd6-0000-4531-a45c-1d1654eb661a",
+ "class": "room",
+ "name": "diningroom",
+ "created": "2026-10-31T16:46:48.023Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "displayName",
+   "value": "DiningRoom",
+   "source": "asset-manager",
+   "change": 5126,
+   "from": "2026-10-31T16:46:48.023Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 667,
+   "type": "at",
+   "direction": "out",
+   "other": {
+    "id": "eb8b5e14-af28-46e3-8bf3-fb8de068683b",
+    "class": "location",
+    "name": "knudanchersvej95"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 5126,
+   "from": "2026-10-31T16:46:48.023Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 5126,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": "20261031164647-70caa9",
+   "verb": "room add",
+   "actor": "lars",
+   "time": "2026-10-31T16:46:48.023Z",
+   "drift": false
+  }
+ ]
+}

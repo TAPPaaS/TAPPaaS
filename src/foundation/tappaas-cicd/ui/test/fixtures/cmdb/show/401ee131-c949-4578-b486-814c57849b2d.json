@@ -1,0 +1,136 @@
+{
+  "id": "401ee131-c949-4578-b486-814c57849b2d",
+  "class": "vm",
+  "ancestors": [
+    "vm",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "test-hadrift",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-31T20:07:21.348Z",
+  "ended": "2026-11-01T08:26:58.915Z",
+  "lastSeen": "2026-11-01T08:26:58.915Z",
+  "seen": {
+    "operator": "2026-11-01T08:26:58.915Z",
+    "site-manager": "2026-10-31T20:07:21.348Z",
+    "proxmox-controller": "2026-10-31T20:10:01.035Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T20:10:01.133Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-11-01T00:04:45.410Z",
+          "reason": "sweep-missing",
+          "source": "health-manager",
+          "status": "critical",
+          "derived": false,
+          "message": "vm/test-hadrift: desired without actual",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "capacity",
+          "since": "2026-10-31T20:10:01.133Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T20:10:01.133Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-11-01T00:04:45.410Z"
+    },
+    "cores": {
+      "value": 2,
+      "source": "site-manager",
+      "since": "2026-10-31T20:07:21.348Z"
+    },
+    "description": {
+      "value": "Test fixture: cluster:ha drift reconciler (issue #193). Disposable NixOS clone used by ../test.sh --deep; safe to delete. zone0=srv-home (VLAN 210) so it stays reachable on either node — the only test VLAN this switch trunks cross-node.",
+      "source": "site-manager",
+      "since": "2026-10-31T20:07:21.348Z"
+    },
+    "desired": {
+      "value": {
+        "file": "test-hadrift.json"
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T20:07:21.348Z"
+    },
+    "disks": {
+      "value": [
+        {
+          "size": "1M",
+          "storage": "tanka1"
+        },
+        {
+          "size": "24G",
+          "storage": "tanka1"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T20:07:21.348Z"
+    },
+    "memory": {
+      "value": 2048,
+      "source": "site-manager",
+      "since": "2026-10-31T20:07:21.348Z"
+    },
+    "release": {
+      "value": {
+        "module": "test-hadrift",
+        "version": "0.1.0"
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T20:07:21.348Z"
+    },
+    "stage": {
+      "value": "retired",
+      "source": "operator",
+      "since": "2026-11-01T08:26:58.915Z"
+    },
+    "state": {
+      "value": "stopped",
+      "source": "site-manager",
+      "since": "2026-10-31T20:07:21.348Z"
+    },
+    "vmid": {
+      "value": 921,
+      "source": "site-manager",
+      "since": "2026-10-31T20:07:21.348Z"
+    },
+    "zone": {
+      "value": "rossen",
+      "source": "site-manager",
+      "since": "2026-10-31T20:07:21.348Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

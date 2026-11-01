@@ -1,0 +1,1 @@
+{"directory":"/var/lib/tappaas-pxe","staged":true,"current":true,"source":"/home/tappaas/pve-tappaas-netboot.iso","sourcePresent":true,"stickImage":{"path":"/var/lib/tappaas-pxe/tappaas-usb.iso","present":true,"size":1763180544,"modified":"2026-10-31T16:34:37+0100"},"xorriso":true,"ready":true,"problems":[],"prepare":null}

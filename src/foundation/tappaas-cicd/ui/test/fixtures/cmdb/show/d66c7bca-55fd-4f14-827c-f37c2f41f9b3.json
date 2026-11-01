@@ -1,0 +1,122 @@
+{
+  "id": "d66c7bca-55fd-4f14-827c-f37c2f41f9b3",
+  "class": "vm",
+  "ancestors": [
+    "vm",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "tvbase-zcnode",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-31T21:27:21.211Z",
+  "ended": "2026-11-01T08:26:58.915Z",
+  "lastSeen": "2026-11-01T08:26:58.915Z",
+  "seen": {
+    "operator": "2026-11-01T08:26:58.915Z",
+    "site-manager": "2026-10-31T21:27:21.211Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T21:30:01.924Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-11-01T00:04:45.410Z",
+          "reason": "sweep-missing",
+          "source": "health-manager",
+          "status": "critical",
+          "derived": false,
+          "message": "vm/tvbase-zcnode: desired without actual",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:25:02.585Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-11-01T00:04:45.410Z"
+    },
+    "cores": {
+      "value": 1,
+      "source": "site-manager",
+      "since": "2026-10-31T21:27:21.211Z"
+    },
+    "description": {
+      "value": "ADR-005 variant test fixture: short-named Debian VM on mgmt (alias-safe under #300)",
+      "source": "site-manager",
+      "since": "2026-10-31T21:27:21.211Z"
+    },
+    "desired": {
+      "value": {
+        "file": "tvbase-zcnode.json"
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T21:27:21.211Z"
+    },
+    "disks": {
+      "value": [
+        {
+          "size": "4M",
+          "storage": "tanka1"
+        },
+        {
+          "size": "4G",
+          "storage": "tanka1"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T21:27:21.211Z"
+    },
+    "memory": {
+      "value": 1024,
+      "source": "site-manager",
+      "since": "2026-10-31T21:27:21.211Z"
+    },
+    "release": {
+      "value": {
+        "module": "fixtures",
+        "version": "0.5"
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T21:27:21.211Z"
+    },
+    "stage": {
+      "value": "retired",
+      "source": "operator",
+      "since": "2026-11-01T08:26:58.915Z"
+    },
+    "state": {
+      "value": "running",
+      "source": "site-manager",
+      "since": "2026-10-31T21:27:21.211Z"
+    },
+    "vmid": {
+      "value": 8950,
+      "source": "site-manager",
+      "since": "2026-10-31T21:27:21.211Z"
+    },
+    "zone": {
+      "value": "zcnode",
+      "source": "site-manager",
+      "since": "2026-10-31T21:27:21.211Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

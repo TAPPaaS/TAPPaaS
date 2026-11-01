@@ -1,0 +1,147 @@
+{
+ "id": "659dec24-6a59-43ab-a322-b9bd850dbcb2",
+ "class": "network-device",
+ "name": "testap",
+ "created": "2026-10-31T20:19:32.746Z",
+ "ended": "2026-11-01T08:26:58.915Z",
+ "attributes": [
+  {
+   "name": "deviceType",
+   "value": "access-point",
+   "source": "ap-manager",
+   "change": 6482,
+   "from": "2026-10-31T20:19:32.746Z",
+   "to": null
+  },
+  {
+   "name": "vendor",
+   "value": "generic",
+   "source": "ap-manager",
+   "change": 6482,
+   "from": "2026-10-31T20:19:32.746Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T20:20:12.587Z",
+     "reason": "follows",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": true,
+     "message": "follows device testap",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:25:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T20:20:12.587Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:25:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 6494,
+   "from": "2026-10-31T20:20:12.587Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "disposed",
+   "source": "operator",
+   "change": 11047,
+   "from": "2026-11-01T08:26:58.915Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 688,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "2594e55e-d5a5-4204-8100-2a61dfff901d",
+    "class": "device",
+    "name": "testap"
+   },
+   "attributes": {},
+   "source": "ap-manager",
+   "change": 6482,
+   "from": "2026-10-31T20:19:32.746Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 686,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "ad69c8e2-0788-4bd8-93bb-83f0405f811b",
+    "class": "port",
+    "name": "uplink"
+   },
+   "attributes": {},
+   "source": "ap-manager",
+   "change": 6482,
+   "from": "2026-10-31T20:19:32.746Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 687,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "66019a2a-64b2-4c57-94cf-98d9c537b519",
+    "class": "port",
+    "name": "wifi"
+   },
+   "attributes": {},
+   "source": "ap-manager",
+   "change": 6482,
+   "from": "2026-10-31T20:19:32.746Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 6482,
+   "kind": "change",
+   "source": "ap-manager",
+   "job": null,
+   "verb": "ap-manager add",
+   "actor": "tappaas",
+   "time": "2026-10-31T20:19:32.746Z",
+   "drift": false
+  },
+  {
+   "id": 6494,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T20:20:12.587Z",
+   "drift": false
+  },
+  {
+   "id": 11047,
+   "kind": "change",
+   "source": "operator",
+   "job": null,
+   "verb": "retire deep-test leftovers",
+   "actor": null,
+   "time": "2026-11-01T08:26:58.915Z",
+   "drift": false
+  }
+ ]
+}

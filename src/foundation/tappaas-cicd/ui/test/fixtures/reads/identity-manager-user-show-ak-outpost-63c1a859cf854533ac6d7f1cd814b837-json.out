@@ -1,0 +1,9 @@
+{
+  "name": "ak-outpost-63c1a859cf854533ac6d7f1cd814b837",
+  "origin": "Authentik built-in",
+  "declaredBy": {
+    "file": "identity.json",
+    "key": "bootstrap"
+  },
+  "editable": false
+}

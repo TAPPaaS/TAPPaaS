@@ -1,0 +1,361 @@
+{
+ "id": "697258f6-ec9e-448a-a64d-1545d8a6a2eb",
+ "class": "vm",
+ "name": "templates",
+ "created": "2026-10-30T08:47:45.445Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "description",
+   "value": "The TAPPaaS VM Template (NixOS and Debian)",
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "name": "desired",
+   "value": {
+    "file": "templates.json"
+   },
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "name": "release",
+   "value": {
+    "module": "templates",
+    "version": "1.1.0"
+   },
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "name": "stack",
+   "value": "foundation",
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "created",
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "name": "maturity",
+   "value": "Production",
+   "source": "module-manager",
+   "change": 1331,
+   "from": "2026-10-31T07:24:26.043Z",
+   "to": null
+  },
+  {
+   "name": "state",
+   "value": "stopped",
+   "source": "module-manager",
+   "change": 1331,
+   "from": "2026-10-31T07:24:26.043Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T08:21:51.484Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1355,
+   "from": "2026-10-31T07:25:02.913Z",
+   "to": "2026-10-31T08:25:03.232Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T08:23:56.058Z",
+    "source": "sweep",
+    "desired": {
+     "file": "templates.json"
+    },
+    "attributes": {
+     "maturity": {
+      "now": "Production",
+      "was": null
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 1730,
+   "from": "2026-10-31T08:23:56.058Z",
+   "to": "2026-10-31T19:23:30.744Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T08:25:03.232Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "vm/templates: drift: appeared maturity",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:52:08.978Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1733,
+   "from": "2026-10-31T08:25:03.232Z",
+   "to": "2026-10-31T09:55:09.015Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T09:55:09.015Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T09:55:09.015Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 2343,
+   "from": "2026-10-31T09:55:09.015Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 38,
+   "type": "member-of",
+   "direction": "out",
+   "other": {
+    "id": "bb8a818c-90a8-47f1-a71d-f33c0f6d8b0f",
+    "class": "environment",
+    "name": "mgmt"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 120,
+   "type": "provides",
+   "direction": "out",
+   "other": {
+    "id": "b35b1a55-2887-453f-acb5-88c367f31d90",
+    "class": "service",
+    "name": "templates:nixos"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 121,
+   "type": "provides",
+   "direction": "out",
+   "other": {
+    "id": "9bfef413-6887-40aa-81bb-87d1668420a1",
+    "class": "service",
+    "name": "templates:windows"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 119,
+   "type": "provides",
+   "direction": "out",
+   "other": {
+    "id": "eca7f88d-aa5f-4a17-8b62-52393f4af4b2",
+    "class": "service",
+    "name": "templates:debian"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 76,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "9bfef413-6887-40aa-81bb-87d1668420a1",
+    "class": "service",
+    "name": "templates:windows"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 74,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "eca7f88d-aa5f-4a17-8b62-52393f4af4b2",
+    "class": "service",
+    "name": "templates:debian"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  },
+  {
+   "id": 75,
+   "type": "runs-on",
+   "direction": "in",
+   "other": {
+    "id": "b35b1a55-2887-453f-acb5-88c367f31d90",
+    "class": "service",
+    "name": "templates:nixos"
+   },
+   "attributes": {},
+   "source": "module-manager",
+   "change": 1,
+   "from": "2026-10-30T08:47:45.445Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 1,
+   "kind": "observation",
+   "source": "module-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:47:45.445Z",
+   "drift": false
+  },
+  {
+   "id": 1331,
+   "kind": "observation",
+   "source": "module-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:24:26.043Z",
+   "drift": false
+  },
+  {
+   "id": 1355,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:25:02.913Z",
+   "drift": false
+  },
+  {
+   "id": 1730,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-31T08:23:56.058Z",
+   "drift": true
+  },
+  {
+   "id": 1733,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T08:25:03.232Z",
+   "drift": false
+  },
+  {
+   "id": 2343,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:55:09.015Z",
+   "drift": false
+  },
+  {
+   "id": 6101,
+   "kind": "change",
+   "source": "module-manager",
+   "job": null,
+   "verb": "update templates",
+   "actor": "tappaas",
+   "time": "2026-10-31T19:23:30.744Z",
+   "drift": false
+  }
+ ]
+}

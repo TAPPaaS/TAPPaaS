@@ -7,10 +7,10 @@
     "wan": {
       "publicIp": "auto",
       "discovered": {
-        "ipv4": "80.248.138.190",
+        "ipv4": "203.0.113.190",
         "prefix": 24,
         "ipv6": [
-          "2a13:e740:292:978c::aba"
+          "2001:db8:2:978c::aba"
         ],
         "private": false,
         "observed": "2026-10-22T02:05:12+02:00"

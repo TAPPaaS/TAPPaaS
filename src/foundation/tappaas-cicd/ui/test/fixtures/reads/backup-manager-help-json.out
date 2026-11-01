@@ -1,0 +1,1928 @@
+{
+  "manifest": 1,
+  "name": "backup-manager",
+  "version": "0.1.0",
+  "tagline": "TAPPaaS backup-policy cascade manager",
+  "common": [
+    {
+      "flag": "--config-dir",
+      "takesValue": true,
+      "arg": "DIR",
+      "choices": null,
+      "repeatable": false,
+      "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+    },
+    {
+      "flag": "--json",
+      "takesValue": false,
+      "arg": null,
+      "choices": null,
+      "repeatable": false,
+      "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+    },
+    {
+      "flag": "--pbs",
+      "takesValue": true,
+      "arg": "HOST",
+      "choices": null,
+      "repeatable": false,
+      "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+    }
+  ],
+  "verbs": [
+    {
+      "verb": "validate",
+      "keys": [
+        [
+          "validate"
+        ]
+      ],
+      "usage": "validate",
+      "note": null,
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "list",
+      "keys": [
+        [
+          "list"
+        ]
+      ],
+      "usage": "list [--disabled-only]",
+      "note": null,
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--disabled-only",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "list: only modules with backup disabled."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "show",
+      "keys": [
+        [
+          "show"
+        ]
+      ],
+      "usage": "show <module>",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "resolve",
+      "keys": [
+        [
+          "resolve"
+        ]
+      ],
+      "usage": "resolve <module> [--environment ENV]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--environment",
+          "takesValue": true,
+          "arg": "ENV",
+          "choices": null,
+          "repeatable": false,
+          "description": "resolve: override the module's recorded .environment."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "modify",
+      "keys": [
+        [
+          "modify"
+        ]
+      ],
+      "usage": "modify <module> [--enabled true|false] [--retention SPEC] [--exclude a,b]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--enabled",
+          "takesValue": true,
+          "arg": "true|false",
+          "choices": [
+            "true",
+            "false"
+          ],
+          "repeatable": false,
+          "description": "modify: set module backup.enabled (true|false)."
+        },
+        {
+          "flag": "--retention",
+          "takesValue": true,
+          "arg": "SPEC",
+          "choices": null,
+          "repeatable": false,
+          "description": "modify: set module backup.retention (e.g. 90d, 1y)."
+        },
+        {
+          "flag": "--exclude",
+          "takesValue": true,
+          "arg": "a",
+          "choices": null,
+          "repeatable": false,
+          "description": "modify: set module backup.exclude (comma-separated)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "changes the module's backup policy in its config and the PBS job"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "add",
+      "keys": [
+        [
+          "add"
+        ]
+      ],
+      "usage": "add <module>",
+      "note": "(wire into the shared PBS job)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "wires the module's guest into the shared PBS job"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "backup",
+      "keys": [
+        [
+          "backup"
+        ]
+      ],
+      "usage": "backup <module>...",
+      "note": "(take each module's backup now, through its job — #759)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": true
+        }
+      ],
+      "options": [
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "takes each module's backup now, through its PBS job"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "delete",
+      "keys": [
+        [
+          "delete"
+        ]
+      ],
+      "usage": "delete <module>",
+      "note": "(un-wire from the shared PBS job)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "un-wires the module from the shared PBS job; its backups stay"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "purge",
+      "keys": [
+        [
+          "purge"
+        ]
+      ],
+      "usage": "purge <module|vmid> [--yes]",
+      "note": "(erase a removed guest's restore points + start GC — #789)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "module|vmid",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--yes",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "purge: do not ask; without it you type the VMID to confirm."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "deletes every backup of the module from PBS"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--yes",
+          "consequence": "purge: do not ask; without it you type the VMID to confirm."
+        }
+      ]
+    },
+    {
+      "verb": "reconcile",
+      "keys": [
+        [
+          "reconcile"
+        ]
+      ],
+      "usage": "reconcile [--apply]",
+      "note": null,
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--apply",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "reconcile: commit changes (default = preview)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "apply-flag",
+        "flag": "--apply"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "restore list",
+      "keys": [
+        [
+          "restore",
+          "list"
+        ]
+      ],
+      "usage": "restore list <module>",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "restore restore",
+      "keys": [
+        [
+          "restore",
+          "restore"
+        ]
+      ],
+      "usage": "restore restore <module> [--from M|VMID] [--node N] [--storage S] [--backup-id ID] [--target-vmid ID] [--yes]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--from",
+          "takesValue": true,
+          "arg": "M|VMID",
+          "choices": [
+            "M",
+            "VMID"
+          ],
+          "repeatable": false,
+          "description": "Restore ANOTHER guest's backup into this module's guest, replacing its disks and keeping its network identity (RESTORE.md §2)."
+        },
+        {
+          "flag": "--node",
+          "takesValue": true,
+          "arg": "N",
+          "choices": null,
+          "repeatable": false,
+          "description": "Restore onto this node (default: the module's node)."
+        },
+        {
+          "flag": "--storage",
+          "takesValue": true,
+          "arg": "S",
+          "choices": null,
+          "repeatable": false,
+          "description": "Target storage pool."
+        },
+        {
+          "flag": "--backup-id",
+          "takesValue": true,
+          "arg": "ID",
+          "choices": null,
+          "repeatable": false,
+          "description": "The snapshot to restore (default: the latest; see 'restore list')."
+        },
+        {
+          "flag": "--target-vmid",
+          "takesValue": true,
+          "arg": "ID",
+          "choices": null,
+          "repeatable": false,
+          "description": "Restore as a new VM id instead of over the module's own."
+        },
+        {
+          "flag": "--yes",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Overwrite the module's own guest without asking — for a script or an agent with no terminal."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "restores the module's guest from a PBS backup"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--yes",
+          "consequence": "Overwrite the module's own guest without asking — for a script or an agent with no terminal."
+        }
+      ]
+    },
+    {
+      "verb": "restore list-all",
+      "keys": [
+        [
+          "restore",
+          "list-all"
+        ]
+      ],
+      "usage": "restore list-all [--json]",
+      "note": "(everything stored; --json: each guest's last backup and last verify, per namespace and job)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "restore list-all: per guest and per target, the last backup (in its job's interval or late) and the last verify with its outcome."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "placement",
+      "keys": [
+        [
+          "placement"
+        ]
+      ],
+      "usage": "placement",
+      "note": "(where PBS lives for this site)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "placement reset",
+      "keys": [
+        [
+          "placement",
+          "reset"
+        ]
+      ],
+      "usage": "placement reset [--peer NAME] [--yes] [--no-update]",
+      "note": "(leave an external PBS for a local one — ADR-012 §2.3, #607)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--peer",
+          "takesValue": true,
+          "arg": "NAME",
+          "choices": null,
+          "repeatable": false,
+          "description": "placement reset: the pull-peer name the old PBS gets (default former-<its host>)."
+        },
+        {
+          "flag": "--yes",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "placement reset / finish-reset: do not ask for confirmation."
+        },
+        {
+          "flag": "--no-update",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "placement reset: stop after the config — then NOTHING is backed up until 'update-module.sh backup' runs."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "moves PBS back to a node of this site"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--yes",
+          "consequence": "placement reset / finish-reset: do not ask for confirmation."
+        }
+      ]
+    },
+    {
+      "verb": "placement use-external",
+      "keys": [
+        [
+          "placement",
+          "use-external"
+        ]
+      ],
+      "usage": "placement use-external <url> [--datastore D] [--namespace NS] [--fingerprint FP]",
+      "note": "(back up to a PBS this site already runs, provisioning nothing — #456)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "url",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--datastore",
+          "takesValue": true,
+          "arg": "D",
+          "choices": null,
+          "repeatable": false,
+          "description": "placement use-external: its datastore (default: pbsStorageName, tappaas_backup)."
+        },
+        {
+          "flag": "--namespace",
+          "takesValue": true,
+          "arg": "NS",
+          "choices": null,
+          "repeatable": false,
+          "description": "placement use-external: the namespace on it to push into."
+        },
+        {
+          "flag": "--fingerprint",
+          "takesValue": true,
+          "arg": "FP",
+          "choices": null,
+          "repeatable": false,
+          "description": "placement use-external: its TLS fingerprint, when its certificate is self-signed."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "points the site's backups at an external PBS"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "placement finish-reset",
+      "keys": [
+        [
+          "placement",
+          "finish-reset"
+        ]
+      ],
+      "usage": "placement finish-reset [--yes]",
+      "note": "(drop the old PBS's <name>_former storage entry, once its history is pulled and a restore worked)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--yes",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "placement finish-reset: do not ask for confirmation."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "finishes moving PBS back to this site"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--yes",
+          "consequence": "placement finish-reset: do not ask for confirmation."
+        }
+      ]
+    },
+    {
+      "verb": "key",
+      "keys": [
+        [
+          "key"
+        ]
+      ],
+      "usage": "key list | status [--json] | export --usb [--node N] [--format] [--device D --yes --password-stdin] | import --usb [--node N] | export|import --file DIR",
+      "note": "(the backup encryption keys, and the copy you keep off the machine)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "list",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "key status: machine-readable — the escrow's fingerprint, the last stick's, and whether they match."
+        },
+        {
+          "flag": "--usb",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "key export|import: a USB stick in a node — encrypted with a password, verified, ejected."
+        },
+        {
+          "flag": "--node",
+          "takesValue": true,
+          "arg": "N",
+          "choices": null,
+          "repeatable": false,
+          "description": "key export|import --usb: the node holding the stick (default tappaas1)."
+        },
+        {
+          "flag": "--format",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "key export --usb: erase the stick even if it is a key stick written before (default: rewrite only its keys, keep everything else on it)."
+        },
+        {
+          "flag": "--device",
+          "takesValue": true,
+          "arg": "D",
+          "choices": null,
+          "repeatable": false,
+          "description": "key export --usb: the stick, as the node lists it (/dev/sdb) — no insert-and-press-Enter, no choice; refused unless it is a USB disk not in use. The web console passes this."
+        },
+        {
+          "flag": "--yes",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "key export --usb --device: no typed confirmation — the caller showed the operator what is erased or kept."
+        },
+        {
+          "flag": "--password-stdin",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "key export --usb --device: the password is the first line of stdin (never on a command line), once, 12+ characters."
+        },
+        {
+          "flag": "--file",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "key export|import: a directory — the keys UNENCRYPTED; guard what holds them."
+        },
+        {
+          "flag": "--dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "key stamp: the keys a stick was just found to hold. The USB export and import call this."
+        },
+        {
+          "flag": "--label",
+          "takesValue": true,
+          "arg": "TEXT",
+          "choices": null,
+          "repeatable": false,
+          "description": "key stamp: what the stick is (node, vendor, serial)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "exports or imports the PBS encryption keys"
+      },
+      "destructive": false,
+      "destructiveWhen": [
+        "import"
+      ],
+      "readWhen": [
+        "list",
+        "status"
+      ],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--yes",
+          "consequence": "key export --usb --device: no typed confirmation — the caller showed the operator what is erased or kept."
+        }
+      ]
+    },
+    {
+      "verb": "coverage",
+      "keys": [
+        [
+          "coverage"
+        ]
+      ],
+      "usage": "coverage <module> [--json]",
+      "note": "(every backup job covering the module's VM — TAPPaaS's own and any other, #554)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "peers",
+      "keys": [
+        [
+          "peers"
+        ]
+      ],
+      "usage": "peers",
+      "note": "(the off-site PBS relationships this site has)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "report",
+      "keys": [
+        [
+          "report"
+        ]
+      ],
+      "usage": "report [--json] [--discover]",
+      "note": null,
+      "details": "Sends the backups to the CMDB (cmdb-controller) as one observation: the PBS datastore (size,\nused, retention; runs-on its machine) with a backs-up to every guest and machine of this site\nit holds restore points for, from what `restore list-all` reads (pbs-controller runs), and the\nbackup peers of config/ (direction, at their location, lastSeen). `restore list-all --json`\nsends the same as a side effect.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "print the report instead of sending it (with --discover, an array)"
+        },
+        {
+          "flag": "--discover",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "add every datastore with its GC state, each restore-point group's age and the sync jobs (ADR-040 D15)"
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "peer add",
+      "keys": [
+        [
+          "peer",
+          "add",
+          "pull"
+        ],
+        [
+          "peer",
+          "add",
+          "remote"
+        ],
+        [
+          "peer",
+          "add",
+          "receive"
+        ]
+      ],
+      "usage": "peer add pull|remote|receive <name> [--host H] [--store S] [--namespace NS] [--port P] [--remote-namespace NS] [--max-depth N] [--schedule SPEC] [--group-filter F] [--auth-id ID] [--propagate] [--location NAME | --country CC [--city C] [--building B]] [--contact EMAIL] [--tunnel serve|dial] [--tunnel-net CIDR] [--listen-port P] [--endpoint H:P] [--peer-key K] [--mtu N] [--force]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--host",
+          "takesValue": true,
+          "arg": "H",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add pull: the PBS we pull from."
+        },
+        {
+          "flag": "--store",
+          "takesValue": true,
+          "arg": "S",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add pull: its datastore name (default tappaas_backup)."
+        },
+        {
+          "flag": "--namespace",
+          "takesValue": true,
+          "arg": "NS",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: pull/receive — where the data lands here. remote — what they may read (default: the root namespace, our VM backups)."
+        },
+        {
+          "flag": "--port",
+          "takesValue": true,
+          "arg": "P",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add pull: its PBS API port (default 8007)."
+        },
+        {
+          "flag": "--remote-namespace",
+          "takesValue": true,
+          "arg": "NS",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add pull: the namespace to pull FROM (default its root)."
+        },
+        {
+          "flag": "--max-depth",
+          "takesValue": true,
+          "arg": "N",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add pull: how many namespace levels below it to sync (0 = that namespace only; default all)."
+        },
+        {
+          "flag": "--schedule",
+          "takesValue": true,
+          "arg": "SPEC",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add pull: when to pull (default 04:00)."
+        },
+        {
+          "flag": "--group-filter",
+          "takesValue": true,
+          "arg": "F",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add pull: replicate only part of the source."
+        },
+        {
+          "flag": "--auth-id",
+          "takesValue": true,
+          "arg": "ID",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add remote: the login they pull with (we create it)."
+        },
+        {
+          "flag": "--propagate",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add remote: let the read grant reach child namespaces. Off by default — on the root that would expose fs/ (config + secrets) and other peers' data."
+        },
+        {
+          "flag": "--location",
+          "takesValue": true,
+          "arg": "NAME",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: the location the peer's PBS is at, one of the site's (site-manager location list) — the evidence its copy is off-site."
+        },
+        {
+          "flag": "--country",
+          "takesValue": true,
+          "arg": "CC",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: instead of --location, the country it is in (ISO code): the site's location at that place is used, or a new one (kind remote) is added."
+        },
+        {
+          "flag": "--city",
+          "takesValue": true,
+          "arg": "C",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: with --country, its city — needed to tell it apart from a Site in the same country."
+        },
+        {
+          "flag": "--building",
+          "takesValue": true,
+          "arg": "B",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: with --country, its building or data centre (the location's address) — needed when it shares the Site's city."
+        },
+        {
+          "flag": "--contact",
+          "takesValue": true,
+          "arg": "EMAIL",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: the other site's operator — mailed by the pulse when their PBS stops answering (ADR-031)."
+        },
+        {
+          "flag": "--tunnel",
+          "takesValue": true,
+          "arg": "serve|dial",
+          "choices": [
+            "serve",
+            "dial"
+          ],
+          "repeatable": false,
+          "description": "peer add: carry this pull over its own WireGuard tunnel (#796, BUDDY.md). The pulled site serves (remote), the puller dials (pull)."
+        },
+        {
+          "flag": "--tunnel-net",
+          "takesValue": true,
+          "arg": "CIDR",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: the tunnel's /30. serve: default the next free /30 of zones.json buddy.ip (10.255.2.0/24). dial: the serving side's."
+        },
+        {
+          "flag": "--listen-port",
+          "takesValue": true,
+          "arg": "P",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add remote --tunnel serve: UDP port to listen on (default the next free from 51830)."
+        },
+        {
+          "flag": "--endpoint",
+          "takesValue": true,
+          "arg": "H:P",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add pull --tunnel dial: the serving side's public address (or its satellite's) and port."
+        },
+        {
+          "flag": "--peer-key",
+          "takesValue": true,
+          "arg": "K",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: the other side's WireGuard public key. serve may add it later: re-run with --force."
+        },
+        {
+          "flag": "--mtu",
+          "takesValue": true,
+          "arg": "N",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: tunnel MTU (e.g. 1340 through a satellite relay; default OPNsense's)."
+        },
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: overwrite an existing peer config (keeps its tunnel /30 and port unless given)."
+        },
+        {
+          "flag": "--config-only",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: write the config, skip onboarding (no PBS contact)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "adds an off-site PBS relationship (a buddy, a remote, a receiver)"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "peer add: overwrite an existing peer config (keeps its tunnel /30 and port unless given)."
+        }
+      ]
+    },
+    {
+      "verb": "peer modify",
+      "keys": [
+        [
+          "peer",
+          "modify",
+          "pull"
+        ],
+        [
+          "peer",
+          "modify",
+          "remote"
+        ]
+      ],
+      "usage": "peer modify pull|remote <name> --contact EMAIL",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--contact",
+          "takesValue": true,
+          "arg": "EMAIL",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer modify: the other site's operator, mailed by the pulse (ADR-031); '' clears it."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "changes a buddy's contact"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "pulse",
+      "keys": [
+        [
+          "pulse"
+        ]
+      ],
+      "usage": "pulse",
+      "note": "(ADR-031: what the backup node's pulse watches — buddies, uplink, firewall, mothership, PBS — and since when each is down)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "peer check",
+      "keys": [
+        [
+          "peer",
+          "check",
+          "pull"
+        ],
+        [
+          "peer",
+          "check",
+          "remote"
+        ]
+      ],
+      "usage": "peer check pull|remote <name>",
+      "note": "(the buddy tunnel's live state: instance, key, handshake, PBS reach)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "peer delete",
+      "keys": [
+        [
+          "peer",
+          "delete",
+          "pull"
+        ],
+        [
+          "peer",
+          "delete",
+          "remote"
+        ],
+        [
+          "peer",
+          "delete",
+          "receive"
+        ]
+      ],
+      "usage": "peer delete pull|remote|receive <name> [--purge] [--config-only]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--purge",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "peer delete: also delete the data in the peer's namespace."
+        },
+        {
+          "flag": "--config-only",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "peer delete: remove the config only (no PBS contact)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "removes the off-site relationship (--purge also its data)"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    }
+  ]
+}

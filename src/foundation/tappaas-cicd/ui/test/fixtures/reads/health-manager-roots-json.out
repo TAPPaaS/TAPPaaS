@@ -1,0 +1,202 @@
+[
+  {
+    "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+    "class": "machine",
+    "name": "tappaas3",
+    "type": "operational",
+    "impactedCount": 2,
+    "impacted": []
+  },
+  {
+    "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+    "class": "vm",
+    "name": "unifi-os",
+    "type": "security",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+    "class": "vm",
+    "name": "openwebui",
+    "type": "security",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+    "class": "app",
+    "name": "cluster",
+    "type": "security",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+    "class": "vm",
+    "name": "karakeep",
+    "type": "security",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+    "class": "vm",
+    "name": "nomad",
+    "type": "security",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+    "class": "vm",
+    "name": "euro-office",
+    "type": "security",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+    "class": "vm",
+    "name": "tappaas-nixos",
+    "type": "drift",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+    "class": "vm",
+    "name": "identity",
+    "type": "security",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+    "class": "app",
+    "name": "mikrotik",
+    "type": "security",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+    "class": "backup-peer",
+    "name": "rasmus",
+    "type": "operational",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+    "class": "vm",
+    "name": "litellm",
+    "type": "security",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+    "class": "lxc",
+    "name": "vllm-amd",
+    "type": "security",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+    "class": "vm",
+    "name": "deconz-test",
+    "type": "security",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+    "class": "disk",
+    "name": "dsk-08",
+    "type": "operational",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+    "class": "disk",
+    "name": "dsk-09",
+    "type": "operational",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+    "class": "device",
+    "name": "USW Pro XG 10 PoE",
+    "type": "drift",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+    "class": "device",
+    "name": "crs-a",
+    "type": "drift",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+    "class": "device",
+    "name": "crs-b",
+    "type": "drift",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+    "class": "app",
+    "name": "pve",
+    "type": "operational",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+    "class": "vm",
+    "name": "tappaas-cicd",
+    "type": "maintenance",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+    "class": "site",
+    "name": "rossen",
+    "type": "capacity",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+    "class": "site",
+    "name": "rossen",
+    "type": "operational",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+    "class": "site",
+    "name": "rossen",
+    "type": "maintenance",
+    "impactedCount": 0,
+    "impacted": []
+  },
+  {
+    "id": "247b3ada-42ab-4fbd-b57f-91eaf7939874",
+    "class": "ssid",
+    "name": "TAPPaaS-Test",
+    "type": "operational",
+    "impactedCount": 0,
+    "impacted": []
+  }
+]

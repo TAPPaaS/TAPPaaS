@@ -16,7 +16,7 @@ import { Block, GENERIC, Placed, Section, compose, declaredBlocks, moduleLayer, 
 import { gaugeLevel, valueText } from "../../web/src/sectionview";
 import { check, done } from "./check";
 import { FakeCmdb } from "./fake-cmdb";
-import { FIX, fakeSite } from "./fake-site";
+import { FIX, PIN, fakeSite } from "./fake-site";
 
 const REPO = join(FIX, "..", "..", "..", "..", "..", "..");
 const schema = JSON.parse(readFileSync(join(REPO, "src", "foundation", "schemas", CONSOLE_SCHEMA), "utf8")) as Record<string, unknown>;
@@ -149,7 +149,7 @@ const row = (name: string, kind: string, rest: Partial<ModuleRow> = {}): ModuleR
 const blank: Omit<KindInput, "module"> = { cmdb: null, cmdbError: null, live: null, liveError: null, modules: [], topology: null, storage: null, backup: null, runs: null, snapshots: null, snapshotsError: null, ssids: null };
 
 function kinds(): void {
-  const live = (JSON.parse(readFileSync(join(FIX, "guests.json"), "utf8")) as { nodes: NodeLive[] }).nodes;
+  const live = (JSON.parse(readFileSync(join(PIN, "guests.json"), "utf8")) as { nodes: NodeLive[] }).nodes;
   check(ids(kindSections({ ...blank, module: row("x", "application") })) === "", "an application has no kind sections");
   check(ids(kindSections({ ...blank, module: row("x", "vm") })) === "resources backups", "a vm: resources backups");
   check(ids(kindSections({ ...blank, module: row("x", "lxc") })) === "resources backups", "an lxc: the same");

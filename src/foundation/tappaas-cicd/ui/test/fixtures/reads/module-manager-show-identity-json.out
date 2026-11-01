@@ -1,0 +1,65 @@
+{
+  "description": "Authentik SSO identity provider for TAPPaaS",
+  "version": "0.5.2",
+  "releaseDate": "2026-02-17",
+  "installTime": "20260809-20:54:21",
+  "updateTime": "20261101-02:10:36",
+  "maintainer": "@larsrossen",
+  "status": "Production",
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/foundation/identity",
+  "environment": "mgmt",
+  "vmname": "identity",
+  "vmid": 140,
+  "vmtag": "TAPPaaS,Foundation",
+  "node": "tappaas1",
+  "zone0": "mgmt",
+  "dependsOn": [
+    "cluster:vm",
+    "cluster:ha",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "provides": [
+    "accessControl",
+    "identity"
+  ],
+  "displayName": "Identity",
+  "dropUnits": [
+    "generate-authentik-secrets.*",
+    "authentik-env-secrets-only.*"
+  ],
+  "stack": "foundation",
+  "config": {
+    "cluster:ha": {
+      "HANode": "tappaas3"
+    },
+    "backup:vm": {
+      "backup": {
+        "enabled": true,
+        "exclude": [],
+        "retention": "7y"
+      }
+    },
+    "cluster:vm": {
+      "cputype": "x86-64-v3",
+      "cores": 2,
+      "memory": 4096,
+      "diskSize": "32G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "network:proxy": {
+      "proxyPort": 9000,
+      "proxyAllowedZones": [
+        "internet"
+      ]
+    }
+  }
+}

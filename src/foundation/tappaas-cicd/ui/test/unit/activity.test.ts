@@ -5,9 +5,9 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { linesNaming, parseJournal, parseLedger, sweepRuns } from "../../src/activity";
 import { check, done } from "./check";
-import { FIX } from "./fake-site";
+import { FIX, PIN } from "./fake-site";
 
-const entries = parseJournal(readFileSync(join(FIX, "sweep-journal.txt"), "utf8"));
+const entries = parseJournal(readFileSync(join(PIN, "sweep-journal.txt"), "utf8"));
 const runs = sweepRuns(entries);
 check(entries.length > 100, `the journal parses (${entries.length} lines)`);
 check(runs.length >= 14, `a run per "Starting TAPPaaS scheduler" (${runs.length})`);

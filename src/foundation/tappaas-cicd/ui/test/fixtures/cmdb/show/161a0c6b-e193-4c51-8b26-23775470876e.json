@@ -1,0 +1,133 @@
+{
+  "id": "161a0c6b-e193-4c51-8b26-23775470876e",
+  "class": "device",
+  "ancestors": [
+    "device",
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "Nano HD",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T08:49:10.964Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.530Z",
+  "seen": {
+    "ap-manager": "2026-11-01T08:52:20.530Z"
+  },
+  "at": null,
+  "attributes": {
+    "clients": {
+      "value": [],
+      "source": "ap-manager",
+      "since": "2026-10-30T08:50:55.299Z"
+    },
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T09:55:09.015Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T09:55:09.015Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T09:55:09.015Z"
+    },
+    "desired": {
+      "value": {
+        "key": "accessPoints.Nano HD",
+        "file": "switch-configuration-desired.json"
+      },
+      "source": "ap-manager",
+      "since": "2026-10-30T08:49:11.095Z"
+    },
+    "deviceType": {
+      "value": "access-point",
+      "source": "ap-manager",
+      "since": "2026-10-31T07:24:26.636Z"
+    },
+    "managementAddress": {
+      "value": "10.0.0.184",
+      "source": "ap-manager",
+      "since": "2026-10-30T08:49:11.095Z"
+    },
+    "model": {
+      "value": "U7NHD",
+      "source": "ap-manager",
+      "since": "2026-10-30T08:49:11.095Z"
+    },
+    "ssids": {
+      "value": [
+        {
+          "name": "rossen-home",
+          "vlan": 310,
+          "zone": "home",
+          "enabled": true,
+          "security": "wpa2-personal"
+        },
+        {
+          "name": "rossen-guest",
+          "vlan": 510,
+          "zone": "guest",
+          "enabled": true,
+          "security": "wpa2-personal"
+        }
+      ],
+      "source": "ap-manager",
+      "since": "2026-10-31T07:24:26.636Z"
+    },
+    "uplink": {
+      "value": {
+        "port": "9",
+        "switch": "USW Pro XG 10 PoE"
+      },
+      "source": "ap-manager",
+      "since": "2026-10-31T07:24:26.636Z"
+    },
+    "vendor": {
+      "value": "unifi",
+      "source": "ap-manager",
+      "since": "2026-10-31T07:24:26.636Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 606,
+      "type": "allocated-to",
+      "direction": "in",
+      "other": {
+        "id": "bef68e7e-2644-4d97-8284-df97074dd701",
+        "class": "network-device",
+        "name": "ap-01"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T00:02:55.574Z"
+    }
+  ]
+}

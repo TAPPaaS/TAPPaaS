@@ -1,0 +1,54 @@
+{
+  "id": "000cd890-dbd2-4d76-a8a8-add447afd4be",
+  "class": "other-device",
+  "ancestors": [
+    "other-device",
+    "asset",
+    "resource",
+    "object"
+  ],
+  "name": "adr040-probe2",
+  "displayName": null,
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-30T09:00:56.772Z",
+  "ended": "2026-10-31T07:32:01.329Z",
+  "lastSeen": "2026-10-31T07:32:01.329Z",
+  "seen": {
+    "asset-manager": "2026-10-31T07:32:01.329Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T07:30:02.146Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T07:25:02.913Z"
+    },
+    "faulty": {
+      "value": false,
+      "source": "asset-manager",
+      "since": "2026-10-30T09:00:56.772Z"
+    },
+    "stage": {
+      "value": "disposed",
+      "source": "asset-manager",
+      "since": "2026-10-31T07:32:01.329Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

@@ -1,0 +1,177 @@
+{
+  "id": "2956e06e-0553-46b0-9307-4aa6b2255d62",
+  "class": "disk",
+  "ancestors": [
+    "disk",
+    "resource",
+    "object"
+  ],
+  "name": "dsk-07",
+  "displayName": "nvme-ASint_AS806_1TB_8061TBFDHY25F220056",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-31T09:50:50.296Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.621Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.173Z",
+    "asset-manager": "2026-11-01T08:52:20.621Z"
+  },
+  "at": null,
+  "attributes": {
+    "bay": {
+      "value": "nvme-ASint_AS806_1TB_8061TBFDHY25F220056",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "bus": {
+      "value": "nvme",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T09:52:08.978Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "dsk-07 (nvme-ASint_AS806_1TB_8061TBFDHY25F220056): health PASSED",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T09:52:08.978Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T09:52:08.978Z"
+    },
+    "displayName": {
+      "value": "nvme-ASint_AS806_1TB_8061TBFDHY25F220056",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "faulty": {
+      "value": false,
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "health": {
+      "value": "PASSED",
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "holds": {
+      "value": "nothing",
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "kind": {
+      "value": "nvme",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "model": {
+      "value": "ASint AS806 1TB",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "partitions": {
+      "value": [
+        {
+          "pool": "tanka1",
+          "size": 1024199753728,
+          "holds": "zfs",
+          "device": "/dev/nvme0n1p1"
+        },
+        {
+          "size": 8388608,
+          "holds": "zfs",
+          "device": "/dev/nvme0n1p9"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "serial": {
+      "value": "8061TBFDHY25F220056",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "size": {
+      "value": 1024209543168,
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "smart": {
+      "value": {
+        "mediaErrors": 0,
+        "powerOnHours": 5923,
+        "criticalWarning": 0
+      },
+      "source": "site-manager",
+      "since": "2026-11-01T07:46:08.132Z"
+    },
+    "stage": {
+      "value": "placed",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "temperature": {
+      "value": 40,
+      "source": "site-manager",
+      "since": "2026-10-31T09:52:00.815Z"
+    },
+    "wearout": {
+      "value": 100,
+      "source": "site-manager",
+      "since": "2026-10-31T09:52:00.815Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 629,
+      "type": "built-on",
+      "direction": "in",
+      "other": {
+        "id": "fe754ad5-ba2a-46b5-bc2a-3465ab625584",
+        "class": "storage-pool",
+        "name": "tanka1"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    {
+      "id": 618,
+      "type": "part-of",
+      "direction": "out",
+      "other": {
+        "id": "a82f521b-2cc5-45a5-9cde-aac82a64ee45",
+        "class": "server",
+        "name": "srv-03"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T09:50:50.296Z"
+    }
+  ]
+}

@@ -1,0 +1,402 @@
+{
+ "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+ "class": "disk",
+ "name": "dsk-09",
+ "created": "2026-10-31T09:50:50.296Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "kind",
+   "value": "hdd",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "model",
+   "value": "HGST_HDN726050ALE614",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "serial",
+   "value": "NAHW317X",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "size",
+   "value": 5000981078016,
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "placed",
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "name": "health",
+   "value": "PASSED",
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  },
+  {
+   "name": "holds",
+   "value": "nothing",
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  },
+  {
+   "name": "partitions",
+   "value": [
+    {
+     "pool": "tankc1",
+     "size": 5000971419648,
+     "holds": "zfs",
+     "device": "/dev/sdb1"
+    },
+    {
+     "size": 8388608,
+     "holds": "zfs",
+     "device": "/dev/sdb9"
+    }
+   ],
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  },
+  {
+   "name": "smart",
+   "value": {
+    "pending": 64,
+    "reallocated": 534,
+    "powerOnHours": 66249,
+    "uncorrectable": 1675
+   },
+   "source": "site-manager",
+   "change": 2276,
+   "from": "2026-10-31T09:52:00.815Z",
+   "to": "2026-10-31T10:59:06.348Z"
+  },
+  {
+   "name": "temperature",
+   "value": 41,
+   "source": "site-manager",
+   "change": 2276,
+   "from": "2026-10-31T09:52:00.815Z",
+   "to": "2026-11-01T07:46:08.132Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T09:52:08.978Z",
+     "reason": "zfs",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "dsk-09 (ata-HGST_HDN726050ALE614_NAHW317X): ZFS DEGRADED in tankc1 (errors); SMART: 534 reallocated, 64 pending, 1675 uncorrectable sectors",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T09:52:08.978Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 2316,
+   "from": "2026-10-31T09:52:08.978Z",
+   "to": null
+  },
+  {
+   "name": "smart",
+   "value": {
+    "pending": 64,
+    "reallocated": 534,
+    "powerOnHours": 66250,
+    "uncorrectable": 1675
+   },
+   "source": "site-manager",
+   "change": 2802,
+   "from": "2026-10-31T10:59:06.348Z",
+   "to": "2026-10-31T11:38:00.928Z"
+  },
+  {
+   "name": "smart",
+   "value": {
+    "pending": 64,
+    "reallocated": 534,
+    "powerOnHours": 66251,
+    "uncorrectable": 1675
+   },
+   "source": "site-manager",
+   "change": 3139,
+   "from": "2026-10-31T11:38:00.928Z",
+   "to": "2026-10-31T15:07:49.679Z"
+  },
+  {
+   "name": "smart",
+   "value": {
+    "pending": 64,
+    "reallocated": 534,
+    "powerOnHours": 66254,
+    "uncorrectable": 1675
+   },
+   "source": "site-manager",
+   "change": 4382,
+   "from": "2026-10-31T15:07:49.679Z",
+   "to": "2026-10-31T16:34:36.034Z"
+  },
+  {
+   "name": "smart",
+   "value": {
+    "pending": 64,
+    "reallocated": 534,
+    "powerOnHours": 66256,
+    "uncorrectable": 1675
+   },
+   "source": "site-manager",
+   "change": 4982,
+   "from": "2026-10-31T16:34:36.034Z",
+   "to": "2026-11-01T00:01:17.336Z"
+  },
+  {
+   "name": "smart",
+   "value": {
+    "pending": 64,
+    "reallocated": 534,
+    "powerOnHours": 66263,
+    "uncorrectable": 1675
+   },
+   "source": "site-manager",
+   "change": 7841,
+   "from": "2026-11-01T00:01:17.336Z",
+   "to": "2026-11-01T07:46:08.132Z"
+  },
+  {
+   "name": "smart",
+   "value": {
+    "pending": 64,
+    "reallocated": 534,
+    "powerOnHours": 66271,
+    "uncorrectable": 1675
+   },
+   "source": "site-manager",
+   "change": 10723,
+   "from": "2026-11-01T07:46:08.132Z",
+   "to": "2026-11-01T08:27:46.806Z"
+  },
+  {
+   "name": "temperature",
+   "value": 40,
+   "source": "site-manager",
+   "change": 10723,
+   "from": "2026-11-01T07:46:08.132Z",
+   "to": "2026-11-01T08:02:33.034Z"
+  },
+  {
+   "name": "temperature",
+   "value": 41,
+   "source": "site-manager",
+   "change": 10885,
+   "from": "2026-11-01T08:02:33.034Z",
+   "to": null
+  },
+  {
+   "name": "smart",
+   "value": {
+    "pending": 64,
+    "reallocated": 534,
+    "powerOnHours": 66272,
+    "uncorrectable": 1675
+   },
+   "source": "site-manager",
+   "change": 11077,
+   "from": "2026-11-01T08:27:46.806Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 620,
+   "type": "part-of",
+   "direction": "out",
+   "other": {
+    "id": "a82f521b-2cc5-45a5-9cde-aac82a64ee45",
+    "class": "server",
+    "name": "srv-03"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 2240,
+   "from": "2026-10-31T09:50:50.296Z",
+   "to": null
+  },
+  {
+   "id": 630,
+   "type": "built-on",
+   "direction": "in",
+   "other": {
+    "id": "0a7d1804-da8c-415e-879c-b077276ae2cd",
+    "class": "storage-pool",
+    "name": "tankc1"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 2241,
+   "from": "2026-10-31T09:51:07.157Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 2240,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "disk adopt",
+   "actor": "tappaas",
+   "time": "2026-10-31T09:50:50.296Z",
+   "drift": false
+  },
+  {
+   "id": 2241,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:51:07.157Z",
+   "drift": true
+  },
+  {
+   "id": 2276,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:52:00.815Z",
+   "drift": true
+  },
+  {
+   "id": 2316,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T09:52:08.978Z",
+   "drift": false
+  },
+  {
+   "id": 2802,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T10:59:06.348Z",
+   "drift": true
+  },
+  {
+   "id": 3139,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T11:38:00.928Z",
+   "drift": true
+  },
+  {
+   "id": 4382,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T15:07:49.679Z",
+   "drift": false
+  },
+  {
+   "id": 4982,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T16:34:36.034Z",
+   "drift": false
+  },
+  {
+   "id": 7841,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T00:01:17.336Z",
+   "drift": false
+  },
+  {
+   "id": 10723,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:46:08.132Z",
+   "drift": false
+  },
+  {
+   "id": 10885,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:02:33.034Z",
+   "drift": false
+  },
+  {
+   "id": 11077,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:27:46.806Z",
+   "drift": false
+  }
+ ]
+}

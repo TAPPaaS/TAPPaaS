@@ -1,0 +1,187 @@
+{
+  "id": "217e1b9d-68a6-4120-a170-13cda77e6b32",
+  "class": "disk",
+  "ancestors": [
+    "disk",
+    "resource",
+    "object"
+  ],
+  "name": "dsk-11",
+  "displayName": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-31T15:51:27.139Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.621Z",
+  "seen": {
+    "site-manager": "2026-11-01T08:52:19.173Z",
+    "asset-manager": "2026-11-01T08:52:20.621Z"
+  },
+  "at": null,
+  "attributes": {
+    "bay": {
+      "value": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N",
+      "source": "asset-manager",
+      "since": "2026-10-31T15:51:27.139Z"
+    },
+    "bus": {
+      "value": "sata",
+      "source": "asset-manager",
+      "since": "2026-10-31T15:51:27.139Z"
+    },
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T15:55:02.577Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "dsk-11 (ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N): health PASSED",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T15:55:02.577Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T15:55:02.577Z"
+    },
+    "displayName": {
+      "value": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N",
+      "source": "asset-manager",
+      "since": "2026-10-31T15:51:27.139Z"
+    },
+    "faulty": {
+      "value": false,
+      "source": "asset-manager",
+      "since": "2026-10-31T15:51:27.139Z"
+    },
+    "health": {
+      "value": "PASSED",
+      "source": "site-manager",
+      "since": "2026-10-31T15:52:19.076Z"
+    },
+    "holds": {
+      "value": "nothing",
+      "source": "site-manager",
+      "since": "2026-10-31T15:52:19.076Z"
+    },
+    "kind": {
+      "value": "ssd",
+      "source": "asset-manager",
+      "since": "2026-10-31T15:51:27.139Z"
+    },
+    "model": {
+      "value": "Samsung SSD 870 EVO 500GB",
+      "source": "asset-manager",
+      "since": "2026-10-31T15:51:27.139Z"
+    },
+    "partitions": {
+      "value": [
+        {
+          "size": 1031168,
+          "holds": "bios-boot",
+          "device": "/dev/sda1"
+        },
+        {
+          "size": 1073741824,
+          "holds": "efi",
+          "device": "/dev/sda2"
+        },
+        {
+          "pool": "rpool",
+          "size": 499033054720,
+          "holds": "zfs",
+          "device": "/dev/sda3"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T15:52:19.076Z"
+    },
+    "serial": {
+      "value": "S6PYNL0Y209497N",
+      "source": "asset-manager",
+      "since": "2026-10-31T15:51:27.139Z"
+    },
+    "size": {
+      "value": 500107862016,
+      "source": "asset-manager",
+      "since": "2026-10-31T15:51:27.139Z"
+    },
+    "smart": {
+      "value": {
+        "reallocated": 0,
+        "powerOnHours": 10325,
+        "uncorrectable": 0
+      },
+      "source": "site-manager",
+      "since": "2026-11-01T08:27:46.806Z"
+    },
+    "stage": {
+      "value": "placed",
+      "source": "asset-manager",
+      "since": "2026-10-31T15:51:27.139Z"
+    },
+    "temperature": {
+      "value": 35,
+      "source": "site-manager",
+      "since": "2026-11-01T08:32:03.130Z"
+    },
+    "wearout": {
+      "value": 99,
+      "source": "site-manager",
+      "since": "2026-10-31T16:34:36.034Z"
+    },
+    "wwn": {
+      "value": "0x5002538f55208720",
+      "source": "asset-manager",
+      "since": "2026-10-31T15:51:27.139Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 658,
+      "type": "built-on",
+      "direction": "in",
+      "other": {
+        "id": "42917e59-c0c4-4293-a877-7f3bb4e6a034",
+        "class": "storage-pool",
+        "name": "rpool"
+      },
+      "attributes": {},
+      "source": "site-manager",
+      "recorded": false,
+      "since": "2026-10-31T15:52:19.076Z"
+    },
+    {
+      "id": 654,
+      "type": "part-of",
+      "direction": "out",
+      "other": {
+        "id": "6c58178e-f591-40cd-9161-b6808856b127",
+        "class": "server",
+        "name": "srv-04"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T15:51:27.139Z"
+    }
+  ]
+}

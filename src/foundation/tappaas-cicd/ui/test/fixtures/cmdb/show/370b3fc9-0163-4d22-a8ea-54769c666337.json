@@ -1,0 +1,318 @@
+{
+  "id": "370b3fc9-0163-4d22-a8ea-54769c666337",
+  "class": "network-device",
+  "ancestors": [
+    "network-device",
+    "asset",
+    "resource",
+    "object"
+  ],
+  "name": "sw-01",
+  "displayName": "USW Pro XG 10 PoE",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-30T08:49:10.799Z",
+  "ended": null,
+  "lastSeen": "2026-11-01T08:52:20.621Z",
+  "seen": {
+    "ap-manager": "2026-11-01T08:52:20.571Z",
+    "site-manager": "2026-11-01T08:52:19.305Z",
+    "asset-manager": "2026-11-01T08:52:20.621Z",
+    "switch-manager": "2026-11-01T08:52:20.381Z"
+  },
+  "at": null,
+  "attributes": {
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "follows",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": true,
+          "message": "follows device USW Pro XG 10 PoE",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "drift",
+          "since": "2026-10-31T00:04:27.092Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T00:04:27.092Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T07:25:02.913Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T07:25:02.913Z"
+    },
+    "controller": {
+      "value": "unifi-controller",
+      "source": "switch-manager",
+      "since": "2026-10-30T08:49:11.217Z"
+    },
+    "deviceType": {
+      "value": "switch",
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    "displayName": {
+      "value": "USW Pro XG 10 PoE",
+      "source": "asset-manager",
+      "since": "2026-10-31T00:02:55.425Z"
+    },
+    "faulty": {
+      "value": false,
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    "model": {
+      "value": "USWED77",
+      "source": "asset-manager",
+      "since": "2026-10-31T00:02:55.425Z"
+    },
+    "ports": {
+      "value": 12,
+      "source": "switch-manager",
+      "since": "2026-10-30T08:49:11.217Z"
+    },
+    "stage": {
+      "value": "operational",
+      "source": "asset-manager",
+      "since": "2026-10-30T19:35:07.978Z"
+    },
+    "vendor": {
+      "value": "unifi",
+      "source": "asset-manager",
+      "since": "2026-10-30T08:49:10.799Z"
+    }
+  },
+  "drift": null,
+  "relations": [
+    {
+      "id": 607,
+      "type": "allocated-to",
+      "direction": "out",
+      "other": {
+        "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+        "class": "device",
+        "name": "USW Pro XG 10 PoE"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T00:02:55.622Z"
+    },
+    {
+      "id": 394,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "34f61132-0d9d-4d2c-9542-61698b180ec4",
+        "class": "port",
+        "name": "1"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 403,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "706e4ab2-2f63-4a79-856d-76bdebae379a",
+        "class": "port",
+        "name": "10"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 404,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "93f5baa3-3fa0-4d6e-9805-92cb2b364b44",
+        "class": "port",
+        "name": "11"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 405,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "6edda0a1-f827-4bcd-9ffa-729b8d4e9c51",
+        "class": "port",
+        "name": "12"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 395,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "35eb60ae-4d79-49dd-9a54-a3a74c4594f7",
+        "class": "port",
+        "name": "2"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 396,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "5898a2cf-c688-4b08-a7e7-6751269a82db",
+        "class": "port",
+        "name": "3"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 397,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "a03e03c0-3c80-49e7-b35d-5bd85acd70e8",
+        "class": "port",
+        "name": "4"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 398,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "554a70f4-a795-4b6c-9a0e-c5626c7a7b33",
+        "class": "port",
+        "name": "5"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 399,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "73e8734e-2067-44fa-8b78-4d97885b135b",
+        "class": "port",
+        "name": "6"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 400,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "0cedc0b4-6ae1-463a-9cfa-d81e5b5b9b03",
+        "class": "port",
+        "name": "7"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 401,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "ebb34ba1-67ef-4dc0-9968-f2f4342800cc",
+        "class": "port",
+        "name": "8"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 402,
+      "type": "part-of",
+      "direction": "in",
+      "other": {
+        "id": "f935ae67-732d-4539-be54-523804ef85ba",
+        "class": "port",
+        "name": "9"
+      },
+      "attributes": {},
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-30T08:49:10.799Z"
+    },
+    {
+      "id": 605,
+      "type": "placed-in",
+      "direction": "out",
+      "other": {
+        "id": "73a0f756-f569-4eaa-8508-bec8ac7ac791",
+        "class": "rack",
+        "name": "rack1"
+      },
+      "attributes": {
+        "u": 23,
+        "face": "front",
+        "slot": 0,
+        "width": "full",
+        "height": 1,
+        "faceplate": "unifi/usw-pro-xg-10-poe",
+        "description": "placeholder position, set by the operator"
+      },
+      "source": "asset-manager",
+      "recorded": true,
+      "since": "2026-10-31T00:02:55.425Z"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+[
+  "authentik Admins",
+  "authentik Agent-Users",
+  "authentik Read-only",
+  "forgejo-admins",
+  "installer",
+  "jellyfin-admins",
+  "logging-admins",
+  "nextcloud-admins",
+  "users"
+]

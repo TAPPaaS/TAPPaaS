@@ -1,0 +1,11 @@
+{
+  "escrowed": 7,
+  "fingerprint": "4c7cfe894f159cffd88149899d915757677ae503e6b47d7931955f5ec5fa8b80",
+  "stick": {
+    "fingerprint": "4c7cfe894f159cffd88149899d915757677ae503e6b47d7931955f5ec5fa8b80",
+    "keys": 7,
+    "written": "2026-10-28T17:40:13+01:00",
+    "label": "tappaas3: Generic Flash Disk serial 3714649B"
+  },
+  "current": true
+}

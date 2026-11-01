@@ -1,0 +1,161 @@
+{
+ "schema": 1,
+ "generated": "2026-11-01T01:44:28.779Z",
+ "sweep": {
+  "endTime": "2026-11-01 02:42:48",
+  "ok": true
+ },
+ "scanners": {
+  "grype": "0.112.0",
+  "trivy": "0.72.0"
+ },
+ "notes": [
+  "Synthetic: made-up CVE ids and packages, the shape of the scan and nothing of it (README.md)",
+  "VEX: 2 statement(s) from 1 file(s)"
+ ],
+ "targets": [
+  {
+   "id": "image:demo/web",
+   "name": "image:demo/web",
+   "layer": "image",
+   "host": "demo.mgmt.internal",
+   "coverage": "ok",
+   "note": null,
+   "seen": 46,
+   "findings": 6,
+   "critical": 1,
+   "high": 2,
+   "fixable": 3,
+   "critHighFixable": 1,
+   "suppressed": 3,
+   "verdict": "act",
+   "act": [
+    "CVE-0000-0001 examplelib: upgrade to 1.2.4"
+   ],
+   "critHighKeys": [
+    "CVE-0000-0001 examplelib",
+    "CVE-0000-0002 sampled",
+    "CVE-0000-0003 fakessl"
+   ],
+   "new": [
+    "CVE-0000-0001 examplelib"
+   ],
+   "critHighRisk": [
+    "CVE-0000-0001",
+    "CVE-0000-0002",
+    "CVE-0000-0003"
+   ],
+   "riskLevel": "high",
+   "critHighVex": [],
+   "module": "demo"
+  },
+  {
+   "id": "demo",
+   "name": "demo",
+   "layer": "nix",
+   "host": "demo.mgmt.internal",
+   "coverage": "ok",
+   "note": null,
+   "seen": 44,
+   "findings": 4,
+   "critical": 0,
+   "high": 1,
+   "fixable": null,
+   "critHighFixable": null,
+   "suppressed": 3,
+   "verdict": "triage",
+   "act": [],
+   "critHighKeys": [
+    "CVE-0000-0004 mockc"
+   ],
+   "new": [],
+   "critHighRisk": [
+    "CVE-0000-0004"
+   ],
+   "riskLevel": "low",
+   "critHighVex": [],
+   "module": "demo"
+  },
+  {
+   "id": "image:tools/worker",
+   "name": "image:tools/worker",
+   "layer": "image",
+   "host": "tools.mgmt.internal",
+   "coverage": "ok",
+   "note": null,
+   "seen": 43,
+   "findings": 3,
+   "critical": 0,
+   "high": 1,
+   "fixable": 1,
+   "critHighFixable": 0,
+   "suppressed": 3,
+   "verdict": "act",
+   "act": [
+    "CVE-0000-0005 stubparse: upgrade to 0.9.1"
+   ],
+   "critHighKeys": [
+    "CVE-0000-0005 stubparse"
+   ],
+   "new": [
+    "CVE-0000-0005 stubparse"
+   ],
+   "critHighRisk": [
+    "CVE-0000-0005"
+   ],
+   "riskLevel": "high",
+   "critHighVex": [],
+   "module": "tools"
+  },
+  {
+   "id": "tools",
+   "name": "tools",
+   "layer": "nix",
+   "host": "tools.mgmt.internal",
+   "coverage": "ok",
+   "note": null,
+   "seen": 40,
+   "findings": 0,
+   "critical": 0,
+   "high": 0,
+   "fixable": null,
+   "critHighFixable": null,
+   "suppressed": 3,
+   "verdict": "clean",
+   "act": [],
+   "critHighKeys": [],
+   "new": [],
+   "critHighRisk": [],
+   "riskLevel": "none",
+   "critHighVex": [],
+   "module": "tools"
+  },
+  {
+   "id": "tappaas-cicd",
+   "name": "tappaas-cicd",
+   "layer": "nix",
+   "host": "tappaas-cicd.mgmt.internal",
+   "coverage": "ok",
+   "note": null,
+   "seen": 42,
+   "findings": 2,
+   "critical": 0,
+   "high": 1,
+   "fixable": null,
+   "critHighFixable": null,
+   "suppressed": 3,
+   "verdict": "triage",
+   "act": [],
+   "critHighKeys": [
+    "CVE-0000-0006 examplelib"
+   ],
+   "new": [],
+   "critHighRisk": [
+    "CVE-0000-0006"
+   ],
+   "riskLevel": "low",
+   "critHighVex": [],
+   "module": "tappaas-cicd"
+  }
+ ]
+}

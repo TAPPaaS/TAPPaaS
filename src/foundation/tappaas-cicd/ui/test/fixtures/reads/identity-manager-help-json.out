@@ -1,0 +1,745 @@
+{
+  "manifest": 1,
+  "name": "identity-manager",
+  "version": "0.1.0",
+  "tagline": "TAPPaaS Identity → Authentik manager",
+  "common": [
+    {
+      "flag": "--config-dir",
+      "takesValue": true,
+      "arg": "DIR",
+      "choices": null,
+      "repeatable": false,
+      "description": "Identity directory (default: $TAPPAAS_CONFIG/identities)"
+    },
+    {
+      "flag": "--no-reconcile",
+      "takesValue": false,
+      "arg": null,
+      "choices": null,
+      "repeatable": false,
+      "description": "add/modify/delete: write config only, do NOT push to identity"
+    }
+  ],
+  "verbs": [
+    {
+      "verb": "bootstrap",
+      "keys": [
+        [
+          "bootstrap"
+        ]
+      ],
+      "usage": "bootstrap --org O --user U --email E [--minimal-org DIR] [--force] [--skip-validate]",
+      "note": "(seeds config/identities from minimal-org/ — the retired user-setup.sh)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--org",
+          "takesValue": true,
+          "arg": "O",
+          "choices": null,
+          "repeatable": false,
+          "description": "organization slug (= the TAPPaaS installation name)"
+        },
+        {
+          "flag": "--user",
+          "takesValue": true,
+          "arg": "U",
+          "choices": null,
+          "repeatable": false,
+          "description": "the installer's username (slug)"
+        },
+        {
+          "flag": "--email",
+          "takesValue": true,
+          "arg": "E",
+          "choices": null,
+          "repeatable": false,
+          "description": "the installer's primary email address"
+        },
+        {
+          "flag": "--minimal-org",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "template source (default: the component's minimal-org/)"
+        },
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "overwrite a non-empty destination"
+        },
+        {
+          "flag": "--skip-validate",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "skip the post-copy reference validation"
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Identity directory (default: $TAPPAAS_CONFIG/identities)"
+        },
+        {
+          "flag": "--no-reconcile",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "add/modify/delete: write config only, do NOT push to identity"
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "seeds config/identities from the minimal org; nothing reaches Authentik until reconcile --apply"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "overwrite a non-empty destination"
+        }
+      ]
+    },
+    {
+      "verb": "reconcile",
+      "keys": [
+        [
+          "reconcile"
+        ],
+        [
+          "sync"
+        ]
+      ],
+      "usage": "reconcile [--apply]",
+      "note": "(alias: sync, deprecated)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--apply",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "push the plan to Authentik (default is PREVIEW)"
+        },
+        {
+          "flag": "--dry-run",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "deprecated no-op (preview is already the default)"
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Identity directory (default: $TAPPAAS_CONFIG/identities)"
+        },
+        {
+          "flag": "--no-reconcile",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "add/modify/delete: write config only, do NOT push to identity"
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "apply-flag",
+        "flag": "--apply"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "validate",
+      "keys": [
+        [
+          "validate"
+        ]
+      ],
+      "usage": "validate",
+      "note": null,
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Identity directory (default: $TAPPAAS_CONFIG/identities)"
+        },
+        {
+          "flag": "--no-reconcile",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "add/modify/delete: write config only, do NOT push to identity"
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "report",
+      "keys": [
+        [
+          "report"
+        ]
+      ],
+      "usage": "report [--json] [--discover]",
+      "note": "(ADR-040: send the organizations, roles, groups and users to the CMDB)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the report instead of sending it."
+        },
+        {
+          "flag": "--discover",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Full depth (D15): also Authentik's providers, applications, outposts and flows, on the identity module's CI."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Identity directory (default: $TAPPAAS_CONFIG/identities)"
+        },
+        {
+          "flag": "--no-reconcile",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "add/modify/delete: write config only, do NOT push to identity"
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "<kind> list",
+      "keys": [
+        [
+          "role",
+          "list"
+        ],
+        [
+          "org",
+          "list"
+        ],
+        [
+          "organization",
+          "list"
+        ],
+        [
+          "group",
+          "list"
+        ],
+        [
+          "user",
+          "list"
+        ]
+      ],
+      "usage": "<kind> list [--json] [--deep] [--declared]",
+      "note": "(group: the model's groups and, marked by their origin, the ones a module or Authentik declares; user: the model's users and Authentik's akadmin and outpost accounts)",
+      "details": null,
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "structured output (default is human-readable)"
+        },
+        {
+          "flag": "--deep",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "org/group only: recurse into groups + user membership"
+        },
+        {
+          "flag": "--declared",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "group/user only: just the groups a module or Authentik declares, or the users Authentik's bootstrap does (no config file), with their origin"
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Identity directory (default: $TAPPAAS_CONFIG/identities)"
+        },
+        {
+          "flag": "--no-reconcile",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "add/modify/delete: write config only, do NOT push to identity"
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [
+        {
+          "flag": "--deep",
+          "touches": "runs the deep suite: creates and removes zztest guests"
+        }
+      ],
+      "disruptions": []
+    },
+    {
+      "verb": "<kind> show",
+      "keys": [
+        [
+          "role",
+          "show"
+        ],
+        [
+          "org",
+          "show"
+        ],
+        [
+          "organization",
+          "show"
+        ],
+        [
+          "group",
+          "show"
+        ],
+        [
+          "user",
+          "show"
+        ],
+        [
+          "role",
+          "get"
+        ],
+        [
+          "org",
+          "get"
+        ],
+        [
+          "organization",
+          "get"
+        ],
+        [
+          "group",
+          "get"
+        ],
+        [
+          "user",
+          "get"
+        ]
+      ],
+      "usage": "<kind> show <name> [--json]",
+      "note": "(alias: get, deprecated)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "structured output (default is human-readable)"
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Identity directory (default: $TAPPAAS_CONFIG/identities)"
+        },
+        {
+          "flag": "--no-reconcile",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "add/modify/delete: write config only, do NOT push to identity"
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "<kind> add",
+      "keys": [
+        [
+          "role",
+          "add"
+        ],
+        [
+          "org",
+          "add"
+        ],
+        [
+          "organization",
+          "add"
+        ],
+        [
+          "group",
+          "add"
+        ],
+        [
+          "user",
+          "add"
+        ]
+      ],
+      "usage": "<kind> add <name> [field flags] [--force] [--no-reconcile]",
+      "note": null,
+      "details": "modify also takes --set <field>=<value> (repeatable) and --unset <field>, by the\nschema's field name (user: displayName, primaryEmail, state, roles, memberOf); the\nflags below are shortcuts for them, one field each (ADR-020 D11).\nField flags (write the validated config, then push it to the identity service):\n  role:  --displayName V  --description V\n  org:   --displayName V  --type V  --owner USER  --parentOrg ORG\n  group: --displayName V  --type V  --ownerOrg ORG  --roles \"a,b\"  --add-roles R  --remove-roles R\n  user:  --displayName V  --email ADDR  --state planned|active|suspended|terminated\n         --roles \"a,b\"  --groups \"g1,g2\"  --add-roles R  --remove-roles R  --add-groups G  --remove-groups G",
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "field",
+          "optional": true,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "overwrite an existing entity"
+        },
+        {
+          "flag": "--no-reconcile",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "add/modify/delete: write config only, do NOT push to identity"
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Identity directory (default: $TAPPAAS_CONFIG/identities)"
+        }
+      ],
+      "open": true,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "writes the entity into config/identities and pushes it to Authentik (with --no-reconcile: config only, then reconcile)"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "overwrite an existing entity"
+        }
+      ]
+    },
+    {
+      "verb": "<kind> modify",
+      "keys": [
+        [
+          "role",
+          "modify"
+        ],
+        [
+          "org",
+          "modify"
+        ],
+        [
+          "organization",
+          "modify"
+        ],
+        [
+          "group",
+          "modify"
+        ],
+        [
+          "user",
+          "modify"
+        ]
+      ],
+      "usage": "<kind> modify <name> [field flags] [--no-reconcile]",
+      "note": null,
+      "details": "modify also takes --set <field>=<value> (repeatable) and --unset <field>, by the\nschema's field name (user: displayName, primaryEmail, state, roles, memberOf); the\nflags below are shortcuts for them, one field each (ADR-020 D11).\nField flags (write the validated config, then push it to the identity service):\n  role:  --displayName V  --description V\n  org:   --displayName V  --type V  --owner USER  --parentOrg ORG\n  group: --displayName V  --type V  --ownerOrg ORG  --roles \"a,b\"  --add-roles R  --remove-roles R\n  user:  --displayName V  --email ADDR  --state planned|active|suspended|terminated\n         --roles \"a,b\"  --groups \"g1,g2\"  --add-roles R  --remove-roles R  --add-groups G  --remove-groups G",
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        },
+        {
+          "name": "field",
+          "optional": true,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--no-reconcile",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "add/modify/delete: write config only, do NOT push to identity"
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Identity directory (default: $TAPPAAS_CONFIG/identities)"
+        }
+      ],
+      "open": true,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "changes the entity in config/identities and pushes it to Authentik (with --no-reconcile: config only, then reconcile)"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "user reset-password",
+      "keys": [
+        [
+          "user",
+          "reset-password"
+        ]
+      ],
+      "usage": "user reset-password <name> [--link | --password-stdin]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--link",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "(default) Print a one-time link where the user sets a password of their own; the link is the authentication, it expires unused. Needs Authentik's recovery flow (identity's update.sh makes it)."
+        },
+        {
+          "flag": "--password-stdin",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Set the password that is the first line of stdin: never on a command line, never printed. The console's way; 8 characters or more."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Identity directory (default: $TAPPAAS_CONFIG/identities)"
+        },
+        {
+          "flag": "--no-reconcile",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "add/modify/delete: write config only, do NOT push to identity"
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "gives the user a new way in: a one-time link to set their own password (printed), or a password read from stdin"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "<kind> delete",
+      "keys": [
+        [
+          "role",
+          "delete"
+        ],
+        [
+          "org",
+          "delete"
+        ],
+        [
+          "organization",
+          "delete"
+        ],
+        [
+          "group",
+          "delete"
+        ],
+        [
+          "user",
+          "delete"
+        ]
+      ],
+      "usage": "<kind> delete <name> [--force] [--no-reconcile]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "delete despite the reference guard"
+        },
+        {
+          "flag": "--no-reconcile",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "add/modify/delete: write config only, do NOT push to identity"
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Identity directory (default: $TAPPAAS_CONFIG/identities)"
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "removes the entity from config/identities and from Authentik (with --no-reconcile: config only)"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "delete despite the reference guard"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,455 @@
+{
+ "id": "10828c57-8089-4f34-a6a2-6e5099bd4764",
+ "class": "network-device",
+ "name": "USW Pro XG 10 PoE",
+ "created": "2026-10-30T12:58:06.772Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "controller",
+   "value": "unifi-controller",
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "name": "deviceType",
+   "value": "switch",
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "name": "model",
+   "value": "USWED77",
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "name": "ports",
+   "value": 12,
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "name": "vendor",
+   "value": "unifi",
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-30T12:58:06.962Z",
+    "source": "sweep",
+    "desired": null,
+    "attributes": {
+     "\u2192allocated-to device/USW Pro XG 10 PoE": {
+      "now": {},
+      "was": null
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 305,
+   "from": "2026-10-30T12:58:06.962Z",
+   "to": "2026-10-30T14:34:19.677Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-30T12:59:36.103Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "network-device/USW Pro XG 10 PoE: drift: appeared; network-device/USW Pro XG 10 PoE: drift: appeared \u2192allocated-to device/USW Pro XG 10 PoE",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T14:32:46.038Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 307,
+   "from": "2026-10-30T12:59:36.103Z",
+   "to": "2026-10-30T14:35:49.161Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-30T12:58:06.962Z",
+    "source": "sweep",
+    "desired": null,
+    "attributes": {
+     "\u2192allocated-to device/USW Pro XG 10 PoE": {
+      "now": null,
+      "was": {}
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 412,
+   "from": "2026-10-30T14:34:19.677Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-30T14:35:49.161Z",
+     "reason": "sweep-gone",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "network-device/USW Pro XG 10 PoE: drift: gone \u2192allocated-to device/USW Pro XG 10 PoE",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:00:51.500Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 414,
+   "from": "2026-10-30T14:35:49.161Z",
+   "to": "2026-10-31T00:04:27.092Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:04:27.092Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1080,
+   "from": "2026-10-31T00:04:27.092Z",
+   "to": "2026-10-31T07:25:02.913Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:04:27.092Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1355,
+   "from": "2026-10-31T07:25:02.913Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 541,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+    "class": "device",
+    "name": "USW Pro XG 10 PoE"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": "2026-10-30T14:32:14.807Z"
+  },
+  {
+   "id": 496,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "3cd30021-a435-4796-8cf8-663ffdfb6e29",
+    "class": "port",
+    "name": "2"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 497,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "ae1eafc5-17d4-4e37-8360-e1e8f4530592",
+    "class": "port",
+    "name": "3"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 498,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "e83bf9e6-5379-40a1-9fc4-fce7b2c25a8b",
+    "class": "port",
+    "name": "4"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 499,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "47b10198-6b84-47e5-92e0-b410ae2f6495",
+    "class": "port",
+    "name": "5"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 500,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "eb01debe-d4a5-4269-895d-c32cde560ca9",
+    "class": "port",
+    "name": "6"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 495,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "c51ada4e-b838-47a2-891d-9a21caa21aaf",
+    "class": "port",
+    "name": "1"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 502,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "efde0a4a-0339-4a9a-9067-145b83a34c48",
+    "class": "port",
+    "name": "8"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 503,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "d738529a-b046-4789-9801-2073f2eaa643",
+    "class": "port",
+    "name": "9"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 504,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "fbf42464-e73d-4a5a-ba6a-14457b52d6c0",
+    "class": "port",
+    "name": "10"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 505,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "c0cbade3-3e33-4148-9f38-a8867b932917",
+    "class": "port",
+    "name": "11"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 506,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "df07e229-e4c1-4122-8a05-533a6412790b",
+    "class": "port",
+    "name": "12"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  },
+  {
+   "id": 501,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "cfbb8a24-fb80-4911-a12b-fc64a65807b9",
+    "class": "port",
+    "name": "7"
+   },
+   "attributes": {},
+   "source": "switch-manager",
+   "change": 303,
+   "from": "2026-10-30T12:58:06.772Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 303,
+   "kind": "observation",
+   "source": "switch-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T12:58:06.772Z",
+   "drift": false
+  },
+  {
+   "id": 305,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-30T12:58:06.962Z",
+   "drift": true
+  },
+  {
+   "id": 307,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T12:59:36.103Z",
+   "drift": false
+  },
+  {
+   "id": 412,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-30T14:34:19.677Z",
+   "drift": true
+  },
+  {
+   "id": 414,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T14:35:49.161Z",
+   "drift": false
+  },
+  {
+   "id": 1080,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T00:04:27.092Z",
+   "drift": false
+  },
+  {
+   "id": 1355,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:25:02.913Z",
+   "drift": false
+  }
+ ]
+}

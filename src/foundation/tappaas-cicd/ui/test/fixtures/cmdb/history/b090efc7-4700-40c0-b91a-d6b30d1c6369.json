@@ -1,0 +1,5689 @@
+{
+ "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+ "class": "site",
+ "name": "rossen",
+ "created": "2026-10-30T08:47:49.432Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "rootCauses",
+   "value": [
+    {
+     "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+     "type": "operational",
+     "impactedCount": 2
+    },
+    {
+     "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "capacity",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "11e3e20e-91d2-4334-814a-aec5bc93e871",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "12afc2ee-39e0-4a7d-9aab-d76063d278cc",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "14e1c60e-f418-4726-92da-0a2ddc43b10a",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19834be2-f290-46f6-aef4-acff8969b821",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "2594e55e-d5a5-4204-8100-2a61dfff901d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29b608bb-c548-4588-addb-fcf3f238d271",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29d8b81f-1de0-4429-9aaa-ec451bd0dab0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "327c2776-2436-47f4-a350-266074de329d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "352117a9-ba13-465e-9b59-b34e2856ad6e",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "3a372910-267a-47b3-89b3-76ee9b4114c3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "401ee131-c949-4578-b486-814c57849b2d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "40d16eb0-cce4-40df-8fa2-ab5f13e9dfa9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4554f757-bf50-445f-b8a3-928b1524f8c3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4c84af50-c24d-481d-8790-6f4af117c50d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4e779567-5872-44a8-8c28-deaa2e9e1292",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "57118def-0dd1-4b48-9e0b-1c5b2b17d596",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6101b828-baa8-4a3a-bd19-66f704725918",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6348879f-cd95-4292-90be-a280b2312731",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6408e1ce-0ce9-4ae2-a43b-1510e5f33501",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "67aae32d-7671-44ca-ac26-40d0a4020cbd",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6a8b6f9c-0b60-433d-91de-2b1bd03d7d61",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7018e49a-d44c-4fbc-a81d-ea5c64bc69fe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "75a5ae52-301f-436a-bc22-40fb12fad424",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "8228f4c5-e3d4-4bac-946f-ea39f7c862eb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c1b41138-6754-4294-8719-3c5901ca6fbb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c5d5c280-5b33-4079-99d9-a856e4861e9f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ce50b004-2db2-42b6-81d7-42ca82d18ebe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d07c5cb6-e77e-4ccc-aa35-7f26b3539c22",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d66c7bca-55fd-4f14-827c-f37c2f41f9b3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "e5d0d704-4a8a-4cb0-a2eb-84ad8f6dc8f8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ea084f3c-7895-4119-8a70-f9c0417742ab",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f28a3bda-ec21-490e-90d2-5d1e95bd54b8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f4f1d45c-b9ad-4856-8eb7-7ad20a7cacc0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f8cb136f-cfb9-480b-8a55-14eacad62851",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ffcae78f-b85c-434a-a1aa-b3cf547c326f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fb9ed212-f2c4-4618-9944-a73f3293a977",
+     "type": "drift",
+     "impactedCount": 0
+    }
+   ],
+   "source": "health-manager",
+   "change": 10512,
+   "from": "2026-11-01T07:10:00.624Z",
+   "to": "2026-11-01T07:15:02.578Z"
+  },
+  {
+   "name": "rootCauses",
+   "value": [
+    {
+     "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+     "type": "operational",
+     "impactedCount": 2
+    },
+    {
+     "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "capacity",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "11e3e20e-91d2-4334-814a-aec5bc93e871",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "12afc2ee-39e0-4a7d-9aab-d76063d278cc",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "14e1c60e-f418-4726-92da-0a2ddc43b10a",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19834be2-f290-46f6-aef4-acff8969b821",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "2594e55e-d5a5-4204-8100-2a61dfff901d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29b608bb-c548-4588-addb-fcf3f238d271",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29d8b81f-1de0-4429-9aaa-ec451bd0dab0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "327c2776-2436-47f4-a350-266074de329d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "352117a9-ba13-465e-9b59-b34e2856ad6e",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "3a372910-267a-47b3-89b3-76ee9b4114c3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "401ee131-c949-4578-b486-814c57849b2d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "40d16eb0-cce4-40df-8fa2-ab5f13e9dfa9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4554f757-bf50-445f-b8a3-928b1524f8c3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4c84af50-c24d-481d-8790-6f4af117c50d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4e779567-5872-44a8-8c28-deaa2e9e1292",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "57118def-0dd1-4b48-9e0b-1c5b2b17d596",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6101b828-baa8-4a3a-bd19-66f704725918",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6348879f-cd95-4292-90be-a280b2312731",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6408e1ce-0ce9-4ae2-a43b-1510e5f33501",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "67aae32d-7671-44ca-ac26-40d0a4020cbd",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6a8b6f9c-0b60-433d-91de-2b1bd03d7d61",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7018e49a-d44c-4fbc-a81d-ea5c64bc69fe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "75a5ae52-301f-436a-bc22-40fb12fad424",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "8228f4c5-e3d4-4bac-946f-ea39f7c862eb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c1b41138-6754-4294-8719-3c5901ca6fbb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c5d5c280-5b33-4079-99d9-a856e4861e9f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ce50b004-2db2-42b6-81d7-42ca82d18ebe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d07c5cb6-e77e-4ccc-aa35-7f26b3539c22",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d66c7bca-55fd-4f14-827c-f37c2f41f9b3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "e5d0d704-4a8a-4cb0-a2eb-84ad8f6dc8f8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ea084f3c-7895-4119-8a70-f9c0417742ab",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f28a3bda-ec21-490e-90d2-5d1e95bd54b8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f4f1d45c-b9ad-4856-8eb7-7ad20a7cacc0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f8cb136f-cfb9-480b-8a55-14eacad62851",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "42917e59-c0c4-4293-a877-7f3bb4e6a034",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fb9ed212-f2c4-4618-9944-a73f3293a977",
+     "type": "drift",
+     "impactedCount": 0
+    }
+   ],
+   "source": "health-manager",
+   "change": 10542,
+   "from": "2026-11-01T07:15:02.578Z",
+   "to": "2026-11-01T07:20:07.817Z"
+  },
+  {
+   "name": "rootCauses",
+   "value": [
+    {
+     "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+     "type": "operational",
+     "impactedCount": 2
+    },
+    {
+     "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "capacity",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "11e3e20e-91d2-4334-814a-aec5bc93e871",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "12afc2ee-39e0-4a7d-9aab-d76063d278cc",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "14e1c60e-f418-4726-92da-0a2ddc43b10a",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19834be2-f290-46f6-aef4-acff8969b821",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "2594e55e-d5a5-4204-8100-2a61dfff901d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29b608bb-c548-4588-addb-fcf3f238d271",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29d8b81f-1de0-4429-9aaa-ec451bd0dab0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "327c2776-2436-47f4-a350-266074de329d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "352117a9-ba13-465e-9b59-b34e2856ad6e",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "3a372910-267a-47b3-89b3-76ee9b4114c3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "401ee131-c949-4578-b486-814c57849b2d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "40d16eb0-cce4-40df-8fa2-ab5f13e9dfa9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4554f757-bf50-445f-b8a3-928b1524f8c3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4c84af50-c24d-481d-8790-6f4af117c50d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4e779567-5872-44a8-8c28-deaa2e9e1292",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "57118def-0dd1-4b48-9e0b-1c5b2b17d596",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6101b828-baa8-4a3a-bd19-66f704725918",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6348879f-cd95-4292-90be-a280b2312731",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6408e1ce-0ce9-4ae2-a43b-1510e5f33501",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "67aae32d-7671-44ca-ac26-40d0a4020cbd",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6a8b6f9c-0b60-433d-91de-2b1bd03d7d61",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7018e49a-d44c-4fbc-a81d-ea5c64bc69fe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "75a5ae52-301f-436a-bc22-40fb12fad424",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "8228f4c5-e3d4-4bac-946f-ea39f7c862eb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c1b41138-6754-4294-8719-3c5901ca6fbb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c5d5c280-5b33-4079-99d9-a856e4861e9f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ce50b004-2db2-42b6-81d7-42ca82d18ebe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d07c5cb6-e77e-4ccc-aa35-7f26b3539c22",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d66c7bca-55fd-4f14-827c-f37c2f41f9b3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "e5d0d704-4a8a-4cb0-a2eb-84ad8f6dc8f8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ea084f3c-7895-4119-8a70-f9c0417742ab",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f28a3bda-ec21-490e-90d2-5d1e95bd54b8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f4f1d45c-b9ad-4856-8eb7-7ad20a7cacc0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f8cb136f-cfb9-480b-8a55-14eacad62851",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ef0d17d6-20aa-4ffb-87ff-5117b239b6eb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fb9ed212-f2c4-4618-9944-a73f3293a977",
+     "type": "drift",
+     "impactedCount": 0
+    }
+   ],
+   "source": "health-manager",
+   "change": 10572,
+   "from": "2026-11-01T07:20:07.817Z",
+   "to": "2026-11-01T07:25:02.587Z"
+  },
+  {
+   "name": "rootCauses",
+   "value": [
+    {
+     "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+     "type": "operational",
+     "impactedCount": 2
+    },
+    {
+     "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "capacity",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "11e3e20e-91d2-4334-814a-aec5bc93e871",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "12afc2ee-39e0-4a7d-9aab-d76063d278cc",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "14e1c60e-f418-4726-92da-0a2ddc43b10a",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19834be2-f290-46f6-aef4-acff8969b821",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "2594e55e-d5a5-4204-8100-2a61dfff901d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29b608bb-c548-4588-addb-fcf3f238d271",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29d8b81f-1de0-4429-9aaa-ec451bd0dab0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "327c2776-2436-47f4-a350-266074de329d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "352117a9-ba13-465e-9b59-b34e2856ad6e",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "3a372910-267a-47b3-89b3-76ee9b4114c3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "401ee131-c949-4578-b486-814c57849b2d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "40d16eb0-cce4-40df-8fa2-ab5f13e9dfa9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4554f757-bf50-445f-b8a3-928b1524f8c3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4c84af50-c24d-481d-8790-6f4af117c50d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4e779567-5872-44a8-8c28-deaa2e9e1292",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "57118def-0dd1-4b48-9e0b-1c5b2b17d596",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6101b828-baa8-4a3a-bd19-66f704725918",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6348879f-cd95-4292-90be-a280b2312731",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6408e1ce-0ce9-4ae2-a43b-1510e5f33501",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "67aae32d-7671-44ca-ac26-40d0a4020cbd",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6a8b6f9c-0b60-433d-91de-2b1bd03d7d61",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7018e49a-d44c-4fbc-a81d-ea5c64bc69fe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "75a5ae52-301f-436a-bc22-40fb12fad424",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "8228f4c5-e3d4-4bac-946f-ea39f7c862eb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c1b41138-6754-4294-8719-3c5901ca6fbb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c5d5c280-5b33-4079-99d9-a856e4861e9f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ce50b004-2db2-42b6-81d7-42ca82d18ebe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d07c5cb6-e77e-4ccc-aa35-7f26b3539c22",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d66c7bca-55fd-4f14-827c-f37c2f41f9b3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "e5d0d704-4a8a-4cb0-a2eb-84ad8f6dc8f8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ea084f3c-7895-4119-8a70-f9c0417742ab",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f28a3bda-ec21-490e-90d2-5d1e95bd54b8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f4f1d45c-b9ad-4856-8eb7-7ad20a7cacc0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f8cb136f-cfb9-480b-8a55-14eacad62851",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ff1c184d-8ba7-49ed-a717-489c5ed9e60d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fb9ed212-f2c4-4618-9944-a73f3293a977",
+     "type": "drift",
+     "impactedCount": 0
+    }
+   ],
+   "source": "health-manager",
+   "change": 10602,
+   "from": "2026-11-01T07:25:02.587Z",
+   "to": "2026-11-01T07:30:15.026Z"
+  },
+  {
+   "name": "rootCauses",
+   "value": [
+    {
+     "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+     "type": "operational",
+     "impactedCount": 2
+    },
+    {
+     "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "capacity",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "11e3e20e-91d2-4334-814a-aec5bc93e871",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "12afc2ee-39e0-4a7d-9aab-d76063d278cc",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "14e1c60e-f418-4726-92da-0a2ddc43b10a",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19834be2-f290-46f6-aef4-acff8969b821",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "2594e55e-d5a5-4204-8100-2a61dfff901d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29b608bb-c548-4588-addb-fcf3f238d271",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29d8b81f-1de0-4429-9aaa-ec451bd0dab0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "327c2776-2436-47f4-a350-266074de329d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "352117a9-ba13-465e-9b59-b34e2856ad6e",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "3a372910-267a-47b3-89b3-76ee9b4114c3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "401ee131-c949-4578-b486-814c57849b2d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "40d16eb0-cce4-40df-8fa2-ab5f13e9dfa9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4554f757-bf50-445f-b8a3-928b1524f8c3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4c84af50-c24d-481d-8790-6f4af117c50d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4e779567-5872-44a8-8c28-deaa2e9e1292",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "57118def-0dd1-4b48-9e0b-1c5b2b17d596",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6101b828-baa8-4a3a-bd19-66f704725918",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6348879f-cd95-4292-90be-a280b2312731",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6408e1ce-0ce9-4ae2-a43b-1510e5f33501",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "67aae32d-7671-44ca-ac26-40d0a4020cbd",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6a8b6f9c-0b60-433d-91de-2b1bd03d7d61",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7018e49a-d44c-4fbc-a81d-ea5c64bc69fe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "75a5ae52-301f-436a-bc22-40fb12fad424",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "8228f4c5-e3d4-4bac-946f-ea39f7c862eb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c1b41138-6754-4294-8719-3c5901ca6fbb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c5d5c280-5b33-4079-99d9-a856e4861e9f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ce50b004-2db2-42b6-81d7-42ca82d18ebe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d07c5cb6-e77e-4ccc-aa35-7f26b3539c22",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d66c7bca-55fd-4f14-827c-f37c2f41f9b3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "e5d0d704-4a8a-4cb0-a2eb-84ad8f6dc8f8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ea084f3c-7895-4119-8a70-f9c0417742ab",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f28a3bda-ec21-490e-90d2-5d1e95bd54b8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f4f1d45c-b9ad-4856-8eb7-7ad20a7cacc0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f8cb136f-cfb9-480b-8a55-14eacad62851",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ffcae78f-b85c-434a-a1aa-b3cf547c326f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fb9ed212-f2c4-4618-9944-a73f3293a977",
+     "type": "drift",
+     "impactedCount": 0
+    }
+   ],
+   "source": "health-manager",
+   "change": 10632,
+   "from": "2026-11-01T07:30:15.026Z",
+   "to": "2026-11-01T07:35:02.582Z"
+  },
+  {
+   "name": "rootCauses",
+   "value": [
+    {
+     "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+     "type": "operational",
+     "impactedCount": 2
+    },
+    {
+     "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "capacity",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "11e3e20e-91d2-4334-814a-aec5bc93e871",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "12afc2ee-39e0-4a7d-9aab-d76063d278cc",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "14e1c60e-f418-4726-92da-0a2ddc43b10a",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19834be2-f290-46f6-aef4-acff8969b821",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "2594e55e-d5a5-4204-8100-2a61dfff901d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29b608bb-c548-4588-addb-fcf3f238d271",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29d8b81f-1de0-4429-9aaa-ec451bd0dab0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "327c2776-2436-47f4-a350-266074de329d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "352117a9-ba13-465e-9b59-b34e2856ad6e",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "3a372910-267a-47b3-89b3-76ee9b4114c3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "401ee131-c949-4578-b486-814c57849b2d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "40d16eb0-cce4-40df-8fa2-ab5f13e9dfa9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4554f757-bf50-445f-b8a3-928b1524f8c3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4c84af50-c24d-481d-8790-6f4af117c50d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4e779567-5872-44a8-8c28-deaa2e9e1292",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "57118def-0dd1-4b48-9e0b-1c5b2b17d596",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6101b828-baa8-4a3a-bd19-66f704725918",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6348879f-cd95-4292-90be-a280b2312731",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6408e1ce-0ce9-4ae2-a43b-1510e5f33501",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "67aae32d-7671-44ca-ac26-40d0a4020cbd",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6a8b6f9c-0b60-433d-91de-2b1bd03d7d61",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7018e49a-d44c-4fbc-a81d-ea5c64bc69fe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "75a5ae52-301f-436a-bc22-40fb12fad424",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "8228f4c5-e3d4-4bac-946f-ea39f7c862eb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c1b41138-6754-4294-8719-3c5901ca6fbb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c5d5c280-5b33-4079-99d9-a856e4861e9f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ce50b004-2db2-42b6-81d7-42ca82d18ebe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d07c5cb6-e77e-4ccc-aa35-7f26b3539c22",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d66c7bca-55fd-4f14-827c-f37c2f41f9b3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "e5d0d704-4a8a-4cb0-a2eb-84ad8f6dc8f8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ea084f3c-7895-4119-8a70-f9c0417742ab",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f28a3bda-ec21-490e-90d2-5d1e95bd54b8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f4f1d45c-b9ad-4856-8eb7-7ad20a7cacc0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f8cb136f-cfb9-480b-8a55-14eacad62851",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ef0d17d6-20aa-4ffb-87ff-5117b239b6eb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fb9ed212-f2c4-4618-9944-a73f3293a977",
+     "type": "drift",
+     "impactedCount": 0
+    }
+   ],
+   "source": "health-manager",
+   "change": 10662,
+   "from": "2026-11-01T07:35:02.582Z",
+   "to": "2026-11-01T07:45:02.587Z"
+  },
+  {
+   "name": "rootCauses",
+   "value": [
+    {
+     "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+     "type": "operational",
+     "impactedCount": 2
+    },
+    {
+     "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "capacity",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "11e3e20e-91d2-4334-814a-aec5bc93e871",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "12afc2ee-39e0-4a7d-9aab-d76063d278cc",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "14e1c60e-f418-4726-92da-0a2ddc43b10a",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19834be2-f290-46f6-aef4-acff8969b821",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "2594e55e-d5a5-4204-8100-2a61dfff901d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29b608bb-c548-4588-addb-fcf3f238d271",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29d8b81f-1de0-4429-9aaa-ec451bd0dab0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "327c2776-2436-47f4-a350-266074de329d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "352117a9-ba13-465e-9b59-b34e2856ad6e",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "3a372910-267a-47b3-89b3-76ee9b4114c3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "401ee131-c949-4578-b486-814c57849b2d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "40d16eb0-cce4-40df-8fa2-ab5f13e9dfa9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4554f757-bf50-445f-b8a3-928b1524f8c3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4c84af50-c24d-481d-8790-6f4af117c50d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4e779567-5872-44a8-8c28-deaa2e9e1292",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "57118def-0dd1-4b48-9e0b-1c5b2b17d596",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6101b828-baa8-4a3a-bd19-66f704725918",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6348879f-cd95-4292-90be-a280b2312731",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6408e1ce-0ce9-4ae2-a43b-1510e5f33501",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "67aae32d-7671-44ca-ac26-40d0a4020cbd",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6a8b6f9c-0b60-433d-91de-2b1bd03d7d61",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7018e49a-d44c-4fbc-a81d-ea5c64bc69fe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "75a5ae52-301f-436a-bc22-40fb12fad424",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "8228f4c5-e3d4-4bac-946f-ea39f7c862eb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c1b41138-6754-4294-8719-3c5901ca6fbb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c5d5c280-5b33-4079-99d9-a856e4861e9f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ce50b004-2db2-42b6-81d7-42ca82d18ebe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d07c5cb6-e77e-4ccc-aa35-7f26b3539c22",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d66c7bca-55fd-4f14-827c-f37c2f41f9b3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "e5d0d704-4a8a-4cb0-a2eb-84ad8f6dc8f8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ea084f3c-7895-4119-8a70-f9c0417742ab",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f28a3bda-ec21-490e-90d2-5d1e95bd54b8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f4f1d45c-b9ad-4856-8eb7-7ad20a7cacc0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f8cb136f-cfb9-480b-8a55-14eacad62851",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "42917e59-c0c4-4293-a877-7f3bb4e6a034",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fb9ed212-f2c4-4618-9944-a73f3293a977",
+     "type": "drift",
+     "impactedCount": 0
+    }
+   ],
+   "source": "health-manager",
+   "change": 10734,
+   "from": "2026-11-01T07:45:02.587Z",
+   "to": "2026-11-01T07:46:16.377Z"
+  },
+  {
+   "name": "rootCauses",
+   "value": [
+    {
+     "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+     "type": "operational",
+     "impactedCount": 2
+    },
+    {
+     "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "capacity",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "11e3e20e-91d2-4334-814a-aec5bc93e871",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "12afc2ee-39e0-4a7d-9aab-d76063d278cc",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "14e1c60e-f418-4726-92da-0a2ddc43b10a",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19834be2-f290-46f6-aef4-acff8969b821",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "2594e55e-d5a5-4204-8100-2a61dfff901d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29b608bb-c548-4588-addb-fcf3f238d271",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29d8b81f-1de0-4429-9aaa-ec451bd0dab0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "327c2776-2436-47f4-a350-266074de329d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "352117a9-ba13-465e-9b59-b34e2856ad6e",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "3a372910-267a-47b3-89b3-76ee9b4114c3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "401ee131-c949-4578-b486-814c57849b2d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "40d16eb0-cce4-40df-8fa2-ab5f13e9dfa9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4554f757-bf50-445f-b8a3-928b1524f8c3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4c84af50-c24d-481d-8790-6f4af117c50d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "4e779567-5872-44a8-8c28-deaa2e9e1292",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "57118def-0dd1-4b48-9e0b-1c5b2b17d596",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6101b828-baa8-4a3a-bd19-66f704725918",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6348879f-cd95-4292-90be-a280b2312731",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6408e1ce-0ce9-4ae2-a43b-1510e5f33501",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "67aae32d-7671-44ca-ac26-40d0a4020cbd",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6a8b6f9c-0b60-433d-91de-2b1bd03d7d61",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7018e49a-d44c-4fbc-a81d-ea5c64bc69fe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "75a5ae52-301f-436a-bc22-40fb12fad424",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "8228f4c5-e3d4-4bac-946f-ea39f7c862eb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c1b41138-6754-4294-8719-3c5901ca6fbb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c5d5c280-5b33-4079-99d9-a856e4861e9f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ce50b004-2db2-42b6-81d7-42ca82d18ebe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d07c5cb6-e77e-4ccc-aa35-7f26b3539c22",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d66c7bca-55fd-4f14-827c-f37c2f41f9b3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "e5d0d704-4a8a-4cb0-a2eb-84ad8f6dc8f8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ea084f3c-7895-4119-8a70-f9c0417742ab",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f28a3bda-ec21-490e-90d2-5d1e95bd54b8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f4f1d45c-b9ad-4856-8eb7-7ad20a7cacc0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f8cb136f-cfb9-480b-8a55-14eacad62851",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ef0d17d6-20aa-4ffb-87ff-5117b239b6eb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fb9ed212-f2c4-4618-9944-a73f3293a977",
+     "type": "drift",
+     "impactedCount": 0
+    }
+   ],
+   "source": "health-manager",
+   "change": 10764,
+   "from": "2026-11-01T07:46:16.377Z",
+   "to": "2026-11-01T07:50:12.577Z"
+  },
+  {
+   "name": "rootCauses",
+   "value": [
+    {
+     "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+     "type": "operational",
+     "impactedCount": 2
+    },
+    {
+     "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "capacity",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "12afc2ee-39e0-4a7d-9aab-d76063d278cc",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "2594e55e-d5a5-4204-8100-2a61dfff901d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29b608bb-c548-4588-addb-fcf3f238d271",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29d8b81f-1de0-4429-9aaa-ec451bd0dab0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "352117a9-ba13-465e-9b59-b34e2856ad6e",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "401ee131-c949-4578-b486-814c57849b2d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "40d16eb0-cce4-40df-8fa2-ab5f13e9dfa9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6101b828-baa8-4a3a-bd19-66f704725918",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6348879f-cd95-4292-90be-a280b2312731",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "67aae32d-7671-44ca-ac26-40d0a4020cbd",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c1b41138-6754-4294-8719-3c5901ca6fbb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c5d5c280-5b33-4079-99d9-a856e4861e9f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ce50b004-2db2-42b6-81d7-42ca82d18ebe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d66c7bca-55fd-4f14-827c-f37c2f41f9b3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f28a3bda-ec21-490e-90d2-5d1e95bd54b8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ef0d17d6-20aa-4ffb-87ff-5117b239b6eb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "3128d2bc-13af-43e6-9c73-51a42ec36a29",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7ef6525e-9b0b-47ed-887e-1362c25a89de",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fb9ed212-f2c4-4618-9944-a73f3293a977",
+     "type": "drift",
+     "impactedCount": 0
+    }
+   ],
+   "source": "health-manager",
+   "change": 10791,
+   "from": "2026-11-01T07:50:12.577Z",
+   "to": "2026-11-01T07:55:00.287Z"
+  },
+  {
+   "name": "rootCauses",
+   "value": [
+    {
+     "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+     "type": "operational",
+     "impactedCount": 2
+    },
+    {
+     "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "capacity",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "12afc2ee-39e0-4a7d-9aab-d76063d278cc",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "2594e55e-d5a5-4204-8100-2a61dfff901d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29b608bb-c548-4588-addb-fcf3f238d271",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29d8b81f-1de0-4429-9aaa-ec451bd0dab0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "352117a9-ba13-465e-9b59-b34e2856ad6e",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "401ee131-c949-4578-b486-814c57849b2d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "40d16eb0-cce4-40df-8fa2-ab5f13e9dfa9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6101b828-baa8-4a3a-bd19-66f704725918",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6348879f-cd95-4292-90be-a280b2312731",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "67aae32d-7671-44ca-ac26-40d0a4020cbd",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c1b41138-6754-4294-8719-3c5901ca6fbb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c5d5c280-5b33-4079-99d9-a856e4861e9f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ce50b004-2db2-42b6-81d7-42ca82d18ebe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d66c7bca-55fd-4f14-827c-f37c2f41f9b3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f28a3bda-ec21-490e-90d2-5d1e95bd54b8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ff1c184d-8ba7-49ed-a717-489c5ed9e60d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "3128d2bc-13af-43e6-9c73-51a42ec36a29",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7ef6525e-9b0b-47ed-887e-1362c25a89de",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fb9ed212-f2c4-4618-9944-a73f3293a977",
+     "type": "drift",
+     "impactedCount": 0
+    }
+   ],
+   "source": "health-manager",
+   "change": 10825,
+   "from": "2026-11-01T07:55:00.287Z",
+   "to": "2026-11-01T08:00:03.203Z"
+  },
+  {
+   "name": "rootCauses",
+   "value": [
+    {
+     "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+     "type": "operational",
+     "impactedCount": 2
+    },
+    {
+     "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "capacity",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "12afc2ee-39e0-4a7d-9aab-d76063d278cc",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "2594e55e-d5a5-4204-8100-2a61dfff901d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29b608bb-c548-4588-addb-fcf3f238d271",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29d8b81f-1de0-4429-9aaa-ec451bd0dab0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "352117a9-ba13-465e-9b59-b34e2856ad6e",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "401ee131-c949-4578-b486-814c57849b2d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "40d16eb0-cce4-40df-8fa2-ab5f13e9dfa9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6101b828-baa8-4a3a-bd19-66f704725918",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6348879f-cd95-4292-90be-a280b2312731",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "67aae32d-7671-44ca-ac26-40d0a4020cbd",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c1b41138-6754-4294-8719-3c5901ca6fbb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c5d5c280-5b33-4079-99d9-a856e4861e9f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ce50b004-2db2-42b6-81d7-42ca82d18ebe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d66c7bca-55fd-4f14-827c-f37c2f41f9b3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f28a3bda-ec21-490e-90d2-5d1e95bd54b8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "3128d2bc-13af-43e6-9c73-51a42ec36a29",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7ef6525e-9b0b-47ed-887e-1362c25a89de",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ff1c184d-8ba7-49ed-a717-489c5ed9e60d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fb9ed212-f2c4-4618-9944-a73f3293a977",
+     "type": "drift",
+     "impactedCount": 0
+    }
+   ],
+   "source": "health-manager",
+   "change": 10855,
+   "from": "2026-11-01T08:00:03.203Z",
+   "to": "2026-11-01T08:02:41.228Z"
+  },
+  {
+   "name": "rootCauses",
+   "value": [
+    {
+     "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+     "type": "operational",
+     "impactedCount": 2
+    },
+    {
+     "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "capacity",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "12afc2ee-39e0-4a7d-9aab-d76063d278cc",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "2594e55e-d5a5-4204-8100-2a61dfff901d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29b608bb-c548-4588-addb-fcf3f238d271",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29d8b81f-1de0-4429-9aaa-ec451bd0dab0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "352117a9-ba13-465e-9b59-b34e2856ad6e",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "401ee131-c949-4578-b486-814c57849b2d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "40d16eb0-cce4-40df-8fa2-ab5f13e9dfa9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6101b828-baa8-4a3a-bd19-66f704725918",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6348879f-cd95-4292-90be-a280b2312731",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "67aae32d-7671-44ca-ac26-40d0a4020cbd",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c1b41138-6754-4294-8719-3c5901ca6fbb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c5d5c280-5b33-4079-99d9-a856e4861e9f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ce50b004-2db2-42b6-81d7-42ca82d18ebe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d66c7bca-55fd-4f14-827c-f37c2f41f9b3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f28a3bda-ec21-490e-90d2-5d1e95bd54b8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "42917e59-c0c4-4293-a877-7f3bb4e6a034",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "3128d2bc-13af-43e6-9c73-51a42ec36a29",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7ef6525e-9b0b-47ed-887e-1362c25a89de",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fb9ed212-f2c4-4618-9944-a73f3293a977",
+     "type": "drift",
+     "impactedCount": 0
+    }
+   ],
+   "source": "health-manager",
+   "change": 10897,
+   "from": "2026-11-01T08:02:41.228Z",
+   "to": "2026-11-01T08:05:02.583Z"
+  },
+  {
+   "name": "rootCauses",
+   "value": [
+    {
+     "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+     "type": "operational",
+     "impactedCount": 2
+    },
+    {
+     "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "capacity",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "0d136269-ae0b-425c-90ce-c8ae058c4e76",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "12afc2ee-39e0-4a7d-9aab-d76063d278cc",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "2594e55e-d5a5-4204-8100-2a61dfff901d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "29d8b81f-1de0-4429-9aaa-ec451bd0dab0",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "352117a9-ba13-465e-9b59-b34e2856ad6e",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "401ee131-c949-4578-b486-814c57849b2d",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "40d16eb0-cce4-40df-8fa2-ab5f13e9dfa9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6101b828-baa8-4a3a-bd19-66f704725918",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "6348879f-cd95-4292-90be-a280b2312731",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "67aae32d-7671-44ca-ac26-40d0a4020cbd",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "b706be8b-a9a9-47f7-b400-d518b049b310",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c1b41138-6754-4294-8719-3c5901ca6fbb",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "c5d5c280-5b33-4079-99d9-a856e4861e9f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ce50b004-2db2-42b6-81d7-42ca82d18ebe",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "d66c7bca-55fd-4f14-827c-f37c2f41f9b3",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "f28a3bda-ec21-490e-90d2-5d1e95bd54b8",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fb9ed212-f2c4-4618-9944-a73f3293a977",
+     "type": "drift",
+     "impactedCount": 0
+    }
+   ],
+   "source": "health-manager",
+   "change": 10923,
+   "from": "2026-11-01T08:05:02.583Z",
+   "to": "2026-11-01T08:27:54.590Z"
+  },
+  {
+   "name": "version",
+   "value": "2.3.3+515",
+   "source": "site-manager",
+   "change": 11049,
+   "from": "2026-11-01T08:27:19.010Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T20:25:02.581Z",
+     "reason": "guest-stopped",
+     "source": "health-manager",
+     "status": "critical",
+     "derived": false,
+     "message": "not running",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T21:05:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T08:27:54.590Z",
+     "reason": "sweep-missing",
+     "source": "health-manager",
+     "status": "critical",
+     "derived": false,
+     "message": "device/testap: desired without actual; device/testcore: desired without actual; lxc/test-lxcdrift: desired without actual; share/nfsdeeptest: desired without actual; vm/test-deb-n3noha: desired without actual; vm/test-deb-nonode: desired without actual; vm/test-deb-vlannode: desired without actual; vm/test-debian: desired without actual; vm/test-fw-c: desired without actual; vm/test-fw-iot: desired without actual; vm/test-hadrift: desired without actual; vm/test-idoidc: desired without actual; vm/test-nfsconsumer: desired without actual; vm/test-nix-vlannode: desired without actual; vm/test-nixos: desired without actual; vm/tvbase-zcnode: desired without actual; zone/swdeepA: desired without actual; zone/test1: desired without actual; zone/testAllowA: desired without actual; zone/testAllowB: desired without actual; zone/testIot: desired without actual; zone/testPinhole: desired without actual",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:27:54.590Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-31T20:05:02.597Z",
+     "reason": "disk-full",
+     "source": "health-manager",
+     "status": "critical",
+     "derived": false,
+     "message": "/ at 93%, over 80%",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:05:02.597Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "11 of 26 warning",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:27:54.590Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T20:55:02.584Z",
+     "reason": "reboot-pending",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "test-deb-nonode the OS asks for a reboot",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T21:00:02.583Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "23 of 23 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:25:02.913Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "impact",
+     "since": "2026-11-01T00:04:45.410Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": true,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:27:54.590Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 11090,
+   "from": "2026-11-01T08:27:54.590Z",
+   "to": "2026-11-01T08:30:20.481Z"
+  },
+  {
+   "name": "rootCauses",
+   "value": [
+    {
+     "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+     "type": "operational",
+     "impactedCount": 2
+    },
+    {
+     "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "capacity",
+     "impactedCount": 0
+    },
+    {
+     "id": "247b3ada-42ab-4fbd-b57f-91eaf7939874",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "drift",
+     "impactedCount": 0
+    }
+   ],
+   "source": "health-manager",
+   "change": 11090,
+   "from": "2026-11-01T08:27:54.590Z",
+   "to": "2026-11-01T08:30:20.481Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T20:25:02.581Z",
+     "reason": "guest-stopped",
+     "source": "health-manager",
+     "status": "critical",
+     "derived": false,
+     "message": "not running",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T21:05:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T08:30:20.481Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "5 of 218 members warning",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-31T20:05:02.597Z",
+     "reason": "disk-full",
+     "source": "health-manager",
+     "status": "critical",
+     "derived": false,
+     "message": "/ at 93%, over 80%",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T20:05:02.597Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "security",
+     "since": "2026-10-30T09:40:04.146Z",
+     "reason": "roll-up",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": true,
+     "message": "11 of 26 warning",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T20:55:02.584Z",
+     "reason": "reboot-pending",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "test-deb-nonode the OS asks for a reboot",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T21:00:02.583Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "backup",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "23 of 23 ok",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T07:25:02.913Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "impact",
+     "since": "2026-11-01T00:04:45.410Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": true,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 11117,
+   "from": "2026-11-01T08:30:20.481Z",
+   "to": null
+  },
+  {
+   "name": "rootCauses",
+   "value": [
+    {
+     "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+     "type": "operational",
+     "impactedCount": 2
+    },
+    {
+     "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "capacity",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "29b608bb-c548-4588-addb-fcf3f238d271",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "247b3ada-42ab-4fbd-b57f-91eaf7939874",
+     "type": "operational",
+     "impactedCount": 0
+    }
+   ],
+   "source": "health-manager",
+   "change": 11117,
+   "from": "2026-11-01T08:30:20.481Z",
+   "to": "2026-11-01T08:32:11.206Z"
+  },
+  {
+   "name": "rootCauses",
+   "value": [
+    {
+     "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+     "type": "operational",
+     "impactedCount": 2
+    },
+    {
+     "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "capacity",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "247b3ada-42ab-4fbd-b57f-91eaf7939874",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "29b608bb-c548-4588-addb-fcf3f238d271",
+     "type": "drift",
+     "impactedCount": 0
+    }
+   ],
+   "source": "health-manager",
+   "change": 11159,
+   "from": "2026-11-01T08:32:11.206Z",
+   "to": "2026-11-01T08:35:02.579Z"
+  },
+  {
+   "name": "rootCauses",
+   "value": [
+    {
+     "id": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+     "type": "operational",
+     "impactedCount": 2
+    },
+    {
+     "id": "26a3e31f-14af-4907-b48f-0b35944152d0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "739cfe3b-9fc8-448b-b10b-39f4aea69229",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "d303eb7b-1eaf-42b6-a330-0c96f2eab18d",
+     "type": "security",
+     "impactedCount": 0
+    },
+    {
+     "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "f21239ae-6212-48fb-b0b4-0f19402fc40a",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+     "type": "drift",
+     "impactedCount": 0
+    },
+    {
+     "id": "1e921a29-0040-4f97-b719-984fa3ba93ed",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "6da7a770-a531-4469-b125-9f5fd7568ea2",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "capacity",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "operational",
+     "impactedCount": 0
+    },
+    {
+     "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+     "type": "maintenance",
+     "impactedCount": 0
+    },
+    {
+     "id": "247b3ada-42ab-4fbd-b57f-91eaf7939874",
+     "type": "operational",
+     "impactedCount": 0
+    }
+   ],
+   "source": "health-manager",
+   "change": 11185,
+   "from": "2026-11-01T08:35:02.579Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 241,
+   "type": "at",
+   "direction": "out",
+   "other": {
+    "id": "eb8b5e14-af28-46e3-8bf3-fb8de068683b",
+    "class": "location",
+    "name": "knudanchersvej95"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 2,
+   "from": "2026-10-30T08:47:49.432Z",
+   "to": "2026-10-30T20:08:06.511Z"
+  },
+  {
+   "id": 589,
+   "type": "at",
+   "direction": "out",
+   "other": {
+    "id": "ce79bde5-a80c-4ccf-9281-f78d5da43c78",
+    "class": "location",
+    "name": "rodovre"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 825,
+   "from": "2026-10-30T20:08:06.511Z",
+   "to": "2026-10-31T00:00:32.049Z"
+  },
+  {
+   "id": 599,
+   "type": "at",
+   "direction": "out",
+   "other": {
+    "id": "eb8b5e14-af28-46e3-8bf3-fb8de068683b",
+    "class": "location",
+    "name": "knudanchersvej95"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 1046,
+   "from": "2026-10-31T00:00:32.049Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 10452,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:00:08.581Z",
+   "drift": false
+  },
+  {
+   "id": 10482,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:05:02.579Z",
+   "drift": false
+  },
+  {
+   "id": 10512,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:10:00.624Z",
+   "drift": false
+  },
+  {
+   "id": 10542,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:15:02.578Z",
+   "drift": false
+  },
+  {
+   "id": 10572,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:20:07.817Z",
+   "drift": false
+  },
+  {
+   "id": 10602,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:25:02.587Z",
+   "drift": false
+  },
+  {
+   "id": 10632,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:30:15.026Z",
+   "drift": false
+  },
+  {
+   "id": 10662,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:35:02.582Z",
+   "drift": false
+  },
+  {
+   "id": 10734,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:45:02.587Z",
+   "drift": false
+  },
+  {
+   "id": 10764,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:46:16.377Z",
+   "drift": false
+  },
+  {
+   "id": 10791,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:50:12.577Z",
+   "drift": false
+  },
+  {
+   "id": 10825,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T07:55:00.287Z",
+   "drift": false
+  },
+  {
+   "id": 10855,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:00:03.203Z",
+   "drift": false
+  },
+  {
+   "id": 10897,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:02:41.228Z",
+   "drift": false
+  },
+  {
+   "id": 10923,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:05:02.583Z",
+   "drift": false
+  },
+  {
+   "id": 11049,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:27:19.010Z",
+   "drift": false
+  },
+  {
+   "id": 11090,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:27:54.590Z",
+   "drift": false
+  },
+  {
+   "id": 11117,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:30:20.481Z",
+   "drift": false
+  },
+  {
+   "id": 11159,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:32:11.206Z",
+   "drift": false
+  },
+  {
+   "id": 11185,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T08:35:02.579Z",
+   "drift": false
+  }
+ ]
+}

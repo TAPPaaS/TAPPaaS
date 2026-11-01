@@ -1,0 +1,153 @@
+{
+  "id": "3575b39b-f840-4338-9f11-ea3fbf347538",
+  "class": "disk",
+  "ancestors": [
+    "disk",
+    "resource",
+    "object"
+  ],
+  "name": "dsk-13",
+  "displayName": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N",
+  "physical": true,
+  "recorded": true,
+  "created": "2026-10-31T09:50:50.296Z",
+  "ended": "2026-10-31T15:19:20.505Z",
+  "lastSeen": "2026-10-31T15:19:20.505Z",
+  "seen": {
+    "site-manager": "2026-10-31T10:27:23.029Z",
+    "asset-manager": "2026-10-31T15:19:20.505Z"
+  },
+  "at": null,
+  "attributes": {
+    "bay": {
+      "value": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "bus": {
+      "value": "sata",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "conditions": {
+      "value": [
+        {
+          "type": "operational",
+          "since": "2026-10-31T09:52:08.978Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "dsk-13 (ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N): health PASSED",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T15:15:02.019Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "maintenance",
+          "since": "2026-10-31T09:52:08.978Z",
+          "reason": "ok",
+          "source": "health-manager",
+          "status": "ok",
+          "derived": false,
+          "message": "",
+          "rootCause": null,
+          "lastChecked": "2026-10-31T15:15:02.019Z",
+          "maintenance": null,
+          "acknowledged": null
+        }
+      ],
+      "source": "health-manager",
+      "since": "2026-10-31T09:52:08.978Z"
+    },
+    "displayName": {
+      "value": "ata-Samsung_SSD_870_EVO_500GB_S6PYNL0Y209497N",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "faulty": {
+      "value": false,
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "health": {
+      "value": "PASSED",
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "holds": {
+      "value": "nothing",
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "kind": {
+      "value": "ssd",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "model": {
+      "value": "Samsung_SSD_870_EVO_500GB",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "partitions": {
+      "value": [
+        {
+          "size": 1031168,
+          "holds": "bios-boot",
+          "device": "/dev/sda1"
+        },
+        {
+          "size": 1073741824,
+          "holds": "efi",
+          "device": "/dev/sda2"
+        },
+        {
+          "pool": "rpool",
+          "size": 499033054720,
+          "holds": "zfs",
+          "device": "/dev/sda3"
+        }
+      ],
+      "source": "site-manager",
+      "since": "2026-10-31T09:51:07.157Z"
+    },
+    "serial": {
+      "value": "S6PYNL0Y209497N",
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "size": {
+      "value": 500107862016,
+      "source": "asset-manager",
+      "since": "2026-10-31T09:50:50.296Z"
+    },
+    "smart": {
+      "value": {
+        "reallocated": 0,
+        "powerOnHours": 10306,
+        "uncorrectable": 0
+      },
+      "source": "site-manager",
+      "since": "2026-10-31T09:52:00.815Z"
+    },
+    "stage": {
+      "value": "disposed",
+      "source": "asset-manager",
+      "since": "2026-10-31T15:19:20.505Z"
+    },
+    "temperature": {
+      "value": 33,
+      "source": "site-manager",
+      "since": "2026-10-31T09:52:00.815Z"
+    },
+    "wearout": {
+      "value": 99,
+      "source": "site-manager",
+      "since": "2026-10-31T09:52:00.815Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

@@ -1,0 +1,27 @@
+{
+  "id": "a145a222-638d-4592-a4ef-545f7e7a10bc",
+  "class": "node",
+  "ancestors": [
+    "node",
+    "ci",
+    "object"
+  ],
+  "name": "s3",
+  "displayName": null,
+  "physical": false,
+  "recorded": false,
+  "created": "2026-10-30T19:33:20.064Z",
+  "ended": null,
+  "lastSeen": null,
+  "seen": {},
+  "at": null,
+  "attributes": {
+    "placeholder": {
+      "value": true,
+      "source": "asset-manager",
+      "since": "2026-10-30T19:33:20.064Z"
+    }
+  },
+  "drift": null,
+  "relations": []
+}

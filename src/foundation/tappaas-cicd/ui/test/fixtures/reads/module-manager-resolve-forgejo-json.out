@@ -1,0 +1,383 @@
+{
+  "module": "forgejo",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy",
+    "network:rules",
+    "identity:identity"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "fields": {
+    "aliasType": {
+      "value": "host",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "appVersion": {
+      "value": "16.0.5",
+      "defaulted": false,
+      "literal": "16.0.5",
+      "notTracking": false
+    },
+    "autoInstall": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "backup": {
+      "value": "{\"enabled\":true,\"exclude\":[],\"retention\":\"7y\"}",
+      "defaulted": false,
+      "literal": "{\"enabled\":true,\"exclude\":[],\"retention\":\"7y\"}",
+      "notTracking": true
+    },
+    "bios": {
+      "value": "ovmf",
+      "defaulted": false,
+      "literal": "ovmf",
+      "notTracking": true
+    },
+    "bridge0": {
+      "value": "lan",
+      "defaulted": false,
+      "literal": "lan",
+      "notTracking": false
+    },
+    "bridge1": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "cloudInit": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "cores": {
+      "value": "2",
+      "defaulted": false,
+      "literal": "2",
+      "notTracking": false
+    },
+    "cputype": {
+      "value": "host",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "dependsOn": {
+      "value": "[\"cluster:vm\",\"templates:nixos\",\"backup:vm\",\"network:proxy\",\"network:rules\",\"identity:identity\"]",
+      "defaulted": false,
+      "literal": "[\"cluster:vm\",\"templates:nixos\",\"backup:vm\",\"network:proxy\",\"network:rules\",\"identity:identity\"]",
+      "notTracking": false
+    },
+    "description": {
+      "value": "Forgejo — self-hosted Git service and DevOps platform (Gitea fork)",
+      "defaulted": false,
+      "literal": "Forgejo — self-hosted Git service and DevOps platform (Gitea fork)",
+      "notTracking": false
+    },
+    "diskAutoGrow": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "diskSize": {
+      "value": "20G",
+      "defaulted": false,
+      "literal": "20G",
+      "notTracking": false
+    },
+    "displayName": {
+      "value": "Forgejo",
+      "defaulted": false,
+      "literal": "Forgejo",
+      "notTracking": false
+    },
+    "environment": {
+      "value": "rossen",
+      "defaulted": false,
+      "literal": "rossen",
+      "notTracking": true
+    },
+    "firewallType": {
+      "value": "opnsense",
+      "defaulted": false,
+      "literal": "opnsense",
+      "notTracking": false
+    },
+    "identity": {
+      "value": "{\"adminGroupClaim\":\"admin\",\"configureService\":\"forgejo-configure-oidc.service\",\"launchPath\":\"/user/oauth2/authentik\",\"oidcRedirectPaths\":[\"/user/oauth2/authentik/callback\"],\"providesAdminRole\":true,\"scopes\":[\"openid\",\"email\",\"profile\"]}",
+      "defaulted": false,
+      "literal": "{\"adminGroupClaim\":\"admin\",\"configureService\":\"forgejo-configure-oidc.service\",\"launchPath\":\"/user/oauth2/authentik\",\"oidcRedirectPaths\":[\"/user/oauth2/authentik/callback\"],\"providesAdminRole\":true,\"scopes\":[\"openid\",\"email\",\"profile\"]}",
+      "notTracking": true
+    },
+    "image": {
+      "value": "8080",
+      "defaulted": false,
+      "literal": "8080",
+      "notTracking": false
+    },
+    "imageType": {
+      "value": "clone",
+      "defaulted": false,
+      "literal": "clone",
+      "notTracking": false
+    },
+    "ingress": {
+      "value": "[{\"from\":\"dmz\",\"ports\":[3000],\"protocol\":\"TCP\",\"description\":\"Caddy reverse proxy forwards HTTPS traffic to Forgejo web UI\"}]",
+      "defaulted": false,
+      "literal": "[{\"from\":\"dmz\",\"ports\":[3000],\"protocol\":\"TCP\",\"description\":\"Caddy reverse proxy forwards HTTPS traffic to Forgejo web UI\"}]",
+      "notTracking": false
+    },
+    "installTime": {
+      "value": "20261006-20:10:32",
+      "defaulted": false,
+      "literal": "20261006-20:10:32",
+      "notTracking": true
+    },
+    "integratesWith": {
+      "value": "[\"logging:logs\"]",
+      "defaulted": false,
+      "literal": "[\"logging:logs\"]",
+      "notTracking": false
+    },
+    "kind": {
+      "value": "vm",
+      "defaulted": false,
+      "literal": "vm",
+      "notTracking": false
+    },
+    "maintainer": {
+      "value": "@ErikDaniel007",
+      "defaulted": false,
+      "literal": "@ErikDaniel007",
+      "notTracking": false
+    },
+    "management": {
+      "value": "managed",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "memory": {
+      "value": "2048",
+      "defaulted": false,
+      "literal": "2048",
+      "notTracking": false
+    },
+    "moduleSource": {
+      "value": "/home/tappaas/TAPPaaS/src/devops/forgejo",
+      "defaulted": false,
+      "literal": "/home/tappaas/TAPPaaS/src/devops/forgejo",
+      "notTracking": true
+    },
+    "node": {
+      "value": "tappaas2",
+      "defaulted": false,
+      "literal": "tappaas2",
+      "notTracking": false
+    },
+    "ostype": {
+      "value": "l26",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pauseOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pausePriority": {
+      "value": "50",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pbsStorageName": {
+      "value": "tappaas_backup",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "pbsUrl": {
+      "value": "backup.mgmt.internal",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "portSync": {
+      "value": "on",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "ports": {
+      "value": "[{\"port\":3000,\"protocol\":\"TCP\",\"description\":\"Web UI and REST API\"},{\"port\":22,\"protocol\":\"TCP\",\"description\":\"SSH git access\"}]",
+      "defaulted": false,
+      "literal": "[{\"port\":3000,\"protocol\":\"TCP\",\"description\":\"Web UI and REST API\"},{\"port\":22,\"protocol\":\"TCP\",\"description\":\"SSH git access\"}]",
+      "notTracking": false
+    },
+    "provides": {
+      "value": "[\"repo\",\"oauth\"]",
+      "defaulted": false,
+      "literal": "[\"repo\",\"oauth\"]",
+      "notTracking": false
+    },
+    "proxyAllowedZones": {
+      "value": "[\"home\",\"work\",\"mgmt\",\"internet\"]",
+      "defaulted": false,
+      "literal": "[\"home\",\"work\",\"mgmt\",\"internet\"]",
+      "notTracking": false
+    },
+    "proxyPort": {
+      "value": "3000",
+      "defaulted": false,
+      "literal": "3000",
+      "notTracking": false
+    },
+    "proxyPreserveHost": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "proxyUpstreamHttp1": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "proxyUpstreamTls": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "rebootOk": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "releaseDate": {
+      "value": "2026-06-01",
+      "defaulted": false,
+      "literal": "2026-06-01",
+      "notTracking": true
+    },
+    "source": {
+      "value": "official",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "sshAccess": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "sshKeyOnly": {
+      "value": "true",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "stack": {
+      "value": "devops",
+      "defaulted": false,
+      "literal": "devops",
+      "notTracking": false
+    },
+    "status": {
+      "value": "Testing",
+      "defaulted": false,
+      "literal": "Testing",
+      "notTracking": false
+    },
+    "storage": {
+      "value": "tanka1",
+      "defaulted": false,
+      "literal": "tanka1",
+      "notTracking": false
+    },
+    "suspended": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "suspendedNoUpdate": {
+      "value": "false",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "trunks0": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "trunks1": {
+      "value": "NONE",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    },
+    "updateTime": {
+      "value": "20261101-02:15:32",
+      "defaulted": false,
+      "literal": "20261101-02:15:32",
+      "notTracking": true
+    },
+    "version": {
+      "value": "0.4.0",
+      "defaulted": false,
+      "literal": "0.4.0",
+      "notTracking": false
+    },
+    "vmid": {
+      "value": "350",
+      "defaulted": false,
+      "literal": "350",
+      "notTracking": false
+    },
+    "vmname": {
+      "value": "forgejo",
+      "defaulted": false,
+      "literal": "forgejo",
+      "notTracking": false
+    },
+    "vmtag": {
+      "value": "TAPPaaS,Community,Testing",
+      "defaulted": false,
+      "literal": "TAPPaaS,Community,Testing",
+      "notTracking": false
+    },
+    "zone0": {
+      "value": "rossen",
+      "defaulted": false,
+      "literal": "rossen",
+      "notTracking": true
+    },
+    "zone1": {
+      "value": "mgmt",
+      "defaulted": true,
+      "literal": "",
+      "notTracking": false
+    }
+  },
+  "origAvailable": true
+}

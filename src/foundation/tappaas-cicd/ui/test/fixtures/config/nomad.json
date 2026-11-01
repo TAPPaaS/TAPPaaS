@@ -1,0 +1,94 @@
+{
+  "description": "Project N.O.M.A.D. — an offline knowledge and education server: Wikipedia and other libraries, courses, books and tools, on hardware you own.",
+  "version": "0.2.0",
+  "releaseDate": "2026-10-15",
+  "installTime": "20261016-09:33:54",
+  "updateTime": "20261101-02:33:37",
+  "maintainer": "@larsrossen",
+  "status": "Development",
+  "kind": "vm",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/home/nomad",
+  "environment": "rossen",
+  "vmname": "nomad",
+  "vmid": 370,
+  "vmtag": "TAPPaaS,App,Knowledge",
+  "node": "tappaas3",
+  "zone0": "dmz",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy",
+    "network:rules",
+    "identity:accessControl"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "provides": [],
+  "appVersion": "1.35.1",
+  "displayName": "Project N.O.M.A.D.",
+  "stack": "home",
+  "config": {
+    "backup:vm": {
+      "backup": {
+        "enabled": true,
+        "exclude": [],
+        "retention": "7y"
+      }
+    },
+    "cluster:vm": {
+      "bios": "ovmf",
+      "cores": 2,
+      "memory": 4096,
+      "diskSize": "128G",
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "identity:accessControl": {
+      "gateGroups": [
+        "admin"
+      ]
+    },
+    "network:rules": {
+      "ports": [
+        {
+          "port": 8080,
+          "protocol": "TCP",
+          "description": "Command Center — reached only through the proxy and the identity gate (members of admin); the VM refuses every other source"
+        },
+        {
+          "port": "8090:8100",
+          "protocol": "TCP",
+          "description": "Information Library (Kiwix, 8090), Data Tools (8100). Ranges, not single ports: an app's port opens only when it is installed in the Command Center, so the readiness wait must not wait for it"
+        },
+        {
+          "port": "8200:8500",
+          "protocol": "TCP",
+          "description": "Notes (8200), Education Platform (Kolibri, 8310-8311), Supply Depot apps (8400-8500)"
+        }
+      ],
+      "ingress": [
+        {
+          "from": "home",
+          "ports": [
+            "8090:8100",
+            "8200:8500"
+          ],
+          "protocol": "TCP",
+          "description": "Client networks reach the apps the Command Center installs, at nomad.dmz.internal:<port>. The Command Center itself is at https://nomad.<domain>, through the proxy and the gate"
+        }
+      ]
+    },
+    "network:proxy": {
+      "proxyPort": 8080,
+      "proxyAllowedZones": [
+        "home",
+        "mgmt",
+        "admin"
+      ]
+    }
+  }
+}

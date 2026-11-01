@@ -1,0 +1,46 @@
+{
+ "id": "c71f79e4-fc8e-46ae-8939-4bad72052a4b",
+ "class": "node",
+ "name": "ISP modem",
+ "created": "2026-10-30T08:49:10.956Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "placeholder",
+   "value": true,
+   "source": "asset-manager",
+   "change": 11,
+   "from": "2026-10-30T08:49:10.956Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 453,
+   "type": "allocated-to",
+   "direction": "in",
+   "other": {
+    "id": "e58dafc8-ff83-4d74-9595-d91db9b32a9d",
+    "class": "appliance",
+    "name": "ISP modem"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 11,
+   "from": "2026-10-30T08:49:10.956Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 11,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:49:10.956Z",
+   "drift": false
+  }
+ ]
+}

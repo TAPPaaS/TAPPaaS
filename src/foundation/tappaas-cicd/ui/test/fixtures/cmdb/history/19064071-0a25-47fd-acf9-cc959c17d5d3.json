@@ -1,0 +1,336 @@
+{
+ "id": "19064071-0a25-47fd-acf9-cc959c17d5d3",
+ "class": "vm",
+ "name": "test-deb-nonode",
+ "created": "2026-10-31T20:57:22.071Z",
+ "ended": "2026-11-01T08:26:58.915Z",
+ "attributes": [
+  {
+   "name": "cores",
+   "value": 1,
+   "source": "site-manager",
+   "change": 6713,
+   "from": "2026-10-31T20:57:22.071Z",
+   "to": null
+  },
+  {
+   "name": "description",
+   "value": "Test: Debian with no explicit node or HANode (defaults from configuration.json)",
+   "source": "site-manager",
+   "change": 6713,
+   "from": "2026-10-31T20:57:22.071Z",
+   "to": null
+  },
+  {
+   "name": "desired",
+   "value": {
+    "file": "test-deb-nonode.json"
+   },
+   "source": "site-manager",
+   "change": 6713,
+   "from": "2026-10-31T20:57:22.071Z",
+   "to": null
+  },
+  {
+   "name": "disks",
+   "value": [
+    {
+     "size": "4M",
+     "storage": "tanka1"
+    },
+    {
+     "size": "4G",
+     "storage": "tanka1"
+    }
+   ],
+   "source": "site-manager",
+   "change": 6713,
+   "from": "2026-10-31T20:57:22.071Z",
+   "to": null
+  },
+  {
+   "name": "memory",
+   "value": 1024,
+   "source": "site-manager",
+   "change": 6713,
+   "from": "2026-10-31T20:57:22.071Z",
+   "to": null
+  },
+  {
+   "name": "release",
+   "value": {
+    "module": "test-vm-creation",
+    "version": "0.5"
+   },
+   "source": "site-manager",
+   "change": 6713,
+   "from": "2026-10-31T20:57:22.071Z",
+   "to": null
+  },
+  {
+   "name": "stack",
+   "value": "test",
+   "source": "site-manager",
+   "change": 6713,
+   "from": "2026-10-31T20:57:22.071Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "operational",
+   "source": "site-manager",
+   "change": 6713,
+   "from": "2026-10-31T20:57:22.071Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "name": "state",
+   "value": "running",
+   "source": "site-manager",
+   "change": 6713,
+   "from": "2026-10-31T20:57:22.071Z",
+   "to": null
+  },
+  {
+   "name": "vmid",
+   "value": 903,
+   "source": "site-manager",
+   "change": 6713,
+   "from": "2026-10-31T20:57:22.071Z",
+   "to": null
+  },
+  {
+   "name": "zone",
+   "value": "mgmt",
+   "source": "site-manager",
+   "change": 6713,
+   "from": "2026-10-31T20:57:22.071Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T21:00:02.583Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T00:01:26.213Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-31T21:00:02.583Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T21:10:08.334Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T21:00:02.583Z",
+     "reason": "reboot-pending",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "test-deb-nonode the OS asks for a reboot",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T21:05:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 6742,
+   "from": "2026-10-31T21:00:02.583Z",
+   "to": "2026-11-01T00:04:45.410Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-11-01T00:03:16.092Z",
+    "source": "sweep",
+    "desired": {
+     "file": "test-deb-nonode.json"
+    },
+    "attributes": {
+     "\u2192runs-on machine/tappaas1": {
+      "now": {},
+      "was": null
+     },
+     "\u2192member-of environment/rossen": {
+      "now": {},
+      "was": null
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 7905,
+   "from": "2026-11-01T00:03:16.092Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T21:00:02.583Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:25:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-11-01T00:04:45.410Z",
+     "reason": "sweep-missing",
+     "source": "health-manager",
+     "status": "critical",
+     "derived": false,
+     "message": "vm/test-deb-nonode: desired without actual",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:25:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "capacity",
+     "since": "2026-10-31T21:00:02.583Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T21:10:08.334Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T21:00:02.583Z",
+     "reason": "reboot-pending",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "test-deb-nonode the OS asks for a reboot",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T21:05:02.585Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 7907,
+   "from": "2026-11-01T00:04:45.410Z",
+   "to": null
+  },
+  {
+   "name": "stage",
+   "value": "retired",
+   "source": "operator",
+   "change": 11047,
+   "from": "2026-11-01T08:26:58.915Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 714,
+   "type": "member-of",
+   "direction": "out",
+   "other": {
+    "id": "9a883fd4-b028-4492-b870-4e8a16b7393c",
+    "class": "environment",
+    "name": "rossen"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 6713,
+   "from": "2026-10-31T20:57:22.071Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  },
+  {
+   "id": 715,
+   "type": "runs-on",
+   "direction": "out",
+   "other": {
+    "id": "c11c3e17-fe34-4bd7-bed6-6f8b259469c8",
+    "class": "machine",
+    "name": "tappaas1"
+   },
+   "attributes": {},
+   "source": "site-manager",
+   "change": 6713,
+   "from": "2026-10-31T20:57:22.071Z",
+   "to": "2026-11-01T08:26:58.915Z"
+  }
+ ],
+ "changes": [
+  {
+   "id": 6713,
+   "kind": "observation",
+   "source": "site-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T20:57:22.071Z",
+   "drift": false
+  },
+  {
+   "id": 6742,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T21:00:02.583Z",
+   "drift": false
+  },
+  {
+   "id": 7905,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-11-01T00:03:16.092Z",
+   "drift": true
+  },
+  {
+   "id": 7907,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-11-01T00:04:45.410Z",
+   "drift": false
+  },
+  {
+   "id": 11047,
+   "kind": "change",
+   "source": "operator",
+   "job": null,
+   "verb": "retire deep-test leftovers",
+   "actor": null,
+   "time": "2026-11-01T08:26:58.915Z",
+   "drift": false
+  }
+ ]
+}

@@ -1,0 +1,574 @@
+{
+ "id": "bef68e7e-2644-4d97-8284-df97074dd701",
+ "class": "network-device",
+ "name": "ap-01",
+ "created": "2026-10-30T08:49:10.799Z",
+ "ended": null,
+ "attributes": [
+  {
+   "name": "deviceType",
+   "value": "access-point",
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "name": "displayName",
+   "value": "Nano HD",
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": "2026-10-30T19:34:31.714Z"
+  },
+  {
+   "name": "faulty",
+   "value": false,
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "name": "model",
+   "value": "U7NHD",
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": "2026-10-30T19:34:31.714Z"
+  },
+  {
+   "name": "stage",
+   "value": "operational",
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": "2026-10-30T19:34:31.714Z"
+  },
+  {
+   "name": "vendor",
+   "value": "unifi",
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": null
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-30T12:58:06.962Z",
+    "source": "sweep",
+    "desired": null,
+    "attributes": {
+     "\u2192allocated-to device/Nano HD": {
+      "now": null,
+      "was": {}
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 305,
+   "from": "2026-10-30T12:58:06.962Z",
+   "to": "2026-10-30T14:34:19.677Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-30T12:59:36.103Z",
+     "reason": "sweep-gone",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "network-device/ap-01: drift: gone \u2192allocated-to device/Nano HD",
+     "rootCause": null,
+     "lastChecked": "2026-10-30T14:32:46.038Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 307,
+   "from": "2026-10-30T12:59:36.103Z",
+   "to": "2026-10-30T14:35:49.161Z"
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-30T12:58:06.962Z",
+    "source": "sweep",
+    "desired": null,
+    "attributes": {
+     "\u2192allocated-to device/Nano HD": {
+      "now": {},
+      "was": null
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 412,
+   "from": "2026-10-30T14:34:19.677Z",
+   "to": "2026-10-30T19:34:31.714Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-30T14:35:49.161Z",
+     "reason": "sweep-appeared",
+     "source": "health-manager",
+     "status": "warning",
+     "derived": false,
+     "message": "network-device/ap-01: drift: appeared \u2192allocated-to device/Nano HD",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:00:51.500Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 414,
+   "from": "2026-10-30T14:35:49.161Z",
+   "to": "2026-10-31T00:04:27.092Z"
+  },
+  {
+   "name": "displayName",
+   "value": "ap-living",
+   "source": "asset-manager",
+   "change": 740,
+   "from": "2026-10-30T19:34:31.714Z",
+   "to": "2026-10-31T00:02:55.425Z"
+  },
+  {
+   "name": "stage",
+   "value": "stock",
+   "source": "asset-manager",
+   "change": 740,
+   "from": "2026-10-30T19:34:31.714Z",
+   "to": "2026-10-30T19:34:38.670Z"
+  },
+  {
+   "name": "stage",
+   "value": "operational",
+   "source": "asset-manager",
+   "change": 741,
+   "from": "2026-10-30T19:34:38.670Z",
+   "to": null
+  },
+  {
+   "name": "displayName",
+   "value": "Nano HD",
+   "source": "asset-manager",
+   "change": 1056,
+   "from": "2026-10-31T00:02:55.425Z",
+   "to": null
+  },
+  {
+   "name": "drift",
+   "value": {
+    "since": "2026-10-31T00:02:55.425Z",
+    "source": "asset-manager",
+    "desired": null,
+    "attributes": {
+     "displayName": {
+      "now": "Nano HD",
+      "was": "ap-living"
+     }
+    }
+   },
+   "source": "cmdb-controller",
+   "change": 1056,
+   "from": "2026-10-31T00:02:55.425Z",
+   "to": "2026-10-31T21:25:37.898Z"
+  },
+  {
+   "name": "model",
+   "value": "U7NHD",
+   "source": "asset-manager",
+   "change": 1056,
+   "from": "2026-10-31T00:02:55.425Z",
+   "to": null
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:04:27.092Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1080,
+   "from": "2026-10-31T00:04:27.092Z",
+   "to": "2026-10-31T07:25:02.913Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "follows",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": true,
+     "message": "follows device Nano HD",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "drift",
+     "since": "2026-10-31T00:04:27.092Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-10-31T00:04:27.092Z",
+     "maintenance": null,
+     "acknowledged": null
+    },
+    {
+     "type": "maintenance",
+     "since": "2026-10-31T07:25:02.913Z",
+     "reason": "ok",
+     "source": "health-manager",
+     "status": "ok",
+     "derived": false,
+     "message": "",
+     "rootCause": null,
+     "lastChecked": "2026-11-01T08:50:02.363Z",
+     "maintenance": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "change": 1355,
+   "from": "2026-10-31T07:25:02.913Z",
+   "to": null
+  }
+ ],
+ "relations": [
+  {
+   "id": 441,
+   "type": "placed-in",
+   "direction": "out",
+   "other": {
+    "id": "c2915fa3-ac0c-4647-994e-46ae1524cb41",
+    "class": "room",
+    "name": "stue"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 10,
+   "from": "2026-10-30T08:49:10.799Z",
+   "to": "2026-10-30T19:34:31.714Z"
+  },
+  {
+   "id": 454,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "161a0c6b-e193-4c51-8b26-23775470876e",
+    "class": "device",
+    "name": "Nano HD"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 12,
+   "from": "2026-10-30T08:49:10.964Z",
+   "to": "2026-10-30T12:58:05.487Z"
+  },
+  {
+   "id": 464,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "21282cac-da44-4a18-85b3-262fbe80da45",
+    "class": "port",
+    "name": "wifi"
+   },
+   "attributes": {},
+   "source": "ap-manager",
+   "change": 21,
+   "from": "2026-10-30T08:49:11.095Z",
+   "to": null
+  },
+  {
+   "id": 463,
+   "type": "part-of",
+   "direction": "in",
+   "other": {
+    "id": "b8d80e29-daa4-4e85-9c80-4f0f83240e97",
+    "class": "port",
+    "name": "uplink"
+   },
+   "attributes": {},
+   "source": "ap-manager",
+   "change": 21,
+   "from": "2026-10-30T08:49:11.095Z",
+   "to": null
+  },
+  {
+   "id": 546,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "161a0c6b-e193-4c51-8b26-23775470876e",
+    "class": "device",
+    "name": "Nano HD"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 371,
+   "from": "2026-10-30T14:32:14.762Z",
+   "to": "2026-10-30T19:34:31.714Z"
+  },
+  {
+   "id": 565,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "16f1fe3b-b8f5-4f7d-851f-a131fe970524",
+    "class": "node",
+    "name": "ap-living"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 742,
+   "from": "2026-10-30T19:34:38.684Z",
+   "to": "2026-10-30T19:35:52.202Z"
+  },
+  {
+   "id": 570,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "1c1bf72f-501e-4ca5-9d7d-fa27fbd4025a",
+    "class": "node",
+    "name": "ap1"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 761,
+   "from": "2026-10-30T19:35:52.202Z",
+   "to": "2026-10-31T00:02:55.574Z"
+  },
+  {
+   "id": 604,
+   "type": "placed-in",
+   "direction": "out",
+   "other": {
+    "id": "c2915fa3-ac0c-4647-994e-46ae1524cb41",
+    "class": "room",
+    "name": "stue"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 1056,
+   "from": "2026-10-31T00:02:55.425Z",
+   "to": null
+  },
+  {
+   "id": 606,
+   "type": "allocated-to",
+   "direction": "out",
+   "other": {
+    "id": "161a0c6b-e193-4c51-8b26-23775470876e",
+    "class": "device",
+    "name": "Nano HD"
+   },
+   "attributes": {},
+   "source": "asset-manager",
+   "change": 1058,
+   "from": "2026-10-31T00:02:55.574Z",
+   "to": null
+  }
+ ],
+ "changes": [
+  {
+   "id": 10,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:49:10.799Z",
+   "drift": false
+  },
+  {
+   "id": 12,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:49:10.964Z",
+   "drift": false
+  },
+  {
+   "id": 21,
+   "kind": "observation",
+   "source": "ap-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T08:49:11.095Z",
+   "drift": false
+  },
+  {
+   "id": 305,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-30T12:58:06.962Z",
+   "drift": true
+  },
+  {
+   "id": 307,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T12:59:36.103Z",
+   "drift": false
+  },
+  {
+   "id": 371,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T14:32:14.762Z",
+   "drift": false
+  },
+  {
+   "id": 412,
+   "kind": "observation",
+   "source": "cmdb-controller",
+   "job": null,
+   "verb": "sweep",
+   "actor": null,
+   "time": "2026-10-30T14:34:19.677Z",
+   "drift": true
+  },
+  {
+   "id": 414,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-30T14:35:49.161Z",
+   "drift": false
+  },
+  {
+   "id": 740,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset add",
+   "actor": "tappaas",
+   "time": "2026-10-30T19:34:31.714Z",
+   "drift": false
+  },
+  {
+   "id": 741,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset allocate",
+   "actor": "tappaas",
+   "time": "2026-10-30T19:34:38.670Z",
+   "drift": false
+  },
+  {
+   "id": 742,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset allocate",
+   "actor": "tappaas",
+   "time": "2026-10-30T19:34:38.684Z",
+   "drift": false
+  },
+  {
+   "id": 761,
+   "kind": "change",
+   "source": "asset-manager",
+   "job": null,
+   "verb": "asset allocate",
+   "actor": "tappaas",
+   "time": "2026-10-30T19:35:52.202Z",
+   "drift": false
+  },
+  {
+   "id": 1056,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T00:02:55.425Z",
+   "drift": true
+  },
+  {
+   "id": 1058,
+   "kind": "observation",
+   "source": "asset-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T00:02:55.574Z",
+   "drift": false
+  },
+  {
+   "id": 1080,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T00:04:27.092Z",
+   "drift": false
+  },
+  {
+   "id": 1355,
+   "kind": "observation",
+   "source": "health-manager",
+   "job": null,
+   "verb": null,
+   "actor": null,
+   "time": "2026-10-31T07:25:02.913Z",
+   "drift": false
+  },
+  {
+   "id": 6897,
+   "kind": "change",
+   "source": "ap-manager",
+   "job": null,
+   "verb": "ap-manager reconcile --apply",
+   "actor": "tappaas",
+   "time": "2026-10-31T21:25:37.898Z",
+   "drift": false
+  }
+ ]
+}
