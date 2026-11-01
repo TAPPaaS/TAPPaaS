@@ -694,6 +694,18 @@ The whole console on a laptop, from what `test/fixtures/capture.sh` recorded (`t
 
 A module with no icon answers 404 on `modules/<name>/icon`, here as on a site: the page draws its initial, and the browser logs the 404.
 
+### Visual capture: every page at four sizes
+
+```bash
+ui/web/e2e/run.sh [--update-baseline] [--routes id,…] [--viewports phone,tablet,laptop,desktop] [--allow id,…] [--port 9097] [--base <ref>]
+```
+
+One command for the loop of editing the front end: it builds `src` and the web app (into `e2e/out/web-dist`, never the committed `web/dist`), starts `fixture-server.sh` on it (`CONSOLE_WEB_DIR`), captures every route of `e2e/routes.json` at phone 390×844, tablet 820×1180, laptop 1366×768 and desktop 1920×1080, compares with the baseline and prints the path of `e2e/out/report.md`: the changed routes first, a route × viewport table (the share of pixels that differ, a `diff/<viewport>/<id>.png` above 0.1 %, T when the accessibility text changed), the text diffs, and "N routes differ, M unchanged". It exits 1 when a capture fails or a route differs that `--allow` does not name. A full run takes about 2½ minutes on the Mac; `--routes overview --viewports laptop` about 8 s. Once: `cd web && npm ci && npx playwright install chromium`.
+
+- **Routes** (`routes.json`): `{id, path, open?, settle?}`. Every page, each module, `/health?select=` on one object of each class, one side panel of Operations, Physical, Devices, Storage and Assets, and each Day 2 wizard at step 1, opened by a click (`open: [{role: "button", name: "Add a node…"}]`) and captured at the viewport, not the page under it.
+- **Capture** (`capture.ts`, Playwright, Chromium): the browser's clock fixed at the fixtures' `CAPTURED` time, reduced motion, no animation, transition, caret or scrollbar, a fixed locale and time zone; it waits for the network, the `settle` text, the fonts and a DOM quiet for 400 ms. A console error or a non-2xx response fails the route (the icon 404s aside). It writes `out/shots/<viewport>/<id>.png` and `.txt` (`ariaSnapshot`: role "name": value, one node per line).
+- **Baseline** (`e2e/baseline/`): the `.txt` files are in git, the PNGs local and stamped with their commit (`STAMP`). They are reused while the stamp lies between the merge base with `--base` (default `$E2E_BASE`, else `adr-041`) and HEAD; otherwise made again from the last commit since the merge base that changed `baseline/` (else the merge base), in a temporary `git worktree` of it, or from the working tree when its console equals that commit's. `--update-baseline` makes the working tree the baseline: commit the `.txt` files with the change the operator accepted.
+
 ## Tests
 
 `test.sh`: `tsc` on the backend and the unit suite (`test/unit/*.test.ts`) — `fixturemode` the fixture mode (what the runner answers and journals, the actor, the clock, the server itself started over the capture); the Health view over
