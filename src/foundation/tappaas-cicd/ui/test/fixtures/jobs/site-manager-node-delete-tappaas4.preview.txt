@@ -1,0 +1,9 @@
+[preview] node delete 'tappaas4' → /home/tappaas/TAPPaaS/src/foundation/cluster/remove-node.sh --dry-run tappaas4
+[Info] Step 1: Can tappaas4 leave the cluster
+[Info]   ✓ 3 other nodes answer: tappaas1, tappaas2, tappaas3
+[Info] Step 2: What tappaas4 still holds
+[Info]   ✓ nothing — no guest, replication job, HA rule or PBS
+[Info]   park switch port 7 on USW Pro XG 10 PoE (it was tappaas4's)
+[Info] DRY-RUN complete — no changes made.
+  then: its node record 'tappaas4' is deleted
+  then: asset srv-04 is released from tappaas4 and kept: it goes back to stock

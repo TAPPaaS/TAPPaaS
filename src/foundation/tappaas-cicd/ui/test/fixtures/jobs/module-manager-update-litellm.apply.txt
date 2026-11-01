@@ -1,0 +1,341 @@
+[Info] module-manager update litellm: to its release
+[Info] Step 1: snapshot litellm before the update
+  ✓ snapshot tappaas-20261101 taken
+  converge litellm: service postgres — step 1: checked, unchanged
+  converge litellm: service redis — step 2: checked, unchanged
+  converge litellm: service litellm — step 3: checked, unchanged
+  converge litellm: service postgres — step 4: checked, unchanged
+  converge litellm: service redis — step 5: checked, unchanged
+  converge litellm: service litellm — step 6: checked, unchanged
+  converge litellm: service postgres — step 7: checked, unchanged
+  converge litellm: service redis — step 8: checked, unchanged
+  converge litellm: service litellm — step 9: checked, unchanged
+  converge litellm: service postgres — step 10: checked, unchanged
+  converge litellm: service redis — step 11: checked, unchanged
+  converge litellm: service litellm — step 12: checked, unchanged
+  converge litellm: service postgres — step 13: checked, unchanged
+  converge litellm: service redis — step 14: checked, unchanged
+  converge litellm: service litellm — step 15: checked, unchanged
+  converge litellm: service postgres — step 16: checked, unchanged
+  converge litellm: service redis — step 17: checked, unchanged
+  converge litellm: service litellm — step 18: checked, unchanged
+  converge litellm: service postgres — step 19: checked, unchanged
+  converge litellm: service redis — step 20: checked, unchanged
+  converge litellm: service litellm — step 21: checked, unchanged
+  converge litellm: service postgres — step 22: checked, unchanged
+  converge litellm: service redis — step 23: checked, unchanged
+  converge litellm: service litellm — step 24: checked, unchanged
+  converge litellm: service postgres — step 25: checked, unchanged
+  converge litellm: service redis — step 26: checked, unchanged
+  converge litellm: service litellm — step 27: checked, unchanged
+  converge litellm: service postgres — step 28: checked, unchanged
+  converge litellm: service redis — step 29: checked, unchanged
+  converge litellm: service litellm — step 30: checked, unchanged
+  converge litellm: service postgres — step 31: checked, unchanged
+  converge litellm: service redis — step 32: checked, unchanged
+  converge litellm: service litellm — step 33: checked, unchanged
+  converge litellm: service postgres — step 34: checked, unchanged
+  converge litellm: service redis — step 35: checked, unchanged
+  converge litellm: service litellm — step 36: checked, unchanged
+  converge litellm: service postgres — step 37: checked, unchanged
+  converge litellm: service redis — step 38: checked, unchanged
+  converge litellm: service litellm — step 39: checked, unchanged
+  converge litellm: service postgres — step 40: checked, unchanged
+  converge litellm: service redis — step 41: checked, unchanged
+  converge litellm: service litellm — step 42: checked, unchanged
+  converge litellm: service postgres — step 43: checked, unchanged
+  converge litellm: service redis — step 44: checked, unchanged
+  converge litellm: service litellm — step 45: checked, unchanged
+  converge litellm: service postgres — step 46: checked, unchanged
+  converge litellm: service redis — step 47: checked, unchanged
+  converge litellm: service litellm — step 48: checked, unchanged
+  converge litellm: service postgres — step 49: checked, unchanged
+  converge litellm: service redis — step 50: checked, unchanged
+  converge litellm: service litellm — step 51: checked, unchanged
+  converge litellm: service postgres — step 52: checked, unchanged
+  converge litellm: service redis — step 53: checked, unchanged
+  converge litellm: service litellm — step 54: checked, unchanged
+  converge litellm: service postgres — step 55: checked, unchanged
+  converge litellm: service redis — step 56: checked, unchanged
+  converge litellm: service litellm — step 57: checked, unchanged
+  converge litellm: service postgres — step 58: checked, unchanged
+  converge litellm: service redis — step 59: checked, unchanged
+  converge litellm: service litellm — step 60: checked, unchanged
+  converge litellm: service postgres — step 61: checked, unchanged
+  converge litellm: service redis — step 62: checked, unchanged
+  converge litellm: service litellm — step 63: checked, unchanged
+  converge litellm: service postgres — step 64: checked, unchanged
+  converge litellm: service redis — step 65: checked, unchanged
+  converge litellm: service litellm — step 66: checked, unchanged
+  converge litellm: service postgres — step 67: checked, unchanged
+  converge litellm: service redis — step 68: checked, unchanged
+  converge litellm: service litellm — step 69: checked, unchanged
+  converge litellm: service postgres — step 70: checked, unchanged
+  converge litellm: service redis — step 71: checked, unchanged
+  converge litellm: service litellm — step 72: checked, unchanged
+  converge litellm: service postgres — step 73: checked, unchanged
+  converge litellm: service redis — step 74: checked, unchanged
+  converge litellm: service litellm — step 75: checked, unchanged
+  converge litellm: service postgres — step 76: checked, unchanged
+  converge litellm: service redis — step 77: checked, unchanged
+  converge litellm: service litellm — step 78: checked, unchanged
+  converge litellm: service postgres — step 79: checked, unchanged
+  converge litellm: service redis — step 80: checked, unchanged
+  converge litellm: service litellm — step 81: checked, unchanged
+  converge litellm: service postgres — step 82: checked, unchanged
+  converge litellm: service redis — step 83: checked, unchanged
+  converge litellm: service litellm — step 84: checked, unchanged
+  converge litellm: service postgres — step 85: checked, unchanged
+  converge litellm: service redis — step 86: checked, unchanged
+  converge litellm: service litellm — step 87: checked, unchanged
+  converge litellm: service postgres — step 88: checked, unchanged
+  converge litellm: service redis — step 89: checked, unchanged
+  converge litellm: service litellm — step 90: checked, unchanged
+  converge litellm: service postgres — step 91: checked, unchanged
+  converge litellm: service redis — step 92: checked, unchanged
+  converge litellm: service litellm — step 93: checked, unchanged
+  converge litellm: service postgres — step 94: checked, unchanged
+  converge litellm: service redis — step 95: checked, unchanged
+  converge litellm: service litellm — step 96: checked, unchanged
+  converge litellm: service postgres — step 97: checked, unchanged
+  converge litellm: service redis — step 98: checked, unchanged
+  converge litellm: service litellm — step 99: checked, unchanged
+  converge litellm: service postgres — step 100: checked, unchanged
+  converge litellm: service redis — step 101: checked, unchanged
+  converge litellm: service litellm — step 102: checked, unchanged
+  converge litellm: service postgres — step 103: checked, unchanged
+  converge litellm: service redis — step 104: checked, unchanged
+  converge litellm: service litellm — step 105: checked, unchanged
+  converge litellm: service postgres — step 106: checked, unchanged
+  converge litellm: service redis — step 107: checked, unchanged
+  converge litellm: service litellm — step 108: checked, unchanged
+  converge litellm: service postgres — step 109: checked, unchanged
+  converge litellm: service redis — step 110: checked, unchanged
+  converge litellm: service litellm — step 111: checked, unchanged
+  converge litellm: service postgres — step 112: checked, unchanged
+  converge litellm: service redis — step 113: checked, unchanged
+  converge litellm: service litellm — step 114: checked, unchanged
+  converge litellm: service postgres — step 115: checked, unchanged
+  converge litellm: service redis — step 116: checked, unchanged
+  converge litellm: service litellm — step 117: checked, unchanged
+  converge litellm: service postgres — step 118: checked, unchanged
+  converge litellm: service redis — step 119: checked, unchanged
+  converge litellm: service litellm — step 120: checked, unchanged
+  converge litellm: service postgres — step 121: checked, unchanged
+  converge litellm: service redis — step 122: checked, unchanged
+  converge litellm: service litellm — step 123: checked, unchanged
+  converge litellm: service postgres — step 124: checked, unchanged
+  converge litellm: service redis — step 125: checked, unchanged
+  converge litellm: service litellm — step 126: checked, unchanged
+  converge litellm: service postgres — step 127: checked, unchanged
+  converge litellm: service redis — step 128: checked, unchanged
+  converge litellm: service litellm — step 129: checked, unchanged
+  converge litellm: service postgres — step 130: checked, unchanged
+  converge litellm: service redis — step 131: checked, unchanged
+  converge litellm: service litellm — step 132: checked, unchanged
+  converge litellm: service postgres — step 133: checked, unchanged
+  converge litellm: service redis — step 134: checked, unchanged
+  converge litellm: service litellm — step 135: checked, unchanged
+  converge litellm: service postgres — step 136: checked, unchanged
+  converge litellm: service redis — step 137: checked, unchanged
+  converge litellm: service litellm — step 138: checked, unchanged
+  converge litellm: service postgres — step 139: checked, unchanged
+  converge litellm: service redis — step 140: checked, unchanged
+  converge litellm: service litellm — step 141: checked, unchanged
+  converge litellm: service postgres — step 142: checked, unchanged
+  converge litellm: service redis — step 143: checked, unchanged
+  converge litellm: service litellm — step 144: checked, unchanged
+  converge litellm: service postgres — step 145: checked, unchanged
+  converge litellm: service redis — step 146: checked, unchanged
+  converge litellm: service litellm — step 147: checked, unchanged
+  converge litellm: service postgres — step 148: checked, unchanged
+  converge litellm: service redis — step 149: checked, unchanged
+  converge litellm: service litellm — step 150: checked, unchanged
+  converge litellm: service postgres — step 151: checked, unchanged
+  converge litellm: service redis — step 152: checked, unchanged
+  converge litellm: service litellm — step 153: checked, unchanged
+  converge litellm: service postgres — step 154: checked, unchanged
+  converge litellm: service redis — step 155: checked, unchanged
+  converge litellm: service litellm — step 156: checked, unchanged
+  converge litellm: service postgres — step 157: checked, unchanged
+  converge litellm: service redis — step 158: checked, unchanged
+  converge litellm: service litellm — step 159: checked, unchanged
+  converge litellm: service postgres — step 160: checked, unchanged
+  converge litellm: service redis — step 161: checked, unchanged
+  converge litellm: service litellm — step 162: checked, unchanged
+  converge litellm: service postgres — step 163: checked, unchanged
+  converge litellm: service redis — step 164: checked, unchanged
+  converge litellm: service litellm — step 165: checked, unchanged
+  converge litellm: service postgres — step 166: checked, unchanged
+  converge litellm: service redis — step 167: checked, unchanged
+  converge litellm: service litellm — step 168: checked, unchanged
+  converge litellm: service postgres — step 169: checked, unchanged
+  converge litellm: service redis — step 170: checked, unchanged
+  converge litellm: service litellm — step 171: checked, unchanged
+  converge litellm: service postgres — step 172: checked, unchanged
+  converge litellm: service redis — step 173: checked, unchanged
+  converge litellm: service litellm — step 174: checked, unchanged
+  converge litellm: service postgres — step 175: checked, unchanged
+  converge litellm: service redis — step 176: checked, unchanged
+  converge litellm: service litellm — step 177: checked, unchanged
+  converge litellm: service postgres — step 178: checked, unchanged
+  converge litellm: service redis — step 179: checked, unchanged
+  converge litellm: service litellm — step 180: checked, unchanged
+  converge litellm: service postgres — step 181: checked, unchanged
+  converge litellm: service redis — step 182: checked, unchanged
+  converge litellm: service litellm — step 183: checked, unchanged
+  converge litellm: service postgres — step 184: checked, unchanged
+  converge litellm: service redis — step 185: checked, unchanged
+  converge litellm: service litellm — step 186: checked, unchanged
+  converge litellm: service postgres — step 187: checked, unchanged
+  converge litellm: service redis — step 188: checked, unchanged
+  converge litellm: service litellm — step 189: checked, unchanged
+  converge litellm: service postgres — step 190: checked, unchanged
+  converge litellm: service redis — step 191: checked, unchanged
+  converge litellm: service litellm — step 192: checked, unchanged
+  converge litellm: service postgres — step 193: checked, unchanged
+  converge litellm: service redis — step 194: checked, unchanged
+  converge litellm: service litellm — step 195: checked, unchanged
+  converge litellm: service postgres — step 196: checked, unchanged
+  converge litellm: service redis — step 197: checked, unchanged
+  converge litellm: service litellm — step 198: checked, unchanged
+  converge litellm: service postgres — step 199: checked, unchanged
+  converge litellm: service redis — step 200: checked, unchanged
+  converge litellm: service litellm — step 201: checked, unchanged
+  converge litellm: service postgres — step 202: checked, unchanged
+  converge litellm: service redis — step 203: checked, unchanged
+  converge litellm: service litellm — step 204: checked, unchanged
+  converge litellm: service postgres — step 205: checked, unchanged
+  converge litellm: service redis — step 206: checked, unchanged
+  converge litellm: service litellm — step 207: checked, unchanged
+  converge litellm: service postgres — step 208: checked, unchanged
+  converge litellm: service redis — step 209: checked, unchanged
+  converge litellm: service litellm — step 210: checked, unchanged
+  converge litellm: service postgres — step 211: checked, unchanged
+  converge litellm: service redis — step 212: checked, unchanged
+  converge litellm: service litellm — step 213: checked, unchanged
+  converge litellm: service postgres — step 214: checked, unchanged
+  converge litellm: service redis — step 215: checked, unchanged
+  converge litellm: service litellm — step 216: checked, unchanged
+  converge litellm: service postgres — step 217: checked, unchanged
+  converge litellm: service redis — step 218: checked, unchanged
+  converge litellm: service litellm — step 219: checked, unchanged
+  converge litellm: service postgres — step 220: checked, unchanged
+  converge litellm: service redis — step 221: checked, unchanged
+  converge litellm: service litellm — step 222: checked, unchanged
+  converge litellm: service postgres — step 223: checked, unchanged
+  converge litellm: service redis — step 224: checked, unchanged
+  converge litellm: service litellm — step 225: checked, unchanged
+  converge litellm: service postgres — step 226: checked, unchanged
+  converge litellm: service redis — step 227: checked, unchanged
+  converge litellm: service litellm — step 228: checked, unchanged
+  converge litellm: service postgres — step 229: checked, unchanged
+  converge litellm: service redis — step 230: checked, unchanged
+  converge litellm: service litellm — step 231: checked, unchanged
+  converge litellm: service postgres — step 232: checked, unchanged
+  converge litellm: service redis — step 233: checked, unchanged
+  converge litellm: service litellm — step 234: checked, unchanged
+  converge litellm: service postgres — step 235: checked, unchanged
+  converge litellm: service redis — step 236: checked, unchanged
+  converge litellm: service litellm — step 237: checked, unchanged
+  converge litellm: service postgres — step 238: checked, unchanged
+  converge litellm: service redis — step 239: checked, unchanged
+  converge litellm: service litellm — step 240: checked, unchanged
+  converge litellm: service postgres — step 241: checked, unchanged
+  converge litellm: service redis — step 242: checked, unchanged
+  converge litellm: service litellm — step 243: checked, unchanged
+  converge litellm: service postgres — step 244: checked, unchanged
+  converge litellm: service redis — step 245: checked, unchanged
+  converge litellm: service litellm — step 246: checked, unchanged
+  converge litellm: service postgres — step 247: checked, unchanged
+  converge litellm: service redis — step 248: checked, unchanged
+  converge litellm: service litellm — step 249: checked, unchanged
+  converge litellm: service postgres — step 250: checked, unchanged
+  converge litellm: service redis — step 251: checked, unchanged
+  converge litellm: service litellm — step 252: checked, unchanged
+  converge litellm: service postgres — step 253: checked, unchanged
+  converge litellm: service redis — step 254: checked, unchanged
+  converge litellm: service litellm — step 255: checked, unchanged
+  converge litellm: service postgres — step 256: checked, unchanged
+  converge litellm: service redis — step 257: checked, unchanged
+  converge litellm: service litellm — step 258: checked, unchanged
+  converge litellm: service postgres — step 259: checked, unchanged
+  converge litellm: service redis — step 260: checked, unchanged
+  converge litellm: service litellm — step 261: checked, unchanged
+  converge litellm: service postgres — step 262: checked, unchanged
+  converge litellm: service redis — step 263: checked, unchanged
+  converge litellm: service litellm — step 264: checked, unchanged
+  converge litellm: service postgres — step 265: checked, unchanged
+  converge litellm: service redis — step 266: checked, unchanged
+  converge litellm: service litellm — step 267: checked, unchanged
+  converge litellm: service postgres — step 268: checked, unchanged
+  converge litellm: service redis — step 269: checked, unchanged
+  converge litellm: service litellm — step 270: checked, unchanged
+  converge litellm: service postgres — step 271: checked, unchanged
+  converge litellm: service redis — step 272: checked, unchanged
+  converge litellm: service litellm — step 273: checked, unchanged
+  converge litellm: service postgres — step 274: checked, unchanged
+  converge litellm: service redis — step 275: checked, unchanged
+  converge litellm: service litellm — step 276: checked, unchanged
+  converge litellm: service postgres — step 277: checked, unchanged
+  converge litellm: service redis — step 278: checked, unchanged
+  converge litellm: service litellm — step 279: checked, unchanged
+  converge litellm: service postgres — step 280: checked, unchanged
+  converge litellm: service redis — step 281: checked, unchanged
+  converge litellm: service litellm — step 282: checked, unchanged
+  converge litellm: service postgres — step 283: checked, unchanged
+  converge litellm: service redis — step 284: checked, unchanged
+  converge litellm: service litellm — step 285: checked, unchanged
+  converge litellm: service postgres — step 286: checked, unchanged
+  converge litellm: service redis — step 287: checked, unchanged
+  converge litellm: service litellm — step 288: checked, unchanged
+  converge litellm: service postgres — step 289: checked, unchanged
+  converge litellm: service redis — step 290: checked, unchanged
+  converge litellm: service litellm — step 291: checked, unchanged
+  converge litellm: service postgres — step 292: checked, unchanged
+  converge litellm: service redis — step 293: checked, unchanged
+  converge litellm: service litellm — step 294: checked, unchanged
+  converge litellm: service postgres — step 295: checked, unchanged
+  converge litellm: service redis — step 296: checked, unchanged
+  converge litellm: service litellm — step 297: checked, unchanged
+  converge litellm: waiting for the service to answer — try 1
+  converge litellm: waiting for the service to answer — try 2
+  converge litellm: waiting for the service to answer — try 3
+  converge litellm: waiting for the service to answer — try 4
+  converge litellm: waiting for the service to answer — try 5
+  converge litellm: waiting for the service to answer — try 6
+  converge litellm: waiting for the service to answer — try 7
+  converge litellm: waiting for the service to answer — try 8
+  converge litellm: waiting for the service to answer — try 9
+  converge litellm: waiting for the service to answer — try 10
+  converge litellm: waiting for the service to answer — try 11
+  converge litellm: waiting for the service to answer — try 12
+  converge litellm: waiting for the service to answer — try 13
+  converge litellm: waiting for the service to answer — try 14
+  converge litellm: waiting for the service to answer — try 15
+  converge litellm: waiting for the service to answer — try 16
+  converge litellm: waiting for the service to answer — try 17
+  converge litellm: waiting for the service to answer — try 18
+  converge litellm: waiting for the service to answer — try 19
+  converge litellm: waiting for the service to answer — try 20
+  converge litellm: waiting for the service to answer — try 21
+  converge litellm: waiting for the service to answer — try 22
+  converge litellm: waiting for the service to answer — try 23
+  converge litellm: waiting for the service to answer — try 24
+  converge litellm: waiting for the service to answer — try 25
+  converge litellm: waiting for the service to answer — try 26
+  converge litellm: waiting for the service to answer — try 27
+  converge litellm: waiting for the service to answer — try 28
+  converge litellm: waiting for the service to answer — try 29
+  converge litellm: waiting for the service to answer — try 30
+  converge litellm: waiting for the service to answer — try 31
+  converge litellm: waiting for the service to answer — try 32
+  converge litellm: waiting for the service to answer — try 33
+  converge litellm: waiting for the service to answer — try 34
+  converge litellm: waiting for the service to answer — try 35
+  converge litellm: waiting for the service to answer — try 36
+  converge litellm: waiting for the service to answer — try 37
+  converge litellm: waiting for the service to answer — try 38
+  converge litellm: waiting for the service to answer — try 39
+  converge litellm: waiting for the service to answer — try 40
+[Info] ✓ litellm is at its release

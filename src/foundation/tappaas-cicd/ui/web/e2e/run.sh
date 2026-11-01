@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 #
 # run.sh — the console's visual loop: build, serve from fixtures, capture every
-# route at every viewport, compare with the baseline, print the report's path.
+# route at every viewport, compare with the baseline, run the flows, print the
+# report's path.
 #
 #   ui/web/e2e/run.sh [--update-baseline] [--routes id,…] [--viewports phone,…]
-#                     [--allow id,…] [--port 9097] [--base <ref>]
+#                     [--allow id,…] [--port 9097] [--base <ref>] [--no-flows]
 #
 # out/ holds this run: shots/<viewport>/<id>.{png,txt}, diff/, report.md.
 # baseline/ holds the look to compare with: the PNGs are local (git-ignored)
@@ -16,7 +17,11 @@
 # built and captured there, then removed; when the working tree's console
 # equals that commit's, from the working tree. --update-baseline captures the
 # working tree as the baseline (stamp HEAD) and rewrites the .txt files: commit
-# them. Exit 1 when a capture fails or a route differs that --allow does not name.
+# them. The flows (flows/*.spec.ts: wizards clicked through, asserted on text
+# and the server's journal) run after the capture on the same server, at phone
+# and laptop (out/flows.log; --no-flows skips them, --update-baseline too).
+# Exit 1 when a capture or a flow fails, or a route differs that --allow does
+# not name.
 set -euo pipefail
 
 E2E="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,7 +35,8 @@ VIEWPORTS="phone,tablet,laptop,desktop"
 ALLOW=""
 UPDATE=0
 BASE_REF="${E2E_BASE:-adr-041}"
-usage() { sed -n '5,7p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+FLOWS=1
+usage() { sed -n '6,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --update-baseline) UPDATE=1; shift ;;
@@ -39,6 +45,8 @@ while [[ $# -gt 0 ]]; do
         --allow) ALLOW="$2"; shift 2 ;;
         --port) PORT="$2"; shift 2 ;;
         --base) BASE_REF="$2"; shift 2 ;;
+        --flows) FLOWS=1; shift ;;
+        --no-flows) FLOWS=0; shift ;;
         *) usage ;;
     esac
 done
@@ -159,6 +167,15 @@ serve "${UI}" "${OUT}/web-dist"
 echo "== capture ${VIEWPORTS}${ROUTES:+ (${ROUTES})}"
 CAPTURED=0
 capture "${UI}" "${OUT}/shots" "${ROUTES}" "${VPS[@]}" || CAPTURED=$?
+# The flows: after the capture, whose pages their jobs would change.
+FLOWED=0
+FLOWS_LINE=""
+if [[ "${FLOWS}" == 1 && "${UPDATE}" == 0 ]]; then
+    echo "== flows"
+    (cd "${WEB}" && E2E_BASE_URL="http://127.0.0.1:${PORT}" E2E_NOW="$(head -1 "${UI}/test/fixtures/CAPTURED")" \
+        E2E_RESULTS="${TMP}/flow-results" playwright test -c e2e/flows/playwright.config.ts) 2>&1 | tee "${OUT}/flows.log" || FLOWED=$?
+    FLOWS_LINE="$(grep -E '^ +[0-9]+ (passed|failed|flaky)' "${OUT}/flows.log" | sed 's/^ *//' | paste -sd, - | sed 's/,/, /g')"
+fi
 stop
 
 if [[ "${UPDATE}" == 1 ]]; then
@@ -172,6 +189,11 @@ echo "== compare"
 rm -rf -- "${OUT}/diff"
 COMPARED=0
 node "${E2E}/compare.ts" --shots "${OUT}/shots" --baseline "${BASELINE}" --out "${OUT}" --allow "${ALLOW}" || COMPARED=$?
+if [[ "${FLOWS}" == 1 ]]; then
+    printf '\n## Flows\n\n%s: %s (flows.log)\n' "$([[ "${FLOWED}" == 0 ]] && echo ok || echo FAILED)" "${FLOWS_LINE:-no result}" >>"${OUT}/report.md"
+    [[ "${FLOWED}" == 0 ]] || grep -E '^ +✘' "${OUT}/flows.log" | sed 's/^ */- /' >>"${OUT}/report.md" || true
+fi
 echo "report: ${OUT}/report.md ($(( $(date +%s) - T0 )) s)"
 [[ "${CAPTURED}" == 0 ]] || echo "run.sh: a capture failed (above)" >&2
-[[ "${CAPTURED}" == 0 && "${COMPARED}" == 0 ]]
+[[ "${FLOWED}" == 0 ]] || echo "run.sh: a flow failed (${OUT}/flows.log)" >&2
+[[ "${CAPTURED}" == 0 && "${COMPARED}" == 0 && "${FLOWED}" == 0 ]]

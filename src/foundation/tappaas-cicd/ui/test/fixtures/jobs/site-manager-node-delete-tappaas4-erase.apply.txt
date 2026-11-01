@@ -1,0 +1,13 @@
+[Info] Step 3: Wipe tappaas4's disks
+[Info]   wiping /dev/nvme0n1 (boot)
+[Info]   wiping /dev/sda
+[Info]   ✓ 2 disks wiped
+[Info] Step 4: Power tappaas4 off
+[Info]   ✓ tappaas4 is off
+[Info] Step 5: Take it out of the cluster
+[Info]   ✓ pvecm delnode tappaas4
+[Info]   ✓ USW Pro XG 10 PoE port 7 parked
+[Info] ✓ tappaas4 is out of the cluster.
+✓ its node record is deleted and unregistered
+✓ asset srv-04 released from tappaas4
+✓ asset srv-04 removed: its cables, placement and record and its 2 disks' records

@@ -10,5 +10,5 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["*.ts"]
+  "include": ["*.ts", "flows/*.ts"]
 }

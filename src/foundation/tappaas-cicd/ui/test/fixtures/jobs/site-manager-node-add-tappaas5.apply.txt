@@ -1,0 +1,10 @@
+
+[node add 1] the switch port: none
+  the machine's port is configured by hand: a node trunk, untagged mgmt
+[node add 2] register 'tappaas5' (standard mgmt IP 10.0.0.14)
+  ✓ registered: the install answer for 58:47:ca:7a:12:34
+[node add 3] open the boot window (TTL 7200s)
+  ✓ the boot window is open on the mothership
+[node add 4] boot the machine now: from the network (UEFI network boot, e.g. F11) or the USB stick
+  the installer picks the boot disk automatically (the smallest SSD/NVMe; an identical smallest pair is mirrored)
+  waiting for the installer to fetch its answer (Ctrl-C aborts; trap auto-off in 7200s)...
