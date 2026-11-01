@@ -71,8 +71,8 @@ function unified(before: string, after: string, label: string): string | null {
   let j = 0;
   while (i < n || j < m) {
     if (i < n && j < m && a[i] === b[j]) ops.push({ t: " ", s: a[i], ai: i++, bi: j++ });
-    else if (j < m && (i === n || lcs[i][j + 1] >= lcs[i + 1][j])) ops.push({ t: "+", s: b[j], ai: i, bi: j++ });
-    else ops.push({ t: "-", s: a[i], ai: i++, bi: j });
+    else if (i < n && (j === m || lcs[i + 1][j] >= lcs[i][j + 1])) ops.push({ t: "-", s: a[i], ai: i++, bi: j });
+    else ops.push({ t: "+", s: b[j], ai: i, bi: j++ });
   }
   const out = [`--- baseline/${label}`, `+++ shots/${label}`];
   for (let k = 0; k < ops.length; ) {
