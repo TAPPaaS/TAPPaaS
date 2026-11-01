@@ -7,6 +7,8 @@
 # log with all of it replaced, keep what a supporter debugs with, leave out the
 # files that never go, and keep its map on the site. --test must send the
 # ALERT with the bundle and then its RESOLVED.
+# The public addresses here are Level 3's resolvers: only a global address is
+# replaced, and a documentation address is not global.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -32,7 +34,7 @@ cp "${c}/identities/users/jonna.json" "${c}/people/users/jonna.json"
 echo '{"bobs-laptop": {"publicKey": "abc="}}' > "${c}/wgvpn/peers.json"
 echo '{"name": "rasmus", "tunnel": {"peerKey": "wgkey="}}' > "${c}/remote-rasmus.json"
 cat > "${c}/network.json" <<'EOF'
-{"vmname": "network", "wan": {"address": "80.248.138.190/24", "gateway": "80.248.138.1"},
+{"vmname": "network", "wan": {"address": "4.2.2.2/24", "gateway": "4.2.2.1"},
  "lan": {"address": "10.0.0.1"}, "apiToken": "s3cr3t-token", "adminPassword": "hunter2",
  "v6": "2a02:aa7:4000:1234::1", "ula": "fd00::1"}
 EOF
@@ -40,7 +42,7 @@ echo '{"vmname": "nextcloud", "displayName": "Nextcloud", "dependsOn": ["identit
 cp "${c}/network.json" "${c}/network.json.orig"
 echo '{"ok": true, "start_time": "2026-10-27 02:00:45", "end_time": "2026-10-27 03:03:29", "succeeded": 30, "total": 30}' > "${c}/last-update-result.json"
 cat > "${d}/logs/nextcloud-test-2026-10-27_020000.log" <<'EOF'
-[Info] user jonna (Jonna Hansen) logged in from 80.248.138.190 via 10.2.0.76
+[Info] user jonna (Jonna Hansen) logged in from 4.2.2.2 via 10.2.0.76
 [Info] mail sent to jonna.hansen@hansen.example; curl -H 'Authorization: Bearer abcdef123'
 [Info] password=hunter2 rejected for bobs-laptop at Elmstreet 12
 [Info] ssh tappaas@nextcloud.rossen.internal ok; egress to 1.1.1.1:443 ok; the account has a password set
@@ -48,7 +50,7 @@ EOF
 touch -d '-10 minutes' "${d}/logs/nextcloud-test-2026-10-27_020000.log"
 echo old > "${d}/logs/old-test.log"; touch -d '-3 days' "${d}/logs/old-test.log"
 for cmd in journalctl systemctl module-manager; do
-    printf '#!/usr/bin/env bash\necho "%s stub: jonna@hansen.example on 80.248.138.190"\n' "${cmd}" > "${d}/bin/${cmd}"
+    printf '#!/usr/bin/env bash\necho "%s stub: jonna@hansen.example on 4.2.2.2"\n' "${cmd}" > "${d}/bin/${cmd}"
     chmod +x "${d}/bin/${cmd}"
 done
 cat > "${d}/notify" <<EOF
@@ -78,7 +80,7 @@ all="$(cat -- $(find "${x}" -type f))"
     && ok "the test logs of the window go in, older ones do not" || bad "logs: $(ls "${x}/logs")"
 
 leaks=0
-for leak in "elmstreet12" "Jonna" "jonna" "Hansen Family" "Elmstreet" "Springfield" "80.248.138.190" "80.248.138.1\"" "2a02:aa7:4000:1234::1" \
+for leak in "elmstreet12" "Jonna" "jonna" "Hansen Family" "Elmstreet" "Springfield" "4.2.2.2" "4.2.2.1\"" "2a02:aa7:4000:1234::1" \
             "hunter2" "s3cr3t-token" "abcdef123" "bobs-laptop" "55.68" "jonna.hansen@"; do
     grep -qF -- "${leak}" <<<"${all}" && { leaks=1; bad "'${leak}' leaks into the bundle: $(grep -rlF -- "${leak}" "${x}" | sed "s|${x}/||" | paste -sd' ')"; }
 done

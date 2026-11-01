@@ -230,7 +230,7 @@ email once it is.
 **What Proxmox actually does.** PVE's only notification target is the builtin
 `mail-to-root` of type **`sendmail`** → the local **postfix** (`relayhost=` empty) →
 **direct-to-MX delivery**. There is **no relay/smarthost** to reuse. It does work — the
-maillog shows `status=sent` to `lars@hrossen.dk` via `aspmx.l.google.com` (the recipient's
+maillog shows `status=sent` to `operator@example.org` via `aspmx.l.google.com` (the recipient's
 Google Workspace MX accepted it directly), with occasional transient DNS deferrals that
 retried successfully.
 

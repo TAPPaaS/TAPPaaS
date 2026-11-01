@@ -26,7 +26,7 @@ NEW = "fe80::47:ff:fe00:168"
 
 def gateways(gw: str) -> str:
     return json.dumps({"dpinger": {
-        "ipv4-gateway": {"gateway": "80.248.138.1", "ipprotocol": "inet", "name": "ipv4-gateway"},
+        "ipv4-gateway": {"gateway": "203.0.113.1", "ipprotocol": "inet", "name": "ipv4-gateway"},
         "WAN_DHCP6": {"gateway": f"{gw}%vtnet1", "ipprotocol": "inet6", "name": "WAN_DHCP6", "status": "none"},
     }})
 
@@ -34,9 +34,9 @@ def gateways(gw: str) -> str:
 HEALTHY = "\n".join([
     "wanif\tvtnet1",
     f"recorded\t{NEW}",
-    "prefix\t2a13:e747:a210:4500::/56",
+    "prefix\t2001:db8:3:4500::/56",
     f"route\t{NEW}%vtnet1",
-    "address\t2a13:e740:292:978c::545",
+    "address\t2001:db8:2:978c::545",
     "rtsold\tyes",
     f"neighbour\t{NEW}\tyes\t02:47:00:00:01:68",
     f"neighbour\t{NEW}%vtnet1\tyes\t02:47:00:00:01:68",
@@ -46,9 +46,9 @@ HEALTHY = "\n".join([
 STALE = "\n".join([
     "wanif\tvtnet1",
     f"recorded\t{OLD}",
-    "prefix\t2a13:e747:a210:8200::/56",
+    "prefix\t2001:db8:3:8200::/56",
     "route\t",
-    "address\t2a13:e740:292:978c::aba",
+    "address\t2001:db8:2:978c::aba",
     "rtsold\tyes",
     f"neighbour\t{OLD}\tno\t",
     f"gateways\t{gateways(OLD)}",
@@ -58,7 +58,7 @@ STALE = "\n".join([
 TCPDUMP = """\
 07:58:29.506868 IP6 (flowlabel 0xde832, hlim 255, next-header ICMPv6 (58) payload length: 48) fe80::47:ff:fe00:168 > ff02::1: [icmp6 sum ok] ICMP6, router advertisement, length 48
 \thop limit 64, Flags [managed], pref medium, router lifetime 3600s, reachable time 0ms, retrans timer 0ms
-\t  prefix info option (3), length 32 (4): 2a13:e740:292:978c::/64, Flags [onlink], valid time 3600s, pref. time 2700s
+\t  prefix info option (3), length 32 (4): 2001:db8:2:978c::/64, Flags [onlink], valid time 3600s, pref. time 2700s
 \t    0x0000:  4080 0000 0e10 0000 0a8c 0000 0000 2a13
 """
 
@@ -67,7 +67,7 @@ class TestParse(unittest.TestCase):
     def test_healthy(self):
         s = parse_wan(HEALTHY)
         self.assertEqual((s.wanif, s.recorded, s.route, s.gateway), ("vtnet1", NEW, NEW, NEW))
-        self.assertEqual(s.prefix, "2a13:e747:a210:4500::/56")
+        self.assertEqual(s.prefix, "2001:db8:3:4500::/56")
         self.assertTrue(s.rtsold)
         self.assertEqual(len(s.neighbours), 1, "the route and the record are one neighbour")
         self.assertTrue(s.to_json()["routerAnswers"])

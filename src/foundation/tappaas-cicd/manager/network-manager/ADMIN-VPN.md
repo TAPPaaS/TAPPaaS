@@ -115,7 +115,7 @@ MTU        = 1340                              # admin WG is double-encapsulated
 [Peer]
 PublicKey           = U/rnce…PVs=              # the OPNsense admin-WG server key (from §1)
 Endpoint            = <satellite-or-cluster-public-ip>:51821
-AllowedIPs          = 10.0.0.0/24, 10.6.0.1/32, 2a13:e747:a210:8261:98:34ff:fe69:901a/128
+AllowedIPs          = 10.0.0.0/24, 10.6.0.1/32, 2001:db8:3:8261:98:34ff:fe69:901a/128
 PersistentKeepalive = 25                       # keeps the CGNAT pinhole open
 ```
 

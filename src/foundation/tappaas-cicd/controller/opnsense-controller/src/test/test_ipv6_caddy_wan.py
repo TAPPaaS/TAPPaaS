@@ -16,9 +16,9 @@ from unittest import mock
 from opnsense_controller import ipv6_cli
 from opnsense_controller.dual_stack import IfaceAddr
 
-WAN6 = IfaceAddr("wan", ipaddress.IPv4Interface("80.248.138.190/24"),
+WAN6 = IfaceAddr("wan", ipaddress.IPv4Interface("203.0.113.190/24"),
                  (ipaddress.IPv6Interface("2001:db8:978c::aba/64"),))
-WAN4 = IfaceAddr("wan", ipaddress.IPv4Interface("80.248.138.190/24"), ())
+WAN4 = IfaceAddr("wan", ipaddress.IPv4Interface("203.0.113.190/24"), ())
 
 
 def rule(desc, family):

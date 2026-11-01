@@ -119,9 +119,9 @@ prefix from the firewall and applies the same check.
 | `static` | the site prefix's first `/56`, with `ipv6Subnet` as its last 8 bits | `::1` in that `/64` |
 | `dynamic` | OPNsense *Track interface* on the WAN, **prefix ID = `ipv6Subnet`** | EUI-64, from the interface's MAC (the spike: `…8210:98:34ff:fe69:901a`) |
 
-Worked example, static `2a13:e747:6648::/48`: `home`, `ipv6Subnet` 16 (`0x10`) →
-`2a13:e747:6648:10::/64`, firewall `2a13:e747:6648:10::1`. With a delegated
-`2a13:e747:a210:8200::/56`, the same zone is `2a13:e747:a210:8210::/64`.
+Worked example, static `2001:db8:5::/48`: `home`, `ipv6Subnet` 16 (`0x10`) →
+`2001:db8:5:10::/64`, firewall `2001:db8:5:10::1`. With a delegated
+`2001:db8:3:8200::/56`, the same zone is `2001:db8:3:8210::/64`.
 
 The same number means the same position in both modes, so a site that moves from dynamic to
 static keeps each zone's place in its prefix.

@@ -243,7 +243,7 @@ check(renderTopology(t).some((l) => /ISP → USW Pro XG 10 PoE port 5, vlan 100/
 // ── the WAN's recorded address (network update.sh → /var/lib/tappaas/wan-address.json)
 check(t.site.wan.discovered === null, "hrossen's capture has no WAN address record: discovered is null");
 {
-  const held = { ipv4: "8.8.4.4", prefix: 24, ipv6: ["2a13:e747:a210:8200::5"], private: false, observed: "2026-10-19T03:12:00+02:00" };
+  const held = { ipv4: "8.8.4.4", prefix: 24, ipv6: ["2001:db8:3:8200::5"], private: false, observed: "2026-10-19T03:12:00+02:00" };
   const x = buildTopology({ ...hrossen(), wanAddress: held }, new Date("2026-10-19T12:00:00Z"));
   check(x.site.wan.publicIp === "auto" && x.site.wan.discovered?.ipv4 === "8.8.4.4", "publicIp stays as site.json says (auto); the WAN's address beside it");
   check(renderTopology(x).some((l) => /public address auto; the WAN holds 8\.8\.4\.4 \(2026-10-19/.test(l)), "the text view names the address the WAN holds");

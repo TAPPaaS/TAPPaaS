@@ -357,7 +357,7 @@ Its output is the join of the sources in §3, in one document:
 
 ```jsonc
 {
-  "site": { "name": "rossen", "wan": { "publicIp": "80.248.138.190", "ipv6": true, "isp": null } },
+  "site": { "name": "rossen", "wan": { "publicIp": "203.0.113.190", "ipv6": true, "isp": null } },
   "nodes": [ { "name": "tappaas1", "kind": "cluster-member", "memoryGiB": 61, "committedGiB": 51.5,
                "ha": { "watchdog": "armed" },
                "uplinks": [ { "name": "lan", "mode": "lacp", "bond": "lanbond", "mtu": 1500,

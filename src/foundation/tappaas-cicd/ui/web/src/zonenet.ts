@@ -94,7 +94,7 @@ export function typeIdText(v: unknown): string | null {
   return t ? `${n} · ${t}` : String(v);
 }
 
-// The ipv6Subnet row of a zone's card: "32 → 2a13:e747:a210:4520::/64";
+// The ipv6Subnet row of a zone's card: "32 → 2001:db8:3:4520::/64";
 // "32 → -" when the site has no prefix to number it in (IPv6 off, none
 // learned); "-" when the zone has no index.
 export function ipv6SubnetText(z: { ipv6Subnet?: unknown }, v6: Ipv6Read | null | undefined): string {

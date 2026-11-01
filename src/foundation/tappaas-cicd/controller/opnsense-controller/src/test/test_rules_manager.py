@@ -2151,19 +2151,19 @@ class TestNfsAliasTableWait(unittest.TestCase):
 
     def test_a_dual_stack_table_matches_its_names(self):
         # OPNsense holds a name's AAAA answer too: IPv4 and IPv6, both current.
-        self.expected = {"tm_jellyfin": {"10.2.0.172", "2a13:e747:a210:4520:67:b6ff:fed8:83e5"},
+        self.expected = {"tm_jellyfin": {"10.2.0.172", "2001:db8:3:4520:67:b6ff:fed8:83e5"},
                          "nfs_share_media": {"10.0.0.10"}}
-        self.mgr._alias_table_addresses = lambda n: (["10.2.0.172", "2a13:e747:a210:4520:67:b6ff:fed8:83e5"]
+        self.mgr._alias_table_addresses = lambda n: (["10.2.0.172", "2001:db8:3:4520:67:b6ff:fed8:83e5"]
                                                      if n == "tm_jellyfin" else ["10.0.0.10"])
         self.assertEqual(self.mgr._wait_for_nfs_tables(self.module, self.rules), [])
         self.mgr._reresolve_alias_tables.assert_not_called()
 
     def test_table_matches_compares_each_family(self):
         from opnsense_controller.rules_manager import _table_matches
-        self.assertTrue(_table_matches(["10.2.0.172", "2a13::1"], {"10.2.0.172"}))        # no AAAA here
-        self.assertTrue(_table_matches(["10.2.0.172"], {"10.2.0.172", "2a13::1"}))        # none on the firewall
-        self.assertFalse(_table_matches(["10.2.0.93", "2a13::1"], {"10.2.0.172", "2a13::1"}))
-        self.assertFalse(_table_matches(["10.2.0.172", "2a13::2"], {"10.2.0.172", "2a13::1"}))
+        self.assertTrue(_table_matches(["10.2.0.172", "2001:db8::1"], {"10.2.0.172"}))        # no AAAA here
+        self.assertTrue(_table_matches(["10.2.0.172"], {"10.2.0.172", "2001:db8::1"}))        # none on the firewall
+        self.assertFalse(_table_matches(["10.2.0.93", "2001:db8::1"], {"10.2.0.172", "2001:db8::1"}))
+        self.assertFalse(_table_matches(["10.2.0.172", "2001:db8::2"], {"10.2.0.172", "2001:db8::1"}))
 
     def test_without_an_expected_address_any_member_will_do(self):
         self.mgr._alias_table_addresses = lambda n: ["10.9.9.9"]
@@ -2261,7 +2261,7 @@ class TestExpectedAliasAddresses(unittest.TestCase):
 
     def _resolve(self, name, *args, **kwargs):
         # getaddrinfo's shape; jf is dual-stack, as a guest on a site with IPv6 is.
-        table = {"nfs-media.mgmt.internal": ["10.0.0.10"], "jf.rossen.internal": ["10.2.0.139", "2a13::139"]}
+        table = {"nfs-media.mgmt.internal": ["10.0.0.10"], "jf.rossen.internal": ["10.2.0.139", "2001:db8::139"]}
         if name not in table:
             raise OSError("no such name")
         return [(None, None, None, "", (a, 0)) for a in table[name]]
@@ -2269,7 +2269,7 @@ class TestExpectedAliasAddresses(unittest.TestCase):
     def test_names_resolve_and_literals_stay(self):
         with patch.object(rm.socket, "getaddrinfo", side_effect=self._resolve):
             self.assertEqual(self.mgr._expected_alias_addresses(self.module, "nfs_share_media"), {"10.0.0.10"})
-            self.assertEqual(self.mgr._expected_alias_addresses(self.module, "tm_jf"), {"10.2.0.139", "2a13::139"})
+            self.assertEqual(self.mgr._expected_alias_addresses(self.module, "tm_jf"), {"10.2.0.139", "2001:db8::139"})
             self.assertEqual(self.mgr._expected_alias_addresses(self.module, "nfs_lit"), {"10.3.10.50"})
 
     def test_unknown_when_it_cannot_be_told(self):
