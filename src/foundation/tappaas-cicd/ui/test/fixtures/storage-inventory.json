@@ -33,6 +33,17 @@
      "reasons": []
     }
    ],
+   "root": {
+    "fs": "ext4",
+    "name": "pve-root",
+    "source": "/dev/mapper/pve-root",
+    "usable": {
+     "total": 100000000000,
+     "used": 21000000000,
+     "avail": 74000000000,
+     "pct": 22.1
+    }
+   },
    "pools": [
     {
      "name": "tanka1",
@@ -791,6 +802,17 @@
      "reasons": []
     }
    ],
+   "root": {
+    "fs": "ext4",
+    "name": "pve-root",
+    "source": "/dev/mapper/pve-root",
+    "usable": {
+     "total": 100000000000,
+     "used": 34000000000,
+     "avail": 61000000000,
+     "pct": 35.8
+    }
+   },
    "pools": [
     {
      "name": "tanka1",
@@ -1401,6 +1423,17 @@
      "reasons": []
     }
    ],
+   "root": {
+    "fs": "ext4",
+    "name": "pve-root",
+    "source": "/dev/mapper/pve-root",
+    "usable": {
+     "total": 60000000000,
+     "used": 12000000000,
+     "avail": 45000000000,
+     "pct": 21.1
+    }
+   },
    "pools": [
     {
      "name": "tanka1",
@@ -2057,6 +2090,17 @@
      "reasons": []
     }
    ],
+   "root": {
+    "fs": "zfs",
+    "name": "rpool",
+    "source": "rpool",
+    "usable": {
+     "total": 482811392000,
+     "used": 3619352576,
+     "avail": 479192039424,
+     "pct": 0.7
+    }
+   },
    "pools": [
     {
      "name": "rpool",

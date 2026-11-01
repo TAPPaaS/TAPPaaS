@@ -357,6 +357,7 @@ export function NodeStorage({ inv, notes, node }: { inv: StorageInventory; notes
       <h3>Storage</h3>
       <ul className="plain small">
         {n.boot.map((d) => <li key={d.device}><i className="st-swatch" style={{ background: STATE_COLOR[d.state] }} /> boot {d.device} · {d.model ?? "?"} · {bytes(d.size)}</li>)}
+        {n.root?.usable && n.root.fs !== "zfs" ? <li><i className="st-swatch" style={{ background: "transparent" }} /> root {n.root.name} · {n.root.fs} · {bytes(n.root.usable.used)} of {bytes(n.root.usable.total)}</li> : null}
         {n.pools.map((p) => <li key={p.name}><i className="st-swatch" style={{ background: STATE_COLOR[p.state] }} /> pool {p.name} · {p.health ?? "?"} · {bytes(p.totals.total - p.totals.free)} of {bytes(p.totals.total)}</li>)}
         {n.otherDisks.map((d) => <li key={d.device}><i className="st-swatch" style={{ background: STATE_COLOR[d.state] }} /> {d.device} in no pool · {d.reasons.join("; ") || d.model}</li>)}
       </ul>

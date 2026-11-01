@@ -177,6 +177,7 @@
   - heading "Storage" [level=3]
   - list:
     - listitem: boot /dev/nvme0n1 · WD_BLACK SN7100 1TB · 932 GiB
+    - listitem: root pve-root · ext4 · 19.6 GiB of 93.1 GiB
     - listitem: pool tanka1 · ONLINE · 431 GiB of 3.5 TiB
     - listitem: pool tankb1 · ONLINE · 2.2 MiB of 10.8 TiB
   - heading "Replication" [level=3]

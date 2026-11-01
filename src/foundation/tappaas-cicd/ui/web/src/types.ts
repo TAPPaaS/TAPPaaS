@@ -537,10 +537,17 @@ export interface StorageReplication {
   state: StorageState;
   reasons: string[];
 }
+export interface StorageRoot {
+  fs: string;
+  name: string;
+  source: string;
+  usable: { total: number; used: number; avail: number; pct: number } | null;
+}
 export interface StorageNode {
   name: string;
   reachable: boolean;
   boot: StorageDisk[];
+  root?: StorageRoot | null; // absent: an inventory older than the field
   pools: StoragePool[];
   otherDisks: StorageDisk[];
   replication: StorageReplication[];

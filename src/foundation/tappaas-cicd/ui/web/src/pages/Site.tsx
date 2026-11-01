@@ -107,13 +107,15 @@ const siteModify = (title: string, fields: string[], note: string) => () => [fie
 // "51 GB / 66 GB", breaking only at the slash on a narrow column.
 const useText = (used: number, total: number): string => `${bytes(used).replace(" ", "\u00a0")} / ${bytes(total).replace(" ", "\u00a0")}`;
 
-// A node's pools as the card lists them, one a line: the root pool first, then
-// its pvehost record's, each with its use when the storage inventory has the pool.
+// A node's pools as the card lists them, one a line: its root first, then its
+// pvehost record's, each with its use when the storage inventory has it.
 function Pools({ pools, inv }: { pools: string[]; inv: StorageInventory["nodes"][number] | undefined }) {
-  const names = pools.includes("rpool") ? pools : ["rpool", ...pools];
+  const root = inv?.root;
+  const rootName = !root ? "root" : root.fs === "zfs" ? root.name : `root ${root.name}`;
   return (
     <>
-      {names.map((name) => {
+      <div>{root?.usable ? `${rootName} (${useText(root.usable.used, root.usable.total)})` : rootName}</div>
+      {pools.filter((name) => name !== "rpool" && name !== root?.name).map((name) => {
         const u = inv?.pools.find((p) => p.name === name)?.usable;
         return <div key={name}>{u ? `${name} (${useText(u.used, u.total)})` : name}</div>;
       })}
