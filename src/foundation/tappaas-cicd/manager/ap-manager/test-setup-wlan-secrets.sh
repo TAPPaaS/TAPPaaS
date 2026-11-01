@@ -74,11 +74,18 @@ ck "--list: an undeclared SSID says so" "yes" "$(grep -q "not declared — ap-ma
 if command -v script >/dev/null 2>&1; then
     : > "${SECRETS_FILE}"
     jq '.home.SSID="<HOME_SSID>"' "${ZONES_FILE}" > "${ZONES_FILE}.t" && mv "${ZONES_FILE}.t" "${ZONES_FILE}"
+    # A terminal and nobody at it: refuses and names --list, writes nothing.
+    out="$(TAPPAAS_NONINTERACTIVE=1 SECRETS_FILE="${SECRETS_FILE}" ZONES_FILE="${ZONES_FILE}" \
+        timeout -k 5 60 script -qec "${SCRIPT_DIR}/setup-wlan-secrets.sh" /dev/null </dev/null 2>&1)" && rc=0 || rc=$?
+    ck "nobody there: refuses"                   "1" "${rc}"
+    ck "…naming --list"                          "yes" "$(grep -q -- '--list' <<<"${out}" && echo yes || echo no)"
+    ck "…and writes nothing"                     "<HOME_SSID>" "$(jq -r '.home.SSID' "${ZONES_FILE}")"
     # answers: home -> name "MyHome", the default wpa2-personal, passphrase twice;
-    #          guest -> keep the name GuestNet, open (no passphrase)
+    #          guest -> keep the name GuestNet, open (no passphrase). They are the
+    #          operator, so TAPPAAS_NONINTERACTIVE from the test run does not apply.
     printf 'MyHome\n\nsecretpw1\nsecretpw1\n\nopen\n' | \
-        SECRETS_FILE="${SECRETS_FILE}" ZONES_FILE="${ZONES_FILE}" \
-        script -qec "${SCRIPT_DIR}/setup-wlan-secrets.sh" /dev/null >/dev/null 2>&1 || true
+        TAPPAAS_NONINTERACTIVE=0 SECRETS_FILE="${SECRETS_FILE}" ZONES_FILE="${ZONES_FILE}" \
+        timeout -k 5 60 script -qec "${SCRIPT_DIR}/setup-wlan-secrets.sh" /dev/null >/dev/null 2>&1 || true
     ck "interactive: the zone's SSID, through ap-manager" "MyHome" "$(jq -r '.home.SSID' "${ZONES_FILE}")"
     ck "interactive: declared site-wide"         "wpa2-personal|open" "$(jq -r '"\(.ssids.MyHome.security)|\(.ssids.GuestNet.security)"' "${CONFIG_DIR}/switch-configuration-desired.json")"
     ck "interactive stored passphrase"           "secretpw1" "$(get_secret MyHome)"
