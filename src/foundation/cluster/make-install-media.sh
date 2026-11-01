@@ -363,7 +363,7 @@ pxe_stage() {
   [[ ! -e pxe ]] || die "./pxe exists: move it away, this step makes and removes its own."
   mkdir -p pxe; chmod 700 pxe
   PXE_STAGED=1
-  info "staging the netboot files, about 5 minutes. Do not boot the target yet..."
+  info "Staging the netboot files, this can take up to 5 min. Do not PXE boot the machine yet"
   if command -v xorriso >/dev/null 2>&1 && command -v cpio >/dev/null 2>&1 && [[ "$(uname -s)" != Darwin ]]; then
     bash -c "$PXE_STAGE" stage "$iso"
   else
@@ -402,7 +402,7 @@ pxe_serve() {
   [[ -n "$dns" ]] || die "dnsmasq is needed for the network boot (brew install dnsmasq, or apt install dnsmasq)."
   command -v python3 >/dev/null 2>&1 || die "python3 is needed for the network boot."
   net_info "$PXE_IFACE"
-  read -r -p "${IN} Interface wired to the target's network [${NET_IF}]: " pick; logged "$pick"
+  read -r -p "${IN} Interface on this machine that is wired to the target's network [${NET_IF}]: " pick; logged "$pick"
   [[ -z "$pick" ]] || net_info "$pick"
   info "serving on ${NET_IF} (${NET_IP}/${NET_PREFIX})"
   pxe_stage "$iso"
@@ -533,7 +533,7 @@ ask_install() {
   [[ -n "$BRANCH"    ]] || BRANCH="$(prompt 'Branch (stable, or main for the newest work)' stable)"
   [[ -n "$SITE_CODE" ]] || SITE_CODE="$(prompt 'The TAPPaaS Site name (lowercase, at most 15 characters)')"
   [[ -n "$ORG"       ]] || ORG="$(prompt 'Name of Organisation controlling the Site' "$SITE_CODE")"
-  [[ -n "$DOMAIN"    ]] || DOMAIN="$(prompt 'Public domain')"
+  [[ -n "$DOMAIN"    ]] || DOMAIN="$(prompt 'Public Domain name for the Site')"
   [[ "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]] || die "not a branch: ${BRANCH}"
   [[ "$SITE_CODE" =~ ^[a-z0-9-]{1,15}$ ]] || die "the Site name is lowercase, at most 15 characters: ${SITE_CODE}"
   [[ "$ORG" =~ ^[a-z0-9-]+$ ]] || die "the Organisation name is lowercase: ${ORG}"
