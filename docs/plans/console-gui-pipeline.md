@@ -1,6 +1,6 @@
 # Console GUI: a systematic way to develop and test it
 
-Status: proposal for the operator, 2026-11-01. Scope: the console (`src/foundation/tappaas-cicd/ui`, "ui" below), its web app (`ui/web`), and how Claude sessions work on it. Answers the eight points of the operator's direction of 2026-11-01.
+Status: accepted by the operator 2026-11-01 (O1–O3 decided below); in implementation. Scope: the console (`src/foundation/tappaas-cicd/ui`, "ui" below), its web app (`ui/web`), and how Claude sessions work on it. Answers the eight points of the operator's direction of 2026-11-01.
 
 ## 0. Where we stand
 
@@ -130,7 +130,7 @@ The deep test (`site-manager test --deep`) stays the proof of layer C across the
 |---|---|---|---|
 | 1 | Fixture mode for the server (`CONSOLE_RUNNER=fixtures`, `src/fixtures.ts` from the test fakes, actor header, `CONSOLE_NOW`); `test/fixtures/capture.sh`; refresh the fixtures from hrossen | Opus | the console runs on the Mac against fixtures; every page opens |
 | 2 | Playwright in `web/`; `routes.json`, `capture.ts`, `compare.ts`, `run.sh`; first baselines at the four viewports | Opus | `run.sh` clean twice in a row |
-| 3 | `.interface-design/system.md` by `extract`, corrected by hand (direction, spacing, radii, breakpoints, patterns, wording); fold `colors.ts` into the tokens; breakpoints to tokens | Opus, after the plugin is added by the operator | `audit` clean; capture shows no diff |
+| 3 | `.interface-design/system.md` written by a session from the stylesheet (direction, spacing, radii, breakpoints, patterns, wording); fold `colors.ts` into the tokens; breakpoints to tokens; our own audit check | Opus | the audit check clean; capture shows no diff |
 | 4 | Flows for Remove node, Add node step 1, Ack, Output stick | Opus | the flows pass, and each fails when its bug is reintroduced |
 | 5 | `TAPPAAS_SIMULATE=1` in `jobs.ts` and the exec wrappers; a layer-C test script template with setup/check/teardown | Opus | a simulated apply on hrossen writes nothing (sweep unchanged) |
 | 6 | `--visual` in `ui/test.sh`, `test-console-visual.sh`, the repo skill | Opus | `ui/test.sh --visual` on the Mac; the skill loads on a `ui/` task |
@@ -139,6 +139,6 @@ Steps 1 and 2 are the loop; 3 to 6 can follow in any order. Each is a session of
 
 ## Open questions for the operator
 
-- **O1** Baselines in git at two viewports (~6 MB, churning) or none in git (every session regenerates them from `adr-041` before its change, ~1 minute)? Proposed: none in git for now; the `.txt` siblings in git.
-- **O2** `TAPPAAS_SIMULATE` as an environment variable of the console service on hrossen (switched by the operator, one system at a time) or a per-job flag in the console (a "simulate" toggle in Operations, visible in the journal)? Proposed: the variable first; the toggle later if the operator wants to mix.
-- **O3** Whether the interface-design plugin is acceptable as a community dependency, or only its `system.md` format (which a session can maintain by hand without the plugin).
+- **O1** *(decided)* No PNG baselines in git. `run.sh` reuses the baseline stored locally (`ui/web/e2e/baseline/`, git-ignored, stamped with the commit it was made from) and regenerates it from the base commit when there is none or the stamp is stale. The `.txt` siblings are in git.
+- **O2** *(decided)* `TAPPAAS_SIMULATE` is an environment variable of the console service, switched by the operator; a per-job toggle may come later.
+- **O3** *(decided)* No dependency on the community plugin (no side-loaded code): the console copies the essence — the `.interface-design/system.md` format with Direction, Tokens and Patterns, an `extract` done once by a session, and an `audit` written as our own check (`scripts/test/test-console-design.sh`: tokens used, no raw colours or spacings in `web/src`).
