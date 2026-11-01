@@ -89,7 +89,9 @@ this machine; otherwise give its address with `--node <address>`. Run it again l
 
 Boot the target from the stick with the NIC to your **upstream router**
 connected — network comes from **DHCP**, exactly like the PXE flow (the
-management addressing is applied later by the TAPPaaS install). The install
+management addressing is applied later by the TAPPaaS install). Connect **only**
+that NIC for the install: on a machine with several, the installer can take its address
+from another network, and keeps that address as the node's fixed one. The install
 is hands-off and WIPES the boot disk(s) it picks. To pick another, pass
 `--disk` at build time: a size (`--disk 500GB`), a model (`--disk "Samsung 990"`)
 or a serial; a second `--disk` mirrors it, `--disk ask` asks on the target's
