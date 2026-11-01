@@ -374,7 +374,7 @@ pxe_stage() {
   fi
 }
 
-PXE_RUN="" PXE_STAGED=""
+PXE_RUN="" PXE_STAGED="" SCAN_PID=""
 pxe_stop_dns() {
   [[ -n "$PXE_RUN" && -f "${PXE_RUN}/dnsmasq.pid" ]] || return 0
   sudo kill "$(cat "${PXE_RUN}/dnsmasq.pid")" 2>/dev/null || true
@@ -462,15 +462,15 @@ scan_ssh() {
       for i in {1..254}; do
         ( exec 3<>"/dev/tcp/${a}.${b}.$(( c + k )).${i}/22" && echo "${a}.${b}.$(( c + k )).${i}" ) 2>/dev/null &
       done
-      _r=0; sleep 3 || _r=130
+      sleep 3
       kill $(jobs -p) 2>/dev/null || true
-      exit "$_r"
-    ) 2>/dev/null || exit 130   # Ctrl-C stops here, not after the remaining blocks
+    ) 2>/dev/null
   done
 }
 
 wait_for_node() {
-  local ip
+  local ip ips found
+  found="$(mktemp)"
   info "waiting for the installed node to come up on this network: this takes 10-15 minutes. Ctrl-C to stop."
   while :; do
     if [[ -n "$PXE_RUN" ]] && grep -q 'GET /initrd' pxe-http.log 2>/dev/null; then
@@ -478,9 +478,20 @@ wait_for_node() {
       # boot could install it again.
       pxe_stop_dns
     fi
-    for ip in ${NODE_IP:-$(scan_ssh)}; do
+    if [[ -n "$NODE_IP" ]]; then
+      ips="$NODE_IP"
+    else
+      # In the background: wait gives way to Ctrl-C at once, a $( ) would not.
+      scan_ssh >"$found" &
+      SCAN_PID=$!
+      wait "$SCAN_PID" || true
+      SCAN_PID=""
+      ips="$(cat "$found")"
+    fi
+    for ip in $ips; do
       if node_ssh -n "root@${ip}" 'command -v pveversion' >/dev/null 2>&1; then
         NODE_IP="$ip"
+        rm -f "$found"
         return 0
       fi
     done
@@ -566,7 +577,7 @@ if [[ -z "${TAPPAAS_MEDIA_CONTAINER:-}" ]]; then
 fi
 
 EXIT_WORK=""
-trap 'pxe_stop; [[ -z "$EXIT_WORK" ]] || rm -rf "$EXIT_WORK"' EXIT
+trap '[[ -z "$SCAN_PID" ]] || kill "$SCAN_PID" 2>/dev/null || true; pxe_stop; [[ -z "$EXIT_WORK" ]] || rm -rf "$EXIT_WORK"' EXIT
 trap 'exit 130' INT TERM
 
 # ── This machine: the ISO, the questions, the key ─────────────────────
