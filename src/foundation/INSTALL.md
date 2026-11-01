@@ -81,7 +81,10 @@ site code, the organisation and the domain of [Step 2](#step-2--bootstrap-minima
 up front. Say yes and it waits for the node, finds it on your network and runs Step 2 for
 you, so skip that step's commands. To find it the node must be on the same network as
 this machine; otherwise give its address with `--node <address>`. Run it again later with
-`--use proxmox-ve_9.2-1-tappaas-auto.iso` to skip the build.
+`--use proxmox-ve_9.2-1-tappaas-auto.iso` to skip the build. Everything it shows, the
+install on the node included, also goes to `make-install-media-<date>.log` in this
+directory. Only you can read it; keep it safe, as the install's output can carry
+credentials. The passwords you type are not in it.
 
 (If you already have — or prefer — a full checkout:
 `git clone https://codeberg.org/TAPPaaS/TAPPaaS.git` and run

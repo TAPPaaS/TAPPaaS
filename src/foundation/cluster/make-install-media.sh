@@ -30,7 +30,11 @@
 #       [--password-file <f>] [--disk <d>] [--disk <d>] [--fqdn <host.domain>] \
 #       [--filesystem zfs|ext4] [--ssh-key <pubkey-file>] [--out <out.iso>] \
 #       [--iso-sha256 <hex>] [--use <built.iso>] [--iface <if>] [--node <ip>] \
-#       [--branch <b>] [--site <code>] [--organization <org>] [--domain <d>]
+#       [--branch <b>] [--site <code>] [--organization <org>] [--domain <d>] [--log <f>]
+#
+# Everything shown, the TAPPaaS install on the node included, also goes to a log in
+# this directory, or to --log; only you can read it, as that output can carry
+# generated credentials.
 #
 # --use skips the build: straight to the stick, network boot and install, with an
 # ISO this script built. --node names the node when it is not in this /24. --iso
@@ -73,7 +77,7 @@ ISO="" OUT="" EMAIL="" COUNTRY="" KEYBOARD="" TIMEZONE="" PASSWORD="" \
   PASSWORD_FILE="" DISK="" FQDN="" FILESYSTEM="zfs" ISO_SHA256=""
 SSH_KEYS=()
 DISKS=()
-USE="" PXE_IFACE="" NODE_IP="" BRANCH="" SITE_CODE="" ORG="" DOMAIN=""
+LOG="" USE="" PXE_IFACE="" NODE_IP="" BRANCH="" SITE_CODE="" ORG="" DOMAIN=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -90,6 +94,7 @@ while [[ $# -gt 0 ]]; do
     --ssh-key)       SSH_KEYS+=("${2:?}"); shift 2 ;;
     --iso-sha256)    ISO_SHA256="${2:?}"; shift 2 ;;
     --use)           USE="${2:?}"; shift 2 ;;
+    --log)           LOG="${2:?}"; shift 2 ;;
     --iface)         PXE_IFACE="${2:?}"; shift 2 ;;
     --node)          NODE_IP="${2:?}"; shift 2 ;;
     --branch)        BRANCH="${2:?}"; shift 2 ;;
@@ -191,10 +196,12 @@ paia_fetch() {
 }
 # <<< media-checks
 
+# What is typed reaches the terminal but not the log's tee; passwords stay out of it.
+logged() { [[ -z "${LOG:-}" ]] || printf '%s\n' "$1" >>"$LOG"; }
 prompt() {
   local v d="${2:-}"
-  if [[ -n "$d" ]]; then read -r -p "${IN} $1 [$d]: " v; printf '%s' "${v:-$d}"
-  else read -r -p "${IN} $1: " v; printf '%s' "$v"; fi
+  if [[ -n "$d" ]]; then read -r -p "${IN} $1 [$d]: " v; logged "$v"; printf '%s' "${v:-$d}"
+  else read -r -p "${IN} $1: " v; logged "$v"; printf '%s' "$v"; fi
 }
 
 # >>> after-the-build
@@ -315,7 +322,7 @@ write_usb() {
   while :; do
     lines="$(sticks_read)"
     if [[ -z "$lines" ]]; then
-      read -r -p "${IN} No USB stick found. Plug one in and press Enter (q to stop): " pick
+      read -r -p "${IN} No USB stick found. Plug one in and press Enter (q to stop): " pick; logged "$pick"
       [[ "$pick" != q ]] || return 1
       continue
     fi
@@ -326,13 +333,13 @@ write_usb() {
       (( bytes >= size )) || no="${no:-too small for the image}"
       info "  ${i}) ${d}  $(( bytes / 1000000000 )) GB  ${name}${note:+  (${note})}${no:+  — not offered: ${no}}"
     done <<<"$lines"
-    read -r -p "${IN} Which stick is erased? [number, r to rescan, q to stop]: " pick
+    read -r -p "${IN} Which stick is erased? [number, r to rescan, q to stop]: " pick; logged "$pick"
     [[ "$pick" != q ]] || return 1
     [[ "$pick" =~ ^[0-9]+$ ]] && (( pick >= 1 && pick <= i )) || continue
     IFS='|' read -r d bytes name note no <<<"$(sed -n "${pick}p" <<<"$lines")"
     (( bytes >= size )) || no="${no:-too small for the image}"
     if [[ -n "$no" ]]; then warn "${d}: ${no}"; continue; fi
-    read -r -p "${IN} ERASE ${d} (${name}, $(( bytes / 1000000000 )) GB)? Type yes: " pick
+    read -r -p "${IN} ERASE ${d} (${name}, $(( bytes / 1000000000 )) GB)? Type yes: " pick; logged "$pick"
     [[ "$pick" == yes ]] || continue
     stick_write "$d" "$iso"
     action "The stick is ready. Boot the target from it, with only the NIC to your upstream router connected."
@@ -395,7 +402,7 @@ pxe_serve() {
   [[ -n "$dns" ]] || die "dnsmasq is needed for the network boot (brew install dnsmasq, or apt install dnsmasq)."
   command -v python3 >/dev/null 2>&1 || die "python3 is needed for the network boot."
   net_info "$PXE_IFACE"
-  read -r -p "${IN} Interface wired to the target's network [${NET_IF}]: " pick
+  read -r -p "${IN} Interface wired to the target's network [${NET_IF}]: " pick; logged "$pick"
   [[ -z "$pick" ]] || net_info "$pick"
   info "serving on ${NET_IF} (${NET_IP}/${NET_PREFIX})"
   pxe_stage "$iso"
@@ -496,7 +503,7 @@ start_install() {
 # The three names the bootstrap takes, asked before the wait so it runs unattended.
 ask_install() {
   local yn
-  read -r -p "${IN} Start the TAPPaaS install over ssh when the node is up? [Y/n]: " yn
+  read -r -p "${IN} Start the TAPPaaS install over ssh when the node is up? [Y/n]: " yn; logged "$yn"
   [[ "$yn" != [nN]* ]] || return 1
   [[ -n "$BRANCH"    ]] || BRANCH="$(prompt 'Branch (stable, or main for the newest work)' stable)"
   [[ -n "$SITE_CODE" ]] || SITE_CODE="$(prompt 'Site code (lowercase, at most 15 characters)')"
@@ -520,7 +527,7 @@ after_build() {
   info "  2) Network-boot the target from this machine"
   info "  3) The target is already booted from this image: go on to the install"
   info "  4) Stop here"
-  read -r -p "${IN} Choice [1]: " c
+  read -r -p "${IN} Choice [1]: " c; logged "$c"
   case "${c:-1}" in
     1|2|3) ;;
     *) warn "The ISO embeds the root password — treat the media like a credential, and delete it after the install."; return 0 ;;
@@ -542,11 +549,20 @@ after_build() {
     start_install
     info "${INSTALL_KEY} logs in to the node as root: keep it safe, or delete it and the node's line for it in /root/.ssh/authorized_keys."
   elif [[ -n "$PXE_RUN" ]]; then
-    read -r -p "${IN} Press Enter when the target has rebooted into Proxmox, to end the network boot: " c
+    read -r -p "${IN} Press Enter when the target has rebooted into Proxmox, to end the network boot: " c; logged "$c"
   fi
   warn "The ISO embeds the root password — treat the media like a credential, and delete it after the install."
 }
 # <<< after-the-build
+
+if [[ -z "${TAPPAAS_MEDIA_CONTAINER:-}" ]]; then
+  [[ -n "$LOG" ]] || LOG="make-install-media-$(date +%Y%m%d-%H%M%S).log"
+  ( umask 077; : >>"$LOG" )
+  chmod 600 "$LOG"
+  # tee -i: Ctrl-C ends the script, and the log takes its last lines first.
+  exec > >(tee -i -a "$LOG") 2>&1
+  info "log: ${LOG}"
+fi
 
 EXIT_WORK=""
 trap 'pxe_stop; [[ -z "$EXIT_WORK" ]] || rm -rf "$EXIT_WORK"' EXIT
