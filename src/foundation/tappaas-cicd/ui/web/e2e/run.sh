@@ -199,7 +199,9 @@ if [[ "${COMPARED}" != 0 && "${CAPTURED}" == 0 ]]; then
         if E2E_WORKERS=1 capture "${UI}" "${OUT}/recapture" "${AGAIN}" "${VPS[@]}"; then
             stop
             cp -R "${OUT}/recapture/." "${OUT}/shots/"
-            rm -rf -- "${OUT}/diff"
+            cp -R "${OUT}/report.md" "${OUT}/report-first.md"
+            rm -rf -- "${OUT}/diff-first"
+            mv -- "${OUT}/diff" "${OUT}/diff-first"
             COMPARED=0
             node "${E2E}/compare.ts" --shots "${OUT}/shots" --baseline "${BASELINE}" --out "${OUT}" --allow "${ALLOW}" || COMPARED=$?
             printf '\nRecaptured alone after a first difference: %s.\n' "${AGAIN}" >>"${OUT}/report.md"
