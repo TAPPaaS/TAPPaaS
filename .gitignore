@@ -22,3 +22,7 @@ result
 # The tracked half is vllm-amd.meta.template.json.
 src/ai/vllm-amd/vllm-amd.meta.json
 dist-test/
+
+# The console's fixture mode: a local build, and the journal of what a run asked.
+src/foundation/tappaas-cicd/ui/dist/
+src/foundation/tappaas-cicd/ui/test/fixtures/journal.jsonl

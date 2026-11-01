@@ -36,6 +36,7 @@ export interface AccessConfig {
   trustLocalHeaders: boolean; // dev only: believe X-Authentik-* from `allow` peers too
   gate?: GateKeys; // the routes' provider keys (gate.ts); without it the firewall is refused
   now?: () => number; // seconds; tests set it
+  fixtureActor?: string; // fixture mode (fixtures.ts) only: no gate, X-Console-Actor says who, and this by default
 }
 
 export interface Me {
@@ -185,6 +186,11 @@ export function decide(
   cfg: AccessConfig,
   setup: SetupState,
 ): Decision {
+  // Nothing here is real: every verb is answered from the fixtures.
+  if (cfg.fixtureActor !== undefined) {
+    const user = header(headers, "x-console-actor") || cfg.fixtureActor;
+    return { ok: true, me: { user, name: user, email: null, groups: [CONSOLE_GROUP], role: "installer", via: "gate", route: "console" } };
+  }
   const fromFirewall = anyMatch(peer, cfg.firewall);
   const local = anyMatch(peer, cfg.allow);
   const route = routeOf(routeHost(headers, fromFirewall || (local && cfg.trustLocalHeaders)));

@@ -29,7 +29,8 @@ import { lokiConfig } from "./assistant-tools";
 import { Conversations } from "./conversations";
 import { loadManifests, registeredManagers } from "./manifest";
 import { Reads } from "./reads";
-import { runAsync, streamAsync } from "./run";
+import { FixtureMode, openFixtures, phaseFrom } from "./fixtures";
+import { Runner, Streamer, runAsync, streamAsync } from "./run";
 import { ConsoleServer } from "./server";
 import { HelpSpec, checkArgs, renderHelp } from "../../lib/ts/src/help";
 import { DieError, die, guarded, info, requireOperator, warn } from "../../lib/ts/src/cli";
@@ -74,7 +75,9 @@ export const HELP: HelpSpec = {
       "CMDB_URL, CMDB_TOKEN_FILE (the CMDB's API; default http://127.0.0.1:9098, /etc/secrets/cmdb-token),\n" +
       "CONSOLE_LOKI_URL, CONSOLE_LOKI_PASSWORD_FILE (its logs tool), CONSOLE_REPO (the managers' READMEs;\n" +
       "default /home/tappaas/TAPPaaS), TAPPAAS_WAN_ADDRESS_FILE (what the WAN held at the last\n" +
-      "network update; default /var/lib/tappaas/wan-address.json).",
+      "network update; default /var/lib/tappaas/wan-address.json).\n" +
+      "Fixture mode, no live system (src/fixtures.ts, ui/fixture-server.sh): CONSOLE_RUNNER=fixtures with\n" +
+      "CONSOLE_FIXTURES=<dir>, CONSOLE_FIXTURES_JOURNAL (default <dir>/journal.jsonl), CONSOLE_NOW=<iso>.",
   ],
 };
 
@@ -118,7 +121,7 @@ export function parseServe(args: string[]): ServeOpts {
     listen: env.CONSOLE_LISTEN ? parseListen(env.CONSOLE_LISTEN) : null,
     allow: env.CONSOLE_ALLOW ? list(env.CONSOLE_ALLOW) : ["127.0.0.1", "::1"],
     webDir: env.CONSOLE_WEB_DIR ?? null,
-    stateDir: env.CONSOLE_STATE_DIR ?? "/var/lib/tappaas/console",
+    stateDir: env.CONSOLE_STATE_DIR ?? (env.CONSOLE_RUNNER === "fixtures" ? "/tmp/tappaas-console-fixtures" : "/var/lib/tappaas/console"),
     trustLocalHeaders: env.CONSOLE_TRUST_LOCAL_HEADERS === "1",
   };
   for (let i = 0; i < args.length; i++) {
@@ -191,6 +194,20 @@ export async function firewallAddress(net: string | null, resolve: (h: string) =
 
 async function serve(o: ServeOpts): Promise<number> {
   requireOperator(); // as tappaas, never root (#533)
+  let server: ConsoleServer | null = null;
+  // Fixture mode: everything below reads the fixtures, and nothing runs.
+  let fx: FixtureMode | null = null;
+  if (process.env.CONSOLE_RUNNER === "fixtures") {
+    try {
+      fx = openFixtures(process.env, o.stateDir, (argv) => phaseFrom(server?.manifests ?? null, argv), __dirname);
+    } catch (e) {
+      die((e as Error).message);
+    }
+    o.configDir = fx.configDir;
+    o.listen ??= [{ host: "127.0.0.1", port: DEFAULT_PORT }];
+  }
+  const run: Runner = fx?.site.run ?? runAsync;
+  const stream: Streamer = fx?.site.stream ?? streamAsync;
   const mgmtNet = zoneNetwork(o.configDir, "mgmt");
   const adminNet = zoneNetwork(o.configDir, "admin");
   let listen = o.listen;
@@ -210,6 +227,7 @@ async function serve(o: ServeOpts): Promise<number> {
     tokenFile: process.env.CONSOLE_SETUP_TOKEN_FILE ?? join(o.configDir, "console-setup-token"),
     identityFile: join(o.configDir, "identity.json"),
     trustLocalHeaders: o.trustLocalHeaders,
+    fixtureActor: fx?.actor,
     // The controllers' Authentik credentials (authentik-controller's default file).
     gate: new GateKeys(
       authentikKeyFetch(process.env.CONSOLE_AUTHENTIK_CREDENTIALS ?? join(process.env.HOME ?? "/home/tappaas", ".authentik-credentials.txt")),
@@ -218,16 +236,17 @@ async function serve(o: ServeOpts): Promise<number> {
   };
   const webDir = o.webDir ?? join(__dirname, "..", "..", "..", "web", "dist");
   const log = (l: string): void => console.log(`[console] ${l}`);
-  const cmdb = new Cmdb({ run: runAsync, log });
+  const cmdb = fx?.cmdb.asCmdb() ?? new Cmdb({ run: runAsync, log });
   const reads = new Reads({
     cmdb,
     configDir: o.configDir,
     repoRoot: process.env.CONSOLE_REPO ?? "/home/tappaas/TAPPaaS",
     stateDir: o.stateDir,
-    run: runAsync,
+    run,
     journalDays: Number(process.env.CONSOLE_JOURNAL_DAYS ?? 7) || 7,
     // Membership through lib/ts (F12): the first declared node that answers.
     clusterNodes: (nodes) => {
+      if (fx) return nodes;
       for (const n of nodes) {
         const r = queryClusterNodes(n);
         if (r) return r;
@@ -236,14 +255,13 @@ async function serve(o: ServeOpts): Promise<number> {
     },
   });
   const healthLive = new HealthLive(reads.healthGraph, cmdb, log);
-  let server: ConsoleServer | null = null;
   let assistant: Assistant | null = null;
   const jobs = new Jobs({
     stateDir: o.stateDir,
     configDir: o.configDir,
     manifests: () => server?.manifests ?? null,
-    stream: streamAsync,
-    run: runAsync,
+    stream,
+    run,
     log,
     proposal: (me, c, p) => assistant?.proposal(me, c, p) ?? null,
     onWriteDone: (job) => {
@@ -265,7 +283,7 @@ async function serve(o: ServeOpts): Promise<number> {
     },
   });
   // The assistant (D7): LiteLLM with the key litellm:models provisioned.
-  const litellm = new LiteLLM({ keyFile: process.env.CONSOLE_LITELLM_KEY_FILE ?? KEY_FILE, configDir: o.configDir, run: runAsync, log });
+  const litellm = new LiteLLM({ keyFile: process.env.CONSOLE_LITELLM_KEY_FILE ?? KEY_FILE, configDir: o.configDir, run, log });
   const home = process.env.HOME ?? "/home/tappaas";
   assistant = new Assistant({
     status: () => litellm.status(),
@@ -279,7 +297,7 @@ async function serve(o: ServeOpts): Promise<number> {
     },
     log,
   });
-  server = new ConsoleServer({ access, webDir: existsSync(webDir) ? webDir : null, mgmtDomain: mgmtDomain(), version: VERSION, log, home: process.env.CONSOLE_SECRETS_DIR ?? home, litellm, assistant, healthLive }, reads, jobs);
+  server = new ConsoleServer({ access, webDir: existsSync(webDir) ? webDir : null, mgmtDomain: mgmtDomain(), version: VERSION, log, home: process.env.CONSOLE_SECRETS_DIR ?? home, litellm, assistant, healthLive, runStdin: fx?.site.runStdin }, reads, jobs);
   for (const l of listen) {
     await server.listen(l.host, l.port).catch((e: Error) => die(`listen ${l.host}:${l.port}: ${e.message}`));
     info(`console ${VERSION} listening on ${l.host}:${l.port}`);
@@ -291,6 +309,8 @@ async function serve(o: ServeOpts): Promise<number> {
   info(`  front end: ${existsSync(webDir) ? webDir : "not built (API only)"}`);
   reads.start();
   healthLive.start();
+  fx?.cmdb.link(true);
+  if (fx) info(`  fixture mode: ${fx.dir}, journal ${fx.journal}, nothing is executed`);
   void litellm.status();
   // What a job may run: every manager's `--help --json` and the declared bash verbs.
   const bashFile = process.env.CONSOLE_MANIFEST_FILE ?? join(__dirname, "..", "..", "..", "manifest", "bash-verbs.json");
@@ -298,7 +318,7 @@ async function serve(o: ServeOpts): Promise<number> {
   // Development: CONSOLE_EXTRA_MANAGERS loads managers the site's registry does not list yet.
   const extra = list(process.env.CONSOLE_EXTRA_MANAGERS ?? "");
   const reloadManifests = (): void => {
-    void loadManifests(runAsync, bashFile, [...new Set([...registeredManagers(o.configDir), ...extra])]).then((ms) => {
+    void loadManifests(run, bashFile, [...new Set([...registeredManagers(o.configDir), ...extra])]).then((ms) => {
       srv.manifests = ms;
       info(`  verb manifests: ${ms.byBin.size} (${[...ms.byBin.keys()].join(", ")})`);
       for (const e of ms.errors) warn(`  no manifest from ${e.bin}: ${e.error}`);
