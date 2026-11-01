@@ -84,7 +84,9 @@ written.
   ref, else an id, else a name) — and is stored as a relation row.
 - `null` unsets an attribute; `"end": true` retires a CI or disposes of a
   resource: it stays, with its history, and leaves key matching, so the same
-  name reported again is a new object (D7).
+  name reported again is a new object (D7). The software running on an ended
+  node ends with it. The end of something the store does not have is nothing,
+  not a refusal.
 - Reporting what is already stored writes nothing. A value that differs closes
   its period and opens a new one. An observation that differs from the last
   with no change behind it marks **drift** on the object (`cmdb show` prints

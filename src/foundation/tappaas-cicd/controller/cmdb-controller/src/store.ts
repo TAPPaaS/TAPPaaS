@@ -983,7 +983,7 @@ class ReportRun {
     const current = new Map<string, Current>();
     const currentTargets = new Map<string, { id: number; to: string; from: string }>();
     if (match === null) {
-      if (o.end && !adopted) return this.problem(at, "there is no such object to end");
+      if (o.end && !adopted) return; // already gone, or never reported: there is nothing to end
       for (const f of fields.values()) {
         if (!f.required || f.name === "name") continue;
         if (f.type === "relation" ? !targets.get(f.name) : values.get(f.name) === undefined || values.get(f.name) === null) {
@@ -1330,8 +1330,23 @@ class ReportRun {
   }
 
   // Retired (a CI) or disposed (a resource): its relations end, its rows stay.
+  // The software running on an ended node ends with it: its key is that node.
   private async end(id: string, cls: string, current: Map<string, Current>): Promise<void> {
     await this.q("UPDATE object SET ended = $2 WHERE id = $1 AND ended IS NULL", [id, this.t]);
+    if (this.mm.isA(cls, "node")) {
+      const software = await this.q(
+        `SELECT o.id, o.class, s.id AS stage_id, s.value AS stage, lower(s.validity) AS "from"
+           FROM relation r JOIN object o ON o.id = r.from_object AND o.ended IS NULL
+           LEFT JOIN attribute s ON s.object = o.id AND s.name = 'stage' AND upper_inf(s.validity)
+          WHERE r.type = 'runs-on' AND r.to_object = $1 AND upper_inf(r.validity) AND o.class IN (SELECT jsonb_array_elements_text($2::jsonb))`,
+        [id, JSON.stringify(this.mm.descendants("software"))],
+      );
+      for (const r of software.rows) {
+        const stage = r.stage_id == null ? [] : ([["stage", { id: Number(r.stage_id), value: r.stage, from: String(r.from) }]] as [string, Current][]);
+        await this.end(String(r.id), String(r.class), new Map(stage));
+        this.touched.add(String(r.id));
+      }
+    }
     for (const r of (await this.q("SELECT id FROM relation WHERE (from_object = $1 OR to_object = $1) AND upper_inf(validity)", [id])).rows) {
       await this.closeRelation(Number(r.id));
     }
