@@ -403,7 +403,7 @@ check "a relation field of a recorded object is recorded" "true" "$(cmdb show ro
 check "query --recorded" "location/home,passive-device/pp-01,room/attic" "$(cmdb query --recorded --json | jq -r '[.[] | "\(.class)/\(.name)"] | join(",")')"
 cmdb report --json >/dev/null <<<'{"source":"health-manager","objects":[{"class":"passive-device","name":"pp-01","attributes":{"description":"seen"}}]}'
 check "a source seeing it later does not unrecord it" "true" "$(cmdb show passive-device/pp-01 --json | jq -r '.recorded')"
-cmdb show passive-device/pp-01 | grep -q "recorded" && ok "cmdb show says so" || bad "cmdb show does not say recorded"
+cmdb show passive-device/pp-01 | grep -c "recorded" >/dev/null && ok "cmdb show says so" || bad "cmdb show does not say recorded"
 
 echo "== relations (the topology's read) =="
 check "by type and from-class, with attributes, both ends named" "passive-device/pp-01 room/attic 3 true" \
