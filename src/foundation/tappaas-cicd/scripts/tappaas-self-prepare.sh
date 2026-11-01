@@ -41,7 +41,7 @@ CONSOLE_POLL="${TAPPAAS_CONSOLE_JOB_POLL:-15}"
 
 # shellcheck source=../lib/common-install-routines.sh
 . "$(dirname "${_here}")/lib/common-install-routines.sh"
-echo prepare > "${CONFIG_DIR}/.update-stage"
+echo prepare | tappaas_config_write "${CONFIG_DIR}/.update-stage"
 mkdir -p "${RUN_DIR}"
 
 # ── 0. a console job in flight ───────────────────────────────────────
@@ -129,7 +129,7 @@ esac
 # pulled, and this is the last point before the rebuild and before the sweep
 # reaches its first module. A failure stops the unit, so the site stays on the
 # old code with a config that is untouched or restorable (D5).
-echo migrate > "${CONFIG_DIR}/.update-stage"
+echo migrate | tappaas_config_write "${CONFIG_DIR}/.update-stage"
 if ! TAPPAAS_CONFIG_DIR="${CONFIG_DIR}" "${MIGRATE}"; then
     fatal "a config migration failed — no rebuild, no sweep"
     exit 1
@@ -138,5 +138,5 @@ fi
 # ── 4. hand over ─────────────────────────────────────────────────────
 echo "${state}" > "${RUN_DIR}/control-plane"
 : > "${RUN_DIR}/prepared"
-echo rebuild > "${CONFIG_DIR}/.update-stage"
+echo rebuild | tappaas_config_write "${CONFIG_DIR}/.update-stage"
 debug "tappaas-self-prepare: control plane ${state}"

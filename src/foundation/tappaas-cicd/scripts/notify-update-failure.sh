@@ -30,6 +30,9 @@
 
 set -euo pipefail
 
+# TAPPAAS_SIMULATE=1: no failure happened, nobody is told, nothing is recorded.
+if [[ "${TAPPAAS_SIMULATE:-}" == "1" ]]; then echo "[simulate] notify-update-failure $*" >&2; exit 0; fi
+
 CONFIG_DIR="${TAPPAAS_CONFIG_DIR:-/home/tappaas/config}"
 DRY_RUN=0
 DEGRADED=0
