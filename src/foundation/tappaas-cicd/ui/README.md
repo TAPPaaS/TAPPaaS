@@ -679,9 +679,24 @@ tsconfig.json"` and `cd web && npm ci && npm run build`, run `node dist/ui/src/m
 --listen 127.0.0.1:<port> --web web/dist --state-dir <dir>`, and `ssh -L <port>:127.0.0.1:<port>`
 from the laptop.
 
+### Fixture mode: no live system
+
+```bash
+ui/fixture-server.sh [--port 9097] [--fixtures <dir>]
+```
+
+The whole console on a laptop, from what `test/fixtures/capture.sh` recorded (`test/fixtures/README.md`). The script builds `src` when it has changed, stops the clock at the capture and serves the committed `web/dist` on 127.0.0.1; after changing the front end, `cd web && npm run build`. Behind it, `CONSOLE_RUNNER=fixtures` with `CONSOLE_FIXTURES=<dir>` has `main.ts` build the server on `src/fixtures.ts`:
+
+- **Nothing is executed.** Reads answer from the captured files. A job's preview says `jobs/<slug>.preview.txt` if there is one, else its argv; an apply says `jobs/<slug>.apply.txt`, else `applied (fixture)`, exit 0. Every call goes to a journal (`CONSOLE_FIXTURES_JOURNAL`, default `<dir>/journal.jsonl`; the script's, `/tmp/tappaas-console-fixtures-<port>/journal.jsonl`), one JSON line of `{at, kind, argv}` with kind `read`, `preview` or `apply`, so a test can assert on argv. A secret on stdin is never journalled.
+- **No sign-in.** The `X-Console-Actor` header says who, default `operator` (`CONSOLE_ACTOR`), as an installer. Outside the mode the header means nothing.
+- **`CONSOLE_NOW=<iso>`** stops the server's clock: ages, the last sweep, acks. The browser's own clock is not the server's: a capture stops that one too (Playwright's `page.clock`).
+- The config is a copy under the state directory, and the repository a link there, so a run writes nothing into the fixtures, `$HOME` or the worktree; anything else the server looks for gets a harmless default (`openFixtures`).
+
+A module with no icon answers 404 on `modules/<name>/icon`, here as on a site: the page draws its initial, and the browser logs the 404.
+
 ## Tests
 
-`test.sh`: `tsc` on the backend and the unit suite (`test/unit/*.test.ts`) — the Health view over
+`test.sh`: `tsc` on the backend and the unit suite (`test/unit/*.test.ts`) — `fixturemode` the fixture mode (what the runner answers and journals, the actor, the clock, the server itself started over the capture); the Health view over
 `test/fixtures/health-site.json` (`fake-cmdb.ts`: one node down with its guests impacted, one
 acknowledged root, one flapping condition, a guest in a window): `health` the document, the client,
 the tree and its roll-ups, the ego graph and the chains, the live feed and the routes, `healthgraph` the cards and lines a page draws (there is no DOM here); `cipanel` a CI's record from fixtures: open events, the history's order, the trace up the backbone and where it stops; `assets` the Assets view's tree (places, not placed, disposed, ports and cables, the CMDB's allocations and their drift), an asset found by its role, the history of its allocations, the filter, and where every side panel's Details link goes; `disks` the disks in the tree (under their server by bay, in stock, their health and pool from the CMDB, what a server's CI lists that no asset records), a disk's placements, the bay row and the page's helpers, which placement fields a form offers, a disk's Details, the storage gates and a pool's members;
