@@ -268,15 +268,28 @@ sudo_ask() {
 
 # stick_write <device> <iso> — erase, write, read back.
 stick_write() {
-  local d="$1" iso="$2" size p
+  local d="$1" iso="$2" size p r
   size="$(wc -c <"$iso" | tr -d ' ')"
   sudo_ask "write the stick"
   case "$(uname -s)" in
     Darwin)
+      # macOS mounts the image's HFS partition the moment it sees it, and that
+      # rewrites the volume's header. So the partition tables go on last: the first
+      # MiB is blanked, the rest written and read back, and only then the first
+      # MiB, which holds no volume.
+      r="${d/\/dev\/disk//dev/rdisk}"
       diskutil unmountDisk "$d" >/dev/null
-      sudo dd if="$iso" of="${d/\/dev\/disk//dev/rdisk}" bs=4m status=progress
+      sudo dd if=/dev/zero of="$r" bs=1m count=1 2>/dev/null
+      sudo dd if="$iso" of="$r" bs=1m skip=1 seek=1 status=progress
       sync
-      diskutil unmountDisk "$d" >/dev/null 2>&1 || true ;;
+      info "reading it back..."
+      sudo cmp -n "$(( size - 1048576 ))" "$iso" "$d" 1048576 1048576 || die "the stick does not match the image: try another stick."
+      sudo dd if="$iso" of="$r" bs=1m count=1 2>/dev/null
+      sync
+      sudo cmp -n 1048576 "$iso" "$d" || die "the stick does not match the image: try another stick."
+      info "  ${GN}✓${CL} the stick matches the image"
+      diskutil eject "$d" >/dev/null 2>&1 || true
+      return 0 ;;
     *)
       for p in $(lsblk -nlo MOUNTPOINT "$d" | grep -v '^$' || true); do sudo umount "$p"; done
       sudo dd if="$iso" of="$d" bs=4M status=progress conv=fsync ;;
@@ -284,10 +297,7 @@ stick_write() {
   info "reading it back..."
   sudo cmp -n "$size" "$iso" "$d" || die "the stick does not match the image: try another stick."
   info "  ${GN}✓${CL} the stick matches the image"
-  case "$(uname -s)" in
-    Darwin) diskutil eject "$d" >/dev/null 2>&1 || true ;;
-    *) sudo eject "$d" 2>/dev/null || true ;;
-  esac
+  sudo eject "$d" 2>/dev/null || true
 }
 
 write_usb() {
