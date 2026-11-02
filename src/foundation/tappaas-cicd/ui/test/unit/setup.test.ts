@@ -110,6 +110,7 @@ async function main(): Promise<void> {
     return { rc: 0, stdout: "ok", stderr: "", ran: true };
   };
   let inputs = await gatherSetup({ configDir: cfg, stateDir: state, run, clusterNodes: (n) => (n.length ? ["tappaas1"] : null), stacks: async () => [] });
+  check(inputs.defaultDomain === "acme.example", "the default environment's domain, which names the published console");
   steps = setupSteps(inputs);
   check(!setupComplete(steps) && steps.filter((s) => s.required && s.done === true).length === 0, "a fresh install: no required step is done");
   check(!ran.some((r) => r.startsWith("module-manager test")), "…and no module test runs on a read");

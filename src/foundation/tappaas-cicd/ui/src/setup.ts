@@ -49,6 +49,7 @@ export const TESTS_FILE = "setup-tests.json"; // in the state directory
 
 export interface SetupInputs {
   defaultEnv: string | null;
+  defaultDomain?: string | null; // the default environment's primary domain
   dnsMode: "wildcard" | "per-service" | null;
   certRefids: Record<string, unknown> | null;
   modules: Record<"backup" | "identity" | "logging", { config: boolean; test: TestResult | null }>;
@@ -361,6 +362,7 @@ export async function gatherSetup(d: GatherDeps): Promise<SetupInputs> {
   const [vpn, aps] = await Promise.all([d.run("network-manager", ["wgvpn", "list"], 60_000), d.run("ap-manager", ["list", "--json"], 60_000)]);
   return {
     defaultEnv,
+    defaultDomain: ((envDoc as { domains?: { primary?: string } } | null)?.domains?.primary) ?? null,
     dnsMode,
     certRefids: readJson(join(d.configDir, "cert-refids.json")),
     modules,

@@ -27,6 +27,7 @@ export interface SetupDoc {
   complete: boolean;
   inputs: {
     defaultEnv: string | null;
+    defaultDomain?: string | null;
     dnsMode: string | null;
     wifi?: { zones: { name: string; type: string | null; state: string | null; ssid: string | null }[]; aps: { name: string; ssids: { name: string; zone: string | null }[] }[] | null };
   };
@@ -244,7 +245,7 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
   };
   const email = typeof site?.email === "string" ? site.email : "";
   const org = (site?.defaultEnvironment as string | undefined) ?? site?.name ?? "";
-  const domain = d?.inputs.defaultEnv ?? "";
+  const domain = d?.inputs.defaultDomain ?? "";
 
   const body: Record<string, ReactNode> = {
     tls:
