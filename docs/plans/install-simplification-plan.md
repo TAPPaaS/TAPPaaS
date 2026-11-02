@@ -21,7 +21,10 @@ The goal: one path for the common case. Answer a few questions, boot the machine
 - `install-access.sh` writing `config/console-setup-url`.
 - The single-sudo root helper for PXE (`e6d635eb`): tested with stand-ins for `sudo` and `dnsmasq` only.
 - The debconf fix (`9e04d046`) and the `repository modify` output (`cb18cf26`).
-- Pool creation and moving guests: `node storage add` plus `module modify network|tappaas-cicd --set storage=tanka1` has never run for real. The doc's commands for it are unproven.
+
+**Proven live on 2026-11-02** (lab2): `node storage add` with `--wipe` made the `tanka1` mirror, and `module modify network|tappaas-cicd --set storage=tanka1` moved both guests live. Both then cold-booted from the pool and passed their tests. The first attempt failed because Proxmox will not delete a disk that snapshots hold, and an update always takes one; the rollback restored the firewall cleanly. A guest with snapshots now keeps its old disks until `snapshot-vm.sh --cleanup` finds no snapshot holding them, also proven. `identity` is still on `local-zfs`.
+
+**Known gaps in the move:** a rollback after a successful move leaves the new disks orphaned on the target pool. `node storage add` prints "HA modules on tanka1" from the declared default, even for guests still on `local-zfs`.
 
 **The test bed.** lab2 is at `192.168.14.93` (node), `192.168.14.140` (firewall WAN), `10.0.0.203` (mothership). Boot disk: 500 GB Samsung 870 EVO. Two 2 TB 990 PRO NVMe carry an old exported `rpool-OLD-…`, so a pool on them needs `--wipe`. It follows `main`.
 
@@ -92,7 +95,7 @@ A site works with no public DNS and no public certificate, and can go public lat
 - CA trust on every VM and container that calls Authentik. **The biggest unknown.**
 - The admin VPN step offers the CA file to the browser.
 - An `internet` route in `local` mode says it is not reachable from the internet.
-- New Day 1 order: first node, more nodes, VPN, foundation with publish and sign-in (setup closes here), then repositories, switches, Wi-Fi, physical, stacks, and an optional "Make it public" step replacing TLS. **For Lars to confirm.**
+- New Day 1 order: first node, more nodes, VPN, foundation with publish and sign-in (setup closes here), then repositories, switches, Wi-Fi, physical, stacks, and an optional "Make it public" step replacing TLS. Lars confirmed this order on 2026-11-02.
 - ADR for all of this, amending ADR-021 and ADR-034 D2, D10 and A15.
 - Publishing must never report success with no route, whichever mode.
 
