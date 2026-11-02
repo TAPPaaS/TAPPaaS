@@ -253,7 +253,8 @@ Keep it least-privilege — grant only the zones you actually administer.
 
 | Symptom | Check |
 | --- | --- |
-| No handshake (`wg show` blank) | `Endpoint` reachable? (A: satellite has the `admin-vpn` role + `:51821` open; B: cluster has a public IP and the bootstrap WAN rule is present — `network-manager wgvpn list` → `wan: present`). Server pubkey correct? |
+| No handshake (`wg show` blank) | `Endpoint` reachable? (A: satellite has the `admin-vpn` role + `:51821` open; B: cluster has a public IP and the bootstrap WAN rule is present — `network-manager wgvpn list` → `wan: present`). Server pubkey correct? A client on the same private LAN as a WAN that still blocks private sources is dropped silently: `module-manager update network` clears it. |
+| "Active", but no names resolve and the internet seems gone | The WireGuard app shows Active with no connection, and the file sends all DNS to the site. Check for a handshake; with none, switch the tunnel off, then see the row above. |
 | Handshake OK, can't reach mgmt | `network-manager wgvpn list` shows `rule: present`? Re-run `network-manager wgvpn setup`. `AllowedIPs` includes `10.0.0.0/24`? |
 | Connects then stalls / hangs | Lower `MTU` (try `1280`). Confirm `PersistentKeepalive = 25`. |
 | A published name answers 403 | The tunnel is a v1 config: `network-manager wgvpn list` says so. Re-issue and re-import it (§6), or use the hosts-file line meanwhile. `dig console.<domain>` should give `10.6.0.1`, not the WAN address. |

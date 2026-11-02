@@ -120,8 +120,8 @@ export function EnrolWizard({ onClose, prefill }: { onClose: () => void; prefill
 
   const stages = [
     { id: "key", title: "1 · Make a key pair on the device", required: true, done: PUBKEY.test(pubkey) ? true : null, detail: "WireGuard identifies the device by a key pair made on the device itself. Only its public half is given to the site." },
-    { id: "register", title: "2 · Register the device", required: true, done: done ?? (job ? null : false), detail: "The site records the device and gives it a tunnel address; the result is the device's WireGuard file, to download." },
-    { id: "install", title: "3 · Put the file on the device and connect", required: true, done: null, detail: "The file goes into the device's WireGuard, with its private key pasted in; then the tunnel is switched on." },
+    { id: "register", title: "2 · Register the device", required: true, done: done ?? (job ? null : false), detail: "The site records the device and gives it a tunnel address. You download the device's WireGuard file: everything but the private key, which the site never sees." },
+    { id: "install", title: "3 · Put the file on the device and connect", required: true, done: null, detail: "The file gets its private key on the device and goes into WireGuard. The tunnel is switched on and checked for a handshake." },
   ];
   // Stages 1 and 2 are open together: the key made in 1 is typed into 2.
   const current = !done ? "register" : "install";
@@ -146,7 +146,7 @@ export function EnrolWizard({ onClose, prefill }: { onClose: () => void; prefill
               <ol>
                 <li>Install the tools: <span className="mono">apt install wireguard-tools</span> or <span className="mono">brew install wireguard-tools</span>.</li>
                 <li><span className="mono">wg genkey | tee tappaas-admin.key | wg pubkey</span> — prints the public key; the private key is in <span className="mono">tappaas-admin.key</span>.</li>
-                <li>Copy the public key into stage 2. Keep <span className="mono">tappaas-admin.key</span>: the key pair alone opens no tunnel. Stage 2 gives you the tunnel's <span className="mono">.conf</span> file, and in stage 3 the private key goes into it.</li>
+                <li>Copy the public key into stage 2. Keep <span className="mono">tappaas-admin.key</span>: the key pair alone opens no tunnel. Stage 2 gives you the <span className="mono">.conf</span> file with a blank for the private key, and stage 3 fills it in here on the device.</li>
               </ol>
             </div>
           </div>
@@ -166,7 +166,8 @@ export function EnrolWizard({ onClose, prefill }: { onClose: () => void; prefill
             <ol>
               <li>Download the file from stage 2 ({name || "tappaas-admin"}.conf). Open it in a text editor and put the device's <b>private key</b> where it says <span className="mono">PrivateKey = &lt;PASTE-YOUR-PRIVATE-KEY&gt;</span>. If the <span className="mono">Endpoint</span> line is a placeholder, put the site's public address there, port 51821.</li>
               <li><b>WireGuard app:</b> import the file (<b>Import tunnel(s) from file</b>; on a phone, send the file to it or scan it as a QR code), or paste its contents into the tunnel from stage 1 under the key the app made. <b>Terminal:</b> in the folder with both files, run <span className="mono">sed -i.bak "s|&lt;PASTE-YOUR-PRIVATE-KEY&gt;|$(cat tappaas-admin.key)|" {name || "tappaas-admin"}.conf</span>, then <span className="mono">chmod 600 {name || "tappaas-admin"}.conf</span> and <span className="mono">sudo wg-quick up ./{name || "tappaas-admin"}.conf</span>. The file now holds the private key, so keep it private.</li>
-              <li>Switch the tunnel on. The device now reaches the management zone: this console, the Proxmox and firewall UIs, and ssh to every host, by their names.</li>
+              <li>Switch the tunnel on, then check that it connected: the app's <b>latest handshake</b> shows a time, or <span className="mono">sudo wg show</span> prints it. <b>Active alone proves nothing:</b> the app shows it with no connection. With a handshake, the device reaches the management zone: this console, the Proxmox and firewall UIs, and ssh to every host, by their names.</li>
+              <li>No handshake? Switch the tunnel off. While it is on, the device asks the site for every name, so a dead tunnel looks like losing the internet.</li>
             </ol>
           ) : (
             <p className="muted small">Once the device is registered.</p>
