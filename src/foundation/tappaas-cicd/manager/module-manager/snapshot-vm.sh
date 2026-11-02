@@ -13,7 +13,8 @@
 #   (none)          Create a new snapshot
 #   --list          List all snapshots on the VM
 #   --cleanup <N>   Delete all tappaas-* snapshots except the newest N
-#                   (snapshots made by hand are never touched)
+#                   (snapshots made by hand are never touched), then the disks
+#                   a storage move left behind that no snapshot holds any more
 #   --restore <N>   Restore snapshot N steps back in history (1 = most recent)
 #
 # Examples:
@@ -185,6 +186,28 @@ get_tappaas_snapshot_names() {
 
 # ── Actions ──────────────────────────────────────────────────────────
 
+# The disks a storage move kept for this VM's snapshots (update-storage.sh): each
+# goes once it is an unused volume that nothing else in the VM's config names.
+drop_moved_disks() {
+    local list="${TAPPAAS_CONFIG:-/home/tappaas/config}/storage-move-leftovers"
+    [[ -f "${list}" ]] || return 0
+    local conf vol key
+    conf="$(ssh -n root@"${NODE_FQDN}" "cat /etc/pve/qemu-server/${VMID}.conf")" || return 0
+    while read -r id vol; do
+        [[ "${id}" == "${VMID}" ]] || continue
+        key="$(awk -v v="${vol}" -F': ' '$1 ~ /^unused[0-9]+$/ && $2 == v {print $1; exit}' <<< "${conf}")"
+        [[ -n "${key}" ]] || continue
+        grep -v '^unused[0-9]*:' <<< "${conf}" | grep -qF "${vol}" && continue
+        info "  Removing ${vol}, left by a storage move"
+        if ssh -n root@"${NODE_FQDN}" "qm disk unlink ${VMID} --idlist ${key} --force 1"; then
+            grep -vxF "${id} ${vol}" "${list}" > "${list}.tmp" || true
+            mv "${list}.tmp" "${list}"
+        else
+            warn "Could not remove ${vol} (${key} of VM ${VMID})"
+        fi
+    done < <(cat "${list}")
+}
+
 case "${ACTION}" in
 
     create)
@@ -218,6 +241,7 @@ case "${ACTION}" in
 
         if [[ "${SNAP_COUNT}" -le "${KEEP}" ]]; then
             debug "  ${SNAP_COUNT} tappaas snapshot(s) found, keeping ${KEEP} — nothing to delete"
+            drop_moved_disks
             exit 0
         fi
 
@@ -244,6 +268,7 @@ case "${ACTION}" in
             die "Cleanup incomplete — ${deleted} snapshot(s) removed, ${failed} failed"
         fi
         debug "${VMNAME}: ${deleted} old snapshot(s) removed (keeping last ${KEEP})"
+        drop_moved_disks
         ;;
 
     restore)

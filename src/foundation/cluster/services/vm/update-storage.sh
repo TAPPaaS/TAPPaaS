@@ -22,6 +22,11 @@
 # the VM config and its instance-id is deterministic, so the guest never sees a
 # new instance (the same reasoning the orphan sweep rests on).
 #
+# Snapshots: Proxmox will not delete a disk that snapshots hold, and an update has
+# just taken one. A guest with snapshots keeps its old disks as unused volumes, so
+# a rollback still works; they are listed in config/storage-move-leftovers and
+# snapshot-vm.sh --cleanup removes each once no snapshot holds it.
+#
 # Only a DECLARED value is applied (fields.json applyOnlyDeclared): the schema
 # default never moves a disk, so a guest that never asked for a storage stays
 # where it was built.
@@ -167,11 +172,20 @@ if [[ -n "${repl_ids}" ]]; then
     [[ "${left}" == "0" ]] || { error "  the replication of VM ${VMID} was not removed within 5 minutes — not moving"; exit 1; }
 fi
 
+snapshots="$(on_node "qm listsnapshot ${VMID}" | awk '$2 != "current"' | wc -l)"
+leftovers="${TAPPAAS_CONFIG:-/home/tappaas/config}/storage-move-leftovers"
 for d in "${disks[@]}"; do
     info "  moving ${d} of VM ${VMID} ${ACTUAL}→${DESIRED} (live)..."
-    on_node "qm disk move ${VMID} ${d} ${DESIRED} --delete 1" >/dev/null \
+    vol="$(awk -v k="${d}" -F': ' '$1 == k {split($2, a, ","); print a[1]}' <<< "${config}")"
+    delete=1
+    [[ "${snapshots}" -eq 0 ]] || delete=0
+    on_node "qm disk move ${VMID} ${d} ${DESIRED} --delete ${delete}" >/dev/null \
         || { error "  qm disk move ${VMID} ${d} ${DESIRED} failed on ${NODE}"; exit 1; }
+    [[ "${delete}" == "1" ]] || echo "${VMID} ${vol}" >> "${leftovers}"
 done
+if [[ "${snapshots}" -gt 0 ]]; then
+    info "  its snapshots hold the old disks on ${ACTUAL}: removed once those snapshots are pruned"
+fi
 # The cloud-init drive: removed and made again on the new storage, then filled.
 if [[ -n "${ci_key}" ]]; then
     info "  making the cloud-init drive (${ci_key}) again on ${DESIRED}..."
