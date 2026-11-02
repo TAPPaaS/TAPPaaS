@@ -282,13 +282,13 @@ export function stacksOf(cats: { modules: { name: string; stack: string | null }
 export interface StackPlan {
   stack: string;
   environment: string | null;
-  steps: { module: string; action: "install" | "skip"; instance?: string; description: string | null; repository?: string | null; maintainer?: string | null }[];
+  steps: { module: string; action: "install" | "skip"; instance?: string; description: string | null; repository?: string | null; maintainer?: string | null; status?: string | null }[];
   missing: { module: string; dependency: string }[];
 }
 
-// What follows a module's name in the list: where it comes from, who keeps it.
+// What follows a module's name in the list: where it comes from, who keeps it, how mature it is.
 export const stackModuleOrigin = (s: StackPlan["steps"][number]): string | null => {
-  const parts = [s.repository ? `Repo: ${s.repository}` : null, s.maintainer ? `Maintainer: ${s.maintainer}` : null].filter(Boolean);
+  const parts = [s.repository ? `Repo: ${s.repository}` : null, s.maintainer ? `Maintainer: ${s.maintainer}` : null, s.status ? `Status: ${s.status}` : null].filter(Boolean);
   return parts.length ? `(${parts.join(", ")})` : null;
 };
 

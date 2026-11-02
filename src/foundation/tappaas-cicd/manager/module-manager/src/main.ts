@@ -141,7 +141,7 @@ export const HELP: HelpSpec = {
         ["--dry-run", "Print the plan — order, what is skipped, outside dependencies missing, hand steps — and change nothing."],
         ["--environment ENV", "Install every module into this environment (passed to each add)."],
         ["--skip MODULE", "Leave this module of the stack out; repeat for each. A module that needs it is then refused."],
-        ["--json", "With --dry-run: the plan as JSON, each module with its description, repository and maintainer; what would refuse it is in the document."],
+        ["--json", "With --dry-run: the plan as JSON, each module with its description, repository, maintainer and status; what would refuse it is in the document."],
         ["--allow-fork", "Passed to each add."],
       ],
       details:
@@ -1007,6 +1007,7 @@ function loadStackModules(configDir: string, stack: string): { mods: StackModule
         name: e.moduleName,
         repository: r.name,
         maintainer: typeof mj.maintainer === "string" ? mj.maintainer : undefined,
+        status: typeof mj.status === "string" ? mj.status : undefined,
         description: typeof mj.description === "string" ? mj.description : undefined,
         vmid: Number.isInteger(v) && v > 0 ? v : undefined,
         dependsOn: list("dependsOn"),
@@ -1056,7 +1057,7 @@ function cmdAddStack(opts: Opts, client: ModuleClient): number {
 
   if (opts.json) {
     if (!opts.dryRun) die("add-stack: --json is for the plan: add --dry-run");
-    const about = new Map(mods.map((m) => [m.name, { description: m.description ?? null, repository: m.repository ?? null, maintainer: m.maintainer ?? null }]));
+    const about = new Map(mods.map((m) => [m.name, { description: m.description ?? null, repository: m.repository ?? null, maintainer: m.maintainer ?? null, status: m.status ?? null }]));
     console.log(JSON.stringify({ stack, environment: env ?? null, ...plan, steps: plan.steps.map((s) => ({ ...s, ...about.get(s.module) })) }, null, 2));
     return 0;
   }

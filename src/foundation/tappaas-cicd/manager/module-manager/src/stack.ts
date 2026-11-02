@@ -15,6 +15,7 @@ export interface StackModule {
   description?: string;
   repository?: string; // the site's name for the repository it comes from
   maintainer?: string;
+  status?: string; // its maturity: Development, Testing, Production
   dependsOn: string[];
   integratesWith: string[];
   // The module's INSTALL.md has steps for the operator after the install.

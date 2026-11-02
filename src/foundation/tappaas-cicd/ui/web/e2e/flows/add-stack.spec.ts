@@ -25,7 +25,7 @@ test("add a stack: pick, tick, preview without what was unticked", async ({ page
   await expect(d.locator(".stack-modules li", { hasText: "hass" }).getByText("installed", { exact: true })).toBeVisible();
   await expect(d.getByRole("checkbox", { name: /^nomad/ })).toBeChecked();
   await expect(d.getByText("Karakeep — bookmarks and read-later")).toBeVisible();
-  await expect(d.locator(".stack-modules li", { hasText: "karakeep" }).getByText(/^\(Repo: TAPPaaS, Maintainer: /)).toBeVisible();
+  await expect(d.locator(".stack-modules li", { hasText: "karakeep" }).getByText(/^\(Repo: TAPPaaS, Maintainer: @\S+, Status: \w+\)$/)).toBeVisible();
   await d.getByRole("checkbox", { name: /^karakeep/ }).uncheck();
   await d.getByRole("button", { name: "Continue", exact: true }).last().click();
 

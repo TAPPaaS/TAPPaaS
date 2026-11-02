@@ -8,7 +8,8 @@
       "instance": "hass",
       "description": "Home Assistant OS (HAOS) - home automation platform",
       "repository": "TAPPaaS",
-      "maintainer": "@ErikDaniel007"
+      "maintainer": "@ErikDaniel007",
+      "status": "Testing"
     },
     {
       "module": "immich",
@@ -16,7 +17,8 @@
       "instance": "immich",
       "description": "Immich self-hosted photo and video backup with ML-powered search, face recognition and mobile apps",
       "repository": "TAPPaaS",
-      "maintainer": "@AndreasJe"
+      "maintainer": "@AndreasJe",
+      "status": "Testing"
     },
     {
       "module": "jellyfin",
@@ -24,7 +26,8 @@
       "instance": "jellyfin",
       "description": "Jellyfin open-source media server for personal movie, TV and music libraries",
       "repository": "TAPPaaS",
-      "maintainer": "@AndreasJe"
+      "maintainer": "@AndreasJe",
+      "status": "Testing"
     },
     {
       "module": "karakeep",
@@ -32,7 +35,8 @@
       "handSteps": false,
       "description": "Karakeep — bookmarks and read-later: links, notes and images, each page archived",
       "repository": "TAPPaaS",
-      "maintainer": "@larsrossen"
+      "maintainer": "@larsrossen",
+      "status": "Development"
     },
     {
       "module": "nomad",
@@ -40,7 +44,8 @@
       "handSteps": true,
       "description": "Project N.O.M.A.D. — an offline knowledge and education server",
       "repository": "TAPPaaS",
-      "maintainer": "@larsrossen"
+      "maintainer": "@larsrossen",
+      "status": "Development"
     }
   ],
   "missing": [],

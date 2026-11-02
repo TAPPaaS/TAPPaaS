@@ -125,7 +125,7 @@ check(rp.object === "7" && rp.label === "crs-a:7", "…or the positional its ver
   check(stacks.join(",") === "home,office", `the stacks, sorted, without foundation or a module of no stack (${stacks.join(",")})`);
   check(stacksOf([{ modules: [{ name: "t", stack: "test" }, { name: "n", stack: "template" }, { name: "w", stack: "web-hosting" }] }]).stacks.join() === "web-hosting", "test and template are no stacks to add");
   const plan = { stack: "home", environment: null, missing: [], steps: [{ module: "hass", action: "skip" as const, instance: "hass", description: null }, { module: "nomad", action: "install" as const, description: null }, { module: "karakeep", action: "install" as const, description: null }] };
-  check(stackModuleOrigin({ ...plan.steps[0], repository: "Community", maintainer: "@AndreasJe" }) === "(Repo: Community, Maintainer: @AndreasJe)", "a module's repository and maintainer");
+  check(stackModuleOrigin({ ...plan.steps[0], repository: "Community", maintainer: "@AndreasJe", status: "Development" }) === "(Repo: Community, Maintainer: @AndreasJe, Status: Development)", "a module's repository, maintainer and status");
   check(stackModuleOrigin({ ...plan.steps[0], repository: "TAPPaaS" }) === "(Repo: TAPPaaS)" && stackModuleOrigin(plan.steps[0]) === null, "only what is known");
   check(stackSkips(plan, ["nomad", "hass"]).join() === "nomad", "only a module the plan would install is skipped");
   check(notes.office === "office — nextcloud, onlyoffice", `a stack's note lists its modules once across repositories (${notes.office})`);
