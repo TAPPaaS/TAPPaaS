@@ -23,13 +23,9 @@ The goal: one path for the common case. Answer a few questions, boot the machine
 - The debconf fix (`9e04d046`) and the `repository modify` output (`cb18cf26`).
 - Pool creation and moving guests: `node storage add` plus `module modify network|tappaas-cicd --set storage=tanka1` has never run for real. The doc's commands for it are unproven.
 
-**The test bed.** lab2 is at `192.168.14.93` (node), `192.168.14.140` (firewall WAN), `10.0.0.203` (mothership). Boot disk: 500 GB Samsung 870 EVO. Two 2 TB 990 PRO NVMe carry an old exported `rpool-OLD-…`, so a pool on them needs `--wipe`. It follows `adr-041`, whose Codeberg tip stops at `f89cb749`. Move it to `main` before its first update:
+**The test bed.** lab2 is at `192.168.14.93` (node), `192.168.14.140` (firewall WAN), `10.0.0.203` (mothership). Boot disk: 500 GB Samsung 870 EVO. Two 2 TB 990 PRO NVMe carry an old exported `rpool-OLD-…`, so a pool on them needs `--wipe`. It follows `main`.
 
-```bash
-site-manager repository modify TAPPaaS --branch main
-```
-
-Log in from `~/lab2-install` on the Mac with `proxmox-ve_9.2-1-tappaas-auto.key`, then hop to the mothership with `/root/tappaas/tappaas-cicd.key`. `~/lab2-install` holds the ISO and key: both are credentials. Identity is installed and the console refuses the install LAN (§3).
+Log in from `~/lab2-install` on the Mac with `proxmox-ve_9.2-1-tappaas-auto.key`, then hop to the mothership with `/root/tappaas/tappaas-cicd.key`. `~/lab2-install` holds the ISO and key: both are credentials. Identity is installed, the identity bootstrap has not run, and setup is open again (§3).
 
 ## 1. Boot disk override
 
@@ -140,7 +136,7 @@ The panel shows, top to bottom:
 
 The cause: the switch to the gate keys on `config/identity.json`, written the moment identity is installed. But the gate only works later, once the identity bootstrap has made a user and the console module has published the route, and it is only reachable from `mgmt` or the admin VPN.
 
-**Done on `main`, 2026-11-02 (unit-tested, not yet run live):** the token file alone says setup is open, and the first installer through the gate deletes it and runs `install-access.sh close`. The closed address answers with a page saying where to go, and `install-access.sh reopen` recovers a site. ADR-034 v1.4 records it. Publishing the console no longer closes anything.
+**Done on `main`, 2026-11-02:** the token file alone says setup is open, and the first installer through the gate deletes it and runs `install-access.sh close`. The closed address answers with a page saying where to go, and `install-access.sh reopen` recovers a site. ADR-034 v1.4 records it. Publishing the console no longer closes anything.
 
 Still to do:
 
@@ -148,7 +144,7 @@ Still to do:
 - Step 3 runs identity, bootstrap and the console publish as one job. It keeps running on the mothership if the browser is cut off, and the operator ends on a page that says where to go next.
 - Before the cut-over, the operator must have a way in that works: the admin VPN imported and tested. An install-LAN operator today has no reason to have done so.
 
-**lab2 is still locked out, left as found for study.** Once lab2 is on `main`, `install-access.sh reopen` on its mothership should bring back the token and the install LAN, as the first live test of this fix. Day 1 then continues in the console.
+**lab2, 2026-11-02:** moved to `main`, and the recovery is proven there: the closed address answered 403 with its page, `install-access.sh reopen` brought back the token and the install LAN, and the forward did not duplicate. **Not yet proven live:** the first gate sign-in closing setup, which also runs `install-access.sh close` from inside the console's sandbox. That needs the identity bootstrap, the console published, and a sign-in over the admin VPN.
 
 ### Step 4: TLS (needs design)
 
