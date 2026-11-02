@@ -43,7 +43,7 @@ import {
   siteNodeHostnames,
   siteRepositories,
 } from "./config";
-import { NOT_INSTALLABLE, StackModule, hasHandSteps, planStack } from "./stack";
+import { NOT_INSTALLABLE, StackModule, catalogueEntries, hasHandSteps, planStack, withoutSkipped } from "./stack";
 import { defaultNodeCandidates, queryClusterGuests, reachableNodes as clusterReachableNodes } from "../../../lib/ts/src/cluster";
 import { moduleScope } from "../../../lib/ts/src/scope";
 import { CmdbObject, CmdbRelation } from "../../../lib/ts/src/cmdb";
@@ -134,12 +134,14 @@ export const HELP: HelpSpec = {
         "at install time — an incomplete module still installs.",
     },
     {
-      usage: "add-stack <stack> [--environment ENV] [--dry-run] [--allow-fork]",
+      usage: "add-stack <stack> [--environment ENV] [--skip MODULE]... [--dry-run] [--json] [--allow-fork]",
       name: "add-stack",
       note: "(every module of a stack, in dependsOn order — #763)",
       options: [
         ["--dry-run", "Print the plan — order, what is skipped, outside dependencies missing, hand steps — and change nothing."],
         ["--environment ENV", "Install every module into this environment (passed to each add)."],
+        ["--skip MODULE", "Leave this module of the stack out; repeat for each. A module that needs it is then refused."],
+        ["--json", "With --dry-run: the plan as JSON, each module with its description; what would refuse it is in the document."],
         ["--allow-fork", "Passed to each add."],
       ],
       details:
@@ -370,6 +372,7 @@ interface Opts {
   // `modify --unset field`, repeatable: remove a stale undeclared field the
   // 3-way merge keeps forever (#648).
   unsets: string[];
+  skips: string[];
   // snapshot-vm sub-action
   snapList: boolean;
   snapCleanup?: number;
@@ -405,6 +408,7 @@ function parseOpts(args: string[]): Opts {
     resolution: false,
     sets: [],
     unsets: [],
+    skips: [],
     snapList: false,
     rest: [],
     passthrough: [],
@@ -484,6 +488,8 @@ function parseOpts(args: string[]): Opts {
       o.decommission = true;
     } else if (a === "--lockdown") {
       o.lockdown = true;
+    } else if (a === "--skip") {
+      o.skips.push(next());
     } else if (a === "--dry-run") {
       o.dryRun = true;
     } else if (a === "--resolution") {
@@ -975,16 +981,13 @@ function loadStackModules(configDir: string, stack: string): { mods: StackModule
     if (!r.path) continue;
     const cat = join(r.path, r.catalog || "src/module-catalog.json");
     if (!existsSync(cat)) continue;
-    let entries: { moduleName?: string; moduleJson?: string; stack?: string; vmid?: number }[] = [];
+    let entries: ReturnType<typeof catalogueEntries> = [];
     try {
-      entries = (JSON.parse(readFileSync(cat, "utf8")) as { modules?: typeof entries }).modules ?? [];
+      entries = catalogueEntries(JSON.parse(readFileSync(cat, "utf8")));
     } catch {
       continue;
     }
     for (const e of entries) {
-      if (e.stack) stacks.add(e.stack);
-      if (e.stack !== stack || !e.moduleName || !e.moduleJson || seen.has(e.moduleName)) continue;
-      seen.add(e.moduleName);
       const jsonPath = join(r.path, e.moduleJson);
       let mj: Record<string, unknown> = {};
       try {
@@ -992,11 +995,17 @@ function loadStackModules(configDir: string, stack: string): { mods: StackModule
       } catch {
         /* an unreadable JSON still installs or fails in add, which says why */
       }
+      // The module's own stack over its catalogue entry's, as the console reads it.
+      const own = typeof mj.stack === "string" && mj.stack !== "" ? mj.stack : e.stack;
+      if (own) stacks.add(own);
+      if (own !== stack || seen.has(e.moduleName)) continue;
+      seen.add(e.moduleName);
       const installMd = join(dirname(jsonPath), "INSTALL.md");
       const list = (k: string): string[] => (Array.isArray(mj[k]) ? (mj[k] as unknown[]).map(String) : []);
       const v = Number((mj as { vmid?: unknown }).vmid ?? (e as { vmid?: unknown }).vmid);
       mods.push({
         name: e.moduleName,
+        description: typeof mj.description === "string" ? mj.description : undefined,
         vmid: Number.isInteger(v) && v > 0 ? v : undefined,
         dependsOn: list("dependsOn"),
         integratesWith: list("integratesWith"),
@@ -1013,11 +1022,13 @@ function cmdAddStack(opts: Opts, client: ModuleClient): number {
   if (NOT_INSTALLABLE.has(stack)) {
     die(`add-stack: '${stack}' is not an installable stack — foundation is installed with the site, template and test modules one by one`);
   }
-  const { mods, stacks } = loadStackModules(opts.configDir, stack);
-  if (mods.length === 0) {
+  const { mods: whole, stacks } = loadStackModules(opts.configDir, stack);
+  if (whole.length === 0) {
     const known = [...stacks].filter((s) => !NOT_INSTALLABLE.has(s)).sort().join(", ");
     die(`add-stack: no module in stack '${stack}' — the stacks: ${known || "none found in the site's repositories"}`);
   }
+  const { mods, unknown } = withoutSkipped(whole, opts.skips);
+  if (unknown.length > 0) die(`add-stack: --skip ${unknown.join(", ")}: not in stack '${stack}' — its modules: ${whole.map((m) => m.name).sort().join(", ")}`);
   const env = opts.environment;
   // Taken VMIDs: every deployed config's, and every guest's on the cluster (a
   // guest no config names still owns its VMID).
@@ -1041,6 +1052,12 @@ function cmdAddStack(opts: Opts, client: ModuleClient): number {
     vmidUsed: (v) => used.has(v),
   });
 
+  if (opts.json) {
+    if (!opts.dryRun) die("add-stack: --json is for the plan: add --dry-run");
+    const about = new Map(mods.map((m) => [m.name, m.description ?? null]));
+    console.log(JSON.stringify({ stack, environment: env ?? null, ...plan, steps: plan.steps.map((s) => ({ ...s, description: about.get(s.module) ?? null })) }, null, 2));
+    return 0;
+  }
   info(`Stack ${stack}${env ? ` into ${env}` : ""}: ${plan.steps.length} module(s), in this order:`);
   plan.steps.forEach((s, i) => {
     const what = s.action === "skip"
@@ -1056,7 +1073,8 @@ function cmdAddStack(opts: Opts, client: ModuleClient): number {
   }
   if (plan.missing.length > 0) {
     for (const m of plan.missing) {
-      console.error(`${RD}[Error]${CL} ${m.module} needs ${m.dependency}, which is not installed — module-manager add ${m.dependency.split(":")[0]}`);
+      const provider = m.dependency.split(":")[0];
+      console.error(`${RD}[Error]${CL} ${m.module} needs ${m.dependency}, which is not installed — ${opts.skips.includes(provider) ? `keep ${provider} in the stack, or skip ${m.module} too` : `module-manager add ${provider}`}`);
     }
     console.error(`${RD}[Error]${CL} nothing was installed: install what the stack needs from outside it first`);
     return 1;
@@ -1077,7 +1095,7 @@ function cmdAddStack(opts: Opts, client: ModuleClient): number {
     });
     if (rc !== 0) {
       console.error(`${RD}[Error]${CL} add ${s.module} failed (rc ${rc}); it rolled itself back. Installed in this run: ${done.join(", ") || "none"}.`);
-      console.error(`${RD}[Error]${CL} Fix it and run 'module-manager add-stack ${stack}${env ? ` --environment ${env}` : ""}' again — what is installed is skipped.`);
+      console.error(`${RD}[Error]${CL} Fix it and run 'module-manager add-stack ${stack}${env ? ` --environment ${env}` : ""}${opts.skips.map((m) => ` --skip ${m}`).join("")}' again — what is installed is skipped.`);
       return rc;
     }
     done.push(s.module);

@@ -12,6 +12,7 @@ export const NOT_INSTALLABLE = new Set(["foundation", "template", "test"]);
 
 export interface StackModule {
   name: string;
+  description?: string;
   dependsOn: string[];
   integratesWith: string[];
   // The module's INSTALL.md has steps for the operator after the install.
@@ -74,6 +75,21 @@ export function installOrder(mods: StackModule[]): { order: string[]; cycle: str
     }
   }
   return { order, cycle: [] };
+}
+
+// Every entry that names a module, whatever the catalogue's grouping: a flat
+// `modules` list, or lists by kind (Community's applicationModules, …).
+export function catalogueEntries(doc: unknown): { moduleName: string; moduleJson: string; stack?: string; vmid?: number }[] {
+  if (Array.isArray(doc)) return doc.flatMap(catalogueEntries);
+  if (typeof doc !== "object" || doc === null) return [];
+  const o = doc as { moduleName?: unknown; moduleJson?: unknown; stack?: string; vmid?: number };
+  if (typeof o.moduleName === "string" && typeof o.moduleJson === "string") return [{ moduleName: o.moduleName, moduleJson: o.moduleJson, stack: o.stack, vmid: o.vmid }];
+  return Object.values(doc).flatMap(catalogueEntries);
+}
+
+// The stack without the modules the operator left out, and any named that it does not hold.
+export function withoutSkipped(mods: StackModule[], skips: string[]): { mods: StackModule[]; unknown: string[] } {
+  return { mods: mods.filter((m) => !skips.includes(m.name)), unknown: skips.filter((s) => !mods.some((m) => m.name === s)) };
 }
 
 export function planStack(mods: StackModule[], facts: StackFacts): StackPlan {

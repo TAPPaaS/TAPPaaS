@@ -355,7 +355,7 @@
           "add-stack"
         ]
       ],
-      "usage": "add-stack <stack> [--environment ENV] [--dry-run] [--allow-fork]",
+      "usage": "add-stack <stack> [--environment ENV] [--skip MODULE]... [--dry-run] [--json] [--allow-fork]",
       "note": "(every module of a stack, in dependsOn order — #763)",
       "details": "The stack's modules are the catalogue entries whose stack it is; the order is the one its\nINSTALL.md shows. Installed modules are skipped. A dependency outside the stack must be\ninstalled first, or nothing is. The first module that fails stops the run; run it again to\nresume. foundation, template and test are not installable stacks.",
       "positionals": [
@@ -373,6 +373,14 @@
           "choices": null,
           "repeatable": false,
           "description": "Install every module into this environment (passed to each add)."
+        },
+        {
+          "flag": "--skip",
+          "takesValue": true,
+          "arg": "MODULE",
+          "choices": null,
+          "repeatable": true,
+          "description": "Leave this module of the stack out; repeat for each. A module that needs it is then refused."
         },
         {
           "flag": "--dry-run",

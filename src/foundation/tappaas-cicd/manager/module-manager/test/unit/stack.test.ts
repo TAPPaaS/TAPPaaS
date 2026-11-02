@@ -4,7 +4,7 @@
 
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
-import { StackModule, hasHandSteps, installOrder, planStack } from "../../src/stack";
+import { StackModule, catalogueEntries, hasHandSteps, installOrder, planStack, withoutSkipped } from "../../src/stack";
 
 let passed = 0;
 let failed = 0;
@@ -90,6 +90,13 @@ check(hasHandSteps("# x\n\n## Post-install\n\nDo this.") && hasHandSteps("## Fir
     check(listed.join(",") === ours.join(","), `${stack}: the order is ${stack}/INSTALL.md's (${ours.join(",")})`);
   }
 }
+
+const shaped = catalogueEntries({ description: "", applicationModules: [{ moduleName: "a", moduleJson: "a.json", stack: "x" }], testModules: [], nested: { more: [{ moduleName: "b", moduleJson: "b.json" }] } });
+check(shaped.map((e) => e.moduleName).join() === "a,b", "a catalogue's entries, whatever its grouping");
+const left = withoutSkipped([{ name: "a", dependsOn: [], integratesWith: [], handSteps: false }, { name: "b", dependsOn: ["a:x"], integratesWith: [], handSteps: false }], ["a", "z"]);
+check(left.mods.map((m) => m.name).join() === "b" && left.unknown.join() === "z", "skipped modules leave the stack; one it does not hold is named");
+const dep = planStack(left.mods, { instanceOf: (m) => m, installed: () => false, providerInstalled: () => false, vmidUsed: () => false });
+check(dep.missing[0]?.dependency === "a:x", "a skipped module a kept one needs is what is missing");
 
 console.log(`\nResults: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
