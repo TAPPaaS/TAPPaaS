@@ -57,8 +57,14 @@ Every alert that arrives, ALERT or RESOLVED, also moves the site's health
 alerts.ts places it, and a worker thread runs `health-manager assess --only
 <ci>` and then `health-manager emit`, so a webhook never waits for them. A burst
 is one worker: what arrives while it runs joins its next round. An alert about
-no object assesses the site. The rule that mails root causes is not assessed
-again: it reads what emit wrote.
+no object assesses the site. health-manager's own rules are not assessed again:
+they read what emit wrote.
+
+The daily digest (HealthDailyDigest) is a mail health-manager writes: `digest
+--json` says what is new since the last one, and whether that makes it an ALERT
+or a STATUS. Sent from a worker thread as a bundle's alert is; once it went,
+`digest --mark` records what it told. When health-manager cannot say, the rule's
+own template goes out, as an ALERT.
 
 Every request is authenticated with a bearer token both sides read from a file
 (the receiver's, and Grafana's copy that logging/update.sh delivers). Every
@@ -314,6 +320,39 @@ def make_lines_for(args):
             print(f"log lines NOT fetched: {e}", flush=True)
             return None
     return lines_for
+
+
+def digest_doc(args):
+    """health-manager's digest {subject, body, keys, …}, or None when it cannot say."""
+    try:
+        r = subprocess.run([args.health, "digest", "--json"], text=True, capture_output=True, timeout=HEALTH_TIMEOUT)
+        doc = json.loads(r.stdout) if r.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired, ValueError) as e:
+        print(f"digest NOT built: {e}", flush=True)
+        return None
+    if not isinstance(doc, dict) or not doc.get("subject") or not doc.get("body"):
+        print(f"digest NOT built: {r.stderr.strip()[-300:]}", flush=True)
+        return None
+    return doc
+
+
+def is_digest(payload):
+    return any((a.get("labels") or {}).get("alertname") == DIGEST_RULE for a in payload.get("alerts") or [])
+
+
+def send_digest(args, template, tries=3, pause=60):
+    doc = digest_doc(args)
+    subject, body = (doc["subject"], doc["body"]) if doc else template
+    for i in range(tries):
+        ok, out = notify(args, subject, body)
+        print(f"{'sent' if ok else 'NOT sent'}: {subject}" + (f" — {out}" if out and not ok else ""), flush=True)
+        if ok:
+            if doc:
+                _health_run([args.health, "digest", "--mark"], json.dumps({"keys": doc.get("keys", [])}))
+            return True
+        if i + 1 < tries:
+            time.sleep(pause)
+    return False
 
 
 def meta(payload):
@@ -636,7 +675,8 @@ def record(args, payload):
 
 
 # ── the health hook (ADR-041 D2) ─────────────────────────────────────────
-HEALTH_RULES = {"HealthRootCause", "HealthRootRecovered"}  # health-manager's own
+DIGEST_RULE = "HealthDailyDigest"
+HEALTH_RULES = {"HealthRootCause", "HealthRootRecovered", DIGEST_RULE}  # health-manager's own
 HEALTH_TIMEOUT = 300
 _health_lock = threading.Lock()
 _health_pending = set()
@@ -673,9 +713,9 @@ def health_targets(payload, config_dir):
     return out
 
 
-def _health_run(cmd):
+def _health_run(cmd, stdin=None):
     try:
-        r = subprocess.run(cmd, text=True, capture_output=True, timeout=HEALTH_TIMEOUT)
+        r = subprocess.run(cmd, text=True, input=stdin, capture_output=True, timeout=HEALTH_TIMEOUT)
         if r.returncode != 0:
             print(f"health hook: {' '.join(cmd[1:])} exited {r.returncode}: {r.stderr.strip()[-300:]}", flush=True)
         return r.returncode == 0
@@ -766,6 +806,10 @@ def make_handler(args):
             mail = render(payload, make_lines_for(args))
             if mail is None:
                 self.reply(200, "nothing to send")
+                return
+            if is_digest(payload) and os.path.exists(args.health):
+                threading.Thread(target=send_digest, args=(args, mail), daemon=True).start()
+                self.reply(200, "queued")
                 return
             m = meta(payload)
             if m["bundle_since"]:

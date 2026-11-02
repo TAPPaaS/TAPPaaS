@@ -139,6 +139,10 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   io.open = null;
   const r3 = assess(io, {}, later(15));
   check(got(r3, nc, "operational")?.reason === "alert-again", "Grafana not answering takes nothing back");
+  io.open = [];
+  io.recent = [alert("HealthDailyDigest", {}, { kind: "module", name: "nextcloud" }, "recent")];
+  const r4 = assess(io, {}, later(20));
+  check(got(r4, nc, "operational")?.status === "ok", "health-manager's own rule is no condition: the digest cannot feed itself");
 }
 
 // ── the sweep's drift ──

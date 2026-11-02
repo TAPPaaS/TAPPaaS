@@ -55,6 +55,10 @@ cat > "${TMP}/health" <<EOF
 #!/usr/bin/env bash
 # fake health-manager: record each call
 printf '%s\n' "\$*" >> "${TMP}/health-calls"
+case "\$*" in
+    "digest --json") cat "${TMP}/digest.json" ;;
+    "digest --mark") cat > "${TMP}/digest-marked" ;;
+esac
 EOF
 chmod +x "${TMP}/health"
 mkdir -p "${TMP}/cfg"
@@ -255,6 +259,31 @@ ck "an alert assesses its object, then emits" "assess --only shop|emit" "$(hooke
 ck "…a RESOLVED too" "assess --only shop|emit" "$(hooked "$(wh resolved state HostSilent site1)")"
 ck "an alert about no known object assesses the site" "assess|emit" "$(hooked "$(wh firing event Oom elsewhere)")"
 ck "health-manager's own rule runs nothing" "" "$(hooked "$(wh firing event HealthRootCause tappaas-cicd)")"
+
+# The daily digest: health-manager writes the mail, and hears what went out.
+digest='{"labels":{"alertname":"HealthDailyDigest","host":"tappaas-cicd","kind":"event"},"annotations":{"mailSubject":"{state}: daily digest could not be built","mailBody":"the template"},"status":"firing","startsAt":"2026-11-02T13:00:00Z"}'
+digest_wh="{\"status\":\"firing\",\"alerts\":[${digest}]}"
+waited() {  # waited <file> <text>: wait for the worker to write it
+    for _ in $(seq 1 30); do grep -q -- "$2" "$1" 2>/dev/null && return 0; sleep 0.1; done
+    return 1
+}
+echo '{"subject":"STATUS: daily digest, nothing new, 2 still open","body":"NOTHING NEW\n","keys":["a","b"]}' > "${TMP}/digest.json"
+: > "${TMP}/health-calls"
+post rotated "${digest_wh}" >/dev/null
+waited "${TMP}/subjects" "STATUS: daily digest"
+ck "the digest's subject is health-manager's" "STATUS: daily digest, nothing new, 2 still open" "$(tail -1 "${TMP}/subjects")"
+ck "…and its body" "yes" "$(grep -q '^NOTHING NEW' "${TMP}/bodies" && echo yes || echo no)"
+waited "${TMP}/health-calls" "digest --mark"
+ck "…what went out is marked, and nothing is assessed" "digest --json|digest --mark" "$(paste -sd'|' - < "${TMP}/health-calls")"
+waited "${TMP}/digest-marked" "keys"
+ck "…the keys it told" "a b" "$(jq -r '.keys | join(" ")' "${TMP}/digest-marked")"
+echo 'not json' > "${TMP}/digest.json"
+: > "${TMP}/health-calls"
+post rotated "${digest_wh}" >/dev/null
+waited "${TMP}/subjects" "could not be built"
+ck "health-manager cannot say: the rule's template goes out" "ALERT: daily digest could not be built" "$(tail -1 "${TMP}/subjects")"
+sleep 0.3
+ck "…and nothing is marked" "digest --json" "$(paste -sd'|' - < "${TMP}/health-calls")"
 
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"

@@ -95,12 +95,16 @@ export function fromGates(checks: CheckResult[], idx: SiteIndex): { findings: Fi
 // ── alerts (ADR-039 D8, ADR-040 D14) ─────────────────────────────────
 // The rules that say something is exposed; every other alert is operational.
 const SECURITY_ALERTS = new Set(["RootKeyChanged", "FirewallCertChanged"]);
+// The rules over health-manager's own events: they report conditions, they are not one. As one, the
+// digest's firing was a new warning, which kept the digest firing the next day.
+const HEALTH_RULES = new Set(["HealthRootCause", "HealthRootRecovered", "HealthDailyDigest"]);
 const CI_LABELS = ["tappaas_ci_id", "tappaas.ci.id", "service_instance_id", "service.instance.id", "host_id", "host.id"];
 const kebab = (s: string): string => s.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
 
 export function fromAlerts(alerts: AlertItem[], idx: SiteIndex): Finding[] {
   const out: Finding[] = [];
   for (const a of [...alerts].sort((x, y) => x.alertname.localeCompare(y.alertname))) {
+    if (HEALTH_RULES.has(a.alertname)) continue;
     const id = CI_LABELS.map((k) => a.labels[k]).find((v) => v && idx.byId.has(v));
     const o = (id ? idx.byId.get(id) : null) ?? (a.subject ? idx.resolve(a.subject) : null) ?? idx.site;
     if (!o) continue;

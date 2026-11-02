@@ -38,16 +38,15 @@
     {
       "name": "health-daily-digest",
       "title": "HealthDailyDigest",
-      "headline": "Daily digest: new warnings and sweep findings",
+      "headline": "Daily digest",
       "kind": "event",
       "match": "(\"to\":\"warning\".*\"kind\":\"causal\".*\"silenced\":false|\"expected\":false)",
       "window": 86400,
       "repeat": "24h",
-      "include": ["lines"],
-      "summary": "In the last 24 hours a condition became a warning root cause, or the discovery sweep found drift, something unmanaged, missing, or differing from config/ (ADR-040 D15). One mail a day while there is anything new; nothing when a day passes quietly.",
+      "summary": "In the last 24 hours a condition became a warning root cause, or the discovery sweep found drift, something unmanaged, missing, or differing from config/ (ADR-040 D15). One mail a day while this fires; nothing when a day passes quietly. health-manager digest writes the mail, an ALERT when it has something new and a STATUS when not; the template below goes out only when it cannot.",
       "mail": {
-        "subject": "{state}: daily digest, new warnings or sweep findings",
-        "body": "== Daily digest: what the last 24 hours brought\n\nhealth-manager list shows every condition that is not ok; cmdb sweep --last the last sweep's differences, drift and unmanaged objects first.\nA warning that matters more belongs in health-rules.json; one that is known, health-manager ack <ci> --note <why>.\n\nLines (anonymized, only where site.json alerts.includeLines is true):\n{lines}\n\nIn Grafana (Explore, Loki): {query}"
+        "subject": "{state}: daily digest could not be built",
+        "body": "== Daily digest\nhealth-manager could not write today's digest, so this mail does not say what is new.\n\nhealth-manager list shows every condition that is not ok; cmdb sweep --last the last sweep's differences.\nIn Grafana (Explore, Loki): {query}"
       }
     }
   ]

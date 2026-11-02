@@ -3,9 +3,12 @@
 
 import { HelpVerb } from "../../../lib/ts/src/help";
 import { die, info, warn } from "../../../lib/ts/src/cli";
+import { readFileSync } from "fs";
 import { CmdbUnavailable } from "../../../lib/ts/src/cmdb";
 import { currentJob } from "../../../lib/ts/src/job";
 import { VerbContext, ack, maintenanceStart, maintenanceStop, unack } from "./ack";
+import { SweepRecord, readLastSweep } from "./cmdbsweep";
+import { buildDigest, readSeen, writeSeen } from "./digest";
 import { HealthCmdb, LiveHealthCmdb, rootsOfSite } from "./emit-cmdb";
 import { runEmit, withEmitLock } from "./emit";
 import { historyLines, historyRows, listLines, listRows, rootDocs, rootLines, showDoc, showLines } from "./emit-read";
@@ -78,9 +81,20 @@ export const EMIT_HELP: HelpVerb[] = [
     ],
     details: "An object's condition transitions, from the CMDB's attribute history.",
   },
+  {
+    usage: "digest [--json] [--mark]", effect: { noPreview: "with --mark, records what the last digest told" },
+    options: [
+      ["--json", "Print the mail as JSON, with the keys --mark takes."],
+      ["--mark", "Read {\"keys\": [...]} on stdin: the digest that went out. The next one compares with these."],
+    ],
+    details:
+      "The daily digest's mail: what is new since the last one, what is still open, what cleared. An\n" +
+      "ALERT with something new, else a STATUS. tappaas-alert-receiver asks for it when\n" +
+      "HealthDailyDigest fires. Without --mark it changes nothing. The record is config/.health-digest-seen.json.",
+  },
 ];
 
-const VERBS = new Set(["emit", "ack", "unack", "maintenance", "show", "list", "roots", "history"]);
+const VERBS = new Set(["emit", "ack", "unack", "maintenance", "show", "list", "roots", "history", "digest"]);
 
 export interface EmitContext {
   cmdb: HealthCmdb;
@@ -88,6 +102,7 @@ export interface EmitContext {
   configDir: string;
   now: Date;
   actor: string;
+  sweep?: () => SweepRecord | null;
 }
 
 /** An ISO time, or a span: forward for --until, back for --since. */
@@ -154,6 +169,20 @@ function cmdEmit(ctx: EmitContext, rest: string[]): number {
   return 0;
 }
 
+function cmdDigest(ctx: EmitContext, rest: string[]): number {
+  if (rest.includes("--mark")) {
+    const { keys } = JSON.parse(readFileSync(0, "utf8")) as { keys: string[] };
+    if (!Array.isArray(keys)) die("digest --mark: expected {\"keys\": [...]} on stdin");
+    writeSeen(ctx.configDir, { at: ctx.now.toISOString(), keys });
+    return 0;
+  }
+  const objects = ctx.cmdb.objects();
+  const rows = listRows(objects, rootsOfSite(objects), {});
+  const doc = buildDigest(rows, (ctx.sweep ?? readLastSweep)(), readSeen(ctx.configDir));
+  info(rest.includes("--json") ? JSON.stringify(doc, null, 2) : `Subject: ${doc.subject}\n\n${doc.body}`);
+  return 0;
+}
+
 function cmdMaintenance(v: VerbContext, rest: string[]): number {
   const a = args(rest);
   const [first, second] = a.positional;
@@ -206,6 +235,8 @@ export function runEmitVerb(cmd: string, rest: string[], ctx: EmitContext): numb
       const d = rootDocs(objects, rootsOfSite(objects));
       return print(json, d, () => rootLines(d));
     }
+    case "digest":
+      return cmdDigest(ctx, rest);
     default: {
       const s = a.val("--since");
       const rows = historyRows(ctx.cmdb.periods(ctx.cmdb.resolve(one()).id), s ? parseWhen(s, ctx.now, -1) : undefined);

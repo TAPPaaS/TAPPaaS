@@ -16,6 +16,7 @@ export interface SweepDifference {
   class: string;
   name: string;
   attribute: string | null;
+  after?: unknown;
   expected: boolean;
   reason?: "new" | "words"; // expected: it belongs to what a verb just made, or only a relation's dependency words changed
 }
@@ -27,7 +28,7 @@ export interface SweepRecord {
   differences?: SweepDifference[];
 }
 
-const WORD: Record<string, string> = { missing: "desired without actual", unmanaged: "actual without desired", desired: "differs from desired", unread: "could not be compared" };
+export const WORD: Record<string, string> = { missing: "desired without actual", unmanaged: "actual without desired", desired: "differs from desired", unread: "could not be compared" };
 const MAX_ROWS = 20;
 
 /** The gate over a record. Pure: null is no record at all. */

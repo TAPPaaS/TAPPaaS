@@ -529,8 +529,10 @@ on a worker thread, placing the alert as `alerts` does; one about no known objec
 what it impacts by class (`impacts: 3 vm, 2 service`); `HealthRootRecovered` mails the RESOLVED of a critical root's recovery.
 `HealthDailyDigest` collects the rest once a day: a warning that became a root cause, and every
 sweep difference nothing explains (drift, unmanaged, missing, differing from `config/`) — one mail
-while the last 24 hours hold anything new, none on a quiet day, the lines in it where
-`site.json` `alerts.includeLines` allows. Nothing mails a symptom. All are `event` rules: a log
+while the last 24 hours hold any such line, none on a quiet day. `health-manager digest` writes
+the mail: what is new since the last one, what is still open, what cleared. With something new it
+is an ALERT, else a STATUS; a known warning stops counting with `ack`, and a sweep's addresses are
+one count, never a finding. Nothing mails a symptom. All are `event` rules: a log
 rule's own resolve follows its window, not the recovery, so the RESOLVED is a mail of its own and
 not a reply to the ALERT. Which events leave the site is the rule file's choice (ADR-039 D1).
 

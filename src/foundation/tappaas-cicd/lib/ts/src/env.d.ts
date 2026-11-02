@@ -115,6 +115,10 @@ declare module "path" {
 }
 
 // ── node:os (unit tests' writable temp trees) ──────────────────────────
+declare module "crypto" {
+  export function createHash(algorithm: string): { update(data: string): { digest(encoding: "hex"): string } };
+}
+
 declare module "os" {
   export function tmpdir(): string;
   export function hostname(): string;
