@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Draft** — for the operator's review, nothing built |
-| **Version** | 0.2 |
+| **Version** | 0.3 |
 | **Date** | 2026-11-02 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
-| **Closes / addresses** | Unblocks #787 (TLS for logging's syslog and Loki ports, "needs a TAPPaaS CA"). Gives #771 (NFS over TLS) the certificates it needs once its ZFS block is gone. Replaces the "Local DNS mode" build list in `docs/plans/install-simplification-plan.md`. Amends ADR-021 R2 and its unpublished-service table (D5 below), ADR-034 D2 and D10 (D10 below; A15 stays rejected), ADR-012 §2.5.1 (the CA key joins the escrow), ADR-007c (a third `dnsMode`). |
-| **Changelog** | v0.1 (2026-11-02) — first draft, from the operator's direction of 2026-11-02: a site CA has two reasons to exist and one implementation; `ca-manager` also holds the DNS providers. v0.2 (2026-11-02) — the operator's direction: a domain's subdomains never need a new CA, and an unrelated domain gets a CA of its own. So one internal CA, plus one CA per `local` domain tree; rotation is no longer how a domain is added. |
+| **Closes / addresses** | Unblocks #787 (TLS for logging's syslog and Loki ports, "needs a TAPPaaS CA"). Gives #771 (NFS over TLS) the certificates it needs once its ZFS block is gone. Replaces the "Local DNS mode" build list in `docs/plans/install-simplification-plan.md`. Amends ADR-021 R2 and its unpublished-service table (D5 below), ADR-034 D2 and D10 (D10 below; A15 stays rejected), ADR-012 §2.5.1 (the CA key joins the escrow), ADR-007c (a third `dnsMode`), ADR-040 D3 (a `certificate-authority` class). |
+| **Changelog** | v0.1 (2026-11-02) — first draft, from the operator's direction of 2026-11-02: a site CA has two reasons to exist and one implementation; `ca-manager` also holds the DNS providers. v0.2 (2026-11-02) — the operator's direction: a domain's subdomains never need a new CA, and an unrelated domain gets a CA of its own. So one internal CA, plus one CA per `local` domain tree; rotation is no longer how a domain is added. v0.3 (2026-11-02) — the operator's direction: CAs are CIs (D11, closes O5 for CAs). |
 
 Every TAPPaaS site gets its own certificate authority at install, for trusted encrypted traffic
 between modules on `<module>.<zone>.internal`, and one more for each domain tree that has no public
@@ -210,6 +210,37 @@ before sign-in.
 ADR-034 A15 stays rejected: the console keeps its gated published name, on the same terms in every
 `dnsMode`.
 
+### D11. Each CA is a CI
+
+cmdb-controller's metamodel (ADR-040 D3) gets a class **`certificate-authority`** under
+`network-element`, beside `dns-name` and `proxy-route`, through the gate of ADR-022h. `ca-manager`
+reports it, as every manager that looks or changes does (ADR-040 D4). Its keys are its name and
+its certificate's fingerprint, so a replaced CA is a new CI, and its history stays with the old one.
+
+| Attribute | Meaning |
+|---|---|
+| `scope` | `internal` or `domain` (D1) |
+| `permitted` | the names it may sign (D2) |
+| `fingerprint` | SHA-256 of its certificate |
+| `notBefore`, `notAfter` | its validity |
+| `state` | `active`, `retiring` (D9: a rotation under way, or no `local` environment left) |
+| `escrowed` | when its key last reached the USB stick, or none |
+| `certificates` | what it has issued: name, `notAfter`, where it is delivered |
+
+| Relation | Example |
+|---|---|
+| `runs-on` | the CA → the mothership, the node that holds its key |
+| `serves` | a domain CA → each `environment` in its tree |
+| `depends-on` | a `proxy-route` → the domain CA that signed its certificate; a module's service → the internal CA |
+
+With those relations, health works as for anything else (ADR-041): a CA expiring, or a certificate
+of its near expiry with renewal failing, is a condition on the CA, and what depends on it is impact,
+not separate root causes. A key never escrowed is a warning on the CA, since losing it costs a new
+import on every device.
+
+The private key is never reported, nor is anything derived from it but the certificate's public
+fingerprint.
+
 ## Alternatives
 
 | | Alternative | Why not |
@@ -233,7 +264,8 @@ ADR-034 A15 stays rejected: the console keeps its gated published name, on the s
 - **O4. Existing sites.** A migration adds the internal CA to hrossen and makerfloss, and guests pick
   it up on their next rebuild. Neither is `local`, so neither gets a domain CA. Decide whether that
   migration needs the operator.
-- **O5. CMDB.** Whether a certificate is a CI of its own (ADR-040) or only a health check.
+- **O5. Certificates in the CMDB.** CAs are CIs (D11). Whether an issued certificate should be a CI
+  too, or stay an attribute of its CA, and how an ACME certificate appears, which has no CA CI.
 
 ## Consequences
 
