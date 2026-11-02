@@ -20,7 +20,7 @@ import { join } from "path";
 import { simulating } from "../../lib/ts/src/exec";
 import { SIMULATE_NO_SECRET } from "./run";
 
-export type SecretName = "acme-dns" | "unifi" | "wlan" | "backup-keys" | "user-password";
+export type SecretName = "acme-dns" | "unifi" | "wlan" | "backup-keys" | "user-password" | "rest-of-foundation";
 
 interface SecretSpec {
   file: string | null; // under the home directory; null: nothing is kept on the mothership
@@ -136,6 +136,24 @@ export const SECRETS: Record<SecretName, SecretSpec> = {
         input: `${password}\n`,
         keys: [user],
         where: `Authentik, for ${user}`,
+      };
+    },
+  },
+  "rest-of-foundation": {
+    file: null,
+    what: "the site owner's password, set in Authentik by rest-of-foundation.sh once the owner exists",
+    lines: () => "rest-of-foundation: the password goes to the script, never kept here",
+    command: (f) => {
+      const password = str(f.password);
+      if (!password || password.length < 8 || password.length > 1024 || !/^[\x20-\x7e]+$/.test(password)) return "password: 8 to 1024 printable characters";
+      return {
+        bin: "rest-of-foundation.sh",
+        // The sweep restarts this console, so the job stops before it; the next sweep does that part.
+        args: ["--skip-update", "--owner-password-stdin"],
+        input: `${password}\n`,
+        keys: ["owner"],
+        timeoutMs: 120 * 60_000,
+        job: true,
       };
     },
   },

@@ -32,6 +32,11 @@ async function main(): Promise<void> {
   check(secretCommand("unifi", { url: "https://x", username: "a", password: "b" }) === null, "unifi is still the console's to write");
   check(!writeSecret("/nonexistent", "wlan", { ssid: "x", passphrase: PASS }).ok, "writeSecret refuses wlan: only ap-manager writes it");
 
+  // ── rest-of-foundation: the owner's password to the script, on stdin ──
+  const rf = secretCommand("rest-of-foundation", { password: PASS });
+  check(typeof rf === "object" && rf !== null && rf.bin === "rest-of-foundation.sh" && rf.job === true && rf.input === `${PASS}\n` && !rf.args.join(" ").includes(PASS), "rest-of-foundation: a job, the owner's password on stdin only");
+  check(typeof secretCommand("rest-of-foundation", { password: "short" }) === "string", "…and a password under 8 characters is refused");
+
   // ── backup-keys: the stick's password to backup-manager key export, on stdin ──
   const bk = secretCommand("backup-keys", { node: "tappaas1", device: "/dev/sdb", password: PASS, format: true });
   check(typeof bk === "object" && bk !== null && bk.bin === "backup-manager" && bk.args.join(" ") === "key export --usb --node tappaas1 --device /dev/sdb --yes --password-stdin --format" && bk.input === `${PASS}\n` && (bk.timeoutMs ?? 0) >= 60_000, "backup-keys: backup-manager key export --usb … --password-stdin, the password on stdin, minutes allowed");

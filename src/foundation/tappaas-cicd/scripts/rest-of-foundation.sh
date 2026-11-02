@@ -13,7 +13,11 @@
 # Idempotent: install-module.sh and update-tappaas reconcile an already-installed
 # module rather than duplicating it, so this script is safe to re-run.
 #
-# Usage: rest-of-foundation.sh [--skip-update] [-h|--help]
+# The first run also seeds config/identities with the site owner and sets the
+# owner's password: asked for up front at a terminal, or read as one line of stdin
+# with --owner-password-stdin (the console's way). It is never stored.
+#
+# Usage: rest-of-foundation.sh [--skip-update] [--owner-password-stdin] [-h|--help]
 #
 # Exit codes: 0 all good, 1 one or more modules failed.
 
@@ -27,16 +31,37 @@ readonly CONFIG_DIR="/home/tappaas/config"
 readonly FOUNDATION_MODULES=(backup identity logging)
 
 SKIP_UPDATE=0
+PASSWORD_STDIN=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip-update) SKIP_UPDATE=1; shift ;;
-    -h|--help) echo "Usage: rest-of-foundation.sh [--skip-update]"; exit 0 ;;
+    --owner-password-stdin) PASSWORD_STDIN=1; shift ;;
+    -h|--help) echo "Usage: rest-of-foundation.sh [--skip-update] [--owner-password-stdin]"; exit 0 ;;
     *) die "Unknown argument: $1" ;;
   esac
 done
 
 [[ "$(hostname -s)" == "tappaas-cicd" ]] \
   || warn "Not running on tappaas-cicd — this is meant to run on the mothership."
+
+# The site owner's password, asked for before the long install so the run needs
+# nobody afterwards. Only the first run has an owner to create.
+identities_dir="${TAPPAAS_CONFIG:-${CONFIG_DIR}}/identities"
+OWNER_PASSWORD=""
+if [[ ! -d "$identities_dir" || -z "$(ls -A "$identities_dir" 2>/dev/null)" ]]; then
+  if [[ "$PASSWORD_STDIN" == "1" ]]; then
+    IFS= read -r OWNER_PASSWORD || true
+    [[ ${#OWNER_PASSWORD} -ge 8 ]] || die "--owner-password-stdin: 8 characters or more on stdin"
+  elif [[ -t 0 ]]; then
+    while :; do
+      IFS= read -r -s -p "Password for your TAPPaaS sign-in (8 characters or more): " OWNER_PASSWORD; echo
+      IFS= read -r -s -p "Again: " _again; echo
+      [[ ${#OWNER_PASSWORD} -ge 8 && "$OWNER_PASSWORD" == "$_again" ]] && break
+      warn "Too short, or the two do not match."
+    done
+    unset _again
+  fi
+fi
 
 # install-module.sh reads ./<module>.json from the current directory, so cd in.
 install_one() {
@@ -80,8 +105,7 @@ done
 # once config/identities exists, so re-runs never disturb operator-added people.
 # (Supersedes the old ADR-006 roles-ensure bootstrap — ADR-007 is authoritative.)
 if [[ " ${FAILED[*]} " != *" identity "* ]]; then
-  people_dir="${TAPPAAS_CONFIG:-${CONFIG_DIR}}/people"
-  if [[ ! -d "$people_dir" || -z "$(ls -A "$people_dir" 2>/dev/null)" ]]; then
+  if [[ ! -d "$identities_dir" || -z "$(ls -A "$identities_dir" 2>/dev/null)" ]]; then
     # Installer identity: email from site.json .email (installer_email), the
     # org/domain from the default environment (get_variant_config) and site name
     # (get_site_value) — all fall back to configuration.json.
@@ -112,6 +136,13 @@ if [[ " ${FAILED[*]} " != *" identity "* ]]; then
               || warn "  environment-manager modify ${_envn} --owner failed — fix by hand (environment-manager validate will flag it)"
           fi
         done
+        if [[ -n "$OWNER_PASSWORD" ]]; then
+          printf '%s\n' "$OWNER_PASSWORD" | identity-manager user reset-password "$inst_user" --password-stdin \
+            && info "  ${GN}✓${CL} password set for ${inst_user}" \
+            || warn "  the password of ${inst_user} was not set — identity-manager user reset-password ${inst_user} --link"
+        else
+          warn "  no password given for ${inst_user} — identity-manager user reset-password ${inst_user} --link"
+        fi
       else
         warn "  identity-manager bootstrap failed — people bootstrap skipped (re-run rest-of-foundation.sh)."
       fi

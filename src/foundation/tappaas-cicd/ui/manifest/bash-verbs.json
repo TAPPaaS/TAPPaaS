@@ -1874,6 +1874,7 @@
      "disruptions": []
     }
    ]
-  }
+  },
+   {"manifest": 1, "name": "rest-of-foundation.sh", "version": "bash", "tagline": "backup, identity, logging and the site owner", "common": [], "verbs": [{"verb": "rest-of-foundation", "keys": [[]], "usage": "rest-of-foundation.sh [--skip-update] [--owner-password-stdin]", "note": null, "details": null, "positionals": [], "options": [{"flag": "--skip-update", "takesValue": false, "arg": null, "choices": null, "repeatable": false, "description": "Skip the final update and tests."}, {"flag": "--owner-password-stdin", "takesValue": false, "arg": null, "choices": null, "repeatable": false, "description": "Read the site owner's password as one line of stdin."}], "open": false, "effect": "write", "preview": {"kind": "none", "touches": "installs backup, identity and logging, and creates the site owner with their password"}, "destructive": false, "destructiveWhen": [], "readWhen": [], "disruptions": []}]}
  ]
 }

@@ -107,7 +107,7 @@ export function setupSteps(i: SetupInputs): SetupStep[] {
   }
 
   const boot = i.identities.organizations > 0 && i.identities.users > 0;
-  steps.push({ id: "bootstrap", title: "Identity bootstrap — your organization and you", required: true, done: boot, detail: boot ? `config/identities: ${i.identities.organizations} organization(s), ${i.identities.users} user(s)` : "config/identities has no organization or no user yet" });
+  steps.push({ id: "bootstrap", title: "Rest of foundation — your organization and you", required: true, done: boot, detail: boot ? `config/identities: ${i.identities.organizations} organization(s), ${i.identities.users} user(s)` : "config/identities has no organization or no user yet" });
 
   if (i.clusterNodes === null) {
     steps.push({ id: "nodes", title: "Nodes", required: true, done: null, detail: "the cluster's membership could not be read" });

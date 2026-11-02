@@ -19,6 +19,7 @@ import { StageState, StepRow } from "../wizard";
 import { AddNodeButton, sessionText, useAddNodeSession } from "./AddNode";
 import { AddStackButton } from "./AddStack";
 import { EnrolButton } from "./Enrol";
+import { RestOfFoundationButton } from "./RestOfFoundation";
 import { Day2 } from "./Day2";
 import { PASSPHRASE_TEXT, SiteSsid, WIFI_ZONE_TYPES, broadcastText, passphraseOf } from "../wizards";
 
@@ -244,7 +245,6 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
     if (!started.data) setCheckError(started.error);
   };
   const email = typeof site?.email === "string" ? site.email : "";
-  const org = (site?.defaultEnvironment as string | undefined) ?? site?.name ?? "";
   const domain = d?.inputs.defaultDomain ?? "";
 
   const body: Record<string, ReactNode> = {
@@ -257,16 +257,7 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
       ) : (
         <p className="small">Nothing to do: with dnsMode per-service Caddy gets each published route's certificate itself.</p>
       ),
-    bootstrap: (
-      <OperateButton
-        label="Bootstrap identities…"
-        title="identity-manager bootstrap"
-        steps={[
-          { title: "1 · Seed config/identities: identity-manager bootstrap", bin: "identity-manager", verb: "bootstrap", initial: { "--org": org, "--email": email, "--user": email.split("@")[0]?.toLowerCase().replace(/[^a-z0-9-]/g, "-") ?? "" }, hide: ["--minimal-org", "--skip-validate"] },
-          { title: "2 · Push to Authentik: identity-manager reconcile", bin: "identity-manager", verb: "reconcile", hide: ["--dry-run"] },
-        ]}
-      />
-    ),
+    bootstrap: <RestOfFoundationButton email={email} />,
     nodes: <AddNodeButton session={adding} />,
     switch: (
       <>
