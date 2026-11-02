@@ -11,10 +11,12 @@
 //     A gate caller outside the group is refused (403), people and service
 //     accounts alike. The `status.<domain>` route is refused for everyone until
 //     the differentiated roles come.
-//   - Before identity exists (D10) there is no gate. While config/identity.json is
-//     absent and the setup token file exists, the console also accepts the mgmt
-//     and admin-VPN networks — and every request from them must present the token.
-//     Once identity.json exists the token is refused even if its file remains.
+//   - Before the gate works (D10), while the setup token file exists, the console
+//     also accepts the mgmt and admin-VPN networks — and every request from them
+//     must present the token. Installing identity does not end this: the gate
+//     needs its route, a user and a way in first. The first installer who comes
+//     through the gate proves all three, and that sign-in deletes the file.
+//     Afterwards those networks only get a page saying where the console is.
 //
 //   - A loopback peer without the gate's headers reads as `read` (the health
 //     checks, `tappaas ask`). A write (a job, P2) is never loopback's: it needs
@@ -30,9 +32,10 @@ export type Role = "installer" | "read";
 export interface AccessConfig {
   firewall: string[]; // addresses whose X-Authentik-* headers are believed
   allow: string[]; // further peers (loopback by default; a dev port-forward arrives as loopback)
-  setupAllow: string[]; // networks accepted, with the token, before identity exists
+  setupAllow: string[]; // networks accepted, with the token, until the gate is proven
   tokenFile: string;
   identityFile: string; // config/identity.json: identity is installed once it exists
+  consoleUrl?: () => string | null; // where the console is published, for the refusal page
   trustLocalHeaders: boolean; // dev only: believe X-Authentik-* from `allow` peers too
   gate?: GateKeys; // the routes' provider keys (gate.ts); without it the firewall is refused
   now?: () => number; // seconds; tests set it
@@ -93,7 +96,7 @@ export interface SetupState {
 export function setupState(cfg: AccessConfig): SetupState {
   const identityInstalled = existsSync(cfg.identityFile);
   const tokenPresent = existsSync(cfg.tokenFile) && readToken(cfg.tokenFile) !== "";
-  return { active: tokenPresent && !identityInstalled, identityInstalled, tokenPresent };
+  return { active: tokenPresent, identityInstalled, tokenPresent };
 }
 
 function readToken(file: string): string {
@@ -173,10 +176,20 @@ export function splitGroups(v: string | undefined): string[] {
 
 // ── the decisions ─────────────────────────────────────────────────────
 
-// Whether a connection from `peer` is accepted at all (checked on connect).
-export function peerAllowed(peer: string, cfg: AccessConfig, setup: SetupState): boolean {
-  if (anyMatch(peer, cfg.firewall) || anyMatch(peer, cfg.allow)) return true;
-  return setup.active && anyMatch(peer, cfg.setupAllow);
+// Whether a connection from `peer` is accepted at all (checked on connect). The
+// setup networks stay accepted once setup is closed: a browser that still has
+// the old address gets movedReason's page instead of a dropped connection, and
+// decide refuses everything else from them.
+export function peerAllowed(peer: string, cfg: AccessConfig): boolean {
+  return anyMatch(peer, cfg.firewall) || anyMatch(peer, cfg.allow) || anyMatch(peer, cfg.setupAllow);
+}
+
+// The refusal once setup is closed: where to go, or how to reopen it when the
+// console was never published.
+function movedReason(cfg: AccessConfig): string {
+  const url = cfg.consoleUrl?.() ?? null;
+  if (url) return `Setup is closed: the console is at ${url}, with sign-in, from mgmt or the admin VPN.`;
+  return "Setup is closed and the console is not published yet. On the mothership, run: install-access.sh reopen";
 }
 
 export function decide(
@@ -222,12 +235,12 @@ export function decide(
 
   const token = presentedToken(headers, queryToken);
   if (token !== null) {
-    // A token is only ever good before identity exists; afterwards it is a 401
-    // even if the file is still there (T6).
+    // A token is only ever good while setup is open: the sign-in that proves the
+    // gate deletes its file, and from then on it is a 401 (T6).
     if (setup.active && tokenMatches(token, cfg)) {
       return { ok: true, me: { user: "setup", name: "Setup", email: null, groups: [], role: "installer", via: "setup-token", route } };
     }
-    if (!local) return { ok: false, status: 401, reason: setup.active ? "wrong setup token" : "the setup token is no longer accepted: identity is installed" };
+    if (!local) return { ok: false, status: 401, reason: setup.active ? "wrong setup token" : movedReason(cfg) };
   }
 
   if (local) {
@@ -236,6 +249,7 @@ export function decide(
   if (setup.active && anyMatch(peer, cfg.setupAllow)) {
     return { ok: false, status: 401, reason: "setup token required (~/config/console-setup-token on tappaas-cicd)" };
   }
+  if (anyMatch(peer, cfg.setupAllow)) return { ok: false, status: 403, reason: movedReason(cfg) };
   return { ok: false, status: 403, reason: `connections from ${normalizeAddr(peer)} are not accepted` };
 }
 
@@ -248,7 +262,7 @@ export type WriteDecision = { ok: true } | { ok: false; status: number; reason: 
 // is open. Loopback without the gate's headers reads only.
 export function mayWrite(me: Me, setup: SetupState): WriteDecision {
   if (me.via === "local") return { ok: false, status: 403, reason: "a write needs the identity gate (the installer group) or the setup token; loopback reads only" };
-  if (me.via === "setup-token" && !setup.active) return { ok: false, status: 401, reason: "the setup token is no longer accepted: identity is installed" };
+  if (me.via === "setup-token" && !setup.active) return { ok: false, status: 401, reason: "the setup token is no longer accepted: the console is behind the identity gate" };
   if (me.role !== "installer") return { ok: false, status: 403, reason: `${me.user ?? "this caller"} is not in the group ${CONSOLE_GROUP}` };
   return { ok: true };
 }

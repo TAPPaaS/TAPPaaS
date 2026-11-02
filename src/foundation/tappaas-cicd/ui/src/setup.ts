@@ -375,15 +375,14 @@ export async function gatherSetup(d: GatherDeps): Promise<SetupInputs> {
   };
 }
 
-// The setup token closes itself (D10, T6): once identity is installed the
-// token is refused, and its file is deleted here — after the identity step,
-// and at any later look.
+// The setup token closes itself (D10, T6): the first installer through the
+// gate has proven the route, a user and a way in, so the token goes. Not on
+// identity's install: until then the token is the only way in.
 export function closeSetupToken(access: AccessConfig, log: (l: string) => void = () => undefined): boolean {
-  const s = setupState(access);
-  if (!(s.identityInstalled && s.tokenPresent)) return false;
+  if (!setupState(access).tokenPresent) return false;
   try {
     unlinkSync(access.tokenFile);
-    log(`identity is installed: deleted the setup token ${access.tokenFile}`);
+    log(`the gate is proven: deleted the setup token ${access.tokenFile}`);
     return true;
   } catch (e) {
     log(`could not delete the setup token ${access.tokenFile}: ${(e as Error).message}`);

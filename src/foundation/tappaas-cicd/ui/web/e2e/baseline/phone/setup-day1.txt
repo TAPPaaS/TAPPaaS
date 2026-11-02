@@ -54,7 +54,7 @@
   - text: is the site from here, and
   - link "Day 2":
     - /url: /setup/day2
-  - text: "grows it. The setup token is closed: identity is installed, so the console is reached through the gate."
+  - text: "grows it. The setup token is closed: the console is reached through the gate."
 - list:
   - listitem:
     - button "pass TLS — certificates done ▸": TLS — certificates done ▸

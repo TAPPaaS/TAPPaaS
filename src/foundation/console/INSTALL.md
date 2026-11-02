@@ -19,10 +19,18 @@ http://<tappaas-cicd mgmt address>:9097/
 cat ~/config/console-setup-token
 ```
 
-While `config/identity.json` does not exist, the console accepts `mgmt` and the admin VPN with
-that token (and nothing else), and serves the **Setup** wizard: the rest of the install from
-the records, step by step. Once identity is installed it refuses the token and deletes its file
-(after the identity step, and at start).
+While that file exists, the console accepts `mgmt` and the admin VPN with that token (and
+nothing else), and serves the **Setup** wizard: the rest of the install from the records, step
+by step. Installing identity does not end this. Your first sign-in as an installer at
+`console.<domain>` does: the console then deletes the token and closes the install-LAN way in,
+and its old address shows a page saying where the console is.
+
+If setup closed before anyone could sign in, reopen it from a shell on the mothership. It makes
+a new token and the same ways in, and the next sign-in closes it again:
+
+```bash
+install-access.sh reopen
+```
 
 ## How the console knows who is calling
 

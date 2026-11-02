@@ -2,7 +2,7 @@
 // reads-are-GET rule (a change is a job, jobs.test.ts), the route cap on jumps, argument
 // hygiene on module names, the static front end and the setup-token cookie.
 
-import { mkdirSync, mkdtempSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { IncomingMessage, ServerResponse } from "http";
@@ -37,7 +37,8 @@ async function main(): Promise<void> {
   };
   const site = fakeSite();
   const reads = new Reads({ configDir: dir, stateDir: join(dir, "state"), run: site.run, journalDays: 7 });
-  const srv = new ConsoleServer({ access, webDir: web, mgmtDomain: "mgmt.internal", version: "test", log: () => undefined }, reads);
+  let setupClosed = 0;
+  const srv = new ConsoleServer({ access, webDir: web, mgmtDomain: "mgmt.internal", version: "test", log: () => undefined, onSetupClosed: () => setupClosed++ }, reads);
 
   const call = async (method: string, url: string, headers: Record<string, string> = {}, peer = "127.0.0.1"): Promise<Reply> => {
     const h: Record<string, string> = {};
@@ -70,7 +71,7 @@ async function main(): Promise<void> {
   r = await call("GET", "/api/v1/me", {}, "10.0.0.1");
   check(r.status === 401, "from the firewall without the gate: 401");
   r = await call("GET", "/api/v1/health", {}, "10.0.0.77");
-  check(r.status === 403 && /not accepted/.test(r.json().error ?? ""), "another mgmt address: 403");
+  check(r.status === 403 && /Setup is closed/.test(r.json().error ?? ""), "another mgmt address: 403, with where to go");
 
   r = await call("GET", "/api/v1/health");
   const hd = r.json().data as { gates: unknown[]; attention: { gate: string }[] };
@@ -172,7 +173,15 @@ async function main(): Promise<void> {
   check(r.status === 401, "a malformed cookie is a 401, not a crash");
   writeFileSync(access.identityFile, "{}");
   r = await call("GET", "/api/v1/me", { cookie: "tappaas_setup=tok-123" }, "10.0.0.50");
-  check(r.status === 403 || r.status === 401, "once identity is installed the cookie no longer opens anything");
+  check(r.status === 200, "identity installed alone does not lock the operator out");
+  r = await call("GET", "/api/v1/me", gate("users"), "10.0.0.1");
+  check(r.status === 403 && existsSync(access.tokenFile) && setupClosed === 0, "someone outside the installers proves nothing: setup stays open");
+  r = await call("GET", "/api/v1/me", gate("installer"), "10.0.0.1");
+  check(r.status === 200 && !existsSync(access.tokenFile) && setupClosed === 1, "the first installer through the gate closes setup, and the install-LAN way in with it");
+  r = await call("GET", "/api/v1/me", gate("installer"), "10.0.0.1");
+  check(r.status === 200 && setupClosed === 1, "…once");
+  r = await call("GET", "/", { cookie: "tappaas_setup=tok-123" }, "10.0.0.50");
+  check(r.status === 401 && r.body.includes("install-access.sh reopen") && !r.body.includes("Setup token"), "the old cookie gets a page saying what happened, and no token form");
 
   reads.stop();
   done("server");

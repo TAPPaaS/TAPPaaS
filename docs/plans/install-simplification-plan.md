@@ -140,16 +140,15 @@ The panel shows, top to bottom:
 
 The cause: the switch to the gate keys on `config/identity.json`, written the moment identity is installed. But the gate only works later, once the identity bootstrap has made a user and the console module has published the route, and it is only reachable from `mgmt` or the admin VPN.
 
-What the fix must do:
+**Done on `main`, 2026-11-02 (unit-tested, not yet run live):** the token file alone says setup is open, and the first installer through the gate deletes it and runs `install-access.sh close`. The closed address answers with a page saying where to go, and `install-access.sh reopen` recovers a site. ADR-034 v1.4 records it. Publishing the console no longer closes anything.
 
-- Make the cut-over the last thing that happens, not the first. The setup token and install LAN stay valid until the gate is proven: operator's user exists, the console route answers, and a signed-in request succeeded. Key the refusal on that, not on `identity.json`. ADR-034 D10 and `console/INSTALL.md` state the current rule, so update them, and review the security effect of keeping the token alive during this window.
+Still to do:
+
+- Security review of the longer token life. It has no expiry and travels over plain HTTP on those networks. The token expiry answer belongs here.
 - Step 3 runs identity, bootstrap and the console publish as one job. It keeps running on the mothership if the browser is cut off, and the operator ends on a page that says where to go next.
 - Before the cut-over, the operator must have a way in that works: the admin VPN imported and tested. An install-LAN operator today has no reason to have done so.
-- The console's refusal should explain itself in the browser: the address to use and why, not a dropped connection.
-- `install-access.sh close` runs as part of the cut-over, so no forward is left behind.
-- A recovery path for a site already in this state, documented in `console/INSTALL.md`.
 
-**lab2 is still locked out, left as found for study.** Recovery is not yet tried. The likely route is the mothership's CLI: `identity-manager bootstrap` and `reconcile`, then `module-manager add console --proxyDomain console.<domain>`, then reach it over the admin VPN (`/root/tappaas-admin-vpn.conf`). Its domain `lab2.hrossen.dk` must resolve for that route. Run it as the first test of the recovery path, or reinstall.
+**lab2 is still locked out, left as found for study.** Once lab2 is on `main`, `install-access.sh reopen` on its mothership should bring back the token and the install LAN, as the first live test of this fix. Day 1 then continues in the console.
 
 ### Step 4: TLS (needs design)
 

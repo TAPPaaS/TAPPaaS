@@ -663,10 +663,11 @@ to `installer` alone (`console.json` `gateGroups`), so others are refused at the
 
 **The setup token (ADR-034 D10).** `bootstrap.sh` writes `~/config/console-setup-token`; the
 install summary names the file and the operator reads it with `cat` — the token is never
-printed, so it reaches no log. While `config/identity.json` does not exist, the console
-accepts the mgmt and admin networks with that token (`?token=` once, then an HttpOnly
-cookie; or `Authorization: Bearer`). Once identity is installed the token is refused, even if
-its file is still there — delete it.
+printed, so it reaches no log. While that file exists, the console accepts the mgmt and admin
+networks with that token (`?token=` once, then an HttpOnly cookie; or `Authorization: Bearer`).
+The first installer through the gate deletes the file and runs `install-access.sh close`;
+those networks then get a page saying where the console is. `install-access.sh reopen` makes a
+new token, from a shell on the mothership.
 
 ## Running it
 

@@ -345,7 +345,7 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
           ) : (
             "The site is not complete yet: the steps below are what remains, in order."
           )}
-          {d.token.active ? " The setup token is active until identity is installed." : d.token.identityInstalled ? " The setup token is closed: identity is installed, so the console is reached through the gate." : ""}
+          {d.token.active ? " The setup token stays active until your first sign-in through the gate." : d.token.identityInstalled ? " The setup token is closed: the console is reached through the gate." : ""}
         </p>
       ) : null}
       {r.env && !d && r.env.refreshing ? <p className="muted">Reading the records…</p> : null}

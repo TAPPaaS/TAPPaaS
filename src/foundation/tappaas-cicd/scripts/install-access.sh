@@ -4,8 +4,8 @@
 # install from the web (ADR-037 D3).
 #
 # The console runs on the mothership from the moment install.sh ends, unlocked by
-# its setup token from mgmt and the admin VPN only, until identity is installed
-# and the console module puts it behind the Authentik gate at console.<domain>.
+# its setup token from mgmt and the admin VPN only, until the first installer
+# signs in through the Authentik gate at console.<domain>.
 # The operator who ran the bootstrap sits on neither, so `open` gives two ways in:
 #
 #   1. The first admin-VPN peer: a key pair made here and a ready wg-quick config
@@ -18,10 +18,14 @@
 #      from that subnet alone, and the subnet added to what the console accepts
 #      with the setup token (config/console-setup-allow).
 #
-# `close` removes the forward and the extra allow: the console module runs it once
-# identity is installed (the setup token stops working then anyway).
+# `close` removes the forward and the extra allow: the console runs it at that
+# first sign-in, when it also deletes the setup token.
 #
-# Usage: install-access.sh open | close | status
+# `reopen` is the way back for a site where setup closed with nobody able to sign
+# in: a new setup token, and the same ways in. The next sign-in through the gate
+# closes it again. From a shell on the mothership only.
+#
+# Usage: install-access.sh open | close | reopen | status
 #
 set -euo pipefail
 
@@ -32,6 +36,7 @@ FW_HOST="${INSTALL_ACCESS_FIREWALL:-root@firewall.mgmt.internal}"
 FW_KEY="${HOME}/.ssh/tappaas-fw"
 CONSOLE_PORT=9097
 NAT_DESC="TAPPaaS: console (install LAN, until identity)"
+TOKEN_FILE="${CONFIG_DIR}/console-setup-token"
 ALLOW_FILE="${CONFIG_DIR}/console-setup-allow"
 URL_FILE="${CONFIG_DIR}/console-setup-url"
 PEER_NAME="install"
@@ -115,11 +120,10 @@ open_lan() {
     printf 'http://%s:%s/\n' "${wan_ip}" "${CONSOLE_PORT}" > "${URL_FILE}"
     systemctl restart tappaas-console.service 2>/dev/null \
         || warn "  install LAN: the console was not restarted — it accepts ${net} after its next start"
-    info "  ${GN}✓${CL} install LAN: http://${wan_ip}:${CONSOLE_PORT}/ from ${net} only, with the setup token, until identity is installed"
+    info "  ${GN}✓${CL} install LAN: http://${wan_ip}:${CONSOLE_PORT}/ from ${net} only, with the setup token, until the first sign-in through the gate"
 }
 
 cmd_open() {
-    [[ -f "${CONFIG_DIR}/identity.json" ]] && { info "identity is installed — the console is at console.<domain>, behind the gate"; return 0; }
     local wan wan_ip="" bits=""
     wan="$(wan_of_firewall)"
     [[ -n "${wan}" ]] && read -r wan_ip bits <<<"${wan}"
@@ -127,6 +131,15 @@ cmd_open() {
     open_vpn_peer "${wan_ip}"
     [[ -n "${wan_ip}" ]] && open_lan "${wan_ip}" "${bits}"
     return 0
+}
+
+cmd_reopen() {
+    if [[ ! -s "${TOKEN_FILE}" ]]; then
+        ( umask 077 && head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n' > "${TOKEN_FILE}" )
+        info "  ${GN}✓${CL} a new setup token: ${TOKEN_FILE}"
+    fi
+    cmd_close
+    cmd_open
 }
 
 cmd_close() {
@@ -154,6 +167,7 @@ cmd_status() {
 case "${1:-}" in
     open)   cmd_open ;;
     close)  cmd_close ;;
+    reopen) cmd_reopen ;;
     status) cmd_status ;;
-    *)      echo "usage: $(basename "$0") open | close | status" >&2; exit 2 ;;
+    *)      echo "usage: $(basename "$0") open | close | reopen | status" >&2; exit 2 ;;
 esac

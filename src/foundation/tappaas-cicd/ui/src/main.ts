@@ -36,7 +36,7 @@ import { HelpSpec, checkArgs, renderHelp } from "../../lib/ts/src/help";
 import { DieError, die, guarded, info, requireOperator, warn } from "../../lib/ts/src/cli";
 import { defaultConfigDir } from "../../lib/ts/src/config-io";
 import { mgmtDomain, queryClusterNodes } from "../../lib/ts/src/cluster";
-import { closeSetupToken, recordSetupTest } from "./setup";
+import { recordSetupTest } from "./setup";
 
 export const VERSION = "0.1.0";
 export const DEFAULT_PORT = 9097;
@@ -57,9 +57,9 @@ export const HELP: HelpSpec = {
       ],
       details:
         "Accepts connections only from the firewall (where Caddy and the Authentik gate run) and from\n" +
-        "--allow; the X-Authentik-* headers are believed only from the firewall. Before identity is\n" +
-        "installed (no config/identity.json) and while the setup token file exists, the mgmt and\n" +
-        "admin networks are accepted too, each request with the token (ADR-034 D10).",
+        "--allow; the X-Authentik-* headers are believed only from the firewall. While the setup\n" +
+        "token file exists, the mgmt and admin networks are accepted too, each request with the token;\n" +
+        "the first installer through the gate deletes the file (ADR-034 D10).",
     },
   ],
   common: [["--config-dir DIR", "Config root (default: $TAPPAAS_CONFIG, $CONFIG_DIR or /home/tappaas/config)."]],
@@ -91,6 +91,17 @@ export interface ServeOpts {
 }
 
 const list = (v: string | undefined): string[] => (v ?? "").split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+
+// Where the console module published the console, for the refusal page.
+export function publishedConsole(file: string): string | null {
+  try {
+    const m = JSON.parse(readFileSync(file, "utf8")) as { proxyDomain?: string; config?: Record<string, { proxyDomain?: string }> };
+    const d = m.config?.["network:proxy"]?.proxyDomain ?? m.proxyDomain;
+    return d ? `https://${d}/` : null;
+  } catch {
+    return null;
+  }
+}
 
 // The networks install-access.sh added for the install LAN: one CIDR per line;
 // anything else is ignored, a missing file adds nothing.
@@ -219,13 +230,14 @@ async function serve(o: ServeOpts): Promise<number> {
   const access: AccessConfig = {
     firewall: await firewallAddress(mgmtNet),
     allow: o.allow,
-    // Before identity: mgmt, the admin VPN, and the install LAN install-access.sh
+    // Until the gate is proven: mgmt, the admin VPN, and the install LAN install-access.sh
     // opened (config/console-setup-allow, a network per line; ADR-037 D3).
     setupAllow: process.env.CONSOLE_SETUP_ALLOW
       ? list(process.env.CONSOLE_SETUP_ALLOW)
       : [mgmtNet, adminNet, ...extraSetupAllow(join(o.configDir, "console-setup-allow"))].filter((x): x is string => !!x),
     tokenFile: process.env.CONSOLE_SETUP_TOKEN_FILE ?? join(o.configDir, "console-setup-token"),
     identityFile: join(o.configDir, "identity.json"),
+    consoleUrl: () => publishedConsole(join(o.configDir, "console.json")),
     trustLocalHeaders: o.trustLocalHeaders,
     fixtureActor: fx?.actor,
     // The controllers' Authentik credentials (authentik-controller's default file).
@@ -265,8 +277,6 @@ async function serve(o: ServeOpts): Promise<number> {
     log,
     proposal: (me, c, p) => assistant?.proposal(me, c, p) ?? null,
     onWriteDone: (job) => {
-      // The identity step puts the console behind the gate: the token goes (D10).
-      closeSetupToken(access, log);
       void reads.refreshAfterJob();
       if (job.bin === "backup-manager" && job.verb === "key") void reads.backupKeysChanged();
     },
@@ -297,12 +307,11 @@ async function serve(o: ServeOpts): Promise<number> {
     },
     log,
   });
-  server = new ConsoleServer({ access, webDir: existsSync(webDir) ? webDir : null, mgmtDomain: mgmtDomain(), version: VERSION, log, home: process.env.CONSOLE_SECRETS_DIR ?? home, litellm, assistant, healthLive, runStdin: fx?.site.runStdin }, reads, jobs);
+  server = new ConsoleServer({ access, webDir: existsSync(webDir) ? webDir : null, mgmtDomain: mgmtDomain(), version: VERSION, log, home: process.env.CONSOLE_SECRETS_DIR ?? home, litellm, assistant, healthLive, runStdin: fx?.site.runStdin, onSetupClosed: () => void run(join(home, "bin", "install-access.sh"), ["close"]).then((r) => { if (r.rc !== 0) warn(`install-access.sh close failed: run it on the mothership (${r.stderr.trim()})`); }) }, reads, jobs);
   for (const l of listen) {
     await server.listen(l.host, l.port).catch((e: Error) => die(`listen ${l.host}:${l.port}: ${e.message}`));
     info(`console ${VERSION} listening on ${l.host}:${l.port}`);
   }
-  closeSetupToken(access, (l) => info(`  ${l}`));
   const s = setupState(access);
   info(`  firewall ${access.firewall.join(", ") || "(unknown)"}; also accepted: ${access.allow.join(", ") || "-"}`);
   if (s.active) info(`  setup token active (${access.tokenFile}): also accepting ${access.setupAllow.join(", ")} with the token`);

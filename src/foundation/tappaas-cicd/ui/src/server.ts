@@ -37,6 +37,7 @@ export interface ServerConfig {
   litellm?: LiteLLM | null; // the assistant's LiteLLM (ADR-034 D7); absent: no assistant
   assistant?: Assistant | null; // its agent loop (assistant.ts)
   healthLive?: HealthLive | null; // the health document's freshness and live feed (healthlive.ts)
+  onSetupClosed?: () => void; // the setup token is gone: close the install-LAN way in
 }
 
 const JSON_TYPE = "application/json; charset=utf-8";
@@ -105,7 +106,7 @@ export class ConsoleServer {
       const s = createServer((req, res) => void this.handle(req, res));
       s.on("connection", (sock) => {
         const peer = normalizeAddr(sock.remoteAddress);
-        if (!peerAllowed(peer, this.cfg.access, setupState(this.cfg.access))) {
+        if (!peerAllowed(peer, this.cfg.access)) {
           this.cfg.log(`refused connection from ${peer}`);
           sock.destroy();
         }
@@ -141,6 +142,9 @@ export class ConsoleServer {
         res.end(setupPage(d.reason, setup.active));
         return;
       }
+      // A real sign-in through the gate ends setup (D10): the route, a user in
+      // the group and the way in all work, so the token is no longer needed.
+      if (d.me.via === "gate" && setup.tokenPresent && this.cfg.access.firewall.some((f) => addrMatches(peer, f)) && closeSetupToken(this.cfg.access, this.cfg.log)) this.cfg.onSetupClosed?.();
       // A token given on the address line becomes the session cookie, and the
       // address line loses it.
       if (d.me.via === "setup-token" && url.searchParams.get("token") && !path.startsWith("/api/")) {
@@ -292,7 +296,6 @@ export class ConsoleServer {
       case "setup": {
         // The checklist, derived from the records each time it is read (D10).
         // No test runs here: POST /setup/check, or a Test job.
-        closeSetupToken(this.cfg.access, this.cfg.log);
         const e = await r.setup.get();
         const steps = e.value ? setupSteps(e.value) : null;
         const st = setupState(this.cfg.access);

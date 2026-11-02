@@ -389,8 +389,8 @@ echo ""
 info "${GN}✓${CL} TAPPaaS-CICD installation completed successfully."
 
 # The console (ADR-034 D10): reachable now, from mgmt or the admin VPN, with the
-# setup token bootstrap.sh wrote — until identity is installed and puts it behind
-# the Authentik gate at console.<domain>. The token itself is never printed: this
+# setup token bootstrap.sh wrote — until the first sign-in through the Authentik
+# gate at console.<domain>. The token itself is never printed: this
 # summary goes to the terminal, to logs and to the journal, and a secret in a
 # log is a secret in every log reader. The operator reads the file.
 _CONSOLE_TOKEN=/home/tappaas/config/console-setup-token
@@ -404,5 +404,5 @@ if [ -s "${_CONSOLE_TOKEN}" ] && [ ! -f /home/tappaas/config/identity.json ]; th
     /home/tappaas/bin/install-access.sh open \
         || _warn "could not open the install access — from mgmt, the console is at http://${_cicd_addr:-tappaas-cicd.mgmt.internal}:9097/"
     info "  over the admin VPN or from mgmt: http://${_cicd_addr:-tappaas-cicd.mgmt.internal}:9097/"
-    info "  until identity is installed (then: console.<domain>, behind the gate)"
+    info "  until your first sign-in at console.<domain>, behind the gate"
 fi

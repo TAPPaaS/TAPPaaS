@@ -55,9 +55,10 @@ the rest of the install as a checklist derived from the records — TLS, backup,
 logging, the identity bootstrap, the nodes, the switch, the admin VPN peer, stacks — each
 step a form over the verbs below with its preview, and the secrets (the DNS provider's
 token, the UniFi controller's local admin, WLAN passphrases) entered there, written where the
-scripts read them and never shown again. It resumes wherever the install stands. Once the
-identity step has run the console deletes the token; publish it behind the gate from the same
-step (`module-manager add console --proxyDomain console.<domain>`).
+scripts read them and never shown again. It resumes wherever the install stands. Publish the
+console behind the gate from the identity step
+(`module-manager add console --proxyDomain console.<domain>`); the token keeps working until your
+first sign-in there, which deletes it.
 
 **Headless, the same steps from a shell:**
 

@@ -33,10 +33,10 @@ check(!addrMatches("10.0.0.10", "10.0.0.1"), "an exact entry is exact");
 // ── no setup token: firewall and loopback only ────────────────────────
 let s = setupState(cfg);
 check(!s.active && !s.tokenPresent, "no token file: setup is not active");
-check(peerAllowed("10.0.0.1", cfg, s), "the firewall connects");
-check(peerAllowed("127.0.0.1", cfg, s), "loopback connects (the dev port-forward)");
-check(!peerAllowed("10.0.0.144", cfg, s), "another mgmt address is refused (T1)");
-check(!peerAllowed("10.0.0.50", cfg, s), "a laptop on mgmt is refused");
+check(peerAllowed("10.0.0.1", cfg), "the firewall connects");
+check(peerAllowed("127.0.0.1", cfg), "loopback connects (the dev port-forward)");
+check(!decide("10.0.0.144", H({}), null, cfg, s).ok, "another mgmt address is refused (T1)");
+check(!decide("10.0.0.50", H({}), null, cfg, s).ok, "a laptop on mgmt is refused");
 
 // ── the gate's headers, from the firewall only ───────────────────────
 // The group sets: only `installer` gets the console.
@@ -130,8 +130,8 @@ check(!d.ok && d.status === 503, "no key cache at all: the firewall is refused, 
 writeFileSync(cfg.tokenFile, "s3cret-token\n");
 s = setupState(cfg);
 check(s.active && s.tokenPresent && !s.identityInstalled, "token file and no identity.json: setup is active");
-check(peerAllowed("10.0.0.50", cfg, s) && peerAllowed("10.255.1.7", cfg, s), "…mgmt and the admin VPN may connect");
-check(!peerAllowed("10.2.0.20", cfg, s), "…a service zone still may not");
+check(peerAllowed("10.0.0.50", cfg) && peerAllowed("10.255.1.7", cfg), "…mgmt and the admin VPN may connect");
+check(!peerAllowed("10.2.0.20", cfg), "…a service zone still may not");
 d = decide("10.0.0.50", H({}), null, cfg, s);
 check(!d.ok && d.status === 401, "from mgmt without the token: 401");
 d = decide("10.0.0.50", H({ authorization: "Bearer s3cret-token" }), null, cfg, s);
@@ -151,11 +151,23 @@ check(presentedToken({ cookie: "tappaas_setup=%E0" }, null) === "%E0", "a malfor
 d = decide("10.0.0.50", H({ cookie: "tappaas_setup=%E0" }), null, cfg, s);
 check(!d.ok && d.status === 401, "…and is a wrong token: 401");
 
-// ── identity installed: the token is refused, even with its file ─────
+// ── identity installed, the gate not proven: the token still works ───
 writeFileSync(cfg.identityFile, "{}");
 s = setupState(cfg);
-check(!s.active && s.tokenPresent && s.identityInstalled, "identity.json exists: setup is over although the file remains");
-check(!peerAllowed("10.0.0.50", cfg, s), "a mgmt laptop is refused again");
+check(s.active && s.tokenPresent && s.identityInstalled, "identity.json alone does not end setup: nobody could get in yet");
+d = decide("10.0.0.50", H({ authorization: "Bearer s3cret-token" }), null, cfg, s);
+check(d.ok && d.me.via === "setup-token", "…so the token still opens the console");
+
+// ── the gate proven: the file is gone, the old address explains itself ─
+rmSync(cfg.tokenFile);
+s = setupState(cfg);
+check(!s.active && !s.tokenPresent, "no token file: setup is over");
+d = decide("10.0.0.50", H({}), null, cfg, s);
+check(!d.ok && d.status === 403 && /not published yet/.test(d.reason) && /install-access\.sh reopen/.test(d.reason), "a mgmt laptop is refused, and told how to reopen when nothing is published");
+d = decide("10.0.0.50", H({ authorization: "Bearer s3cret-token" }), null, { ...cfg, consoleUrl: () => "https://console.hrossen.dk/" }, s);
+check(!d.ok && d.status === 401 && /https:\/\/console\.hrossen\.dk\//.test(d.reason), "…and a stale token is told where the console is");
+d = decide("10.2.0.20", H({}), null, cfg, s);
+check(!d.ok && d.status === 403 && /not accepted/.test(d.reason), "an address outside the setup networks gets no directions");
 d = decide("127.0.0.1", H({ authorization: "Bearer s3cret-token" }), null, cfg, s);
 check(d.ok && d.me.via === "local", "loopback with a stale token is just loopback");
 d = decide("10.0.0.1", H({ authorization: "Bearer s3cret-token" }), null, cfg, s);

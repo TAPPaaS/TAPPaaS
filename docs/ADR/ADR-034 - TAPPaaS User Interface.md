@@ -8,7 +8,7 @@
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | **#844** (the UI design spike and this ADR). Related: #839 (the UI, physical view first), #183 (service catalog), #91 (Backstage), #142 (agent access to `tappaas-cicd`), #843 (SIEM); caused #853, #854, #855 (switch-controller and console gaps) and #856 (the admin tunnel). Builds on ADR-007 (taxonomy, 007e Health, 007f managers and controllers), ADR-020 (declared-field changes), ADR-021 / ADR-023 / ADR-032 (reachability, routes, exposure), ADR-031 (pulse). |
-| **Changelog** | v1.3 (2026-10-30) — **D11 added (operator):** a module's page is composed of sections by kind and by module (`console.json`), and side panels show status with a jump to the module page, where the operations are; amends D5. The Site's Device tab is Assets. · v1.2 (2026-10-27) — **D3 amended (#878):** the console is for the `installer` group only, and an installer may do everything (destructive verbs behind the typed name); `admin` and `users` get no access, the gate's application is bound to `installer` alone, service accounts follow the same rule by their groups, and `status.<domain>` is refused for everyone until differentiated roles come, a later step. D2's table, D8 and T1 follow. · v1.1 (2026-10-25) — **D2:** the backend verifies the gate's signed token (`X-Authentik-Jwt`) and takes the user and groups from it; the firewall's address alone is no longer believed. · v1.0 (2026-10-18) — **Accepted** by the operator with the console installed and in use on hrossen; #183 is folded into the Modules page (D6) and #91 is not adopted (A3), both closed with this acceptance. · v0.4 (2026-10-18) — **D2** says what a source outside the route's zones gets as installed on hrossen: Caddy runs the gate before the access list, so an anonymous request is redirected to the login and a signed-in one gets 403; the console is never reached; was "403 to the internet". · v0.3 (2026-10-18) — as built through P3 and reviewed on hrossen: **D2** the route is `console.<domain>` through Caddy and the gate from `mgmt` and `admin` only, certificate by HTTP-01, 403 to the internet, `internet` refused in the zone list, the admin tunnel's DNS and routes (#856) a prerequisite; `status.<domain>` waits for gated `proxyRoutes`; **O1** closed (`console.<domain>`, passed as `--proxyDomain`), **O2** and **O3** closed as built; D1, D3, D4, D7 and D10 say where the build differs; *As built* added to the Implementation plan; Consequences gain #853 to #856; A15 (an `.internal` name with a site CA). · v0.2 (2026-10-17) — **D10 installation**: after `bootstrap.sh` the rest of the install is a Setup wizard over the same jobs, with a setup token before identity exists (operator agreed 2026-10-17); P1 and P2 amended. · v0.1 — first draft, from the design spike [`docs/design/ui-spike.md`](../design/ui-spike.md) and the operator's decisions of 2026-10-17 (homelable is inspiration, not the product; operators plus a read-only owner view; every verb reachable, destructive ones behind a typed name; the assistant proposes and never applies). |
+| **Changelog** | v1.4 (2026-11-02) — **D10 amended (operator):** the setup token ends at the first installer's sign-in through the gate, not when identity is installed, which locked the operator out of a site with no route and no user yet; the closed-setup address answers with where to go instead of dropping the connection; `install-access.sh reopen` recovers a site in that state; T6 follows. · v1.3 (2026-10-30) — **D11 added (operator):** a module's page is composed of sections by kind and by module (`console.json`), and side panels show status with a jump to the module page, where the operations are; amends D5. The Site's Device tab is Assets. · v1.2 (2026-10-27) — **D3 amended (#878):** the console is for the `installer` group only, and an installer may do everything (destructive verbs behind the typed name); `admin` and `users` get no access, the gate's application is bound to `installer` alone, service accounts follow the same rule by their groups, and `status.<domain>` is refused for everyone until differentiated roles come, a later step. D2's table, D8 and T1 follow. · v1.1 (2026-10-25) — **D2:** the backend verifies the gate's signed token (`X-Authentik-Jwt`) and takes the user and groups from it; the firewall's address alone is no longer believed. · v1.0 (2026-10-18) — **Accepted** by the operator with the console installed and in use on hrossen; #183 is folded into the Modules page (D6) and #91 is not adopted (A3), both closed with this acceptance. · v0.4 (2026-10-18) — **D2** says what a source outside the route's zones gets as installed on hrossen: Caddy runs the gate before the access list, so an anonymous request is redirected to the login and a signed-in one gets 403; the console is never reached; was "403 to the internet". · v0.3 (2026-10-18) — as built through P3 and reviewed on hrossen: **D2** the route is `console.<domain>` through Caddy and the gate from `mgmt` and `admin` only, certificate by HTTP-01, 403 to the internet, `internet` refused in the zone list, the admin tunnel's DNS and routes (#856) a prerequisite; `status.<domain>` waits for gated `proxyRoutes`; **O1** closed (`console.<domain>`, passed as `--proxyDomain`), **O2** and **O3** closed as built; D1, D3, D4, D7 and D10 say where the build differs; *As built* added to the Implementation plan; Consequences gain #853 to #856; A15 (an `.internal` name with a site CA). · v0.2 (2026-10-17) — **D10 installation**: after `bootstrap.sh` the rest of the install is a Setup wizard over the same jobs, with a setup token before identity exists (operator agreed 2026-10-17); P1 and P2 amended. · v0.1 — first draft, from the design spike [`docs/design/ui-spike.md`](../design/ui-spike.md) and the operator's decisions of 2026-10-17 (homelable is inspiration, not the product; operators plus a read-only owner view; every verb reachable, destructive ones behind a typed name; the assistant proposes and never applies). |
 
 One web UI for a TAPPaaS site: it shows the site and its health, draws the site as it is cabled,
 operates it through the managers and nothing else, and carries an assistant one can talk to.
@@ -362,11 +362,15 @@ registration, `add-stack`. Therefore:
   The wizard runs the verbs step by step; the scripts stay for headless installs.
 - **A setup token bridges the window before identity.** The gate of D3 does not exist until the
   identity step has run. `bootstrap.sh` writes a one-time token (`~/config/console-setup-token`),
-  the install summary prints the address with it, and while `config/identity.json` does not exist
-  the console accepts `mgmt` and the admin VPN with that token (`?token=` once, then an HttpOnly
-  cookie, or a bearer header) and nothing else; the token acts as Installer. Once identity exists
-  the token is refused even if its file remains, and the file is deleted after the identity step
-  and at start. This is a necessity of install order, not an SSO-optional mode; it closes itself.
+  the install summary prints the address with it, and while that file exists the console accepts
+  `mgmt` and the admin VPN with that token (`?token=` once, then an HttpOnly cookie, or a bearer
+  header) and nothing else; the token acts as Installer. Installing identity does not end this:
+  the gate needs its route, a user in `installer` and a way in, and the token is the only way in
+  until they exist (v1.4). The first installer who signs in through the gate proves all three, and
+  that request deletes the file and closes the install-LAN way in. The network addresses then get
+  a page saying where the console is. A site where setup closed with nobody able to sign in is
+  reopened from a shell on the mothership with `install-access.sh reopen`. This is a necessity of
+  install order, not an SSO-optional mode; it closes itself.
 - **Secrets are entered in the wizard** into the places the scripts already read, mode 0600, and
   never shown again; Activity records their keys, never their values. As built, three declared
   files only: the DNS provider credential (`~/.acme-dns-credentials.txt`), the UniFi controller's
@@ -450,7 +454,7 @@ the asset, not the module. This amends D5's panel and ADR-040 D10's CI panel acc
   | `tappaas-train preview --json` | the train | the release card |
   | A dry run for every write verb, or a declared *no preview* | the managers | D4 refuses to apply without one; `identity-manager <kind> add` and `storage-manager share add` already preview through `reconcile`; a few bash verbs do not |
   | The job log format and location | tappaas-cicd | Activity; `/var/lib/tappaas/console/jobs.jsonl`, one line per job, rotated with the journal |
-  | A setup token written by `bootstrap.sh`, printed by the install summary, deleted by the identity step | tappaas-cicd | D10, the wizard before the gate exists |
+  | A setup token written by `bootstrap.sh`, printed by the install summary, deleted by the first sign-in through the gate | tappaas-cicd | D10, the wizard before the gate exists |
   | A "done" predicate per install step, from the records | the managers' reads | D10, the checklist's state is derived, never stored |
 
   P1 to P3 filled the first, second, third, fourth, eighth, ninth and tenth rows, and added
@@ -524,9 +528,10 @@ installed or switched on the mothership.
 - **T4 — the topology.** `network-manager topology --json` on hrossen names every node port,
   switch port, LAG, AP and buddy that the five source verbs name; a finding of `validate` is
   attached to the object it mentions.
-- **T6 — the setup token.** It is accepted only before identity's config exists and only from
-  the `mgmt` and admin-VPN networks; after the identity step it is gone from disk and a request
-  with it gets 401.
+- **T6 — the setup token.** It is accepted only from the `mgmt` and admin-VPN networks (and an
+  install LAN opened for the install), and only until the first installer signs in through the
+  gate; from then on it is gone from disk and a request with it gets 401. It has no expiry: an
+  install left unfinished keeps a valid token, over plain HTTP on those networks.
 - **T5 — the assistant.** Asked to run a change, it proposes a card and applies nothing; the card's
   job carries the conversation turn.
 - Unit: the installer group over the group sets (installer, admin only, users only, none, the setup token, loopback, a service account's token), the refused status route, the manifest parser, the topology join.

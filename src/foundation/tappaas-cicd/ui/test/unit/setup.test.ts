@@ -201,10 +201,10 @@ async function main(): Promise<void> {
   // ── the setup token closes itself (T6) ──────────────────────────────
   const access: AccessConfig = { firewall: ["10.0.0.1"], allow: ["127.0.0.1"], setupAllow: ["10.0.0.0/24"], tokenFile: join(cfg, "console-setup-token"), identityFile: join(dir, "no-identity.json"), trustLocalHeaders: false, gate: testGate() };
   writeFileSync(access.tokenFile, "t0k3n\n");
-  check(!closeSetupToken(access) && existsSync(access.tokenFile), "before identity: the token stays");
-  check(decide("10.0.0.50", { host: "console.acme.example", authorization: "Bearer t0k3n" }, null, access, setupState(access)).ok, "…and is accepted from mgmt");
   const after = { ...access, identityFile: join(cfg, "identity.json") };
-  check(closeSetupToken(after) && !existsSync(after.tokenFile), "after the identity step: the token is gone from disk (T6)");
+  check(decide("10.0.0.50", { host: "console.acme.example", authorization: "Bearer t0k3n" }, null, after, setupState(after)).ok, "identity installed, gate not proven: the token is still accepted from mgmt");
+  check(closeSetupToken(after) && !existsSync(after.tokenFile), "the gate proven: the token is gone from disk (T6)");
+  check(!closeSetupToken(after), "…and closing again does nothing");
   const d = decide("10.0.0.1", { host: "console.acme.example", authorization: "Bearer t0k3n" }, null, after, setupState(after));
   check(!d.ok && d.status === 401, "…and a request with it gets 401 (T6)");
 
