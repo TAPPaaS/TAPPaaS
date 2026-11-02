@@ -56,5 +56,12 @@ JSON='{"proxyRoutes":[{"name":"bad","port":7000,"proxyAllowedZones":["nosuchzone
 ck "an unknown zone in a route stops the install" "$(grep -c 'DIE: proxyRoutes .bad.' "${W}/err" 2>/dev/null)" "1"
 ck "…before any handler is written" "$(grep -c '^add-handler' "${W}/calls")" "0"
 
+# mgmt takes the admin VPN with it: the operator's way in from outside.
+echo '{"mgmt":{"ip":"10.0.0.0/24"},"admin":{"ip":"10.255.1.0/24"}}' > "${W}/zones2.json"
+proxy_zone_access_list demo tappaas-adm "${W}/zones2.json" d mgmt >/dev/null
+ck "a list with mgmt allows the admin VPN" "$(grep -c -- 'add-accesslist tappaas-adm --clients 10.0.0.0/24,10.255.1.0/24 ' "${W}/calls")" "1"
+proxy_zone_access_list demo tappaas-adm2 "${W}/zones2.json" d mgmt admin >/dev/null
+ck "…once, when it names both" "$(grep -c -- 'add-accesslist tappaas-adm2 --clients 10.0.0.0/24,10.255.1.0/24 ' "${W}/calls")" "1"
+
 echo "test-proxy-route-zones: ${pass} passed, ${fail} failed"
 [[ ${fail} -eq 0 ]]

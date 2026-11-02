@@ -217,6 +217,12 @@ proxy_zone_access_list() {
             continue
         fi
         cidrs="${cidrs:+${cidrs},}${cidr}"
+        # The admin VPN is how an operator reaches mgmt from outside it, and the
+        # firewall already gives its peers mgmt: a list with mgmt takes them too.
+        if [[ "${z}" == "mgmt" && " ${zones[*]} " != *" admin "* ]]; then
+            cidr=$(jq -r '.admin.ip // empty' "${zones_file}" 2>/dev/null)
+            [[ -z "${cidr}" ]] || cidrs="${cidrs},${cidr}"
+        fi
     done
 
     if [[ ${#malformed[@]} -gt 0 ]]; then
