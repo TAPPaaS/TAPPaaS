@@ -85,7 +85,7 @@ export function EnrolWizard({ onClose, prefill }: { onClose: () => void; prefill
           <label className="form-row">
             <span>public key *</span>
             <input type="text" className="mono" placeholder="the 44 characters from stage 1" value={pubkey} disabled={busy} onChange={(e) => setPubkey(e.target.value.trim())} />
-            <small className="muted">{pubkey && pubkeyProblem(pubkey) ? <span className="ff-error">{pubkeyProblem(pubkey)}. </span> : null}The device's public key only. The private key stays on the device.</small>
+            <small className="muted">{pubkey && pubkeyProblem(pubkey) ? <span className="ff-error">{pubkeyProblem(pubkey)}. </span> : null}The public key from stage 1, not an IP address. The private key stays on the device.</small>
           </label>
           {more ? (
             <>
@@ -146,7 +146,7 @@ export function EnrolWizard({ onClose, prefill }: { onClose: () => void; prefill
               <ol>
                 <li>Install the tools: <span className="mono">apt install wireguard-tools</span> or <span className="mono">brew install wireguard-tools</span>.</li>
                 <li><span className="mono">wg genkey | tee tappaas-admin.key | wg pubkey</span> — prints the public key; the private key is in <span className="mono">tappaas-admin.key</span>.</li>
-                <li>Copy the public key into stage 2.</li>
+                <li>Copy the public key into stage 2. Keep <span className="mono">tappaas-admin.key</span>: the key pair alone opens no tunnel. Stage 2 gives you the tunnel's <span className="mono">.conf</span> file, and in stage 3 the private key goes into it.</li>
               </ol>
             </div>
           </div>
@@ -165,7 +165,7 @@ export function EnrolWizard({ onClose, prefill }: { onClose: () => void; prefill
           {done ? (
             <ol>
               <li>Download the file from stage 2 ({name || "tappaas-admin"}.conf). Open it in a text editor and put the device's <b>private key</b> where it says <span className="mono">PrivateKey = &lt;PASTE-YOUR-PRIVATE-KEY&gt;</span>. If the <span className="mono">Endpoint</span> line is a placeholder, put the site's public address there, port 51821.</li>
-              <li><b>WireGuard app:</b> import the file (<b>Import tunnel(s) from file</b>; on a phone, send the file to it or scan it as a QR code), or paste its contents into the tunnel from stage 1 under the key the app made. <b>Terminal:</b> save it as <span className="mono">/etc/wireguard/{name || "tappaas-admin"}.conf</span> and run <span className="mono">sudo wg-quick up {name || "tappaas-admin"}</span>.</li>
+              <li><b>WireGuard app:</b> import the file (<b>Import tunnel(s) from file</b>; on a phone, send the file to it or scan it as a QR code), or paste its contents into the tunnel from stage 1 under the key the app made. <b>Terminal:</b> in the folder with both files, run <span className="mono">sed -i.bak "s|&lt;PASTE-YOUR-PRIVATE-KEY&gt;|$(cat tappaas-admin.key)|" {name || "tappaas-admin"}.conf</span>, then <span className="mono">chmod 600 {name || "tappaas-admin"}.conf</span> and <span className="mono">sudo wg-quick up ./{name || "tappaas-admin"}.conf</span>. The file now holds the private key, so keep it private.</li>
               <li>Switch the tunnel on. The device now reaches the management zone: this console, the Proxmox and firewall UIs, and ssh to every host, by their names.</li>
             </ol>
           ) : (

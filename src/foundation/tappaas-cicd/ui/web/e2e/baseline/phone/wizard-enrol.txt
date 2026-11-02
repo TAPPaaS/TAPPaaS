@@ -128,7 +128,7 @@
       - list:
         - listitem: "Install the tools: apt install wireguard-tools or brew install wireguard-tools."
         - listitem: wg genkey | tee tappaas-admin.key | wg pubkey — prints the public key; the private key is in tappaas-admin.key.
-        - listitem: Copy the public key into stage 2.
+        - listitem: "Copy the public key into stage 2. Keep tappaas-admin.key: the key pair alone opens no tunnel. Stage 2 gives you the tunnel's .conf file, and in stage 3 the private key goes into it."
     - listitem:
       - button "fail 2 · Register the device to do ▾" [expanded]: 2 · Register the device to do ▾
       - paragraph: The site records the device and gives it a tunnel address; the result is the device's WireGuard file, to download.
@@ -136,9 +136,9 @@
       - textbox "device name * How the site lists it, and the name of the file you get.":
         - /placeholder: lars-laptop
       - text: How the site lists it, and the name of the file you get. public key *
-      - textbox "public key * The device's public key only. The private key stays on the device.":
+      - textbox "public key * The public key from stage 1, not an IP address. The private key stays on the device.":
         - /placeholder: the 44 characters from stage 1
-      - text: The device's public key only. The private key stays on the device.
+      - text: The public key from stage 1, not an IP address. The private key stays on the device.
       - paragraph:
         - 'button "More: a fixed tunnel address, another endpoint…"'
       - text: runs
