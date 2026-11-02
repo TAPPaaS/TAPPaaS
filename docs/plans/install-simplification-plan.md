@@ -214,7 +214,38 @@ Steps 2 and 3 can run side by side. Hold the doc restructure until step 10, so i
 - `release/bump-version.sh --check` caught the v1.4 tag loss, but nothing runs it at a boundary yet.
 - `ui/web/e2e/run.sh` defaults its base to `adr-041`. Change to `main` before that branch goes.
 
-## 7. Working rules for whoever picks this up
+## 7. Building the Day 1 pages with the console-gui skill
+
+The `console-gui` skill (`~/.claude/skills/console-gui/SKILL.md`, a symlink into `tappaas-claude`) is the working guide for any change under `ui/`. A session started before the skill existed cannot load it by name, so it reads the file instead. `docs/plans/console-gui-pipeline.md` has the reasons, `.interface-design/system.md` the tokens and wording.
+
+Tried on `main` on 2026-11-02, in a fresh worktree:
+
+- `ui/web/e2e/run.sh --routes setup-day1 --viewports phone,laptop --no-flows --base main` passed. The first run took 2 minutes, including `npm ci`, the baseline and the build.
+- `scripts/test/test-console-design.sh` passed (27 checks).
+- `ui/test.sh` passed (57), but only with the web app's `tsc` on PATH. Without it, all three stages fail at once with a misleading "type errors":
+
+```bash
+PATH="$PWD/web/node_modules/.bin:/opt/homebrew/bin:$PATH" /opt/homebrew/bin/bash ./test.sh
+```
+
+**Traps to expect:**
+
+- `run.sh` and `ui/README.md` still default to `adr-041`, which no longer matches `main`. Pass `--base main` until the default is changed (§6). The skill's shipping steps name `origin/adr-041` too.
+- **The fixtures show a finished site.** They are captured from hrossen, so `/setup/day1` shows every step done. No page of the new wizard can be seen in its real state with them. This has to be solved first.
+
+**The work order for the wizard:**
+
+1. Make a fresh-site fixture set: one node, `network` and `tappaas-cicd` only, no identity. `ui/test/fixtures/capture.sh --host <lab2's mothership> --out <dir>` captures a real one, ideally right after the next lab2 reinstall. Add a hand-made two-node variant, since the panel behaves differently with more than one machine.
+2. Teach `run.sh` to serve another set. `fixture-server.sh --fixtures <dir>` can already; `run.sh` has no such option. Add `setup-day1-fresh` routes in `e2e/routes.json`.
+3. Build the placement read first, with unit tests over the fixtures. The rules live there, not in the page.
+4. Build the panel from the shared parts (`wizard.tsx`, `flows.tsx`, `stepform.tsx`, `jobs.tsx`). A new step, confirm or output panel is a review finding.
+5. Add `web/e2e/flows/foundation.spec.ts`, as with `add-node.spec.ts`: click through it, and assert on the verb the server's journal recorded. Cover one machine (pool drop-down only), two machines (three drop-downs), an invalid HA and pool pair (button disabled, with the reason), and a row set back to `rpool` (no move).
+6. Check at phone width. Three drop-downs on a row will need to stack.
+7. Run it on hrossen with `TAPPAAS_SIMULATE=1`, then for real only on lab2.
+
+A session never commits a Mac-built `web/dist`. It builds on hrossen's nix as the skill says, and only one session writes the console sources at a time.
+
+## 8. Working rules for whoever picks this up
 
 - Branch work in a new worktree from `main`. Never switch or stage in `~/src/TAPPaaS`; other sessions commit there.
 - The operator pushes. Fast-forward local `main` and hand over the push command.
