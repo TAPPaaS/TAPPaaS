@@ -29,7 +29,7 @@ The goal: one path for the common case. Answer a few questions, boot the machine
 site-manager repository modify TAPPaaS --branch main
 ```
 
-Log in from `~/lab2-install` on the Mac with `proxmox-ve_9.2-1-tappaas-auto.key`, then hop to the mothership with `/root/tappaas/tappaas-cicd.key`. `~/lab2-install` holds the ISO and key: both are credentials. No identity is installed yet, so the setup token is still valid.
+Log in from `~/lab2-install` on the Mac with `proxmox-ve_9.2-1-tappaas-auto.key`, then hop to the mothership with `/root/tappaas/tappaas-cicd.key`. `~/lab2-install` holds the ISO and key: both are credentials. Identity is installed and the console refuses the install LAN (§3).
 
 ## 1. Boot disk override
 
@@ -55,21 +55,74 @@ Work:
 
 Today's order (`ui/src/setup.ts`): TLS, backup, identity, logging, identity bootstrap, nodes, switch, admin VPN, then the optional stacks, Wi-Fi and physical. There is no disk step. The page body is in `ui/web/src/pages/Setup.tsx`.
 
-The new order:
+The new order, Lars's decision of 2026-11-02:
 
-### Step 1: Disks
+1. Set up disks on the first node
+2. Add more nodes
+3. Rest of foundation, including the moves of `tappaas-cicd` and `network`
+4. TLS
+5. Switch setup
+6. Wi-Fi
+7. Physical site
+8. Admin VPN
+9. Stacks
+
+Nodes come before the foundation because backup should sit on a different machine from what it protects, whenever there is one.
+
+**Consequences of this order:**
+
+- **The cut-over moves out of step 3.** The gate cannot be proven until a certificate exists (step 4) and the operator has a way in (step 8). So identity, the bootstrap and publishing the console run in step 3, the token and install LAN stay valid through steps 4 to 8, and the switch to the gate happens at the end of step 8, on a real sign-in. This lengthens the token's life, which the security review must cover.
+- **Wildcard sites.** Identity and the console install before the wildcard exists. Check what each does until step 4 issues it, and whether their module tests fail in between. `per-service` sites get their certificates at install, if ports 80/443 are reachable.
+- **Switch ports before step 5.** A second node boots over PXE on a switch that step 5 has not set up yet, and lab2's PXE trouble on 2026-11-01 was the port's config. The Add nodes step must say what the port needs. **Open:** is that sentence enough, or does a managed-switch site need its switch step before nodes?
+- **Pools on added nodes.** HA needs the same pool on both machines, so step 2 must also offer a pool on each new node, using the same form as step 1.
+- **Nodes before backup.** A node added first has no backup client. The backup install should wire it in through `integratesWith`, but this order has not been run. Add nodes has also only been used on a site with identity, so test it under the setup token.
+
+### Step 1: Disks on the first node
 
 - First and required, with a real outcome either way: a pool made, or "boot pool only" chosen and recorded.
 - Reuse the node pool form in `ui/web/src/physical/nodepools.tsx` (`node storage add`, with `--disks`, `--layout`, `--wipe`). Do not build a second form.
 - On a single-disk site (Hetzner with one disk, or no free disks) the step reads as done with a sentence saying why.
 
-### Step 2: Foundation, as one step
+### Step 2: Add more nodes
 
-- One action installs identity, logging and backup, runs the identity bootstrap, and moves `tappaas-cicd` and `network` to `tanka1` if Step 1 made a pool. No separate install form per module.
-- The defaults come from the records. Ask only what has no default. Show one job with a line per module; a module's fields stay reachable behind an Advanced link.
-- `rest-of-foundation.sh` already does most of this in one run. The step should run it (or a verb built on it), so the CLI and the console stay one path. It lacks the storage move.
-- **Order inside the step:** the move should come first, so the later modules land on the pool, unless a test shows otherwise. Backup's placement on one node needs a look.
-- Moving `network` carries the firewall, so this is where the live move is most dangerous. Test it on lab2 alone first, from the install LAN, and watch whether the console session survives. Today's doc claims "without a restart".
+- Reuse the Add node wizard, followed by the pool form for the new node.
+- Needs a plain "no more machines" answer, so a single-node site moves on. It reads as done with one node.
+
+### Step 3: Rest of foundation, as one panel and one job
+
+The panel shows, top to bottom:
+
+1. A description of what is about to happen: what gets installed, what gets moved, and that it keeps running if the browser is cut off.
+2. The machines in short form: each node with its memory and disks.
+3. The five foundation modules, the two installed (`network`, `tappaas-cicd`) and the three to install (`backup`, `identity`, `logging`). Each row has up to three drop-downs:
+   - **Machine**: only with more than one machine.
+   - **HA machine**: only with more than one machine, and with a "none" choice.
+   - **Disk/pool**: always.
+
+**Prefilled values**, from the default placement:
+
+- The values in the module's `.json`.
+- Where those are not possible: `tappaas1`, no HA, and `tanka1`, or `rpool` if there is no `tanka1`.
+- `backup` has `node: ""` and `storage: tankc1`. It prefers a machine other than the one holding the mothership when one exists, and a `tankc1` pool over `tanka1`. This is the point of doing nodes first.
+
+**An installed module's row is a move.** `network` and `tappaas-cicd` prefill to `tanka1` when the default allows it, so they move unless the operator sets them back to `rpool`. The panel marks each row as Install, Move or Stays.
+
+**Rules for the drop-downs:**
+
+- The pool list is what the chosen machine has. With an HA machine, it is what both have, because replication needs the same pool on both (`cluster/services/ha/update-service.sh` refuses otherwise).
+- The HA list leaves out the chosen machine and any node without the guest's bridges (`cluster/lib/ha-bridge-lib.sh`). `network` needs the WAN bridge on its machine.
+- Changing a machine rechecks the row and says what changed. The action stays disabled, with the reason next to it, while a row is invalid.
+- Do not write the rules twice. `cluster/lib/storage-placement.sh` (`sp_choose`) already holds the fallback, and `get_default_ha_node` the HA default. One read verb returns the proposal and the choices per row, and the console only draws it.
+
+**The script gets the same thing.** `rest-of-foundation.sh` grows the placement: with no arguments it uses the same default proposal, it can print the proposal, and it takes the operator's choices per module. The panel runs the script (or a verb built on it) with those choices, so the CLI and the console stay one path. Today it installs `backup identity logging` plus the bootstrap, on the module's defaults, and has no move. Preview shows the proposal with each move spelled out, per the preview/apply contract.
+
+**The job's order:** moves first, so `network` and `tappaas-cicd` are on the pool before anything else, then backup, identity, logging, the identity bootstrap, publishing the console. One job with a line per module.
+
+**Risks:**
+
+- Moving `network` carries the firewall. Test it on lab2 alone first, from the install LAN, and watch whether the console session survives. Today's doc claims "without a restart".
+- The job runs on the mothership while `tappaas-cicd` itself moves, by pool or by machine. A move to another machine has never been run for either guest.
+- Moving between machines and between pools are two different operations. The panel can ask for both on one row, so the job must do them in a safe order.
 - **Installing identity locks the operator out of the console. This happened on lab2 on 2026-11-01** (see below). It must be fixed before the step ships, and it is worth fixing first, since today's wizard does it too.
 - Keep "Publish the console" inside this step. Today it is a separate button next to Identity, and it cannot be reached once identity is in.
 
@@ -85,7 +138,7 @@ The cause: the switch to the gate keys on `config/identity.json`, written the mo
 What the fix must do:
 
 - Make the cut-over the last thing that happens, not the first. The setup token and install LAN stay valid until the gate is proven: operator's user exists, the console route answers, and a signed-in request succeeded. Key the refusal on that, not on `identity.json`. ADR-034 D10 and `console/INSTALL.md` state the current rule, so update them, and review the security effect of keeping the token alive during this window.
-- The foundation step runs identity, bootstrap and the console publish as one job. It keeps running on the mothership if the browser is cut off, and the operator ends on a page that says where to go next.
+- Step 3 runs identity, bootstrap and the console publish as one job. It keeps running on the mothership if the browser is cut off, and the operator ends on a page that says where to go next.
 - Before the cut-over, the operator must have a way in that works: the admin VPN imported and tested. An install-LAN operator today has no reason to have done so.
 - The console's refusal should explain itself in the browser: the address to use and why, not a dropped connection.
 - `install-access.sh close` runs as part of the cut-over, so no forward is left behind.
@@ -93,7 +146,7 @@ What the fix must do:
 
 **lab2 is still locked out, left as found for study.** Recovery is not yet tried. The likely route is the mothership's CLI: `identity-manager bootstrap` and `reconcile`, then `module-manager add console --proxyDomain console.<domain>`, then reach it over the admin VPN (`/root/tappaas-admin-vpn.conf`). Its domain `lab2.hrossen.dk` must resolve for that route. Run it as the first test of the recovery path, or reinstall.
 
-### Step 3: TLS (needs design)
+### Step 4: TLS (needs design)
 
 Today: `dnsMode` per environment, `per-service` by default (Caddy over HTTP-01) or `wildcard` (OPNsense ACME, DNS-01). In `per-service` the step reads done with nothing done, and the wildcard path shows a provider, key name and value form plus a `dns_cf_token`-style hint.
 
@@ -106,7 +159,7 @@ Problems to solve:
 
 Direction: ask one plain question first (internal only, public services on this machine's own address, or a DNS provider with an API), set the mode from the answer, and make "done" a real check. **Open:** whether "internal only" is a supported end state with no certificates (`INSTALL.md` Step 4 says it is), and what the console itself then uses. Needs a short design note before code.
 
-### Step 4: Switches
+### Step 5: Switches
 
 - The step registers a UniFi controller only: the form is `unifi`, and `add-controller` has `--vendor unifi` prefilled. Lars's point: it implies UniFi, while MikroTik and manual switches exist too.
 - It is also **required**, and done only when a switch has discovered ports. A site with an unmanaged or manual switch can never finish Day 1. `completed` stays false for good. Fix that first: make it optional or give it a "no managed switch" answer.
@@ -114,7 +167,9 @@ Direction: ask one plain question first (internal only, public services on this 
 
 ### The rest
 
-Admin VPN, nodes, stacks, Wi-Fi and physical stay, after the above. **Open:** is one required node step useful on a single-node site (it reads done at once), and is the VPN required on a LAN site? The install's first peer already exists (`/root/tappaas-admin-vpn.conf`), so it may read done from the start.
+Wi-Fi and physical stay as they are, optional, in steps 6 and 7. Stacks are last.
+
+Step 8, the admin VPN, is required: the gate is reachable only from `mgmt` and the VPN, so this step tests the VPN and ends with the sign-in that does the cut-over. The install's first peer already exists (`/root/tappaas-admin-vpn.conf`), so existing is not enough to read as done.
 
 Rule for the whole page: each step states what it will do, shows a real result, and has a way out when it does not apply. Follow `docs/plans/console-gui-pipeline.md` for how to develop and test console changes.
 
@@ -135,17 +190,19 @@ Move the rest (SSH appendix, hand PXE, Cloudflare scope) to the full path or to 
 ## 5. Order of work
 
 1. Boot disk question (§1). Small, independent.
-2. Day 1 landing page (§2), make the switch step not block completion (§3 Step 4), and fix the identity lockout (§3 Step 2). The lockout comes first: until it is fixed, Day 1 cannot be completed from the install LAN.
-3. Prove the pool and move commands by hand on lab2: move lab2 to `main`, make `tanka1` with `--wipe`, move `tappaas-cicd` and `network` from the CLI, and fix what breaks. Everything in Step 1 and 2 depends on this. Then `rest-of-foundation.sh` on lab2.
+2. Day 1 landing page (§2), make the switch step not block completion (§3 Step 5), and fix the identity lockout (§3 Step 3). The lockout comes first: until it is fixed, Day 1 cannot be completed from the install LAN.
+3. Prove the pool and move commands by hand on lab2: move lab2 to `main`, make `tanka1` with `--wipe`, move `tappaas-cicd` and `network` from the CLI, and fix what breaks. Everything in Steps 1 to 3 depends on this. Then `rest-of-foundation.sh` on lab2.
 4. Day 1 Step 1 (disks).
-5. Day 1 Step 2 (foundation as one step), including the token expiry answer.
-6. TLS design note, Lars's decisions, then the step.
-7. Switch step choices.
-8. Fresh install of lab2 through the finished path, reviewing the doc as it goes. It proves the endnote too.
-9. `INSTALL.md` restructure, from what that run shows.
-10. Hetzner, on a real machine.
+5. Day 1 Step 2 (add nodes, with a pool on each).
+6. Day 1 Step 3 (the placement read, the script, the panel), including the token expiry answer.
+7. TLS design note, Lars's decisions, then the step.
+8. Switch step choices.
+9. Step 8: the VPN test and the sign-in cut-over.
+10. Fresh install of lab2 through the finished path, reviewing the doc as it goes. It proves the endnote too.
+11. `INSTALL.md` restructure, from what that run shows.
+12. Hetzner, on a real machine.
 
-Steps 2 and 3 can run side by side. Hold the doc restructure until step 8, so it describes what works.
+Steps 2 and 3 can run side by side. Hold the doc restructure until step 10, so it describes what works.
 
 ## 6. Also open
 
