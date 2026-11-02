@@ -19,6 +19,8 @@
 // record to write. That is a supported configuration, not an error, and it must
 // be reported as its own state rather than as a failed lookup.
 
+import { existsSync, readdirSync, readFileSync } from "fs";
+import { join } from "path";
 import { spawnSync } from "child_process";
 import type { Zone, ZonesDoc } from "./types";
 
@@ -48,6 +50,26 @@ export function gatewayIpOf(cidr: string | undefined): string | undefined {
   const network = (asInt & mask) >>> 0;
   const gw = (network + 1) >>> 0;
   return [(gw >>> 24) & 255, (gw >>> 16) & 255, (gw >>> 8) & 255, gw & 255].join(".");
+}
+
+// A name under an environment that holds its own wildcard certificate needs no
+// public record: the certificate is there and the site's resolver answers the
+// name, so the proxy serves it. That is what lets a site with no public DNS
+// publish its services to the admin VPN and its own zones.
+export function coveredBySiteWildcard(envDir: string, domain: string): boolean {
+  if (!existsSync(envDir)) return false;
+  const name = domain.toLowerCase();
+  return readdirSync(envDir)
+    .filter((f) => f.endsWith(".json"))
+    .some((f) => {
+      try {
+        const d = (JSON.parse(readFileSync(join(envDir, f), "utf8")) as { domains?: { primary?: string; dnsMode?: string } }).domains;
+        const primary = d?.primary?.toLowerCase();
+        return d?.dnsMode === "wildcard" && !!primary && (name === primary || name.endsWith(`.${primary}`));
+      } catch {
+        return false;
+      }
+    });
 }
 
 // The pure core (ADR-021 Testing: "the resolver as a pure function"). Whether

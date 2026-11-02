@@ -64,7 +64,7 @@ import {
   zoneEnvironments,
 } from "./serves";
 import { distributeZones, shouldAutoDistribute } from "./distribute";
-import { isPubliclyResolvableSync, resolveSplitHorizonTarget } from "./splithorizon";
+import { coveredBySiteWildcard, isPubliclyResolvableSync, resolveSplitHorizonTarget } from "./splithorizon";
 import { runZonesMerge } from "./zonesmerge";
 import { readFirewallOccupancy } from "./firewall-occupancy";
 import { MOVE_ADVICE, collisionOf } from "./occupancy";
@@ -1438,7 +1438,10 @@ function cmdSplitHorizonTarget(opts: Opts): number {
     die("split-horizon-target needs a domain: split-horizon-target <domain>");
   }
   const doc = loadZones(opts.zonesFile);
-  const published = opts.assumePublished === true || isPubliclyResolvableSync(domain);
+  const published =
+    opts.assumePublished === true ||
+    coveredBySiteWildcard(join(dirname(opts.zonesFile), "environments"), domain) ||
+    isPubliclyResolvableSync(domain);
   const r = resolveSplitHorizonTarget(doc, domain, published);
   if (opts.json) {
     process.stdout.write(JSON.stringify(r) + "\n");

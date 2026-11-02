@@ -17,7 +17,7 @@
 process.env.TAPPAAS_CMDB = "off";
 
 import { opnsenseDryRunResult, proxmoxNeedsRecheck, proxmoxStatus } from "../../src/planes";
-import { gatewayIpOf, resolveSplitHorizonTarget } from "../../src/splithorizon";
+import { coveredBySiteWildcard, gatewayIpOf, resolveSplitHorizonTarget } from "../../src/splithorizon";
 import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import { HELP, run } from "../../src/main";
 import { renderManifest, undocumentedOptions } from "../../../../lib/ts/src/help";
@@ -2179,6 +2179,16 @@ function tmpZones(): string {
   check(un.status === "unpublished", "D5: an unpublishable name is UNPUBLISHED, not an error");
   check(un.status === "unpublished" && un.domain === "internal-only.example.org",
     "D5: …and it names the domain it could not publish");
+
+  // A site with its own wildcard certificate publishes with no public record.
+  const envs = mkdtempSync(join(tmpdir(), "nm-envs-"));
+  writeFileSync(join(envs, "local.json"), JSON.stringify({ domains: { primary: "lab.example.org", dnsMode: "wildcard" } }));
+  writeFileSync(join(envs, "other.json"), JSON.stringify({ domains: { primary: "other.example.org" } }));
+  writeFileSync(join(envs, "broken.json"), "{");
+  check(coveredBySiteWildcard(envs, "console.lab.example.org"), "a name under a wildcard environment is covered");
+  check(!coveredBySiteWildcard(envs, "console.other.example.org"), "…a per-service environment's name is not");
+  check(!coveredBySiteWildcard(envs, "notlab.example.org"), "…nor a name that only ends in the same letters");
+  check(!coveredBySiteWildcard(join(envs, "absent"), "x.lab.example.org"), "…and no environments directory covers nothing");
 
   // No dmz zone at all → ERROR: the site cannot express an answer.
   const noDmz = resolveSplitHorizonTarget(docOf({ srv: { ip: "10.2.0.0/24" } }), "x.example.org", true);
