@@ -165,7 +165,7 @@ Still to do:
 - Step 3 runs identity, bootstrap and the console publish as one job. It keeps running on the mothership if the browser is cut off, and the operator ends on a page that says where to go next.
 - Before the cut-over, the operator must have a way in that works: the admin VPN imported and tested. An install-LAN operator today has no reason to have done so.
 
-**lab2, 2026-11-02:** on `main`, recovery proven: the closed address answered 403 with its page, and `install-access.sh reopen` brought back the token and the install LAN with one forward. It now runs the local DNS test setup by hand (above). **Not yet proven live:** the first gate sign-in closing setup, which also runs `install-access.sh close` from inside the console's sandbox. That needs the identity bootstrap and a sign-in over the admin VPN.
+**lab2, 2026-11-02:** on `main`, recovery proven: the closed address answered 403 with its page, and `install-access.sh reopen` brought back the token and the install LAN with one forward. It now runs the local DNS test setup by hand (above). **Proven live, same day:** the first gate sign-in over the admin VPN closed setup: the token is gone, no 9097 forward is left on the firewall, and the install-LAN address no longer answers. Getting there needed `blockpriv` removed from lab2's WAN by hand, and the password set from Day 2 (notes 1 and 4 below).
 
 ### Step 4: TLS (needs design)
 
@@ -262,6 +262,13 @@ Move the rest (SSH appendix, hand PXE, Cloudflare scope) to the full path or to 
 Steps 2 and 3 can run side by side. Hold the doc restructure until step 11, so it describes what works.
 
 ## 6. Also open
+
+**Notes from the lab2 VPN and sign-in test, 2026-11-02:**
+
+1. **Private addresses reach the firewall in the standard setup.** The template sets `blockpriv` on WAN (`src/foundation/network/firewall-config.xml.template`), which drops 192.168.0.0/16 and the other private ranges before the admin VPN's rule. A VPN client on the same LAN as a private WAN gets no handshake and no error. Remove it from the standard setup. Existing sites keep theirs until an update changes it, so decide that in the same change.
+2. **The identity bootstrap runs in Rest of foundation.** It is still a separate Day 1 step today. Move it into the panel's job (Step 3), with the panel asking for what it needs.
+3. **A better explanation of setting up WireGuard.** Rework the Enrol wizard. The stage 2 file has no private key until stage 3, and the wizard does not say so at stage 2. The app shows Active with no handshake, so the wizard must say how to check for one. While a dead tunnel is on, the file's `DNS = 10.0.0.1` stops all name lookups on the device, which looks like losing the internet.
+4. **The identity bootstrap sets the user's password.** It asks for none, prints none, and the owner can only sign in after setting one from Day 2. It should request the password and set it, so the owner can sign in straight after the bootstrap.
 
 - `install.sh`'s hand path still re-launches in full-screen tmux and hides the scroll. Only the media script follows the log. Unify if the hand path stays in the simple guide.
 - WAN and LAN ports are now auto-detected on the media-script path. On a machine with several spare NICs the LAN pick can be wrong. **Open:** add a question, or leave it to `node network set`.
