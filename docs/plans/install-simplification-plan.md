@@ -265,10 +265,12 @@ Steps 2 and 3 can run side by side. Hold the doc restructure until step 11, so i
 
 **Notes from the lab2 VPN and sign-in test, 2026-11-02:**
 
-1. **Private addresses reach the firewall in the standard setup.** The template sets `blockpriv` on WAN (`src/foundation/network/firewall-config.xml.template`), which drops 192.168.0.0/16 and the other private ranges before the admin VPN's rule. A VPN client on the same LAN as a private WAN gets no handshake and no error. Remove it from the standard setup. Existing sites keep theirs until an update changes it, so decide that in the same change.
-2. **The identity bootstrap runs in Rest of foundation.** It is still a separate Day 1 step today. Move it into the panel's job (Step 3), with the panel asking for what it needs.
-3. **A better explanation of setting up WireGuard.** Rework the Enrol wizard. The stage 2 file has no private key until stage 3, and the wizard does not say so at stage 2. The app shows Active with no handshake, so the wizard must say how to check for one. While a dead tunnel is on, the file's `DNS = 10.0.0.1` stops all name lookups on the device, which looks like losing the internet.
-4. **The identity bootstrap sets the user's password.** It asks for none, prints none, and the owner can only sign in after setting one from Day 2. It should request the password and set it, so the owner can sign in straight after the bootstrap.
+1. **Private addresses reach the firewall in the standard setup.** Done: `blockpriv` is out of the firewall template, and `network`'s update clears it, because the image carries the template and an installed site needs the change too. A VPN client on the same LAN as a private WAN used to get no handshake and no error.
+2. **The identity bootstrap runs in Rest of foundation.** Done for now: Day 1's bootstrap step is a Rest of foundation wizard that runs `rest-of-foundation.sh` as one job, which also backfills `ownerOrg`. The placement panel of Step 3 is still to build, and will take this job over. The module rows stay until then.
+3. **A better explanation of setting up WireGuard.** Done for the wording: the Enrol wizard and `ADMIN-VPN.md` say the file has a blank for the key, that Active is no proof, and what a dead tunnel does to names. The wider rethink of how the tunnel is set up is still open.
+4. **The identity bootstrap sets the user's password.** Done: the script asks up front at a terminal, or takes it on stdin (`--owner-password-stdin`) from the wizard, and sets it after the reconcile.
+
+**Not yet proven on lab2:** notes 1, 2 and 4 passed unit tests and a stubbed script run only. They need a console dist built on hrossen, then a fresh identity bootstrap.
 
 - `install.sh`'s hand path still re-launches in full-screen tmux and hides the scroll. Only the media script follows the log. Unify if the hand path stays in the simple guide.
 - WAN and LAN ports are now auto-detected on the media-script path. On a machine with several spare NICs the LAN pick can be wrong. **Open:** add a question, or leave it to `node network set`.
