@@ -132,10 +132,10 @@
       - list:
         - listitem: "Install the tools: apt install wireguard-tools or brew install wireguard-tools."
         - listitem: wg genkey | tee tappaas-admin.key | wg pubkey — prints the public key; the private key is in tappaas-admin.key.
-        - listitem: "Copy the public key into stage 2. Keep tappaas-admin.key: the key pair alone opens no tunnel. Stage 2 gives you the tunnel's .conf file, and in stage 3 the private key goes into it."
+        - listitem: "Copy the public key into stage 2. Keep tappaas-admin.key: the key pair alone opens no tunnel. Stage 2 gives you the .conf file with a blank for the private key, and stage 3 fills it in here on the device."
     - listitem:
       - button "fail 2 · Register the device to do ▾" [expanded]: 2 · Register the device to do ▾
-      - paragraph: The site records the device and gives it a tunnel address; the result is the device's WireGuard file, to download.
+      - paragraph: "The site records the device and gives it a tunnel address. You download the device's WireGuard file: everything but the private key, which the site never sees."
       - text: "Registers the device as a peer of the admin VPN on the firewall and prints its WireGuard file: the tunnel address it was given, the site's DNS, and what it may reach (the management zone, and the published names). device name *"
       - textbox "device name * How the site lists it, and the name of the file you get.":
         - /placeholder: lars-laptop
@@ -152,7 +152,7 @@
       - text: a name is needed
     - listitem:
       - button "warn 3 · Put the file on the device and connect pending ▸": 3 · Put the file on the device and connect pending ▸
-      - paragraph: The file goes into the device's WireGuard, with its private key pasted in; then the tunnel is switched on.
+      - paragraph: The file gets its private key on the device and goes into WireGuard. The tunnel is switched on and checked for a handshake.
 - text: Add a backup buddy
 - paragraph: Another site's PBS keeps an off-site copy — pulled through its own tunnel — or this site keeps theirs.
 - button "Add a backup buddy…"

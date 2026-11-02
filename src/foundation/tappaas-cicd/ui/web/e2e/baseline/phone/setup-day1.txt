@@ -69,7 +69,7 @@
     - button "pass Logging (Loki, Grafana) done ▸": Logging (Loki, Grafana) done ▸
     - paragraph: installed; updated and tested by the sweep (2026-11-01 01:42:48Z)
   - listitem:
-    - button "pass Identity bootstrap — your organization and you done ▸": Identity bootstrap — your organization and you done ▸
+    - button "pass Rest of foundation — your organization and you done ▸": Rest of foundation — your organization and you done ▸
     - paragraph: "config/identities: 1 organization(s), 3 user(s)"
   - listitem:
     - button "pass Nodes done ▸": Nodes done ▸
