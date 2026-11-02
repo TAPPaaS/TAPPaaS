@@ -96,7 +96,6 @@
       <ipaddrv6>dhcp6</ipaddrv6>
       <subnet/>
       <gateway/>
-      <blockpriv>1</blockpriv>
       <blockbogons>1</blockbogons>
       <dhcphostname/>
       <media/>
