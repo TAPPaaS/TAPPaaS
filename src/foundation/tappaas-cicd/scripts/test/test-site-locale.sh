@@ -127,12 +127,11 @@ fi
 
 # The site's own CA reaches guests only when the site has one.
 grep -q 'security.pki' "${WORK}/frag.nix" && bad "a site with no CA got a certificate list" || ok "no site CA: no certificate list"
-_cadir="$(mktemp -d)"
-printf -- '-----BEGIN CERTIFICATE-----\nQUJD\n-----END CERTIFICATE-----\n' > "${_cadir}/site-ca.pem"
-_cafrag="$(TAPPAAS_CONFIG="${_cadir}" render_site_nix mgmt)"
+printf -- '-----BEGIN CERTIFICATE-----\nQUJD\n-----END CERTIFICATE-----\n' > "${WORK}/config/site-ca.pem"
+_cafrag="$(load 'render_site_nix mgmt')"
 grep -q 'security.pki.certificates' <<< "${_cafrag}" && grep -q '^QUJD$' <<< "${_cafrag}" \
     && ok "a site CA is in the guest's fragment" || bad "the site CA is not in the guest's fragment"
-rm -rf "${_cadir}"
+rm -f "${WORK}/config/site-ca.pem"
 
 echo ""
 echo "── summary: ${pass} pass, ${fail} fail ──"
