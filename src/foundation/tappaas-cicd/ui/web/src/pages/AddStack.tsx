@@ -11,7 +11,7 @@ import { Step, StepView } from "../operate";
 import { EnvironmentRow, SiteRead } from "../types";
 import { Badge, ReadState, canOperate, useMe } from "../ui";
 import { DecideStep, StepRow, Wizard } from "../wizard";
-import { StackPlan, stackSkips, stacksOf } from "../wizards";
+import { StackPlan, stackModuleOrigin, stackSkips, stacksOf } from "../wizards";
 
 interface Choice {
   stack: string;
@@ -90,7 +90,7 @@ function AddStackWizard({ onClose, prefill }: { onClose: () => void; prefill?: T
                     <li key={s.module}>
                       <label className="stack-module">
                         <input type="checkbox" checked={installed || !off.includes(s.module)} disabled={installed} onChange={(e) => setOff(e.target.checked ? off.filter((m) => m !== s.module) : [...off, s.module])} />
-                        <span><span className="mono">{s.module}</span>{installed ? <> <Badge level="pass">installed</Badge></> : null}</span>
+                        <span><span className="mono">{s.module}</span>{stackModuleOrigin(s) ? <> <span className="muted">{stackModuleOrigin(s)}</span></> : null}{installed ? <> <Badge level="pass">installed</Badge></> : null}</span>
                         {s.description ? <small className="muted">{s.description}</small> : null}
                       </label>
                     </li>

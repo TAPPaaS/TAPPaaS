@@ -282,9 +282,15 @@ export function stacksOf(cats: { modules: { name: string; stack: string | null }
 export interface StackPlan {
   stack: string;
   environment: string | null;
-  steps: { module: string; action: "install" | "skip"; instance?: string; description: string | null }[];
+  steps: { module: string; action: "install" | "skip"; instance?: string; description: string | null; repository?: string | null; maintainer?: string | null }[];
   missing: { module: string; dependency: string }[];
 }
+
+// What follows a module's name in the list: where it comes from, who keeps it.
+export const stackModuleOrigin = (s: StackPlan["steps"][number]): string | null => {
+  const parts = [s.repository ? `Repo: ${s.repository}` : null, s.maintainer ? `Maintainer: ${s.maintainer}` : null].filter(Boolean);
+  return parts.length ? `(${parts.join(", ")})` : null;
+};
 
 // The modules to pass as --skip: those the plan would install and the operator
 // took off. An installed one is no choice, so never named.

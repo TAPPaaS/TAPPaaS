@@ -6,31 +6,41 @@
       "module": "hass",
       "action": "skip",
       "instance": "hass",
-      "description": "Home Assistant OS (HAOS) - home automation platform"
+      "description": "Home Assistant OS (HAOS) - home automation platform",
+      "repository": "TAPPaaS",
+      "maintainer": "@ErikDaniel007"
     },
     {
       "module": "immich",
       "action": "skip",
       "instance": "immich",
-      "description": "Immich self-hosted photo and video backup with ML-powered search, face recognition and mobile apps"
+      "description": "Immich self-hosted photo and video backup with ML-powered search, face recognition and mobile apps",
+      "repository": "TAPPaaS",
+      "maintainer": "@AndreasJe"
     },
     {
       "module": "jellyfin",
       "action": "skip",
       "instance": "jellyfin",
-      "description": "Jellyfin open-source media server for personal movie, TV and music libraries"
+      "description": "Jellyfin open-source media server for personal movie, TV and music libraries",
+      "repository": "TAPPaaS",
+      "maintainer": "@AndreasJe"
     },
     {
       "module": "karakeep",
       "action": "install",
       "handSteps": false,
-      "description": "Karakeep — bookmarks and read-later: links, notes and images, each page archived"
+      "description": "Karakeep — bookmarks and read-later: links, notes and images, each page archived",
+      "repository": "TAPPaaS",
+      "maintainer": "@larsrossen"
     },
     {
       "module": "nomad",
       "action": "install",
       "handSteps": true,
-      "description": "Project N.O.M.A.D. — an offline knowledge and education server"
+      "description": "Project N.O.M.A.D. — an offline knowledge and education server",
+      "repository": "TAPPaaS",
+      "maintainer": "@larsrossen"
     }
   ],
   "missing": [],

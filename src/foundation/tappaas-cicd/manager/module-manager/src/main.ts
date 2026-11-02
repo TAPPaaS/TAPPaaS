@@ -141,7 +141,7 @@ export const HELP: HelpSpec = {
         ["--dry-run", "Print the plan — order, what is skipped, outside dependencies missing, hand steps — and change nothing."],
         ["--environment ENV", "Install every module into this environment (passed to each add)."],
         ["--skip MODULE", "Leave this module of the stack out; repeat for each. A module that needs it is then refused."],
-        ["--json", "With --dry-run: the plan as JSON, each module with its description; what would refuse it is in the document."],
+        ["--json", "With --dry-run: the plan as JSON, each module with its description, repository and maintainer; what would refuse it is in the document."],
         ["--allow-fork", "Passed to each add."],
       ],
       details:
@@ -1005,6 +1005,8 @@ function loadStackModules(configDir: string, stack: string): { mods: StackModule
       const v = Number((mj as { vmid?: unknown }).vmid ?? (e as { vmid?: unknown }).vmid);
       mods.push({
         name: e.moduleName,
+        repository: r.name,
+        maintainer: typeof mj.maintainer === "string" ? mj.maintainer : undefined,
         description: typeof mj.description === "string" ? mj.description : undefined,
         vmid: Number.isInteger(v) && v > 0 ? v : undefined,
         dependsOn: list("dependsOn"),
@@ -1054,8 +1056,8 @@ function cmdAddStack(opts: Opts, client: ModuleClient): number {
 
   if (opts.json) {
     if (!opts.dryRun) die("add-stack: --json is for the plan: add --dry-run");
-    const about = new Map(mods.map((m) => [m.name, m.description ?? null]));
-    console.log(JSON.stringify({ stack, environment: env ?? null, ...plan, steps: plan.steps.map((s) => ({ ...s, description: about.get(s.module) ?? null })) }, null, 2));
+    const about = new Map(mods.map((m) => [m.name, { description: m.description ?? null, repository: m.repository ?? null, maintainer: m.maintainer ?? null }]));
+    console.log(JSON.stringify({ stack, environment: env ?? null, ...plan, steps: plan.steps.map((s) => ({ ...s, ...about.get(s.module) })) }, null, 2));
     return 0;
   }
   info(`Stack ${stack}${env ? ` into ${env}` : ""}: ${plan.steps.length} module(s), in this order:`);
@@ -1076,7 +1078,7 @@ function cmdAddStack(opts: Opts, client: ModuleClient): number {
       const provider = m.dependency.split(":")[0];
       console.error(`${RD}[Error]${CL} ${m.module} needs ${m.dependency}, which is not installed — ${opts.skips.includes(provider) ? `keep ${provider} in the stack, or skip ${m.module} too` : `module-manager add ${provider}`}`);
     }
-    console.error(`${RD}[Error]${CL} nothing was installed: install what the stack needs from outside it first`);
+    console.error(`${RD}[Error]${CL} nothing was installed: ${plan.missing.every((m) => opts.skips.includes(m.dependency.split(":")[0])) ? "a module you left out is needed by one you kept" : "install what the stack needs from outside it first"}`);
     return 1;
   }
   if (opts.dryRun) {

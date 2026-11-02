@@ -13,6 +13,8 @@ export const NOT_INSTALLABLE = new Set(["foundation", "template", "test"]);
 export interface StackModule {
   name: string;
   description?: string;
+  repository?: string; // the site's name for the repository it comes from
+  maintainer?: string;
   dependsOn: string[];
   integratesWith: string[];
   // The module's INSTALL.md has steps for the operator after the install.
