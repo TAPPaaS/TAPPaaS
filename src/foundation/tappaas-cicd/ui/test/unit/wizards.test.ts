@@ -10,7 +10,7 @@ import { join } from "path";
 import { buildArgv, confirmMatches, confirmObject, missingFields, requiredOptions, stepFlow } from "../../web/src/argv";
 import { previewStop } from "../../src/jobs";
 import { ManifestVerb } from "../../web/src/types";
-import { BUDDY_KINDS, PASSPHRASE_TEXT, RunJob, jobInApply, jobRunState, previewRefuses, refusalLines, runFailure, SatellitePlan, SessionJob, SiteSsid, StepSpec, argOf, buddyNameProblem, sessionJob, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, broadcastText, defaultSsid, isPlaceholderSsid, needsPassphrase, passphraseOf, queuedBehind, passphraseProblem, ssidProblem, stacksOf, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
+import { BUDDY_KINDS, PASSPHRASE_TEXT, RunJob, jobInApply, jobRunState, previewRefuses, refusalLines, runFailure, SatellitePlan, SessionJob, SiteSsid, StepSpec, argOf, buddyNameProblem, sessionJob, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, broadcastText, defaultSsid, isPlaceholderSsid, needsPassphrase, passphraseOf, queuedBehind, passphraseProblem, ssidProblem, stackSkips, stacksOf, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
 import { check, done } from "./check";
 import { FIX, pinned } from "./fake-site";
 
@@ -123,6 +123,9 @@ check(rp.object === "7" && rp.label === "crs-a:7", "…or the positional its ver
   ];
   const { stacks, notes } = stacksOf(cats);
   check(stacks.join(",") === "home,office", `the stacks, sorted, without foundation or a module of no stack (${stacks.join(",")})`);
+  check(stacksOf([{ modules: [{ name: "t", stack: "test" }, { name: "n", stack: "template" }, { name: "w", stack: "web-hosting" }] }]).stacks.join() === "web-hosting", "test and template are no stacks to add");
+  const plan = { stack: "home", environment: null, missing: [], steps: [{ module: "hass", action: "skip" as const, instance: "hass", description: null }, { module: "nomad", action: "install" as const, description: null }, { module: "karakeep", action: "install" as const, description: null }] };
+  check(stackSkips(plan, ["nomad", "hass"]).join() === "nomad", "only a module the plan would install is skipped");
   check(notes.office === "office — nextcloud, onlyoffice", `a stack's note lists its modules once across repositories (${notes.office})`);
 }
 

@@ -1133,6 +1133,12 @@ export class Reads {
     };
   }
 
+  // What add-stack would do, each module with its description: its dry run,
+  // read fresh each time, so what was just installed shows as installed.
+  stackPlan(stack: string, environment: string | null): Promise<unknown> {
+    return runJson<unknown>(this.cfg.run, "module-manager", ["add-stack", stack, ...(environment ? ["--environment", environment] : []), "--dry-run", "--json"], { timeoutMs: 60_000 });
+  }
+
   private async loadSite(): Promise<Record<string, unknown>> {
     const run = this.cfg.run;
     const [site, listed, repositories, guests] = await Promise.all([

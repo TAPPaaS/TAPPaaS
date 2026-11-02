@@ -251,6 +251,17 @@ export class ConsoleServer {
       }
       case "catalogs":
         return sendJson(res, 200, envelope(await r.catalogs.get()));
+      case "stack-plan": {
+        // The modules of a stack and what add-stack would do with each: stack-plan/<stack>[?environment=<env>].
+        const environment = url.searchParams.get("environment");
+        if (!a || !OBJECT_NAME.test(a) || (environment && !OBJECT_NAME.test(environment))) return sendJson(res, 400, { error: "stack-plan/<stack>[?environment=<env>]" });
+        try {
+          const data = await r.stackPlan(a, environment);
+          return sendJson(res, 200, { data, at: new Date().toISOString(), ageSeconds: 0, refreshing: false, error: null });
+        } catch (e) {
+          return sendJson(res, 200, { data: null, at: null, ageSeconds: null, refreshing: false, error: (e as Error).message });
+        }
+      }
       case "fields": {
         // The field manifest of an add or modify form: fields/<kind>[/<name>][?mode=add|modify].
         if (!a || !(FIELD_KINDS as readonly string[]).includes(a)) return sendJson(res, 404, { error: `fields/<${FIELD_KINDS.join("|")}>[/<name>]` });

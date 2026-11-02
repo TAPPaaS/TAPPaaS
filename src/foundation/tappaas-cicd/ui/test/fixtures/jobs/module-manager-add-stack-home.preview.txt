@@ -1,0 +1,6 @@
+Stack home into rossen: 4 module(s), in this order:
+  1. hass: skip — hass is installed
+  2. immich: skip — immich is installed
+  3. jellyfin: skip — jellyfin is installed
+  4. nomad: install — then its INSTALL.md has steps for you
+--dry-run: nothing changed

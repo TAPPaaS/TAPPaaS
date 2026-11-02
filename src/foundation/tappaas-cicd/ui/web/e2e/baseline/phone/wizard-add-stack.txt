@@ -105,36 +105,40 @@
 - paragraph: "Gives a user who cannot sign in a new way in: a one-time link where they set a password of their own, or a temporary password you hand over."
 - button "Reset a user's password…"
 - text: Add a stack
-- paragraph: Every module of a stack installed in dependency order; the preview is the plan.
+- paragraph: The modules of a stack you choose, installed in dependency order; the preview is the plan.
 - button "Add a stack…"
 - dialog "Add a stack":
   - heading "Add a stack" [level=2]
   - button "close": ×
-  - 'heading "Add a stack: module-manager add-stack <stack>" [level=3]'
-  - text: "The preview is the plan (add-stack --dry-run): the modules in dependsOn order, what is skipped, what is missing outside the stack, the hand steps. Apply installs them one by one; the first failure stops it, and running it again resumes. stack *"
-  - combobox "stack *":
-    - option "— pick a stack" [selected]
-    - option "ai — litellm, openwebui, vllm-amd"
-    - option "collaboration — coturn, euro-office, lazysite, nextcloud, nextcloud-hpb"
-    - option "devops — forgejo, woodpecker"
-    - option "home — deconz, hass, immich, jellyfin, karakeep, nomad"
-    - option "misc — windows-server"
-    - option "security — netbird-client, vaultwarden"
-    - option "template — tappaas-nixos, tappaas-winserver, template"
-    - option "test — test-deb-n3noha, test-deb-nonode, test-deb-vlannode, test-debian, test-nix-vlannode, test-nixos, test-ubuntu-vlan"
-  - text: "--environment"
-  - combobox "--environment Install every module into this environment (passed to each add).":
-    - option "— the default environment, rossen"
-    - option "mgmt"
-    - option "rossen — the default environment" [selected]
-    - option "test"
-  - text: Install every module into this environment (passed to each add).
-  - checkbox "--allow-fork Passed to each add."
-  - text: "--allow-fork Passed to each add. apply runs"
-  - code: $ module-manager add-stack --environment rossen
-  - button "Copy"
-  - button "Preview" [disabled]
-  - text: fill in stack first
+  - list:
+    - listitem:
+      - button "fail 1 · The stack to do ▾" [expanded]: 1 · The stack to do ▾
+      - paragraph: Which stack, into which environment.
+      - group:
+        - text: stack *
+        - combobox "stack *":
+          - option "— pick a stack" [selected]
+          - option "ai — litellm, openwebui, vllm-amd"
+          - option "collaboration — coturn, euro-office, nextcloud, nextcloud-hpb"
+          - option "devops — forgejo, woodpecker"
+          - option "home — deconz, hass, immich, jellyfin, karakeep, nomad"
+          - option "misc — windows-server"
+          - option "security — netbird-client, vaultwarden"
+          - option "web-hosting — lazysite"
+        - text: environment *
+        - combobox "environment *":
+          - option "—"
+          - option "mgmt"
+          - option "rossen — the default environment" [selected]
+          - option "test"
+      - button "Continue" [disabled]
+      - text: Choose a stack and an environment.
+    - listitem:
+      - button "fail 2 · The modules to do ▸": 2 · The modules to do ▸
+      - paragraph: What is already installed, and what to install.
+    - listitem:
+      - button "fail 3 · Preview and install to do ▸": 3 · Preview and install to do ▸
+      - paragraph: The plan, then the install; it takes minutes per module, and its output shows here.
 - heading "Access and backup" [level=2]
 - text: Enrol a device for mgmt access
 - paragraph: Register a laptop or other device running WireGuard to be able to connect to the TAPPaaS management zone.

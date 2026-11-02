@@ -109,7 +109,7 @@
 - paragraph: "Gives a user who cannot sign in a new way in: a one-time link where they set a password of their own, or a temporary password you hand over."
 - button "Reset a user's password…"
 - text: Add a stack
-- paragraph: Every module of a stack installed in dependency order; the preview is the plan.
+- paragraph: The modules of a stack you choose, installed in dependency order; the preview is the plan.
 - button "Add a stack…"
 - heading "Access and backup" [level=2]
 - text: Enrol a device for mgmt access

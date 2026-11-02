@@ -260,12 +260,16 @@ export function identitySpecs(kind: string, verb: "add" | "modify" | "delete", n
   };
 }
 
-// The stacks the catalogues name, foundation aside (it is installed, never
-// added), each with its modules as the note the Add a stack form shows.
+// module-manager's NOT_INSTALLABLE: foundation is installed with the site,
+// template and test modules one by one.
+const NOT_ADDABLE = new Set(["foundation", "template", "test"]);
+
+// The stacks the catalogues name, those aside, each with its modules as the
+// note the Add a stack form shows.
 export function stacksOf(cats: { modules: { name: string; stack: string | null }[] }[]): { stacks: string[]; notes: Record<string, string> } {
   const mods = new Map<string, string[]>();
   for (const c of cats) for (const m of c.modules) {
-    if (!m.stack || m.stack === "foundation") continue;
+    if (!m.stack || NOT_ADDABLE.has(m.stack)) continue;
     const l = mods.get(m.stack) ?? [];
     if (!l.includes(m.name)) l.push(m.name);
     mods.set(m.stack, l);
@@ -273,6 +277,18 @@ export function stacksOf(cats: { modules: { name: string; stack: string | null }
   const stacks = [...mods.keys()].sort();
   return { stacks, notes: Object.fromEntries(stacks.map((s) => [s, `${s} — ${mods.get(s)!.join(", ")}`])) };
 }
+
+// What add-stack --dry-run --json says of a stack.
+export interface StackPlan {
+  stack: string;
+  environment: string | null;
+  steps: { module: string; action: "install" | "skip"; instance?: string; description: string | null }[];
+  missing: { module: string; dependency: string }[];
+}
+
+// The modules to pass as --skip: those the plan would install and the operator
+// took off. An installed one is no choice, so never named.
+export const stackSkips = (plan: StackPlan, off: string[]): string[] => plan.steps.filter((s) => s.action === "install" && off.includes(s.module)).map((s) => s.module);
 
 // ── a wizard's session, found again from its job ──────────────────────
 // A wizard keeps its state in its pop-up alone. Closed while its job ran (or

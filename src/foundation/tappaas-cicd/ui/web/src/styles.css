@@ -503,6 +503,10 @@ ol.setup { list-style: none; padding: 0; margin: 14px 0; display: grid; grid-tem
 .ff-group { border-left: 2px solid var(--line); padding-left: var(--sp-8); }
 .ff-group-head { font-size: 12px; color: var(--muted); }
 /* A list of defined objects: one box each, in a row, then a line for any other value. */
+.stack-modules { list-style: none; margin: 0 0 var(--sp-8); padding: 0; }
+.stack-modules li { padding: var(--sp-4) 0; border-bottom: 1px solid var(--line); }
+.stack-module { display: grid; grid-template-columns: auto 1fr; gap: 0 var(--sp-8); align-items: baseline; font-size: 13px; }
+.stack-module small { grid-column: 2; overflow-wrap: anywhere; }
 .ff-checks { display: flex; flex-wrap: wrap; gap: var(--sp-4) var(--sp-16); align-items: center; }
 .ff-check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
 .ff-row .ff-check input { width: auto; margin: 0; }

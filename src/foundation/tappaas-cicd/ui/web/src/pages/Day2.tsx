@@ -20,7 +20,8 @@ import { REMOVE_NODE_TEXT, RemoveNodeButton } from "./RemoveNode";
 import { addEnvironmentSteps } from "./Environments";
 import { SiteRead, Topology } from "../types";
 import { ApIn, SiteSsid, ZoneIn, wifiZones } from "../wizards";
-import { AddStackButton, SetupDoc } from "./Setup";
+import { AddStackButton } from "./AddStack";
+import { SetupDoc } from "./Setup";
 import { ENROL_TEXT, EnrolButton } from "./Enrol";
 import { WIFI_TEXT, WifiButton } from "./Wifi";
 import { BuddyButton } from "./Buddy";
@@ -214,8 +215,8 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
           A person who signs in: their name, email, groups and roles, staged and then pushed to Authentik.
         </WizardCard>
         <WizardCard title="Reset a user's password" action={<ResetPasswordCardButton />}>{RESET_PASSWORD_TEXT}</WizardCard>
-        <WizardCard title="Add a stack" action={<AddStackButton opens />}>
-          Every module of a stack installed in dependency order; the preview is the plan.
+        <WizardCard title="Add a stack" action={<AddStackButton />}>
+          The modules of a stack you choose, installed in dependency order; the preview is the plan.
         </WizardCard>
       </Group>
       <Group title="Access and backup">

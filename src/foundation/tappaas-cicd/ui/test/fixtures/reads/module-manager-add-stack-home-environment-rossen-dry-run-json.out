@@ -1,0 +1,39 @@
+{
+  "stack": "home",
+  "environment": "rossen",
+  "steps": [
+    {
+      "module": "hass",
+      "action": "skip",
+      "instance": "hass",
+      "description": "Home Assistant OS (HAOS) - home automation platform"
+    },
+    {
+      "module": "immich",
+      "action": "skip",
+      "instance": "immich",
+      "description": "Immich self-hosted photo and video backup with ML-powered search, face recognition and mobile apps"
+    },
+    {
+      "module": "jellyfin",
+      "action": "skip",
+      "instance": "jellyfin",
+      "description": "Jellyfin open-source media server for personal movie, TV and music libraries"
+    },
+    {
+      "module": "karakeep",
+      "action": "install",
+      "handSteps": false,
+      "description": "Karakeep — bookmarks and read-later: links, notes and images, each page archived"
+    },
+    {
+      "module": "nomad",
+      "action": "install",
+      "handSteps": true,
+      "description": "Project N.O.M.A.D. — an offline knowledge and education server"
+    }
+  ],
+  "missing": [],
+  "cycle": [],
+  "noVmid": []
+}
