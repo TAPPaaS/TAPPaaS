@@ -212,7 +212,6 @@ Steps 2 and 3 can run side by side. Hold the doc restructure until step 10, so i
 - The media script's stick write prints `dd` record noise.
 - hrossen's mothership reports a changed host key for `tappaas2`. Not investigated; do not clear it blindly.
 - `release/bump-version.sh --check` caught the v1.4 tag loss, but nothing runs it at a boundary yet.
-- `ui/web/e2e/run.sh` defaults its base to `adr-041`. Change to `main` before that branch goes.
 
 ## 7. Building the Day 1 pages with the console-gui skill
 
@@ -220,7 +219,7 @@ The `console-gui` skill (`~/.claude/skills/console-gui/SKILL.md`, a symlink into
 
 Tried on `main` on 2026-11-02, in a fresh worktree:
 
-- `ui/web/e2e/run.sh --routes setup-day1 --viewports phone,laptop --no-flows --base main` passed. The first run took 2 minutes, including `npm ci`, the baseline and the build.
+- `ui/web/e2e/run.sh --routes setup-day1 --viewports phone,laptop --no-flows` passed. The first run took 2 minutes, including `npm ci`, the baseline and the build.
 - `scripts/test/test-console-design.sh` passed (27 checks).
 - `ui/test.sh` passed (57), but only with the web app's `tsc` on PATH. Without it, all three stages fail at once with a misleading "type errors":
 
@@ -228,9 +227,8 @@ Tried on `main` on 2026-11-02, in a fresh worktree:
 PATH="$PWD/web/node_modules/.bin:/opt/homebrew/bin:$PATH" /opt/homebrew/bin/bash ./test.sh
 ```
 
-**Traps to expect:**
+**The trap to expect:**
 
-- `run.sh` and `ui/README.md` still default to `adr-041`, which no longer matches `main`. Pass `--base main` until the default is changed (§6). The skill's shipping steps name `origin/adr-041` too.
 - **The fixtures show a finished site.** They are captured from hrossen, so `/setup/day1` shows every step done. No page of the new wizard can be seen in its real state with them. This has to be solved first.
 
 **The work order for the wizard:**
@@ -247,7 +245,7 @@ A session never commits a Mac-built `web/dist`. It builds on hrossen's nix as th
 
 ## 8. Working rules for whoever picks this up
 
-- Branch work in a new worktree from `main`. Never switch or stage in `~/src/TAPPaaS`; other sessions commit there.
+- `adr-041` is merged, and work happens on `main` in `~/src/TAPPaaS`. Other sessions commit there too, so commit by pathspec and never switch branch or stage unrelated files.
 - The operator pushes. Fast-forward local `main` and hand over the push command.
 - Commit subject at most 72 characters, body at most 3 lines, no Claude co-author, by pathspec.
 - Export `SSH_AUTH_SOCK` from launchctl before ssh or git calls.

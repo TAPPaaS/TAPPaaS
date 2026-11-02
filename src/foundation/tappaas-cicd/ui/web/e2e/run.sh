@@ -11,7 +11,7 @@
 # baseline/ holds the look to compare with: the PNGs are local (git-ignored)
 # and baseline/STAMP names the commit they came from; the .txt siblings are in
 # git. A baseline is reused while its stamp lies between the merge base with
-# <ref> (default $E2E_BASE, else adr-041) and HEAD. Otherwise it is made again
+# <ref> (default $E2E_BASE, else main) and HEAD. Otherwise it is made again
 # from the last commit since the merge base that changed baseline/ (an accepted
 # look), else the merge base: in a temporary `git worktree` of that commit,
 # built and captured there, then removed; when the working tree's console
@@ -34,7 +34,7 @@ ROUTES=""
 VIEWPORTS="phone,tablet,laptop,desktop"
 ALLOW=""
 UPDATE=0
-BASE_REF="${E2E_BASE:-adr-041}"
+BASE_REF="${E2E_BASE:-main}"
 FLOWS=1
 usage() { sed -n '6,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 while [[ $# -gt 0 ]]; do
