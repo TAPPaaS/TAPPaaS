@@ -57,70 +57,43 @@ Today's order (`ui/src/setup.ts`): TLS, backup, identity, logging, identity boot
 
 The new order, Lars's decision of 2026-11-02:
 
-1. Configure switch fabric (optional)
-2. Finish first node configuration: disks and LAN bonding
-3. Add more nodes (optional)
-4. Rest of foundation, including the moves of `tappaas-cicd` and `network`
-5. TLS
-6. Wi-Fi
-7. Physical site
-8. Admin VPN
-9. Stacks
+1. Finish first node configuration
+2. Add more nodes (optional)
+3. Rest of foundation, including the moves of `tappaas-cicd` and `network`
+4. TLS
+5. Repositories (optional)
+6. Configure switch fabric (optional)
+7. Wi-Fi
+8. Physical site
+9. Admin VPN
+10. Stacks
 
-Switches come first because adding nodes depends on them: a new node boots over PXE on its switch port, and lab2's PXE trouble on 2026-11-01 was the port's config. Nodes come before the foundation because backup should sit on a different machine from what it protects, whenever there is one.
+Nodes come before the foundation because backup should sit on a different machine from what it protects, whenever there is one. The switch fabric stays late because its controllers need the foundation and a repository: `unifi-os` is a VM that depends on backup, and both it and `mikrotik` are Community modules. LAN bonding is not part of Day 1 at all; it has its own Day 2 wizard.
 
 **Consequences of this order:**
 
-- **The cut-over is not part of step 4.** The gate cannot be proven until a certificate exists (step 5) and the operator has a way in (step 8). So identity, the bootstrap and publishing the console run in step 4, the token and install LAN stay valid through steps 5 to 8, and the switch to the gate happens at the end of step 8, on a real sign-in. This lengthens the token's life, which the security review must cover.
-- **Wildcard sites.** Identity and the console install before the wildcard exists. Check what each does until step 5 issues it, and whether their module tests fail in between. `per-service` sites get their certificates at install, if ports 80/443 are reachable.
+- **The cut-over is not part of step 3.** The gate cannot be proven until a certificate exists (step 4) and the operator has a way in (step 9). So identity, the bootstrap and publishing the console run in step 3, the token and install LAN stay valid through steps 4 to 9, and the switch to the gate happens at the end of step 9, on a real sign-in. This lengthens the token's life, which the security review must cover.
+- **Wildcard sites.** Identity and the console install before the wildcard exists. Check what each does until step 4 issues it, and whether their module tests fail in between. `per-service` sites get their certificates at install, if ports 80/443 are reachable.
+- **Nodes before switches.** A node added at step 2 boots over PXE on a switch TAPPaaS does not manage yet, and lab2's PXE trouble on 2026-11-01 was the port's config. Add a node already prints what a manual switch port needs (`manualTrunkText`). Step 2 must show that, and the operator sets the port by hand. Step 6 then has to take over ports already carrying nodes without cutting them. `interrogate` leaves ports with a link alone, so test that this holds.
 - **Nodes before backup.** A node added first has no backup client. The backup install should wire it in through `integratesWith`, but this order has not been run. Add a node has also only been used on a site with identity, so test it under the setup token.
 
-**What counts as finished:** steps 2, 4, 5 and 8 are required. Steps 1, 3, 6, 7 and 9 are optional, and none of them holds back completion.
+**What counts as finished:** steps 1, 3, 4 and 9 are required. Steps 2, 5, 6, 7, 8 and 10 are optional, and none of them holds back completion.
 
-### Step 1: Configure switch fabric (optional)
+### Step 1: Finish first node configuration
 
-Replaces today's "The switch", which is required, UniFi only, and can never finish on a site without a managed switch.
+- Disks only: `NodePools` (`ui/web/src/physical/nodepools.tsx`), the same part as stage 4 of Add a node. Do not build a second form. It already takes a `node` prop.
+- The outcome is a pool made, or "boot pool only" chosen and recorded. On a machine with no free disks it reads as done with a sentence saying why.
 
-The help text at the top says, in plain words:
+### Step 2: Add more nodes (optional)
 
-- It is fine not to have switches under management. TAPPaaS then works with what is there, and you set the VLANs on your switches by hand. The console tells you which VLANs each port needs. Skip this step if so.
-- Managing them lets TAPPaaS set each port for you. That includes the port of every node you add next, and the LAN bonds.
-- Do this first when you plan to add nodes, because a new node boots through its switch port.
-
-Then:
-
-- **Choose:** MikroTik, UniFi, or both. "None" is a clear answer that moves on and is recorded, so the step reads as done.
-- **For each chosen vendor, run the basic setup and discovery:** credentials and address, register, read the switches and ports (`switch-manager interrogate`), show what was found, then program trunks and park free ports (`reconcile`) with its preview.
-- Reuse `manager/switch-manager/setup-switches.sh`'s logic where it fits. It already knows a brand's architecture: UniFi has a controller, MikroTik registers each switch by address.
-- A switch we don't support stays `switch-manager add-switch --managed manual`, which prints the steps. Offer it behind the "none" answer.
-
-**Blockers found in the code:**
-
-- **Both controllers are Community modules, not part of the foundation.** A fresh site has neither, and the Community repository must be set up first.
-- `mikrotik` is `kind: application` with no dependencies, so it can install at step 1.
-- **`unifi-os` cannot.** It carries `unifi-controller`, but it is a VM that `dependsOn` `backup:vm`, and backup comes in step 4. Direction: split the controller into a small application module like `mikrotik`, with the UniFi OS VM separate. **Open:** Lars's call, and the existing controller then has to be one the site already has, on its own hardware or network.
-- **Credentials.** The console's declared secrets cover UniFi only. MikroTik's `setup-credentials.sh` needs a form, as a fourth declared secret, which changes ADR-034 D10's list of three.
-- **Reachability.** The mothership must reach the controller or switch from `mgmt` at step 1. A factory-fresh switch, or a controller on the install LAN, may not be reachable. Check this on lab2, whose firewall WAN sits on that LAN.
-- **`reconcile` before the site is finished.** It parks free ports and programs trunks while the operator is reaching the console through those switches. The preview must make that plain, and the operator's own port must not be parked. `interrogate` leaves ports with a link alone, so test that this covers it.
-
-### Step 2: Finish first node configuration
-
-Two substeps, both lifted out of Add a node so there is one version of each:
-
-- **Disks:** `NodePools` (`ui/web/src/physical/nodepools.tsx`), stage 4 of Add a node. The outcome is a pool made, or "boot pool only" chosen and recorded. On a machine with no free disks it reads as done with a sentence saying why.
-- **LAN bonding:** `LanUplink` (`ui/web/src/pages/NodeUplinks.tsx`), stage 5a. Optional inside the step, with "one port is fine" as an answer. It sets up the bond and its switch port, then runs the failover test.
-
-Both already take a `node` prop, so the step renders them for the first node.
-
-**Risk:** the first node carries the firewall and the mothership, so a bond change there touches the path the console itself runs on. Add a node has only done this on a node holding neither. Test on lab2 first, from the install LAN and with no managed switch as well. Without a managed switch only `active-backup` can work unattended.
-
-### Step 3: Add more nodes (optional)
-
-- Reuse the Day 2 Add a node wizard as it is, from a button in the step. It already covers data pools (stage 4), the LAN bond (5a) and the WAN port (5b), so HA has its pools with no extra work.
+- Reuse the Day 2 Add a node wizard, from a button in the step. Its data pool stage gives HA its pools with no extra work.
 - "No more machines" is a plain answer, and the step reads as done.
-- **Remove stage 6, "Place the machine correctly in the physical view", from the wizard.** Placing belongs to step 7. The wizard ends after stage 5b with a line saying where to find the machine. Stage 1's text ("to be placed in stage 6"), `addNodeStage` and the `done` stage, `STAGE_NUMBER`, `nodeadd.test.ts` and `flows/add-node.spec.ts` follow. Check that `addNodeStage` still has an end, because resuming a session depends on it.
+- **Two stages come out of the wizard, also on Day 2:**
+  - Stage 6, "Place the machine correctly in the physical view". Placing belongs to Physical site.
+  - Stage 5a, the LAN bond. It moves to the bonding wizard below.
+- What remains is stages 0 to 4 and the WAN port, which becomes stage 5. Stage 1's text ("to be placed in stage 6"), `addNodeStage` and its `lan` and `done` stages, `STAGE_NUMBER`, `nodeadd.test.ts` and `flows/add-node.spec.ts` follow. Check that `addNodeStage` still has an end, because resuming a session depends on it. The wizard ends with a line saying where to find the machine and that bonding is on Day 2.
 
-### Step 4: Rest of foundation, as one panel and one job
+### Step 3: Rest of foundation, as one panel and one job
 
 The panel shows, top to bottom:
 
@@ -170,7 +143,7 @@ The cause: the switch to the gate keys on `config/identity.json`, written the mo
 What the fix must do:
 
 - Make the cut-over the last thing that happens, not the first. The setup token and install LAN stay valid until the gate is proven: operator's user exists, the console route answers, and a signed-in request succeeded. Key the refusal on that, not on `identity.json`. ADR-034 D10 and `console/INSTALL.md` state the current rule, so update them, and review the security effect of keeping the token alive during this window.
-- Step 4 runs identity, bootstrap and the console publish as one job. It keeps running on the mothership if the browser is cut off, and the operator ends on a page that says where to go next.
+- Step 3 runs identity, bootstrap and the console publish as one job. It keeps running on the mothership if the browser is cut off, and the operator ends on a page that says where to go next.
 - Before the cut-over, the operator must have a way in that works: the admin VPN imported and tested. An install-LAN operator today has no reason to have done so.
 - The console's refusal should explain itself in the browser: the address to use and why, not a dropped connection.
 - `install-access.sh close` runs as part of the cut-over, so no forward is left behind.
@@ -178,7 +151,7 @@ What the fix must do:
 
 **lab2 is still locked out, left as found for study.** Recovery is not yet tried. The likely route is the mothership's CLI: `identity-manager bootstrap` and `reconcile`, then `module-manager add console --proxyDomain console.<domain>`, then reach it over the admin VPN (`/root/tappaas-admin-vpn.conf`). Its domain `lab2.hrossen.dk` must resolve for that route. Run it as the first test of the recovery path, or reinstall.
 
-### Step 5: TLS (needs design)
+### Step 4: TLS (needs design)
 
 Today: `dnsMode` per environment, `per-service` by default (Caddy over HTTP-01) or `wildcard` (OPNsense ACME, DNS-01). In `per-service` the step reads done with nothing done, and the wildcard path shows a provider, key name and value form plus a `dns_cf_token`-style hint.
 
@@ -191,11 +164,52 @@ Problems to solve:
 
 Direction: ask one plain question first (internal only, public services on this machine's own address, or a DNS provider with an API), set the mode from the answer, and make "done" a real check. **Open:** whether "internal only" is a supported end state with no certificates (`INSTALL.md` Step 4 says it is), and what the console itself then uses. Needs a short design note before code.
 
+### Step 5: Repositories (optional)
+
+- Today a fresh site has only the TAPPaaS repository. The install does not add Community, and repositories appear only on the Site page.
+- The step lists what is registered and offers Community as one choice, prefilled, plus any other repository by URL. `site-manager repository add <url>` is the verb, with its branch and fingerprint handling; the step adds no logic of its own.
+- "TAPPaaS only" is a plain answer, and the step reads as done.
+- Say what Community is: modules maintained outside the core project. **Open:** the default branch for Community, and whether its trust check shows anything an operator must decide.
+
+### Step 6: Configure switch fabric (optional)
+
+Replaces today's "The switch", which is required, UniFi only, and can never finish on a site without a managed switch.
+
+The help text at the top says, in plain words:
+
+- It is fine not to have switches under management. TAPPaaS then works with what is there, and you set the VLANs on your switches by hand. The console tells you which VLANs each port needs. Skip this step if so.
+- Managing them lets TAPPaaS set each port for you, and lets the bonding wizard set up switch ports.
+
+Then:
+
+- **Choose:** MikroTik, UniFi, or both. "None" is a clear answer that moves on and is recorded, so the step reads as done.
+- **For each chosen vendor, run the basic setup and discovery:** install its module if needed, credentials and address, register, read the switches and ports (`switch-manager interrogate`), show what was found, then program trunks and park free ports (`reconcile`) with its preview.
+- Reuse `manager/switch-manager/setup-switches.sh`'s logic where it fits. It already knows a brand's architecture: UniFi has a controller, MikroTik registers each switch by address.
+- A switch we don't support stays `switch-manager add-switch --managed manual`, which prints the steps. Offer it behind the "none" answer.
+
+**To solve:**
+
+- **Needs Community.** If step 5 was skipped, say so and link back to it.
+- **Credentials.** The console's declared secrets cover UniFi only. MikroTik's `setup-credentials.sh` needs a form, as a fourth declared secret, which changes ADR-034 D10's list of three.
+- **Reachability.** The mothership must reach the controller or switch from `mgmt`. A factory-fresh switch, or a controller on the install LAN, may not be reachable. Check this on lab2, whose firewall WAN sits on that LAN.
+- **`reconcile` on a live site.** It parks free ports and programs trunks while the operator and the nodes run through those switches. The preview must make that plain, and the operator's own port must not be parked.
+
+Check what each vendor supports today before promising it (`src/foundation/network/scripts/switch-controller`, `docs/plans/mikrotik-mlag-test-plan.md`). The site's own firewall VLANs must not depend on this step.
+
 ### The rest
 
-Wi-Fi and physical stay as they are, optional, in steps 6 and 7. Stacks are last. Physical site is now the one place a machine gets its room and rack, so it must list nodes added in step 3 as still to be placed.
+Wi-Fi and physical stay as they are, optional, in steps 7 and 8. Physical site is now the one place a machine gets its room and rack, so it must list nodes added in step 2 as still to be placed.
 
-Step 8, the admin VPN, is required: the gate is reachable only from `mgmt` and the VPN, so this step tests the VPN and ends with the sign-in that does the cut-over. The install's first peer already exists (`/root/tappaas-admin-vpn.conf`), so existing is not enough to read as done.
+Step 9, the admin VPN, is required: the gate is reachable only from `mgmt` and the VPN, so this step tests the VPN and ends with the sign-in that does the cut-over. The install's first peer already exists (`/root/tappaas-admin-vpn.conf`), so existing is not enough to read as done.
+
+Stacks are last.
+
+### New Day 2 wizard: Bond a node's LAN
+
+- A button "Bond a node's LAN…" on Day 2, with its route in `e2e/routes.json`. Pick a node, then run `LanUplink` (`ui/web/src/pages/NodeUplinks.tsx`), which already does the port, the mode, the switch port and the failover test, and already takes a `node` prop. It only needs a wizard around it.
+- It covers every node, including the first. Add a node's copy goes (Step 2 above).
+- Without a managed switch, `active-backup` is the choice that needs nothing from the switch. `lacp` needs the two switch ports set as one LAG first; the component already says so.
+- **Risk:** a node can carry the firewall and the mothership, so a bond change touches the path the console itself runs on. It has only been done on a node holding neither. Test on lab2 first, from the install LAN, and have the wizard warn when the node holds them.
 
 Rule for the whole page: each step states what it will do, shows a real result, and has a way out when it does not apply. Follow `docs/plans/console-gui-pipeline.md` for how to develop and test console changes.
 
@@ -216,19 +230,20 @@ Move the rest (SSH appendix, hand PXE, Cloudflare scope) to the full path or to 
 ## 5. Order of work
 
 1. Boot disk question (§1). Small, independent.
-2. Day 1 landing page (§2), make the switch step optional with a "none" answer (§3 Step 1), remove Add a node's stage 6 (§3 Step 3), and fix the identity lockout (§3 Step 4). The lockout comes first: until it is fixed, Day 1 cannot be completed from the install LAN.
-3. Prove the pool and move commands by hand on lab2: move lab2 to `main`, make `tanka1` with `--wipe`, move `tappaas-cicd` and `network` from the CLI, and fix what breaks. Everything in Steps 2 to 4 depends on this. Then `rest-of-foundation.sh` on lab2.
-4. Day 1 Step 2 (first node: disks, LAN bonding), including the bond on a node carrying the firewall.
-5. Day 1 Step 1 (switch fabric), after Lars settles the `unifi-os` split.
-6. Day 1 Step 3 (Add a node in the wizard).
-7. Day 1 Step 4 (the placement read, the script, the panel), including the token expiry answer.
-8. TLS design note, Lars's decisions, then the step.
-9. Step 8: the VPN test and the sign-in cut-over.
-10. Fresh install of lab2 through the finished path, reviewing the doc as it goes. It proves the endnote too.
-11. `INSTALL.md` restructure, from what that run shows.
-12. Hetzner, on a real machine.
+2. Day 1 landing page (§2), make the switch step optional with a "none" answer (§3 Step 6), take stages 5a and 6 out of Add a node with the bonding wizard in place (§3), and fix the identity lockout (§3 Step 3). The lockout comes first: until it is fixed, Day 1 cannot be completed from the install LAN.
+3. Prove the pool and move commands by hand on lab2: move lab2 to `main`, make `tanka1` with `--wipe`, move `tappaas-cicd` and `network` from the CLI, and fix what breaks. Everything in Steps 1 to 3 depends on this. Then `rest-of-foundation.sh` on lab2.
+4. Day 1 Step 1 (first node disks).
+5. Day 1 Step 2 (Add a node in the wizard).
+6. Day 1 Step 3 (the placement read, the script, the panel), including the token expiry answer.
+7. TLS design note, Lars's decisions, then the step.
+8. Day 1 Step 5 (repositories).
+9. Day 1 Step 6 (switch fabric).
+10. Step 9: the VPN test and the sign-in cut-over.
+11. Fresh install of lab2 through the finished path, reviewing the doc as it goes. It proves the endnote too.
+12. `INSTALL.md` restructure, from what that run shows.
+13. Hetzner, on a real machine.
 
-Steps 2 and 3 can run side by side. Hold the doc restructure until step 10, so it describes what works.
+Steps 2 and 3 can run side by side. Hold the doc restructure until step 11, so it describes what works.
 
 ## 6. Also open
 
