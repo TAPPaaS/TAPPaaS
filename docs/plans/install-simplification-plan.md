@@ -87,12 +87,16 @@ A site works with no public DNS and no public certificate, and can go public lat
 
 **Not proven:** a real sign-in, apps' SSO calls to Authentik over the site CA, and any browser's trust of it.
 
+**Proven on lab2, 2026-11-02, later the same day:** without the CA, the logging VM failed OIDC discovery (`curl` exit 60), and the mothership failed its Grafana calls. The install still ended in congratulations. With `config/site-ca.pem` in place, `site-locale.sh` puts the CA in each guest's `tappaas-site.nix`, and logging then passed all its tests, its OIDC configured and `/login` redirecting to SSO. A person's Grafana sign-in over the VPN is still to do. The Debian path is written but has not run on a guest. Apps inside containers are not covered: a container has its own trust store.
+
+Found on the way: a mothership update refuses to run while Codeberg is unreachable. Rebuilding by hand needs `render_site_nix` and `tappaas-rebuild@tappaas-cicd.service`. A mothership needs that rebuild before its own calls trust the CA.
+
 **To build:**
 
 - `dnsMode: local` in the schema, environment-manager and the proxy scripts, behaving as `wildcard` with the certificate from the site CA instead of ACME.
 - A verb that makes the CA and the wildcard, records the refid and adds the Unbound wildcard. Today's `environment-manager modify` refuses a site with no `ownerOrg`, so it must work before the identity bootstrap. Check the certificate's renewal, since `lifetime` is 397 days.
 - The install: no domain given defaults to `<site>.home.arpa`. Use `local` by default.
-- CA trust on every VM and container that calls Authentik. **The biggest unknown.**
+- CA trust in containers that call Authentik, and on Proxmox nodes. The verb must write `config/site-ca.pem`. Fail the install, not congratulate, when an app's SSO could not be wired.
 - The admin VPN step offers the CA file to the browser.
 - An `internet` route in `local` mode says it is not reachable from the internet.
 - New Day 1 order: first node, more nodes, VPN, foundation with publish and sign-in (setup closes here), then repositories, switches, Wi-Fi, physical, stacks, and an optional "Make it public" step replacing TLS. Lars confirmed this order on 2026-11-02.
