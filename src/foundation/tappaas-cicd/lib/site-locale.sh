@@ -174,7 +174,21 @@ EOF
   nix.settings.trusted-public-keys = [ "${sitekey}" ];
 EOF
     fi
+    # A site without a public certificate signs its own (dnsMode local): guests
+    # calling the site's names, such as an app's SSO, must trust that CA.
+    local ca
+    ca="$(site_ca_file)"
+    if [[ -n "${ca}" ]]; then
+        printf "\n  security.pki.certificates = [ ''\n%s\n  '' ];\n" "$(cat "${ca}")"
+    fi
     printf '}\n'
+}
+
+# The site CA's PEM file when this site has one, else nothing.
+site_ca_file() {
+    local f="${TAPPAAS_CONFIG:-/home/tappaas/config}/site-ca.pem"
+    [[ -s "${f}" ]] && printf '%s\n' "${f}"
+    return 0
 }
 
 # Install the fragment on a NixOS guest. The caller's nixos-rebuild picks it up:
@@ -258,6 +272,17 @@ EOF
             else
                 warn "  could not point ${ip} at the time source ${ntp}"
             fi
+        fi
+    fi
+
+    # The site's own CA, as for NixOS. update-ca-certificates reads this directory.
+    local ca
+    ca="$(site_ca_file)"
+    if [[ -n "${ca}" ]] && ! ssh -n -o BatchMode=yes "${user}@${ip}" "grep -qs '$(sed -n 2p "${ca}")' /usr/local/share/ca-certificates/tappaas-site.crt"; then
+        if ssh -o BatchMode=yes "${user}@${ip}" "sudo sh -c 'cat > /usr/local/share/ca-certificates/tappaas-site.crt && update-ca-certificates'" < "${ca}" >/dev/null 2>&1; then
+            info "  site CA trusted"; changed=1
+        else
+            warn "  could not install the site CA on ${ip}"
         fi
     fi
 
