@@ -81,6 +81,8 @@ Nodes come before the foundation because backup should sit on a different machin
 
 ### Local DNS mode (decided 2026-11-02)
 
+**Superseded for design by [ADR-043](../ADR/ADR-043%20-%20Site%20Certificates.md) (draft).** The CA is not a mode: every site has one, and `ca-manager` owns it. The proofs below still stand. The build list below is replaced by the ADR's Delivery section.
+
 A site works with no public DNS and no public certificate, and can go public later without renaming anything. The VPN needs only an IP address, so it comes first and everything after it uses local names.
 
 **Proven on lab2, 2026-11-02, by hand:** a site CA and a `*.lab2.hrossen.dk` certificate in the firewall's trust store, `cert-refids.json` pointing at it, `dnsMode: wildcard`, and an Unbound wildcard to the DMZ gateway. With no public record, identity and the console got Caddy routes with that certificate, and `console.lab2.hrossen.dk` redirected through the gate to Authentik's login page. So the existing wildcard path carries this. The network-manager resolver treated those names as unpublished; that is fixed. The gate step on lab2 used a temporary bypass until that fix reaches it.
