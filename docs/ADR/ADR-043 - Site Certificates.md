@@ -3,16 +3,16 @@
 | | |
 |---|---|
 | **Status** | **Draft** — for the operator's review, nothing built |
-| **Version** | 0.1 |
+| **Version** | 0.2 |
 | **Date** | 2026-11-02 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | Unblocks #787 (TLS for logging's syslog and Loki ports, "needs a TAPPaaS CA"). Gives #771 (NFS over TLS) the certificates it needs once its ZFS block is gone. Replaces the "Local DNS mode" build list in `docs/plans/install-simplification-plan.md`. Amends ADR-021 R2 and its unpublished-service table (D5 below), ADR-034 D2 and D10 (D10 below; A15 stays rejected), ADR-012 §2.5.1 (the CA key joins the escrow), ADR-007c (a third `dnsMode`). |
-| **Changelog** | v0.1 (2026-11-02) — first draft, from the operator's direction of 2026-11-02: a site CA has two reasons to exist and one implementation; `ca-manager` also holds the DNS providers. |
+| **Changelog** | v0.1 (2026-11-02) — first draft, from the operator's direction of 2026-11-02: a site CA has two reasons to exist and one implementation; `ca-manager` also holds the DNS providers. v0.2 (2026-11-02) — the operator's direction: a domain's subdomains never need a new CA, and an unrelated domain gets a CA of its own. So one internal CA, plus one CA per `local` domain tree; rotation is no longer how a domain is added. |
 
-Every TAPPaaS site gets its own certificate authority at install. It serves two needs with one
-implementation: HTTPS for site names that have no public DNS, and trusted encrypted traffic
-between modules on `<module>.<zone>.internal`. `ca-manager` becomes the single owner of the site's
+Every TAPPaaS site gets its own certificate authority at install, for trusted encrypted traffic
+between modules on `<module>.<zone>.internal`, and one more for each domain tree that has no public
+certificates, for HTTPS on those names. One implementation serves both. `ca-manager` becomes the single owner of the site's
 certificates, whoever issues them, and the single place to register a DNS provider. How a
 published name gets its certificate becomes a choice of issuer, and changing that choice changes
 nothing else.
@@ -47,36 +47,61 @@ nothing else.
 
 ## Decision
 
-### D1. Every site has one CA, always
+### D1. One internal CA, and one CA per `local` domain tree
 
-The CA is not a mode. `ca-manager init` runs in the install, before any guest but the firewall and
-the mothership is built, so that every guest has its trust from its first build. A site that will
-always use ACME for its public names has a CA too, for its internal names.
+The site has two kinds of CA, made and held the same way, differing only in what they may sign:
 
-The CA is a self-signed root with no intermediate, valid for 10 years, named
-`TAPPaaS <site> site CA`. One level is enough: the mothership is the only signer, and an
-intermediate on the same machine as the root protects nothing.
+| CA | May sign | Exists | Who trusts it |
+|---|---|---|---|
+| **Internal CA** | `internal` | always, from the install | every guest, node and the firewall |
+| **Domain CA** | one domain and its subdomains | while an environment in that tree is `local` | every guest, node and the firewall, and the people using that domain |
 
-### D2. Name constraints limit what the CA can sign
+`ca-manager init` makes the internal CA in the install, before any guest but the firewall and the
+mothership is built, so that every guest has its trust from its first build. A domain CA is made
+when an environment first needs one.
 
-An operator imports this CA into browsers and devices, so a stolen key must not be able to
-impersonate an unrelated site. The root carries a critical X.509 Name Constraints extension
-permitting only `internal`, `home.arpa`, and the domains of the site's environments at the time it
-is made.
+The rule for a new domain CA: **an environment needs one only when it is `local` and its domain is
+neither a domain CA's domain nor a subdomain of one.**
 
-A domain added later needs a new CA (D9). That is the cost of the constraint, and it is accepted.
+| Environment's domain, in `local` | Result |
+|---|---|
+| `my-org.tld` (the default) | a domain CA for `my-org.tld` |
+| `test.my-org.tld` | none: that CA covers it |
+| `other-org.tld` | a second, separate domain CA |
+| `my-org.tld`, replacing `<site>.home.arpa` | a new domain CA replaces the `home.arpa` one |
+
+Separate trees get separate CAs on purpose. A person who works with `other-org.tld` imports only
+that CA, and it can sign nothing for `my-org.tld`.
+
+A site that publishes only through ACME has the internal CA alone, and asks no one to import
+anything. Internal names are served to modules, not people, so a browser rarely needs the internal
+CA. Replacing a domain leaves the internal CA and every internal certificate untouched.
+
+Each CA is a self-signed root with no intermediate, valid for 10 years, named `TAPPaaS <site>
+internal CA` or `TAPPaaS <domain> CA`. One level is enough: the mothership is the only signer, and
+an intermediate on the same machine as the root protects nothing.
+
+### D2. Name constraints limit what each CA can sign
+
+An operator imports a domain CA into browsers and devices, so a stolen key must not be able to
+impersonate an unrelated site. Every root carries a critical X.509 Name Constraints extension
+permitting only what D1's table says. A constraint on a domain covers all its subdomains.
+
+Certificates are a separate matter from CAs: `*.my-org.tld` does not match
+`app.test.my-org.tld`, so each environment gets its own wildcard, from the same CA.
+
 A client that ignores the extension loses this protection, and nothing else.
 
 ### D3. The key lives on the mothership, and is escrowed
 
-The private key is a mode-600 file on the mothership, outside `config/`, read only by `ca-manager`.
-It joins the backup encryption keys in the escrow, so `backup-manager key export` writes it to the
-USB stick and a rebuilt mothership gets the same CA back (ADR-012 §2.5.1). Losing it means every
-guest and browser has to trust a new CA.
+Each CA's private key is a mode-600 file on the mothership, outside `config/`, read only by
+`ca-manager`. They join the backup encryption keys in the escrow, so `backup-manager key export` writes it to the
+USB stick and a rebuilt mothership gets the same CAs back (ADR-012 §2.5.1). Losing one means
+everything that trusts it has to trust a new one.
 
 The mothership already holds the keys to every host, so the CA adds no new class of compromise. The
-firewall does not hold the CA key: it is the edge device. It holds the CA's certificate, and the
-key of the wildcard it serves.
+firewall holds no CA key: it is the edge device. It holds the CAs' certificates, and the keys of
+the wildcards it serves.
 
 Not a `step-ca` VM: automatic ACME renewal for guests is attractive, but it is one more machine,
 needed before anything else exists and restored before anything else can start.
@@ -85,24 +110,25 @@ needed before anything else exists and restored before anything else can start.
 
 | `dnsMode` | Published names issued by | Needs |
 |---|---|---|
-| `local` (new) | the site CA, a wildcard | nothing public; each client trusts the CA |
+| `local` (new) | the tree's domain CA, a wildcard per environment | nothing public; each person trusts that CA |
 | `wildcard` | ACME DNS-01 through `os-acme-client` | a registered DNS provider (D6) |
 | `per-service` | ACME HTTP-01 through Caddy | public records, ports 80 and 443 |
 
-Internal names come from the site CA in all three. The refid in `cert-refids.json` means the same
+Internal names come from the internal CA in all three. The refid in `cert-refids.json` means the same
 in `local` and `wildcard`, so `network:proxy` needs no new branch for how a route binds its
 certificate; `local` only joins `wildcard` in skipping the public DNS check. An explicit
 `proxyTls: http01` under a `local` environment is refused: there is nothing public for it to use.
 
-Going public is `environment-manager modify --dnsMode wildcard|per-service`. The CA, guest trust,
-internal certificates and every name stay as they are.
+Going public is `environment-manager modify --dnsMode wildcard|per-service`. Guest trust, internal
+certificates and every name stay as they are. A domain CA with no `local` environment left is
+retired (D9).
 
 `local` is the default for a new site. With no domain given, the domain is `<site>.home.arpa`.
 
 ### D5. Internal names get certificates on request
 
 A module declares that it serves TLS on its internal name, and `ca-manager cert issue` makes it a
-certificate for `<vmname>.<zone>.internal`, delivered to the VM beside its other secrets. Nothing
+certificate for `<vmname>.<zone>.internal` from the internal CA, delivered to the VM beside its other secrets. Nothing
 changes for a module that does not ask. `.internal` still goes around Caddy and the identity gate,
 so this is encryption and trust, not access control.
 
@@ -139,7 +165,8 @@ firewall through the trust API, as it did by hand on lab2.
 
 ### D8. One path for trust
 
-`ca-manager` writes `config/site-ca.pem`, holding every CA the site currently trusts (D9).
+`ca-manager` writes `config/site-ca.pem`, holding every CA the site currently trusts. Guests and
+nodes trust them all: a module may call a name in any tree.
 
 - **NixOS guests:** `tappaas-site.nix`, as proven on lab2.
 - **Debian guests and Proxmox nodes:** `update-ca-certificates`, through `site-locale.sh`.
@@ -147,7 +174,8 @@ firewall through the trust API, as it did by hand on lab2.
 - **Containers:** a container has its own trust store. Modules mount the host's bundle read-only
   and set the variable their runtime reads (`SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`,
   `REQUESTS_CA_BUNDLE`). Runtimes that ignore all of these are handled per module (O1).
-- **People:** the admin VPN step in Day 1 offers the CA file, with what to do for each browser.
+- **People:** the admin VPN step in Day 1 offers the CA file of the domain they will use, with what
+  to do for each browser. Never the internal CA by default.
 
 An app whose SSO cannot be wired fails the install. Today that is a warning, and the install then
 congratulates the operator on a login that does not work.
@@ -158,17 +186,18 @@ congratulates the operator on a login that does not work.
 |---|---|---|
 | ACME wildcard | `os-acme-client` on the firewall | its own schedule |
 | HTTP-01 | Caddy | its own schedule |
-| Site CA certificates | `ca-manager cert renew`, in the sweep | 60 days before expiry |
+| Certificates from the site's CAs | `ca-manager cert renew`, in the sweep | 60 days before expiry |
 
-Certificates from the site CA last one year: Apple clients refuse anything over 825 days, and a
+Certificates from the site's CAs last one year: Apple clients refuse anything over 825 days, and a
 year gives every site at least one sweep-driven renewal to prove the path. A site whose sweep stops
 gets 60 days of warning, not a sudden outage. `ca-manager status` lists every certificate
 whoever issued it, and a health gate raises expiry the same way for all of them.
 
-`ca-manager rotate` makes a new CA, needed for a new domain (D2), near the end of the 10 years, or
-after a compromise. Both CAs stay in `site-ca.pem` while guests rebuild and certificates are
-reissued; the old one leaves when nothing uses it. Browsers need the new CA imported by hand, and
-the verb says so.
+A CA is replaced only when its domain changes, near the end of its 10 years, or after a compromise.
+Adding an environment never replaces one (D1). `ca-manager rotate` keeps the old and new CA in
+`site-ca.pem` while guests rebuild and certificates are reissued; the old one leaves when nothing
+uses it, and a retired domain CA leaves the same way. People need a new domain CA imported by hand,
+and the verb says so.
 
 ### D10. Effect on Day 1
 
@@ -188,7 +217,8 @@ ADR-034 A15 stays rejected: the console keeps its gated published name, on the s
 | A1 | The CA and its key in OPNsense's trust store (what lab2 runs by hand) | Quick, and the API exists, but it puts the key that every client trusts on the edge device, and a firewall rebuild must restore it. |
 | A2 | A `step-ca` VM with ACME for guests | D3. Worth revisiting if many modules need short-lived certificates. |
 | A3 | A CA only for `local` sites | Two code paths, and internal TLS would depend on how a site publishes. This is the hack this ADR exists to avoid. |
-| A4 | No name constraints | No re-issue when a domain is added, but a stolen key could impersonate any website to every browser that imported the CA. |
+| A4 | No name constraints | No new CA for a new domain, but a stolen key could impersonate any website to every browser that imported the CA. |
+| A6 | One CA holding `internal` and every domain | One import, but a new unrelated domain would replace the CA for everything, and everyone using one domain would trust a CA that can sign for all of them. |
 | A5 | Keep `acme-setup.sh` and add a separate CA script | Two owners of `cert-refids.json` and of "which certificate does this domain have". |
 
 ## Open questions
@@ -196,13 +226,13 @@ ADR-034 A15 stays rejected: the console keeps its gated published name, on the s
 - **O1. Containers.** Only a NixOS service (Grafana) is proven. Test a container that calls
   Authentik, Immich being the candidate, before the mount in D8 becomes the rule.
 - **O2. Browser support for name constraints.** Test Firefox, Chrome and Safari, and iOS and
-  Android, with a constrained root on lab2 before D2 is final. `home.arpa` and `internal` in the
-  permitted list need the same test.
+  Android, with constrained roots on lab2 before D2 is final. `home.arpa` and `internal` as
+  permitted names need the same test.
 - **O3. Where a module declares D5**, and which service delivers and reloads the certificate. This
   is a blueprint question (ADR-027); logging is the first case to design from.
-- **O4. Existing sites.** A migration adds the CA to hrossen and makerfloss, and guests pick it up on
-  their next rebuild. Decide whether the domains they have at that moment are the whole constraint
-  list, and whether that migration needs the operator.
+- **O4. Existing sites.** A migration adds the internal CA to hrossen and makerfloss, and guests pick
+  it up on their next rebuild. Neither is `local`, so neither gets a domain CA. Decide whether that
+  migration needs the operator.
 - **O5. CMDB.** Whether a certificate is a CI of its own (ADR-040) or only a health check.
 
 ## Consequences
@@ -210,17 +240,19 @@ ADR-034 A15 stays rejected: the console keeps its gated published name, on the s
 - One verb family answers "what certificates does this site have, and who issues them".
 - A site can be installed, used and signed in to with no public DNS, and go public later with no
   rename.
-- Mothership recovery must restore the CA key, or every client has to trust a new CA. The escrow
+- Mothership recovery must restore the CA keys, or every client has to trust new CAs. The escrow
   covers this; the restore runbook has to say so.
 - A provider token is stored on the mothership and on the firewall.
-- `local` asks each operator to import a CA on each device. That is the price of no public
-  certificate, and the site loses it by going public.
+- `local` asks each person to import their domain's CA on each device. That is the price of no
+  public certificate, and going public ends it.
+- A site with several unrelated `local` domains has several CAs to escrow and to watch.
 - More traffic can be verified, so the many `--no-ssl-verify` and `curl -k` calls can go, one at a
   time, starting with the firewall's API certificate.
 
 ## Delivery
 
-1. `ca-manager`: `init`, `status`, `cert issue|renew`, with the name constraints tested on lab2 (O2).
+1. `ca-manager`: `init`, `status`, `cert issue|renew`, both kinds of CA, with the name constraints
+   tested on lab2 (O2).
 2. Trust from `ca-manager` (D8), with the install calling `init`, and the SSO failure made fatal.
 3. `dnsMode: local`, the Unbound wildcard, and `environment-manager` working before the bootstrap.
 4. Providers (D6), then `acme-setup.sh` as a shim and the credential migration.
@@ -230,9 +262,10 @@ ADR-034 A15 stays rejected: the console keeps its gated published name, on the s
 
 ## Testing
 
-- Unit tests for constraint building, the renewal window, and refusal of a name outside the
-  constraints.
-- A live test on lab2: a fresh install to a Grafana sign-in with no public DNS, then a switch to
-  `wildcard` with a test domain, with nothing renamed and internal certificates unchanged.
+- Unit tests for D1's rule, constraint building, the renewal window, and refusal of a name outside
+  a CA's constraints.
+- A live test on lab2: a fresh install to a Grafana sign-in with no public DNS, then a second
+  environment on a subdomain (no new CA) and one on an unrelated domain (a CA of its own), then a
+  switch to `wildcard` with a test domain, with nothing renamed and internal certificates unchanged.
 - A rotation on lab2, with an app staying signed-in-capable throughout.
-- A restore of the CA key from the USB stick to a rebuilt mothership.
+- A restore of the CA keys from the USB stick to a rebuilt mothership.
