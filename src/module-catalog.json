@@ -144,9 +144,9 @@
     },
     {
       "moduleName": "lazysite",
-      "moduleJson": "src/collaboration/lazysite/lazysite.json",
+      "moduleJson": "src/web-hosting/lazysite/lazysite.json",
       "vmid": 380,
-      "stack": "collaboration"
+      "stack": "web-hosting"
     },
     {
       "moduleName": "tappaas-nixos",

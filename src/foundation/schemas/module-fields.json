@@ -614,6 +614,7 @@
         "foundation": "Part of the platform every site runs.",
         "ai": "Model serving, inference and AI tooling — e.g. litellm, openwebui, vllm-amd.",
         "collaboration": "Shared working and communication — e.g. nextcloud, euro-office.",
+        "web-hosting": "Websites and what serves them — e.g. lazysite, and Community's wordpress, webhost and website.",
         "devops": "Development and delivery tooling — source forges, CI, registries. Declared before this repo has a module in it; Community's forgejo belongs here.",
         "home": "Home and building automation, and the devices it drives — e.g. hass, deconz, and most of what Community publishes.",
         "security": "Security and secure access — e.g. vaultwarden, netbird-client.",
