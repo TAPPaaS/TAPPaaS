@@ -69,12 +69,32 @@ Nodes come before the foundation because backup should sit on a different machin
 **Consequences of this order:**
 
 - **The cut-over is not part of step 3.** The gate cannot be proven until a certificate exists (step 4) and the operator has a way in (step 9). So identity, the bootstrap and publishing the console run in step 3, the token and install LAN stay valid through steps 4 to 9, and the switch to the gate happens at the end of step 9, on a real sign-in. This lengthens the token's life, which the security review must cover.
-- **Publishing needs public DNS. Found on lab2, 2026-11-02.** `network:proxy` makes no route for a name with no public DNS record, and exits 0 with a warning. On lab2 neither `identity.lab2.hrossen.dk` nor `console.lab2.hrossen.dk` has a record, so Caddy has no routes at all: no login page, no gate, while Day 1 shows identity as done and Publish as succeeded. So step 3 cannot finish the gate on its own. Records and certificates come first, or publishing moves to step 4, and an unpublished identity or console must read as not done, with the record it needs named. A site behind NAT also needs ports 80/443 forwarded, or a wildcard by DNS-01, and the cut-over depends on that. **Open:** the order of steps 3 and 4 in the light of this.
+- **Publishing must not need public DNS.** Decided 2026-11-02: see "Local DNS mode" below. This replaces the order of steps 3 and 4 and the cut-over timing above once built.
 - **Wildcard sites.** Identity and the console install before the wildcard exists. Check what each does until step 4 issues it, and whether their module tests fail in between. `per-service` sites get their certificates at install, if ports 80/443 are reachable.
 - **Nodes before switches.** A node added at step 2 boots over PXE on a switch TAPPaaS does not manage yet, and lab2's PXE trouble on 2026-11-01 was the port's config. Add a node already prints what a manual switch port needs (`manualTrunkText`). Step 2 must show that, and the operator sets the port by hand. Step 6 then has to take over ports already carrying nodes without cutting them. `interrogate` leaves ports with a link alone, so test that this holds.
 - **Nodes before backup.** A node added first has no backup client. The backup install should wire it in through `integratesWith`, but this order has not been run. Add a node has also only been used on a site with identity, so test it under the setup token.
 
 **What counts as finished:** steps 1, 3, 4 and 9 are required. Steps 2, 5, 6, 7, 8 and 10 are optional, and none of them holds back completion.
+
+### Local DNS mode (decided 2026-11-02)
+
+A site works with no public DNS and no public certificate, and can go public later without renaming anything. The VPN needs only an IP address, so it comes first and everything after it uses local names.
+
+**Proven on lab2, 2026-11-02, by hand:** a site CA and a `*.lab2.hrossen.dk` certificate in the firewall's trust store, `cert-refids.json` pointing at it, `dnsMode: wildcard`, and an Unbound wildcard to the DMZ gateway. With no public record, identity and the console got Caddy routes with that certificate, and `console.lab2.hrossen.dk` redirected through the gate to Authentik's login page. So the existing wildcard path carries this. The network-manager resolver treated those names as unpublished; that is fixed. The gate step on lab2 used a temporary bypass until that fix reaches it.
+
+**Not proven:** a real sign-in, apps' SSO calls to Authentik over the site CA, and any browser's trust of it.
+
+**To build:**
+
+- `dnsMode: local` in the schema, environment-manager and the proxy scripts, behaving as `wildcard` with the certificate from the site CA instead of ACME.
+- A verb that makes the CA and the wildcard, records the refid and adds the Unbound wildcard. Today's `environment-manager modify` refuses a site with no `ownerOrg`, so it must work before the identity bootstrap. Check the certificate's renewal, since `lifetime` is 397 days.
+- The install: no domain given defaults to `<site>.home.arpa`. Use `local` by default.
+- CA trust on every VM and container that calls Authentik. **The biggest unknown.**
+- The admin VPN step offers the CA file to the browser.
+- An `internet` route in `local` mode says it is not reachable from the internet.
+- New Day 1 order: first node, more nodes, VPN, foundation with publish and sign-in (setup closes here), then repositories, switches, Wi-Fi, physical, stacks, and an optional "Make it public" step replacing TLS. **For Lars to confirm.**
+- ADR for all of this, amending ADR-021 and ADR-034 D2, D10 and A15.
+- Publishing must never report success with no route, whichever mode.
 
 ### Step 1: Finish first node configuration
 
@@ -145,7 +165,7 @@ Still to do:
 - Step 3 runs identity, bootstrap and the console publish as one job. It keeps running on the mothership if the browser is cut off, and the operator ends on a page that says where to go next.
 - Before the cut-over, the operator must have a way in that works: the admin VPN imported and tested. An install-LAN operator today has no reason to have done so.
 
-**lab2, 2026-11-02:** moved to `main`, and the recovery is proven there: the closed address answered 403 with its page, `install-access.sh reopen` brought back the token and the install LAN, and the forward did not duplicate. **Not yet proven live, and blocked on public DNS and a certificate (§3):** the first gate sign-in closing setup, which also runs `install-access.sh close` from inside the console's sandbox. That needs public records for `identity` and `console`, a certificate, the identity bootstrap, and a sign-in over the admin VPN.
+**lab2, 2026-11-02:** on `main`, recovery proven: the closed address answered 403 with its page, and `install-access.sh reopen` brought back the token and the install LAN with one forward. It now runs the local DNS test setup by hand (above). **Not yet proven live:** the first gate sign-in closing setup, which also runs `install-access.sh close` from inside the console's sandbox. That needs the identity bootstrap and a sign-in over the admin VPN.
 
 ### Step 4: TLS (needs design)
 
