@@ -122,6 +122,9 @@ export const SETUP_COOKIE = "tappaas_setup";
 export function presentedToken(headers: Record<string, string | string[] | undefined>, query: string | null): string | null {
   const auth = header(headers, "authorization");
   if (auth && /^Bearer\s+/i.test(auth)) return auth.replace(/^Bearer\s+/i, "").trim();
+  // What was just typed beats the cookie: after a reopen the browser still holds
+  // the old token, and it must not hide the new one.
+  if (query) return query;
   const cookie = header(headers, "cookie") ?? "";
   for (const part of cookie.split(";")) {
     const [k, ...v] = part.trim().split("=");
@@ -134,7 +137,7 @@ export function presentedToken(headers: Record<string, string | string[] | undef
       }
     }
   }
-  return query;
+  return null;
 }
 
 // ── the console's group (D3) ──────────────────────────────────────────

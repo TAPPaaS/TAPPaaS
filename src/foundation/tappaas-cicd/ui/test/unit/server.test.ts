@@ -167,6 +167,8 @@ async function main(): Promise<void> {
   check(r.status === 302 && /^tappaas_setup=tok-123; .*HttpOnly; SameSite=Strict/.test(r.headers["set-cookie"] ?? "") && r.headers.location === "/", "the token on the address line becomes an HttpOnly cookie");
   r = await call("GET", "/api/v1/me", { cookie: "tappaas_setup=tok-123" }, "10.0.0.50");
   check((r.json().data as { via: string }).via === "setup-token", "…which the API then accepts");
+  r = await call("GET", "/?token=tok-123", { cookie: "tappaas_setup=old-token" }, "10.0.0.50");
+  check(r.status === 302 && /^tappaas_setup=tok-123;/.test(r.headers["set-cookie"] ?? ""), "the new token replaces a stale cookie");
   r = await call("GET", "/", {}, "10.0.0.50");
   check(r.status === 401 && r.body.includes("Setup token"), "without it, a page asking for the token");
   r = await call("GET", "/api/v1/me", { cookie: "tappaas_setup=%E0" }, "10.0.0.50");

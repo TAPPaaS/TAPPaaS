@@ -142,6 +142,8 @@ d = decide("10.0.0.50", H({}), "s3cret-token", cfg, s);
 check(d.ok && d.me.via === "setup-token", "?token= works on a first page load");
 d = decide("10.0.0.50", H({ cookie: "a=b; tappaas_setup=s3cret-token" }), null, cfg, s);
 check(d.ok && d.me.via === "setup-token", "…and so does the cookie it becomes");
+d = decide("10.0.0.50", H({ cookie: "tappaas_setup=old-token" }), "s3cret-token", cfg, s);
+check(d.ok && d.me.via === "setup-token", "a token typed in beats a stale cookie (after a reopen)");
 d = decide("10.0.0.50", H({ authorization: "Bearer wrong" }), null, cfg, s);
 check(!d.ok && d.status === 401, "a wrong token: 401");
 d = decide("10.0.0.50", gate("Installer"), null, cfg, s);
