@@ -20,7 +20,7 @@ interface Choice {
 
 function AddStackWizard({ onClose, prefill }: { onClose: () => void; prefill?: TargetValues | null }) {
   const me = useMe();
-  const cats = useRead<{ modules: { name: string; stack: string | null }[] }[]>("catalogs", 600_000).env?.data ?? [];
+  const cats = useRead<{ modules: { name: string; stack: string | null; maturity: string | null }[] }[]>("catalogs", 600_000).env?.data ?? [];
   const envs = (useRead<EnvironmentRow[]>("environments").env?.data ?? []).map((e) => e.name);
   const site = useRead<SiteRead>("site").env?.data?.site;
   const defaultEnv = typeof site?.defaultEnvironment === "string" ? site.defaultEnvironment : "";

@@ -124,6 +124,8 @@ check(rp.object === "7" && rp.label === "crs-a:7", "…or the positional its ver
   const { stacks, notes } = stacksOf(cats);
   check(stacks.join(",") === "home,office", `the stacks, sorted, without foundation or a module of no stack (${stacks.join(",")})`);
   check(stacksOf([{ modules: [{ name: "t", stack: "test" }, { name: "n", stack: "template" }, { name: "w", stack: "web-hosting" }] }]).stacks.join() === "web-hosting", "test and template are no stacks to add");
+  const old = stacksOf([{ modules: [{ name: "website", stack: "web-hosting", maturity: "Development" }, { name: "wordpress", stack: "web-hosting", maturity: "Deprecated" }, { name: "unifi", stack: "gone", maturity: "Deprecated" }] }]);
+  check(old.stacks.join() === "web-hosting" && old.notes["web-hosting"] === "web-hosting — website", "a deprecated module is in no stack, and a stack of only those is gone");
   const plan = { stack: "home", environment: null, missing: [], steps: [{ module: "hass", action: "skip" as const, instance: "hass", description: null }, { module: "nomad", action: "install" as const, description: null }, { module: "karakeep", action: "install" as const, description: null }] };
   check(stackModuleOrigin({ ...plan.steps[0], repository: "Community", maintainer: "@AndreasJe", status: "Development" }) === "(Repo: Community, Maintainer: @AndreasJe, Status: Development)", "a module's repository, maintainer and status");
   check(stackModuleOrigin({ ...plan.steps[0], repository: "TAPPaaS" }) === "(Repo: TAPPaaS)" && stackModuleOrigin(plan.steps[0]) === null, "only what is known");

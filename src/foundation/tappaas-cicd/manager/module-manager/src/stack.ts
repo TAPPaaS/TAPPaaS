@@ -10,6 +10,9 @@
 
 export const NOT_INSTALLABLE = new Set(["foundation", "template", "test"]);
 
+// A module no longer maintained is no part of a stack: `add` still takes it by name.
+export const deprecated = (status: unknown): boolean => status === "Deprecated";
+
 export interface StackModule {
   name: string;
   description?: string;

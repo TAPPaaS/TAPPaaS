@@ -265,11 +265,11 @@ export function identitySpecs(kind: string, verb: "add" | "modify" | "delete", n
 const NOT_ADDABLE = new Set(["foundation", "template", "test"]);
 
 // The stacks the catalogues name, those aside, each with its modules as the
-// note the Add a stack form shows.
-export function stacksOf(cats: { modules: { name: string; stack: string | null }[] }[]): { stacks: string[]; notes: Record<string, string> } {
+// note the Add a stack form shows. A deprecated module is no part of a stack.
+export function stacksOf(cats: { modules: { name: string; stack: string | null; maturity?: string | null }[] }[]): { stacks: string[]; notes: Record<string, string> } {
   const mods = new Map<string, string[]>();
   for (const c of cats) for (const m of c.modules) {
-    if (!m.stack || NOT_ADDABLE.has(m.stack)) continue;
+    if (!m.stack || NOT_ADDABLE.has(m.stack) || m.maturity === "Deprecated") continue;
     const l = mods.get(m.stack) ?? [];
     if (!l.includes(m.name)) l.push(m.name);
     mods.set(m.stack, l);

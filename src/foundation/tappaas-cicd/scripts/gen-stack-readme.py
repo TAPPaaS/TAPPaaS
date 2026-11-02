@@ -137,8 +137,9 @@ def main(argv):
             continue
         mods = [m for m in allmods if m[1] == stack]
         blocks = {"README.md": readme_block(mods)}
-        if mods:  # a planned stack has nothing to install yet
-            blocks["INSTALL.md"] = install_block(mods, allmods)
+        installs = [m for m in mods if m[3].get("status") != "Deprecated"]  # as add-stack
+        if installs:  # a planned stack has nothing to install yet
+            blocks["INSTALL.md"] = install_block(installs, allmods)
         for doc in DOCS:
             if doc not in blocks:
                 continue

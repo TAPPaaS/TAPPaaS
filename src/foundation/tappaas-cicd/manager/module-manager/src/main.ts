@@ -43,7 +43,7 @@ import {
   siteNodeHostnames,
   siteRepositories,
 } from "./config";
-import { NOT_INSTALLABLE, StackModule, catalogueEntries, hasHandSteps, planStack, withoutSkipped } from "./stack";
+import { NOT_INSTALLABLE, StackModule, catalogueEntries, deprecated, hasHandSteps, planStack, withoutSkipped } from "./stack";
 import { defaultNodeCandidates, queryClusterGuests, reachableNodes as clusterReachableNodes } from "../../../lib/ts/src/cluster";
 import { moduleScope } from "../../../lib/ts/src/scope";
 import { CmdbObject, CmdbRelation } from "../../../lib/ts/src/cmdb";
@@ -145,7 +145,7 @@ export const HELP: HelpSpec = {
         ["--allow-fork", "Passed to each add."],
       ],
       details:
-        "The stack's modules are the catalogue entries whose stack it is; the order is the one its\n" +
+        "The stack's modules are the catalogue entries whose stack it is, deprecated ones aside; the order is the one its\n" +
         "INSTALL.md shows. Installed modules are skipped. A dependency outside the stack must be\n" +
         "installed first, or nothing is. The first module that fails stops the run; run it again to\n" +
         "resume. foundation, template and test are not installable stacks.",
@@ -997,9 +997,10 @@ function loadStackModules(configDir: string, stack: string): { mods: StackModule
       }
       // The module's own stack over its catalogue entry's, as the console reads it.
       const own = typeof mj.stack === "string" && mj.stack !== "" ? mj.stack : e.stack;
-      if (own) stacks.add(own);
+      if (own && !deprecated(mj.status)) stacks.add(own);
       if (own !== stack || seen.has(e.moduleName)) continue;
       seen.add(e.moduleName);
+      if (deprecated(mj.status)) continue;
       const installMd = join(dirname(jsonPath), "INSTALL.md");
       const list = (k: string): string[] => (Array.isArray(mj[k]) ? (mj[k] as unknown[]).map(String) : []);
       const v = Number((mj as { vmid?: unknown }).vmid ?? (e as { vmid?: unknown }).vmid);
