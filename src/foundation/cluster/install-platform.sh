@@ -383,7 +383,7 @@ build_cicd() {
     elif cicd_ssh 'cat /home/tappaas/config/admin-vpn/install-peer.conf' 2>/dev/null > "${peer}.tmp" && [[ -s "${peer}.tmp" ]]; then
       install -m 0600 "${peer}.tmp" "${peer}"
       echo -e "    This site's WAN is public, so the console is reached over the admin VPN: import ${peer}"
-      echo -e "    (scp root@${node}:${peer} .) in WireGuard, connect, and open ${BL}http://${CICD_IP}:9097/${CL}."
+      echo -e "    (scp root@${node}:${peer} .) in WireGuard, connect, and open ${BL}http://${CICD_IP}:9097/setup/day1${CL}."
     fi
     echo -e "    It asks for the setup token. From the machine you ran the install from:"
     echo -e "      ${BL}ssh root@${node} \"ssh -i /root/tappaas/tappaas-cicd.key -o StrictHostKeyChecking=accept-new tappaas@tappaas-cicd.mgmt.internal cat config/console-setup-token\"${CL}"

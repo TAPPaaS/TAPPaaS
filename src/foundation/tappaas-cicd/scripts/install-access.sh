@@ -117,7 +117,7 @@ open_lan() {
         return 0
     fi
     printf '%s\n' "${net}" > "${ALLOW_FILE}"
-    printf 'http://%s:%s/\n' "${wan_ip}" "${CONSOLE_PORT}" > "${URL_FILE}"
+    printf 'http://%s:%s/setup/day1\n' "${wan_ip}" "${CONSOLE_PORT}" > "${URL_FILE}"
     systemctl restart tappaas-console.service 2>/dev/null \
         || warn "  install LAN: the console was not restarted — it accepts ${net} after its next start"
     info "  ${GN}✓${CL} install LAN: http://${wan_ip}:${CONSOLE_PORT}/ from ${net} only, with the setup token, until the first sign-in through the gate"
