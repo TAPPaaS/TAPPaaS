@@ -362,6 +362,15 @@ if [[ -n "${_site_tz}" ]]; then
     done <<< "$NODES"
 fi
 
+# Step 5f: every node trusts the site's CAs (ADR-043 D8), as the Debian guests do.
+if [[ -f /home/tappaas/bin/site-locale.sh ]] && . /home/tappaas/bin/site-locale.sh && declare -F apply_site_ca_debian >/dev/null; then
+    debug "Step 5f: the site's CAs on the nodes"
+    while read -r node; do
+        [[ -n "${node}" ]] || continue
+        apply_site_ca_debian "$node.$MGMTVLAN.internal" root || true
+    done <<< "$NODES"
+fi
+
 # Step 6: Drift-heal the cluster storage `nodes` lists from the nodes' records.
 # The lists have only one-shot writers (config-storage at pool creation,
 # site-manager node add after a join) — a node that joined by any other

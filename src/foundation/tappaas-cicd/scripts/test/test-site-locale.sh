@@ -133,6 +133,35 @@ grep -q 'security.pki.certificates' <<< "${_cafrag}" && grep -q '^QUJD$' <<< "${
     && ok "a site CA is in the guest's fragment" || bad "the site CA is not in the guest's fragment"
 rm -f "${WORK}/config/site-ca.pem"
 
+# Debian guests and nodes (ADR-043 D8): one file per CA, the directory replaced
+# whole, and an unchanged bundle left alone. ssh is a stand-in that runs the
+# remote script here, under a fake root, with update-ca-certificates a no-op.
+FAKE="${WORK}/root"; mkdir -p "${FAKE}/usr/local/share/ca-certificates"
+cat > "${WORK}/ssh" <<STUB
+#!/usr/bin/env bash
+cmd="\${@: -1}"; echo "\${cmd}" >> "${WORK}/ssh.log"
+case "\${cmd}" in
+  *"sh -s"*) sed -e "s#/usr/local/share#${FAKE}/usr/local/share#g" -e 's#update-ca-certificates --fresh#true#' | bash ;;
+  *) eval "\$(sed "s#/usr/local/share#${FAKE}/usr/local/share#g" <<< "\${cmd}")" ;;
+esac
+STUB
+chmod +x "${WORK}/ssh"
+printf -- '-----BEGIN CERTIFICATE-----\nQUJD\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\nREVG\n-----END CERTIFICATE-----\n' > "${WORK}/config/site-ca.pem"
+echo stale > "${FAKE}/usr/local/share/ca-certificates/tappaas-site.crt"
+_o="$(PATH="${WORK}:${PATH}" load 'apply_site_ca_debian 10.0.0.9 root; echo rc=$?' 2>&1)"
+has "${_o}" "rc=0" "the CAs go onto a Debian host"
+is "…one file per CA" "$(ls "${FAKE}/usr/local/share/ca-certificates/tappaas" | grep -c 'site-.*\.crt')" "2"
+is "…each a whole certificate" "$(grep -c BEGIN "${FAKE}/usr/local/share/ca-certificates/tappaas/site-2.crt")" "1"
+[[ ! -e "${FAKE}/usr/local/share/ca-certificates/tappaas-site.crt" ]] && ok "…and the single file of before is gone" || bad "the old single file was left"
+: > "${WORK}/ssh.log"; _o="$(PATH="${WORK}:${PATH}" load 'apply_site_ca_debian 10.0.0.9 root; echo rc=$?' 2>&1)"
+has "${_o}" "rc=1" "an unchanged bundle changes nothing"
+is "…in one ssh" "$(grep -c . "${WORK}/ssh.log")" "1"
+printf -- '-----BEGIN CERTIFICATE-----\nQUJD\n-----END CERTIFICATE-----\n' > "${WORK}/config/site-ca.pem"
+PATH="${WORK}:${PATH}" load 'apply_site_ca_debian 10.0.0.9 root' >/dev/null 2>&1
+is "a CA that left the bundle leaves the host" "$(ls "${FAKE}/usr/local/share/ca-certificates/tappaas" | grep -c 'site-.*\.crt')" "1"
+grep -q 'sudo sh -s' <(PATH="${WORK}:${PATH}" load 'printf x > "${TAPPAAS_CONFIG}/site-ca.pem.tmp"; apply_site_ca_debian 10.0.0.9 tappaas' 2>&1; printf -- '-----BEGIN CERTIFICATE-----\nWFla\n-----END CERTIFICATE-----\n' > "${WORK}/config/site-ca.pem"; PATH="${WORK}:${PATH}" load 'apply_site_ca_debian 10.0.0.9 tappaas' >/dev/null 2>&1; cat "${WORK}/ssh.log") && ok "a guest's user gets it through sudo" || bad "no sudo for a guest user"
+rm -f "${WORK}/config/site-ca.pem"
+
 echo ""
 echo "── summary: ${pass} pass, ${fail} fail ──"
 [[ "${fail}" -eq 0 ]]

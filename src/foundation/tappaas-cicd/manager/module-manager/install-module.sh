@@ -963,6 +963,10 @@ main() {
             info "  Wiring ${BL}${dep}${CL} install-service.sh for '${effective_module}'..."
             if "${iscript}" "${effective_module}"; then
                 info "  ${GN}✓${CL} ${dep} integration wired"
+            elif [[ "${dep}" == identity:* ]]; then
+                # Identity is always installed: an app it cannot sign people in to is
+                # not installed, whatever else worked (ADR-043 D8).
+                die "Sign-in could not be wired: ${dep} install-service failed — see above"
             else
                 warn "  ${dep} install-service returned non-zero — optional integration not wired (continuing)"
             fi

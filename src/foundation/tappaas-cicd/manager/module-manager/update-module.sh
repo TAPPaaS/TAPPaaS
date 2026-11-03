@@ -417,6 +417,9 @@ apply_dependson_delta() {
             info "  Newly-added integration ${BL}${dep}${CL} — running install-service.sh (create) for '${module}'..."
             if "${ascript}" "${module}"; then
                 info "  ${GN}✓${CL} ${dep} integration wired"
+            elif [[ "${dep}" == identity:* ]]; then
+                fatal_with_rollback "${module}" "${snap_created}" \
+                    "sign-in could not be wired: install-service.sh failed for '${dep}' (ADR-043 D8)"
             else
                 warn "  ${dep} install-service returned non-zero — optional integration not wired (continuing)"
             fi

@@ -37,9 +37,18 @@ holds exactly the recorded CAs.
 
 ## Not yet
 
-From ADR-043's delivery list: the DNS providers, `rotate`, the CMDB report (D11), delivering
-certificates to guests, the install calling `init`, and `site-locale.sh` reading the bundle this
-writes.
+From ADR-043's delivery list: the DNS providers, `rotate`, the CMDB report (D11), and delivering
+certificates to guests.
+
+## Who calls it
+
+- The mothership's install runs `init` before any guest but the firewall and itself is built, and
+  its pre-update runs it again, so a site installed earlier gets its internal CA at its next update.
+- `site-locale.sh` puts the bundle on every NixOS guest (`tappaas-site.nix`) and every Debian guest;
+  the cluster update puts it on every node. Debian hosts get one file per CA under
+  `/usr/local/share/ca-certificates/tappaas/`.
+- A bundle holding a CA ca-manager did not make is never overwritten: `init` refuses, and says how
+  to take it over (`--replace-bundle`).
 
 ## Testing
 

@@ -41,8 +41,11 @@ export const HELP: HelpSpec = {
     { usage: "status [--json]", effect: "read", options: [["--json", "status: the record as JSON, with days left."]] },
     { usage: "validate", note: "(the record against the key dir and the trust bundle)" },
     {
-      usage: "init [--check]",
-      options: [["--check", "Say what it would make; change nothing."]],
+      usage: "init [--replace-bundle] [--check]",
+      options: [
+        ["--replace-bundle", "Rewrite config/site-ca.pem even when it holds CAs ca-manager did not make."],
+        ["--check", "Say what it would make; change nothing."],
+      ],
       details:
         "Makes the site's internal CA, which may sign names under `internal` and nothing else, and\n" +
         "writes the trust bundle config/site-ca.pem. Runs once, in the install; a second run changes\n" +
@@ -115,13 +118,17 @@ function now(): Date {
 }
 
 // The CA made, recorded, and the bundle rewritten.
-function createCa(store: Store, doc: CaDoc, id: string, scope: "internal" | "domain", permitted: string[], cn: string): void {
+function createCa(store: Store, doc: CaDoc, id: string, scope: "internal" | "domain", permitted: string[], cn: string, replace = false): void {
+  // Refuse before anything is made: a CA that could not join the bundle would
+  // be recorded and trusted by nothing.
+  const foreign = replace ? [] : store.foreignInBundle(doc);
+  if (foreign.length) die(`${store.bundleFile} holds CAs ca-manager did not make (${foreign.join("; ")}): rewriting it would take them from every guest. Replace them first, or pass --replace-bundle to init`);
   store.ensureKeyDir();
   makeCa(store.caKey(id), store.caCert(id), cn, permitted, CA_DAYS);
   const ci = certInfo(readFileSync(store.caCert(id), "utf8"));
   doc.cas[id] = { scope, permitted, subject: ci.subject, fingerprint: ci.fingerprint, notBefore: ci.notBefore, notAfter: ci.notAfter, state: "active", created: stamp() };
   store.save(doc);
-  store.writeBundle(doc);
+  store.writeBundle(doc, replace);
 }
 
 function signCert(store: Store, doc: CaDoc, name: string, names: string[], ca: string): CertRecord {
@@ -134,11 +141,17 @@ function signCert(store: Store, doc: CaDoc, name: string, names: string[], ca: s
   return rec;
 }
 
-function init(store: Store, check: boolean): number {
+function init(store: Store, check: boolean, replace: boolean): number {
   const doc = store.load();
   if (doc.cas[INTERNAL_ID]) {
     info(`${GN}✓${CL} the internal CA exists (${doc.cas[INTERNAL_ID].subject})`);
-    if (!check && store.writeBundle(doc)) info(`  wrote ${store.bundleFile}`);
+    if (!check && !simulating()) {
+      try {
+        if (store.writeBundle(doc, replace)) info(`  wrote ${store.bundleFile}`);
+      } catch (e) {
+        die((e as Error).message);
+      }
+    }
     return 0;
   }
   const cn = `TAPPaaS ${siteName(store.configDir)} internal CA`;
@@ -146,7 +159,7 @@ function init(store: Store, check: boolean): number {
     info(`would make ${cn}, for names under ${INTERNAL_NAME}, and write ${store.bundleFile}`);
     return 0;
   }
-  createCa(store, doc, INTERNAL_ID, "internal", [INTERNAL_NAME], cn);
+  createCa(store, doc, INTERNAL_ID, "internal", [INTERNAL_NAME], cn, replace);
   info(`${GN}✓${CL} made ${cn}, for names under ${INTERNAL_NAME}`);
   info(`  its key: ${store.caKey(INTERNAL_ID)} — escrow it with the backup keys`);
   return 0;
@@ -291,7 +304,7 @@ export function run(argv: string[]): number {
   if (args[0] === "status") return status(store, args.includes("--json"));
   if (args[0] === "validate") return validate(store);
   requireOperator();
-  if (args[0] === "init") return init(store, check);
+  if (args[0] === "init") return init(store, check, args.includes("--replace-bundle"));
   if (args[0] === "domain" && args[1] === "add") {
     const [domain] = positional(args, 2, []);
     if (!domain) die("domain add <domain>");

@@ -174,8 +174,8 @@ EOF
   nix.settings.trusted-public-keys = [ "${sitekey}" ];
 EOF
     fi
-    # A site without a public certificate signs its own (dnsMode local): guests
-    # calling the site's names, such as an app's SSO, must trust that CA.
+    # The site's CAs (ADR-043 D8): guests calling the site's names, such as an
+    # app's SSO, or another module's internal name, must trust them.
     local ca
     ca="$(site_ca_file)"
     if [[ -n "${ca}" ]]; then
@@ -184,11 +184,41 @@ EOF
     printf '}\n'
 }
 
-# The site CA's PEM file when this site has one, else nothing.
+# The site's trust bundle when it has one, else nothing. ca-manager writes it
+# (ADR-043 D8): every CA the site trusts, the internal CA first.
 site_ca_file() {
     local f="${TAPPAAS_CONFIG:-/home/tappaas/config}/site-ca.pem"
     [[ -s "${f}" ]] && printf '%s\n' "${f}"
     return 0
+}
+
+# The site's CAs on a Debian guest or a Proxmox node (ADR-043 D8). update-ca-certificates
+# takes one certificate per file, so the bundle is split into tappaas/site-<n>.crt,
+# and the directory is replaced whole: a CA that left the bundle leaves the host.
+# The bundle's checksum is kept beside them, so an unchanged bundle is one ssh.
+# Returns 0 when it changed something.
+apply_site_ca_debian() {
+    local ip="$1" user="${2:-tappaas}" ca sum sudo=""
+    ca="$(site_ca_file)"
+    [[ -n "${ca}" ]] || return 1
+    [[ "${user}" == "root" ]] || sudo="sudo"
+    sum="$(sha256sum < "${ca}" | cut -c1-64)"
+    ssh -n -o BatchMode=yes "${user}@${ip}" "grep -qsx '${sum}' /usr/local/share/ca-certificates/tappaas/.bundle" 2>/dev/null && return 1
+    if ssh -o BatchMode=yes "${user}@${ip}" "${sudo} sh -s" >/dev/null 2>&1 <<EOF
+d=/usr/local/share/ca-certificates/tappaas
+rm -f /usr/local/share/ca-certificates/tappaas-site.crt
+rm -rf "\$d" && mkdir -p "\$d"
+awk -v d="\$d" '/BEGIN CERTIFICATE/{n++} n{print > (d "/site-" n ".crt")}' <<'PEM'
+$(cat "${ca}")
+PEM
+update-ca-certificates --fresh >/dev/null && echo '${sum}' > "\$d/.bundle"
+EOF
+    then
+        info "  site CAs trusted on ${ip} ($(grep -c 'BEGIN CERTIFICATE' "${ca}"))"
+        return 0
+    fi
+    warn "  could not install the site CAs on ${ip}"
+    return 1
 }
 
 # Install the fragment on a NixOS guest. The caller's nixos-rebuild picks it up:
@@ -275,16 +305,7 @@ EOF
         fi
     fi
 
-    # The site's own CA, as for NixOS. update-ca-certificates reads this directory.
-    local ca
-    ca="$(site_ca_file)"
-    if [[ -n "${ca}" ]] && ! ssh -n -o BatchMode=yes "${user}@${ip}" "grep -qs '$(sed -n 2p "${ca}")' /usr/local/share/ca-certificates/tappaas-site.crt"; then
-        if ssh -o BatchMode=yes "${user}@${ip}" "sudo sh -c 'cat > /usr/local/share/ca-certificates/tappaas-site.crt && update-ca-certificates'" < "${ca}" >/dev/null 2>&1; then
-            info "  site CA trusted"; changed=1
-        else
-            warn "  could not install the site CA on ${ip}"
-        fi
-    fi
+    apply_site_ca_debian "${ip}" "${user}" && changed=1
 
     [[ "${changed}" -eq 1 ]] && debug "  site locale converged on ${ip}"
     return 0

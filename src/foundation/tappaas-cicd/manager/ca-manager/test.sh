@@ -39,6 +39,14 @@ K="${FIX}/keys"
 CA() { TAPPAAS_CONFIG="${FIX}/cfg" CONFIG_DIR="${FIX}/cfg" TAPPAAS_CA_DIR="${K}" run_ts "node '${DIST}/manager/ca-manager/src/main.js' $*"; }
 vfy() { run_ts "openssl verify -CAfile '$1' -verify_hostname '$3' '$2'" >/dev/null 2>&1; }
 
+# A bundle with a CA put there by hand is not taken from the guests.
+mkdir -p "${FIX}/hand"; run_ts "openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout '${FIX}/hand/k' -out '${FIX}/cfg/site-ca.pem' -days 5 -subj '/CN=hand CA'" >/dev/null 2>&1
+CA init >/dev/null 2>&1 && bad "init: a hand-made CA in the bundle refused" || ok "init: a hand-made CA in the bundle refused"
+[[ ! -e "${K}" && "$(grep -c BEGIN "${FIX}/cfg/site-ca.pem")" == "1" ]] && ok "…before anything is made" || bad "…something was made"
+CA init --replace-bundle >/dev/null 2>&1 && ! grep -q 'hand CA' <(run_ts "openssl crl2pkcs7 -nocrl -certfile '${FIX}/cfg/site-ca.pem' | openssl pkcs7 -print_certs -noout") \
+    && [[ "$(grep -c BEGIN "${FIX}/cfg/site-ca.pem")" == "1" ]] && ok "init --replace-bundle takes it over" || bad "init --replace-bundle"
+rm -rf "${K}" "${FIX}/cfg/certificates.json" "${FIX}/cfg/site-ca.pem"
+
 CA init --check >/dev/null 2>&1; [[ ! -e "${K}" && ! -e "${FIX}/cfg/certificates.json" ]] && ok "init --check makes nothing" || bad "init --check made something"
 CA init >/dev/null 2>&1 && ok "init: the internal CA" || bad "init"
 [[ "$(mode "${K}")" == "700" ]] && ok "init: the key dir is 700" || bad "init: key dir mode"

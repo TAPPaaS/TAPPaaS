@@ -263,9 +263,11 @@ fingerprint.
   Firefox reports `SEC_ERROR_CERT_NOT_IN_NAME_SPACE`. Still to test: Chrome, iOS and Android.
 - **O3. Where a module declares D5**, and which service delivers and reloads the certificate. This
   is a blueprint question (ADR-027); logging is the first case to design from.
-- **O4. Existing sites.** A migration adds the internal CA to hrossen and makerfloss, and guests pick
-  it up on their next rebuild. Neither is `local`, so neither gets a domain CA. Decide whether that
-  migration needs the operator.
+- **O4. Existing sites.** Answered: no operator and no migration. The mothership's pre-update runs
+  `ca-manager init`, so an existing site gets its internal CA at its next update, and its guests
+  and nodes trust it from then. Neither hrossen nor makerfloss is `local`, so neither gets a domain
+  CA. A site whose bundle holds a CA put there by hand (lab2) is refused, not overwritten, until
+  that CA is replaced.
 - **O5. Certificates in the CMDB.** CAs are CIs (D11). Whether an issued certificate should be a CI
   too, or stay an attribute of its CA, and how an ACME certificate appears, which has no CA CI.
 

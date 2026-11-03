@@ -37,6 +37,12 @@ else
   die "scripts/refresh-control-plane.sh not found — cannot refresh the control plane"
 fi
 
+# The internal CA (ADR-043 D1): a site installed before ca-manager gets it here.
+# Idempotent; the guests trust it from their next rebuild.
+if [[ -x /home/tappaas/bin/ca-manager ]]; then
+  /home/tappaas/bin/ca-manager init >/dev/null 2>&1 || warn "ca-manager init failed — guests keep the trust they have"
+fi
+
 # get to the right directory (the rest of this file is relative to it)
 cd /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd || die "TAPPaaS-CICD directory not found!"
 

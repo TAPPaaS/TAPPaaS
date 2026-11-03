@@ -90,10 +90,22 @@ export class Store {
     }
   }
 
-  // The bundle from the CAs' own files, written only when it differs.
-  writeBundle(doc: CaDoc): boolean {
+  // Certificates in the bundle on disk that no recorded CA is: a CA put there by
+  // hand, which a rewrite would take away from every guest.
+  foreignInBundle(doc: CaDoc): string[] {
+    if (!existsSync(this.bundleFile)) return [];
+    const ours = new Set(Object.values(doc.cas).map((c) => c.fingerprint));
+    const pems = readFileSync(this.bundleFile, "utf8").match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g) ?? [];
+    return pems.map((p) => certInfo(p)).filter((c) => !ours.has(c.fingerprint)).map((c) => c.subject);
+  }
+
+  // The bundle from the CAs' own files, written only when it differs. A bundle
+  // holding a CA ca-manager did not make is left as it is unless `replace`.
+  writeBundle(doc: CaDoc, replace = false): boolean {
     const text = this.bundleText(doc);
     if (existsSync(this.bundleFile) && readFileSync(this.bundleFile, "utf8") === text) return false;
+    const foreign = replace ? [] : this.foreignInBundle(doc);
+    if (foreign.length) throw new Error(`${this.bundleFile} holds CAs ca-manager did not make (${foreign.join("; ")}): rewriting it would take them from every guest. Replace them first, or pass --replace-bundle`);
     const tmp = `${this.bundleFile}.tmp`;
     writeFileGuarded(tmp, text, "utf8");
     chmodGuarded(tmp, 0o644);
