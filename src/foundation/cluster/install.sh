@@ -39,23 +39,18 @@ msg_error() { echo -e "${RD}[Error]${CL} ${CROSS} $1"; }
 
 # with_dots <log> <command...>
 #
-# Run a long command with its output in <log>; on failure the last lines are
-# shown. At a terminal it prints a dot per line of output so a step that takes
-# minutes shows it is alive (#266); into a log (the install's tee) nothing.
+# Run a long command with one dot per line of its output, so a step that takes
+# minutes shows it is alive (#266). The full output goes to <log>; on failure the
+# last lines are shown. Ends the dots with a newline: msg_ok/msg_error clear only
+# the current terminal line, and a long run of dots wraps over several.
 with_dots() {
-  local log="$1" rc=0 tty=0
+  local log="$1" rc=0
   shift
-  [ -t 1 ] && tty=1
   set +e
-  if [ "${tty}" = 1 ]; then
-    "$@" 2>&1 | tee -a "${log}" | while IFS= read -r _; do printf '.'; done
-    rc=${PIPESTATUS[0]}
-    echo
-  else
-    "$@" >>"${log}" 2>&1
-    rc=$?
-  fi
+  "$@" 2>&1 | tee -a "${log}" | while IFS= read -r _; do printf '.'; done
+  rc=${PIPESTATUS[0]}
   set -e
+  echo
   if [ "${rc}" -ne 0 ]; then
     tail -n 5 "${log}" | sed 's/^/    /'
   fi
@@ -587,7 +582,8 @@ fi
 # curl -fsSL https://pkgs.netbird.io/install.sh | sh
 
 
-info "Updating Proxmox VE: a few minutes (log: /root/tappaas/pve-update.log)"
+# The dots follow on the step's own line, as the spinner's did.
+echo -ne "${DGN}[Info]${CL} Updating Proxmox VE (Patience — a dot per package step; log: /root/tappaas/pve-update.log)"
 : > /root/tappaas/pve-update.log
 _upd_ok=1
 with_dots /root/tappaas/pve-update.log apt-get update || { _upd_ok=0; msg_error "apt update failed"; }

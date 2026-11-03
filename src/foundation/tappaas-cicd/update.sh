@@ -52,19 +52,17 @@ if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
     kill "${_follow}" 2>/dev/null || true
     [[ "${rc}" -eq 0 ]] || die "nixos-rebuild failed (exit ${rc}); see journalctl -u ${_unit}"
 else
-    # Dots while the unit runs, at a terminal only (a log gets none).
-    # `systemctl start --wait` exits with the unit's own result, so the real
-    # status is preserved directly — issue #201's PIPESTATUS problem cannot
-    # arise here because there is no pipe.
-    _dots=0; [ -t 1 ] && _dots=1
+    # Dots while the unit runs. `systemctl start --wait` exits with the unit's
+    # own result, so the real status is preserved directly — issue #201's
+    # PIPESTATUS problem cannot arise here because there is no pipe.
     set +e
     systemctl start --wait "${_unit}" &
     _pid=$!
-    while kill -0 "${_pid}" 2>/dev/null; do (( _dots )) && printf "."; sleep 2; done
+    while kill -0 "${_pid}" 2>/dev/null; do printf "."; sleep 2; done
     wait "${_pid}"
     rc=$?
     set -e
-    (( _dots )) && echo ""
+    echo ""
     if [[ "${rc}" -ne 0 ]]; then
         # Same diagnostic contract as 3c6379a — name the cause, never report a
         # bare exit code. The output is in the journal now rather than a temp

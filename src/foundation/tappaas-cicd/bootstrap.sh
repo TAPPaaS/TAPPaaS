@@ -9,7 +9,7 @@ set -euo pipefail
 # This runs over SSH from install-platform.sh, so keep the console quiet:
 # bootstrap's own status lines go to [Debug] (shown only when TAPPAAS_DEBUG=1),
 # the noisy git/keygen output is redirected to $BOOTSTRAP_LOG, and the
-# nixos-rebuild output goes there too (a row of progress dots at a terminal).
+# nixos-rebuild output is rendered as a row of progress dots (one per line).
 BOOTSTRAP_LOG="${BOOTSTRAP_LOG:-/tmp/tappaas-bootstrap.log}"
 : >"$BOOTSTRAP_LOG" 2>/dev/null || BOOTSTRAP_LOG=/dev/null
 msg_info() { if [ "${TAPPAAS_DEBUG:-0}" = "1" ]; then echo "[Debug] $*"; fi; }
@@ -130,13 +130,12 @@ fi
 
 # rebuild the nixos configuration. NixOS version is pinned in ./flake.lock
 # (declared in git); --impure only to read /etc/nixos/hardware-configuration.nix.
-# The very verbose build output is captured in full to $BOOTSTRAP_LOG (a row
-# of progress dots at a terminal, none into a log); on failure its tail is shown.
-msg_info "Rebuilding NixOS (nixos-rebuild switch)"
-_dots=0; [ -t 1 ] && _dots=1
+# The very verbose build output is rendered as a row of progress dots (one per
+# line) and captured in full to $BOOTSTRAP_LOG; on failure its tail is shown.
+msg_info "Rebuilding NixOS (nixos-rebuild switch) — progress dots follow"
 if sudo nixos-rebuild switch --flake .#tappaas-cicd --impure 2>&1 \
      | tee -a "$BOOTSTRAP_LOG" \
-     | { if [ "$_dots" = 1 ]; then while IFS= read -r _; do printf '.'; done; printf '\n'; else cat >/dev/null; fi; }; then
+     | { while IFS= read -r _; do printf '.'; done; printf '\n'; }; then
   msg_ok "NixOS rebuild complete"
 else
   echo "[Error] nixos-rebuild switch failed — tail of ${BOOTSTRAP_LOG}:" >&2

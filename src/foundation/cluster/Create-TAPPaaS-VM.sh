@@ -572,21 +572,21 @@ if [ "${IMAGETYPE:-}" != "clone" ]; then
       # Decompress to a plain .iso under template/iso; ISO_NAME is what qm attaches.
       if [[ "$IMAGE" == *.bz2 ]]; then
         ISO_NAME="$(basename "${IMAGE%.bz2}")"
-        curl -fsSLo "/tmp/${IMAGE##*/}" "$URL"
+        curl -fSLo "/tmp/${IMAGE##*/}" "$URL"
         image_sha256_check "/tmp/${IMAGE##*/}" "${IMAGESHA256:-}"
         info "Decompressing ISO, have patience"
         bzip2 -dc "/tmp/${IMAGE##*/}" > "/var/lib/vz/template/iso/${ISO_NAME}"
         rm -f "/tmp/${IMAGE##*/}"
       elif [[ "$IMAGE" == *.xz ]]; then
         ISO_NAME="$(basename "${IMAGE%.xz}")"
-        curl -fsSLo "/tmp/${IMAGE##*/}" "$URL"
+        curl -fSLo "/tmp/${IMAGE##*/}" "$URL"
         image_sha256_check "/tmp/${IMAGE##*/}" "${IMAGESHA256:-}"
         info "Decompressing ISO, have patience"
         xz -dc "/tmp/${IMAGE##*/}" > "/var/lib/vz/template/iso/${ISO_NAME}"
         rm -f "/tmp/${IMAGE##*/}"
       else
         ISO_NAME="$(basename "$IMAGE")"
-        curl -fsSLo "/var/lib/vz/template/iso/${ISO_NAME}" "$URL"
+        curl -fSLo "/var/lib/vz/template/iso/${ISO_NAME}" "$URL"
         image_sha256_check "/var/lib/vz/template/iso/${ISO_NAME}" "${IMAGESHA256:-}"
       fi
       info "Downloaded ISO file to /var/lib/vz/template/iso/${ISO_NAME}"
@@ -606,7 +606,7 @@ if [ "${IMAGETYPE:-}" != "clone" ]; then
       info "Using the downloaded, hash-verified Disk Image: ${PREFETCHED}"
     else
       info "Retrieving the Disk Image: $URL"
-      curl -fsSLo "$IMAGE" "$URL"
+      curl -fSLo "$IMAGE" "$URL"
       image_sha256_check "$IMAGE" "${IMAGESHA256:-}"
     fi
     if [[ "$IMAGE" == *.bz2 ]]; then
@@ -821,28 +821,27 @@ if [ "$IMAGETYPE" == "clone" ]; then
     local _node="$1" _src="$2" _new="$3" _name="$4" _via_ssh="${5:-}"
     local _pvesh_cmd="pvesh create /nodes/${_node}/qemu/${_src}/clone --newid ${_new} --name '${_name}' --full 1 2>&1"
     debug "  Cloning template ${_src} → VM ${_new} on ${_node}..."
-    # Progress: 'transferred X of Y (Z%)' lines → a single dot each at a
-    # terminal (none into a log); every other clone line → [Debug].
-    local _dots=0; [ -t 1 ] && _dots=1
+    # Progress: 'transferred X of Y (Z%)' lines → a single dot each (visible
+    # progress without flooding); every other clone line → [Debug].
     if [[ -n "$_via_ssh" ]]; then
       # shellcheck disable=SC2029
       ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR "root@${_node}.mgmt.internal" "${_pvesh_cmd}" \
         | while IFS= read -r _line; do
             [[ "$_line" =~ ^UPID: ]] && continue
             [[ -z "$_line" ]] && continue
-            if [[ "$_line" == *transferred* ]]; then (( _dots )) && printf '.' || true; else debug "  ${_line}"; fi
+            if [[ "$_line" == *transferred* ]]; then printf '.'; else debug "  ${_line}"; fi
           done
     else
       eval "${_pvesh_cmd}" \
         | while IFS= read -r _line; do
             [[ "$_line" =~ ^UPID: ]] && continue
             [[ -z "$_line" ]] && continue
-            if [[ "$_line" == *transferred* ]]; then (( _dots )) && printf '.' || true; else debug "  ${_line}"; fi
+            if [[ "$_line" == *transferred* ]]; then printf '.'; else debug "  ${_line}"; fi
           done
     fi
     _clone_rc=${PIPESTATUS[0]}
-    (( _dots )) && printf '\n' || true
     if [[ $_clone_rc -ne 0 ]]; then
+      printf '\n'
       error "Clone failed (exit ${_clone_rc})"
       exit 1
     fi
@@ -877,6 +876,7 @@ if [ "$IMAGETYPE" == "clone" ]; then
 
   # Set CPU type after cloning (clone inherits from template)
   qm set $VMID --cpu "$CPU_TYPE" >/dev/null
+  printf '\n'   # terminate the clone progress-dot line
 fi
 
 info "${BOLD}Configuring the $VMNAME VM settings..."

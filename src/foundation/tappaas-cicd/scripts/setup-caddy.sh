@@ -64,10 +64,11 @@ else
             warn "os-caddy installation failed or returned non-zero"
         }
     else
-        _pkg_log="$(mktemp)"
-        run_with_dots "${_pkg_log}" ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y os-caddy'" \
-            || warn "os-caddy installation failed or returned non-zero"
-        rm -f "${_pkg_log}"
+        ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y os-caddy'" 2>&1 | while IFS= read -r _; do printf "."; done || {
+            echo ""
+            warn "os-caddy installation failed or returned non-zero"
+        }
+        echo ""
     fi
 
     # Verify the package actually got installed
@@ -87,10 +88,10 @@ for pkg in os-acme-client os-ddclient; do
         debug "  $pkg already installed"
     else
         info "Step 1b: Installing $pkg..."
-        _pkg_log="$(mktemp)"
-        run_with_dots "${_pkg_log}" ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y $pkg'" \
-            || warn "$pkg installation returned non-zero"
-        rm -f "${_pkg_log}"
+        ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y $pkg'" 2>&1 \
+            | while IFS= read -r _; do printf "."; done || \
+            warn "$pkg installation returned non-zero"
+        echo ""
         if ! ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info $pkg'" &>/dev/null; then
             die "$pkg installation failed"
         fi
