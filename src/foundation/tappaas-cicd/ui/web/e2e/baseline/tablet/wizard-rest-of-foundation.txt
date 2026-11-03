@@ -78,33 +78,34 @@
         - banner:
           - heading "Rest of foundation" [level=2]
           - button "close": ×
-        - paragraph: "One job: first network and tappaas-cicd move to the pool shown below (live, no restart), then backup, identity and logging are installed where shown, then your organization and you as its owner, the account you sign in with. It keeps running on the mothership if this browser is cut off."
+        - paragraph: "One job: first network and tappaas-cicd move to the disk system shown below (live, no restart), then backup, identity and logging are installed where shown, then your organization and you as its owner, the account you sign in with. It keeps running on the mothership if this browser is cut off."
         - heading "Machines" [level=3]
         - list:
           - listitem: "tappaas1: 64 GiB memory; local-zfs 444 GiB (424 GiB free), the boot pool; tanka1 1.8 TiB (1.8 TiB free)"
         - heading "Foundation modules" [level=3]
         - paragraph: "network — Move: tappaas1, local-zfs → tappaas1, tanka1"
-        - text: pool
-        - combobox "pool":
+        - text: installed on disk system
+        - combobox "installed on disk system":
           - option "tanka1" [selected]
           - option "local-zfs"
         - paragraph: "tappaas-cicd — Move: tappaas1, local-zfs → tappaas1, tanka1"
-        - text: pool
-        - combobox "pool":
+        - text: installed on disk system
+        - combobox "installed on disk system":
           - option "tanka1" [selected]
           - option "local-zfs"
         - paragraph: backup — Placeholder
         - paragraph: "no tankc pool on any machine: backup is a placeholder until one is added"
         - paragraph: identity — Install
-        - text: pool
-        - combobox "pool":
+        - text: installed on disk system
+        - combobox "installed on disk system":
           - option "tanka1" [selected]
           - option "local-zfs"
         - paragraph: logging — Install
-        - text: pool
-        - combobox "pool":
+        - text: installed on disk system
+        - combobox "installed on disk system":
           - option "tanka1" [selected]
           - option "local-zfs"
+        - heading "You" [level=3]
         - text: you
         - textbox "you From the site's email address." [disabled]: operator (operator@example.org)
         - text: From the site's email address. password *

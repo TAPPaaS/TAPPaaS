@@ -51,7 +51,7 @@ function RestOfFoundationWizard({ email, onClose }: { email: string; onClose: ()
 
   return (
     <Wizard title="Rest of foundation" onClose={onClose} running={job && jobLive(job) ? [jobLabel(job)] : []}>
-      <p className="small">One job: first network and tappaas-cicd move to the pool shown below (live, no restart), then backup, identity and logging are installed where shown, then your organization and you as its owner, the account you sign in with. It keeps running on the mothership if this browser is cut off.</p>
+      <p className="small">One job: first network and tappaas-cicd move to the disk system shown below (live, no restart), then backup, identity and logging are installed where shown, then your organization and you as its owner, the account you sign in with. It keeps running on the mothership if this browser is cut off.</p>
       {!run.id ? <PlacementPanel read={read.failure ?? read.env?.error ?? null} placement={placement} places={places} changed={changed} choose={choose} /> : null}
       {run.id ? (
         !job ? (
@@ -70,8 +70,9 @@ function RestOfFoundationWizard({ email, onClose }: { email: string; onClose: ()
             ) : null}
           </>
         )
-      ) : (
+      ) : !placement && !read.failure && !read.env?.error ? null : (
         <div className="form">
+          <h3>You</h3>
           <label className="form-row">
             <span>you</span>
             <input type="text" value={owner ? `${owner} (${email})` : ""} disabled />
@@ -106,7 +107,7 @@ function PlacementPanel({ read, placement, places, changed, choose }: {
   choose: (r: PlacementRow, p: Place) => void;
 }) {
   if (!placement || !places) {
-    return read ? <p className="readstate readstate-fail small">The machines could not be read: {read}. The job then uses its own proposal.</p> : <p className="muted small">Reading the machines…</p>;
+    return read ? <p className="readstate readstate-fail small">The machines could not be read: {read}. The job then uses its own proposal.</p> : <p className="muted small">Reading the machines and their disk systems… (it asks each machine: about half a minute)</p>;
   }
   const many = placement.nodes.length > 1;
   return (
@@ -135,7 +136,7 @@ function PlacementPanel({ read, placement, places, changed, choose }: {
               <div className="form">
                 {many ? (
                   <label className="form-row">
-                    <span>machine</span>
+                    <span>install on machine</span>
                     <select value={p.node} onChange={(e) => choose(r, { ...p, node: e.target.value })}>
                       {Object.keys(r.choices).map((n) => <option key={n} value={n}>{n}</option>)}
                     </select>
@@ -143,7 +144,7 @@ function PlacementPanel({ read, placement, places, changed, choose }: {
                 ) : null}
                 {many && c && c.ha.length ? (
                   <label className="form-row">
-                    <span>HA machine</span>
+                    <span>high availability backup on</span>
                     <select value={p.ha} onChange={(e) => choose(r, { ...p, ha: e.target.value })}>
                       <option value="">none</option>
                       {c.ha.map((n) => <option key={n} value={n}>{n}</option>)}
@@ -151,7 +152,7 @@ function PlacementPanel({ read, placement, places, changed, choose }: {
                   </label>
                 ) : null}
                 <label className="form-row">
-                  <span>pool</span>
+                  <span>installed on disk system</span>
                   <select value={p.storage} onChange={(e) => choose(r, { ...p, storage: e.target.value })}>
                     {(c?.pools[p.ha] ?? []).map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
