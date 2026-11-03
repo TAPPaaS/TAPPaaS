@@ -18,7 +18,7 @@ import { existsSync, readFileSync, watchFile } from "fs";
 import { lookup } from "dns";
 import { networkInterfaces } from "os";
 import { join } from "path";
-import { AccessConfig, addrMatches, setupState } from "./access";
+import { AccessConfig, Me, addrMatches, setupState } from "./access";
 import { GateKeys, authentikKeyFetch } from "./gate";
 import { Cmdb } from "./cmdb";
 import { HealthLive } from "./healthlive";
@@ -36,7 +36,7 @@ import { HelpSpec, checkArgs, renderHelp } from "../../lib/ts/src/help";
 import { DieError, die, guarded, info, requireOperator, warn } from "../../lib/ts/src/cli";
 import { defaultConfigDir } from "../../lib/ts/src/config-io";
 import { mgmtDomain, queryClusterNodes } from "../../lib/ts/src/cluster";
-import { recordSetupTest } from "./setup";
+import { recordSetupTest, setupCheckModules } from "./setup";
 
 export const VERSION = "0.1.0";
 export const DEFAULT_PORT = 9097;
@@ -283,6 +283,15 @@ async function serve(o: ServeOpts): Promise<number> {
     // A foundation module's test run as a job counts for its Setup step.
     onDone: (job, tail) => {
       if (recordSetupTest(o.stateDir, job, tail)) void reads.setupTestRecorded();
+      // Rest of foundation installed what was missing: their tests run now, as
+      // Setup's Check runs them, so its step reads done without a second click.
+      if (job.bin === "rest-of-foundation.sh" && job.exit === 0) {
+        const me = { ...job.who, email: null, groups: [], route: "console" } as Me;
+        for (const m of setupCheckModules(o.configDir, o.stateDir)) {
+          const r = jobs.createRead(me, ["module-manager", "test", m]);
+          if (r.job) log(`job ${r.job.id} read after rest-of-foundation: ${r.job.argv.join(" ")}`);
+        }
+      }
     },
     // A new build linked while a job ran (ui/install.sh left restart-pending):
     // now that nothing runs, exit; the unit's Restart=always starts the new one.
