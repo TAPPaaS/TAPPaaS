@@ -558,6 +558,24 @@ start_install() {
   done
   rm -f "$seen"
   [[ "$state" == 0 ]] || die "the install stopped on ${NODE_IP}: see above, and ${LOG:-the output}."
+  show_token
+}
+
+# The console's setup token, on request: read from the mothership through the
+# node with the install key, and written to the terminal only, never to the log
+# (a secret in a log is a secret for every reader of it, ADR-034 D10).
+show_token() {
+  local yn tok key
+  key="$(cd "$(dirname "$INSTALL_KEY")" && pwd)/$(basename "$INSTALL_KEY")"
+  [[ -t 0 && -w /dev/tty ]] || { info "the setup token, from this machine: ssh -i ${key} root@${NODE_IP} 'ssh -i /root/tappaas/tappaas-cicd.key tappaas@tappaas-cicd.mgmt.internal cat config/console-setup-token'"; return 0; }
+  read -r -p "${IN} Press Enter to show the console's setup token here (it is not written to the log), or n to skip: " yn; logged "$yn"
+  if [[ "$yn" != [nN]* ]]; then
+    tok="$(node_ssh -n "root@${NODE_IP}" 'ssh -i /root/tappaas/tappaas-cicd.key -o StrictHostKeyChecking=accept-new -o BatchMode=yes tappaas@tappaas-cicd.mgmt.internal cat config/console-setup-token' 2>/dev/null || true)"
+    if [[ -n "$tok" ]]; then printf '  Setup token: %s\n' "$tok" >/dev/tty
+    else warn "the setup token could not be read: the console may have closed setup already"; fi
+  fi
+  info "To show it again later, from this machine:"
+  info "  ssh -i ${key} root@${NODE_IP} 'ssh -i /root/tappaas/tappaas-cicd.key tappaas@tappaas-cicd.mgmt.internal cat config/console-setup-token'"
 }
 
 # The three names the bootstrap takes, asked before the wait so it runs unattended.

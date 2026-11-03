@@ -244,5 +244,3 @@ echo ""
 cat ~/tappaas/console-next-steps.txt 2>/dev/null \
   || echo -e "  Continue on the mothership: ${BL}ssh tappaas@tappaas-cicd${CL}, then ${BL}rest-of-foundation.sh${CL}"
 echo ""
-echo -e "  The same steps from the command line, and more nodes: see INSTALL.md."
-echo ""
