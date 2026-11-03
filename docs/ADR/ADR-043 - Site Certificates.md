@@ -334,7 +334,7 @@ for the install and the update, which rebuild anyway); a changed refid moves eve
 | 3 `dnsMode: local` | built and proven on lab2; a new site defaults to it, with `<site>.home.arpa` when no domain is given (unproven until a fresh install) |
 | D11 CAs in the CMDB | built: `certificate-authority` CIs; `depends-on` relations and `escrowed` still to do |
 | 4 providers, `acme-setup.sh` shim | built: `provider add|list|for|remove`, `acme`, the shim, migration 0029, the console's form; not run against a real DNS provider, and `provider test` not built |
-| 5 Day 1 order | not started |
+| 5 Day 1 order | built: the confirmed order, no TLS step, Make it public, first node disks, repositories, and a recorded answer for each optional step; the switch fabric's vendor choice and discovery are still the old UniFi form |
 | 6 #787 logging TLS | not started |
 | 7 fresh lab2 | not started |
 
