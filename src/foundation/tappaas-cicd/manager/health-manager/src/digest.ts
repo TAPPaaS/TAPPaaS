@@ -11,8 +11,9 @@
 // news.
 
 import { createHash } from "crypto";
-import { existsSync, readFileSync, renameSync, writeFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { join } from "path";
+import { renameGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 import { SweepDifference, SweepRecord, WORD } from "./cmdbsweep";
 import { ListRow } from "./emit-read";
 
@@ -162,6 +163,6 @@ export function readSeen(configDir: string): DigestSeen | null {
 
 export function writeSeen(configDir: string, seen: DigestSeen): void {
   const path = join(configDir, SEEN_FILE);
-  writeFileSync(`${path}.tmp`, `${JSON.stringify(seen)}\n`);
-  renameSync(`${path}.tmp`, path);
+  writeFileGuarded(`${path}.tmp`, `${JSON.stringify(seen)}\n`);
+  renameGuarded(`${path}.tmp`, path);
 }
