@@ -57,7 +57,10 @@ export const TESTS_FILE = "setup-tests.json"; // in the state directory
 export const ANSWERS_FILE = "setup-answers.json"; // in the state directory
 
 // What each step that can be answered takes as its answer.
-export const ANSWERS = { firstnode: "boot-only", nodes: "no-more", repos: "tappaas-only", switch: "none", public: "stay-local" } as const;
+export const ANSWERS = { firstnode: "boot-only", nodes: "no-more", repos: "tappaas-only", switch: "no-more", wifi: "no-more", public: "stay-local" } as const;
+// An answer an older console recorded, read as today's: "none" (no switch managed) is "no more switches".
+const LEGACY_ANSWERS: Partial<Record<AnswerStep, string[]>> = { switch: ["none"] };
+const answered = (a: SetupAnswers, step: AnswerStep): boolean => a[step] === ANSWERS[step] || (LEGACY_ANSWERS[step] ?? []).includes(a[step] ?? "");
 export type AnswerStep = keyof typeof ANSWERS;
 export type SetupAnswers = Partial<Record<AnswerStep, string>>;
 
@@ -70,7 +73,7 @@ export interface SetupInputs {
   identities: { organizations: number; users: number };
   siteNodes: string[];
   clusterNodes: string[] | null; // null: membership could not be read
-  switches: { name: string; ports: number; discovered: number; controller: string | null }[] | null;
+  switches: { name: string; ports: number; discovered: number; controller: string | null; manual?: boolean }[] | null;
   vpnPeers: string[] | null; // null: wgvpn list could not be read
   wifi: WifiInputs;
   physical?: PhysicalInputs | null; // null: positions.json could not be read
@@ -168,18 +171,31 @@ export function setupSteps(i: SetupInputs): SetupStep[] {
     detail: extra.length ? `registered: ${repos.join(", ")}` : answer.repos === ANSWERS.repos ? "TAPPaaS only, as answered" : "TAPPaaS only: add Community or another, or answer \"TAPPaaS only\"",
   });
 
-  // 6 · the switch fabric (optional): none managed is a plain answer.
-  if (answer.switch === ANSWERS.switch) {
-    steps.push({ id: "switch", title: "Switch fabric (optional)", required: false, done: true, detail: "no switch under management, as answered: set the VLANs on the switches by hand" });
-  } else if (i.switches === null) {
-    steps.push({ id: "switch", title: "Switch fabric (optional)", required: false, done: null, detail: "switch-configuration-actual.json could not be read" });
+  // 6 · the switch fabric (optional), as More nodes: add switches until "no
+  // more switches". A switch TAPPaaS programs counts once its ports are read; one
+  // managed outside TAPPaaS counts as recorded.
+  if (i.switches === null) {
+    steps.push({ id: "switch", title: "Switch fabric (optional)", required: false, done: answered(answer, "switch") ? true : null, detail: "switch-configuration-actual.json could not be read" });
   } else {
-    const ok = i.switches.filter((s) => s.discovered > 0);
-    steps.push({ id: "switch", title: "Switch fabric (optional)", required: false, done: ok.length > 0, detail: i.switches.length === 0 ? "no switch registered: register one, or answer \"none\"" : ok.length ? i.switches.map((s) => `${s.name}: ${s.ports} port(s), ${s.discovered} discovered${s.controller ? ` via ${s.controller}` : ""}`).join("; ") : "registered, but no port discovered yet: switch-manager interrogate" });
+    const line = (s: NonNullable<SetupInputs["switches"]>[number]) =>
+      s.manual ? `${s.name}: managed outside TAPPaaS, ${s.ports} port(s) recorded` : `${s.name}: ${s.ports} port(s), ${s.discovered} discovered${s.controller ? ` via ${s.controller}` : ""}`;
+    const unread = i.switches.filter((s) => !s.manual && s.discovered === 0).map((s) => s.name);
+    const list = i.switches.map(line).join("; ");
+    const done = unread.length === 0 && (i.switches.length > 0 || answered(answer, "switch"));
+    const detail = unread.length
+      ? `${list}; ports not read yet on ${unread.join(", ")}: discover them in Add a switch`
+      : i.switches.length === 0
+        ? answered(answer, "switch")
+          ? "no switch, as answered: the VLANs on the switches are set by hand"
+          : "no switch yet: add one, or answer \"no more switches\""
+        : answered(answer, "switch")
+          ? `${list}; no more switches, as answered`
+          : list;
+    steps.push({ id: "switch", title: "Switch fabric (optional)", required: false, done, detail });
   }
 
   // 7–9 · Wi-Fi, the physical site, stacks.
-  steps.push(wifiStep(i.wifi));
+  steps.push(wifiStep(i.wifi, answered(answer, "wifi")));
   steps.push(physicalStep(i.physical, i.siteNodes, (i.switches ?? []).map((s) => s.name)));
   steps.push({ id: "stacks", title: "Stacks (optional)", required: false, done: i.stacks.length > 0, detail: i.stacks.length ? `installed: ${i.stacks.join(", ")}` : "none yet" });
 
@@ -209,7 +225,9 @@ export function clientZonesWithoutWifi(w: WifiInputs): { name: string; declared:
     .map((z) => ({ name: z.name, declared: z.ssid && !/^<.*>$/.test(z.ssid) ? z.ssid : null }));
 }
 
-export function wifiStep(w: WifiInputs): SetupStep {
+// As More nodes: add Wi-Fi until every Client zone has an SSID, or until "no
+// more Wi-Fi" says the rest stay without.
+export function wifiStep(w: WifiInputs, noMore = false): SetupStep {
   const title = "WiFi (optional)";
   const clients = w.zones.filter((z) => z.type === "Client" && (z.state ?? "Active") === "Active").map((z) => z.name);
   if (clients.length === 0) return { id: "wifi", title, required: false, done: true, detail: "no active Client zone: nothing to broadcast" };
@@ -220,6 +238,7 @@ export function wifiStep(w: WifiInputs): SetupStep {
     return { id: "wifi", title, required: false, done: true, detail: `every active Client zone has an SSID: ${names.join(", ")}` };
   }
   const named = missing.map((z) => (z.declared ? `${z.name} (zones.json names ${z.declared}; no access point broadcasts it)` : z.name)).join(", ");
+  if (noMore) return { id: "wifi", title, required: false, done: true, detail: `no more Wi-Fi, as answered; without an SSID: ${named}` };
   return { id: "wifi", title, required: false, done: false, detail: w.aps.length === 0 ? `no access point registered yet (ap-manager add); no SSID for: ${named}` : `no SSID for: ${named}` };
 }
 
@@ -315,11 +334,11 @@ export function parseApList(out: string): WifiInputs["aps"] {
 }
 
 export function parseSwitches(doc: unknown): SetupInputs["switches"] {
-  const sw = (doc as { switches?: Record<string, { controller?: string; ports?: Record<string, { source?: string }> }> })?.switches;
+  const sw = (doc as { switches?: Record<string, { controller?: string; managed?: string; ports?: Record<string, { source?: string }> }> })?.switches;
   if (!sw || typeof sw !== "object") return [];
   return Object.entries(sw).map(([name, s]) => {
     const ports = Object.values(s.ports ?? {});
-    return { name, ports: ports.length, discovered: ports.filter((p) => p.source === "discovered").length, controller: s.controller ?? null };
+    return { name, ports: ports.length, discovered: ports.filter((p) => p.source === "discovered").length, controller: s.controller ?? null, manual: s.managed === "manual" };
   });
 }
 

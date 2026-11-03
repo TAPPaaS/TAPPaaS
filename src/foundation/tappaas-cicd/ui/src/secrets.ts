@@ -15,12 +15,12 @@
 //                                            job (a minute or two, with its output and Stop):
 //                                            the stick is the keys' copy that leaves the building
 
-import { chmodSync, existsSync, readFileSync, renameSync, statSync, writeFileSync } from "fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
 import { simulating } from "../../lib/ts/src/exec";
 import { SIMULATE_NO_SECRET } from "./run";
 
-export type SecretName = "acme-dns" | "unifi" | "wlan" | "backup-keys" | "user-password" | "rest-of-foundation";
+export type SecretName = "acme-dns" | "unifi" | "mikrotik" | "wlan" | "backup-keys" | "user-password" | "rest-of-foundation";
 
 interface SecretSpec {
   file: string | null; // under the home directory; null: nothing is kept on the mothership
@@ -31,6 +31,9 @@ interface SecretSpec {
   // Set by its owner's verb instead of written here: the argv (never the
   // secret), the secret on stdin, and the keys it sets.
   command?: (fields: Record<string, unknown>) => SecretCommand | string;
+  // One file per object in the directory `file` names (mode 700): its name
+  // from the fields, or an error. The status lists the objects that have one.
+  fileOf?: (fields: Record<string, unknown>) => string | { error: string };
 }
 
 export interface SecretCommand {
@@ -80,6 +83,28 @@ export const SECRETS: Record<SecretName, SecretSpec> = {
       if (!url || !/^https?:\/\//.test(url)) return "url: https://<controller>[:port]";
       if (!username || !password) return "username and password of a local UniFi OS admin";
       return new Map([["url", url], ["username", username], ["password", password]]);
+    },
+  },
+  // A MikroTik switch's RouterOS API login, as the mikrotik module's
+  // setup-credentials.sh stores it: ~/.mikrotik-credentials/<switch>.txt.
+  mikrotik: {
+    file: ".mikrotik-credentials",
+    what: "each MikroTik switch's RouterOS API login (a user in a group with read, write and api), which mikrotik-controller logs in with",
+    fileOf: (f) => {
+      const sw = str(f.switch);
+      return sw && /^[a-z0-9][a-z0-9-]{0,62}$/.test(sw) ? `${sw}.txt` : { error: "switch: the switch's name, lower case letters, digits and -" };
+    },
+    lines: (f) => {
+      const username = str(f.username);
+      const password = str(f.password);
+      if (!username || !password) return "username and password of the RouterOS user TAPPaaS logs in as";
+      const out = new Map([["username", username], ["password", password], ["tls", f.tls === true || f.tls === "true" ? "true" : "false"]]);
+      const port = str(f.port);
+      if (port) {
+        if (!/^[0-9]{1,5}$/.test(port)) return "port: a number";
+        out.set("port", port);
+      }
+      return out;
     },
   },
   wlan: {
@@ -205,6 +230,16 @@ export function secretStatus(home: string, name: SecretName): SecretStatus {
   if (spec.file === null) return { name, file: "", what: spec.what, present: false, keys: [], modified: null };
   const f = join(home, spec.file);
   if (!existsSync(f)) return { name, file: f, what: spec.what, present: false, keys: [], modified: null };
+  if (spec.fileOf) {
+    // A directory of one file per object: the objects are its keys.
+    let objects: string[] = [];
+    try {
+      objects = readdirSync(f).filter((n) => n.endsWith(".txt") && !n.startsWith(".")).map((n) => n.slice(0, -4)).sort();
+    } catch {
+      objects = [];
+    }
+    return { name, file: f, what: spec.what, present: objects.length > 0, keys: objects, modified: null };
+  }
   let keys: string[] = [];
   try {
     keys = [...parseKv(readFileSync(f, "utf8")).keys()];
@@ -225,7 +260,14 @@ export function writeSecret(home: string, name: SecretName, fields: Record<strin
   const spec = SECRETS[name];
   if (spec.command || spec.file === null) return { ok: false, error: `${name} is set through its owner's verb (secretCommand), not written here` };
   if (simulating()) return { ok: false, error: SIMULATE_NO_SECRET };
-  const f = join(home, spec.file);
+  let f = join(home, spec.file);
+  if (spec.fileOf) {
+    const one = spec.fileOf(fields);
+    if (typeof one !== "string") return { ok: false, error: one.error };
+    mkdirSync(f, { recursive: true });
+    chmodSync(f, 0o700);
+    f = join(f, one);
+  }
   let current = new Map<string, string>();
   try {
     if (existsSync(f)) current = parseKv(readFileSync(f, "utf8"));

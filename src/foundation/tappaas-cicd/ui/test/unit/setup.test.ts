@@ -85,7 +85,14 @@ async function main(): Promise<void> {
   check(one({ firstNode: null }, "firstnode").done === null, "…no node record: unknown");
   check(one({ repositories: ["TAPPaaS"] }, "repos").done === false && one({ repositories: ["TAPPaaS"], answers: { repos: "tappaas-only" } }, "repos").done === true, "TAPPaaS alone: not done until \"TAPPaaS only\"");
   check(one({ siteNodes: ["tappaas1"], clusterNodes: ["tappaas1"] }, "nodes").done === false && one({ siteNodes: ["tappaas1"], clusterNodes: ["tappaas1"], answers: { nodes: "no-more" } }, "nodes").done === true, "one node: not done until \"no more machines\"");
-  check(one({ switches: [], answers: { switch: "none" } }, "switch").done === true && one({ switches: null, answers: { switch: "none" } }, "switch").done === true, "no switch managed: \"none\" answers it, even unreadable");
+  check(one({ switches: [], answers: { switch: "no-more" } }, "switch").done === true && one({ switches: null, answers: { switch: "no-more" } }, "switch").done === true, "no switch: \"no more switches\" answers it, even unreadable");
+  check(one({ switches: [], answers: { switch: "none" } as never }, "switch").done === true, "…and an older console's \"none\" still does");
+  check(one({ switches: [] }, "switch").done === false && /add one, or answer "no more switches"/.test(one({ switches: [] }, "switch").detail), "no switch and no answer: not done, and says both ways on");
+  const manual = one({ switches: [{ name: "office-sw", ports: 2, discovered: 0, controller: null, manual: true }] }, "switch");
+  check(manual.done === true && /office-sw: managed outside TAPPaaS, 2 port\(s\) recorded/.test(manual.detail), "a switch managed outside TAPPaaS counts once recorded, though it has no port read");
+  const unread = one({ switches: [{ name: "crs-c", ports: 0, discovered: 0, controller: null }], answers: { switch: "no-more" } }, "switch");
+  check(unread.done === false && /ports not read yet on crs-c/.test(unread.detail), "a switch TAPPaaS programs with no port read: not done, even after \"no more switches\"");
+  check(wifiStep(wifi, true).done === true && /no more Wi-Fi, as answered; without an SSID: home/.test(wifiStep(wifi, true).detail), "\"no more Wi-Fi\": done, naming the zones left without");
   const nolog = one({ modules: { ...hrossen.modules, logging: { config: false, test: null } } }, "bootstrap");
   check(nolog.done === false && nolog.detail.includes("logging: not installed"), "no config/logging.json: the rest of the foundation is not done, and says logging is missing");
   check(one({ modules: { ...hrossen.modules, backup: { config: true, test: { rc: 1, tail: "FAIL pbs", at: "2026-10-18T09:00:00.000Z" } } } }, "bootstrap").done === false, "installed but its test fails: not done");
@@ -114,7 +121,8 @@ async function main(): Promise<void> {
   // ── answers: the console's own record ──────────────────────────────
   {
     const sd = mkdtempSync(join(tmpdir(), "console-answers-"));
-    check(recordSetupAnswer(sd, "switch", "none") === null && readSetupAnswers(sd).switch === "none", "an answer is recorded and read back");
+    check(recordSetupAnswer(sd, "switch", "no-more") === null && readSetupAnswers(sd).switch === "no-more", "an answer is recorded and read back");
+    check(recordSetupAnswer(sd, "wifi", "no-more") === null && readSetupAnswers(sd).wifi === "no-more", "…Wi-Fi's too");
     check(recordSetupAnswer(sd, "switch", "maybe") !== null && recordSetupAnswer(sd, "vpn", "none") !== null, "…a wrong answer, or a step that takes none, is refused");
     check(recordSetupAnswer(sd, "switch", null) === null && readSetupAnswers(sd).switch === undefined, "…and null withdraws it");
     rmSync(sd, { recursive: true, force: true });
@@ -249,6 +257,16 @@ async function main(): Promise<void> {
   check((statSync(join(home, ".unifi-os-credentials.txt")) as unknown as { mode: number }).mode % 0o1000 === 0o600, "…mode 0600");
   const st = secretStatus(home, "unifi");
   check(st.present && st.keys.join() === "url,username,password" && !JSON.stringify(st).includes('"pw"'), "the status names the keys and never a value");
+  // mikrotik: one RouterOS login per switch, as the module's setup-credentials.sh keeps it.
+  check(secretStatus(home, "mikrotik").present === false, "mikrotik: no switch yet, not set");
+  w = writeSecret(home, "mikrotik", { switch: "crs-a", username: "tappaas", password: "r0uter" });
+  const mf = join(home, ".mikrotik-credentials", "crs-a.txt");
+  check(w.ok && parseKv(readFileSync(mf, "utf8")).get("tls") === "false" && parseKv(readFileSync(mf, "utf8")).get("username") === "tappaas", "mikrotik: ~/.mikrotik-credentials/<switch>.txt, username=, password=, tls=false");
+  check((statSync(mf) as unknown as { mode: number }).mode % 0o1000 === 0o600 && (statSync(join(home, ".mikrotik-credentials")) as unknown as { mode: number }).mode % 0o1000 === 0o700, "…the file 0600 in a 0700 directory");
+  writeSecret(home, "mikrotik", { switch: "crs-b", username: "tappaas", password: "x" });
+  const ms = secretStatus(home, "mikrotik");
+  check(ms.present && ms.keys.join() === "crs-a,crs-b" && !JSON.stringify(ms).includes("r0uter"), "…its status names the switches, never a password");
+  check(!writeSecret(home, "mikrotik", { switch: "../evil", username: "a", password: "b" }).ok && !writeSecret(home, "mikrotik", { switch: "crs-c", username: "a", password: "b", port: "x" }).ok, "…a switch name that is not a name, or a port that is not a number, is refused");
   // wlan is ap-manager's (ssid set-passphrase on stdin, #889; wifi.test.ts): the console writes no line of it.
   check(!writeSecret(home, "wlan", { ssid: "home", passphrase: "correct horse" }).ok && !existsSync(join(home, ".wlan-secrets.txt")), "wlan: not written by the console");
   writeFileSync(join(home, ".wlan-secrets.txt"), "home=pa=ss word\nguest=battery staple\n", { encoding: "utf8", mode: 0o600 });
