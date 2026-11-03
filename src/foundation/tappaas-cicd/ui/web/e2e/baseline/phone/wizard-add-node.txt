@@ -198,6 +198,9 @@
 - text: Add a satellite
 - paragraph: A rented machine with a public IPv4 gives a site without one public ingress and the admin-VPN relay.
 - button "Add a satellite…"
+- text: Add a repository
+- paragraph: A repository of modules, such as Community, whose stacks can then be added; or one without modules that the nightly update keeps current.
+- button "Add a repository…"
 - heading "The physical view" [level=2]
 - text: Record the rooms
 - paragraph:

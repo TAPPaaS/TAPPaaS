@@ -83,6 +83,9 @@
     - listitem:
       - 'button "skip 4 · The result: module-manager test optional ▸"': "4 · The result: module-manager test optional ▸"
       - paragraph: Read live.
+- text: Add a repository
+- paragraph: A repository of modules, such as Community, whose stacks can then be added; or one without modules that the nightly update keeps current.
+- button "Add a repository…"
 - heading "The physical view" [level=2]
 - text: Record the rooms
 - paragraph:

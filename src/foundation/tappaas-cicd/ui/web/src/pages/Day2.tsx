@@ -21,6 +21,7 @@ import { addEnvironmentSteps } from "./Environments";
 import { SiteRead, Topology } from "../types";
 import { ApIn, SiteSsid, ZoneIn, wifiZones } from "../wizards";
 import { AddStackButton } from "./AddStack";
+import { AddRepositoryButton } from "./AddRepository";
 import { SetupDoc } from "./Setup";
 import { ENROL_TEXT, EnrolButton } from "./Enrol";
 import { WIFI_TEXT, WifiButton } from "./Wifi";
@@ -179,7 +180,8 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
   const me = useMe();
   const zones = useRead<ZoneIn[]>("zones");
   const apsRead = useRead<ApIn[]>("aps");
-  const site = useRead<SiteRead>("site").env?.data?.site;
+  const siteRead = useRead<SiteRead>("site").env?.data;
+  const site = siteRead?.site;
   const ssidsRead = useRead<SiteSsid[]>("ssids");
   const wifi = wifiZones(zones.env?.data ?? [], ssidsRead.env?.data ?? []);
   // /setup/day2#wifi-<zone> (Day 1's WiFi step): that card, once it is there.
@@ -204,6 +206,9 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
         </WizardCard>
         <WizardCard title="Add a satellite" action={<SatelliteButton />}>
           A rented machine with a public IPv4 gives a site without one public ingress and the admin-VPN relay.
+        </WizardCard>
+        <WizardCard title="Add a repository" action={<AddRepositoryButton installed={(siteRead?.repositories ?? []).map((r) => r.name)} />}>
+          A repository of modules, such as Community, whose stacks can then be added; or one without modules that the nightly update keeps current.
         </WizardCard>
       </Group>
       <PhysicalSite doc={doc} />
