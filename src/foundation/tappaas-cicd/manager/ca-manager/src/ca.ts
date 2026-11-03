@@ -32,6 +32,58 @@ export interface CertRecord {
   // trust store and the refid Caddy binds (D7).
   trust?: string;
   refid?: string;
+  // Where it was put on a guest (D5), so a renewal puts it there again.
+  deliveries?: Delivery[];
+}
+
+export interface Delivery {
+  host: string; // reached as tappaas@<host>, the key written as root through sudo
+  dir: string; // <dir>/<as>.pem (the certificate, then its CA) and <dir>/<as>.key
+  as: string;
+  group: string; // the key is mode 0640, root:<group>
+  reload: string[]; // the units reloaded after a change
+}
+
+const HOST = /^[a-z0-9][a-z0-9.-]{0,252}$/;
+const UNIT = /^[A-Za-z0-9@._-]+$/;
+// A delivery's fields, refused when one could leave the guest's directory or be
+// read as a shell word.
+export function deliveryProblem(d: Delivery): string | null {
+  if (!HOST.test(d.host)) return `${d.host}: not a host name`;
+  if (!/^\/[A-Za-z0-9._/-]+$/.test(d.dir) || d.dir.includes("..")) return `${d.dir}: an absolute directory, letters, digits, . _ - and /`;
+  if (!/^[a-z0-9][a-z0-9._-]{0,60}$/.test(d.as)) return `${d.as}: a file name, letters, digits, . _ -`;
+  if (!/^[a-z_][a-z0-9_-]{0,31}$/.test(d.group)) return `${d.group}: a group name`;
+  const bad = d.reload.find((u) => !UNIT.test(u));
+  return bad ? `${bad}: not a unit name` : null;
+}
+
+// The script the guest runs as root (`sudo sh -s`) to take a certificate in. The
+// chain and key travel inside it, on ssh's stdin, never in an argument. Each file
+// is replaced atomically, and the units are reloaded only when something changed.
+export function deliveryScript(d: Delivery, chain: string, key: string): string {
+  const pem = `${d.dir}/${d.as}.pem`;
+  const kf = `${d.dir}/${d.as}.key`;
+  const end = (t: string): string => (t.endsWith("\n") ? t : `${t}\n`);
+  return [
+    "set -eu",
+    "umask 077",
+    `getent group ${d.group} >/dev/null || { echo "no group ${d.group} here" >&2; exit 3; }`,
+    `install -d -m 0750 -o root -g ${d.group} ${d.dir}`,
+    `cat > ${pem}.new <<'TAPPAAS_CHAIN'`,
+    end(chain) + "TAPPAAS_CHAIN",
+    `cat > ${kf}.new <<'TAPPAAS_KEY'`,
+    end(key) + "TAPPAAS_KEY",
+    `chown root:${d.group} ${pem}.new ${kf}.new`,
+    `chmod 0644 ${pem}.new`,
+    `chmod 0640 ${kf}.new`,
+    "changed=0",
+    `cmp -s ${pem}.new ${pem} 2>/dev/null && cmp -s ${kf}.new ${kf} 2>/dev/null || changed=1`,
+    `mv -f ${pem}.new ${pem}`,
+    `mv -f ${kf}.new ${kf}`,
+    ...(d.reload.length ? [`[ "$changed" = 1 ] && systemctl try-reload-or-restart ${d.reload.join(" ")}`] : []),
+    `[ "$changed" = 1 ] && echo changed || echo unchanged`,
+    "",
+  ].join("\n");
 }
 
 // The wildcard of an environment: its record's name, and the names it holds.

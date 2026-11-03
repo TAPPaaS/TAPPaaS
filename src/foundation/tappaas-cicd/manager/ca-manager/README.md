@@ -27,6 +27,7 @@ ca-manager domain add <domain> [--check]
 ca-manager cert issue <name> --dns <n>[,<n>…] [--check]
 ca-manager cert renew [<name>] [--within <days>] [--force] [--check]
 ca-manager wildcard <environment> --domain <domain> [--check]
+ca-manager cert deliver <name> --host <h> --dir <d> --as <file> --group <g> [--reload <unit>,…]
 ca-manager provider add <name> --type <t> [--domain <d>,…] < credential
 ca-manager provider list|for <domain>|remove <name>
 ca-manager acme <environment> --domain <domain> [--staging] [--dns-sleep <s>]
@@ -50,13 +51,17 @@ lines, kept in the key dir (`providers/<name>.env`, mode 600), with only the fie
 it. `acme-setup.sh` is a shim over these for one release, and migration 0029 makes an existing
 `~/.acme-dns-credentials.txt` a provider.
 
+`cert deliver` puts a certificate and its key on a guest (D5) as root through sudo, the key 0640
+root:<group>, and records where; `cert renew` puts a renewed one there again and reloads the
+units named. The mothership's pre-update runs `cert renew` on every update. Logging is the first
+module to use it (#787).
+
 `validate` checks the record against the files: fingerprints, key modes, and that the bundle
 holds exactly the recorded CAs.
 
 ## Not yet
 
-From ADR-043's delivery list: `provider test` (against Let's Encrypt staging), `rotate`, delivering
-certificates to guests, and
+From ADR-043's delivery list: `provider test` (against Let's Encrypt staging), `rotate`, and
 in the CMDB report the `depends-on` relations of the routes and services a CA signed for, and
 `escrowed` (empty until the key escrow takes the CA keys).
 

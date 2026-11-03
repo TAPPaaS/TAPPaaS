@@ -12,6 +12,8 @@ import {
   dueForRenewal,
   emptyDoc,
   nameProblem,
+  deliveryProblem,
+  deliveryScript,
   parseCredential,
   providerFor,
   refidFromSetup,
@@ -91,6 +93,16 @@ const pc = parseCredential("provider=cloudflare\ndns_cf_token=abc # the token\n\
 check("fields" in pc && pc.fields.dns_cf_token === "abc" && pc.fields.dns_cf_account_id === "42", "the legacy file's lines are a credential, comments and its provider line dropped");
 check("error" in parseCredential("token=abc\n") && "error" in parseCredential("dns_cf_token=\n") && "error" in parseCredential(""), "a field not named dns_…, an empty value, or nothing at all is refused");
 check(refidFromSetup("signed\n  status: 200\n  refid: 6ae9abc\n") === "6ae9abc" && refidFromSetup("nothing") === null, "the refid acme-manager setup prints");
+
+// ── D5: a certificate put on a guest ──
+const dv = { host: "logging.mgmt.internal", dir: "/etc/tappaas-tls", as: "logging", group: "tappaas-tls", reload: ["nginx", "alloy"] };
+check(deliveryProblem(dv) === null, "a delivery to a guest's directory is accepted");
+check(deliveryProblem({ ...dv, dir: "/etc/../root" }) !== null && deliveryProblem({ ...dv, dir: "etc/x" }) !== null, "…not one that leaves its directory, or a relative one");
+check(deliveryProblem({ ...dv, host: "x;rm -rf /" }) !== null && deliveryProblem({ ...dv, reload: ["nginx; reboot"] }) !== null && deliveryProblem({ ...dv, as: "../k" }) !== null, "…nor a host, unit or file name that is a shell word");
+const sc = deliveryScript(dv, "-----BEGIN CERTIFICATE-----\nAA\n-----END CERTIFICATE-----", "-----BEGIN PRIVATE KEY-----\nKK\n-----END PRIVATE KEY-----\n");
+check(sc.includes("<<'TAPPAAS_KEY'\n-----BEGIN PRIVATE KEY-----\nKK\n-----END PRIVATE KEY-----\nTAPPAAS_KEY"), "the key travels in the script's quoted heredoc, on stdin");
+check(sc.includes("chmod 0640 /etc/tappaas-tls/logging.key.new") && sc.includes("chown root:tappaas-tls"), "…written 0640 root:<group>");
+check(sc.includes("mv -f /etc/tappaas-tls/logging.key.new /etc/tappaas-tls/logging.key") && sc.includes('[ "$changed" = 1 ] && systemctl try-reload-or-restart nginx alloy'), "…replaced whole, the units reloaded only on a change");
 
 console.log("");
 console.log(`Results: ${passed} passed, ${failed} failed`);

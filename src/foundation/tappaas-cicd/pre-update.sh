@@ -41,6 +41,9 @@ fi
 # Idempotent; the guests trust it from their next rebuild.
 if [[ -x /home/tappaas/bin/ca-manager ]]; then
   /home/tappaas/bin/ca-manager init --no-rebuild >/dev/null 2>&1 || warn "ca-manager init failed — guests keep the trust they have"
+  # Renewal (ADR-043 D9): what expires within 60 days is renewed, and put on the
+  # guests and the firewall again.
+  /home/tappaas/bin/ca-manager cert renew >/dev/null 2>&1 || warn "ca-manager cert renew reported a failure — ca-manager status"
 fi
 
 # get to the right directory (the rest of this file is relative to it)

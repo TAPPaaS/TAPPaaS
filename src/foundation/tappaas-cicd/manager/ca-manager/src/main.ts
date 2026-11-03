@@ -26,6 +26,9 @@ import {
   domainNeed,
   dueForRenewal,
   signerFor,
+  Delivery,
+  deliveryProblem,
+  deliveryScript,
   parseCredential,
   providerFor,
   refidFromSetup,
@@ -83,10 +86,11 @@ export const HELP: HelpSpec = {
         "an existing domain CA already covers needs none, and is told so.",
     },
     {
-      usage: "cert issue <name> --dns <n>[,<n>…] [--check]",
+      usage: "cert issue <name> --dns <n>[,<n>…] [--if-absent] [--check]",
       name: "cert issue",
       options: [
         ["--dns N", "The names, comma-separated (a wildcard is *.<domain>)."],
+        ["--if-absent", "A certificate of that name for the same names is left as it is (a module's update calls this every time)."],
         ["--check", "Say which CA would sign it; change nothing."],
       ],
       details: "Signs a certificate for the names, by the one CA whose constraint covers them all, and keeps\nits key in the key dir. <name> is how ca-manager knows it.",
@@ -105,6 +109,19 @@ export const HELP: HelpSpec = {
         "Run again, it renews a wildcard that is due and re-imports it in place: the refid stays.\n" +
         "When the environment had another certificate, every route on it moves to the new one,\n" +
         "Caddy is reloaded, and the old one leaves the firewall once nothing serves it.",
+    },
+    {
+      usage: "cert deliver <name> --host <h> --dir <d> --as <file> --group <g> [--reload <unit>[,<unit>…]] [--check]",
+      name: "cert deliver",
+      options: [
+        ["--host H", "The guest, reached as tappaas@<h>; the files are written as root through sudo."],
+        ["--dir D", "The directory on the guest: <d>/<file>.pem (the certificate, then its CA) and <d>/<file>.key."],
+        ["--as F", "The files' name."],
+        ["--group G", "The key is 0640 root:<g>: the services that read it are in that group."],
+        ["--reload U", "The units reloaded when the files changed."],
+        ["--check", "Say what it would put where; change nothing."],
+      ],
+      details: "Puts a certificate and its key on a guest (ADR-043 D5) and records where, so `cert renew`\nputs the renewed one there too.",
     },
     {
       usage: "provider add <name> --type <t> [--domain <d>[,<d>…]] [--check]",
@@ -281,9 +298,14 @@ function domainAdd(store: Store, domain: string, check: boolean, rebuild: boolea
   return 0;
 }
 
-function certIssue(store: Store, name: string, names: string[], check: boolean): number {
+function certIssue(store: Store, name: string, names: string[], check: boolean, ifAbsent = false): number {
   if (!CERT_NAME.test(name)) die(`${name}: a certificate's name is lower-case letters, digits, dots and dashes`);
   const doc = store.load();
+  const had = doc.certificates[name];
+  if (had && ifAbsent && [...had.names].sort().join(",") === [...names].sort().join(",")) {
+    info(`${GN}✓${CL} ${name} exists (${had.names.join(", ")}), until ${had.notAfter.slice(0, 10)}`);
+    return 0;
+  }
   if (doc.certificates[name]) die(`a certificate ${name} exists: renew it (cert renew ${name} --force), or pick another name`);
   const problem = certProblem(doc, names);
   if (problem) die(problem);
@@ -506,6 +528,37 @@ function acme(store: Store, env: string, domain: string, staging: boolean, dnsSl
   return 0;
 }
 
+// Put a certificate on a guest (D5). Returns whether its files changed there.
+function deliver(store: Store, name: string, d: Delivery): boolean {
+  const script = deliveryScript(d, readFileSync(store.certChain(name), "utf8"), readFileSync(store.certKey(name), "utf8"));
+  const ssh = process.env.CA_MANAGER_SSH ?? "ssh";
+  const r = spawnSync(ssh, ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", `tappaas@${d.host}`, "sudo sh -s"], { encoding: "utf8", input: script });
+  if (r.status !== 0) throw new Error(`${d.host}: ${(r.stderr ?? "").trim().split("\n").slice(-1)[0] || r.error?.message || `exit ${r.status}`}`);
+  return (r.stdout ?? "").trim().split("\n").slice(-1)[0] === "changed";
+}
+
+function certDeliver(store: Store, name: string, d: Delivery, check: boolean): number {
+  const doc = store.load();
+  const rec = doc.certificates[name];
+  if (!rec) die(`no certificate ${name} (ca-manager status)`);
+  const problem = deliveryProblem(d);
+  if (problem) die(problem);
+  if (check || simulating()) {
+    info(`would put ${name} on ${d.host} as ${d.dir}/${d.as}.pem and .key (root:${d.group})${d.reload.length ? `, reloading ${d.reload.join(", ")}` : ""}`);
+    return 0;
+  }
+  let changed: boolean;
+  try {
+    changed = deliver(store, name, d);
+  } catch (e) {
+    die(`${name} was not delivered: ${(e as Error).message}`);
+  }
+  rec.deliveries = [...(rec.deliveries ?? []).filter((x) => !(x.host === d.host && x.dir === d.dir && x.as === d.as)), d];
+  store.save(doc);
+  info(changed ? `${GN}✓${CL} ${name} on ${d.host} (${d.dir}/${d.as}.pem)${d.reload.length ? `, ${d.reload.join(", ")} reloaded` : ""}` : `${GN}✓${CL} ${name} on ${d.host} is current`);
+  return 0;
+}
+
 function certRenew(store: Store, only: string | undefined, within: number, force: boolean, check: boolean): number {
   const doc = store.load();
   if (only && !doc.certificates[only]) die(`no certificate ${only} (ca-manager status)`);
@@ -527,10 +580,19 @@ function certRenew(store: Store, only: string | undefined, within: number, force
       info(`would renew ${n} (${daysLeft(c.notAfter, t)} days left) by ${ca}`);
       continue;
     }
-    const keep = { trust: c.trust, refid: c.refid };
+    const keep = { trust: c.trust, refid: c.refid, deliveries: c.deliveries };
     const rec = Object.assign(signCert(store, doc, n, c.names, ca), keep);
     store.save(doc);
     info(`${GN}✓${CL} renewed ${n}, until ${rec.notAfter.slice(0, 10)}`);
+    for (const d of c.deliveries ?? []) {
+      try {
+        deliver(store, n, d);
+        info(`  …and put on ${d.host} again`);
+      } catch (e) {
+        warn(`${n} was renewed but not put on ${d.host}: ${(e as Error).message}`);
+        failed++;
+      }
+    }
     if (rec.trust) {
       try {
         pushToFirewall(store, doc, n);
@@ -636,7 +698,7 @@ export function run(argv: string[]): number {
     const [name] = positional(args, 2, ["--dns"]);
     const dns = opt(args, "--dns");
     if (!name || !dns) die("cert issue <name> --dns <n>[,<n>…]");
-    return changed(certIssue(store, name, dns.split(",").map((s) => s.trim()).filter(Boolean), check), "cert issue");
+    return changed(certIssue(store, name, dns.split(",").map((s) => s.trim()).filter(Boolean), check, args.includes("--if-absent")), "cert issue");
   }
   if (args[0] === "wildcard") {
     const [env] = positional(args, 1, ["--domain"]);
@@ -672,6 +734,16 @@ export function run(argv: string[]): number {
     const sleep = ds === undefined ? 150 : Number(ds);
     if (!Number.isInteger(sleep) || sleep < 0) die("--dns-sleep <seconds>");
     return changed(acme(store, env, domain, args.includes("--staging"), sleep, check), "acme");
+  }
+  if (args[0] === "cert" && args[1] === "deliver") {
+    const [name] = positional(args, 2, ["--host", "--dir", "--as", "--group", "--reload"]);
+    const host = opt(args, "--host");
+    const dir = opt(args, "--dir");
+    const as = opt(args, "--as");
+    const group = opt(args, "--group");
+    if (!name || !host || !dir || !as || !group) die("cert deliver <name> --host <h> --dir <d> --as <file> --group <g> [--reload <unit>,…]");
+    const reload = (opt(args, "--reload") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    return changed(certDeliver(store, name, { host, dir, as, group, reload }, check), "cert deliver");
   }
   if (args[0] === "cert" && args[1] === "renew") {
     const [name] = positional(args, 2, ["--within"]);

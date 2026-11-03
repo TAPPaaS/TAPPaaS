@@ -149,6 +149,21 @@ grep -q -- '--from 0ldacme0ld --to acme0newref1' "${FIX}/fw/caddy" && ok "…and
 P '' acme nope --domain other.tld >/dev/null 2>&1 && bad "acme: a domain with no provider refused" || ok "acme: a domain with no provider refused"
 P '' provider remove cf >/dev/null 2>&1 && [[ ! -e "${K}/providers/cf.env" ]] && ok "provider remove: record and secret gone" || bad "provider remove"
 
+# ── D5: a certificate onto a guest (ssh is a stand-in that keeps what it got) ──
+cat > "${FIX}/bin/fake-ssh" <<STUB
+#!/usr/bin/env bash
+echo "\$*" >> "${FIX}/fw/deliver-args"; cat > "${FIX}/fw/deliver-stdin"; echo changed
+STUB
+chmod +x "${FIX}/bin/fake-ssh"
+D() { CA_MANAGER_SSH="${FIX}/bin/fake-ssh" CA "$@"; }
+CA cert issue logging9 --dns logging.mgmt.internal --if-absent >/dev/null 2>&1 && CA cert issue logging9 --dns logging.mgmt.internal --if-absent 2>&1 | grep -q 'exists' && ok "cert issue --if-absent: a second call leaves it" || bad "cert issue --if-absent"
+D cert deliver logging9 --host logging.mgmt.internal --dir /etc/tappaas-tls --as logging --group tappaas-tls --reload nginx,alloy >/dev/null 2>&1 && ok "cert deliver" || bad "cert deliver"
+grep -q 'tappaas@logging.mgmt.internal sudo sh -s' "${FIX}/fw/deliver-args" && ! grep -q 'PRIVATE' "${FIX}/fw/deliver-args" && grep -q 'PRIVATE KEY' "${FIX}/fw/deliver-stdin" && ok "…the key on ssh's stdin, never its arguments" || bad "…key handling"
+[[ "$(jq -r '.certificates.logging9.deliveries[0] | "\(.host) \(.dir) \(.group) \(.reload|join(","))"' "${FIX}/cfg/certificates.json")" == "logging.mgmt.internal /etc/tappaas-tls tappaas-tls nginx,alloy" ]] && ok "…and where recorded" || bad "…not recorded"
+D cert deliver logging9 --host 'x;id' --dir /etc/t --as l --group g >/dev/null 2>&1 && bad "cert deliver: a host that is a shell word refused" || ok "cert deliver: a host that is a shell word refused"
+: > "${FIX}/fw/deliver-args"; D cert renew logging9 --force >/dev/null 2>&1 && grep -q 'tappaas@logging.mgmt.internal' "${FIX}/fw/deliver-args" && ok "a renewal puts it on the guest again" || bad "renewal not re-delivered"
+[[ "$(jq -r '.certificates.logging9.deliveries | length' "${FIX}/cfg/certificates.json")" == "1" ]] && ok "…and keeps its delivery" || bad "…delivery lost on renewal"
+
 CA validate >/dev/null 2>&1 && ok "validate: all consistent" || bad "validate"
 chmod 644 "${K}/certs/wild.key"; CA validate >/dev/null 2>&1 && bad "validate: a readable key is a finding" || ok "validate: a readable key is a finding"; chmod 600 "${K}/certs/wild.key"
 echo "# x" >> "${FIX}/cfg/site-ca.pem"; CA validate >/dev/null 2>&1 && bad "validate: a changed bundle is a finding" || ok "validate: a changed bundle is a finding"
