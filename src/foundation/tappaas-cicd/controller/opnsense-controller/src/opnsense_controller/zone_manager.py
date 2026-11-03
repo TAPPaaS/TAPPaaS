@@ -2648,13 +2648,9 @@ class ZoneManager:
         if not isinstance(vlan_results, dict):
             vlan_results = {}
 
-        # Query live OPNsense once (best-effort). Two sources:
-        #   • assigned interfaces (get_assigned_vlans): tag → identifier (opt1)
-        #     and the assignment label (for drift detection — issue #213).
-        #   • DHCP ranges: domain → range and the lan/opt id for untagged zones.
+        # Query live OPNsense once (best-effort): the assigned interfaces
+        # (get_assigned_vlans), for each tag's label (drift detection — issue #213).
         assigned_by_tag: dict[int, dict] = {}
-        iface_by_domain: dict[str, str] = {}
-        dhcp_by_domain: dict[str, tuple[str, str]] = {}
         try:
             with VlanManager(self.config) as _vm:
                 for a in _vm.get_assigned_vlans():
@@ -2662,17 +2658,8 @@ class ZoneManager:
                         assigned_by_tag[int(a["vlan_tag"])] = a
                     except (TypeError, ValueError, KeyError):
                         continue
-            live = self.list_current_config()
-            for r in live.get("dhcp_ranges", []):
-                dom = r.get("domain") or ""
-                if dom:
-                    iface_by_domain[dom] = r.get("interface") or ""
-                    dhcp_by_domain[dom] = (r.get("start_addr") or "", r.get("end_addr") or "")
         except Exception as e:  # noqa: BLE001 - summary degrades gracefully offline
             debug(f"  (live OPNsense config unavailable for summary: {e})")
-
-        def _last_octet(addr: str) -> str:
-            return f".{addr.rsplit('.', 1)[1]}" if addr and "." in addr else addr
 
         def _flag_for(zone: "Zone") -> tuple[str, bool]:
             """Return (flag_text, is_warning): live label drift takes priority,
@@ -2699,41 +2686,20 @@ class ZoneManager:
                 return ("renamed label", False)
             return ("—", False)
 
+        # Four columns, to fit a narrow screen (the console's output panel): a
+        # zone's type, state, interface and DHCP range are in zones.json and
+        # `zone-manager --list`; a warning still ends its row.
         info("Zone Summary:")
-        sep = "─" * 150
+        sep = "─" * 66
         info(sep)
-        info(f"  {'VLAN':>4}  {'Zone':<13} {'Type':<11} {'State':<9} {'IF':<7} "
-             f"{'Network':<19} {'DHCP':<11} {'Domain':<22} {'Flags':<10} Description")
+        info(f"  {'Zone':<13} {'VLAN':>4}  {'Network':<19} Domain")
         info(sep)
 
         warn_count = created_count = 0
         for zone in sorted(self.zones, key=lambda z: z.vlan_tag):
-            if zone.is_enabled:
-                state = "enabled"
-            elif zone.is_manual:
-                state = "manual"
-            else:
-                state = "disabled"
-
             vlan = str(zone.vlan_tag) if zone.vlan_tag > 0 else "0"
             network = zone.ip_network or "—"
             domain = zone.domain or "—"
-
-            # IF: assigned identifier for tagged zones; untagged/manual fall back
-            # to the DHCP-range interface (e.g. mgmt → lan) then the bridge.
-            if zone.needs_vlan and zone.vlan_tag in assigned_by_tag:
-                iface = assigned_by_tag[zone.vlan_tag].get("identifier") or "—"
-            else:
-                iface = iface_by_domain.get(domain) or (
-                    zone.bridge if (not zone.needs_vlan or zone.is_manual) else "") or "—"
-
-            rng = dhcp_by_domain.get(domain)
-            if rng and rng[0]:
-                dhcp = f"{_last_octet(rng[0])}-{_last_octet(rng[1])}"
-            elif zone.is_enabled and zone.needs_vlan:
-                dhcp = f"{_last_octet(zone.dhcp_start)}-{_last_octet(zone.dhcp_end)}"
-            else:
-                dhcp = "—"
 
             flag, is_warn = _flag_for(zone)
             if is_warn:
@@ -2741,11 +2707,9 @@ class ZoneManager:
             elif flag == "created":
                 created_count += 1
 
-            description = zone.description or "—"
-            row = (f"  {vlan:>4}  {zone.name:<13} {zone.zone_type:<11} {state:<9} "
-                   f"{iface:<7} {network:<19} {dhcp:<11} {domain:<22} {flag:<10} {description}")
+            row = f"  {zone.name:<13} {vlan:>4}  {network:<19} {domain}"
             if is_warn:
-                warn(row)
+                warn(f"{row}  — {flag}")
             else:
                 info(row)
 
