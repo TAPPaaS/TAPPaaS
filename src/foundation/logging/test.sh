@@ -176,7 +176,7 @@ check_tls() {
     if [[ "${code}" == "401" ]]; then check_pass "Query over TLS: a verified certificate, and a credential asked for (401)"
     else check_fail "Query over TLS on :3110 got ${code:-no answer}"; fi
     # shellcheck disable=SC2086
-    if ssh ${SSH_OPTS} "tappaas@${VM_HOST}" "ss -lnt 'sport = :6514' | grep -q LISTEN && ss -lnt 'sport = :6515' | grep -q LISTEN" &>/dev/null; then
+    if ssh ${SSH_OPTS} "tappaas@${VM_HOST}" "ss -lnt 'sport = :6514' | grep -c LISTEN >/dev/null && ss -lnt 'sport = :6515' | grep -c LISTEN >/dev/null" &>/dev/null; then
         check_pass "Syslog over TLS listening on 6514/tcp and 6515/tcp"
     else
         check_fail "Syslog over TLS is NOT listening on 6514/tcp and 6515/tcp"
