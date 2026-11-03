@@ -460,6 +460,11 @@ in
         # holds (usb-copy.json, beside the escrow, tappaas's): without it the
         # write succeeds but the backup-keys gate keeps asking for a stick.
         "-/etc/secrets/backup-fs"
+        # A module add or update builds the guest's NixOS system here (#774):
+        # the guest's /etc/nixos staged, and the result rooted. Read-only, the
+        # build falls back to the guest itself (lab2, 2026-11-03).
+        "/var/lib/tappaas-guest-build"
+        "/nix/var/nix/gcroots/tappaas-guests"
       ];
       ReadOnlyPaths = [
         "-/home/tappaas/.ssh/authorized_keys"
@@ -956,6 +961,10 @@ in
     # fails their namespace setup — on a fresh mothership the first switch runs
     # before install.sh writes anything there (lab2 bootstrap, 2026-10-27).
     "d /home/tappaas/config 0755 tappaas users -"
+    # The guest builds' stage and roots (update-os.sh): the console unit names
+    # both in ReadWritePaths, and a missing one fails its namespace setup.
+    "d /var/lib/tappaas-guest-build 0700 root root -"
+    "d /nix/var/nix/gcroots/tappaas-guests 0755 root root -"
     # The security scan's scanner databases (ADR-011): the unit's ReadWritePaths
     # names this directory, and a missing one fails the unit's namespace setup.
     "d /home/tappaas/.cache 0700 tappaas users -"
