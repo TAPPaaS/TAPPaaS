@@ -65,6 +65,14 @@ fi
 # network-manager init / environment-manager add, so it must be a valid zone/env
 # slug (^[a-z][a-z0-9-]*$ — lowercase, digits, hyphens; start with a letter).
 [[ -n "$ORG" ]] || ORG="$SITE_CODE"
+
+# The site's domain (ADR-043 D4): with none given, <site>.home.arpa — the name
+# space RFC 8375 keeps for homes, and one a site CA may sign. Every site starts
+# in dnsMode local; going public is Day 1's "Make it public".
+if [[ -z "$DOMAIN" ]]; then
+  DOMAIN="$(printf '%s' "$SITE_CODE" | tr '[:upper:]_' '[:lower:]-').home.arpa"
+  _info "No --domain given; the site's domain is ${DOMAIN} (local: no public DNS needed)."
+fi
 [[ "$ORG" =~ ^[a-z][a-z0-9-]*$ ]] \
   || { _error "Organization '$ORG' invalid (^[a-z][a-z0-9-]*\$). Pass --organization explicitly."; exit 1; }
 _info "Site code: ${SITE_CODE}; default org/environment: ${ORG}"
@@ -234,7 +242,7 @@ if [ ! -f "/home/tappaas/config/environments/${ORG}.json" ]; then
   # the ADR-007 refactor (Phase 8.1). The TS bin IS on PATH at this point: the
   # manager/install.sh dispatch loop above already nix-built + linked the
   # managers ("linking manager/ components...").
-  CME_ARGS=(--name "$ORG")
+  CME_ARGS=(--name "$ORG" --dns-mode local)
   [[ -n "$DOMAIN" ]] && CME_ARGS+=(--domain "$DOMAIN")
   /home/tappaas/bin/environment-manager add "${CME_ARGS[@]}" \
     || _error "  environment bootstrap (environment-manager add) reported a non-zero rc"
@@ -245,6 +253,13 @@ fi
 # The site's internal CA (ADR-043 D1): before any guest but the firewall and this
 # one is built, so every guest trusts it from its first build.
 /home/tappaas/bin/ca-manager init --no-rebuild || _error "  ca-manager init failed: no internal CA, so guests get no site trust"
+
+# Both environments start in dnsMode local: their wildcard from the site's CA, on
+# the firewall, and the Unbound wildcard. The network reconcile follows later.
+for _env in mgmt "$ORG"; do
+  /home/tappaas/bin/environment-manager reconcile "$_env" --apply --skip-network \
+    || _warn "  the ${_env} environment's certificate is not in place yet — environment-manager reconcile ${_env} --apply"
+done
 
 # Install the cluster and network jsons
 cd ../cluster || { _error "Cluster directory not found!"; exit 1; }

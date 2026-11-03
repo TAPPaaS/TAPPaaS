@@ -25,13 +25,14 @@
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { basename, join } from "path";
 import { environmentsDir, serializeEnvironment } from "./config";
-import { Environment } from "./types";
+import { DnsMode, Environment } from "./types";
 import { identityDir, mkdirGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 
 export interface BootstrapOptions {
   configDir: string;
   name?: string; // explicit --name; else derived from site.json '.defaultEnvironment'
   domain?: string; // --domain for the default env's domains.primary
+  dnsMode?: DnsMode; // --dns-mode for both (the install: local, ADR-043 D4)
   force: boolean;
 }
 
@@ -82,6 +83,7 @@ export function buildBootstrapEnvironments(
   name: string,
   owner: string,
   domain: string | undefined,
+  dnsMode?: DnsMode,
 ): { mgmt: Environment; def: Environment } {
   const display = name.charAt(0).toUpperCase() + name.slice(1);
   const mgmt: Environment = {
@@ -103,8 +105,8 @@ export function buildBootstrapEnvironments(
   // record per host under the default dnsMode=per-service, so this grants the
   // capability, not the exposure.
   if (domain) {
-    mgmt.domains = { primary: domain };
-    def.domains = { primary: domain };
+    mgmt.domains = { primary: domain, ...(dnsMode ? { dnsMode } : {}) };
+    def.domains = { primary: domain, ...(dnsMode ? { dnsMode } : {}) };
   }
   return { mgmt, def };
 }
@@ -142,7 +144,7 @@ export function bootstrap(opts: BootstrapOptions): BootstrapResult {
     );
   }
 
-  const { mgmt, def } = buildBootstrapEnvironments(name, owner, opts.domain);
+  const { mgmt, def } = buildBootstrapEnvironments(name, owner, opts.domain, opts.dnsMode);
 
   const wrote: string[] = [];
   const skipped: string[] = [];

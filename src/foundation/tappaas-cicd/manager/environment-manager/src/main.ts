@@ -435,6 +435,7 @@ function cmdAdd(opts: Opts, net: NetworkClient): void {
       configDir: opts.configDir,
       name: opts.name,
       domain: opts.domain,
+      dnsMode: opts.dnsMode,
       force: opts.force,
     });
     for (const w of res.warnings) warn(w);

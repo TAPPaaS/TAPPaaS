@@ -19,7 +19,7 @@ import {
   withBinding,
   writeEnvironment,
 } from "../../src/config";
-import { bootstrap, firstOrg, resolveName } from "../../src/bootstrap";
+import { bootstrap, buildBootstrapEnvironments, firstOrg, resolveName } from "../../src/bootstrap";
 import { CliModuleClient } from "../../src/clients";
 import { Environment } from "../../src/types";
 
@@ -74,6 +74,11 @@ try {
     "bootstrap writes mgmt.json + <N>.json",
   );
   check(res.owner === "acme", "bootstrap derives ownerOrg from first org");
+  {
+    const { mgmt, def } = buildBootstrapEnvironments("demo", "acme", "demo.home.arpa", "local");
+    check(mgmt.domains?.dnsMode === "local" && def.domains?.dnsMode === "local" && def.domains?.primary === "demo.home.arpa", "the install's dnsMode reaches both bootstrap environments (ADR-043 D4)");
+    check(buildBootstrapEnvironments("demo", "acme", "x.org").def.domains?.dnsMode === undefined, "…and none given leaves the default");
+  }
 
   // load round-trip.
   const model = loadEnvironments(root);
