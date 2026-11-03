@@ -46,6 +46,51 @@ export interface CaDoc {
   version: 1;
   cas: Record<string, CaRecord>;
   certificates: Record<string, CertRecord>;
+  // DNS providers (D6): what ACME's DNS-01 uses. The secret is in the key dir,
+  // never here: only the names of its fields.
+  providers?: Record<string, ProviderRecord>;
+}
+
+export interface ProviderRecord {
+  type: string; // os-acme-client's provider: cloudflare, hetzner, dns_desec, …
+  domains: string[]; // the domains it serves, each with its subdomains; none: any
+  keys: string[]; // the names of its credential's fields (dns_cf_token, …)
+  added: string;
+}
+
+// The provider for a domain: the one whose domains cover it, else the one that
+// serves any domain. Null when neither exists.
+export function providerFor(doc: CaDoc, domain: string): string | null {
+  const ps = Object.entries(doc.providers ?? {});
+  const named = ps.find(([, p]) => p.domains.some((d) => within(domain, d)));
+  if (named) return named[0];
+  const any = ps.find(([, p]) => p.domains.length === 0);
+  return any ? any[0] : null;
+}
+
+// A provider's credential: KEY=VALUE lines, each key acme.sh's dns_<provider>_<field>.
+export function parseCredential(text: string): { fields: Record<string, string> } | { error: string } {
+  const fields: Record<string, string> = {};
+  for (const raw of text.split("\n")) {
+    const line = raw.replace(/#.*$/, "").trim();
+    if (!line) continue;
+    const i = line.indexOf("=");
+    if (i <= 0) return { error: `not KEY=VALUE: ${line.slice(0, 20)}…` };
+    const k = line.slice(0, i).trim();
+    const v = line.slice(i + 1).trim();
+    if (k === "provider") continue; // the legacy file's first line
+    if (!/^dns_[a-z0-9_]+$/i.test(k)) return { error: `${k}: the fields are named dns_… (acme.sh's names, e.g. dns_cf_token)` };
+    if (!v) return { error: `${k}: no value` };
+    fields[k] = v;
+  }
+  if (Object.keys(fields).length === 0) return { error: "no dns_… field on stdin" };
+  return { fields };
+}
+
+// The refid acme-manager setup prints for the issued certificate.
+export function refidFromSetup(output: string): string | null {
+  const m = [...output.matchAll(/^\s+refid:\s+(\S+)/gm)];
+  return m.length ? m[m.length - 1][1] : null;
 }
 
 export const INTERNAL_ID = "internal";

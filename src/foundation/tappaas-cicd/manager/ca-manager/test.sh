@@ -125,6 +125,30 @@ grep -q -- '--from 0ld0ld0ld --to' "${FIX}/fw/caddy" && ok "the old certificate'
 grep -q 'configctl caddy reload' "${FIX}/fw/ssh" && ok "…Caddy reloads" || bad "…no Caddy reload"
 grep -q -- 'cert-retire --refid 0ld0ld0ld' "${FIX}/fw/calls" && ok "…and the old one is retired" || bad "…old certificate not retired"
 
+# ── D6: DNS providers, and ACME through them (acme-manager and ssh are stand-ins) ──
+P() { printf '%b' "$1" | PATH="${FIX}/bin:${PATH}" TAPPAAS_CONFIG="${FIX}/cfg" CONFIG_DIR="${FIX}/cfg" TAPPAAS_CA_DIR="${K}" CA_MANAGER_REBUILD="${FIX}/bin/rebuild" run_ts "node '${DIST}/manager/ca-manager/src/main.js' ${*:2}"; }
+P 'dns_cf_token=s3cr3t-value\n' provider add cf --type cloudflare --domain acme9.org >/dev/null 2>&1 && ok "provider add: the credential on stdin" || bad "provider add"
+[[ "$(mode "${K}/providers/cf.env")" == "600" ]] && grep -q 's3cr3t-value' "${K}/providers/cf.env" && ok "…kept in the key dir, mode 600" || bad "…secret file"
+! grep -q 's3cr3t-value' "${FIX}/cfg/certificates.json" && [[ "$(jq -r '.providers.cf.keys | join(",")' "${FIX}/cfg/certificates.json")" == "dns_cf_token" ]] && ok "…the record names its fields, never their values" || bad "…record holds a secret"
+P 'token=x\n' provider add bad --type cloudflare >/dev/null 2>&1 && bad "provider add: a field not named dns_… refused" || ok "provider add: a field not named dns_… refused"
+[[ "$(P '' provider for sub.acme9.org 2>/dev/null)" == "cf" ]] && ok "provider for: a subdomain's provider" || bad "provider for"
+P '' provider for nowhere.tld >/dev/null 2>&1 && bad "provider for: none is exit 1" || ok "provider for: none is exit 1"
+echo '{"name":"lab9","email":"ops@acme9.org"}' > "${FIX}/cfg/site.json"
+cat > "${FIX}/bin/acme-manager" <<STUB
+#!/usr/bin/env bash
+echo "\$*" >> "${FIX}/fw/acme"; cat > "${FIX}/fw/acme-stdin"
+echo "  status: 200"; echo "  refid: acme0newref1"
+STUB
+chmod +x "${FIX}/bin/acme-manager"
+jq '. + {"pub": "0ldacme0ld"}' "${FIX}/cfg/cert-refids.json" > "${FIX}/t" && mv "${FIX}/t" "${FIX}/cfg/cert-refids.json"
+: > "${FIX}/fw/caddy"; P '' acme pub --domain acme9.org --dns-sleep 5 >/dev/null 2>&1 && ok "acme: issued through the domain's provider" || bad "acme"
+grep -q -- '--provider cloudflare' "${FIX}/fw/acme" && grep -q -- '--provider-fields-stdin' "${FIX}/fw/acme" && ! grep -q 's3cr3t' "${FIX}/fw/acme" && ok "…the credential on its stdin, not its arguments" || bad "…credential in arguments"
+grep -q 's3cr3t-value' "${FIX}/fw/acme-stdin" && ok "…which got it" || bad "…credential not passed"
+[[ "$(jq -r .pub "${FIX}/cfg/cert-refids.json")" == "acme0newref1" ]] && ok "…its refid recorded" || bad "…refid not recorded"
+grep -q -- '--from 0ldacme0ld --to acme0newref1' "${FIX}/fw/caddy" && ok "…and the routes on the old certificate moved to it" || bad "…routes not moved"
+P '' acme nope --domain other.tld >/dev/null 2>&1 && bad "acme: a domain with no provider refused" || ok "acme: a domain with no provider refused"
+P '' provider remove cf >/dev/null 2>&1 && [[ ! -e "${K}/providers/cf.env" ]] && ok "provider remove: record and secret gone" || bad "provider remove"
+
 CA validate >/dev/null 2>&1 && ok "validate: all consistent" || bad "validate"
 chmod 644 "${K}/certs/wild.key"; CA validate >/dev/null 2>&1 && bad "validate: a readable key is a finding" || ok "validate: a readable key is a finding"; chmod 600 "${K}/certs/wild.key"
 echo "# x" >> "${FIX}/cfg/site-ca.pem"; CA validate >/dev/null 2>&1 && bad "validate: a changed bundle is a finding" || ok "validate: a changed bundle is a finding"

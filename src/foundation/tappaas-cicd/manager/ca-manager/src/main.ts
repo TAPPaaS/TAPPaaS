@@ -26,6 +26,9 @@ import {
   domainNeed,
   dueForRenewal,
   signerFor,
+  parseCredential,
+  providerFor,
+  refidFromSetup,
   wildcardName,
   wildcardNames,
 } from "./ca";
@@ -34,7 +37,7 @@ import { Store, certInfo } from "./store";
 import { EnvDomain, buildCaReport } from "./cmdbreport";
 import { printOrSend, reportChange } from "../../../lib/ts/src/cmdb-reporter";
 import { readdirSync } from "fs";
-import { existsSync, readFileSync } from "fs";
+import { chmodSync, existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "fs";
 import { hostname } from "os";
 import { spawnSync } from "child_process";
 
@@ -102,6 +105,35 @@ export const HELP: HelpSpec = {
         "Run again, it renews a wildcard that is due and re-imports it in place: the refid stays.\n" +
         "When the environment had another certificate, every route on it moves to the new one,\n" +
         "Caddy is reloaded, and the old one leaves the firewall once nothing serves it.",
+    },
+    {
+      usage: "provider add <name> --type <t> [--domain <d>[,<d>…]] [--check]",
+      name: "provider add",
+      options: [
+        ["--type T", "os-acme-client's provider: cloudflare, hetzner, desec, … or its dns_ key."],
+        ["--domain D", "The domains it serves, each with its subdomains; none: any domain."],
+        ["--check", "Check the credential's shape; change nothing."],
+      ],
+      details:
+        "A DNS provider for ACME's DNS-01 (ADR-043 D6). Its credential comes on stdin as KEY=VALUE\n" +
+        "lines named as acme.sh names them (dns_cf_token=…), never in an argument, and is kept in the\n" +
+        "key dir; config/certificates.json records only its fields' names. Adding a name again replaces it.",
+    },
+    { usage: "provider list [--json]", name: "provider list", effect: "read", options: [["--json", "provider list: as JSON."]] },
+    { usage: "provider for <domain>", name: "provider for", effect: "read", note: "(the provider a domain's ACME certificate uses; exit 1 when none)" },
+    { usage: "provider remove <name>", name: "provider remove" },
+    {
+      usage: "acme <environment> --domain <domain> [--staging] [--dns-sleep <s>] [--check]",
+      options: [
+        ["--domain D", "The environment's primary domain."],
+        ["--staging", "Let's Encrypt's staging CA (testing)."],
+        ["--dns-sleep S", "Seconds for the TXT record to spread before validation (default 150)."],
+        ["--check", "Say which provider it would use; change nothing."],
+      ],
+      details:
+        "For an environment in dnsMode wildcard: a Let's Encrypt wildcard for *.<domain> and <domain>,\n" +
+        "through os-acme-client on the firewall, with the domain's provider. Its refid goes to\n" +
+        "config/cert-refids.json; routes on an older certificate move to it. The firewall renews it.",
     },
     {
       usage: "cert renew [<name>] [--within <days>] [--force] [--check]",
@@ -381,6 +413,99 @@ function wildcard(store: Store, env: string, domain: string, check: boolean, reb
   return 0;
 }
 
+const PROVIDER_NAME = /^[a-z0-9][a-z0-9-]{0,40}$/;
+
+function providerAdd(store: Store, name: string, type: string, domains: string[], check: boolean): number {
+  if (!PROVIDER_NAME.test(name)) die(`${name}: a provider's name is lower-case letters, digits and dashes`);
+  if (!/^[a-z0-9_]+$/i.test(type)) die(`--type ${type}: a provider name or dns_ key`);
+  for (const d of domains) {
+    const p = domainNeed(emptyDocFor(), d);
+    if (p.kind === "refused") die(p.why);
+  }
+  const cred = parseCredential(readFileSync(0, "utf8"));
+  if ("error" in cred) die(`provider add: ${cred.error}`);
+  const keys = Object.keys(cred.fields).sort();
+  if (check || simulating()) {
+    info(`would record ${name} (${type}${domains.length ? `, for ${domains.join(", ")}` : ", for any domain"}) with ${keys.join(", ")}`);
+    return 0;
+  }
+  const doc = store.load();
+  store.ensureKeyDir();
+  const file = store.providerSecret(name);
+  const tmp = `${file}.tmp`;
+  writeFileSync(tmp, keys.map((k) => `${k}=${cred.fields[k]}`).join("\n") + "\n", "utf8");
+  chmodSync(tmp, 0o600);
+  renameSync(tmp, file);
+  doc.providers = { ...(doc.providers ?? {}), [name]: { type, domains, keys, added: stamp() } };
+  store.save(doc);
+  info(`${GN}✓${CL} provider ${name} (${type}) for ${domains.length ? domains.join(", ") : "any domain"}: ${keys.join(", ")}`);
+  return 0;
+}
+
+function emptyDocFor(): CaDoc {
+  return { version: 1, cas: {}, certificates: {} };
+}
+
+function providerList(store: Store, json: boolean): number {
+  const ps = store.load().providers ?? {};
+  if (json) {
+    process.stdout.write(JSON.stringify(ps, null, 1) + "\n");
+    return 0;
+  }
+  if (!Object.keys(ps).length) info("no DNS provider yet: ca-manager provider add <name> --type <t> < credential");
+  for (const [n, p] of Object.entries(ps)) info(`  ${n.padEnd(16)} ${p.type.padEnd(12)} ${p.domains.length ? p.domains.join(", ") : "any domain"}  (${p.keys.join(", ")})`);
+  return 0;
+}
+
+function providerRemove(store: Store, name: string): number {
+  const doc = store.load();
+  if (!doc.providers?.[name]) die(`no provider ${name} (ca-manager provider list)`);
+  delete doc.providers[name];
+  store.save(doc);
+  if (existsSync(store.providerSecret(name))) unlinkSync(store.providerSecret(name));
+  info(`${GN}✓${CL} removed provider ${name} — the firewall keeps its copy in os-acme-client until it is removed there`);
+  return 0;
+}
+
+function siteEmail(configDir: string): string {
+  const site = readJsonObject(join(configDir, "site.json"));
+  return site && typeof site.email === "string" ? site.email : "";
+}
+
+function acme(store: Store, env: string, domain: string, staging: boolean, dnsSleep: number, check: boolean): number {
+  if (!CERT_NAME.test(env)) die(`${env}: not an environment name`);
+  const doc = store.load();
+  const name = providerFor(doc, domain);
+  if (!name) die(`no DNS provider for ${domain}: ca-manager provider add <name> --type <t> --domain ${domain} < credential`);
+  const p = doc.providers![name];
+  const email = siteEmail(store.configDir);
+  if (!email || email.startsWith("CHANGE")) die("site.json .email is not set: Let's Encrypt needs a contact");
+  if (check || simulating()) {
+    info(`would get *.${domain} from Let's Encrypt${staging ? " (staging)" : ""} through ${name} (${p.type}), and record its refid for ${env}`);
+    return 0;
+  }
+  const secret = readFileSync(store.providerSecret(name), "utf8");
+  // acme.sh's DNS hooks are put in place by os-acme-client's own setup (#327).
+  spawnSync("ssh", ["-n", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", `root@${FIREWALL}`, "sh /usr/local/opnsense/scripts/OPNsense/AcmeClient/setup.sh"], { encoding: "utf8" });
+  const args = ["--firewall", FIREWALL, "--no-ssl-verify", "setup", "--domain", domain, "--email", email, "--provider", p.type,
+    "--dns-sleep", String(dnsSleep), "--timeout", String(dnsSleep + 180), "--provider-fields-stdin",
+    ...(staging ? ["--staging", "--account-name", "letsencrypt-staging"] : [])];
+  info(`getting *.${domain} from Let's Encrypt${staging ? " (staging)" : ""} through ${name} — a few minutes`);
+  const r = spawnSync("acme-manager", args, { encoding: "utf8", input: secret, env: { ...process.env, PYTHONUNBUFFERED: "1" } });
+  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+  if (r.status !== 0) {
+    process.stderr.write(out.split("\n").slice(-15).join("\n") + "\n");
+    die(`acme-manager setup failed for ${domain} (exit ${r.status})`);
+  }
+  const refid = refidFromSetup(out);
+  if (!refid) die("acme-manager reported success but printed no refid");
+  const before = readJsonObject(join(store.configDir, "cert-refids.json"))?.[env];
+  recordRefid(store, env, refid);
+  info(`${GN}✓${CL} *.${domain} issued, refid ${refid}, recorded for ${env}`);
+  if (typeof before === "string" && before && before !== refid) moveOff(before, refid);
+  return 0;
+}
+
 function certRenew(store: Store, only: string | undefined, within: number, force: boolean, check: boolean): number {
   const doc = store.load();
   if (only && !doc.certificates[only]) die(`no certificate ${only} (ca-manager status)`);
@@ -518,6 +643,35 @@ export function run(argv: string[]): number {
     const domain = opt(args, "--domain");
     if (!env || !domain) die("wildcard <environment> --domain <domain>");
     return changed(wildcard(store, env, domain, check, !args.includes("--no-rebuild")), "wildcard");
+  }
+  if (args[0] === "provider" && args[1] === "list") return providerList(store, args.includes("--json"));
+  if (args[0] === "provider" && args[1] === "for") {
+    const [domain] = positional(args, 2, []);
+    if (!domain) die("provider for <domain>");
+    const n = providerFor(store.load(), domain);
+    if (!n) return 1;
+    info(n);
+    return 0;
+  }
+  if (args[0] === "provider" && args[1] === "add") {
+    const [name] = positional(args, 2, ["--type", "--domain"]);
+    const type = opt(args, "--type");
+    if (!name || !type) die("provider add <name> --type <t> [--domain <d>,…] < credential");
+    return changed(providerAdd(store, name, type, (opt(args, "--domain") ?? "").split(",").map((s) => s.trim()).filter(Boolean), check), "provider add");
+  }
+  if (args[0] === "provider" && args[1] === "remove") {
+    const [name] = positional(args, 2, []);
+    if (!name) die("provider remove <name>");
+    return changed(providerRemove(store, name), "provider remove");
+  }
+  if (args[0] === "acme") {
+    const [env] = positional(args, 1, ["--domain", "--dns-sleep"]);
+    const domain = opt(args, "--domain");
+    if (!env || !domain) die("acme <environment> --domain <domain>");
+    const ds = opt(args, "--dns-sleep");
+    const sleep = ds === undefined ? 150 : Number(ds);
+    if (!Number.isInteger(sleep) || sleep < 0) die("--dns-sleep <seconds>");
+    return changed(acme(store, env, domain, args.includes("--staging"), sleep, check), "acme");
   }
   if (args[0] === "cert" && args[1] === "renew") {
     const [name] = positional(args, 2, ["--within"]);

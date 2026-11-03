@@ -12,6 +12,9 @@ import {
   dueForRenewal,
   emptyDoc,
   nameProblem,
+  parseCredential,
+  providerFor,
+  refidFromSetup,
   signerFor,
   within,
 } from "../../src/ca";
@@ -75,6 +78,19 @@ check(docProblems(doc).length === 0, "a good record has no problems");
 check(docProblems({ version: 1, cas: {}, certificates: { x: cert("2027-01-01T00:00:00Z") } }).some((p) => p.includes("not recorded")), "a certificate of an unknown CA is a problem");
 check(docProblems({ ...doc, certificates: { x: { ...cert("2027-01-01T00:00:00Z"), names: ["a.other.tld"] } } }).some((p) => p.includes("outside")), "a recorded name outside its CA's constraint is a problem");
 check(docProblems(null).length > 0 && docProblems({ version: 2, cas: {}, certificates: {} }).length > 0, "a broken record is refused");
+
+// ── D6: DNS providers ──
+const pd: CaDoc = { ...doc, providers: {
+  cf: { type: "cloudflare", domains: ["my-org.tld"], keys: ["dns_cf_token"], added: "" },
+  any: { type: "hetzner", domains: [], keys: ["dns_hetzner_token"], added: "" },
+} };
+check(providerFor(pd, "test.my-org.tld") === "cf", "a domain's provider covers its subdomains");
+check(providerFor(pd, "other.tld") === "any", "…and a provider for any domain takes the rest");
+check(providerFor({ ...doc, providers: {} }, "x.tld") === null, "…none: no provider");
+const pc = parseCredential("provider=cloudflare\ndns_cf_token=abc # the token\n\ndns_cf_account_id = 42\n");
+check("fields" in pc && pc.fields.dns_cf_token === "abc" && pc.fields.dns_cf_account_id === "42", "the legacy file's lines are a credential, comments and its provider line dropped");
+check("error" in parseCredential("token=abc\n") && "error" in parseCredential("dns_cf_token=\n") && "error" in parseCredential(""), "a field not named dns_…, an empty value, or nothing at all is refused");
+check(refidFromSetup("signed\n  status: 200\n  refid: 6ae9abc\n") === "6ae9abc" && refidFromSetup("nothing") === null, "the refid acme-manager setup prints");
 
 console.log("");
 console.log(`Results: ${passed} passed, ${failed} failed`);

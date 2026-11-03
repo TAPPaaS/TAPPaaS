@@ -27,6 +27,9 @@ ca-manager domain add <domain> [--check]
 ca-manager cert issue <name> --dns <n>[,<n>…] [--check]
 ca-manager cert renew [<name>] [--within <days>] [--force] [--check]
 ca-manager wildcard <environment> --domain <domain> [--check]
+ca-manager provider add <name> --type <t> [--domain <d>,…] < credential
+ca-manager provider list|for <domain>|remove <name>
+ca-manager acme <environment> --domain <domain> [--staging] [--dns-sleep <s>]
 ca-manager status [--json]
 ca-manager validate
 ```
@@ -39,12 +42,21 @@ through `trust-manager` (the CA without its key), and the wildcard's refid writt
 `config/cert-refids.json` for Caddy. `environment-manager reconcile` calls it. A renewed wildcard is
 replaced in place on the firewall, so its refid stays, and Caddy is reloaded.
 
+`provider add` records a DNS provider for ACME (D6): its credential on stdin as `dns_…=value`
+lines, kept in the key dir (`providers/<name>.env`, mode 600), with only the fields' names in
+`certificates.json`. A provider serves the domains it names and their subdomains, or any domain.
+`acme` gets an environment's Let's Encrypt wildcard through its domain's provider, with
+`acme-manager` on the firewall, and records the refid as `wildcard` does; os-acme-client renews
+it. `acme-setup.sh` is a shim over these for one release, and migration 0029 makes an existing
+`~/.acme-dns-credentials.txt` a provider.
+
 `validate` checks the record against the files: fingerprints, key modes, and that the bundle
 holds exactly the recorded CAs.
 
 ## Not yet
 
-From ADR-043's delivery list: the DNS providers, `rotate`, delivering certificates to guests, and
+From ADR-043's delivery list: `provider test` (against Let's Encrypt staging), `rotate`, delivering
+certificates to guests, and
 in the CMDB report the `depends-on` relations of the routes and services a CA signed for, and
 `escrowed` (empty until the key escrow takes the CA keys).
 

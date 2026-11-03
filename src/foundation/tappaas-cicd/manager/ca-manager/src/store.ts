@@ -69,6 +69,9 @@ export class Store {
   certChain(name: string): string {
     return join(this.keyDir, "certs", `${name}.pem`);
   }
+  providerSecret(name: string): string {
+    return join(this.keyDir, "providers", `${name}.env`);
+  }
 
   load(): CaDoc {
     if (!existsSync(this.recordFile)) return emptyDoc();
@@ -84,7 +87,7 @@ export class Store {
 
   // The key dir, and its two subdirectories, mode 700.
   ensureKeyDir(): void {
-    for (const d of [this.keyDir, join(this.keyDir, "ca"), join(this.keyDir, "certs")]) {
+    for (const d of [this.keyDir, join(this.keyDir, "ca"), join(this.keyDir, "certs"), join(this.keyDir, "providers")]) {
       mkdirGuarded(d, { recursive: true });
       chmodGuarded(d, 0o700);
     }
