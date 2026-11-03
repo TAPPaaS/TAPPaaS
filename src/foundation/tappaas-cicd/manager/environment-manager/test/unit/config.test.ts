@@ -90,6 +90,12 @@ try {
   const ok = validateEnvironmentRefs(env, env, refs);
   check(ok.errors.length === 0, "valid env passes ref validation");
 
+  // Before the identity bootstrap (ADR-043 D7): an empty owner is a warning, an absent one an error.
+  const early = validateEnvironmentRefs({ ...env, ownerOrg: "" }, { ...env, ownerOrg: "" }, refs);
+  check(early.errors.length === 0 && early.warnings.some((w) => w.includes("ownerOrg is empty")), "an empty ownerOrg is a warning, not a refusal");
+  const absent = validateEnvironmentRefs({ ...env, ownerOrg: "" }, { name: env.name, displayName: env.displayName }, refs);
+  check(absent.errors.some((e) => e.includes("missing required field 'ownerOrg'")), "…but an absent one is still refused");
+
   // unknown zone + unknown owner → errors.
   const bad: Environment = {
     name: "bad",

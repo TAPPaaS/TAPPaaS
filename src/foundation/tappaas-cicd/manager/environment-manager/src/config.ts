@@ -245,7 +245,11 @@ export function validateEnvironmentRefs(
   // Required fields (the jq-fallback level of the schema check).
   if (!env.name) errors.push(`${base}: missing required field 'name'`);
   if (!env.displayName) errors.push(`${base}: missing required field 'displayName'`);
-  if (!env.ownerOrg) errors.push(`${base}: missing required field 'ownerOrg'`);
+  // ownerOrg must be there, but is empty until the identity bootstrap creates the
+  // organization (ADR-043 D7): the environment still has to be changeable before it.
+  const rawOwner = raw && typeof raw === "object" ? (raw as Record<string, unknown>).ownerOrg : undefined;
+  if (rawOwner === undefined) errors.push(`${base}: missing required field 'ownerOrg'`);
+  else if (!env.ownerOrg) warnings.push(`${base}: ownerOrg is empty — the identity bootstrap sets it`);
 
   // Reject an authored tlsCertRefid anywhere (runtime state, not config).
   if (hasTlsCertRefid(raw)) {
