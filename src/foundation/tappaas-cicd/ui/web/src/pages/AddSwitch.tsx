@@ -20,7 +20,7 @@ import { ModuleSummary, Topology } from "../types";
 import { canOperate, useMe } from "../ui";
 import { DecideStep, StepRow, Wizard } from "../wizard";
 import { AddRepositoryButton } from "./AddRepository";
-import type { SetupDoc } from "./Setup";
+import type { SecretStatus, SetupDoc } from "./Setup";
 import { ADD_SWITCH_TEXT, SWITCH_KINDS, SwitchKind, hostOf } from "../switchadd";
 
 interface ZoneRow {
@@ -127,6 +127,11 @@ export function AddSwitchWizard({ onClose }: { onClose: () => void }) {
   const repos = setup?.inputs.repositories ?? null;
   const domain = setup?.inputs.defaultDomain ?? "";
   const mgmtNet = zones.find((z) => z.name === "mgmt")?.ip ?? "10.0.0.0/24";
+  // The controllers registered already, as the switches behind them name them.
+  const topo = useRead<Topology>("topology").env?.data ?? null;
+  const secrets = useRead<SecretStatus[]>("secrets", 600_000).env?.data ?? [];
+  const unifiSaved = secrets.find((x) => x.name === "unifi")?.present ?? false;
+  const controllers = [...new Map((topo?.switches ?? []).filter((s) => s.controller).map((s) => [s.controller as string, s.controllerAddress ?? ""])).entries()].map(([name, address]) => ({ name, address }));
 
   const [choice, setChoice] = useState<SwitchKind | "">("");
   const [kind, setKind] = useState<SwitchKind | null>(null);
@@ -142,7 +147,11 @@ export function AddSwitchWizard({ onClose }: { onClose: () => void }) {
   const unifi = kind === "unifi-existing" || kind === "unifi-install";
   const needsModule = kind === "unifi-install" || kind === "mikrotik";
   const moduleName = kind === "unifi-install" ? "unifi-os" : "mikrotik";
-  const ctlName = kind === "unifi-install" ? "unifi-os" : "unifi-controller";
+  // The controller this login is for: one registered already at its address or
+  // under the name, else the name it gets.
+  const known = login?.url ? controllers.find((c) => c.address === login.url || hostOf(c.address) === hostOf(login.url ?? "")) ?? null : null;
+  const ctlName = known?.name ?? (kind === "unifi-install" ? "unifi-os" : "unifi-controller");
+  const taken = !known && controllers.some((c) => c.name === ctlName);
   const swName = kind === "mikrotik" ? login?.name ?? "" : kind === "manual" ? manualName ?? "" : "";
 
   // ── the stages of each kind ──
@@ -253,6 +262,13 @@ export function AddSwitchWizard({ onClose }: { onClose: () => void }) {
         {row(
           "login",
           unifi ? (
+            <>
+            {kind === "unifi-existing" && unifiSaved && controllers.length && login === null ? (
+              <p className="small toolbar">
+                <span>A UniFi login is saved already, for <b>{controllers[0].name}</b> ({controllers[0].address}).</span>
+                <button className="btn" onClick={() => { setLogin({ url: controllers[0].address }); setRegistered(true); }}>Keep it, and read its switches again</button>
+              </p>
+            ) : null}
             <Login
               title={`the login to ${login?.url ?? "the controller"}`}
               saved={login !== null}
@@ -268,6 +284,7 @@ export function AddSwitchWizard({ onClose }: { onClose: () => void }) {
                 return null;
               }}
             />
+            </>
           ) : kind === "mikrotik" ? (
             login === null ? (
               <Login
@@ -303,11 +320,18 @@ export function AddSwitchWizard({ onClose }: { onClose: () => void }) {
         {row(
           "register",
           login?.url ? (
-            <StepView
-              step={{ title: `switch-manager add-controller ${ctlName}`, bin: "switch-manager", verb: "add-controller", fixed: [ctlName], initial: { "--vendor": "unifi", "--ip": hostOf(login.url) }, hide: ["--vendor", "--managed"], button: `Register ${ctlName}` }}
-              me={me}
-              onDone={(ok) => ok && setRegistered(true)}
-            />
+            known || taken ? (
+              <>
+                <p className="small">{known ? <>The controller at {known.address} is registered already, as <b>{known.name}</b>.</> : <>A controller named <b>{ctlName}</b> is registered already, at another address: its switches are read with the login just saved.</>}</p>
+                <div className="actions"><button className="btn btn-primary" onClick={() => setRegistered(true)}>Continue</button></div>
+              </>
+            ) : (
+              <StepView
+                step={{ title: `switch-manager add-controller ${ctlName}`, bin: "switch-manager", verb: "add-controller", fixed: [ctlName], initial: { "--vendor": "unifi", "--ip": login.url }, hide: ["--vendor", "--managed"], button: `Register ${ctlName}`, note: "Its address is the URL the login above is for." }}
+                me={me}
+                onDone={(ok) => ok && setRegistered(true)}
+              />
+            )
           ) : (
             <p className="muted small">Once the login is saved.</p>
           ),
@@ -342,7 +366,7 @@ export function AddSwitchWizard({ onClose }: { onClose: () => void }) {
             ) : (
               <>
                 <p className="small">The switches are read. Which machine is on which port is recorded per switch: choose one, record its ports, and continue.</p>
-                <SwitchPortsByName nodes={nodes} controller={ctlName} onDone={() => setPorts(true)} />
+                <SwitchPortsByName nodes={nodes} controller={ctlName} topo={topo} onDone={() => setPorts(true)} />
               </>
             )
           ) : (
@@ -420,8 +444,7 @@ function ManualRecord({ onDone }: { onDone: (name: string) => void }) {
 }
 
 // After a controller is read: the port records of one of the switches it has.
-function SwitchPortsByName({ nodes, controller, onDone }: { nodes: string[]; controller: string; onDone: () => void }) {
-  const topo = useRead<Topology>("topology").env?.data ?? null;
+function SwitchPortsByName({ nodes, controller, topo, onDone }: { nodes: string[]; controller: string; topo: Topology | null; onDone: () => void }) {
   const names = (topo?.switches ?? []).filter((s) => !s.controller || s.controller === controller).map((s) => s.name);
   const [sw, setSw] = useState("");
   const [chosen, setChosen] = useState<string | null>(null);
