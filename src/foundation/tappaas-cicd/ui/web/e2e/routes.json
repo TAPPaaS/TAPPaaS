@@ -80,6 +80,7 @@
   {"id":"wizard-add-user","path":"/setup/day2","open":[{"role":"button","name":"Add a user…"}],"settle":"Add a user"},
   {"id":"wizard-reset-password","path":"/setup/day2","open":[{"role":"button","name":"Reset a user's password…"}],"settle":"Reset a user's password"},
   {"id":"wizard-add-stack","path":"/setup/day2","open":[{"role":"button","name":"Add a stack…"}],"settle":"Add a stack"},
+  {"id":"wizard-add-switch","path":"/setup/day2","open":[{"role":"button","name":"Add a switch…"}],"settle":"How the switch is managed"},
   {"id":"wizard-enrol","path":"/setup/day2","open":[{"role":"button","name":"Enrol a device…"}],"settle":"Enrol a device for mgmt access"},
   {"id":"wizard-buddy","path":"/setup/day2","open":[{"role":"button","name":"Add a backup buddy…"}],"settle":"Add a backup buddy"},
   {"id":"wizard-backup-keys","path":"/setup/day2","open":[{"role":"button","name":"Write the backup keys…"}],"settle":"Write the backup keys to a USB stick"},

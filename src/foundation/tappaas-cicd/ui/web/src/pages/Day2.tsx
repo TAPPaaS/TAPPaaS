@@ -20,6 +20,8 @@ import { REMOVE_NODE_TEXT, RemoveNodeButton } from "./RemoveNode";
 import { addEnvironmentSteps } from "./Environments";
 import { SiteRead, Topology } from "../types";
 import { ApIn, SiteSsid, ZoneIn, wifiZones } from "../wizards";
+import { AddSwitchButton } from "./AddSwitch";
+import { ADD_SWITCH_TEXT } from "../switchadd";
 import { AddStackButton } from "./AddStack";
 import { AddRepositoryButton } from "./AddRepository";
 import { SetupDoc } from "./Setup";
@@ -201,6 +203,9 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
           Adding a new physical machine as a Proxmox node of this site. This includes defining its connectivity and its boot disk, configuring it in the cluster, and setting up its data pools.
         </WizardCard>
         <WizardCard title="Remove a node" action={<RemoveNodeButton />}>{REMOVE_NODE_TEXT}</WizardCard>
+        <WizardCard title="Add a switch" action={<AddSwitchButton />}>
+          {ADD_SWITCH_TEXT}
+        </WizardCard>
         <WizardCard title="Adopt a machine" action={<AdoptButton />}>
           {ADOPT_TEXT}
         </WizardCard>

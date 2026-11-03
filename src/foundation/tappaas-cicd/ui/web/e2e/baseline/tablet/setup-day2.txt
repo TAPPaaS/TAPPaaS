@@ -57,6 +57,9 @@
 - text: Remove a node
 - paragraph: Takes a machine out of the cluster for good. The console first checks that nothing still needs it (something running on it, a copy kept on it, the site's backup server) and says where to move each; then the machine leaves the cluster, its switch ports are parked and the node is gone from the site. The other nodes are untouched.
 - button "Remove a node…"
+- text: Add a switch
+- paragraph: "A switch the site's machines are cabled to: TAPPaaS programs its ports through a UniFi controller or RouterOS, or records one managed outside TAPPaaS and says what to set on it by hand."
+- button "Add a switch…"
 - text: Adopt a machine
 - paragraph: A machine that already runs — a Debian host in a cupboard or a data centre — becomes a module of the site, at the location it is at. The mothership's key is added for root, its config is written and nothing else on it changes.
 - button "Adopt a machine…"

@@ -21,7 +21,9 @@ import { AddPoolButton } from "../physical/nodepools";
 import { EnrolButton } from "./Enrol";
 import { RestOfFoundationButton } from "./RestOfFoundation";
 import { Day2 } from "./Day2";
-import { PASSPHRASE_TEXT, SiteSsid, WIFI_ZONE_TYPES, broadcastText, passphraseOf } from "../wizards";
+import { PASSPHRASE_TEXT, SiteSsid, WIFI_ZONE_TYPES, ZoneIn, broadcastText, passphraseOf, wifiZones } from "../wizards";
+import { AddSwitchButton } from "./AddSwitch";
+import { WifiButton } from "./Wifi";
 import { AddRepositoryButton } from "./AddRepository";
 
 export interface SetupDoc {
@@ -33,6 +35,7 @@ export interface SetupDoc {
     dnsMode: string | null;
     firstNode?: { name: string; pools: string[] } | null;
     repositories?: string[];
+    siteNodes?: string[];
     answers?: Record<string, string>;
     modules?: Record<string, { config: boolean; test: { rc: number; at: string } | null }>;
     wifi?: { zones: { name: string; type: string | null; state: string | null; ssid: string | null }[]; aps: { name: string; ssids: { name: string; zone: string | null }[] }[] | null };
@@ -166,16 +169,7 @@ function WifiLinks({ doc }: { doc: SetupDoc | null }) {
           </tbody>
         </table>
       ) : null}
-      {missing.length === 0 ? (
-        <p className="small">Change an SSID or its passphrase from <Link to="/setup/day2#wifi">Day 2</Link>.</p>
-      ) : (
-        <p className="small toolbar">
-          {missing.map((z) => (
-            <Link key={z.name} to={`/setup/day2#wifi-${z.name}`} className="btn">Add WiFi for {z.name} →</Link>
-          ))}
-          <span className="muted">on Day 2: the SSID, its passphrase, then the reconcile that programs every access point.</span>
-        </p>
-      )}
+      {missing.length ? <p className="small">Without an SSID yet: {missing.map((z) => z.name).join(", ")}. Add WiFi below: the SSID, its passphrase, then the reconcile that programs every access point.</p> : null}
     </>
   );
 }
@@ -274,6 +268,10 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
   const email = typeof site?.email === "string" ? site.email : "";
   const domain = d?.inputs.defaultDomain ?? "";
   const ans = (step: string): boolean => !!d?.inputs.answers?.[step];
+  // The zones that can have Wi-Fi, for the same wizard as Day 2's.
+  const zonesRead = useRead<ZoneIn[]>("zones");
+  const ssidsRead = useRead<SiteSsid[]>("ssids", 600_000);
+  const wifi = wifiZones(zonesRead.env?.data ?? [], ssidsRead.env?.data ?? []);
 
   const body: Record<string, ReactNode> = {
     firstnode: d?.inputs.firstNode ? (
@@ -314,23 +312,24 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
     ),
     switch: (
       <>
-        <p className="small">Managing the switches lets TAPPaaS set each port for you. Without it TAPPaaS works with what is there, and you set the VLANs each port needs by hand; Day 2 shows which.</p>
-        <SecretForm name="unifi" status={sec("unifi")} onSaved={secrets.reload} fields={[{ key: "url", label: "controller URL", placeholder: "https://10.0.0.5:11443" }, { key: "username", label: "local admin" }, { key: "password", label: "password", secret: true }]} />
-        <OperateButton
-          label="Register the switch…"
-          title="Register and interrogate the switch"
-          steps={[
-            { title: "1 · The controller: switch-manager add-controller", bin: "switch-manager", verb: "add-controller", initial: { "@name": "unifi-controller", "--vendor": "unifi" }, note: "--ip: the controller's address (as in the credentials above)." },
-            { title: "2 · Read its switches and ports: switch-manager interrogate", bin: "switch-manager", verb: "interrogate", note: "Every port with no record and no link is recorded parked: an access port in iotLocal (tier 6, no internet, nothing else reachable). A port with a link is left as the switch has it and named — register the node uplinks (add-port) or park it." },
-            { title: "3 · Program the trunks and park the free ports: switch-manager reconcile", bin: "switch-manager", verb: "reconcile", note: "The preview lists every port it would set, the parked ones included; apply pushes them." },
-          ]}
-        />
-        <p className="small toolbar"><AnswerButton step="switch" answer="none" label="None: I set the VLANs by hand" given={ans("switch")} onChanged={r.reload} /></p>
+        <p className="small">Managing the switches lets TAPPaaS set each port for you. A switch managed outside TAPPaaS is recorded too, and TAPPaaS says which VLANs each of its ports needs. Add them one at a time.</p>
+        <p className="small toolbar">
+          <AddSwitchButton />
+          <AnswerButton step="switch" answer="no-more" label="No more switches" given={ans("switch")} onChanged={r.reload} />
+        </p>
       </>
     ),
     vpn: <EnrolButton />,
     stacks: <AddStackButton opens={false} />,
-    wifi: <WifiLinks doc={d ?? null} />,
+    wifi: (
+      <>
+        <WifiLinks doc={d ?? null} />
+        <p className="small toolbar">
+          <WifiButton zones={wifi} site={site?.name ?? ""} />
+          <AnswerButton step="wifi" answer="no-more" label="No more Wi-Fi" given={ans("wifi")} onChanged={r.reload} />
+        </p>
+      </>
+    ),
     physical: (
       <p className="small toolbar">
         <Link to="/setup/day2#physical" className="btn">The physical site →</Link>
