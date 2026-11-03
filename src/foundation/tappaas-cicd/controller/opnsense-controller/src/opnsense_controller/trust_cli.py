@@ -52,6 +52,12 @@ def cmd_cert_ensure(mgr: TrustManager, args) -> int:
     return 0
 
 
+def cmd_cert_retire(mgr: TrustManager, args) -> int:
+    for d in mgr.cert_retire(args.refid):
+        print(f"removed: {d}")
+    return 0
+
+
 def cmd_list(mgr: TrustManager, args) -> int:
     rows = [{"kind": k, "descr": e.descr, "refid": e.refid, "caref": e.caref} for k, es in (("ca", mgr.cas()), ("cert", mgr.certs())) for e in es]
     if args.json:
@@ -83,6 +89,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pem-file", required=True)
     p.add_argument("--key-stdin", action="store_true")
     p.set_defaults(handler=cmd_cert_ensure)
+
+    p = sub.add_parser("cert-retire", parents=[gp], help="Remove a TAPPaaS certificate no domain serves, and its CA once unused")
+    p.add_argument("--refid", required=True)
+    p.set_defaults(handler=cmd_cert_retire)
 
     p = sub.add_parser("list", parents=[gp], help="The trust store's CAs and certificates")
     p.add_argument("--json", action="store_true")

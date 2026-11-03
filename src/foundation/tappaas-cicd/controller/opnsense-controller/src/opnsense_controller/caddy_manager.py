@@ -409,6 +409,33 @@ class CaddyManager:
         }
         return self._api_post("ReverseProxy", "addReverseProxy", data)
 
+    def rebind_certificate(self, old_refid: str, new_refid: str) -> list[str]:
+        """Move every domain bound to ``old_refid`` onto ``new_refid`` (ADR-043).
+
+        A domain's certificate changes when its environment's wildcard is replaced
+        by another (a domain CA's for an ACME one, or a new issuer): all of the
+        routes on it move together, or two certificates for one name are served.
+        Returns the domains moved; the caller reconfigures and reloads Caddy."""
+        moved: list[str] = []
+        for row in self._api_get("ReverseProxy", "searchReverseProxy").get("rows", []):
+            if row.get("CustomCertificate") != old_refid:
+                continue
+            data = {
+                "reverse": {
+                    "enabled": row.get("enabled", "1"),
+                    "FromDomain": row.get("FromDomain", ""),
+                    "description": row.get("description", ""),
+                    "DnsChallenge": row.get("DnsChallenge", "0") if isinstance(row.get("DnsChallenge"), str) else "0",
+                    "CustomCertificate": new_refid,
+                    "AccessLog": "1",
+                }
+            }
+            r = self._api_post("ReverseProxy", "setReverseProxy", data, url_params=[row.get("uuid", "")])
+            if r.get("result") != "saved":
+                raise RuntimeError(f"rebind {row.get('FromDomain')}: {r}")
+            moved.append(row.get("FromDomain", ""))
+        return moved
+
     def update_domain(self, uuid: str, domain: CaddyDomain) -> dict:
         """Update an existing reverse proxy domain.
 

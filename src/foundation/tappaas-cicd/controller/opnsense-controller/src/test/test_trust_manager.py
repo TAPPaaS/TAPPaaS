@@ -20,16 +20,22 @@ LEAF2 = "-----BEGIN CERTIFICATE-----\nTDI=\n-----END CERTIFICATE-----\n"
 KEY = "-----BEGIN PRIVATE KEY-----\nSw==\n-----END PRIVATE KEY-----\n"
 
 
-def _store_manager():
+def _store_manager(caddy_rows=None):
     """A manager over an in-memory trust store; returns (manager, store, calls)."""
     store = {"ca": [], "cert": []}
+    caddy = caddy_rows if caddy_rows is not None else []
     calls = []
     n = {"i": 0}
 
     def run_module(_module, **kwargs):
         p = kwargs["params"]
+        if p.get("module") == "caddy":
+            return {"result": {"response": {"rows": caddy}}}
         kind, cmd, data, up = p["controller"], p["command"], p.get("data") or {}, p.get("params")
         calls.append((kind, cmd))
+        if cmd == "del":
+            store[kind] = [r for r in store[kind] if r["uuid"] != up[0]]
+            return {"result": {"response": {"result": "deleted"}}}
         if cmd == "search":
             return {"result": {"response": {"rows": [dict(r) for r in store[kind]]}}}
         body = data.get(kind, {})
@@ -90,6 +96,43 @@ class TestCert(unittest.TestCase):
         store["cert"].append(dict(store["cert"][0], uuid="u9", refid="r9"))
         with self.assertRaises(RuntimeError):
             mgr.cert_ensure("dup", LEAF2, KEY)
+
+
+class TestRetire(unittest.TestCase):
+    def _seed(self, mgr, store):
+        mgr.ca_ensure("TAPPaaS: old CA", CA)
+        mgr.cert_ensure("TAPPaaS: old wildcard", LEAF1, KEY)
+        store["cert"][0]["caref"] = store["ca"][0]["refid"]
+        return store["cert"][0]["refid"]
+
+    def test_unused_goes_with_its_ca(self):
+        mgr, store, _ = _store_manager()
+        refid = self._seed(mgr, store)
+        self.assertEqual(mgr.cert_retire(refid), ["TAPPaaS: old wildcard", "TAPPaaS: old CA"])
+        self.assertEqual((store["ca"], store["cert"]), ([], []))
+
+    def test_a_served_certificate_stays(self):
+        rows = []
+        mgr, store, _ = _store_manager(rows)
+        refid = self._seed(mgr, store)
+        rows.append({"FromDomain": "network.lab9.example.org", "CustomCertificate": refid})
+        with self.assertRaises(RuntimeError):
+            mgr.cert_retire(refid)
+        self.assertEqual(len(store["cert"]), 1)
+
+    def test_not_tappaas_stays(self):
+        mgr, store, _ = _store_manager()
+        mgr.cert_ensure("Web GUI TLS certificate", LEAF1, KEY)
+        with self.assertRaises(RuntimeError):
+            mgr.cert_retire(store["cert"][0]["refid"])
+
+    def test_a_ca_that_still_signs_stays(self):
+        mgr, store, _ = _store_manager()
+        refid = self._seed(mgr, store)
+        mgr.cert_ensure("TAPPaaS: other", LEAF2, KEY)
+        store["cert"][1]["caref"] = store["ca"][0]["refid"]
+        self.assertEqual(mgr.cert_retire(refid), ["TAPPaaS: old wildcard"])
+        self.assertEqual(len(store["ca"]), 1)
 
 
 class TestCli(unittest.TestCase):

@@ -166,6 +166,39 @@ class TrustManager:
             raise RuntimeError(f"trust cert add '{name}': {r}")
         return self._refid_of(self.certs(), name), True
 
+    def _caddy_uses(self, refid: str) -> list[str]:
+        params = {"module": "caddy", "controller": "ReverseProxy", "command": "searchReverseProxy", "action": "get"}
+        rows = self.client.run_module("raw", params=params).get("result", {}).get("response", {}).get("rows", []) or []
+        return [r.get("FromDomain", "") for r in rows if r.get("CustomCertificate") == refid]
+
+    def cert_retire(self, refid: str) -> list[str]:
+        """Remove a certificate TAPPaaS put on the firewall once nothing serves it,
+        then its CA once nothing it signed is left (ADR-043 D9). Returns what was
+        removed. Refuses a certificate a Caddy domain still uses, and leaves alone
+        what TAPPaaS did not make (its description does not start with TAPPaaS)."""
+        found = [c for c in self.certs() if c.refid == refid]
+        if not found:
+            return []
+        cert = found[0]
+        if not cert.descr.startswith("TAPPaaS"):
+            raise RuntimeError(f"'{cert.descr}' is not TAPPaaS's to remove")
+        users = self._caddy_uses(refid)
+        if users:
+            raise RuntimeError(f"'{cert.descr}' is still served for {', '.join(users)}")
+        removed: list[str] = []
+        r = self._api("cert", "del", None, [cert.uuid])
+        if r.get("result") != "deleted":
+            raise RuntimeError(f"trust cert del '{cert.descr}': {r}")
+        removed.append(cert.descr)
+        if cert.caref and not any(c.caref == cert.caref for c in self.certs()):
+            for ca in self.cas():
+                if ca.refid == cert.caref and ca.descr.startswith("TAPPaaS"):
+                    r = self._api("ca", "del", None, [ca.uuid])
+                    if r.get("result") != "deleted":
+                        raise RuntimeError(f"trust ca del '{ca.descr}': {r}")
+                    removed.append(ca.descr)
+        return removed
+
     def _refid_of(self, entries: list[TrustEntry], name: str) -> str:
         found = self._named(entries, name)
         if not found or not found[0].refid:

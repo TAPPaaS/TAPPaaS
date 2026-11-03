@@ -939,6 +939,14 @@ Examples:
     # reconfigure
     subparsers.add_parser("reconfigure", parents=[global_parser], help="Reconfigure Caddy (apply changes)")
 
+    # rebind-certificate (ADR-043): every domain on one certificate onto another
+    rebind_parser = subparsers.add_parser(
+        "rebind-certificate", parents=[global_parser],
+        help="Move every domain bound to one Trust refid onto another, then reconfigure",
+    )
+    rebind_parser.add_argument("--from", dest="from_refid", required=True, help="The refid the domains are bound to now")
+    rebind_parser.add_argument("--to", dest="to_refid", required=True, help="The refid to bind them to")
+
     # status (#589)
     subparsers.add_parser("status", parents=[global_parser], help="Report whether the Caddy service is running")
 
@@ -1034,6 +1042,15 @@ Examples:
                 success = list_all(manager, as_json=args.json)
             elif args.command == "reconfigure":
                 success = reconfigure_cmd(manager, args.check_mode)
+            elif args.command == "rebind-certificate":
+                if args.check_mode:
+                    print(f"would move the domains on {args.from_refid} to {args.to_refid}")
+                    success = True
+                else:
+                    moved = manager.rebind_certificate(args.from_refid, args.to_refid)
+                    for d in moved:
+                        print(f"moved: {d}")
+                    success = not moved or reconfigure_cmd(manager, False)
             elif args.command == "status":
                 success = status_cmd(manager)
 

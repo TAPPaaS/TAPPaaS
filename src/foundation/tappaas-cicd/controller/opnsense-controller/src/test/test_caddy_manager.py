@@ -749,3 +749,39 @@ class TestStatusCommand(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRebindCertificate(unittest.TestCase):
+    """ADR-043: every domain on a replaced wildcard moves to the new one together."""
+
+    def _mgr(self, rows):
+        sets = []
+        mgr = CaddyManager(config=MagicMock())
+        mgr._client = MagicMock()  # noqa: SLF001
+
+        def run_module(_module, **kwargs):
+            p = kwargs.get("params", {})
+            if p.get("command") == "searchReverseProxy":
+                return {"result": {"response": {"rows": rows}}}
+            sets.append((p.get("params"), p.get("data")))
+            return {"result": {"response": {"result": "saved"}}}
+
+        mgr._client.run_module.side_effect = run_module  # noqa: SLF001
+        return mgr, sets
+
+    def test_moves_only_the_old_refids_domains(self):
+        rows = [
+            {"uuid": "a", "FromDomain": "console.lab9.org", "description": "TAPPaaS: console", "enabled": "1", "DnsChallenge": "0", "CustomCertificate": "OLD"},
+            {"uuid": "b", "FromDomain": "network.lab9.org", "description": "TAPPaaS: network", "enabled": "1", "DnsChallenge": "0", "CustomCertificate": "OLD"},
+            {"uuid": "c", "FromDomain": "other.example.org", "description": "TAPPaaS: other", "enabled": "1", "DnsChallenge": "0", "CustomCertificate": "ELSE"},
+        ]
+        mgr, sets = self._mgr(rows)
+        self.assertEqual(mgr.rebind_certificate("OLD", "NEW"), ["console.lab9.org", "network.lab9.org"])
+        self.assertEqual([s[0] for s in sets], [["a"], ["b"]])
+        self.assertTrue(all(s[1]["reverse"]["CustomCertificate"] == "NEW" for s in sets))
+        self.assertEqual(sets[0][1]["reverse"]["FromDomain"], "console.lab9.org")
+
+    def test_nothing_on_the_old_refid_moves_nothing(self):
+        mgr, sets = self._mgr([{"uuid": "c", "FromDomain": "x", "CustomCertificate": "ELSE"}])
+        self.assertEqual(mgr.rebind_certificate("OLD", "NEW"), [])
+        self.assertEqual(sets, [])
