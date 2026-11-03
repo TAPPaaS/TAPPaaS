@@ -12,7 +12,7 @@ import { AccessConfig, Me, decide, setupState } from "../../src/access";
 import { Jobs } from "../../src/jobs";
 import { Runner, Streamer } from "../../src/run";
 import { parseKv, secretCommand, secretStatus, writeSecret } from "../../src/secrets";
-import { SetupInputs, TESTS_FILE, physicalStep, readPhysical, WifiInputs, clientZonesWithoutWifi, closeSetupToken, gatherSetup, parseApList, parseSwitches, parseWgvpnPeers, readSetupTests, readWifiZones, recordSetupTest, setupCheckModules, setupComplete, setupSteps, wifiStep } from "../../src/setup";
+import { SetupInputs, TESTS_FILE, readSetupAnswers, recordSetupAnswer, physicalStep, readPhysical, WifiInputs, clientZonesWithoutWifi, closeSetupToken, gatherSetup, parseApList, parseSwitches, parseWgvpnPeers, readSetupTests, readWifiZones, recordSetupTest, setupCheckModules, setupComplete, setupSteps, wifiStep } from "../../src/setup";
 import { testGate } from "./gate-fixture";
 import { check, done } from "./check";
 import { FIX, PIN } from "./fake-site";
@@ -48,8 +48,14 @@ async function main(): Promise<void> {
     wifi,
     physical: { rooms: [{ name: "basement", location: "knudanchersvej95" }], placed: ["tappaas1", "tappaas2", "tappaas3", ...sw!.map((x) => x.name)], recorded: [] },
     stacks: ["home", "test"],
+    firstNode: { name: "tappaas1", pools: ["tanka1"] },
+    repositories: ["TAPPaaS", "Community"],
+    answers: {},
   };
   let steps = setupSteps(hrossen);
+  check(steps.map((s) => s.id).join() === "firstnode,nodes,vpn,backup,identity,logging,bootstrap,repos,switch,wifi,physical,stacks,public", "Day 1's order: first node, nodes, VPN, foundation, repositories, switches, Wi-Fi, physical, stacks, make it public");
+  check(steps.filter((s) => s.required).map((s) => s.id).join() === "firstnode,vpn,backup,identity,logging,bootstrap", "…required: the first node, the VPN and the foundation");
+  check(!steps.some((s) => (s.id as string) === "tls"), "…and no TLS step (ADR-043 D10)");
   check(steps.filter((s) => s.id !== "wifi").every((s) => s.done === true) && setupComplete(steps), "hrossen: every step reads as done but the optional WiFi");
 
   // ── the WiFi step ───────────────────────────────────────────────────
@@ -65,12 +71,18 @@ async function main(): Promise<void> {
   check(wifiStep({ ...wifi, aps: null }).done === null, "ap-manager unreadable: unknown");
   check(wifiStep({ zones: wifi.zones.filter((z) => z.name !== "home"), aps: [] }).done === true, "no active Client zone: nothing to do");
   check(wifiStep({ zones: [{ name: "lab", type: "Client", state: null, vlan: 330, ssid: null }], aps: [] }).done === false, "a Client zone with no state is active");
-  check(steps.find((s) => s.id === "tls")!.detail.includes("per-service"), "per-service: TLS needs no wildcard certificate");
+  check(steps.find((s) => s.id === "public")!.done === true, "per-service: the site is public already");
 
   // ── each predicate on its own ───────────────────────────────────────
   const one = (over: Partial<SetupInputs>, id: string) => setupSteps({ ...hrossen, ...over }).find((s) => s.id === id)!;
-  check(one({ dnsMode: "wildcard" }, "tls").done === false, "wildcard mode without config/cert-refids.json: TLS not done");
-  check(one({ dnsMode: "wildcard", certRefids: { rossen: "5f1c" } }, "tls").done === true, "…with the default environment's refid: done");
+  check(one({ dnsMode: "local" }, "public").done === false && !one({ dnsMode: "local" }, "public").required, "local: not public yet, and that is optional");
+  check(one({ dnsMode: "local", answers: { public: "stay-local" } }, "public").done === true, "…\"stay local\" answers it");
+  check(one({ firstNode: { name: "tappaas1", pools: [] } }, "firstnode").done === false, "the first node without a data pool: not done");
+  check(one({ firstNode: { name: "tappaas1", pools: [] }, answers: { firstnode: "boot-only" } }, "firstnode").done === true, "…\"boot pool only\" answers it");
+  check(one({ firstNode: null }, "firstnode").done === null, "…no node record: unknown");
+  check(one({ repositories: ["TAPPaaS"] }, "repos").done === false && one({ repositories: ["TAPPaaS"], answers: { repos: "tappaas-only" } }, "repos").done === true, "TAPPaaS alone: not done until \"TAPPaaS only\"");
+  check(one({ siteNodes: ["tappaas1"], clusterNodes: ["tappaas1"] }, "nodes").done === false && one({ siteNodes: ["tappaas1"], clusterNodes: ["tappaas1"], answers: { nodes: "no-more" } }, "nodes").done === true, "one node: not done until \"no more machines\"");
+  check(one({ switches: [], answers: { switch: "none" } }, "switch").done === true && one({ switches: null, answers: { switch: "none" } }, "switch").done === true, "no switch managed: \"none\" answers it, even unreadable");
   check(one({ modules: { ...hrossen.modules, logging: { config: false, test: null } } }, "logging").done === false, "no config/logging.json: logging not done");
   check(one({ modules: { ...hrossen.modules, backup: { config: true, test: { rc: 1, tail: "FAIL pbs", at: "2026-10-18T09:00:00.000Z" } } } }, "backup").done === false, "installed but its test fails: not done");
   check(/passed \(2026-10-18 09:00:00Z\)/.test(steps.find((s) => s.id === "backup")!.detail), "…and a step says when its test last ran");
@@ -79,6 +91,7 @@ async function main(): Promise<void> {
   const nd = one({ clusterNodes: ["tappaas1", "tappaas2"] }, "nodes");
   check(nd.done === false && nd.detail.includes("tappaas3"), "a declared node outside the cluster: not done, and named");
   check(one({ clusterNodes: null }, "nodes").done === null, "membership unreadable: unknown, not done");
+  check(!one({ switches: [] }, "switch").required, "the switch fabric is optional");
   check(one({ switches: [] }, "switch").done === false && one({ switches: [{ name: "s", ports: 0, discovered: 0, controller: null }] }, "switch").done === false, "no switch, or one not interrogated: not done");
   check(one({ vpnPeers: [] }, "vpn").done === false, "no admin VPN peer: not done");
   check(!one({ stacks: [] }, "stacks").required && setupComplete(setupSteps({ ...hrossen, stacks: [] })), "stacks are optional");
@@ -93,6 +106,15 @@ async function main(): Promise<void> {
   const all = physicalStep({ rooms, placed: ["tappaas1", "tappaas2", "crs-a"], recorded: [{ name: "modem", kind: "modem" }] }, nodes, ["crs-a"]);
   check(all.done === true && /modem \(modem\)/.test(all.detail), "every node and switch placed: done, the recorded devices listed");
   check(physicalStep({ rooms: [], placed: ["tappaas1", "tappaas2"], recorded: [] }, nodes, []).done === false, "…but not without a room");
+
+  // ── answers: the console's own record ──────────────────────────────
+  {
+    const sd = mkdtempSync(join(tmpdir(), "console-answers-"));
+    check(recordSetupAnswer(sd, "switch", "none") === null && readSetupAnswers(sd).switch === "none", "an answer is recorded and read back");
+    check(recordSetupAnswer(sd, "switch", "maybe") !== null && recordSetupAnswer(sd, "vpn", "none") !== null, "…a wrong answer, or a step that takes none, is refused");
+    check(recordSetupAnswer(sd, "switch", null) === null && readSetupAnswers(sd).switch === undefined, "…and null withdraws it");
+    rmSync(sd, { recursive: true, force: true });
+  }
 
   // ── gathered from a config tree: a fresh install ────────────────────
   const dir = mkdtempSync(join(tmpdir(), "console-setup-"));
@@ -150,7 +172,8 @@ async function main(): Promise<void> {
   inputs = await gather();
   steps = setupSteps(inputs);
   check(!ran.some((r) => r.startsWith("module-manager test")), "the next read is from the kept results: no test ran");
-  check(steps.filter((s) => s.done !== true).map((s) => s.id).join() === "vpn,physical,stacks", "with the records in place every step is done but the VPN peer (and the optional physical site and stacks)");
+  check(steps.filter((s) => s.done !== true).map((s) => s.id).join() === "firstnode,vpn,repos,physical,stacks", "with the records in place every step is done but the first node's pool, the VPN peer (and the optional repositories, physical site and stacks)");
+  check(inputs.firstNode?.name === "tappaas1" && inputs.firstNode.pools.length === 0, "the first node and its pools come from its record");
   check(readPhysical(cfg)?.rooms.length === 0, "no positions.json: an empty one");
   writeFileSync(join(cfg, "racks.json"), JSON.stringify({ rooms: { basement: {} }, mounts: { tappaas1: { rack: "rack1", u: 1 } } }));
   check(readPhysical(cfg)?.placed.join() === "tappaas1", "racks.json's mounts until migration 0020 has run");

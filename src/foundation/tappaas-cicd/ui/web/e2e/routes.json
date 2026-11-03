@@ -2,6 +2,8 @@
   {"id":"overview","path":"/"},
   {"id":"setup","path":"/setup"},
   {"id":"setup-day1","path":"/setup/day1"},
+  {"id":"setup-day1-public","path":"/setup/day1","open":[{"role":"button","name":"Make it public (optional)","exact":false}],"settle":"Stay local"},
+  {"id":"setup-day1-repos","path":"/setup/day1","open":[{"role":"button","name":"Repositories (optional)","exact":false}],"settle":"TAPPaaS only"},
   {"id":"setup-day2","path":"/setup/day2"},
   {"id":"health","path":"/health"},
   {"id":"operations","path":"/operations"},

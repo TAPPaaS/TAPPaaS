@@ -23,7 +23,7 @@ import { MODULE_NAME, NODE_NAME, OBJECT_NAME, Reads } from "./reads";
 import { ownerSummary, readConfigs } from "./owner";
 import { SECRETS, isSecretName, secretCommand, secretStatus, writeSecret } from "./secrets";
 import { StdinRunner, jobEnv, runWithStdin } from "./run";
-import { closeSetupToken, setupCheckModules, setupComplete, setupSteps } from "./setup";
+import { closeSetupToken, recordSetupAnswer, setupCheckModules, setupComplete, setupSteps } from "./setup";
 import { FIELD_KINDS, FieldKind } from "./fieldmanifest";
 
 export interface ServerConfig {
@@ -178,6 +178,7 @@ export class ConsoleServer {
     if (head === "jobs") return this.jobsApi(method, a, b, me, res, req, url);
     if (head === "secrets") return this.secretsApi(method, a, me, res, req);
     if (head === "setup" && a === "check") return this.setupCheck(method, me, res, req);
+    if (head === "setup" && a === "answer") return this.setupAnswer(method, me, res, req);
     if (head === "assistant") return this.assistantApi(method, a, b, me, res, req);
     if (head === "operations") return this.operationsApi(method, a, parts.length, me, res, req);
     if (method !== "GET") return sendJson(res, 405, { error: `${method} /api/v1/${head ?? ""}: reads are GET; a change is a job (POST /api/v1/jobs)` });
@@ -650,6 +651,32 @@ export class ConsoleServer {
       started.push(r.job);
     }
     return sendJson(res, 201, { data: started });
+  }
+
+  // ── a Day 1 step's plain answer ("none", "no more machines") ─────────
+  //   POST /setup/answer {step, answer}   record it; answer null withdraws it
+  // A record of the console's own (setup-answers.json in its state directory),
+  // which an optional step reads as done. Written by whoever may change the site.
+  private async setupAnswer(method: string, me: Me, res: ServerResponse, req?: IncomingMessage): Promise<void> {
+    if (method !== "POST") return sendJson(res, 405, { error: "setup/answer: POST" });
+    const w = mayWrite(me, setupState(this.cfg.access));
+    if (!w.ok) return sendJson(res, w.status, { error: w.reason });
+    const ctype = req ? String(req.headers["content-type"] ?? "") : "";
+    if (!/^application\/json\b/i.test(ctype)) return sendJson(res, 415, { error: "an answer is posted as application/json" });
+    let body: Record<string, unknown>;
+    try {
+      body = req ? await readJsonBody(req) : {};
+    } catch (e) {
+      return sendJson(res, 400, { error: (e as Error).message });
+    }
+    const step = typeof body.step === "string" ? body.step : "";
+    const answer = body.answer === null ? null : typeof body.answer === "string" ? body.answer : undefined;
+    if (answer === undefined) return sendJson(res, 400, { error: "answer: the step's answer, or null to withdraw it" });
+    const err = recordSetupAnswer(this.reads.stateDir, step, answer);
+    if (err) return sendJson(res, 400, { error: err });
+    this.cfg.log(`setup answer ${step}=${answer ?? "(withdrawn)"} by ${me.user ?? me.via}`);
+    await this.reads.setupTestRecorded();
+    return sendJson(res, 200, { data: { step, answer } });
   }
 
   // ── the assistant (ADR-034 D7) ────────────────────────────────────

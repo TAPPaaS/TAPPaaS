@@ -11,7 +11,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test, type Page } from "@playwright/test";
 
-interface Step { role: Parameters<Page["getByRole"]>[0]; name: string }
+interface Step { role: Parameters<Page["getByRole"]>[0]; name: string; exact?: boolean }
 interface Route { id: string; path: string; open?: Step[]; settle?: string }
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -54,7 +54,9 @@ for (const r of ROUTES.filter((x) => !ONLY.length || ONLY.includes(x.id))) {
     await page.addStyleTag({ content: STILL });
     await page.waitForLoadState("networkidle");
     for (const s of r.open ?? []) {
-      await page.getByRole(s.role, { name: s.name, exact: true }).click();
+      // exact: false matches a name that holds more than its words, a step's header
+      // with its state beside its title.
+      await page.getByRole(s.role, { name: s.name, exact: s.exact ?? true }).click();
       await page.waitForLoadState("networkidle");
     }
     if (r.settle) await page.getByText(r.settle).first().waitFor({ state: "visible" });

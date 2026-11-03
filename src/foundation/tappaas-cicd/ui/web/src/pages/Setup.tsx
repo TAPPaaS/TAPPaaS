@@ -18,6 +18,7 @@ import { Dot, Link, ReadState, canOperate, replacePath, since, useMe } from "../
 import { StageState, StepRow } from "../wizard";
 import { AddNodeButton, sessionText, useAddNodeSession } from "./AddNode";
 import { AddStackButton } from "./AddStack";
+import { AddPoolButton } from "../physical/nodepools";
 import { EnrolButton } from "./Enrol";
 import { RestOfFoundationButton } from "./RestOfFoundation";
 import { Day2 } from "./Day2";
@@ -30,6 +31,9 @@ export interface SetupDoc {
     defaultEnv: string | null;
     defaultDomain?: string | null;
     dnsMode: string | null;
+    firstNode?: { name: string; pools: string[] } | null;
+    repositories?: string[];
+    answers?: Record<string, string>;
     wifi?: { zones: { name: string; type: string | null; state: string | null; ssid: string | null }[]; aps: { name: string; ssids: { name: string; zone: string | null }[] }[] | null };
   };
   token: { active: boolean; present: boolean; identityInstalled: boolean };
@@ -220,6 +224,28 @@ export function Setup({ tab }: { tab?: SetupTab }) {
   );
 }
 
+// A step's plain answer ("none", "no more machines"): recorded by the console, so
+// an optional step reads as done with nothing installed. Again, it is withdrawn.
+function AnswerButton({ step, answer, label, given, onChanged }: { step: string; answer: string; label: string; given: boolean; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  if (!canOperate(useMe())) return null;
+  const send = async () => {
+    setBusy(true);
+    setMsg(null);
+    const r = await post<unknown>("setup/answer", { step, answer: given ? null : answer });
+    setBusy(false);
+    if (!r.ok) return setMsg(r.error);
+    onChanged();
+  };
+  return (
+    <>
+      <button className="btn" disabled={busy} onClick={() => void send()}>{given ? `Undo “${label}”` : label}</button>
+      {msg ? <span className="ff-error small"> {msg}</span> : null}
+    </>
+  );
+}
+
 function Day1({ r }: { r: Read<SetupDoc> }) {
   const secrets = useRead<SecretStatus[]>("secrets", 600_000);
   // A node being added (Add node closed mid-way): its Nodes step says so, open,
@@ -246,21 +272,52 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
   };
   const email = typeof site?.email === "string" ? site.email : "";
   const domain = d?.inputs.defaultDomain ?? "";
+  const ans = (step: string): boolean => !!d?.inputs.answers?.[step];
 
   const body: Record<string, ReactNode> = {
-    tls:
-      d?.inputs.dnsMode === "wildcard" ? (
-        <>
-          <SecretForm name="acme-dns" status={sec("acme-dns")} onSaved={secrets.reload} fields={[{ key: "provider", label: "DNS provider", placeholder: "cloudflare, gandi_livedns, …" }, { key: "@key", label: "its key name", placeholder: "dns_cf_token, dns_gandi_livedns_token, …" }, { key: "@value", label: "its value", secret: true }]} />
-          <OperateButton label="Issue the certificate…" title="acme-setup.sh" steps={[{ title: "acme-setup.sh --no-save-creds", bin: "acme-setup.sh", verb: "acme-setup", initial: { "--no-save-creds": true }, note: "Reads the credential saved above; issues *.<domain> on the firewall and records its refid in config/cert-refids.json." }]} />
-        </>
-      ) : (
-        <p className="small">Nothing to do: with dnsMode per-service Caddy gets each published route's certificate itself.</p>
-      ),
+    firstnode: d?.inputs.firstNode ? (
+      <p className="small toolbar">
+        <AddPoolButton node={d.inputs.firstNode.name} />
+        <AnswerButton step="firstnode" answer="boot-only" label="Boot pool only" given={ans("firstnode")} onChanged={r.reload} />
+        <span className="muted">A data pool on the free disks holds the guests and lets HA replicate them; a machine with one disk keeps the boot pool.</span>
+      </p>
+    ) : null,
+    repos: (
+      <p className="small toolbar">
+        {(d?.inputs.repositories ?? []).includes("Community") ? null : (
+          <OperateButton label="Add Community…" title="site-manager repository add codeberg.org/TAPPaaS/Community" steps={[{ title: "site-manager repository add codeberg.org/TAPPaaS/Community --branch main", bin: "site-manager", verb: "repository add", fixed: ["codeberg.org/TAPPaaS/Community"], initial: { "--branch": "main" }, note: "Community: modules maintained outside the core project, such as UniFi OS and MikroTik." }]} />
+        )}
+        <OperateButton label="Add a repository…" title="site-manager repository add" steps={[{ title: "site-manager repository add <url>", bin: "site-manager", verb: "repository add" }]} />
+        <AnswerButton step="repos" answer="tappaas-only" label="TAPPaaS only" given={ans("repos")} onChanged={r.reload} />
+      </p>
+    ),
+    public: (
+      <>
+        {d?.inputs.dnsMode === "local" ? (
+          <p className="small">The site's names are signed by its own CA, and each person imports it once. Going public gets them a certificate every device already trusts: a wildcard through a DNS provider's API (below), or one per name from public DNS records.</p>
+        ) : (
+          <p className="small">The site's names have public certificates. A wildcard through a DNS provider's API (below) serves every name of the domain with one certificate.</p>
+        )}
+        <SecretForm name="acme-dns" status={sec("acme-dns")} onSaved={secrets.reload} fields={[{ key: "provider", label: "DNS provider", placeholder: "cloudflare, gandi_livedns, …" }, { key: "@key", label: "its key name", placeholder: "dns_cf_token, dns_gandi_livedns_token, …" }, { key: "@value", label: "its value", secret: true }]} />
+        <p className="small toolbar">
+          <OperateButton label="Go public with the wildcard…" title={`environment-manager modify ${d?.inputs.defaultEnv ?? "<env>"} --dns-mode wildcard`} steps={[
+            { title: `environment-manager modify ${d?.inputs.defaultEnv ?? "<env>"} --dns-mode wildcard`, bin: "environment-manager", verb: "modify", fixed: [d?.inputs.defaultEnv ?? ""], initial: { "--dns-mode": "wildcard" } },
+            { title: `environment-manager reconcile ${d?.inputs.defaultEnv ?? "<env>"} --apply`, bin: "environment-manager", verb: "reconcile", fixed: [d?.inputs.defaultEnv ?? ""], note: "Gets *.<domain> from Let's Encrypt through the provider above, and moves every route onto it." },
+          ]} />
+          <AnswerButton step="public" answer="stay-local" label="Stay local" given={ans("public")} onChanged={r.reload} />
+        </p>
+      </>
+    ),
     bootstrap: <RestOfFoundationButton email={email} />,
-    nodes: <AddNodeButton session={adding} />,
+    nodes: (
+      <span className="toolbar">
+        <AddNodeButton session={adding} />
+        <AnswerButton step="nodes" answer="no-more" label="No more machines" given={ans("nodes")} onChanged={r.reload} />
+      </span>
+    ),
     switch: (
       <>
+        <p className="small">Managing the switches lets TAPPaaS set each port for you. Without it TAPPaaS works with what is there, and you set the VLANs each port needs by hand; Day 2 shows which.</p>
         <SecretForm name="unifi" status={sec("unifi")} onSaved={secrets.reload} fields={[{ key: "url", label: "controller URL", placeholder: "https://10.0.0.5:11443" }, { key: "username", label: "local admin" }, { key: "password", label: "password", secret: true }]} />
         <OperateButton
           label="Register the switch…"
@@ -271,6 +328,7 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
             { title: "3 · Program the trunks and park the free ports: switch-manager reconcile", bin: "switch-manager", verb: "reconcile", note: "The preview lists every port it would set, the parked ones included; apply pushes them." },
           ]}
         />
+        <p className="small toolbar"><AnswerButton step="switch" answer="none" label="None: I set the VLANs by hand" given={ans("switch")} onChanged={r.reload} /></p>
       </>
     ),
     vpn: <EnrolButton />,

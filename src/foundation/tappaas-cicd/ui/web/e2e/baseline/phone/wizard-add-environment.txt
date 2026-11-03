@@ -129,12 +129,13 @@
     - option "wan"
   - text: "The Service zone its modules run in: the zone in zones.json that names this environment. domains domains.primary · string"
   - textbox "default no public domain (reached only from inside)"
-  - text: Primary public domain (e.g. foo-company.nl). domains.dnsMode · one of per-service, wildcard
+  - text: Primary public domain (e.g. foo-company.nl). domains.dnsMode · one of per-service, wildcard, local
   - combobox:
     - option "default per-service" [selected]
     - option "per-service"
     - option "wildcard"
-  - text: DNS / certificate strategy.
+    - option "local"
+  - text: Who issues the certificate for published names.
   - group: 7 fields not changed here
   - group "Options":
     - text: Options

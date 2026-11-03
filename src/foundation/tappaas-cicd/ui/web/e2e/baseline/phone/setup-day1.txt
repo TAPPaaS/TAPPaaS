@@ -57,8 +57,14 @@
   - text: "grows it. The setup token is closed: the console is reached through the gate."
 - list:
   - listitem:
-    - button "pass TLS — certificates done ▸": TLS — certificates done ▸
-    - paragraph: "rossen is dnsMode per-service: Caddy gets each route's certificate itself (HTTP-01); there is no wildcard to issue"
+    - button "pass First node — its disks done ▸": First node — its disks done ▸
+    - paragraph: "tappaas1: tanka1, tankb1"
+  - listitem:
+    - button "pass More nodes (optional) done ▸": More nodes (optional) done ▸
+    - paragraph: "4 node(s), all cluster members: tappaas1, tappaas2, tappaas3, tappaas4"
+  - listitem:
+    - button "pass The admin VPN done ▸": The admin VPN done ▸
+    - paragraph: "peer(s): lars-mac"
   - listitem:
     - button "pass Backup (PBS) done ▸": Backup (PBS) done ▸
     - paragraph: installed; updated and tested by the sweep (2026-11-01 01:42:48Z)
@@ -72,14 +78,11 @@
     - button "pass Rest of foundation — your organization and you done ▸": Rest of foundation — your organization and you done ▸
     - paragraph: "config/identities: 1 organization(s), 3 user(s)"
   - listitem:
-    - button "pass Nodes done ▸": Nodes done ▸
-    - paragraph: "4 node(s), all cluster members: tappaas1, tappaas2, tappaas3, tappaas4"
+    - button "pass Repositories (optional) done ▸": Repositories (optional) done ▸
+    - paragraph: "registered: TAPPaaS, Community"
   - listitem:
-    - button "pass The switch done ▸": The switch done ▸
+    - button "pass Switch fabric (optional) done ▸": Switch fabric (optional) done ▸
     - paragraph: "USW Pro XG 10 PoE: 12 port(s), 12 discovered via unifi-controller; crs-a: 17 port(s), 17 discovered; crs-b: 17 port(s), 17 discovered"
-  - listitem:
-    - button "pass The admin VPN done ▸": The admin VPN done ▸
-    - paragraph: "peer(s): lars-mac"
   - listitem:
     - button "pass WiFi (optional) done ▸": WiFi (optional) done ▸
     - paragraph: "every active Client zone has an SSID: rossen-home → home"
@@ -89,3 +92,6 @@
   - listitem:
     - button "pass Stacks (optional) done ▸": Stacks (optional) done ▸
     - paragraph: "installed: ai, collaboration, devops, home, misc, security"
+  - listitem:
+    - button "pass Make it public (optional) done ▸": Make it public (optional) done ▸
+    - paragraph: rossen is public (dnsMode per-service)

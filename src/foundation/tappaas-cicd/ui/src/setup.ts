@@ -5,10 +5,10 @@
 // membership). Each step is then a form over its verbs in the front end, run
 // as jobs with their previews.
 //
-//   tls        wildcard mode: config/cert-refids.json names the default
-//              environment (acme-setup.sh recorded the certificate);
-//              per-service mode: nothing to issue — Caddy gets each route's
-//              certificate itself (HTTP-01)
+//   firstnode  the first node has a data pool, or "boot pool only" was answered
+//   nodes      optional: every node site.json declares is a cluster member, and
+//              there is more than one or "no more machines" was answered
+//   vpn        the admin VPN has at least one peer (network-manager wgvpn list)
 //   backup, identity, logging   config/<module>.json exists and its module
 //              test passed the last time it ran. The tests run only as jobs
 //              (POST /setup/check, the page's Check button; the step's Test
@@ -16,9 +16,9 @@
 //              view. Their last result is kept in the state directory
 //              (setup-tests.json) and read back like any record.
 //   bootstrap  config/identities holds an organization and a user
-//   nodes      every node site.json declares is a cluster member
-//   switch     a switch is registered and interrogated (ports discovered)
-//   vpn        the admin VPN has at least one peer (network-manager wgvpn list)
+//   repos      optional: a repository beside TAPPaaS, or "TAPPaaS only" answered
+//   switch     optional: a switch registered and interrogated (ports discovered),
+//              or "none" answered
 //   wifi       optional: every active Client zone (zones.json) has an SSID an
 //              access point maps to it (ap-manager list --json); a name
 //              zones.json declares that no AP broadcasts is not WiFi yet
@@ -27,6 +27,14 @@
 //              (config/positions.json, racks.json until migration 0020);
 //              the devices recorded there that nothing manages are listed
 //   stacks     optional: which stacks have modules installed
+//   public     optional (ADR-043 D10): the default environment is public (wildcard
+//              or per-service), or "stay local" was answered
+//
+// The order is Day 1's (operator, 2026-11-02): first node, more nodes, the
+// admin VPN, the foundation with sign-in, repositories, switches, Wi-Fi, the
+// physical site, stacks, and making it public. An answer an optional step can
+// take ("none") is a record of the console's (setup-answers.json in its state
+// directory), so the step reads as done without anything to install.
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync } from "fs";
 import { join } from "path";
@@ -46,11 +54,17 @@ export interface TestResult {
 
 export const SETUP_MODULES = ["backup", "identity", "logging"] as const;
 export const TESTS_FILE = "setup-tests.json"; // in the state directory
+export const ANSWERS_FILE = "setup-answers.json"; // in the state directory
+
+// What each step that can be answered takes as its answer.
+export const ANSWERS = { firstnode: "boot-only", nodes: "no-more", repos: "tappaas-only", switch: "none", public: "stay-local" } as const;
+export type AnswerStep = keyof typeof ANSWERS;
+export type SetupAnswers = Partial<Record<AnswerStep, string>>;
 
 export interface SetupInputs {
   defaultEnv: string | null;
   defaultDomain?: string | null; // the default environment's primary domain
-  dnsMode: "wildcard" | "per-service" | null;
+  dnsMode: "wildcard" | "per-service" | "local" | null;
   certRefids: Record<string, unknown> | null;
   modules: Record<"backup" | "identity" | "logging", { config: boolean; test: TestResult | null }>;
   identities: { organizations: number; users: number };
@@ -61,6 +75,9 @@ export interface SetupInputs {
   wifi: WifiInputs;
   physical?: PhysicalInputs | null; // null: positions.json could not be read
   stacks: string[];
+  firstNode?: { name: string; pools: string[] } | null; // its record's storagePools; null: no node record
+  repositories?: string[]; // site.json repositories[].name
+  answers?: SetupAnswers;
 }
 
 // What positions.json says of the site's hardware: its rooms (and where), the
@@ -76,7 +93,7 @@ export interface WifiInputs {
   aps: { name: string; ssids: { name: string; zone: string | null }[] }[] | null; // null: ap-manager list could not be read
 }
 
-export type StepId = "tls" | "backup" | "identity" | "logging" | "bootstrap" | "nodes" | "switch" | "vpn" | "wifi" | "physical" | "stacks";
+export type StepId = "firstnode" | "nodes" | "vpn" | "backup" | "identity" | "logging" | "bootstrap" | "repos" | "switch" | "wifi" | "physical" | "stacks" | "public";
 
 export interface SetupStep {
   id: StepId;
@@ -90,46 +107,87 @@ const MODULE_TITLES = { backup: "Backup (PBS)", identity: "Identity (Authentik)"
 
 export function setupSteps(i: SetupInputs): SetupStep[] {
   const steps: SetupStep[] = [];
+  const answer = i.answers ?? {};
 
-  if (i.dnsMode === "wildcard") {
-    const has = !!i.defaultEnv && !!i.certRefids && typeof i.certRefids[i.defaultEnv] === "string";
-    steps.push({ id: "tls", title: "TLS — the wildcard certificate", required: true, done: has, detail: has ? `config/cert-refids.json: ${i.defaultEnv} → ${String(i.certRefids![i.defaultEnv!])}` : `no certificate recorded for ${i.defaultEnv ?? "the default environment"} in config/cert-refids.json` });
+  // 1 · the first node's disks: a data pool, or the boot pool alone, said so.
+  const fn = i.firstNode;
+  if (fn === undefined || fn === null) steps.push({ id: "firstnode", title: "First node — its disks", required: true, done: null, detail: "no node record yet" });
+  else if (fn.pools.length) steps.push({ id: "firstnode", title: "First node — its disks", required: true, done: true, detail: `${fn.name}: ${fn.pools.join(", ")}` });
+  else if (answer.firstnode === ANSWERS.firstnode) steps.push({ id: "firstnode", title: "First node — its disks", required: true, done: true, detail: `${fn.name}: the boot pool only, as answered` });
+  else steps.push({ id: "firstnode", title: "First node — its disks", required: true, done: false, detail: `${fn.name} has no data pool: make one from its free disks, or answer "boot pool only"` });
+
+  // 2 · more nodes (optional).
+  if (i.clusterNodes === null) {
+    steps.push({ id: "nodes", title: "More nodes (optional)", required: false, done: null, detail: "the cluster's membership could not be read" });
   } else {
-    steps.push({ id: "tls", title: "TLS — certificates", required: true, done: i.defaultEnv !== null, detail: i.defaultEnv ? `${i.defaultEnv} is dnsMode per-service: Caddy gets each route's certificate itself (HTTP-01); there is no wildcard to issue` : "no default environment yet (site.json)" });
+    const missing = i.siteNodes.filter((n) => !i.clusterNodes!.includes(n));
+    const done = missing.length === 0 && (i.siteNodes.length > 1 || answer.nodes === ANSWERS.nodes);
+    const detail = missing.length
+      ? `not joined: ${missing.join(", ")}`
+      : i.siteNodes.length > 1
+        ? `${i.siteNodes.length} node(s), all cluster members: ${i.siteNodes.join(", ")}`
+        : answer.nodes === ANSWERS.nodes
+          ? `${i.siteNodes.join(", ")} alone, as answered`
+          : `${i.siteNodes.join(", ") || "no node"} alone: add a machine, or answer "no more machines"`;
+    steps.push({ id: "nodes", title: "More nodes (optional)", required: false, done, detail });
   }
 
+  // 3 · the admin VPN: the gate is reachable from mgmt and the VPN only.
+  if (i.vpnPeers === null) steps.push({ id: "vpn", title: "The admin VPN", required: true, done: null, detail: "network-manager wgvpn list could not be read" });
+  else steps.push({ id: "vpn", title: "The admin VPN", required: true, done: i.vpnPeers.length > 0, detail: i.vpnPeers.length ? `peer(s): ${i.vpnPeers.join(", ")}` : "no peer yet: enrol a device" });
+
+  // 4 · the foundation, and you in it.
   for (const m of SETUP_MODULES) {
     const s = i.modules[m];
     const done = !s.config ? false : s.test === null ? null : s.test.rc === 0;
     const when = s.test ? ` (${s.test.at.replace("T", " ").replace(/\.\d+Z$/, "Z")})` : "";
-    const detail = !s.config ? `config/${m}.json does not exist: not installed` : s.test === null ? `installed (config/${m}.json); its test has not run yet: Check runs it, and so does the next sweep` : s.test.rc === 0 ? (s.test.sweep ? `installed; updated and tested by the sweep${when}` : `installed; module-manager test ${m} passed${when}`) : `installed; module-manager test ${m} failed${when} (exit ${s.test.rc}): ${s.test.tail}`;
+    const detail = !s.config ? `config/${m}.json does not exist: not installed` : s.test === null ? `installed (config/${m}.json); its test has not run yet: Check runs it, and so does the next sweep` : s.test.rc === 0 ? (s.test.sweep ? `installed; updated and tested by the sweep${when}` : `installed; its test passed${when}`) : `installed, but its test failed${when}: ${s.test.tail}`;
     steps.push({ id: m, title: MODULE_TITLES[m], required: true, done, detail });
   }
-
   const boot = i.identities.organizations > 0 && i.identities.users > 0;
   steps.push({ id: "bootstrap", title: "Rest of foundation — your organization and you", required: true, done: boot, detail: boot ? `config/identities: ${i.identities.organizations} organization(s), ${i.identities.users} user(s)` : "config/identities has no organization or no user yet" });
 
-  if (i.clusterNodes === null) {
-    steps.push({ id: "nodes", title: "Nodes", required: true, done: null, detail: "the cluster's membership could not be read" });
-  } else {
-    const missing = i.siteNodes.filter((n) => !i.clusterNodes!.includes(n));
-    steps.push({ id: "nodes", title: "Nodes", required: true, done: i.siteNodes.length > 0 && missing.length === 0, detail: missing.length ? `not joined: ${missing.join(", ")}` : `${i.siteNodes.length} node(s), all cluster members: ${i.siteNodes.join(", ")}` });
-  }
+  // 5 · repositories (optional).
+  const repos = i.repositories ?? [];
+  const extra = repos.filter((r) => r !== "TAPPaaS");
+  steps.push({
+    id: "repos",
+    title: "Repositories (optional)",
+    required: false,
+    done: extra.length > 0 || answer.repos === ANSWERS.repos,
+    detail: extra.length ? `registered: ${repos.join(", ")}` : answer.repos === ANSWERS.repos ? "TAPPaaS only, as answered" : "TAPPaaS only: add Community or another, or answer \"TAPPaaS only\"",
+  });
 
-  if (i.switches === null) {
-    steps.push({ id: "switch", title: "The switch", required: true, done: null, detail: "switch-configuration-actual.json could not be read" });
+  // 6 · the switch fabric (optional): none managed is a plain answer.
+  if (answer.switch === ANSWERS.switch) {
+    steps.push({ id: "switch", title: "Switch fabric (optional)", required: false, done: true, detail: "no switch under management, as answered: set the VLANs on the switches by hand" });
+  } else if (i.switches === null) {
+    steps.push({ id: "switch", title: "Switch fabric (optional)", required: false, done: null, detail: "switch-configuration-actual.json could not be read" });
   } else {
     const ok = i.switches.filter((s) => s.discovered > 0);
-    steps.push({ id: "switch", title: "The switch", required: true, done: ok.length > 0, detail: i.switches.length === 0 ? "no switch registered" : ok.length ? i.switches.map((s) => `${s.name}: ${s.ports} port(s), ${s.discovered} discovered${s.controller ? ` via ${s.controller}` : ""}`).join("; ") : `registered (${i.switches.map((s) => s.name).join(", ")}) but not interrogated: no port discovered` });
+    steps.push({ id: "switch", title: "Switch fabric (optional)", required: false, done: ok.length > 0, detail: i.switches.length === 0 ? "no switch registered: register one, or answer \"none\"" : ok.length ? i.switches.map((s) => `${s.name}: ${s.ports} port(s), ${s.discovered} discovered${s.controller ? ` via ${s.controller}` : ""}`).join("; ") : "registered, but no port discovered yet: switch-manager interrogate" });
   }
 
-  if (i.vpnPeers === null) steps.push({ id: "vpn", title: "The admin VPN", required: true, done: null, detail: "network-manager wgvpn list could not be read" });
-  else steps.push({ id: "vpn", title: "The admin VPN", required: true, done: i.vpnPeers.length > 0, detail: i.vpnPeers.length ? `peer(s): ${i.vpnPeers.join(", ")}` : "no peer yet: enrol a device" });
-
+  // 7–9 · Wi-Fi, the physical site, stacks.
   steps.push(wifiStep(i.wifi));
   steps.push(physicalStep(i.physical, i.siteNodes, (i.switches ?? []).map((s) => s.name)));
-
   steps.push({ id: "stacks", title: "Stacks (optional)", required: false, done: i.stacks.length > 0, detail: i.stacks.length ? `installed: ${i.stacks.join(", ")}` : "none yet" });
+
+  // 10 · make it public (optional, ADR-043 D10): the issuer of published names.
+  const pub = i.dnsMode === "wildcard" || i.dnsMode === "per-service";
+  steps.push({
+    id: "public",
+    title: "Make it public (optional)",
+    required: false,
+    done: pub || answer.public === ANSWERS.public,
+    detail: pub
+      ? `${i.defaultEnv ?? "the default environment"} is public (dnsMode ${i.dnsMode})`
+      : i.dnsMode === "local"
+        ? answer.public === ANSWERS.public
+          ? "it stays local, as answered: the site's own CA signs its names"
+          : "local: the site's own CA signs its names, and each person imports it. Going public needs a DNS provider or public records"
+        : "no default environment",
+  });
   return steps;
 }
 
@@ -344,7 +402,8 @@ export async function gatherSetup(d: GatherDeps): Promise<SetupInputs> {
   const site = readJson(join(d.configDir, "site.json")) ?? {};
   const defaultEnv = (site.defaultEnvironment as string | undefined) ?? (site.name as string | undefined) ?? null;
   const envDoc = defaultEnv ? readJson(join(d.configDir, "environments", `${defaultEnv}.json`)) : null;
-  const dnsMode = ((envDoc?.domains as { dnsMode?: string } | undefined)?.dnsMode === "wildcard" ? "wildcard" : envDoc ? "per-service" : null) as SetupInputs["dnsMode"];
+  const dm = (envDoc?.domains as { dnsMode?: string } | undefined)?.dnsMode;
+  const dnsMode = (dm === "wildcard" || dm === "local" ? dm : envDoc ? "per-service" : null) as SetupInputs["dnsMode"];
   // The cluster's nodes are their pvehost instances (ADR-036 D6).
   const siteNodes = clusterNodeNames(d.configDir);
   // The module tests are not run here (every Setup read gathers): their last
@@ -374,7 +433,40 @@ export async function gatherSetup(d: GatherDeps): Promise<SetupInputs> {
     wifi: { zones: readWifiZones(join(d.configDir, "zones.json")), aps: aps.ran && aps.rc === 0 ? parseApList(aps.stdout) : null },
     physical: readPhysical(d.configDir),
     stacks: await d.stacks().catch(() => []),
+    firstNode: firstNodeOf(d.configDir, siteNodes),
+    repositories: Array.isArray(site.repositories) ? (site.repositories as { name?: unknown }[]).map((r) => (typeof r.name === "string" ? r.name : "")).filter(Boolean) : [],
+    answers: readSetupAnswers(d.stateDir),
   };
+}
+
+// The first node: the first of the cluster's nodes, with its record's pools.
+function firstNodeOf(configDir: string, siteNodes: string[]): { name: string; pools: string[] } | null {
+  const name = siteNodes[0];
+  if (!name) return null;
+  const rec = readJson(join(configDir, `${name}.json`));
+  const pools = Array.isArray(rec?.storagePools) ? (rec!.storagePools as unknown[]).filter((p): p is string => typeof p === "string") : [];
+  return { name, pools };
+}
+
+export function readSetupAnswers(stateDir: string): SetupAnswers {
+  const doc = readJson(join(stateDir, ANSWERS_FILE)) ?? {};
+  const out: SetupAnswers = {};
+  for (const k of Object.keys(ANSWERS) as AnswerStep[]) if (doc[k] === ANSWERS[k]) out[k] = ANSWERS[k];
+  return out;
+}
+
+// Record (or, with null, withdraw) a step's answer. Returns an error for the
+// caller, or null.
+export function recordSetupAnswer(stateDir: string, step: string, answer: string | null): string | null {
+  if (!(step in ANSWERS)) return `${step}: not a step that takes an answer (${Object.keys(ANSWERS).join(", ")})`;
+  const want = ANSWERS[step as AnswerStep];
+  if (answer !== null && answer !== want) return `${step}: the answer is '${want}'`;
+  const doc = readSetupAnswers(stateDir);
+  if (answer === null) delete doc[step as AnswerStep];
+  else doc[step as AnswerStep] = want;
+  mkdirSync(stateDir, { recursive: true });
+  writeJsonAtomic(join(stateDir, ANSWERS_FILE), doc);
+  return null;
 }
 
 // The setup token closes itself (D10, T6): the first installer through the
