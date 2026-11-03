@@ -358,6 +358,14 @@ PXE_STAGE='set -e; iso="$1"
   ( cd pxe && echo proxmox.iso | cpio -L -H newc -o --quiet >> initrd )
   rm -f pxe/proxmox.iso; chmod 644 pxe/*'
 
+# Staging needs Docker on a Mac (or xorriso and cpio elsewhere): asked before the
+# install's questions, so a stopped Docker is found at once, not after them.
+pxe_tools_ready() {
+  if command -v xorriso >/dev/null 2>&1 && command -v cpio >/dev/null 2>&1 && [[ "$(uname -s)" != Darwin ]]; then return 0; fi
+  command -v docker >/dev/null 2>&1 || die "network boot needs Docker here (Docker Desktop, or colima): install it and run this again."
+  docker info >/dev/null 2>&1 || die "Docker is not running: start it (Docker Desktop, or: colima start) and run this again."
+}
+
 pxe_stage() {
   local iso="$1"
   [[ ! -e pxe ]] || die "./pxe exists: move it away, this step makes and removes its own."
@@ -575,7 +583,7 @@ after_build() {
   fi
   case "${c:-1}" in
     1) write_usb "$OUT" || return 0 ;;
-    2) pxe_serve "$OUT" ;;
+    2) pxe_tools_ready; pxe_serve "$OUT" ;;
   esac
   if [[ "$want_install" == 1 ]]; then
     net_info "${NET_IF:-}"
