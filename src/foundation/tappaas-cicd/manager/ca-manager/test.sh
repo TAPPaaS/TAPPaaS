@@ -164,6 +164,8 @@ D cert deliver logging9 --host 'x;id' --dir /etc/t --as l --group g >/dev/null 2
 : > "${FIX}/fw/deliver-args"; D cert renew logging9 --force >/dev/null 2>&1 && grep -q 'tappaas@logging.mgmt.internal' "${FIX}/fw/deliver-args" && ok "a renewal puts it on the guest again" || bad "renewal not re-delivered"
 [[ "$(jq -r '.certificates.logging9.deliveries | length' "${FIX}/cfg/certificates.json")" == "1" ]] && ok "…and keeps its delivery" || bad "…delivery lost on renewal"
 
+r="$(PATH="${FIX}/bin:${PATH}" CA cert to-firewall logging9 2>/dev/null | tail -1)"; [[ "${r}" =~ ^[0-9a-f]{8,}$ && "$(jq -r '.certificates.logging9.refid' "${FIX}/cfg/certificates.json")" == "${r}" ]] && grep -q -- '--name TAPPaaS: internal' "${FIX}/fw/calls" && ok "cert to-firewall: the certificate and its CA imported, the refid printed and recorded" || bad "cert to-firewall"
+
 CA validate >/dev/null 2>&1 && ok "validate: all consistent" || bad "validate"
 chmod 644 "${K}/certs/wild.key"; CA validate >/dev/null 2>&1 && bad "validate: a readable key is a finding" || ok "validate: a readable key is a finding"; chmod 600 "${K}/certs/wild.key"
 echo "# x" >> "${FIX}/cfg/site-ca.pem"; CA validate >/dev/null 2>&1 && bad "validate: a changed bundle is a finding" || ok "validate: a changed bundle is a finding"

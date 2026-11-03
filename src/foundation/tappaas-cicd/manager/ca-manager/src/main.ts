@@ -124,6 +124,15 @@ export const HELP: HelpSpec = {
       details: "Puts a certificate and its key on a guest (ADR-043 D5) and records where, so `cert renew`\nputs the renewed one there too.",
     },
     {
+      usage: "cert to-firewall <name> [--check]",
+      name: "cert to-firewall",
+      options: [["--check", "Say what it would import; change nothing."]],
+      details:
+        "Puts a certificate and its key in the firewall's trust store, with the CA that signed it (the CA\n" +
+        "without its key), and prints its refid, for what on the firewall uses a certificate — its syslog\n" +
+        "client, a TLS destination. A renewal replaces it in place: the refid stays.",
+    },
+    {
       usage: "provider add <name> --type <t> [--domain <d>[,<d>…]] [--check]",
       name: "provider add",
       options: [
@@ -744,6 +753,24 @@ export function run(argv: string[]): number {
     if (!name || !host || !dir || !as || !group) die("cert deliver <name> --host <h> --dir <d> --as <file> --group <g> [--reload <unit>,…]");
     const reload = (opt(args, "--reload") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
     return changed(certDeliver(store, name, { host, dir, as, group, reload }, check), "cert deliver");
+  }
+  if (args[0] === "cert" && args[1] === "to-firewall") {
+    const [name] = positional(args, 2, []);
+    if (!name) die("cert to-firewall <name>");
+    const doc = store.load();
+    if (!doc.certificates[name]) die(`no certificate ${name} (ca-manager status)`);
+    if (check || simulating()) {
+      info(`would import ${name} and the CA ${doc.certificates[name].ca} into the firewall's trust store`);
+      return 0;
+    }
+    let refid: string;
+    try {
+      refid = pushToFirewall(store, doc, name);
+    } catch (e) {
+      die(`${name} could not be put on the firewall: ${(e as Error).message}`);
+    }
+    process.stdout.write(`${refid}\n`);
+    return changed(0, "cert to-firewall");
   }
   if (args[0] === "cert" && args[1] === "renew") {
     const [name] = positional(args, 2, ["--within"]);
