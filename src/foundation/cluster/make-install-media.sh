@@ -363,7 +363,25 @@ PXE_STAGE='set -e; iso="$1"
 pxe_tools_ready() {
   if command -v xorriso >/dev/null 2>&1 && command -v cpio >/dev/null 2>&1 && [[ "$(uname -s)" != Darwin ]]; then return 0; fi
   command -v docker >/dev/null 2>&1 || die "network boot needs Docker here (Docker Desktop, or colima): install it and run this again."
-  docker info >/dev/null 2>&1 || die "Docker is not running: start it (Docker Desktop, or: colima start) and run this again."
+  docker_running || die "Docker is not running and did not start: start it (Docker Desktop, or: colima start) and run this again."
+}
+
+# Docker answering, started when it is not: Colima if that is what this machine
+# has, else Docker Desktop. A restart of the machine stops both.
+docker_running() {
+  docker info >/dev/null 2>&1 && return 0
+  if command -v colima >/dev/null 2>&1; then
+    info "Docker is not running: starting it (colima start), about a minute"
+    colima start >/dev/null 2>&1 || true
+  elif [[ "$(uname -s)" == Darwin && -d /Applications/Docker.app ]]; then
+    info "Docker is not running: starting Docker Desktop"
+    open -a Docker >/dev/null 2>&1 || true
+  else
+    return 1
+  fi
+  local i
+  for i in $(seq 1 60); do docker info >/dev/null 2>&1 && return 0; sleep 2; done
+  return 1
 }
 
 pxe_stage() {
@@ -738,6 +756,7 @@ if ! command -v proxmox-auto-install-assistant >/dev/null 2>&1; then
     Darwin)
       command -v docker >/dev/null 2>&1 \
         || die "proxmox-auto-install-assistant is Linux-only and Docker is not available — install Docker Desktop, or run this script on any Linux box."
+      docker_running || die "Docker is not running and did not start: start it (Docker Desktop, or: colima start) and run this again."
       info "assistant not found — building inside a Debian container (mounting \$PWD)..."
       # Force linux/amd64: the assistant and prepare-iso ship amd64-only, so on
       # Apple-Silicon Macs the container must run x86_64 (via Docker/Colima
