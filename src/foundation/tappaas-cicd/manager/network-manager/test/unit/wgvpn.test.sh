@@ -44,6 +44,8 @@ _ow_api() {
 }
 
 export TAPPAAS_CONFIG_DIR="${TMP}/config"
+# The mothership's own WAN address is an endpoint fallback: not this test's (hrossen, 2026-11-03).
+export TAPPAAS_WAN_ADDRESS_FILE="${TMP}/no-wan-address.json"
 mkdir -p "${TAPPAAS_CONFIG_DIR}"
 ZONES="${TAPPAAS_CONFIG_DIR}/zones.json"
 # The test fixture's dmz has no ipv6Subnet; hrossen's has 97.
