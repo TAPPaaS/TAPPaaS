@@ -14,11 +14,11 @@
 
 HOST="$(read_module_config "${CONSUMER}" 2>/dev/null | jq -r '.vmname // empty')"
 HOST="${HOST:-${CONSUMER}}"
-LOKI="${LOKI_URL:-http://logging.mgmt.internal:3100}"
-
 info "  logging:logs tests for ${BL}${CONSUMER}${CL}"
 # shellcheck source=../../../tappaas-cicd/lib/log-shipping.sh
 . "${LOG_SHIPPING_LIB:-/home/tappaas/bin/log-shipping.sh}"
+# Over TLS once logging serves it (#787), the plain port until then.
+LOKI="${LOKI_URL:-$(log_shipping_query_url)}"
 KIND="$(log_shipping_syslog_kind "${CONSUMER}")"
 SEL="{host=\"${HOST}\"}"
 [[ -n "${KIND}" ]] && SEL="{host=~\"${HOST}|${HOST}[.].+\"}"

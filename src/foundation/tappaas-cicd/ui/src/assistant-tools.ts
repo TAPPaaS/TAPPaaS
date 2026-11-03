@@ -20,17 +20,20 @@ import { Opened } from "./conversations";
 import { resolveTarget, wizardForVerb } from "../web/src/consoletargets";
 
 export interface LokiConfig {
-  url: string; // e.g. http://logging.mgmt.internal:3100
+  url: string; // e.g. https://logging.mgmt.internal:3110
+  fallback?: string; // tried when url cannot be reached at all: the plain port, while a site moves to TLS
   user: string;
   passwordFile: string; // ~/.loki-admin-password (lib/log-shipping.sh)
 }
 
-// Loki through the logging module's API (:3100, the admin credential the
-// mothership holds, lib/log-shipping.sh), when logging is installed here.
+// Loki through the logging module's API (the admin credential the mothership
+// holds, lib/log-shipping.sh), when logging is installed here: over TLS on :3110
+// (#787), the plain :3100 while logging does not serve TLS yet.
 export function lokiConfig(configDir: string, home: string, env: Record<string, string | undefined> = process.env): LokiConfig | null {
   const passwordFile = env.CONSOLE_LOKI_PASSWORD_FILE ?? join(home, ".loki-admin-password");
   if (!existsSync(join(configDir, "logging.json")) || !existsSync(passwordFile)) return null;
-  return { url: env.CONSOLE_LOKI_URL ?? "http://logging.mgmt.internal:3100", user: "tappaas", passwordFile };
+  if (env.CONSOLE_LOKI_URL) return { url: env.CONSOLE_LOKI_URL, user: "tappaas", passwordFile };
+  return { url: "https://logging.mgmt.internal:3110", fallback: "http://logging.mgmt.internal:3100", user: "tappaas", passwordFile };
 }
 
 export interface ToolContext {
@@ -477,7 +480,7 @@ async function logs(ctx: ToolContext, args: Record<string, unknown>): Promise<To
   } catch {
     return { ok: false, summary: "logs: no credential", content: `Loki's credential (${l.passwordFile}) cannot be read` };
   }
-  const q = `${l.url.replace(/\/+$/, "")}/loki/api/v1/query_range`;
+  const q = (base: string): string => `${base.replace(/\/+$/, "")}/loki/api/v1/query_range`;
   const params = [
     ["query", logql(host, contains)],
     ["start", `${start}000000`],
@@ -487,7 +490,10 @@ async function logs(ctx: ToolContext, args: Record<string, unknown>): Promise<To
   ].map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
   const f = ctx.fetch ?? fetch;
   const auth = Buffer.from(`${l.user}:${pw}`).toString("base64");
-  const r = await f(`${q}?${params}`, { headers: { Authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(30_000) });
+  const ask = (base: string) => f(`${q(base)}?${params}`, { headers: { Authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(30_000) });
+  // A connection that fails outright (no TLS on :3110 yet) falls back; an HTTP
+  // answer, even an error, is Loki's and stands.
+  const r = await ask(l.url).catch((e: unknown) => (l.fallback ? ask(l.fallback) : Promise.reject(e)));
   if (!r.ok) return { ok: false, summary: `logs ${host}: HTTP ${r.status}`, content: `Loki answered HTTP ${r.status}: ${(await r.text()).slice(0, 200)}` };
   const doc = (await r.json()) as { data?: { result?: { stream?: Record<string, string>; values?: [string, string][] }[] } };
   const lines: [number, string][] = [];

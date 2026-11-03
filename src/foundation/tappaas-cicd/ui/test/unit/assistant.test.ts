@@ -333,6 +333,16 @@ async function main(): Promise<void> {
   o = await runTool({ ...tools, loki: lk, fetch: lokiFetch, now: () => 1792310000000 }, "logs", '{"host":"immich","since":"4h","contains":"OOM"}');
   check(lk !== null && o.ok && /immich-ml: OOM pressure/.test(o.content) && /query_range\?query=%7Bhost%3D%22immich%22%7D/.test(asked) && auth === `Basic ${Buffer.from("tappaas:pw").toString("base64")}`, "logs: Loki's query_range for the host, with the admin credential");
   check(toolDefs({ ...tools, loki: lk }).some((t) => t.function.name === "logs"), "with logging installed the logs tool is offered");
+  check(lk?.url === "https://logging.mgmt.internal:3110" && /^https:\/\/logging\.mgmt\.internal:3110\//.test(asked), "logs are asked over TLS on :3110 (#787)");
+  const tried: string[] = [];
+  const plainOnly = (async (url: string) => {
+    tried.push(url);
+    if (url.startsWith("https:")) throw new TypeError("fetch failed");
+    return { ok: true, status: 200, text: async () => "", json: async () => ({ data: { result: [] } }) };
+  }) as unknown as typeof fetch;
+  o = await runTool({ ...tools, loki: lk, fetch: plainOnly, now: () => 1792310000000 }, "logs", '{"host":"immich","since":"4h"}');
+  check(o.ok && tried.length === 2 && tried[1].startsWith("http://logging.mgmt.internal:3100/"), "…and on the plain :3100 while logging serves no TLS yet");
+  check(lokiConfig(dir, dir, { CONSOLE_LOKI_URL: "http://x:1" })?.fallback === undefined, "…an explicit address is used alone");
 
   // ── the history the model is sent ───────────────────────────────────
   const hist: ChatMessage[] = [];

@@ -4,7 +4,7 @@
 # samples node/tappaas-guest-memory sends to Loki once a minute (#663).
 #
 # Usage: guest-memory-report.sh [window]     (default 7d; any LogQL range: 24h, 7d, 14d)
-#        LOKI_URL=http://logging.mgmt.internal:3100 (default)
+#        LOKI_URL=https://logging.mgmt.internal:3110 (default; :3100 while logging serves no TLS)
 #
 # Columns, in GiB: declared (the VM's memory), peak / p99 / avg of `used`
 # (total - MemAvailable: what the guest could not give back), the suggested
@@ -26,7 +26,7 @@ set -euo pipefail
 . "${LOG_SHIPPING_LIB:-/home/tappaas/bin/log-shipping.sh}"
 
 WINDOW="${1:-7d}"
-LOKI_URL="${LOKI_URL:-http://logging.mgmt.internal:3100}"
+LOKI_URL="${LOKI_URL:-$(log_shipping_query_url)}"   # over TLS once logging serves it (#787)
 SEL='{source="proxmox", unit="tappaas-guest-memory"} | logfmt | measured="1" | __error__=""'
 
 q() {   # q <logql> — instant query → {"vm": value, …}

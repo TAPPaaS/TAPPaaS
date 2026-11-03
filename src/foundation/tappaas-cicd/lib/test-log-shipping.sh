@@ -89,6 +89,8 @@ _ls_guest_root 'ftp:host' </dev/null >/dev/null 2>&1 && no "an unknown transport
 [[ "$(_LS_TLS=1 log_shipping_query_url)" == "https://logging.mgmt.internal:3110" ]] && ok || no "TLS ready: query :3110"
 [[ "$(_LS_TLS=0 log_shipping_push_url)" == "http://logging.mgmt.internal:3101/loki/api/v1/push" ]] && ok || no "TLS not ready: push stays on :3101"
 [[ "$(_LS_TLS=1 LOG_SHIPPING_PUSH_URL=http://x:1/p log_shipping_push_url)" == "http://x:1/p" ]] && ok || no "an override wins"
+_ls_rsyslog_conf logging.mgmt.internal tls | grep -q 'port="6515"' && _ls_rsyslog_conf logging.mgmt.internal tls | grep -q 'StreamDriverPermittedPeers="logging.mgmt.internal"' && ok || no "a node's TLS forwarder: :6515, logging's name checked"
+_ls_rsyslog_conf logging.mgmt.internal | grep -q 'port="1515"' && ! _ls_rsyslog_conf logging.mgmt.internal | grep -q StreamDriver && ok || no "…and the plain one unchanged"
 _LS_TLS=1 render_logging_alloy web dmz "x" | grep -q 'url = "https://logging.mgmt.internal:3111/loki/api/v1/push"' && ok || no "the rendered client pushes over TLS once it is ready"
 
 echo "Results: ${pass} passed, ${fail} failed"
