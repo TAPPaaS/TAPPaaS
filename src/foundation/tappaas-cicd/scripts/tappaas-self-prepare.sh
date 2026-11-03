@@ -135,6 +135,16 @@ if ! TAPPAAS_CONFIG_DIR="${CONFIG_DIR}" "${MIGRATE}"; then
     exit 1
 fi
 
+# ── 3b. the site's internal CA (ADR-043 D1) ──────────────────────────
+# Before the rebuild, so this mothership's own trust holds it from the rebuild
+# that follows: made later (pre-update), a site installed before ca-manager
+# rebuilt first and distrusted its own CA for a night (hrossen, 2026-11-03).
+# Idempotent; a failure costs the trust, not the run.
+if [[ -x "${TAPPAAS_BIN:-/home/tappaas/bin}/ca-manager" ]]; then
+    "${TAPPAAS_BIN:-/home/tappaas/bin}/ca-manager" init --no-rebuild >/dev/null 2>&1 \
+        || warn "ca-manager init failed — guests keep the trust they have (ca-manager status)"
+fi
+
 # ── 4. hand over ─────────────────────────────────────────────────────
 echo "${state}" > "${RUN_DIR}/control-plane"
 : > "${RUN_DIR}/prepared"
