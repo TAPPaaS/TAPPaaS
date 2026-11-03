@@ -256,9 +256,11 @@ fingerprint.
 
 - **O1. Containers.** Only a NixOS service (Grafana) is proven. Test a container that calls
   Authentik, Immich being the candidate, before the mount in D8 becomes the rule.
-- **O2. Browser support for name constraints.** Test Firefox, Chrome and Safari, and iOS and
-  Android, with constrained roots on lab2 before D2 is final. `home.arpa` and `internal` as
-  permitted names need the same test.
+- **O2. Browser support for name constraints.** Tested 2026-11-03 on a Mac with throwaway
+  constrained roots (`internal`, `lab2.hrossen.dk`, `lab2.home.arpa`): OpenSSL 4.1, Node, Python,
+  curl, macOS's own verifier (Safari's) and Firefox all accept the permitted names, a wildcard and
+  a subdomain environment included, and all refuse names outside them, the parent domain included.
+  Firefox reports `SEC_ERROR_CERT_NOT_IN_NAME_SPACE`. Still to test: Chrome, iOS and Android.
 - **O3. Where a module declares D5**, and which service delivers and reloads the certificate. This
   is a blueprint question (ADR-027); logging is the first case to design from.
 - **O4. Existing sites.** A migration adds the internal CA to hrossen and makerfloss, and guests pick
