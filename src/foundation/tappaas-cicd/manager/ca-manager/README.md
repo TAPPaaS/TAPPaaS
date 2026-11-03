@@ -26,13 +26,20 @@ ca-manager init [--check]
 ca-manager domain add <domain> [--check]
 ca-manager cert issue <name> --dns <n>[,<n>…] [--check]
 ca-manager cert renew [<name>] [--within <days>] [--force] [--check]
+ca-manager wildcard <environment> --domain <domain> [--check]
 ca-manager status [--json]
 ca-manager validate
 ```
 
 `cert issue` picks the one CA whose constraint covers every name; internal and domain names go in
 separate certificates. Certificates last a year, and `cert renew` renews what expires within 60
-days. `validate` checks the record against the files: fingerprints, key modes, and that the bundle
+days. `wildcard` serves an environment in `dnsMode: local`: its domain's CA (made if no CA covers the
+domain), a wildcard for `*.<domain>` and `<domain>`, both put into the firewall's trust store
+through `trust-manager` (the CA without its key), and the wildcard's refid written to
+`config/cert-refids.json` for Caddy. `environment-manager reconcile` calls it. A renewed wildcard is
+replaced in place on the firewall, so its refid stays, and Caddy is reloaded.
+
+`validate` checks the record against the files: fingerprints, key modes, and that the bundle
 holds exactly the recorded CAs.
 
 ## Not yet

@@ -28,6 +28,18 @@ export interface CertRecord {
   notBefore: string;
   notAfter: string;
   issued: string;
+  // A certificate the firewall serves (a domain CA's wildcard): its name in the
+  // trust store and the refid Caddy binds (D7).
+  trust?: string;
+  refid?: string;
+}
+
+// The wildcard of an environment: its record's name, and the names it holds.
+export function wildcardName(env: string): string {
+  return `wildcard-${env}`;
+}
+export function wildcardNames(domain: string): string[] {
+  return [`*.${domain}`, domain];
 }
 
 export interface CaDoc {

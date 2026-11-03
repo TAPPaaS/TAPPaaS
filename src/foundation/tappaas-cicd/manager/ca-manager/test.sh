@@ -79,6 +79,35 @@ fp="$(jq -r '.certificates.logging.fingerprint' "${FIX}/cfg/certificates.json")"
 CA cert renew logging --force >/dev/null 2>&1 && [[ "$(jq -r '.certificates.logging.fingerprint' "${FIX}/cfg/certificates.json")" != "${fp}" ]] && ok "cert renew --force: a new certificate" || bad "cert renew --force"
 vfy "${K}/ca/internal.pem" "${K}/certs/logging.pem" logging.mgmt.internal && ok "…which verifies" || bad "…renewed verify"
 
+# ── wildcard: an environment's domain CA and wildcard, onto the firewall ──
+# trust-manager and ssh are stand-ins: the store is a directory of files.
+mkdir -p "${FIX}/bin" "${FIX}/fw"
+cat > "${FIX}/bin/trust-manager" <<STUB
+#!/usr/bin/env bash
+echo "\$*" >> "${FIX}/fw/calls"
+v=\$1; name=""; pem=""
+while [[ \$# -gt 0 ]]; do case \$1 in --name) name=\$2; shift;; --pem-file) pem=\$2; shift;; esac; shift; done
+f="${FIX}/fw/\$(printf %s "\${name}" | tr -c 'a-zA-Z0-9' _)"
+[[ \$v == cert-ensure ]] && cat > /dev/null
+id="\$(printf %s "\${name}" | cksum | cut -d' ' -f1)abcdef"
+if [[ -f "\$f" ]] && cmp -s "\$f" "\$pem"; then echo "present: \$name" >&2; else cp "\$pem" "\$f"; echo "updated: \$name" >&2; fi
+echo "\${id}"
+STUB
+printf '#!/bin/sh\necho "$*" >> "%s/fw/ssh"\n' "${FIX}" > "${FIX}/bin/ssh"; chmod +x "${FIX}/bin/trust-manager" "${FIX}/bin/ssh"
+W() { PATH="${FIX}/bin:${PATH}" CA "$@"; }
+W wildcard mgmt --domain lab9.example.org --check >/dev/null 2>&1; [[ ! -e "${FIX}/fw/calls" ]] && ok "wildcard --check touches nothing" || bad "wildcard --check touched the firewall"
+W wildcard mgmt --domain lab9.example.org >/dev/null 2>&1 && ok "wildcard: an environment's CA and wildcard" || bad "wildcard"
+[[ "$(jq -r '.cas["domain-lab9.example.org"].scope' "${FIX}/cfg/certificates.json")" == "domain" ]] && ok "…its domain got a CA" || bad "…no domain CA"
+vfy "${FIX}/cfg/site-ca.pem" "${K}/certs/wildcard-mgmt.pem" console.lab9.example.org && ok "…the wildcard verifies for console.<domain>" || bad "…wildcard verify"
+r="$(jq -r '.mgmt' "${FIX}/cfg/cert-refids.json")"; [[ -n "${r}" && "${r}" == "$(jq -r '.certificates["wildcard-mgmt"].refid' "${FIX}/cfg/certificates.json")" ]] && ok "…its refid recorded for Caddy" || bad "…refid not recorded"
+grep -q -- '--name TAPPaaS: domain-lab9.example.org' "${FIX}/fw/calls" && ! grep -q 'key-stdin' <(grep 'ca-ensure' "${FIX}/fw/calls") && ok "…the CA imported without its key" || bad "…CA import"
+W wildcard lab9 --domain test.lab9.example.org >/dev/null 2>&1 && [[ "$(jq -r '.cas | keys | length' "${FIX}/cfg/certificates.json")" == "4" ]] && ok "a subdomain environment: no new CA" || bad "subdomain environment"
+: > "${FIX}/fw/calls"; W wildcard mgmt --domain lab9.example.org 2>&1 | grep -q 'refid' && ! grep -q 'updated' <(W wildcard mgmt --domain lab9.example.org 2>&1) && ok "wildcard again: nothing re-signed" || bad "wildcard again"
+[[ ! -e "${FIX}/fw/ssh" ]] && ok "…and Caddy not reloaded" || bad "…Caddy reloaded for nothing"
+CA_MANAGER_NOW=2027-10-15T00:00:00Z W cert renew wildcard-mgmt >/dev/null 2>&1 && grep -q 'configctl caddy reload' "${FIX}/fw/ssh" && ok "a renewed wildcard is replaced on the firewall and Caddy reloaded" || bad "renewal onto the firewall"
+[[ "$(jq -r '.mgmt' "${FIX}/cfg/cert-refids.json")" == "${r}" ]] && ok "…its refid unchanged" || bad "…refid changed"
+W wildcard x --domain lab9.internal >/dev/null 2>&1 && bad "wildcard: an internal domain refused" || ok "wildcard: an internal domain refused"
+
 CA validate >/dev/null 2>&1 && ok "validate: all consistent" || bad "validate"
 chmod 644 "${K}/certs/wild.key"; CA validate >/dev/null 2>&1 && bad "validate: a readable key is a finding" || ok "validate: a readable key is a finding"; chmod 600 "${K}/certs/wild.key"
 echo "# x" >> "${FIX}/cfg/site-ca.pem"; CA validate >/dev/null 2>&1 && bad "validate: a changed bundle is a finding" || ok "validate: a changed bundle is a finding"

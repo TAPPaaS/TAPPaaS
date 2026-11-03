@@ -12,7 +12,7 @@
 import { join } from "path";
 import { CL, GN, YW, die, guarded, info, requireOperator, warn } from "../../../lib/ts/src/cli";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
-import { defaultConfigDir, readJsonObject, simulating } from "../../../lib/ts/src/config-io";
+import { defaultConfigDir, readJsonObject, simulating, writeJsonAtomic } from "../../../lib/ts/src/config-io";
 import {
   CA_DAYS,
   CERT_DAYS,
@@ -26,10 +26,13 @@ import {
   domainNeed,
   dueForRenewal,
   signerFor,
+  wildcardName,
+  wildcardNames,
 } from "./ca";
 import { issue, makeCa } from "./openssl";
 import { Store, certInfo } from "./store";
 import { existsSync, readFileSync } from "fs";
+import { spawnSync } from "child_process";
 
 const VERSION = "0.1.0";
 
@@ -66,6 +69,18 @@ export const HELP: HelpSpec = {
         ["--check", "Say which CA would sign it; change nothing."],
       ],
       details: "Signs a certificate for the names, by the one CA whose constraint covers them all, and keeps\nits key in the key dir. <name> is how ca-manager knows it.",
+    },
+    {
+      usage: "wildcard <environment> --domain <domain> [--check]",
+      options: [
+        ["--domain D", "The environment's primary domain."],
+        ["--check", "Say what it would make and import; change nothing."],
+      ],
+      details:
+        "For an environment in dnsMode local: its domain's CA (made when no CA covers the domain yet), a\n" +
+        "wildcard for *.<domain> and <domain> signed by it, both imported into the firewall's trust store\n" +
+        "(the CA without its key), and the wildcard's refid written to config/cert-refids.json for Caddy.\n" +
+        "Run again, it renews a wildcard that is due and re-imports it in place: the refid stays.",
     },
     {
       usage: "cert renew [<name>] [--within <days>] [--force] [--check]",
@@ -200,6 +215,83 @@ function certIssue(store: Store, name: string, names: string[], check: boolean):
   return 0;
 }
 
+const FIREWALL = process.env.OPNSENSE_HOST ?? "firewall.mgmt.internal";
+
+// trust-manager <verb> …: the refid it prints last, and whether it changed the store.
+function trustManager(args: string[], input?: string): { refid: string; changed: boolean } {
+  const r = spawnSync("trust-manager", args, { encoding: "utf8", ...(input !== undefined ? { input } : {}) });
+  if (r.error) throw new Error(`trust-manager: ${r.error.message}`);
+  if (r.status !== 0) throw new Error(`trust-manager ${args[0]}: ${(r.stderr ?? "").trim().split("\n").slice(-1)[0] || `exit ${r.status}`}`);
+  const refid = (r.stdout ?? "").trim().split("\n").slice(-1)[0] ?? "";
+  if (!/^[0-9a-f]{8,}$/.test(refid)) throw new Error(`trust-manager ${args[0]}: no refid in its answer`);
+  return { refid, changed: /^(imported|updated):/m.test(r.stderr ?? "") };
+}
+
+// The certificate on the firewall, with the CA that signed it (D7): returns its
+// refid. Caddy caches what it serves, so a certificate replaced in place is
+// followed by a reload of Caddy.
+function pushToFirewall(store: Store, doc: CaDoc, name: string): string {
+  const rec = doc.certificates[name];
+  const trust = rec.trust ?? `TAPPaaS: ${name}`;
+  trustManager(["ca-ensure", "--name", `TAPPaaS: ${rec.ca}`, "--pem-file", store.caCert(rec.ca)]);
+  const r = trustManager(["cert-ensure", "--name", trust, "--pem-file", store.certChain(name), "--key-stdin"], readFileSync(store.certKey(name), "utf8"));
+  if (r.changed && rec.refid === r.refid) {
+    const reload = spawnSync("ssh", ["-n", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", `root@${FIREWALL}`, "configctl caddy reload"], { encoding: "utf8" });
+    if (reload.status !== 0) warn(`Caddy was not reloaded (${(reload.stderr ?? "").trim() || `exit ${reload.status}`}): it serves the old certificate until it is`);
+  }
+  rec.trust = trust;
+  rec.refid = r.refid;
+  store.save(doc);
+  return r.refid;
+}
+
+function recordRefid(store: Store, env: string, refid: string): void {
+  const file = join(store.configDir, "cert-refids.json");
+  const cur = readJsonObject(file) ?? {};
+  if (cur[env] === refid) return;
+  writeJsonAtomic(file, { ...cur, [env]: refid });
+}
+
+function wildcard(store: Store, env: string, domain: string, check: boolean): number {
+  if (!CERT_NAME.test(env)) die(`${env}: not an environment name`);
+  const doc = store.load();
+  const need = domainNeed(doc, domain);
+  if (need.kind === "refused") die(need.why);
+  const name = wildcardName(env);
+  const names = wildcardNames(domain);
+  const have = doc.certificates[name];
+  const reissue = !have || have.names.join(",") !== names.join(",");
+  const renew = !reissue && dueForRenewal(have, now());
+  if (check || simulating()) {
+    if (need.kind === "new") info(`would make TAPPaaS ${domain} CA, for ${domain} and its subdomains`);
+    info(reissue ? `would sign ${name} (${names.join(", ")})` : renew ? `would renew ${name}` : `${name} is current`);
+    info(`would import the CA and ${name} into the firewall's trust store and record the refid for ${env}`);
+    return 0;
+  }
+  if (need.kind === "new") {
+    createCa(store, doc, need.id, "domain", [domain], `TAPPaaS ${domain} CA`);
+    info(`${GN}✓${CL} made TAPPaaS ${domain} CA — people using ${domain} import ${store.caCert(need.id)}`);
+  }
+  const ca = signerFor(doc, names);
+  if (!ca) die(`no active CA covers ${names.join(", ")}`);
+  if (reissue || renew) {
+    const keep = have ? { trust: have.trust, refid: have.refid } : {};
+    const rec = signCert(store, doc, name, names, ca);
+    Object.assign(rec, keep);
+    store.save(doc);
+    info(`${GN}✓${CL} ${reissue ? "signed" : "renewed"} ${name}: ${names.join(", ")}, until ${rec.notAfter.slice(0, 10)}`);
+  }
+  let refid: string;
+  try {
+    refid = pushToFirewall(store, doc, name);
+  } catch (e) {
+    die(`${name} could not be put on the firewall: ${(e as Error).message}`);
+  }
+  recordRefid(store, env, refid);
+  info(`${GN}✓${CL} ${name} on the firewall, refid ${refid}, recorded for ${env}`);
+  return 0;
+}
+
 function certRenew(store: Store, only: string | undefined, within: number, force: boolean, check: boolean): number {
   const doc = store.load();
   if (only && !doc.certificates[only]) die(`no certificate ${only} (ca-manager status)`);
@@ -221,8 +313,19 @@ function certRenew(store: Store, only: string | undefined, within: number, force
       info(`would renew ${n} (${daysLeft(c.notAfter, t)} days left) by ${ca}`);
       continue;
     }
-    const rec = signCert(store, doc, n, c.names, ca);
+    const keep = { trust: c.trust, refid: c.refid };
+    const rec = Object.assign(signCert(store, doc, n, c.names, ca), keep);
+    store.save(doc);
     info(`${GN}✓${CL} renewed ${n}, until ${rec.notAfter.slice(0, 10)}`);
+    if (rec.trust) {
+      try {
+        pushToFirewall(store, doc, n);
+        info(`  …and replaced on the firewall (refid ${rec.refid})`);
+      } catch (e) {
+        warn(`${n} was renewed but not put on the firewall: ${(e as Error).message}`);
+        failed++;
+      }
+    }
   }
   return failed ? 1 : 0;
 }
@@ -315,6 +418,12 @@ export function run(argv: string[]): number {
     const dns = opt(args, "--dns");
     if (!name || !dns) die("cert issue <name> --dns <n>[,<n>…]");
     return certIssue(store, name, dns.split(",").map((s) => s.trim()).filter(Boolean), check);
+  }
+  if (args[0] === "wildcard") {
+    const [env] = positional(args, 1, ["--domain"]);
+    const domain = opt(args, "--domain");
+    if (!env || !domain) die("wildcard <environment> --domain <domain>");
+    return wildcard(store, env, domain, check);
   }
   if (args[0] === "cert" && args[1] === "renew") {
     const [name] = positional(args, 2, ["--within"]);
