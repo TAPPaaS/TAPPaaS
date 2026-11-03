@@ -499,7 +499,7 @@ proxy_path_rules_check() {
              (if ((.zones // []) | length) == 0 then "a rule has no zones — delete it instead" else empty end),
              (if ((.zones // []) | index("none")) != null then "none inside a rule admits no one — delete the rule instead" else empty end),
              (if .identityGate == false and (((.description // "") | tostring | gsub("^\\s+|\\s+$"; "")) | length) == 0
-                then "a rule with identityGate false needs a description: who calls these paths and why they cannot sign in (ADR-032 D1)" else empty end),
+                then "a rule with identityGate false needs a description: who calls these paths and why they cannot sign in" else empty end),
              ((.paths // [])[] | tostring |
                 if (startswith("/") | not) then "path \(.) must start with /"
                 elif test("\\s") then "path \(.) contains whitespace"

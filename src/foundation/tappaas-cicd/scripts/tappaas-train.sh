@@ -297,7 +297,7 @@ signing_ready() {
     local key pub blob signers revoked ok=0
     key="$(g config user.signingkey)"
     if [[ -z "${key}" ]]; then
-        error "${2:-the release tag} must be signed (ADR-033): this repository lists signers in ${VERIFY_SIGNERS_PATH}, and no signing key is configured"
+        error "${2:-the release tag} must be signed: this repository lists signers in ${VERIFY_SIGNERS_PATH}, and no signing key is configured"
         error "  git -C ${REPO_DIR} config user.signingkey 'key::<your public key>'   (the key in your vault's SSH agent, via ssh -A)"
         return 1
     fi
@@ -335,7 +335,7 @@ render_releases() {
     jq -r "${JQ_NOTES}"'
       "# TAPPaaS releases",
       "",
-      "Every version, the revision it names, and when it reached each channel (ADR-028 D13).",
+      "Every version, the revision it names, and when it reached each channel.",
       "A boundary cuts the next version into **staging**; the same version reaches **production**",
       "at the boundary after. To run one: `git checkout v<version>`.",
       "",
@@ -508,7 +508,7 @@ cmd_status() {
             fi
             printf '  %-14s %-18s %-11s %s\n' "${_rn}" "${_rb}" "${_real}" "${_note}"
         done < <(site_repos "${CONFIG_DIR}/site.json")
-        (( CHAN_UNDECLARED == 0 )) || warn "  ${CHAN_UNDECLARED} repository/repositories declare no channels.json (ADR-028 D11)"
+        (( CHAN_UNDECLARED == 0 )) || warn "  ${CHAN_UNDECLARED} repository/repositories declare no channels.json — every branch in them reads as unstable"
         (( CHAN_MISMATCH == 0 )) || warn "  ${CHAN_MISMATCH} repository/repositories are not on the branch this site's channel names"
         # The one an operator cannot resolve by switching a branch.
         if (( CHAN_NOBRANCH > 0 )); then
@@ -1354,7 +1354,7 @@ cmd_boundary() {
     # Kept whatever the verdict, so the record says which commit met — or did
     # not meet — the blueprint at each boundary. A dry run records nothing.
     pins_check
-    info "${BOLD}Container image pins${CL} (ADR-028 D4 — reported, never a refusal)"
+    info "${BOLD}Container image pins${CL} (reported, never a refusal)"
     pins_report
     [[ "${DRY_RUN}" == "1" ]] || { record_blueprint; record_secrets; record_pins; }
     local forced="${FORCE_BOUNDARY}"
@@ -1581,7 +1581,7 @@ cmd_fault() {
        '.fault = {what: $w, at: $now}' "${STATE_FILE}" > "${tmp}" \
         && mv -f "${tmp}" "${STATE_FILE}" || { rm -f "${tmp}"; die "could not update ${STATE_FILE}"; }
     warn "  Fault recorded. Promotion to production is BLOCKED until it is resolved on main."
-    info "  Staging keeps the revision; production keeps what it has (ADR-028 D9)."
+    info "  Staging keeps the revision; production keeps what it has."
     info "  When the fix is on main: ${SCRIPT_NAME} fault --resolved <commit>"
     return 0
 }
@@ -1612,8 +1612,8 @@ cmd_patch() {
         *) die "usage: ${SCRIPT_NAME} patch <staging|production> <commit> --why \"<what>\"" ;;
     esac
     [[ -n "${commit}" ]] || die "patch needs the commit that carries the fix"
-    [[ -n "${WHY}" ]] || die "patch needs --why: which D12 case (data safety, a security CVE, a service down) and what"
-    d12_clause_ok "${WHY}" "${channel}" || die "--why must start with the D12 case it invokes — ${D12_CLAUSES//|/ or }$([[ ${channel} == staging ]] && echo ' or disruption:') — then what: \"service down: grafana crash-loops on /etc/secrets\". Not urgent otherwise (ADR-028 D12)."
+    [[ -n "${WHY}" ]] || die "patch needs --why: which urgent-fix case (data safety, a security CVE, a service down) and what"
+    d12_clause_ok "${WHY}" "${channel}" || die "--why must start with the urgent-fix case it invokes — ${D12_CLAUSES//|/ or }$([[ ${channel} == staging ]] && echo ' or disruption:') — then what: \"service down: grafana crash-loops on /etc/secrets\". Anything else waits for the next boundary."
     full="$(g rev-parse --verify --quiet "${commit}^{commit}")" || die "unknown commit: ${commit}"
     [[ -z "$(g status --porcelain)" ]] || { error "the checkout has uncommitted changes"; return 1; }
 
@@ -1622,7 +1622,7 @@ cmd_patch() {
         error "${branch} is already at ${commit}"; return 1
     fi
     if ! g merge-base --is-ancestor "origin/${branch}" "${full}"; then
-        error "${commit} does not build on ${branch}'s tip — author the fix on a branch off ${branch} (ADR-028 D12)"
+        error "${commit} does not build on ${branch}'s tip — author the fix on a branch off ${branch}"
         return 1
     fi
     # On main, or the next boundary reintroduces the fault.
@@ -1815,7 +1815,7 @@ cmd_preview() {
         sed -i.bak "s|github:NixOS/nixpkgs/[^\"]*\"|github:NixOS/nixpkgs/${TO_BRANCH}\"|" "${t}/flake.nix" && rm -f "${t}/flake.nix.bak"
     fi
     from="$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${PIN_LOCK}")"
-    info "${BOLD}Pin preview${CL} — what the next pin move would bring (#788). Nothing is built or moved."
+    info "${BOLD}Pin preview${CL} — what the next pin move would bring. Nothing is built or moved."
     if [[ -z "${TAPPAAS_PIN_FINDINGS:-}" && "${NO_PIN_MOVE}" != "1" ]]; then
         ( cd "${t}" && nix flake update --extra-experimental-features "nix-command flakes" ) >/dev/null 2>&1 \
             || { rm -rf "${t}"; die "could not resolve the next pin${TO_BRANCH:+ on ${TO_BRANCH}}"; }
@@ -1889,7 +1889,7 @@ preview_plan() {
 # decide — it adds knowledge, it does not replace the proof.
 pin_gate() {   # $1 = templates dir with the moved lock, $2 = from rev
     local f="${CONFIG_DIR}/train-preview-boundary.json" open
-    info "  pin preview (#788): what this pin brings, before the deep test"
+    info "  pin preview: what this pin brings, before the deep test"
     if ! pin_findings "$1" "$2" "${f}"; then
         warn "  pin preview unavailable — the deep test still proves the pin"
         return 0

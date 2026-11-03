@@ -20,7 +20,7 @@ this module on every pass and deletes what is no longer declared.
 
 ## Fields
 
-`network:rules` owns **6** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`network:rules` owns **6** declared field(s). Each table below carries the field's full definition and, where the service applies it, what a change to it does (in place, a restart, a rebuild).
 
 ### `ingress`
 

@@ -159,15 +159,15 @@ main() {
     # stack still installs, environment-scoped, and `tier` is read for one more
     # release so a module JSON that has not dropped it still installs as before.
     if [[ -z "$stack" ]]; then
-        lint_warn "${base}: no 'stack' — installs as ${scope}-scoped; a module states its stack (#463), and the foundation stack is what makes it site-scoped"
+        lint_warn "${base}: no 'stack' — installs as ${scope}-scoped; a module states its stack, and the foundation stack is what makes it site-scoped"
     fi
     if [[ -n "$tier" ]]; then
         local tier_says="environment"
         [[ "$tier" == "foundation" ]] && tier_says="site"
         if [[ -n "$stack" && "$tier_says" != "$scope" ]]; then
-            lint_warn "${base}: 'tier: ${tier}' is ignored — scope follows the stack, and stack '${stack}' is ${scope}-scoped (ADR-022e)"
+            lint_warn "${base}: 'tier: ${tier}' is ignored — scope follows the stack, and stack '${stack}' is ${scope}-scoped; remove 'tier'"
         else
-            lint_warn "${base}: 'tier' is retired (ADR-022e, #676) — scope follows the stack; remove it"
+            lint_warn "${base}: 'tier' is retired — scope follows the stack; remove it"
         fi
     fi
 

@@ -478,14 +478,14 @@ function checkTierInvariants(doc: ZonesDoc, rep: Reporter): void {
       rep.warn(
         `I5: zone '${name}' has 'dmz' in access-to — that grants the whole DMZ ` +
           `subnet on every port, including the firewall's own GUI (8443) and SSH ` +
-          `(22) on the DMZ gateway (#618). Remove it: reaching the reverse proxy ` +
+          `(22) on the DMZ gateway. Remove it: reaching the reverse proxy ` +
           `is the caddy-reach rule (DMZ gateway /32, tcp 80+443), and reaching a ` +
           `DMZ workload is a pinhole via 'dmz'.pinhole-allowed-from.`,
       );
       i5++;
     }
   }
-  if (i5 === 0) rep.ok("I5: no zone reaches the DMZ zone-wide (ADR-021 D3b)");
+  if (i5 === 0) rep.ok("I5: no zone reaches the DMZ zone-wide");
 
   // ── I3 — egress boundary: a tier-6 (no-egress) zone must not list internet. ──
   let i3 = 0;

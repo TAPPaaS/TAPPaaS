@@ -24,7 +24,7 @@ export const EMIT_HELP: HelpVerb[] = [
       ["--json", "Print the events as a JSON array as well."],
     ],
     details:
-      "One event per condition transition since the last run (ADR-041 D4), as a JSON line in the\n" +
+      "One event per condition transition since the last run, as a JSON line in the\n" +
       "journal, identifier tappaas-health; the ack, maintenance and rootcause events beside them.\n" +
       "Tracks flapping, and ends acks and maintenance windows when they expire. Runs after every\n" +
       "assess (health-assess.timer). The cursor is config/.health-emit-cursor.",

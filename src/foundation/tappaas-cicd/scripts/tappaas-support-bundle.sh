@@ -72,7 +72,7 @@ strip() { sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g'; }
 
 # ── --test: the whole path, on a good day ────────────────────────────
 if [[ "${TEST}" -eq 1 ]]; then
-    bundle="$("$0" --reason "test of the alert mail and support bundle path (#883)" \
+    bundle="$("$0" --reason "test of the alert mail and support bundle path" \
         --unit update-tappaas.service --out "${OUT}")" || { say "the bundle could not be written"; exit 1; }
     result="$(jq -r '"ok=\(.ok) succeeded=\(.succeeded // "?")/\(.total // "?") \(.start_time // "") → \(.end_time // "")"' \
         "${CONFIG_DIR}/last-update-result.json" 2>/dev/null || echo "no last-update-result.json")"

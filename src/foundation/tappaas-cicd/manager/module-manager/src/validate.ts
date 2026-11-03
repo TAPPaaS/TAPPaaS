@@ -73,15 +73,15 @@ export function validateModule(
   const scope = moduleScope(m);
   if (!m.stack) {
     warn(
-      `no 'stack' — ${scope}-scoped; a module states its stack (#463), and the foundation stack is what makes it site-scoped`,
+      `no 'stack' — ${scope}-scoped; a module states its stack, and the foundation stack is what makes it site-scoped`,
     );
   }
   if (m.tier) {
     const tierSays = m.tier === "foundation" ? "site" : "environment";
     warn(
       m.stack && tierSays !== scope
-        ? `'tier: ${m.tier}' is ignored — scope follows the stack, and stack '${m.stack}' is ${scope}-scoped (ADR-022e)`
-        : `'tier' is retired (ADR-022e, #676) — scope follows the stack; the next update removes it`,
+        ? `'tier: ${m.tier}' is ignored — scope follows the stack, and stack '${m.stack}' is ${scope}-scoped`
+        : `'tier' is retired — scope follows the stack; the next update removes it`,
     );
   }
 
@@ -281,7 +281,7 @@ export function validateOrphanFields(
       severity: "warning",
       message:
         `field '${field}' is read only by ${usedBy.join(", ")}, none of which this module wires — ` +
-        `it has no effect. Add the dependency, or drop the field (#683)`,
+        `it has no effect. Add the dependency, or drop the field`,
     });
   }
 }
@@ -318,7 +318,7 @@ export function validateConfigBlock(m: ModuleConfig, out: ValidateFinding[]): vo
       out.push({
         module: m.name,
         severity: "error",
-        message: `config block '${key}' is not a declared dependency — add it to dependsOn (#161)`,
+        message: `config block '${key}' is not a declared dependency — add it to dependsOn`,
       });
     }
   }
@@ -342,7 +342,7 @@ export function validateConfigBlock(m: ModuleConfig, out: ValidateFinding[]): vo
       out.push({
         module: m.name,
         severity: "error",
-        message: `field '${field}' is set in both the header and a config block (or in two config blocks) — ambiguous (#161)`,
+        message: `field '${field}' is set in both the header and a config block (or in two config blocks) — ambiguous`,
       });
     }
   }
@@ -536,8 +536,7 @@ export function validateFieldManifests(
           severity: "error",
           message:
             `${coordinate} owns ${owned.length} declared field(s) (${owned.join(", ")}) but ships no ` +
-            `${path} — their change semantics are undeclared, so nothing can say what changing one costs ` +
-            `(ADR-020 D4)`,
+            `${path} — their change semantics are undeclared, so nothing can say what changing one costs; add the manifest`,
         });
       }
       // Owns nothing: no manifest needed, and none expected.

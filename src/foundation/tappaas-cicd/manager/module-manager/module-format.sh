@@ -58,7 +58,7 @@ usage() {
 Usage: ${SCRIPT_NAME} <to-flat|to-config> <file.json> [--in-place]
 
 Convert a TAPPaaS module JSON between the flat form and the Pattern-A
-\`config\`-block form (issue #161). Both are equivalent; normalization to flat
+\`config\`-block form. Both are equivalent; normalization to flat
 happens automatically at deploy/validation.
 
 Commands:

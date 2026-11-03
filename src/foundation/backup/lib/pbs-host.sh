@@ -48,10 +48,10 @@ pbs_host_ensure_patched() {
     owner="$(pbs_host_owner "${host}" "${zone}")" || rc=$?
     case "${owner}" in
         cluster)  debug "  the PBS host ${host} is a cluster node — patched by the cluster module" ;;
-        adopted)  info "  ${GN}✓${CL} the PBS host ${host} is now a debianhost instance — patched by the sweep (#603)" ;;
+        adopted)  info "  ${GN}✓${CL} the PBS host ${host} is now a debianhost instance — patched by the sweep" ;;
         unknown)  warn "  cannot tell whether ${host} is a cluster node (cluster unreachable) — not checking who patches it" ;;
         none)     warn "  NOTHING PATCHES the PBS host ${host}: it is not a cluster node and could not be adopted as a machine."
-                  warn "    Register it by its address: module-manager module adopt <ip-or-fqdn of ${host}> (#603)" ;;
+                  warn "    Register it by its address: module-manager module adopt <ip-or-fqdn of ${host}>" ;;
         *)        debug "  the PBS host ${host} is a ${owner} instance — patched by the sweep" ;;
     esac
     return "${rc}"
@@ -114,14 +114,14 @@ awk 'NR>1 && /^Types:/ && prev != "" { print "" } { print; prev=$0 }' "$f" > "${
 apt-get -q update >/dev/null 2>&1 || echo "apt-update-failed"
 echo "repaired"
 REMOTE
-    )" || { warn "  could not check ${host}'s apt sources for the #749 defect"; return 0; }
+    )" || { warn "  could not check ${host}'s apt sources for stanzas run together"; return 0; }
 
     case "${out}" in
         *repaired*)
-            info "  ${GN}✓${CL} ${host}: proxmox.sources stanzas were not separated — repaired (#749), backup kept as .pre-749"
+            info "  ${GN}✓${CL} ${host}: proxmox.sources stanzas were not separated — repaired, backup kept as .pre-749"
             ;;
         *already-separated*|*no-file*) : ;;
-        *) debug "  ${host}: #749 repair said '${out}'" ;;
+        *) debug "  ${host}: the apt sources repair said '${out}'" ;;
     esac
     return 0
 }

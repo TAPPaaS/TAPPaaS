@@ -760,7 +760,7 @@ else
     *)    say "boot disk on the target: the one matching '${FIELD_BOOT}'${FIELD_MIRROR:+ + '${FIELD_MIRROR}'} — its console asks when none matches" ;;
   esac
 fi
-[[ "$FILESYSTEM" == "ext4" ]] && warn "ext4 boot disk: only for a node with data disks — without one there is no pool for the guests (ADR-037 D1)"
+[[ "$FILESYSTEM" == "ext4" ]] && warn "ext4 boot disk: only for a node with data disks — without one there is no pool for the guests; use zfs unless the node has a data disk"
 
 INSTALL_KEY="${OUT%.iso}.key"
 if [[ -z "${TAPPAAS_MEDIA_CONTAINER:-}" ]]; then

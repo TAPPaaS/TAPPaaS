@@ -165,7 +165,7 @@ repo_sync_verify_gate() {
             [[ "${target}" == "${head}" ]] && return 0
             error "  repo-sync: ${name}: REFUSED — $(git -C "${path}" rev-parse --short "${target}") on '${branch}' (${channel}) is not a verified release"
             error "    ${VERIFY_REASON}"
-            error "    the checkout stays on the last verified release; see ADR-033 D6"
+            error "    the checkout stays on the last verified release; nothing newer is taken until a signed release arrives"
             return 3 ;;
     esac
 }
@@ -227,7 +227,7 @@ repo_sync_introduce() {
             error "    ask its owners for the fingerprints of the keys they sign with: --signer SHA256:... (once per key)"
         else
             error "  repo-sync: ${name}: REFUSED — '${branch}' is a ${channel} branch, and ${name} signs no releases (no keys in ${VERIFY_SIGNERS_PATH})"
-            error "    to track it unverified, add it with --unsigned (ADR-033 D9)"
+            error "    to track it unverified, add it with --unsigned"
         fi
         return 3
     fi

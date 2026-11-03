@@ -27,7 +27,7 @@ nfs_service_check() {
             rc=1; continue
         fi
         st="$(nfs_mount_status "${m}")"
-        [[ "${st}" == "pending" ]] && info "  $(jq -r .path <<< "${m}"): share $(jq -r .share <<< "${m}") is not declared on any server — pending, the directory stays local (ADR-029 D11)"
+        [[ "${st}" == "pending" ]] && info "  $(jq -r .path <<< "${m}"): share $(jq -r .share <<< "${m}") is not declared on any server — pending, the directory stays local until it is"
     done 3< <(nfs_mounts "${consumer}")
     return "${rc}"
 }
@@ -118,7 +118,7 @@ nfs_fact() { sed -n "s/.*\b$2=\([^ ]*\).*/\1/p" <<< "$1"; }
 nfs_service_converge() {
     local consumer="$1" target os m path src v access req status facts lines="" rc=0
     nfs_service_check "${consumer}" || { error "storage:nfs: ${consumer}'s mounts are refused (above) — nothing was changed"; return 1; }
-    [[ "$(nfs_consumer_os "${consumer}")" != "other" ]] || { error "storage:nfs mounts only NixOS and Debian guests (ADR-029 D10)"; return 1; }
+    [[ "$(nfs_consumer_os "${consumer}")" != "other" ]] || { error "storage:nfs mounts only NixOS and Debian guests"; return 1; }
     nfs_service_reconverge "${consumer}" || { error "storage:nfs: a share's server did not converge (above)"; return 1; }
     nfs_service_rules "${consumer}" || return 1
     target="$(nfs_consumer_target "${consumer}")" \
@@ -137,7 +137,7 @@ nfs_service_converge() {
             local gone; gone="$(nfs_fact "${facts}" mounted)"
             [[ -n "${gone}" || "$(nfs_fact "${facts}" autofs)" != "yes" ]] || gone="$(nfs_fact "${facts}" fstab)"
             if [[ -n "${gone}" ]]; then
-                error "  ${path}: share $(jq -r .share <<< "${m}") is gone, but ${path} is still mounted from it — never a silent fallback to a local directory (ADR-029 D14). Declare the share again, or remove the mount."
+                error "  ${path}: share $(jq -r .share <<< "${m}") is gone, but ${path} is still mounted from it — it is never quietly replaced by a local directory. Declare the share again, or remove the mount."
                 rc=1
                 # Keep the guest's entry as it is: dropping it would unmount on the
                 # next rebuild and start the app on an empty directory.
@@ -199,7 +199,7 @@ nfs_service_drop_prenfs() {
     fi
     tappaas_ssh_guest -o BatchMode=yes "${target}" "sudo rm -rf --one-file-system '${path}.pre-nfs'" \
         || { error "  ${path}: could not remove ${path}.pre-nfs"; return 1; }
-    info "  ${GN}✓${CL} ${path}: the share is healthy — the local copy ${path}.pre-nfs is removed (ADR-029 D14)"
+    info "  ${GN}✓${CL} ${path}: the share is healthy — the local copy ${path}.pre-nfs is removed"
 }
 
 # nfs_service_migrate <consumer> <target> <mount-json> <source> <version> <access>
@@ -209,7 +209,7 @@ nfs_service_migrate() {
     path="$(jq -r .path <<< "${m}")"
     NFS_MIGRATE_RC=0
     if ! nfs_consent "${consumer}"; then
-        warn "  ${path}: share $(jq -r .share <<< "${m}") is available and ${path} holds data — migration pending: it stops the app, so it needs ${consumer}'s rebootOk or --allow-disruption (ADR-029 D14)"
+        warn "  ${path}: share $(jq -r .share <<< "${m}") is available and ${path} holds data — migration pending: it stops the app, so it needs ${consumer}'s rebootOk or --allow-disruption"
         return 1
     fi
     if [[ "${ready}" != "yes" ]]; then
@@ -226,7 +226,7 @@ nfs_service_migrate() {
     while IFS= read -r l; do [[ -n "${l}" ]] && info "    ${l}"; done <<< "${out}"
     case "${rc}" in
         0) info "  ${GN}✓${CL} ${path}: migrated — ${path}.pre-nfs goes with the next healthy update" ;;
-        3) error "  ${path}: not migrated — the share already holds data, and the two are never merged; resolve by hand (ADR-029 D14)" ;;
+        3) error "  ${path}: not migrated — the share already holds data, and the two are never merged; move one into the other by hand, then run the update again" ;;
         4) error "  ${path}: not migrated — something not in stopUnits/stopCommand still has files open (above); the app is running again on its local data" ;;
         *) error "  ${path}: migration failed (exit ${rc}) — the app is running again on its local data" ;;
     esac
@@ -278,7 +278,7 @@ EOF
             info "  ${GN}✓${CL} ${consumer}: /etc/fstab block updated and applied" ;;
         *)
             rm -f "${tmp}"
-            error "  ${consumer}: storage:nfs mounts only NixOS and Debian guests (ADR-029 D10)"; return 1 ;;
+            error "  ${consumer}: storage:nfs mounts only NixOS and Debian guests"; return 1 ;;
     esac
     rm -f "${tmp}"
 }

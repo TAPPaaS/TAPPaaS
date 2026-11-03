@@ -339,7 +339,7 @@ REMOTE
         || { warn "  could not escrow ${module}'s encryption key"; return 1; }
     ${esc_sudo}chmod 600 "${escrowed}"
     info "  ${GN}✓${CL} encryption key escrowed → ${escrowed}"
-    warn "  Take the mandatory OUT-OF-BAND copy now (§2.5.1): backup-manager key export --usb"
+    warn "  Take the mandatory OUT-OF-BAND copy now: backup-manager key export --usb"
     return 0
 }
 
@@ -457,7 +457,7 @@ pbs_fs_install_timer() {
 set -euo pipefail
 cat > /etc/systemd/system/tappaas-fs-backup.service <<'UNIT'
 [Unit]
-Description=TAPPaaS file-level backup of this host's declared paths (ADR-012 §3.1, #662)
+Description=TAPPaaS file-level backup of this host's declared paths
 ConditionPathExists=${runner}
 
 [Service]

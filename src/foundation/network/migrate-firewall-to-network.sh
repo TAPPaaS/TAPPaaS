@@ -155,7 +155,7 @@ SRC_JSON="${OLD_JSON}"
 VMID="$(jq -r '.vmid // empty' "${SRC_JSON}" 2>/dev/null || true)"
 
 cat <<BANNER
-${BOLD}ADR-007 P8 — live firewall → network migration${CL}
+${BOLD}Live firewall → network migration${CL}
   config dir   : ${CONFIG_DIR}
   source config: ${SRC_JSON}
   VM id        : ${VMID:-<unknown>}

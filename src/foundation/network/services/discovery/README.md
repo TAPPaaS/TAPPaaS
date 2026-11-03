@@ -14,7 +14,7 @@ relays are per module and port.
 
 ## Fields
 
-`network:discovery` owns **2** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`network:discovery` owns **2** declared field(s). Each table below carries the field's full definition and, where the service applies it, what a change to it does (in place, a restart, a rebuild).
 
 ### `discoveryMdns`
 

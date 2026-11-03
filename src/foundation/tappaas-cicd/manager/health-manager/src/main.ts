@@ -82,7 +82,7 @@ export const HELP: HelpSpec = {
     {
       usage: "validate [--live] [--threshold PCT] [--memory-threshold PCT] [--json] [--config-dir DIR]",
       details:
-        "Reads the conditions the last assess wrote (ADR-041): the gates' table, and exit 1 on any critical\n" +
+        "Reads the conditions the last assess wrote: the gates' table, and exit 1 on any critical\n" +
         "condition that is neither derived, acknowledged nor in maintenance. With no recent assess, or a\n" +
         "threshold given, it assesses first; with no CMDB it runs the gates itself.",
       options: [
@@ -97,7 +97,7 @@ export const HELP: HelpSpec = {
       details: "What each node commits once the update has converged every guest: a VM at its configured memory, a container at its highest use of the last week plus 25% (at least 512 MB, at most its limit). Growth that does not fit under the threshold is held: named, and the update keeps that module at its current memory; everything else goes ahead. A node already over that nothing grows, and growth that fits, warn. Exit 1 only when the module being installed would take its node to the threshold. The update sweep's and install-module's pre-flight.",
       options: [
         ["--json", "Print the result as JSON, with `held`: the modules whose growth does not fit (module, node, from, to in bytes)."],
-        ["--room-for <module>", "Instead: would starting this suspended module fit on its node, and which pauseOk modules there — lowest pausePriority first — would make it fit (#891). Exit 1 when even that does not."],
+        ["--room-for <module>", "Instead: would starting this suspended module fit on its node, and which pauseOk modules there — lowest pausePriority first — would make it fit. Exit 1 when even that does not."],
         ["--drain <node>", "Instead: would this node's HA guests fit on the other nodes for its reboot, and which pauseOk modules would make them fit. Exit 1 when even that does not."],
         ["--install <instance>", "Count this deployed config's memory as new on its node (install-module, before the guest exists)."],
         ["--memory-threshold PCT", `Percent of a node's RAM the projected commitment must stay under (default ${DEFAULT_MEMORY_THRESHOLD}).`],
@@ -121,7 +121,7 @@ export const HELP: HelpSpec = {
       details:
         "Inventories every target — the mothership, each module's VM or container, the containers\n" +
         "running inside them (by registry digest), the nodes and the firewall — and matches each\n" +
-        "against its layer's CVE source (ADR-011 v0.3). Read-only on every target. Writes\n" +
+        "against its layer's CVE source. Read-only on every target. Writes\n" +
         "~/config/sbom/site.cdx.json (CycloneDX) and ~/config/sbom/cve-status.json; the previous\n" +
         "status is kept as cve-status.previous.json. Runs after every sweep (tappaas-security-scan).",
     },
@@ -134,7 +134,7 @@ export const HELP: HelpSpec = {
         ["--no-vex", "Apply no VEX statement (by default the ones `scan security` applies: <module>-vex.json)."],
       ],
       details:
-        "Matches a package list against the CVE database as if it ran (#788): the release train's\n" +
+        "Matches a package list against the CVE database as if it ran: the release train's\n" +
         "`tappaas-train preview` uses it for the packages the NEXT nixpkgs pin would bring, which\n" +
         "nothing runs yet. Same CPE rule, matcher and VEX as `scan security`; writes nothing.\n" +
         "Prints {\"findings\": [{id, severity, pkg, installed, fixed, purl}], \"suppressed\": [...], \"error\": \"\"}:\n" +
@@ -148,7 +148,7 @@ export const HELP: HelpSpec = {
         ["--no-vex", "Apply no VEX statement (by default the ones `scan security` applies)."],
       ],
       details:
-        "Scans container images by registry reference, none of which has to run here (#788): the\n" +
+        "Scans container images by registry reference, none of which has to run here: the\n" +
         "release preview compares a past release's images with the next one's. trivy fetches each\n" +
         "image (layers are cached). Same VEX as `scan security`. Writes nothing. Prints\n" +
         "{\"<ref>\": {\"findings\": [...], \"suppressed\": [...], \"error\": \"\"}}.",
@@ -159,7 +159,7 @@ export const HELP: HelpSpec = {
       options: [
         ["--json", "Print the report instead of sending it."],
         ["--from <file>", "Take the gates from this `validate --json` output instead of running them."],
-        ["--discover", "Accepted for the CMDB's sweep (ADR-040 D15); the report is already its full depth."],
+        ["--discover", "Accepted for the CMDB's sweep; the report is already its full depth."],
       ],
       details: "`assess` under the name every cmdbSource answers to.",
     },
@@ -186,7 +186,7 @@ export const HELP: HelpSpec = {
         ["--file F", "check: this candidate file instead of the rules in use."],
         ["--json", "Print the rules, or the problems."],
       ],
-      details: "The correlation rules of metamodel/health-rules.json (ADR-041 D3). check exits 1 on a rule it cannot place.",
+      details: "The correlation rules of metamodel/health-rules.json. check exits 1 on a rule it cannot place.",
     },
     // ── end ADR-041 assess ──
     {
@@ -213,7 +213,7 @@ export const HELP: HelpSpec = {
         ["--json", "Print the alerts as JSON, each with the object it is about."],
       ],
       details:
-        "The site's alerts (ADR-039): open — state alerts firing now, from Grafana on the logging VM;\n" +
+        "The site's alerts: open — state alerts firing now, from Grafana on the logging VM;\n" +
         "recent — event alerts of the last 24 hours, from the mothership's alert receiver. Each is\n" +
         "placed on the module, machine or node it is about. The heartbeat is never listed.",
     },

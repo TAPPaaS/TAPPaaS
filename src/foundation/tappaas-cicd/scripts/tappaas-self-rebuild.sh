@@ -65,7 +65,7 @@ if [[ -r "${_lock}" ]]; then
         info "nixpkgs pin: ${_lock_rev:0:12} (${_lock_date:-?}, ${_age_days}d old) — from ${_lock}"
         if [[ -n "${_run_date}" && -n "${_lock_date}" && -n "${_run_rev}" \
               && "${_run_rev}" != "${_lock_rev}" && "${_lock_date}" < "${_run_date}" ]]; then
-            warn "This rebuild moves nixpkgs BACKWARDS (#680):"
+            warn "This rebuild moves nixpkgs BACKWARDS:"
             warn "  running now : ${_run_rev:0:12} (${_run_date})"
             warn "  this flake  : ${_lock_rev:0:12} (${_lock_date})"
             warn "  Packages downgrade on switch and the kernel at the next boot — security-relevant"
@@ -187,8 +187,8 @@ CUR_RELEASE="$(release_of "${CURRENT_SYSTEM}")"
 NEW_RELEASE="$(release_of "${NEW_TOPLEVEL:-/nonexistent}")"
 
 if [[ -n "${NEW_RELEASE}" && -n "${CUR_RELEASE}" && "${NEW_RELEASE}" != "${CUR_RELEASE}" ]]; then
-    info "Release move: ${CUR_RELEASE} -> ${NEW_RELEASE} — staging it for the next boot"
-    info "  (an in-place switch across a release cannot reload dbus-broker; #725)"
+    # An in-place switch across a release cannot reload dbus-broker (#725).
+    info "New NixOS release: ${CUR_RELEASE} → ${NEW_RELEASE}, staged for the next boot"
     if ! HOME=/var/lib/tappaas-rebuild nixos-rebuild boot --flake ".#${VMNAME}" --impure \
             >>"${REBUILD_LOG}" 2>&1; then
         error "staging the release move failed — last lines of ${REBUILD_LOG}:"

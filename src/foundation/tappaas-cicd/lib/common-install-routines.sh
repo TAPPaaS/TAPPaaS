@@ -1813,7 +1813,7 @@ function wait_for_guest_settled() {
       *"NTP no"*)
         # Booted, clock not yet synchronised.
         if [[ ${ntp_waited} -ge ${ntp_wait} || ${waited} -ge ${max_wait} ]]; then
-          warn "  ${host}: booted, but its clock is NOT synchronised after ${ntp_wait}s — time-sensitive checks may fail (#716)"
+          warn "  ${host}: booted, but its clock is NOT synchronised after ${ntp_wait}s — time-sensitive checks (TLS, sign-in) may fail until it is"
           return 0
         fi
         ntp_waited=$((ntp_waited + interval)) ;;

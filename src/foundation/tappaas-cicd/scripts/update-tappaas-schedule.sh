@@ -155,7 +155,7 @@ resume_marker="${CONFIG_DIR:-/home/tappaas/config}/.update-resume"
 if [[ -f "${resume_marker}" ]]; then
     reason="$(sed -n 's/.*"reason"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${resume_marker}" | head -1)"
     rm -f "${resume_marker}"
-    echo "update-tappaas-schedule: resuming the sweep interrupted by ${reason:-a planned reboot} (#744)"
+    echo "update-tappaas-schedule: resuming the sweep interrupted by ${reason:-a planned reboot}"
     if [[ "${TAPPAAS_NO_SYSTEMCTL:-0}" == "1" ]] || [[ "${DRY_RUN}" -eq 1 ]]; then
         echo "update-tappaas-schedule: (would start update-tappaas.service)"
     else

@@ -104,7 +104,7 @@ def render(coord, manifest, schema):
         body += [
             f"`{coord}` owns **{len(fields)}** declared field(s). Each table below "
             "carries the field's full definition and, where the service applies it, "
-            "its ADR-020 change semantics.",
+            "what a change to it does (in place, a restart, a rebuild).",
             "",
         ]
         for name in fields:

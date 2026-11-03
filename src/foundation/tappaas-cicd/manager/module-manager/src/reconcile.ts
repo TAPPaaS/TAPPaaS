@@ -454,7 +454,7 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
       `re-applied, but ${parts.join(" and ")} after the fact — reconcile of ` +
         `'${module}' did NOT converge. The apply scripts returned success; the ` +
         `providers' own test-service.sh disagree. A known cause for a NAT/proxy ` +
-        `plane is a firewall-wide precondition the apply cannot see (ADR-016: ` +
+        `plane is a firewall-wide precondition the apply cannot see (` +
         `source-NAT rules are inert while OPNsense snat_mode is 'automatic').`,
     );
   }

@@ -107,7 +107,7 @@ export const HELP: HelpSpec = {
       options: [
         ["--set <field>=<value>", "Set a field by its name: displayName, ownerOrg, zone, domains.primary,\n" +
           "                   domains.dnsMode; repeat it. The options below are shortcuts, one field\n" +
-          "                   each (ADR-020 D11)."],
+          "                   each."],
         ["--domain D", "The environment's public primary domain."],
         ["--owner ORG", "The organization that owns the environment."],
         ["--zone Z", "Move the environment to this Service zone: it is linked to the environment\n" +
@@ -130,10 +130,10 @@ export const HELP: HelpSpec = {
     },
     {
       usage: "report [--json] [--discover]",
-      note: "(ADR-040: send every environment, its owner and the zones serving it to the CMDB)",
+      note: "(send every environment, its owner and the zones serving it to the CMDB)",
       options: [
         ["--json", "Print the report instead of sending it."],
-        ["--discover", "Accepted for the sweep (D15): what this plane holds is all report sends."],
+        ["--discover", "Accepted for the sweep: what this plane holds is all report sends."],
       ],
     },
     {
@@ -672,7 +672,7 @@ function cmdDelete(opts: Opts, net: NetworkClient, mod: ModuleClient, dt: DnsTls
 
   for (const l of leftover) warn(`  NOT removed — ${l}`);
   if (domain && ownsDomain) {
-    info(`  Yours to remove at your DNS provider: the public records for ${domain} and *.${domain} (#383).`);
+    info(`  Yours to remove at your DNS provider: the public records for ${domain} and *.${domain}.`);
   }
   if (!dry) info(`${GN}Deleted environment '${name}'${CL}`);
 }

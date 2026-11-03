@@ -79,23 +79,23 @@ Arguments:
     module-name              Name of the module (expects ./<module-name>.json)
 
 Options:
-    --environment <name>     Target environment (ADR-007 P5). Drives the VM name
+    --environment <name>     Target environment. Drives the VM name
                              (<module> in the default env, else <module>-<env>)
                              and zone0 (the zone in zones.json naming that
                              environment). Site-scoped modules (the foundation
-                             stack, ADR-022e) may ONLY be installed into 'mgmt'.
+                             stack) may ONLY be installed into 'mgmt'.
     --variant <name>         DEPRECATED alias for --environment (compat period).
                              --environment wins if both are given.
     --allow-fork             Permit a site-scoped module from a non-official
                              source (scope/source lint override).
     --no-rollback            Keep a failed install in place for inspection
-                             (default: remove what the run created — #584)
+                             (default: remove what the run created)
     --reinstall              Delete the existing deployment first, then install
                              fresh (delete-module.sh --force, then install)
     --<field> <value>        Override a JSON field value
     -h, --help               Show this help message
 
-Environment / zone resolution (ADR-007 P5):
+Environment / zone resolution:
     * --environment given          → use it.
     * else scope:site (the foundation stack) → 'mgmt'.
     * else                         → the default environment (single non-mgmt
@@ -381,7 +381,7 @@ main() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --force)
-                die "install-module.sh has no --force (#453). An already-deployed module takes the release forward with 'module-manager module update ${1:-<module>}' (local modifications survive), or is replaced with --reinstall."
+                die "install-module.sh has no --force. An already-deployed module takes the release forward with 'module-manager module update ${1:-<module>}' (local modifications survive), or is replaced with --reinstall."
                 ;;
             --no-rollback)
                 INSTALL_NO_ROLLBACK=true
@@ -637,7 +637,7 @@ main() {
         [[ "$(readlink -f "$(pwd)")" == "$(readlink -f /home/tappaas/TAPPaaS/src/foundation)"/* ]] && _arf=(--foundation)
         if [[ -f "${_ar}" ]]; then
             python3 -I "${_ar}" validate "${_arf[@]}" "$(pwd)/${module}-alerts.json" \
-                || die "${module}-alerts.json does not validate (ADR-039) — fix the rules above"
+                || die "${module}-alerts.json does not validate — fix the alert rules named above"
         fi
     fi
 

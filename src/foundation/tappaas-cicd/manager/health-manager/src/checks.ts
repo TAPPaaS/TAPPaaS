@@ -158,7 +158,7 @@ export function checkBackupStatus(configDir: string): CheckResult {
     return {
       name: "backup-status",
       status: "skip",
-      detail: "backup status predates the optedIn/inPbsJob split (#627)",
+      detail: "backup status predates the optedIn/inPbsJob split",
     };
   }
   const disabled: string[] = [];

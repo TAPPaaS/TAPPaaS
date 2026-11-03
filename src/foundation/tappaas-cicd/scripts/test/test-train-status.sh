@@ -989,9 +989,9 @@ git -C "${TMP}/w" merge -q --no-edit "${_fix}"; git -C "${TMP}/w" push -q origin
 run patch staging "${_fix}"
 [[ "${RC}" -ne 0 && "${OUT}" == *"--why"* ]] && ok "a patch without a reason is refused" || bad "no --why accepted: ${OUT}"
 run patch staging "${_fix}" --why "it is finished"
-[[ "${RC}" -ne 0 && "${OUT}" == *"must start with the D12 case"* ]] && ok "a reason that names no D12 case is refused (#746)" || bad "a reason without a clause accepted: ${OUT}"
+[[ "${RC}" -ne 0 && "${OUT}" == *"must start with the urgent-fix case"* ]] && ok "a reason that names no D12 case is refused (#746)" || bad "a reason without a clause accepted: ${OUT}"
 run patch production "${_fix}" --why "disruption: a nightly check fails"
-[[ "${RC}" -ne 0 && "${OUT}" == *"must start with the D12 case"* ]] && ok "production refuses a disruption — staging's case only (D12)" || bad "production took disruption: ${OUT}"
+[[ "${RC}" -ne 0 && "${OUT}" == *"must start with the urgent-fix case"* ]] && ok "production refuses a disruption — staging's case only (D12)" || bad "production took disruption: ${OUT}"
 run patch staging "${_fix}" --why "disruption: a nightly check fails" --dry-run
 [[ "${RC}" -eq 0 ]] && ok "staging takes a disruption the boundary would carry on (D12)" || bad "staging refused disruption: ${OUT}"
 run patch production "${_fix}" --why "service down: grafana"

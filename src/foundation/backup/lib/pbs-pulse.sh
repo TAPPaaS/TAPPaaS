@@ -134,7 +134,7 @@ pulse_ensure() {
         || { warn "  pulse: could not write ${host}:/etc/tappaas/pulse.json"; return 1; }
     _pulse_ssh "${host}" 'cat > /etc/systemd/system/tappaas-pulse.service <<EOF
 [Unit]
-Description=TAPPaaS pulse: is the backup buddy alive, and is this site? (ADR-031)
+Description=TAPPaaS pulse: is the backup buddy alive, and is this site?
 After=network-online.target
 
 [Service]
@@ -143,7 +143,7 @@ ExecStart=/usr/local/sbin/tappaas-pulse
 EOF
 cat > /etc/systemd/system/tappaas-pulse.timer <<EOF
 [Unit]
-Description=TAPPaaS pulse every 5 minutes (ADR-031)
+Description=TAPPaaS pulse every 5 minutes
 
 [Timer]
 OnBootSec=2min

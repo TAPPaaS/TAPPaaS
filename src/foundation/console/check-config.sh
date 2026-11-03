@@ -27,7 +27,7 @@ open="$(jq -r '
     || { echo "console: cannot read the config ${cfg}" >&2; exit 2; }
 
 if [[ -n "${open}" ]]; then
-    echo "console: proxyAllowedZones may not include ${open} — the console is reached from mgmt and the admin VPN only (ADR-034 D2); keep it [\"mgmt\", \"admin\"]" >&2
+    echo "console: proxyAllowedZones may not include ${open} — the console is reached from mgmt and the admin VPN only; keep it [\"mgmt\", \"admin\"]" >&2
     exit 1
 fi
 exit 0

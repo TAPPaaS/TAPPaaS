@@ -89,7 +89,7 @@ Arguments:
 
 Options:
     -h, --help        Show this help message
-    --environment <name>  Target environment (ADR-007 P5). The installed config
+    --environment <name>  Target environment. The installed config
                           is <module>-<env>.json for a non-default/non-mgmt env;
                           <module>.json otherwise. Equivalent to naming the
                           suffixed module directly.
@@ -97,8 +97,8 @@ Options:
     --force           Proceed although something says no: a pre-update test
                       that failed fatally (exit 2), or an archived/external
                       module. Never reboots, never overwrites the deployed
-                      config (ADR-020 v0.10 D8). A non-fatal test failure
-                      (exit 1) never blocks the update anyway (#635)
+                      config. A non-fatal test failure (exit 1) never
+                      blocks the update anyway
     --allow-disruption
                       Authorize downtime for this module now — a reboot or an
                       offline migrate. Without it such a change is deferred
@@ -419,7 +419,7 @@ apply_dependson_delta() {
                 info "  ${GN}✓${CL} ${dep} integration wired"
             elif [[ "${dep}" == identity:* ]]; then
                 fatal_with_rollback "${module}" "${snap_created}" \
-                    "sign-in could not be wired: install-service.sh failed for '${dep}' (ADR-043 D8)"
+                    "sign-in could not be wired: install-service.sh failed for '${dep}' — the module is rolled back; see the lines above"
             else
                 warn "  ${dep} install-service returned non-zero — optional integration not wired (continuing)"
             fi

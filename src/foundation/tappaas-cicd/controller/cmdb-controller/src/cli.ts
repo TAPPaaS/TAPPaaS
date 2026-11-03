@@ -7,7 +7,7 @@ import { CmdbRefused, CmdbReport, CmdbUnavailable, cmdbQuery, cmdbRelations, cmd
 
 type Obj = Record<string, unknown>;
 
-const HELP = `cmdb — the CMDB: the actual state of the site (ADR-040)
+const HELP = `cmdb — the CMDB: the actual state of the site
 
   cmdb show <object> [--class C] [--at TIME]          an object: attributes, relations, drift
   cmdb query [<class>] [--physical] [--recorded] [--where k=v]... [--at TIME] [--all]

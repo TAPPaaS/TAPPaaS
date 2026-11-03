@@ -46,7 +46,7 @@ usage() {
     cat << EOF
 Usage: ${SCRIPT_NAME} [--apply] [--config-dir <dir>] [--yes]
 
-Retire the legacy .variant field from installed module configs (#438).
+Retire the legacy .variant field from installed module configs.
 
 Options:
   --apply             Write the changes (default is a read-only plan).

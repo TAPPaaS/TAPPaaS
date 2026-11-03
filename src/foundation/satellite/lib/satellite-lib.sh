@@ -119,7 +119,7 @@ sat_check_roles() {
     for r in ${SAT_ROLES//,/ }; do
         if [[ "${r}" == backup ]]; then
             [[ "${SAT_MGMT}" == unmanaged ]] && continue
-            die "${INSTANCE}: the backup role is set by locking the satellite down as a pull vault — add it without, then: module-manager module modify ${INSTANCE} --lockdown (ADR-010 §8.4.4)"
+            die "${INSTANCE}: the backup role is set by locking the satellite down as a pull vault — add it without, then: module-manager module modify ${INSTANCE} --lockdown"
         fi
         [[ " ${SAT_ADD_ROLES} " == *" ${r} "* ]] || die "${INSTANCE}: unknown role '${r}' (reverse-proxy, admin-vpn)"
     done
@@ -151,7 +151,7 @@ sat_install() {
     # it tracked an end-of-life branch with no lock, no test exercised it, and the
     # vault role refused it outright — so selecting it got you an unpinned,
     # untested machine that could not do the job most satellites exist for.
-    [[ "${SAT_OS}" == debian ]] || die "${INSTANCE}: os must be debian, not '${SAT_OS}' — the NixOS satellite was retired (#712)"
+    [[ "${SAT_OS}" == debian ]] || die "${INSTANCE}: os must be debian, not '${SAT_OS}' — the NixOS satellite is no longer supported"
     sat_check_roles
     sat_check_ssh_config "${SAT_CFG}" || die "${INSTANCE}: the sshPort settings are refused (above)"
     command -v jq >/dev/null || die "jq required"
@@ -316,14 +316,14 @@ sat_lockdown() {
     local dir="${CONFIG_DIR:-/home/tappaas/config}" bj
     bj="${dir}/backup.json"
     [[ "${SAT_MGMT}" == managed ]] || die "${INSTANCE} is already locked down (management: ${SAT_MGMT})"
-    [[ "${SAT_OS}" == debian ]] || die "${INSTANCE} runs ${SAT_OS}: the vault is the Debian satellite's (official PBS, ADR-010 D19)"
+    [[ "${SAT_OS}" == debian ]] || die "${INSTANCE} runs ${SAT_OS}: the vault runs only on a Debian satellite (it uses the official PBS packages)"
     [[ -n "${ADDRESS}" ]] || die "${INSTANCE} records no address"
     [[ -f "${bj}" ]] || die "no config/backup.json — there is no Site PBS for the vault to pull"
     [[ "$(jq -r '.node // empty' "${bj}")" != "${INSTANCE}" ]] \
-        || die "${INSTANCE} is the Site's PBS Host (backup.json node) — the Site's only copy cannot also be its protected copy (ADR-010 §8.4.4)"
+        || die "${INSTANCE} is the Site's PBS Host (backup.json node) — the Site's only copy cannot also be its protected copy"
     case "$(jq -r '.placementState // empty' "${bj}")" in
         node|node:*|local) ;;
-        *) die "backup placement is '$(jq -r '.placementState // "empty"' "${bj}")' — the vault pulls a PBS of the Site's own; there is none (ADR-012 §1.2/§1.3)" ;;
+        *) die "backup placement is '$(jq -r '.placementState // "empty"' "${bj}")' — the vault pulls a PBS of the Site's own; there is none; place the Site's PBS first (backup-manager placement)" ;;
     esac
     jq -e '(.host.operatorSshKeys // []) | length > 0' "${SAT_CFG}" >/dev/null \
         || die "${INSTANCE} records no operator key — after lockdown nothing else could log in"

@@ -73,17 +73,17 @@ export const HELP: HelpSpec = {
         "--locationCountry <cc>", "--locationTimezone <tz>", "--locationLocale <l>", "--locationKeyboard <kb>",
         "--locationLatitude <deg>", "--locationLongitude <deg>", "--locationCity <c>", "--locationBuilding <f>"],
       options: [
-        ["--set <field>=<value>", "set any field site-fields.json classes in-place, by its name (dotted inside an object: backup.target, updateSchedule.hour); repeat it. The options below are shortcuts, one field each (ADR-020 D11)."],
+        ["--set <field>=<value>", "set any field site-fields.json classes in-place, by its name (dotted inside an object: backup.target, updateSchedule.hour); repeat it. The options below are shortcuts, one field each."],
         ["--unset <field[,field]>", "remove optional fields (supportEmail, branding.logo, …); a required field and the update schedule cannot be removed."],
         ["--channel <c>", "release channel: unstable | staging | production. Checks EVERY registered repository against the branch it declares for that channel in its channels.json, warns where they disagree or where none is declared, and proposes the fix; moving towards production needs --force."],
         ["--force", "authorize a channel move towards production — older code, and migrations do not run backwards."],
         ["--displayName <s>", "display name"],
         ["--owner <org>", "owning organization"],
         ["--email <addr>", "admin email"],
-        ["--supportEmail <addr>", "where an alert's support bundle is to be forwarded (#883): one e-mail address; empty by default, \"\" clears it"],
+        ["--supportEmail <addr>", "where an alert's support bundle is to be forwarded: one e-mail address; empty by default, \"\" clears it"],
         ["--automaticReboot true|false", "allow update reboots"],
         ["--ipv6 true|false", "the site supports IPv6: OPNsense's 'Allow IPv6', applied by the next network update (default false)"],
-        ["--requireSigned true|false", "refuse to update a staging/production repository that signs no releases (ADR-033 D9; default false). A repository that lists signing keys is verified either way; one that declares no channels (no channels.json) is unstable, and moves unverified with a warning."],
+        ["--requireSigned true|false", "refuse to update a staging/production repository that signs no releases (default false). A repository that lists signing keys is verified either way; one that declares no channels (no channels.json) is unstable, and moves unverified with a warning."],
         ["--snapshotRetention <n>", "VM snapshots kept per module"],
         ["--backupTarget <s>", "backup.target"],
         ["--backupOffsite <s>", "backup.offsite"],
@@ -108,8 +108,8 @@ export const HELP: HelpSpec = {
         ["--updateFrequency <f>", "daily | weekly | monthly | none"],
         ["--updateWeekday <Day>", "Monday … Sunday (weekly/monthly only)"],
         ["--updateHour <0-23>", "hour of the update window"],
-        ["--healthAssessInterval <min>", "health.assessInterval — minutes between health-manager assess runs, 1-1440 (default 5; ADR-041 D2)"],
-        ["--alertsIncludeLines true|false", "alerts.includeLines — alert mails carry the log lines a rule asks for (default true; ADR-039)"],
+        ["--healthAssessInterval <min>", "health.assessInterval — minutes between health-manager assess runs, 1-1440 (default 5)"],
+        ["--alertsIncludeLines true|false", "alerts.includeLines — alert mails carry the log lines a rule asks for (default true)"],
         ["--check", "say what would change, in one line; write nothing."],
         ["--json", "with --check: the whole resulting site.json, for machines."],
       ],
@@ -135,7 +135,7 @@ export const HELP: HelpSpec = {
     { usage: "location modify <name> [--set <field>=<value>]... [--displayName <s>] [--kind site|remote] [--country <CC>] [--city <c>] [--address <a>] [--timezone <tz>] [--latitude <deg>] [--longitude <deg>] [--unset <f,g>] [--check]",
       effect: { dryRun: "--check" },
       options: [
-        ["--set <field>=<value>", "set a field by its name (displayName, kind, country, city, address, timezone, latitude, longitude); repeat it. The options below are shortcuts, one field each (ADR-020 D11)."],
+        ["--set <field>=<value>", "set a field by its name (displayName, kind, country, city, address, timezone, latitude, longitude); repeat it. The options below are shortcuts, one field each."],
         ["--displayName <s>", "the name shown; '' (or --unset) clears this and the other optional fields."],
         ["--kind site|remote", "site: this site's own equipment is there; remote: another site's place."],
         ["--country <CC>", "ISO 3166-1 alpha-2 country code."],
@@ -157,12 +157,12 @@ export const HELP: HelpSpec = {
       options: [
         ["(default)", "Install Proxmox on the machine: TAPPaaS serves the installer's answer and opens the boot window, and the machine boots the installer from the network (PXE) or from the USB stick image."],
         ["--adopt <ipv4>", "Do not install: join a Proxmox installed by hand, reached as root over ssh at <ipv4> with the cicd key authorized; it moves to the node's management address in the join. The install options (--switch-port, --mac, --boot-*, --ttl) do not apply."],
-        ["--asset <a>", "The asset the machine is (asset-manager asset list: a server in stock or placed, in no role): checked before anything is installed, and its recorded cable and MAC stand in for --switch-port and --mac. Blank: once the node has joined, its serial and MACs are matched against the free server assets, and an asset is created (srv-NN) when none matches (ADR-040 D8)."],
+        ["--asset <a>", "The asset the machine is (asset-manager asset list: a server in stock or placed, in no role): checked before anything is installed, and its recorded cable and MAC stand in for --switch-port and --mac. Blank: once the node has joined, its serial and MACs are matched against the free server assets, and an asset is created (srv-NN) when none matches."],
         ["--switch-port <sw>:<p>", "The switch and port the machine is cabled to. On a switch TAPPaaS manages, the port is set up as a trunk port, and the machine's MAC is learned there when it boots the installer (blank MAC). On a switch TAPPaaS does not program, configure the port by hand as a trunk port that also carries all the VLAN tagged traffic, and give --mac (blank: the first machine that asks gets the answer)."],
         ["--mac <m>", "The MAC of the cabled card (aa:bb:cc:dd:ee:ff), from the machine's label, its BIOS or its BMC. Blank: learned on --switch-port; with no switch port either, the first machine that asks for an install answer while the boot window is open gets it (a cluster node never does) — keep --ttl short then."],
         ["--boot-disk <d>", "The disk to install Proxmox on (wiped), can be the model name or size if it is unique. Blank: the smallest SSD or NVMe disk, and both when the smallest two are alike (mirrored). ask: chosen on the node's console."],
         ["--boot-mirror <d>", "A second disk to mirror the boot pool onto, named like --boot-disk. Blank: a mirror only when --boot-disk finds two disks alike. none: one disk."],
-        ["--boot-filesystem zfs|ext4", "The boot disk's filesystem; zfs (default) lets the boot pool carry the guests on a node with no data disk (ADR-037 D1), ext4 only with data disks."],
+        ["--boot-filesystem zfs|ext4", "The boot disk's filesystem; zfs (default) lets the boot pool carry the guests on a node with no data disk, ext4 only with data disks."],
         ["--wan-port <if>", "the node's WAN interface."],
         ["--no-wan", "the node has no WAN port."],
         ["--lan-ports <a,b>", "the node's lan port(s); two or more bond under lan as lanbond. Default: auto-detected, one port."],
@@ -234,7 +234,7 @@ export const HELP: HelpSpec = {
         ["--switch-port <sw>:<p>", "The switch port a lan port being added is cabled to: made the node's trunk on the switch before the node changes (on a switch TAPPaaS programs; on another, set it by hand)."],
         ["--wan-switch-port <sw>:<p>", "With --wan-port: the switch port the WAN cable reaches, made an access port in the WAN zone before the node changes."],
         ["--no-wan", "The wan bridge gives up its port, so it can join the lan bond (e.g. a 1G wan port as lan's backup leg). The node can then no longer carry the firewall's WAN; refused while a guest uses the wan bridge."],
-        ["--wan-port <p>", "The wan bridge carries <p> (by name or MAC): the reverse of --no-wan, so the firewall's WAN role can move to this node (#849). Not one of the lan ports. Moving the firewall's failover there also takes the network module's HANode and the switch port as an access port in the WAN VLAN (cluster README)."],
+        ["--wan-port <p>", "The wan bridge carries <p> (by name or MAC): the reverse of --no-wan, so the firewall's WAN role can move to this node. Not one of the lan ports. Moving the firewall's failover there also takes the network module's HANode and the switch port as an access port in the WAN VLAN (cluster README)."],
         ["--switch-wait <s>", "With --apply: wait up to <s> seconds (30–1800, default 30) for the change to verify, to configure the switch side meanwhile — e.g. the LAG for lacp, once the node speaks it. Needs the drained node's HA watchdog released."],
         ["--config-only", "Declare only, without contacting the node (ports by MAC)."],
         ["--apply", "Converge: drain the node (HA maintenance), carry lan on the declared ports under a 45s rollback, confirm from the mothership, bring the node back. One node at a time."],
@@ -255,13 +255,13 @@ export const HELP: HelpSpec = {
         ["--managed full|tracked", "full (default): the repository holds modules; its module catalog is checked and its modules can be installed. tracked: a repository without modules; the nightly update keeps it current, nothing is installed from it."],
         ["--catalog <p>", "Where the module catalog is in the repository (default src/module-catalog.json); full only."],
         ["--signer SHA256:<fp>", "The fingerprint of the key the repository's owners sign releases with; get it from them, out of band. Once per key. If a site runs in trusted mode, only stable/staging branches with matching key fingerprints are accepted."],
-        ["--unsigned", "Add a staging/production branch without signer fingerprints: a repository that signs nothing, or one trusted from the revision cloned now (D9)."],
+        ["--unsigned", "Add a staging/production branch without signer fingerprints: a repository that signs nothing, or one trusted from the revision cloned now."],
       ] },
     { usage: "repository probe <url> [--branch <b>] [--json]",
       note: "(what add would find, as JSON, without cloning: the branches, the one add checks out, its channel, whether it signs)",
       options: [["--branch <b>", "The branch to look at (default stable, or the repository's default branch when it has no stable)."], ["--json", "The answer as JSON (it is always JSON)."]] },
     { usage: "repository introduce <name> [--signer <fp>]...",
-      note: "(ADR-033 D5: check the checkout against its signers' fingerprints and record it)",
+      note: "(check the checkout against its signers' fingerprints and record it)",
       options: [
         ["--signer SHA256:<fp>", "A key the owners sign with, from them (once per key). The current release must be signed by one of them; written to site.json once it holds. Without it: the fingerprints already in site.json."],
       ] },
@@ -321,10 +321,10 @@ export const HELP: HelpSpec = {
         ["--stop", "Stop the running update gracefully: the module in progress finishes, the rest are skipped (the next update takes them), and the run is recorded as interrupted. Ctrl-C only stops following a run; `sudo systemctl stop update-tappaas.service` stops it at once, without rolling back the module in progress."],
       ] },
     { usage: "report [--json] [--discover]",
-      note: "(ADR-040: send the site, its locations, the cluster, its nodes and guests to the CMDB, and each lan uplink leg's cable with its bond as redundancyGroup)",
+      note: "(send the site, its locations, the cluster, its nodes and guests to the CMDB, and each lan uplink leg's cable with its bond as redundancyGroup)",
       options: [
         ["--json", "Print the report instead of sending it; with uplink legs the switch inventory places, an array: the site's report, then one per leg."],
-        ["--discover", "Full depth (D15), one more read per node: every NIC and disk, ZFS layouts, storages, PCI devices, guests' NICs, corosync links."],
+        ["--discover", "Full depth, one more read per node: every NIC and disk, ZFS layouts, storages, PCI devices, guests' NICs, corosync links."],
       ] },
     { usage: "test [--deep] [--verbose]",
       note: "(run every deployed module's tests, from every repository; one line per module, each module's output in ~/logs/site-test-<time>/)",
@@ -643,7 +643,7 @@ function cmdSite(o: Opts): void {
       if (from && rank(v) > rank(from)) {
         const forced = o.flags.has("--force");
         const msg = `${from} → ${v} moves this site BACKWARDS, to older code. `
-          + `Config migrations (ADR-025) do not run backwards, so a migration this site has `
+          + `Config migrations do not run backwards, so a migration this site has `
           + `already applied cannot be undone by switching channel.`;
         if (!forced) {
           no(`${msg}\n       Re-run with --force if that is what you mean.`);
@@ -669,7 +669,7 @@ function cmdSite(o: Opts): void {
         const decl = declaredChannels(path);
         if (decl === null) {
           undeclared++;
-          warn(`${name} declares no channels.json — every branch in it reads as unstable (ADR-028 D11).`);
+          warn(`${name} declares no channels.json — every branch in it reads as unstable.`);
           warn(`  Add one at its root, or accept that this site cannot claim '${v}' for it.`);
           continue;
         }
@@ -1663,7 +1663,7 @@ function cmdUpdate(o: Opts, client: SiteClient): number {
   // On success update-tappaas's own last line, just followed, is this summary.
   if (result !== "success") {
     infoTagged(summaryLine(readResult(o.configDir)));
-    warn(`${UNIT} ended with result '${result}' — journalctl -u ${UNIT} -n 200; the site owner was notified (#651)`);
+    warn(`${UNIT} ended with result '${result}' — journalctl -u ${UNIT} -n 200; the site owner was notified`);
     return 1;
   }
   // Exit 3 of the sweep is a unit success (SuccessExitStatus): the run

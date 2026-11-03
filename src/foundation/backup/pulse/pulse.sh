@@ -146,7 +146,7 @@ mail_to() {  # mail_to <to,…> <subject> — body on stdin
     {
         printf 'To: %s\nSubject: [TAPPaaS %s] %s\nContent-Type: text/plain; charset=UTF-8\n\n' \
             "${to}" "${SITE:-site}" "${subject}"
-        printf '%s\n\n— the pulse on %s (ADR-031)\n' "${body}" "$(hostname -f 2>/dev/null || hostname)"
+        printf '%s\n\n— the backup pulse on %s\n' "${body}" "$(hostname -f 2>/dev/null || hostname)"
     } | if [[ -n "${PULSE_SENDMAIL:-}" ]]; then ${PULSE_SENDMAIL}; else /usr/sbin/sendmail -t; fi
 }
 when() { date -d "@$1" '+%Y-%m-%d %H:%M %Z' 2>/dev/null || date -r "$1" '+%Y-%m-%d %H:%M %Z'; }

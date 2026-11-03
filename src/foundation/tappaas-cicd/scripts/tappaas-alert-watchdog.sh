@@ -119,7 +119,7 @@ webhook reaches tappaas-alert-receiver on the mothership. One of those stopped:
   - the receiver:     journalctl -u tappaas-alert-receiver (401 = a token mismatch:
                       re-run the logging module's update)
 
-Repeated once a day while it lasts. Sent by tappaas-alert-watchdog (#126).
+Repeated once a day while it lasts. Sent by tappaas-alert-watchdog.
 EOF
     then
         printf '%s %s\n' "${down_since:-${NOW}}" "${NOW}" > "${STATE}"
@@ -135,7 +135,7 @@ if [[ -n "${down_since}" ]]; then
 The logging module's alert rules are reporting again (heartbeat ${when}),
 after $(( (NOW - down_since) / 60 )) minutes without. Log conditions raise alerts again.
 
-Sent by tappaas-alert-watchdog (#126).
+Sent by tappaas-alert-watchdog.
 EOF
     then
         rm -f "${STATE}"

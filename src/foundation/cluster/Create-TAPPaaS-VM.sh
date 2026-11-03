@@ -92,7 +92,7 @@ function image_sha256_check() {
   local file="$1" want have
   want="$(image_sha256_want "$2")"
   if [[ -z "$want" ]]; then
-    warn "No imageSha256 recorded for ${file##*/} — the download is not checked (ADR-033 D7)."
+    warn "No imageSha256 recorded for ${file##*/} — the download is used without a checksum check."
     return 0
   fi
   [[ "$want" =~ ^[0-9a-f]{64}$ ]] || die "imageSha256 '$2' is not a SHA-256 hash; refusing ${file##*/}."
@@ -432,7 +432,7 @@ resolve_storage() {
   fi
   if [[ "${chosen}" != "${want}" ]]; then
     # To stderr: this function's stdout IS the storage name.
-    warn "storage '${want}' is not on node '${node}' — building on '${chosen}' (a module's storage is a preference, ADR-037 D1); the module's config records it" >&2
+    warn "storage '${want}' is not on node '${node}' — building on '${chosen}' (a module's storage is a preference, not a requirement); the module's config records it" >&2
   fi
   printf '%s' "${chosen}"
 }

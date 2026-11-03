@@ -49,19 +49,19 @@ const VERSION = "0.1.0";
 export const HELP: HelpSpec = {
   name: "ca-manager",
   version: VERSION,
-  tagline: "TAPPaaS site certificates — the internal CA, a CA per local domain tree, and what they issue (ADR-043)",
+  tagline: "TAPPaaS site certificates — the internal CA, a CA per local domain tree, and what they issue",
   verbs: [
     { usage: "status [--json]", effect: "read", options: [["--json", "status: the record as JSON, with days left."]] },
     { usage: "validate", note: "(the record against the key dir and the trust bundle)" },
     {
       usage: "report [--json] [--discover]",
-      name: "report (to the CMDB, ADR-040)",
+      name: "report (to the CMDB)",
       effect: "read",
       options: [
         ["--json", "report: print it instead of sending it."],
-        ["--discover", "report: accepted for the CMDB's sweep (ADR-040 D15); the report is already its full depth."],
+        ["--discover", "report: accepted for the CMDB's sweep; the report is already its full depth."],
       ],
-      details: "Sends each CA as a certificate-authority CI (ADR-043 D11): on this mothership, serving the\nenvironments in its tree, with what it issued. Never a key.",
+      details: "Sends each CA as a certificate-authority CI: on this mothership, serving the\nenvironments in its tree, with what it issued. Never a key.",
     },
     {
       usage: "init [--replace-bundle] [--no-rebuild] [--check]",
@@ -121,7 +121,7 @@ export const HELP: HelpSpec = {
         ["--reload U", "The units reloaded when the files changed."],
         ["--check", "Say what it would put where; change nothing."],
       ],
-      details: "Puts a certificate and its key on a guest (ADR-043 D5) and records where, so `cert renew`\nputs the renewed one there too.",
+      details: "Puts a certificate and its key on a guest and records where, so `cert renew`\nputs the renewed one there too.",
     },
     {
       usage: "cert to-firewall <name> [--check]",
@@ -141,7 +141,7 @@ export const HELP: HelpSpec = {
         ["--check", "Check the credential's shape; change nothing."],
       ],
       details:
-        "A DNS provider for ACME's DNS-01 (ADR-043 D6). Its credential comes on stdin as KEY=VALUE\n" +
+        "A DNS provider for ACME's DNS-01. Its credential comes on stdin as KEY=VALUE\n" +
         "lines named as acme.sh names them (dns_cf_token=…), never in an argument, and is kept in the\n" +
         "key dir; config/certificates.json records only its fields' names. Adding a name again replaces it.",
     },

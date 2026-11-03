@@ -126,7 +126,7 @@ pbs_module_bucket() {
     local module="$1" dir="${2:-${PBS_SCHEDULE_CONFIG_DIR}}" spec bucket
     spec="$(pbs_schedule_resolve "${module}" "${dir}")"
     if ! bucket="$(pbs_schedule_bucket "${spec}")"; then
-        error "backup schedule '${spec}' for module '${module}' is not supported — use daily | weekly | monthly | HH:MM (never more often than once a day, ADR-012 §3.2)"
+        error "backup schedule '${spec}' for module '${module}' is not supported — use daily | weekly | monthly | HH:MM (never more often than once a day)"
         return 1
     fi
     printf '%s\n' "${bucket}"

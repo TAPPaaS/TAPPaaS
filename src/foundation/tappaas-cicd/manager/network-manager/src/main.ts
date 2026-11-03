@@ -114,11 +114,11 @@ export const HELP: HelpSpec = {
     { usage: "exists <name>", details: "Exit 0 when the zone exists, non-zero when it does not." },
     {
       usage: "report [--json] [--discover]",
-      name: "report (to the CMDB, ADR-040)",
+      name: "report (to the CMDB)",
       effect: "read",
       options: [
         ["--json", "print the report instead of sending it (with --discover, an array of two)"],
-        ["--discover", "everything the firewall holds, in a second report: rules and aliases by UUID with their live position, NAT, routes, certificates, packages (ADR-040 D15)"],
+        ["--discover", "everything the firewall holds, in a second report: rules and aliases by UUID with their live position, NAT, routes, certificates, packages"],
       ],
       details:
         "Sends what the network is, as one observation, to the CMDB (cmdb-controller): the zones of\n" +
@@ -139,7 +139,7 @@ export const HELP: HelpSpec = {
       ],
       hidden: ["--no-racks"],
       details:
-        "The physical site as one derived document, read from the CMDB (ADR-040); --live joins the\n" +
+        "The physical site as one derived document, read from the CMDB; --live joins the\n" +
         "planes instead, and is what runs, with a line on stderr, when the CMDB does not answer or\n" +
         "does not yet hold all of it: nodes with their uplinks, legs, LLDP peers and\n" +
         "guests; switches with their ports, LAGs and drift; access points; zones; the buddies and the\n" +

@@ -183,7 +183,7 @@ main() {
     # 3. Module
     local module
     module="$(adopt_module_for_os "${id}" "${pve}")" \
-        || die "no machine module for os '${id:-unknown}' — one module per OS (ADR-026 D7); nothing was written"
+        || die "no machine module for os '${id:-unknown}' — TAPPaaS adopts the operating systems it has a module for (Proxmox VE, Debian); nothing was written"
     if [[ "${module}" == pvehost ]]; then
         local status site_name
         status="$(_adopt_ssh 'pvesh get /cluster/status --output-format json' 2>/dev/null)" || status=""

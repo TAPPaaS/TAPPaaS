@@ -19,7 +19,7 @@ import { DEFAULT_PORT, VERSION } from "./main";
 export const HELP: HelpSpec = {
   name: "tappaas",
   version: VERSION,
-  tagline: "the site's assistant in a shell (ADR-034 D7)",
+  tagline: "the site's assistant in a shell",
   verbs: [
     {
       usage: "ask [<question>] [--console <url>] [--conversation <id>]",

@@ -217,7 +217,7 @@ case "${ACTION}" in
         # filesystem mid-run can hang the thaw and strand the VM for hours (same
         # incident class as the #275 self-reboot guard in update-os.sh).
         if [[ "${VMNAME}" == "$(hostname)" || "${VMNAME}" == "$(hostname -s)" ]]; then
-            die "Refusing to snapshot '${VMNAME}' (VM ${VMID}) — it is THIS host. An agent fsfreeze of the controller's own root FS can strand it (#352). Snapshot it from a PVE node under supervision if you really need to."
+            die "Refusing to snapshot '${VMNAME}' (VM ${VMID}) — it is THIS host. Freezing the filesystem this command runs from can hang it for hours. Snapshot it from a PVE node under supervision if you really need to."
         fi
         SNAP_NAME="tappaas-$(date +'%Y%m%d-%H%M%S')"
         SNAP_DESC="TAPPaaS snapshot for ${MODULE}"

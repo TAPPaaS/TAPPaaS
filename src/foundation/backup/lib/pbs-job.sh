@@ -380,13 +380,13 @@ _pbs_foreign_guard() {
     hit="$(jq -r '[.[] | select(.enabled and (.managed | not) and .how == "explicit")][0]
                   | if . == null then "" else "\(.jobId) (storage \(.storage), schedule \(.schedule))" end' <<<"${cov}")"
     if [[ -n "${hit}" ]]; then
-        warn "  VMID ${vmid} is already backed up by job ${hit}, which TAPPaaS did not create — NOT adding a second job (#554)."
+        warn "  VMID ${vmid} is already backed up by job ${hit}, which TAPPaaS did not create — NOT adding a second job."
         warn "    To let TAPPaaS manage it, remove VMID ${vmid} from that job; the next update adds it here."
         return 1
     fi
     hit="$(jq -r '[.[] | select(.enabled and (.managed | not) and (.how == "all" or .how == "pool"))][0]
                   | if . == null then "" else "\(.jobId) (\(.how), storage \(.storage), schedule \(.schedule))" end' <<<"${cov}")"
-    [[ -z "${hit}" ]] || warn "  VMID ${vmid} is also covered by job ${hit}, which TAPPaaS did not create — adding it to the managed job anyway, so it reaches PBS; the two overlap (#554)."
+    [[ -z "${hit}" ]] || warn "  VMID ${vmid} is also covered by job ${hit}, which TAPPaaS did not create — adding it to the managed job anyway, so it reaches PBS; the two overlap."
     return 0
 }
 

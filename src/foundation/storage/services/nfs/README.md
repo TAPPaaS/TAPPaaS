@@ -126,7 +126,7 @@ deferred: OpenZFS 2.4.4's `sharenfs` refuses `xprtsec=tls`, and exports stay on
 
 ## Fields
 
-`storage:nfs` owns **1** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`storage:nfs` owns **1** declared field(s). Each table below carries the field's full definition and, where the service applies it, what a change to it does (in place, a restart, a rebuild).
 
 ### `mounts`
 

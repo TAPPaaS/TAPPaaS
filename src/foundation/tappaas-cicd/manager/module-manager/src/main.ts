@@ -80,7 +80,7 @@ const VERSION = "0.1.0";
 export const HELP: HelpSpec = {
   name: "module-manager",
   version: VERSION,
-  tagline: "TAPPaaS module lifecycle manager (ADR-007 #3)",
+  tagline: "TAPPaaS module lifecycle manager",
   verbs: [
     {
       usage: "list [--diff] [--services] [--resolution] [--json]",
@@ -103,7 +103,7 @@ export const HELP: HelpSpec = {
     {
       usage: "fields <module> [--json]",
       name: "fields",
-      note: "(ADR-020: every field the module may set, the service that owns it and its change class)",
+      note: "(every field the module may set, the service that owns it and its change class)",
       details:
         "What `modify --set` would make of each field before anything is typed: the coordinate whose\n" +
         "manifest classifies it and its change class (in-place, grow-only, in-place-reboot, migrate,\n" +
@@ -116,7 +116,7 @@ export const HELP: HelpSpec = {
       options: [
         [
           "--json",
-          "The resolved document as JSON — what the converge consumes (ADR-020 D1).",
+          "The resolved document as JSON — what the converge consumes.",
         ],
       ],
     },
@@ -125,18 +125,18 @@ export const HELP: HelpSpec = {
       name: "validate",
       options: [
         ["--allow-fork", "Permit forked/non-canonical module sources (relax scope/source lint)."],
-        ["--blueprint", "Check module SOURCE directories against the ADR-027 blueprint instead of linting deployed configs: every module of every registered repository, or the named modules/directories."],
+        ["--blueprint", "Check module SOURCE directories against the module blueprint (the files every module ships) instead of linting deployed configs: every module of every registered repository, or the named modules/directories."],
         ["--repo PATH", "With --blueprint: every module in that repository's catalogue (what the release boundary runs)."],
       ],
       details:
-        "--blueprint reports what a module is made of (ADR-027): a missing MUST is an error, a\n" +
+        "--blueprint reports what a module is made of: a missing MUST is an error, a\n" +
         "missing SHOULD a warning, the same for every module. Exit 1 on any error. It never runs\n" +
         "at install time — an incomplete module still installs.",
     },
     {
       usage: "add-stack <stack> [--environment ENV] [--skip MODULE]... [--dry-run] [--json] [--allow-fork]",
       name: "add-stack",
-      note: "(every module of a stack, in dependsOn order — #763)",
+      note: "(every module of a stack, in dependsOn order)",
       options: [
         ["--dry-run", "Print the plan — order, what is skipped, outside dependencies missing, hand steps — and change nothing."],
         ["--environment ENV", "Install every module into this environment (passed to each add)."],
@@ -155,9 +155,9 @@ export const HELP: HelpSpec = {
       name: "add",
       options: [
         ["--environment ENV", "Target environment to install into (default: foundation→mgmt, else the org env)."],
-        ["--instance NAME", "Name the instance: config/NAME.json instead of the default <module>[-<environment>] — e.g. tappaas2 for one of several nodes (ADR-026 D6.4)."],
+        ["--instance NAME", "Name the instance: config/NAME.json instead of the default <module>[-<environment>] — e.g. tappaas2 for one of several nodes."],
         ["--allow-fork", "Permit forked/non-canonical module sources."],
-        ["--reinstall", "Delete the existing deployment first, then install fresh — the only way to replace a deployed config (#301, #453)."],
+        ["--reinstall", "Delete the existing deployment first, then install fresh — the only way to replace a deployed config."],
         ["--location NAME", "A machine: the site's location it is at (site-manager location list); absent, the primary location."],
         ["--country CC", "A machine: where it is, instead of --location — the site's location at that place, added as a location of kind remote when there is none."],
         ["--city CITY", "With --country: the city."],
@@ -168,7 +168,7 @@ export const HELP: HelpSpec = {
     {
       usage: "adopt <address> [--instance NAME] [--zone ZONE] [--location NAME | --country CC [--city C] [--building B]] [--wait SECONDS] [--set field=value]...", effect: { noPreview: "makes a running machine a module: writes its config, turns its SSH key-only" },
       name: "adopt",
-      note: "(ADR-026 D8.1: a machine that already runs becomes a module; its SSH becomes key-only unless --set sshKeyOnly=false — nothing else on it is changed)",
+      note: "(a machine that already runs becomes a module; its SSH becomes key-only unless --set sshKeyOnly=false — nothing else on it is changed)",
       options: [
         ["--instance NAME", "Name the instance instead of the machine's hostname — when that name is taken by another machine."],
         ["--zone ZONE", "The zone it sits in, when its address is in no active zone (a Location reached through a tunnel)."],
@@ -177,13 +177,13 @@ export const HELP: HelpSpec = {
         ["--city CITY", "With --country: the city."],
         ["--building B", "With --country: the building or data centre, when the city is the site's own."],
         ["--wait SECONDS", "How long to wait for root to accept the mothership's key (default 300); nothing is written until it does."],
-        ["--set field=value", "Write a field into the new config before its install runs. --set sshKeyOnly=false keeps password SSH as the machine has it (#756); without it, the machine refuses password logins over SSH, as the cluster nodes do."],
+        ["--set field=value", "Write a field into the new config before its install runs. --set sshKeyOnly=false keeps password SSH as the machine has it; without it, the machine refuses password logins over SSH, as the cluster nodes do."],
       ],
     },
     {
       usage: "update <module> [--environment ENV] [--force] [--allow-disruption] [--no-snapshot] [--debug] [--silent]", effect: { noPreview: "takes the module to its release: a snapshot, then the converge of its guest and services; a disruptive change waits for --allow-disruption" },
       name: "update",
-      note: "(#655: take the release forward; local modifications survive the 3-way merge)",
+      note: "(take the release forward; local modifications survive the 3-way merge)",
       options: [
         ["--environment ENV", "Target environment to update."],
         [
@@ -210,14 +210,14 @@ export const HELP: HelpSpec = {
         ],
         [
           "--set instance=<new>",
-          "Rename the instance itself (#566): its config files, and the `node` references other configs make to it. Runs alone. The guest keeps its own name (vmname) and everything keyed on it; a machine is refused (it is named after its host).",
+          "Rename the instance itself: its config files, and the `node` references other configs make to it. Runs alone. The guest keeps its own name (vmname) and everything keyed on it; a machine is refused (it is named after its host).",
         ],
         [
           "--unset field",
           "Remove a stale undeclared field the merge keeps forever (repeatable). Refused for a declared field and for one the release source still defines.",
         ],
         ["--dry-run", "Run the pre-gate only: print each --set's service and change class (or why it is refused), and change nothing. With `--set instance=<new>`: say what the rename would move and repoint. With --json: the plan as JSON."],
-        ["--lockdown", "Run the module's lockdown.sh, alone: for a satellite, make it the unmanaged off-site vault — it pulls the Site's PBS, patches itself, and the mothership's key is removed (ADR-010 §8.4.4). One-way."],
+        ["--lockdown", "Run the module's lockdown.sh, alone: for a satellite, make it the unmanaged off-site vault — it pulls the Site's PBS, patches itself, and the mothership's key is removed. One-way."],
         ["--environment ENV", "Target environment to modify."],
         ["--force", "As for `update`: proceed past a fatally failed pre-update test or an archived/external status."],
         ["--allow-disruption", "As for `update`: authorize downtime for this module now."],
@@ -234,7 +234,7 @@ export const HELP: HelpSpec = {
         ["--archive", "Archive the module config (default; mutually exclusive with --remove)."],
         ["--remove", "Fully remove the module config (mutually exclusive with --archive)."],
         ["--vmid ID", "Target a specific VM id."],
-        ["--decommission", "A machine only: also run its module's delete.sh, taking the Site's side of it down (a satellite: OPNsense peer, tunnel, edge rules). Without it a machine is only unregistered; the machine itself is never touched (ADR-010 §8.4.5)."],
+        ["--decommission", "A machine only: also run its module's delete.sh, taking the Site's side of it down (a satellite: OPNsense peer, tunnel, edge rules). Without it a machine is only unregistered; the machine itself is never touched."],
         ["--environment ENV", "Target environment to delete from."],
         ["--yes", "Skip the VM-destroy confirmation prompt, for automation (also -y)."],
         ["--force", "Proceed despite warnings; also implies --yes + --remove."],
@@ -243,12 +243,12 @@ export const HELP: HelpSpec = {
     {
       usage: "suspend <module> [--no-update]", effect: { noPreview: "stops the guest and keeps it stopped; config, backups, DNS and route stay; the nightly update still patches it" },
       name: "suspend",
-      note: "(#428: stop the guest and keep everything else; patched by the nightly update, stopped again after)",
+      note: "(stop the guest and keep everything else; patched by the nightly update, stopped again after)",
       details:
         "The guest stops — through HA for an HA guest, which then keeps it stopped; otherwise with\n" +
         "onboot cleared, so a node reboot does not start it. Config, backups, DNS and the published\n" +
         "route stay. The config is marked suspended and the health check reports it as suspended, not\n" +
-        "down. The nightly update still patches it (#890): after every other module, when it fits on its\n" +
+        "down. The nightly update still patches it: after every other module, when it fits on its\n" +
         "node, it is resumed, updated, tested and suspended again. A machine cannot be suspended.",
       options: [["--no-update", "Keep it out of that patch pass too — for a module stopped because it is broken. Resume clears it."]],
     },
@@ -256,7 +256,7 @@ export const HELP: HelpSpec = {
     {
       usage: "migrate <module> [--force]", effect: { noPreview: "moves the guest to the node its config declares" },
       name: "migrate",
-      note: "(ADR-019: realizes the DECLARED placement; takes no node argument)",
+      note: "(realizes the DECLARED placement; takes no node argument)",
       options: [
         ["--force", "authorize an OFFLINE move when the guest cannot migrate live"],
       ],
@@ -267,7 +267,7 @@ export const HELP: HelpSpec = {
       options: [
         ["--apply", "Converge the module's config → VM/service. Default is a read-only three-way (released/desired/running) drift INSPECT."],
         ["--allow-disruption", "--apply: authorize a disruptive change (reboot / offline migrate). Without it such a change is deferred, not applied."],
-        ["--fail-fast", "--apply: stop at the first dependency that fails to re-apply and skip the module's own update.sh — for a caller that rolls back (module update, #768)."],
+        ["--fail-fast", "--apply: stop at the first dependency that fails to re-apply and skip the module's own update.sh — for a caller that rolls back (module update)."],
         ["--environment ENV", "Target environment to reconcile."],
         ["--no-snapshot", "Skip any pre-change VM snapshot (--apply; leaf re-apply is idempotent)."],
         ["--no-services", "INSPECT only: skip the dependency-service drift check (declared firewall/NAT/discovery state), which is ON by default."],
@@ -287,10 +287,10 @@ export const HELP: HelpSpec = {
     {
       usage: "report [--json] [--discover] [--end <module>]",
       name: "report",
-      note: "(ADR-040: send every installed instance, its services, dependencies and the control plane's components to the CMDB)",
+      note: "(send every installed instance, its services, dependencies and the control plane's components to the CMDB)",
       options: [
         ["--json", "Print the report instead of sending it."],
-        ["--discover", "Accepted for the sweep (D15): what this plane holds is all report sends."],
+        ["--discover", "Accepted for the sweep: what this plane holds is all report sends."],
         ["--end MODULE", "Report the end of this instance instead: delete-module.sh, once its guest is gone."],
       ],
     },
@@ -312,11 +312,11 @@ export const HELP: HelpSpec = {
   notes: [
     "The 'module' entity keyword is OPTIONAL (module is the only entity), so both\n" +
       "'module-manager list' and 'module-manager module list' work.",
-    `Verbs map (ADR-007 verb alignment):
+    `Verbs map:
   add=install-module  modify=update-module  delete=delete-module
   test=test-module    validate=scope/source lint
-  resolve=desired state (config + schema defaults), the one resolver (ADR-020)
-  drift=that desired state vs the live guest, per service (ADR-020)
+  resolve=desired state (config + schema defaults), the one resolver
+  drift=that desired state vs the live guest, per service
   reconcile=inspect drift (default) / --apply=leaf re-apply (was health show vm)
   list [--diff] reads config/*.json (+ live drift with --diff). snapshot-vm is special.`,
   ],
@@ -424,7 +424,7 @@ function parseOpts(args: string[]): Opts {
     if (a === "--config-dir") {
       o.configDir = next();
     } else if (a === "--environment" || a === "--variant") {
-      if (a === "--variant") warn(`--variant is deprecated; treating as --environment (ADR-007 P5)`);
+      if (a === "--variant") warn(`--variant is deprecated; treating as --environment`);
       o.environment = next();
     } else if (a === "--vmid") {
       o.vmid = next();
@@ -593,7 +593,7 @@ function cmdListResolution(opts: Opts): number {
     );
     warn(
       "No .moduleSource recorded and no repository catalog entry. Any operation needing " +
-        "the source directory will fail at that point rather than here (#460).",
+        "the source directory will fail at that point rather than here.",
     );
   }
   return unresolvable.length > 0 ? 1 : 0;
@@ -1203,7 +1203,7 @@ function cmdModify(opts: Opts, client: ModuleClient, verb: "update" | "modify"):
     return previewFieldChanges(module, opts);
   }
   if (verb === "modify" && opts.sets.length === 0 && opts.unsets.length === 0) {
-    warn("`modify` with no --set is the release update — say `module-manager module update` instead (#655)");
+    warn("`modify` with no --set is the release update — say `module-manager module update` instead");
   }
   // The update's rollback restores the config it backed up — which, after the
   // write below, already carries the --set. It is handed the copy from before

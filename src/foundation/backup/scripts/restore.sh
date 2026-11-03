@@ -389,7 +389,7 @@ if [ "$VM_EXISTS" = "yes" ]; then
       die "Could not confirm VM ${RESTORE_VMID} stopped — refusing to destroy it. Nothing was changed."
     fi
   else
-    warn "ha-vm-lib not available — falling back to a direct stop (unsafe for an HA-managed VM, #434)"
+    warn "ha-vm-lib not available — falling back to a direct stop (unsafe for an HA-managed VM: HA may start it again mid-restore)"
     ssh root@${TARGET_NODE}.${ZONE}.internal "${CLI} stop ${RESTORE_VMID} || true"
     sleep 5
   fi

@@ -2601,7 +2601,7 @@ class RulesManager:
                 )
         if auto_descriptions:
             info("")
-            info(f"AUTO-PINHOLES (declaration-derived, #173/#632) for {module.vmname}:")
+            info(f"AUTO-PINHOLES (derived from the declarations) for {module.vmname}:")
             for line in auto_descriptions:
                 info(line)
         info("")

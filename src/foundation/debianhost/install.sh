@@ -17,7 +17,7 @@ info "${BOLD}Registering ${BL}${INSTANCE}${CL}${BOLD} at ${ADDRESS}${CL}"
 
 dh_reachable || die "cannot log in to root@${ADDRESS} with the mothership's key — authorise it first (module adopt prints the command)"
 id="$(dh_os_id)"
-[[ "${id}" == "debian" ]] || die "${INSTANCE} runs '${id:-unknown}', not debian — it is not a debianhost (ADR-026 D7: one module per OS)"
+[[ "${id}" == "debian" ]] || die "${INSTANCE} runs '${id:-unknown}', not debian — it is not a debianhost; adopt it with the module for its OS"
 version="$(dh_ssh '. /etc/os-release && printf "%s" "${VERSION_ID:-?}"' 2>/dev/null || echo '?')"
 
 info "  ${GN}✓${CL} root by key; Debian ${version}"

@@ -10,7 +10,7 @@ dh_load() {
     check_json "${CONFIG_DIR:-/home/tappaas/config}/${INSTANCE}.json" || exit 1
     ADDRESS="$(get_config_value 'address' '')"
     [[ -n "${ADDRESS}" ]] || {
-        error "${INSTANCE}: no 'address' in its config — a machine is reached by its address (ADR-026 D8.1)"
+        error "${INSTANCE}: no 'address' in its config — a machine is reached by its address; register it again: module-manager module adopt <address> --instance ${INSTANCE}"
         exit 1
     }
 }

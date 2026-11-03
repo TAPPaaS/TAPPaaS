@@ -28,7 +28,7 @@ trusted to have made config true. That is the blind spot recommendation 1 closes
 
 ## Fields
 
-`network:proxy` owns **9** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`network:proxy` owns **9** declared field(s). Each table below carries the field's full definition and, where the service applies it, what a change to it does (in place, a restart, a rebuild).
 
 ### `proxyDomain`
 

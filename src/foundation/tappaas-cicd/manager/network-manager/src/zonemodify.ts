@@ -138,7 +138,7 @@ export function preGateZoneSet(
         field: req.field,
         reason:
           `has no declared changeClass in zones-fields.json, so what changing it costs is unknown — ` +
-          `declare one before it can be set through a verb (ADR-020 D6)`,
+          `declare one before it can be set through a verb`,
       });
       continue;
     }

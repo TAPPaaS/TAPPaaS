@@ -24,7 +24,7 @@ if [[ "${SAT_MGMT}" == unmanaged ]]; then
     exit 0
 fi
 [[ -n "$(jq -r '.address // empty' "${SAT_CFG}")" ]] \
-    || die "${INSTANCE} records no 'address' — a satellite from before ADR-010 §8.4 is converted by hand first (satellite/INSTALL.md, 'Converting an existing satellite')"
+    || die "${INSTANCE} records no 'address' — a satellite set up before satellites recorded their address is converted by hand first (satellite/INSTALL.md, 'Converting an existing satellite')"
 sat_edge_rules_ensure || warn "  OPNsense edge rules for ${SAT_ROLES} could not be ensured"
 sat_dns_ensure || warn "  ${SAT_NAME}.${SAT_DNS_ZONE}.internal could not be registered at the tunnel end"
 # The Site's PBS on it (ADR-010 §8.4.3): the nodes' path open exactly while it is.

@@ -197,7 +197,7 @@ def render(payload, lines_for=None):
             lines.append("Log lines (anonymized):")
             lines.append(_lines_text(a, lines_for))
         lines.append("")
-    lines.append("Sent by the logging module's alert rules (#126) through tappaas-alert-receiver.")
+    lines.append("Sent by the logging module's alert rules through tappaas-alert-receiver.")
     return subject, "\n".join(lines) + "\n"
 
 
@@ -246,7 +246,7 @@ def render_templated(payload, alerts, status, word, title, hosts, lines_for):
         if ann.get("query") and "{query}" not in (ann.get("mailBody") or ""):
             parts.append(f"In Grafana (Explore, Loki): {ann['query']}")
         parts.append("")
-    parts.append("Sent by the logging module's alert rules (#126) through tappaas-alert-receiver.")
+    parts.append("Sent by the logging module's alert rules through tappaas-alert-receiver.")
     return subject, "\n".join(parts) + "\n"
 
 
@@ -531,7 +531,7 @@ def node_down_mail(node, state, members):
               f"Look at {node}: power, network, console. The Proxmox UI on {others[0] if others else 'another node'}"
               " shows the cluster and HA state (Datacenter > HA).",
               "",
-              "Sent by the logging module's alert rules (#126) through tappaas-alert-receiver."]
+              "Sent by the logging module's alert rules through tappaas-alert-receiver."]
     return subject, "\n".join(lines) + "\n"
 
 
@@ -552,7 +552,7 @@ def node_back_mail(node, state, incident):
     if incident.get("moved"):
         lines += ["", "Moved by HA while it was down (they stay where they are until HA moves them back):"]
         lines += [f"  {name} -> {to}" for name, to in sorted(incident["moved"].items())]
-    lines += ["", "Sent by the logging module's alert rules (#126) through tappaas-alert-receiver."]
+    lines += ["", "Sent by the logging module's alert rules through tappaas-alert-receiver."]
     return f"RESOLVED: node {node} is back", "\n".join(lines) + "\n"
 
 

@@ -36,18 +36,18 @@ Commands:
   status                      Show PBS datastore status
   retention                   Show current retention policy
 
-Multi-source datastore (issue #227):
+Multi-source datastore:
   list-sources                List namespaces, buddies (remotes) and sync jobs
   (peer relationships moved to the manager: backup-manager peer add|delete)
 
-Externally-managed PBS (ADR-012 §1.3, #456):
+Externally-managed PBS:
   use-external <url> [--datastore <ds>] [--namespace <ns>] [--fingerprint <fp>]
                               Consume a PBS this site did NOT provision — on the LAN, at a
                               satellite, or a third party. Registers it as the module's backup
                               storage and records placementState=external + pbsUrl. Creates no
                               datastore and never touches what is already stored there.
   reset-external [--peer <name>]
-                              Leave external (#607; run through 'backup-manager placement
+                              Leave external (run through 'backup-manager placement
                               reset'): keeps the old PBS's storage entry as <name>_former,
                               records it in formerExternal, placementState → shim. Refused
                               unless there is a tankc pool to move to.
@@ -184,7 +184,7 @@ case "$COMMAND" in
     info "${BOLD}Sync jobs:${CL}"
     ssh root@${PBS_NODE}.${ZONE}.internal "proxmox-backup-manager sync-job list" 2>/dev/null || true
     echo
-    info "${BOLD}Push targets (we push off-site — ADR-012 P4):${CL}"
+    info "${BOLD}Push targets (we push off-site):${CL}"
     ssh root@${MGMT_NODE}.${ZONE}.internal "pvesm status" 2>/dev/null | awk 'NR==1 || $1 ~ /^offsite-/' || true
     ;;
 

@@ -366,7 +366,7 @@ export const HELP: HelpSpec = {
     {
       usage: "export --json [--cmdb]",
       effect: "read",
-      options: [["--json", "The document and the whole catalog, for network-manager topology."], ["--cmdb", "Instead of the document: its objects and relations as the CMDB would answer them (ADR-040), with the catalog."]],
+      options: [["--json", "The document and the whole catalog, for network-manager topology."], ["--cmdb", "Instead of the document: its objects and relations as the CMDB would answer them, with the catalog."]],
     },
     {
       usage: "report [--json]",
@@ -379,7 +379,7 @@ export const HELP: HelpSpec = {
   notes: [
     "A placement names a device as `network-manager topology` does. A cable the switches or LLDP see is drawn from the topology and never recorded; record only what nothing can see — the ISP's modem, a patch panel, a PDU.",
     "position-manager and rack-manager are the old names of asset-manager and answer the same verbs for one release; config/racks.json became config/positions.json by migration 0020.",
-    "An asset is the physical thing (ADR-040 D7): asset add records it, ordered or in stock; place puts it in a rack or a room; asset allocate gives it a role — a node, a switch, an AP, or a device nothing manages that it is — and its placement and cables follow the role's name; asset release ends the role, asset dispose the asset. faulty is a flag beside the stage (asset fault, asset repaired). A device a switch port sees is recorded by asset record.",
+    "An asset is the physical thing: asset add records it, ordered or in stock; place puts it in a rack or a room; asset allocate gives it a role — a node, a switch, an AP, or a device nothing manages that it is — and its placement and cables follow the role's name; asset release ends the role, asset dispose the asset. faulty is a flag beside the stage (asset fault, asset repaired). A device a switch port sees is recorded by asset record.",
     "A port's kind is its connector (rj45, sfp, wifi, usb-a, usb-c), its speed its maximum; the link a cable negotiates is the cable's link speed. A plate's ports are the asset's, its own merged over them by name (port add, port modify).",
     "A link through a patch panel is split there (cable split): the topology still shows one link, the racks its two wires.",
     "A disk is an asset of its own (dsk-NN), known by its serial, placed in a bay of another asset (place <disk> --in <asset>); placing it into another asset is the move, unplace puts it in stock. node add records a new machine's disks; disk adopt records the disks the CMDB knows in the servers there are.",

@@ -19,7 +19,7 @@ it is safe to relocate or resize under a bind-mount. Compare
 
 ## Fields
 
-`cluster:lxc` owns **15** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`cluster:lxc` owns **15** declared field(s). Each table below carries the field's full definition and, where the service applies it, what a change to it does (in place, a restart, a rebuild).
 
 ### `vmname`
 

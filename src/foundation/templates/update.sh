@@ -107,7 +107,7 @@ http_code="$(curl -fsIL -o /dev/null -w '%{http_code}' "$asset_url" 2>/dev/null 
 prefetch_image() {
   local url="$1" image="$2" want="$3" dir="${IMAGE_PREFETCH_DIR:-/root/tappaas}"
   if [[ -z "$want" ]]; then
-    warn "tappaas-nixos.json records no imageSha256 — the image is not checked (ADR-033 D7)."
+    warn "tappaas-nixos.json records no imageSha256 — the image is used without a checksum check."
     return 0
   fi
   [[ "$want" =~ ^([Ss][Hh][Aa]256:)?[0-9a-fA-F]{64}$ ]] || die "imageSha256 '${want}' in ${NIX_JSON} is not a SHA-256 hash."
