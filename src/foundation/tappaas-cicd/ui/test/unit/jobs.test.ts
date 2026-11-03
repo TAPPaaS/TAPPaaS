@@ -10,7 +10,7 @@ import { join } from "path";
 import { IncomingMessage, ServerResponse } from "http";
 import { AccessConfig, Me, SetupState } from "../../src/access";
 import { HelpSpec, renderManifest } from "../../../lib/ts/src/help";
-import { Job, JobSummary, Jobs, RESTART_MARKER, parseUnitShow, previewStop, shellQuote, sweepBlocks, takeRestartMarker } from "../../src/jobs";
+import { Job, JobSummary, Jobs, RESTART_MARKER, parseUnitShow, previewStop, restartDue, shellQuote, sweepBlocks, takeRestartMarker } from "../../src/jobs";
 import { Manifests } from "../../src/manifest";
 import { Reads } from "../../src/reads";
 import { Runner, Streamer } from "../../src/run";
@@ -269,6 +269,12 @@ async function main(): Promise<void> {
   check(!takeRestartMarker(dir), "no marker: nothing to take");
   writeFileSync(join(dir, RESTART_MARKER), "");
   check(takeRestartMarker(dir) && !existsSync(join(dir, RESTART_MARKER)) && !takeRestartMarker(dir), "the marker is taken once and removed");
+  // …and a switch's reload of the unit leaves the same marker (lab2 2026-11-03: a
+  // restart cut off the `module update tappaas-cicd` job doing the switch)
+  writeFileSync(join(dir, RESTART_MARKER), "");
+  check(!restartDue(dir, true) && existsSync(join(dir, RESTART_MARKER)), "a busy runner keeps the marker: the running job is not cut off");
+  check(restartDue(dir, false) && !existsSync(join(dir, RESTART_MARKER)), "an idle runner takes it and is due to restart");
+  check(!restartDue(dir, false), "…once: no marker, no restart");
 
   // ── Activity: jobs.jsonl and jobs/<id>.log ──────────────────────────
   const lines = readFileSync(jobs.file, "utf8").trim().split("\n").map((l) => JSON.parse(l) as JobSummary & { output?: string });

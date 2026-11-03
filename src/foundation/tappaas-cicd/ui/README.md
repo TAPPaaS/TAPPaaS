@@ -572,7 +572,10 @@ new build — but `module update tappaas-cicd` reaches that script from inside a
 (`pre-update.sh` → `refresh-control-plane.sh`), and a restart then would kill the job. So it
 asks the console first (`GET /jobs` → `busy`): if a job runs or waits it leaves
 `<state dir>/restart-pending` instead, and the console exits into the new build the moment
-its runner is idle (the unit's `Restart=always`).
+its runner is idle (the unit's `Restart=always`). A NixOS switch that changes the unit itself
+(the same `module update`, through `tappaas-rebuild@`; the nightly sweep; a shell) reloads it
+instead of restarting it (`reloadIfChanged` in `tappaas-cicd.nix`): the reload only leaves
+the marker, which the console takes at a job's end or, already idle, within five seconds.
 
 ## The assistant (ADR-034 D7, P3)
 

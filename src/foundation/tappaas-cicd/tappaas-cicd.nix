@@ -400,9 +400,17 @@ in
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     unitConfig.ConditionPathExists = "/home/tappaas/bin/console";
+    # A switch that changes this unit reloads it instead of restarting it: the
+    # switch is often reached from a console job (`module update tappaas-cicd`
+    # rebuilds through tappaas-rebuild@), and a restart would cut that job off
+    # (lab2 2026-11-03). The reload, run after the daemon-reload, leaves
+    # restart-pending; the console exits at its next idle moment and comes back
+    # under the new definition (Restart=always), as for a new build below.
+    reloadIfChanged = true;
     serviceConfig = {
       User = "tappaas";
       ExecStart = "/home/tappaas/bin/console serve";
+      ExecReload = "${pkgs.coreutils}/bin/touch /var/lib/tappaas/console/restart-pending";
       # "always", not "on-failure": the console exits 0 on purpose to take up a
       # new build. ui/install.sh does not restart it while a job runs (the
       # relink is reached from `module update tappaas-cicd`, itself a job — a
