@@ -121,21 +121,29 @@
   - paragraph: Register a laptop or other device running WireGuard to be able to connect to the TAPPaaS management zone.
   - list:
     - listitem:
+      - button "pass 0 · How the tunnel is made done ▾" [expanded]: 0 · How the tunnel is made done ▾
+      - paragraph: "Four steps: a key pair on this device, the device registered with the site, its WireGuard file, the tunnel."
+      - list:
+        - listitem: A key pair on this device. A private key that never leaves it, and its public half.
+        - listitem: Register the device. The site takes the public key, gives the device a tunnel address, and answers with its own public key and address.
+        - listitem: "The WireGuard file. Your private key together with the site's address and public key: everything WireGuard needs to connect."
+        - listitem: The tunnel. Switch it on, check it connected, and switch it off when you are done.
+    - listitem:
       - button "warn 1 · Make a key pair on the device pending ▾" [expanded]: 1 · Make a key pair on the device pending ▾
       - paragraph: WireGuard identifies the device by a key pair made on the device itself. Only its public half is given to the site.
       - paragraph: With the WireGuard app (macOS, Windows, iOS, Android)
       - list:
         - listitem: Install WireGuard from the app store, open it.
-        - listitem: "Add a tunnel: Add empty tunnel (on a phone: Create from scratch). The app makes the key pair and shows the public key."
-        - listitem: "Copy the public key into stage 2. Leave the tunnel open: its file comes in stage 3."
-      - paragraph: On a Linux or Mac terminal
-      - list:
-        - listitem: "Install the tools: apt install wireguard-tools or brew install wireguard-tools."
-        - listitem: wg genkey | tee tappaas-admin.key | wg pubkey — prints the public key; the private key is in tappaas-admin.key.
-        - listitem: "Copy the public key into stage 2. Keep tappaas-admin.key: the key pair alone opens no tunnel. Stage 2 gives you the .conf file with a blank for the private key, and stage 3 fills it in here on the device."
+        - listitem: "Add a tunnel: Add empty tunnel (on a phone: Create from scratch). The app makes the key pair and shows the public key, and the private key under it."
+        - listitem: Copy the public key into step 2.
+      - paragraph: On a Linux or Mac terminal (brew install wireguard-tools or apt install wireguard-tools first)
+      - paragraph: "In the folder you will keep the tunnel in, run this. It prints the public key and keeps the private key in tappaas-admin.key:"
+      - code: $ wg genkey | tee tappaas-admin.key | wg pubkey
+      - button "Copy"
+      - paragraph: Copy the public key it printed into step 2.
     - listitem:
       - button "fail 2 · Register the device to do ▾" [expanded]: 2 · Register the device to do ▾
-      - paragraph: "The site records the device and gives it a tunnel address. You download the device's WireGuard file: everything but the private key, which the site never sees."
+      - paragraph: The site records the device's public key and gives it a tunnel address. Its answer is the device's WireGuard file, with the site's address and key in it.
       - text: "Registers the device as a peer of the admin VPN on the firewall and prints its WireGuard file: the tunnel address it was given, the site's DNS, and what it may reach (the management zone, and the published names). device name *"
       - textbox "device name * How the site lists it, and the name of the file you get.":
         - /placeholder: lars-laptop
@@ -151,8 +159,11 @@
       - button "Register the device" [disabled]
       - text: a name is needed
     - listitem:
-      - button "warn 3 · Put the file on the device and connect pending ▸": 3 · Put the file on the device and connect pending ▸
-      - paragraph: The file gets its private key on the device and goes into WireGuard. The tunnel is switched on and checked for a handshake.
+      - button "warn 3 · The WireGuard file pending ▸": 3 · The WireGuard file pending ▸
+      - paragraph: The file from step 2, completed with the device's private key. That key never leaves the device.
+    - listitem:
+      - 'button "warn 4 · The tunnel: up, check, down pending ▸"': "4 · The tunnel: up, check, down pending ▸"
+      - paragraph: Switch it on, see that it connected, switch it off when you are done.
 - text: Add a backup buddy
 - paragraph: Another site's PBS keeps an off-site copy — pulled through its own tunnel — or this site keeps theirs.
 - button "Add a backup buddy…"
