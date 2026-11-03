@@ -317,6 +317,24 @@ removed from the firewall. It needed four things by hand, each a gap to close:
 Logging's update failed once on the way, its OIDC setup meeting Caddy's cached certificate, and
 passed when rerun after the reload.
 
+All four are closed in code, not yet proven live: a new CA rebuilds the mothership (`--no-rebuild`
+for the install and the update, which rebuild anyway); a changed refid moves every route with
+`caddy-manager rebind-certificate`, reloads Caddy, and retires the old certificate with
+`trust-manager cert-retire`, which removes only what TAPPaaS made and nothing still served.
+
+## Progress, 2026-11-03
+
+| Step | State |
+|---|---|
+| 1 `ca-manager` | built: `init`, `domain add`, `cert issue|renew`, `wildcard`, `status`, `validate`, `report` |
+| 2 trust, `init` in the install, SSO failure fatal | built; the Debian and node path is unproven on a real host |
+| 3 `dnsMode: local` | built and proven on lab2; a new site defaults to it, with `<site>.home.arpa` when no domain is given (unproven until a fresh install) |
+| D11 CAs in the CMDB | built: `certificate-authority` CIs; `depends-on` relations and `escrowed` still to do |
+| 4 providers, `acme-setup.sh` shim | not started |
+| 5 Day 1 order | not started |
+| 6 #787 logging TLS | not started |
+| 7 fresh lab2 | not started |
+
 ## Testing
 
 - Unit tests for D1's rule, constraint building, the renewal window, and refusal of a name outside
