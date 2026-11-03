@@ -77,17 +77,16 @@ done
 [[ -t 0 && -t 1 ]] || INTERACTIVE=0
 command -v qm >/dev/null || die "qm not found — run this on a Proxmox node."
 
-# The domain is foundational: cicd's Caddy reverse proxy is configured for
-# <service>.<domain>, so the platform cannot be set up without a real one.
-# Require it (prompt interactively; refuse the placeholder); no silent default.
+# The site's domain. None given: <site>.home.arpa (ADR-043 D4) — the site's own
+# CA signs its names, so nothing public is needed until Day 1's "Make it public".
+# The placeholder is refused, as before.
 if [[ "$SKIP_CICD" != "1" ]]; then
-  while [[ -z "$DOMAIN" || "$DOMAIN" == CHANGE* ]]; do
-    if [[ "$INTERACTIVE" == "1" ]]; then
-      read -r -p "  Enter your public domain for TAPPaaS (e.g. example.com): " DOMAIN
-    else
-      die "--domain is required (the platform's reverse proxy needs a real domain). Re-run with --domain <yourdomain>."
-    fi
-  done
+  [[ "$DOMAIN" != CHANGE* ]] || die "--domain ${DOMAIN} is the placeholder: give the site's domain, or none for <site>.home.arpa"
+  if [[ -z "$DOMAIN" && -n "$ORGNAME" ]]; then
+    DOMAIN="$(printf '%s' "$ORGNAME" | tr '[:upper:]_' '[:lower:]-').home.arpa"
+    info "No --domain given: the site's domain is ${DOMAIN} (its own CA; nothing public needed)."
+  fi
+  [[ -n "$DOMAIN" ]] || die "--name or --domain is needed: the site's domain is <name>.home.arpa when none is given"
 fi
 
 readonly TAPPAAS_DIR="/root/tappaas"
@@ -297,7 +296,7 @@ build_cicd() {
     "$CREATE_VM" tappaas-cicd
   fi
 
-  local dom="${DOMAIN}"   # required + validated above (never a placeholder)
+  local dom="${DOMAIN}"   # set above: given, or <site>.home.arpa
 
   # --manual-cicd: keep the old behaviour — just print the in-VM steps.
   if [[ "$MANUAL_CICD" == "1" ]]; then
