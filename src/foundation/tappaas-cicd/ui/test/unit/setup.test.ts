@@ -11,7 +11,7 @@ import { HelpSpec, renderManifest } from "../../../lib/ts/src/help";
 import { AccessConfig, Me, decide, setupState } from "../../src/access";
 import { Jobs } from "../../src/jobs";
 import { Runner, Streamer } from "../../src/run";
-import { parseKv, secretStatus, writeSecret } from "../../src/secrets";
+import { parseKv, secretCommand, secretStatus, writeSecret } from "../../src/secrets";
 import { SetupInputs, TESTS_FILE, physicalStep, readPhysical, WifiInputs, clientZonesWithoutWifi, closeSetupToken, gatherSetup, parseApList, parseSwitches, parseWgvpnPeers, readSetupTests, readWifiZones, recordSetupTest, setupCheckModules, setupComplete, setupSteps, wifiStep } from "../../src/setup";
 import { testGate } from "./gate-fixture";
 import { check, done } from "./check";
@@ -212,15 +212,17 @@ async function main(): Promise<void> {
   // ── secrets: where the scripts read them, never echoed ──────────────
   const home = join(dir, "home");
   mkdirSync(home);
+  // acme-dns: a ca-manager provider (ADR-043 D6), the credential on its stdin.
+  const ac = secretCommand("acme-dns", { provider: "cloudflare", keys: { dns_cf_token: "s3cr3t" } });
+  check(typeof ac === "object" && ac !== null && ac.bin === "ca-manager" && ac.args.join(" ") === "provider add cloudflare --type cloudflare" && ac.input === "dns_cf_token=s3cr3t\n" && !ac.args.join(" ").includes("s3cr3t"), "acme-dns: ca-manager provider add, the credential on stdin only");
+  check(typeof secretCommand("acme-dns", { provider: "cloudflare", keys: { token: "x" } }) === "string", "a key the provider does not name (dns_…) is refused");
   let w = writeSecret(home, "acme-dns", { provider: "cloudflare", keys: { dns_cf_token: "s3cr3t" } });
-  check(w.ok && readFileSync(join(home, ".acme-dns-credentials.txt"), "utf8") === "provider=cloudflare\ndns_cf_token=s3cr3t\n", "acme-dns: provider= and dns_… lines, as acme-setup.sh reads them");
-  check((statSync(join(home, ".acme-dns-credentials.txt")) as unknown as { mode: number }).mode % 0o1000 === 0o600, "…mode 0600");
-  const st = secretStatus(home, "acme-dns");
-  check(st.present && st.keys.join() === "provider,dns_cf_token" && !JSON.stringify(st).includes("s3cr3t"), "the status names the keys and never a value");
-  w = writeSecret(home, "acme-dns", { provider: "cloudflare", keys: { token: "x" } });
-  check(!w.ok, "a key the provider does not name (dns_…) is refused");
+  check(!w.ok && !existsSync(join(home, ".acme-dns-credentials.txt")), "…and the console no longer writes the file");
   w = writeSecret(home, "unifi", { url: "https://10.0.0.5:11443", username: "tappaas", password: "pw" });
   check(w.ok && parseKv(readFileSync(join(home, ".unifi-os-credentials.txt"), "utf8")).get("username") === "tappaas", "unifi: url=, username=, password=");
+  check((statSync(join(home, ".unifi-os-credentials.txt")) as unknown as { mode: number }).mode % 0o1000 === 0o600, "…mode 0600");
+  const st = secretStatus(home, "unifi");
+  check(st.present && st.keys.join() === "url,username,password" && !JSON.stringify(st).includes('"pw"'), "the status names the keys and never a value");
   // wlan is ap-manager's (ssid set-passphrase on stdin, #889; wifi.test.ts): the console writes no line of it.
   check(!writeSecret(home, "wlan", { ssid: "home", passphrase: "correct horse" }).ok && !existsSync(join(home, ".wlan-secrets.txt")), "wlan: not written by the console");
   writeFileSync(join(home, ".wlan-secrets.txt"), "home=pa=ss word\nguest=battery staple\n", { encoding: "utf8", mode: 0o600 });

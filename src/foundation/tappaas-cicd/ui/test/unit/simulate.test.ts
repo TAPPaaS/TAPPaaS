@@ -111,8 +111,8 @@ async function main(): Promise<void> {
   check(ran.length === 0, "secret: nothing ran");
   const direct = await runWithStdin("sh", ["-c", `touch ${join(dir, "stdin-ran")}`], "pw\n");
   check(direct.rc !== 0 && direct.stderr === SIMULATE_NO_SECRET && !existsSync(join(dir, "stdin-ran")), "a verb fed a secret directly: not run");
-  const w = writeSecret(dir, "acme-dns", { apiKey: "k" });
-  check(!w.ok && w.error === SIMULATE_NO_SECRET && !existsSync(join(dir, ".acme-dns-credentials.txt")), "a secret the console writes: refused");
+  const w = writeSecret(dir, "unifi", { url: "https://x", username: "a", password: "b" });
+  check(!w.ok && w.error === SIMULATE_NO_SECRET && !existsSync(join(dir, ".unifi-os-credentials.txt")), "a secret the console writes: refused");
 
   // Reads and previews are untouched.
   ran.length = 0;

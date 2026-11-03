@@ -51,21 +51,23 @@ const DEVICE = /^\/dev\/[a-z][a-z0-9]{1,30}$/;
 const NODE = /^[A-Za-z0-9_][A-Za-z0-9_-]{0,62}$/;
 export const SECRETS: Record<SecretName, SecretSpec> = {
   "acme-dns": {
-    file: ".acme-dns-credentials.txt",
-    what: "the DNS provider's API credential acme-setup.sh reads for the wildcard certificate",
-    lines: (f) => {
+    file: null,
+    what: "a DNS provider's API credential for the ACME wildcard certificate, kept by ca-manager (ADR-043 D6)",
+    lines: () => "acme-dns: registered with ca-manager provider add, never written here",
+    command: (f) => {
       const provider = str(f.provider);
       if (!provider || !/^[a-z0-9_]+$/.test(provider)) return "provider: the acme.sh DNS provider, e.g. cloudflare or gandi_livedns";
-      const out = new Map([["provider", provider]]);
       const keys = (f.keys ?? {}) as Record<string, unknown>;
+      const lines: string[] = [];
       for (const [k, v] of Object.entries(keys)) {
         if (!/^dns_[a-z0-9_]+$/i.test(k)) return `${k}: the provider's keys are named dns_… (acme.sh's names, e.g. dns_cf_token)`;
         const s = str(v);
         if (!s) return `${k}: a value is required`;
-        out.set(k, s);
+        lines.push(`${k}=${s}`);
       }
-      if (out.size < 2) return "at least one dns_… key";
-      return out;
+      if (!lines.length) return "at least one dns_… key";
+      const name = provider.replace(/^dns_/, "").replace(/_/g, "-");
+      return { bin: "ca-manager", args: ["provider", "add", name, "--type", provider], input: lines.join("\n") + "\n", keys: Object.keys(keys), where: `ca-manager's provider ${name}` };
     },
   },
   unifi: {
