@@ -91,6 +91,7 @@ declare module "fs" {
     // run against the sweep's result file (ADR-011 §9).
     mtimeMs: number;
     size: number; // bytes — the console rotates jobs.jsonl past a size
+    mode: number; // permission bits — ca-manager checks its keys are private
   }
   export function statSync(path: string): StatLike;
   // Free space on the filesystem holding `path` (the scan checks its scanner
@@ -117,6 +118,16 @@ declare module "path" {
 // ── node:os (unit tests' writable temp trees) ──────────────────────────
 declare module "crypto" {
   export function createHash(algorithm: string): { update(data: string): { digest(encoding: "hex"): string } };
+  // ca-manager reads the certificates it made (ADR-043).
+  export class X509Certificate {
+    constructor(pem: string);
+    readonly fingerprint256: string;
+    readonly validFrom: string;
+    readonly validTo: string;
+    readonly subject: string;
+    readonly subjectAltName: string | undefined;
+    readonly ca: boolean;
+  }
 }
 
 declare module "os" {

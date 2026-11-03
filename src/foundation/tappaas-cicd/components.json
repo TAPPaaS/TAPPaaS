@@ -75,6 +75,15 @@
       "cmdbSource": true
     },
     {
+      "name": "ca-manager",
+      "kind": "manager",
+      "path": "manager/ca-manager",
+      "language": "typescript",
+      "package": "ca-manager",
+      "manifest": "help-json",
+      "cmdbSource": false
+    },
+    {
       "name": "asset-manager",
       "kind": "manager",
       "path": "manager/asset-manager",

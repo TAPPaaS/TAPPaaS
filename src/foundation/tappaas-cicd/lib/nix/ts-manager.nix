@@ -34,6 +34,7 @@
   version ? "0.1.0",
   description ? "TAPPaaS ${name}",
   entry ? "src/main.js", # entry point inside the component's dist tree
+  runtimeInputs ? [ ], # programs the component runs, put on its PATH (ca-manager: openssl)
 }:
 let
   cicd = ../..; # lib/nix/ -> tappaas-cicd/
@@ -105,7 +106,9 @@ let
       mkdir -p "$out/lib"
       cp -r ${componentRel}/dist/* "$out/lib/"
       makeWrapper ${pkgs.nodejs_22}/bin/node "$out/bin/${name}" \
-        --add-flags "$out/lib/${componentRel}/${entry}"
+        --add-flags "$out/lib/${componentRel}/${entry}" ${
+          pkgs.lib.optionalString (runtimeInputs != [ ]) "--prefix PATH : ${pkgs.lib.makeBinPath runtimeInputs}"
+        }
       runHook postInstall
     '';
 

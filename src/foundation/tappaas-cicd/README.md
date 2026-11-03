@@ -10,7 +10,7 @@ configures every other module in the system.
 | Capability | Access from | How |
 |------------|-------------|-----|
 | Admin shell + module toolbox | mgmt zone | `ssh tappaas@tappaas-cicd`; `install-module.sh`, `update-module.sh`, `test-module.sh`, `delete-module.sh`, … in `~/bin` |
-| Domain managers (config state) | mothership CLI | `site-manager`, `environment-manager`, `module-manager`, `network-manager`, `identity-manager`, `health-manager`, `storage-manager`, … |
+| Domain managers (config state) | mothership CLI | `site-manager`, `environment-manager`, `module-manager`, `network-manager`, `identity-manager`, `health-manager`, `storage-manager`, `ca-manager`, … |
 | Infrastructure controllers (runtime state) | mothership CLI | `opnsense-controller`, `proxmox-controller`, `switch-manager`, `authentik-controller`, `node-provisioner`, … |
 | The CMDB: the actual state of the site, with history (ADR-040) | mothership CLI | `cmdb show` · `query` · `history` · `impact` · `report` · `rescan` · `class` · `resolve`, the client of `cmdb.service` ([`cmdb-controller`](./controller/cmdb-controller/README.md)) on `/run/cmdb/cmdb.sock`, its store PostgreSQL's database `cmdb` on this VM |
 | Scheduled system updates | automatic | `update-tappaas.service`, started by a timer rendered from `site.json` `updateSchedule`; the unit updates the mothership itself first (logs → journald → Loki) |

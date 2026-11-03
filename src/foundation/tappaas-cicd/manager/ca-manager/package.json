@@ -1,0 +1,13 @@
+{
+  "name": "ca-manager",
+  "version": "0.1.0",
+  "description": "TAPPaaS site certificates — the internal CA, a CA per local domain tree, and what they issue (ADR-043) — TypeScript",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "ca-manager": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}
