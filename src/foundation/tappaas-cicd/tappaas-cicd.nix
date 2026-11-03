@@ -291,9 +291,6 @@ in
         ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
           + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
           + ":/run/current-system/sw/bin")
-        # Node trusts only its own CA list unless told: the system's holds the
-        # site's CAs (ADR-043 D8), which the logs tool's TLS to logging needs (#787).
-        "NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt"
       ];
     };
   };
@@ -418,6 +415,9 @@ in
         ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
           + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
           + ":/run/current-system/sw/bin")
+        # Node trusts only its own CA list unless told: the system's holds the
+        # site's CAs (ADR-043 D8), which the logs tool's TLS to logging needs (#787).
+        "NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt"
       ];
       # The operator's switches, set without a rebuild ("-": usually absent).
       # TAPPAAS_SIMULATE=1, on test systems only: jobs show the real plan and
