@@ -618,6 +618,7 @@
         "devops": "Development and delivery tooling — source forges, CI, registries. Declared before this repo has a module in it; Community's forgejo belongs here.",
         "home": "Home and building automation, and the devices it drives — e.g. hass, deconz, and most of what Community publishes.",
         "security": "Security and secure access — e.g. vaultwarden, netbird-client.",
+        "infrastructure": "The site's own network hardware and the controllers that manage it — e.g. Community's mikrotik and unifi-os.",
         "misc": "No natural stack yet. The honest fallback, not a description: prefer moving a module out of it to inventing a stack with one member.",
         "template": "A template to copy, not a module to install — a Proxmox VM template, the module skeleton.",
         "test": "A fixture the test suites install and remove; never part of a real site."

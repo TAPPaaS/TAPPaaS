@@ -32,7 +32,7 @@ END = "<!-- END GENERATED MODULES -->"
 DOCS = ["README.md", "INSTALL.md"]
 # The stacks that get a directory: what a module is FOR. foundation keeps its own
 # directory and README; template and test say what a module IS (ADR-004).
-PURPOSE = ["ai", "collaboration", "devops", "home", "security", "web-hosting", "misc"]
+PURPOSE = ["ai", "collaboration", "devops", "home", "security", "infrastructure", "web-hosting", "misc"]
 
 
 def repo_root(argv):
