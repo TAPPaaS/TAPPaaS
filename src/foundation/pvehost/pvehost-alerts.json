@@ -3,11 +3,12 @@
   "rules": [
     {
       "name": "disk-errors",
-      "_comment": "Disk trouble is a condition, not an event, and its sources speak rarely: smartd re-warns every few hours, ZED in bursts. Looking back a day, it stays firing while any disk error was seen, mails once a day (repeat), and resolves after a quiet day. ZED: class=checksum|io|data|deadman, or a vdev entering a bad state. smartd / kernel: pending or uncorrectable sectors, SMART failure, I/O error, matched as smartd spells them, not case-blind: 'SMART Prefailure Attribute: … changed from 100 to 64' is an attribute moving at every boot, not a failure. logging/test.sh Check 0 runs real lines against this filter.",
+      "_comment": "Disk trouble is a condition, not an event, and its sources speak rarely: smartd re-warns every few hours, ZED in bursts. Looking back a day, it stays firing while any disk error was seen, mails once a day (repeat), and resolves after a quiet day. ZED: class=checksum|io|data|deadman, or a vdev entering a bad state. smartd / kernel: pending or uncorrectable sectors, SMART failure, I/O error, matched as smartd spells them, not case-blind: 'SMART Prefailure Attribute: … changed from 100 to 64' is an attribute moving at every boot, not a failure. logging/test.sh Check 0 runs real lines against this filter. Only those three sources' streams (unit): the match is a backtracking regex, and over a day of a node's whole syslog (auditd alone is ~500k lines) every minute it kept a 2-core logging VM busy.",
       "title": "DiskErrors",
       "kind": "state",
       "window": 86400,
       "repeat": "24h",
+      "unit": "kernel|smartd|zed",
       "match": "class=(checksum|io|data|deadman) |vdev_state=(DEGRADED|FAULTED|UNAVAIL|REMOVED)|SMART.*FAILED|FAILED SMART|Failed SMART|SMART Failure|(?i:I/O error|pool .*(DEGRADED|FAULTED|UNAVAIL)|Currently unreadable|Offline uncorrectable)",
       "summary": "Disk or ZFS errors on a Proxmox node in the last 24 hours (ZED pool events, smartd sector warnings, kernel I/O errors). Repeated once a day while they continue.",
       "query": "__SELECTOR__ |~ \"class=|smartd|I/O error|DEGRADED|FAULTED\""

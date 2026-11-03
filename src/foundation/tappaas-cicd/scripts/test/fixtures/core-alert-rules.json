@@ -4,8 +4,8 @@
     "kind": "state",
     "bundle": false,
     "from": 86400,
-    "expr": "sum by (host) (count_over_time({host=~\"^(tappaas1|tappaas2)$\"} |~ \"class=(checksum|io|data|deadman) |vdev_state=(DEGRADED|FAULTED|UNAVAIL|REMOVED)|SMART.*FAILED|FAILED SMART|Failed SMART|SMART Failure|(?i:I/O error|pool .*(DEGRADED|FAULTED|UNAVAIL)|Currently unreadable|Offline uncorrectable)\" [86400s]))",
-    "query": "{host=~\"^(tappaas1|tappaas2)$\"} |~ \"class=|smartd|I/O error|DEGRADED|FAULTED\"",
+    "expr": "sum by (host) (count_over_time({host=~\"^(tappaas1|tappaas2)$\", unit=~\"kernel|smartd|zed\"} |~ \"class=(checksum|io|data|deadman) |vdev_state=(DEGRADED|FAULTED|UNAVAIL|REMOVED)|SMART.*FAILED|FAILED SMART|Failed SMART|SMART Failure|(?i:I/O error|pool .*(DEGRADED|FAULTED|UNAVAIL)|Currently unreadable|Offline uncorrectable)\" [86400s]))",
+    "query": "{host=~\"^(tappaas1|tappaas2)$\", unit=~\"kernel|smartd|zed\"} |~ \"class=|smartd|I/O error|DEGRADED|FAULTED\"",
     "summary": "Disk or ZFS errors on a Proxmox node in the last 24 hours (ZED pool events, smartd sector warnings, kernel I/O errors). Repeated once a day while they continue.",
     "headline": null,
     "repeat": "24h"
