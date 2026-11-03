@@ -131,6 +131,8 @@ echo "# x" >> "${FIX}/cfg/site-ca.pem"; CA validate >/dev/null 2>&1 && bad "vali
 CA init >/dev/null 2>&1; CA validate >/dev/null 2>&1 && ok "init rewrites the bundle" || bad "init did not repair the bundle"
 [[ "$(CA status --json 2>/dev/null | jq -r '.certificates.logging.daysLeft')" -ge 364 ]] && ok "status --json: days left" || bad "status --json"
 CA --help --json >/dev/null 2>&1 && ok "--help --json: the verb manifest" || bad "--help --json"
+[[ "$(CA report --json 2>/dev/null | jq -r '[.objects[] | select(.class == "certificate-authority")] | length')" -ge 3 ]] && ok "report --json: every CA a certificate-authority CI" || bad "report --json"
+CA report --json 2>/dev/null | grep -q 'PRIVATE KEY' && bad "report: a key in it" || ok "report: never a key"
 CA cert issue x --bogus y >/dev/null 2>&1 && bad "an undeclared option refused" || ok "an undeclared option refused"
 TAPPAAS_SIMULATE=1 CA domain add sim.tld >/dev/null 2>&1; [[ ! -e "${K}/ca/domain-sim.tld.key" ]] && ok "simulate: nothing made" || bad "simulate made a CA"
 

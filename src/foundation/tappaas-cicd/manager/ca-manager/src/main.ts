@@ -31,6 +31,9 @@ import {
 } from "./ca";
 import { issue, makeCa } from "./openssl";
 import { Store, certInfo } from "./store";
+import { EnvDomain, buildCaReport } from "./cmdbreport";
+import { printOrSend, reportChange } from "../../../lib/ts/src/cmdb-reporter";
+import { readdirSync } from "fs";
 import { existsSync, readFileSync } from "fs";
 import { hostname } from "os";
 import { spawnSync } from "child_process";
@@ -44,6 +47,16 @@ export const HELP: HelpSpec = {
   verbs: [
     { usage: "status [--json]", effect: "read", options: [["--json", "status: the record as JSON, with days left."]] },
     { usage: "validate", note: "(the record against the key dir and the trust bundle)" },
+    {
+      usage: "report [--json] [--discover]",
+      name: "report (to the CMDB, ADR-040)",
+      effect: "read",
+      options: [
+        ["--json", "report: print it instead of sending it."],
+        ["--discover", "report: accepted for the CMDB's sweep (ADR-040 D15); the report is already its full depth."],
+      ],
+      details: "Sends each CA as a certificate-authority CI (ADR-043 D11): on this mothership, serving the\nenvironments in its tree, with what it issued. Never a key.",
+    },
     {
       usage: "init [--replace-bundle] [--no-rebuild] [--check]",
       options: [
@@ -121,6 +134,30 @@ function positional(args: string[], skip: number, valued: string[]): string[] {
     out.push(args[i]);
   }
   return out;
+}
+
+// The environments and their primary domains, for which a domain CA serves.
+function envDomains(configDir: string): EnvDomain[] {
+  const dir = join(configDir, "environments");
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => {
+      const e = readJsonObject(join(dir, f));
+      const d = e && typeof e.domains === "object" && e.domains ? (e.domains as Record<string, unknown>).primary : undefined;
+      return { name: f.replace(/\.json$/, ""), domain: typeof d === "string" ? d : "" };
+    })
+    .filter((e) => e.domain);
+}
+
+function caReport(store: Store) {
+  return buildCaReport(store.load(), hostname().split(".")[0], envDomains(store.configDir));
+}
+
+// A change is in the CMDB as it is made (ADR-040 D4); delivery never fails the verb.
+function reportMade(store: Store, verb: string): void {
+  const s = reportChange(caReport(store), verb);
+  if (s.error) warn(`cmdb: change not recorded: ${s.error}`);
 }
 
 function siteName(configDir: string): string {
@@ -458,31 +495,36 @@ export function run(argv: string[]): number {
 
   if (args[0] === "status") return status(store, args.includes("--json"));
   if (args[0] === "validate") return validate(store);
+  if (args[0] === "report") return printOrSend(caReport(store), args.includes("--json"));
   requireOperator();
-  if (args[0] === "init") return init(store, check, args.includes("--replace-bundle"), !args.includes("--no-rebuild"));
+  const changed = (rc: number, verb: string): number => {
+    if (rc === 0 && !check && !simulating()) reportMade(store, verb);
+    return rc;
+  };
+  if (args[0] === "init") return changed(init(store, check, args.includes("--replace-bundle"), !args.includes("--no-rebuild")), "init");
   if (args[0] === "domain" && args[1] === "add") {
     const [domain] = positional(args, 2, []);
     if (!domain) die("domain add <domain>");
-    return domainAdd(store, domain, check, !args.includes("--no-rebuild"));
+    return changed(domainAdd(store, domain, check, !args.includes("--no-rebuild")), "domain add");
   }
   if (args[0] === "cert" && args[1] === "issue") {
     const [name] = positional(args, 2, ["--dns"]);
     const dns = opt(args, "--dns");
     if (!name || !dns) die("cert issue <name> --dns <n>[,<n>…]");
-    return certIssue(store, name, dns.split(",").map((s) => s.trim()).filter(Boolean), check);
+    return changed(certIssue(store, name, dns.split(",").map((s) => s.trim()).filter(Boolean), check), "cert issue");
   }
   if (args[0] === "wildcard") {
     const [env] = positional(args, 1, ["--domain"]);
     const domain = opt(args, "--domain");
     if (!env || !domain) die("wildcard <environment> --domain <domain>");
-    return wildcard(store, env, domain, check, !args.includes("--no-rebuild"));
+    return changed(wildcard(store, env, domain, check, !args.includes("--no-rebuild")), "wildcard");
   }
   if (args[0] === "cert" && args[1] === "renew") {
     const [name] = positional(args, 2, ["--within"]);
     const w = opt(args, "--within");
     const within = w === undefined ? RENEW_DAYS : Number(w);
     if (!Number.isInteger(within) || within < 0) die("--within <days>: a whole number of days");
-    return certRenew(store, name, within, args.includes("--force"), check);
+    return changed(certRenew(store, name, within, args.includes("--force"), check), "cert renew");
   }
   die(`unknown verb '${args.slice(0, 2).join(" ")}' — see 'ca-manager --help'`);
 }

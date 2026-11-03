@@ -81,7 +81,7 @@
       "language": "typescript",
       "package": "ca-manager",
       "manifest": "help-json",
-      "cmdbSource": false
+      "cmdbSource": true
     },
     {
       "name": "asset-manager",

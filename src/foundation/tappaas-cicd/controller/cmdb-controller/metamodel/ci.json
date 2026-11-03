@@ -245,6 +245,22 @@
         "allowedZones": { "type": "array", "items": { "type": "string" } }
       }
     },
+    "certificate-authority": {
+      "parent": "network-element",
+      "description": "One of the site's CAs (ADR-043 D11): the internal CA, or a CA for a domain tree. Its fingerprint is part of its key, so a replaced CA is a new CI and its history stays with the old one.",
+      "fields": {
+        "name": { "key": 1, "description": "ca-manager's id: internal, or domain-<domain>." },
+        "fingerprint": { "type": "string", "key": 1, "immutable": true, "description": "SHA-256 of its certificate." },
+        "scope": { "type": "string", "description": "internal or domain." },
+        "permitted": { "type": "array", "items": { "type": "string" }, "description": "The names its constraint allows, each with its subdomains." },
+        "notBefore": { "type": "string" },
+        "notAfter": { "type": "string" },
+        "state": { "type": "string", "description": "active, or retiring: a rotation under way, or no local environment left." },
+        "escrowed": { "type": "string", "description": "When its key last reached the USB stick; empty when never." },
+        "certificates": { "type": "array", "volatile": true, "description": "What it has issued: name, names, notAfter, and the refid of one the firewall serves." },
+        "onNode": { "type": "relation", "relation": "runs-on", "required": true, "description": "The mothership, which holds its key." }
+      }
+    },
     "vpn-peer": {
       "parent": "network-element",
       "description": "A WireGuard peer.",

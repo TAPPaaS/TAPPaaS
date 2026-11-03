@@ -9,11 +9,11 @@
       "ends": [["asset", "node"]]
     },
     "runs-on": {
-      "description": "A guest on its machine; software on the node it runs in; a pool or datastore on its node.",
+      "description": "A guest on its machine; software on the node it runs in; a pool or datastore on its node; a CA on the mothership that holds its key.",
       "tree": "from",
       "dependant": "from", "required": true,
       "cardinality": "n:1",
-      "ends": [["vm", "machine"], ["lxc", "machine"], ["software", "node"], ["storage-pool", "node"], ["datastore", "node"]]
+      "ends": [["vm", "machine"], ["lxc", "machine"], ["software", "node"], ["storage-pool", "node"], ["datastore", "node"], ["certificate-authority", "node"]]
     },
     "part-of": {
       "description": "A port is part of its asset (D9); a disk of the asset it is in (ADR-042).",
@@ -67,11 +67,11 @@
       "ends": [["node", "service"]]
     },
     "serves": {
-      "description": "A zone serves an environment; a proxy route a service.",
+      "description": "A zone serves an environment; a proxy route a service; a domain CA the environments in its tree.",
       "tree": "from",
       "dependant": "to", "required": false,
       "cardinality": "n:m",
-      "ends": [["zone", "environment"], ["proxy-route", "service"]]
+      "ends": [["zone", "environment"], ["proxy-route", "service"], ["certificate-authority", "environment"]]
     },
     "owned-by": {
       "description": "An environment or a group is owned by an organization; an organization by its parent; an asset by the site.",

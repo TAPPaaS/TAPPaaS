@@ -44,8 +44,16 @@ holds exactly the recorded CAs.
 
 ## Not yet
 
-From ADR-043's delivery list: the DNS providers, `rotate`, the CMDB report (D11), and delivering
-certificates to guests.
+From ADR-043's delivery list: the DNS providers, `rotate`, delivering certificates to guests, and
+in the CMDB report the `depends-on` relations of the routes and services a CA signed for, and
+`escrowed` (empty until the key escrow takes the CA keys).
+
+## CMDB
+
+`report` sends each CA as a `certificate-authority` CI (ADR-043 D11): its key is its id and its
+certificate's fingerprint, so a replaced CA is a new CI. It `runs-on` the mothership and a domain
+CA `serves` every environment in its tree; what it issued rides on it. Every changing verb reports
+its change the same way.
 
 ## Who calls it
 
