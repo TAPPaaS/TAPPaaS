@@ -296,6 +296,27 @@ fingerprint.
 6. #787 logging, as the proof of D5.
 7. A fresh lab2 through the whole path, replacing the hand-made CA.
 
+## Findings from the lab2 replacement, 2026-11-03
+
+lab2's hand-made CA was replaced through steps 1 to 3: `ca-manager init --replace-bundle`, both
+environments set to `local`, `environment-manager reconcile --apply`, then the modules updated.
+Every name then served a wildcard from `TAPPaaS lab2.hrossen.dk CA`, and the old entries were
+removed from the firewall. It needed four things by hand, each a gap to close:
+
+- **The mothership must trust a new CA before the modules' tests run.** A CA added outside the
+  sweep left it trusting only the old bundle, and the console's test failed with HTTP 000. It
+  needed `tappaas-render-fragments.sh` and `tappaas-rebuild@tappaas-cicd`.
+- **A new refid needs a reload of Caddy.** The routes were rebound, but Caddy served its cached
+  certificate until `configctl caddy reload`.
+- **Every route on the domain must move together.** `network` was not updated and kept the old
+  refid, so two certificates for `*.<domain>` were loaded at once. A change of refid should
+  update every module on that domain.
+- **The old trust entries are ca-manager's to retire.** They were deleted by hand once no route
+  used them.
+
+Logging's update failed once on the way, its OIDC setup meeting Caddy's cached certificate, and
+passed when rerun after the reload.
+
 ## Testing
 
 - Unit tests for D1's rule, constraint building, the renewal window, and refusal of a name outside
