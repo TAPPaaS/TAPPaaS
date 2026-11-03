@@ -92,10 +92,7 @@ function planWildcardState(
     });
   }
 
-  // ── TLS: record an issued cert's refid, or issue it (creds permitting) ──
-  // Decide this first because ISSUING (via acme-setup.sh) also registers the
-  // wildcard DNS itself, so we skip the separate DNS action in that case.
-  let issuing = false;
+  // ── TLS: record an issued cert's refid, or issue it (a DNS provider permitting) ──
   const issued = mode === "wildcard" ? dt.issuedCertRefid(domain) : undefined;
   const recorded = dt.recordedCertRefid(env.name);
   if (mode === "local") {
@@ -112,32 +109,23 @@ function planWildcardState(
     } else {
       notes.push(`cert-refids.json already records ${issued} for '${env.name}' — no change.`);
     }
-  } else if (dt.acmeCredsAvailable()) {
-    issuing = true;
+  } else if (dt.acmeCredsAvailable(domain)) {
     actions.push({
       kind: "issue-wildcard-cert",
       scope: "environment",
-      target:
-        `issue *.${domain} via acme-setup.sh --environment ${env.name} ` +
-        `(ACME creds present), then record its refid`,
+      target: `issue *.${domain} through its DNS provider (ca-manager acme ${env.name}), then record its refid`,
       domain,
     });
   } else {
     warnings.push(
-      `environment '${env.name}': no *.${domain} wildcard cert issued and ` +
-        `~/.acme-dns-credentials.txt is absent — run ` +
-        `\`acme-setup.sh --environment ${env.name}\` once (needs DNS-API credentials) to issue it.`,
+      `environment '${env.name}': no *.${domain} wildcard cert issued and no DNS provider for ${domain} — ` +
+        `register one (ca-manager provider add <name> --type <t> --domain ${domain} < credential), then reconcile again.`,
     );
   }
 
   // ── DNS: converge the split-horizon wildcard override ──
-  // Skipped when issuing, because acme-setup.sh registers it as part of issuance.
-  if (issuing) {
-    notes.push(
-      `wildcard DNS for *.${domain} is registered as part of certificate issuance (acme-setup.sh).`,
-    );
-    return;
-  }
+  // Planned whether or not a certificate is being issued: ca-manager issues, the
+  // resolver is this reconcile's (ADR-043 D7).
   const st = dt.wildcardDnsState(domain, zone);
   if (st.unpublished) {
     // ADR-021 R3: a supported configuration, not an error. There is no public
@@ -460,9 +448,9 @@ export function applyPlan(
         continue;
       }
       try {
-        // acme-setup.sh issues, registers the wildcard DNS, and writes
+        // ca-manager acme issues through the domain's DNS provider and writes
         // cert-refids.json; issueWildcardCert returns the resulting refid.
-        dt.issueWildcardCert(env.name);
+        dt.issueWildcardCert(env.name, a.domain ?? "");
         applied++;
       } catch (e) {
         if (e instanceof NetworkUnreachable) throw e;

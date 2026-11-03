@@ -546,7 +546,7 @@ function wildcardEnv(name: string, _zone: string, domain: string): Environment {
 }
 
 // TLS: no cert issued + creds present → an issue-wildcard-cert action, and the
-// separate DNS action is SKIPPED because acme-setup.sh registers DNS itself.
+// wildcard DNS is planned beside it: ca-manager issues, the reconcile owns the resolver.
 {
   const net = new FakeNetworkClient();
   net.seedZone("foo");
@@ -566,9 +566,8 @@ function wildcardEnv(name: string, _zone: string, domain: string): Environment {
     "no cert + creds present plans an issue-wildcard-cert",
   );
   check(
-    !plan.actions.some((a) => a.kind === "register-wildcard-dns") &&
-      plan.notes.some((n) => n.includes("as part of certificate issuance")),
-    "issuance bundles DNS registration, so no separate DNS action is planned",
+    plan.actions.some((a) => a.kind === "register-wildcard-dns"),
+    "issuance no longer brings DNS with it: the wildcard DNS is planned too (ADR-043 D7)",
   );
 }
 
@@ -589,8 +588,8 @@ function wildcardEnv(name: string, _zone: string, domain: string): Environment {
   );
   check(
     !plan.actions.some((a) => a.kind === "issue-wildcard-cert") &&
-      plan.warnings.some((w) => w.includes("acme-dns-credentials.txt is absent")),
-    "no cert + no creds warns to run acme-setup, never issues",
+      plan.warnings.some((w) => w.includes("no DNS provider for")),
+    "no cert + no DNS provider warns to register one, never issues",
   );
   check(
     plan.actions.some((a) => a.kind === "register-wildcard-dns"),

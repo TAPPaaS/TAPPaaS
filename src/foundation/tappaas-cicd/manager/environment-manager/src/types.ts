@@ -184,12 +184,12 @@ export interface DnsTlsClient {
   writeCertRefid(envName: string, refid: string): void;
   // Whether ACME DNS-API credentials are on disk (~/.acme-dns-credentials.txt),
   // which is what lets acme-setup.sh run non-interactively.
-  acmeCredsAvailable(): boolean;
+  acmeCredsAvailable(domain: string): boolean;
   // Issue the wildcard cert for this environment via acme-setup.sh (needs creds),
   // returning the resulting Trust refid. acme-setup.sh also (idempotently)
   // registers the wildcard DNS and writes cert-refids.json itself. Throws on
   // failure.
-  issueWildcardCert(envName: string): string;
+  issueWildcardCert(envName: string, domain: string): string;
   // dnsMode local (ADR-043 D4): the domain's site CA issues the wildcard, and
   // ca-manager imports it into the firewall and records its refid. Idempotent:
   // a current wildcard is left as it is. Returns the refid.

@@ -203,7 +203,7 @@ export class FakeDnsTlsClient implements DnsTlsClient {
     this.log.push(`write-cert-refid ${envName}=${refid}`);
     this.refids.set(envName, refid);
   }
-  acmeCredsAvailable(): boolean {
+  acmeCredsAvailable(_domain: string): boolean {
     return this.credsPresent;
   }
   issueLocalWildcard(envName: string, domain: string): string {
@@ -212,7 +212,7 @@ export class FakeDnsTlsClient implements DnsTlsClient {
     this.refids.set(envName, this.issueYields);
     return this.issueYields;
   }
-  issueWildcardCert(envName: string): string {
+  issueWildcardCert(envName: string, _domain: string): string {
     this.log.push(`issue-wildcard-cert ${envName}`);
     if (this.issueError) throw this.issueError;
     this.refids.set(envName, this.issueYields);

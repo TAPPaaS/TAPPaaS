@@ -24,7 +24,6 @@ const NETWORK_MANAGER_BIN = (): string => process.env.NETWORK_MANAGER_BIN ?? "ne
 const MODULE_MANAGER_BIN = (): string => process.env.MODULE_MANAGER_BIN ?? "module-manager";
 const UNBOUND_MANAGER_BIN = (): string => process.env.UNBOUND_MANAGER_BIN ?? "unbound-manager";
 const ACME_MANAGER_BIN = (): string => process.env.ACME_MANAGER_BIN ?? "acme-manager";
-const ACME_SETUP_BIN = (): string => process.env.ACME_SETUP_BIN ?? "acme-setup.sh";
 const CA_MANAGER_BIN = (): string => process.env.CA_MANAGER_BIN ?? "ca-manager";
 
 // A cert this close to expiry (or already expired) is treated by reconcile as
@@ -340,12 +339,9 @@ export class CliDnsTlsClient implements DnsTlsClient {
     writeFileGuarded(this.certRefidsPath(), JSON.stringify(map, null, 2) + "\n");
   }
 
-  acmeCredsAvailable(): boolean {
-    // acme-setup.sh reads ~/.acme-dns-credentials.txt; $HOME resolves the same
-    // path without depending on os.homedir (the repo's `types: []` node shim does
-    // not declare it).
-    const home = process.env.HOME ?? "";
-    return home !== "" && existsSync(join(home, ".acme-dns-credentials.txt"));
+  acmeCredsAvailable(domain: string): boolean {
+    // ca-manager holds the DNS providers (ADR-043 D6): it answers which serves a domain.
+    return captureResult(CA_MANAGER_BIN(), ["provider", "for", domain]).rc === 0;
   }
 
   removeWildcard(domain: string, dryRun: boolean): number {
@@ -392,22 +388,14 @@ export class CliDnsTlsClient implements DnsTlsClient {
     return refid;
   }
 
-  issueWildcardCert(envName: string): string {
-    // Delegate issuance to acme-setup.sh (the sole credential-bearing step); it
-    // runs non-interactively when ~/.acme-dns-credentials.txt is present, and
-    // itself registers the wildcard DNS + writes cert-refids.json. Stream its
-    // (multi-minute) progress to the operator's terminal.
-    const rc = stream(ACME_SETUP_BIN(), ["--environment", envName]);
-    if (rc !== 0) {
-      throw new Error(`${ACME_SETUP_BIN()} --environment ${envName} failed (exit ${rc})`);
-    }
-    // acme-setup.sh wrote the refid; read it back rather than re-parsing output.
+  issueWildcardCert(envName: string, domain: string): string {
+    // ca-manager gets it through the domain's DNS provider and records its refid
+    // in cert-refids.json (ADR-043 D7); stream its multi-minute progress.
+    const rc = stream(CA_MANAGER_BIN(), ["acme", envName, "--domain", domain]);
+    if (rc !== 0) throw new Error(`ca-manager acme ${envName} --domain ${domain} failed (exit ${rc})`);
     const refid = this.recordedCertRefid(envName);
-    if (!refid) {
-      throw new Error(
-        `${ACME_SETUP_BIN()} reported success but cert-refids.json['${envName}'] is still empty`,
-      );
-    }
+    if (!refid) throw new Error(`ca-manager reported success but cert-refids.json['${envName}'] is still empty`);
     return refid;
   }
+
 }
