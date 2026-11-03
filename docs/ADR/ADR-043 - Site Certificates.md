@@ -335,7 +335,7 @@ for the install and the update, which rebuild anyway); a changed refid moves eve
 | D11 CAs in the CMDB | built: `certificate-authority` CIs; `depends-on` relations and `escrowed` still to do |
 | 4 providers, `acme-setup.sh` shim | built: `provider add|list|for|remove`, `acme`, the shim, migration 0029, the console's form; not run against a real DNS provider, and `provider test` not built |
 | 5 Day 1 order | built: the confirmed order, no TLS step, Make it public, first node disks, repositories, and a recorded answer for each optional step; the switch fabric's vendor choice and discovery are still the old UniFi form |
-| 6 #787 logging TLS | phase A built and proven on lab2: `cert deliver`, logging serving 3110/3111/6514/6515 with the internal CA's certificate, senders moving to TLS once it is verified (the mothership's journal did); phase B (OPNsense and Proxmox syslog onto 6514/6515, the console's log reader, then the plain ports gone) still to do |
+| 6 #787 logging TLS | built and proven on lab2: every sender on TLS with the internal CA — guests' journals on 3111, the mothership's and the console's queries on 3110, OPNsense's syslog on 6514 (tls4, its own certificate), the node's rsyslog on 6515, a test line found in Loki; the plain ports go a release later |
 | 7 fresh lab2 | not started |
 
 ## Testing
