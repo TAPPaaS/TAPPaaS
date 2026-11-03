@@ -4,6 +4,12 @@
 # (issue #254). Run from the cicd mothership at INSTALL.md §2.3, after the install
 # chain has set up Caddy but before installing the rest of the foundation.
 #
+# DEPRECATED (ADR-043 D7): ca-manager now holds the DNS providers and issues the
+# certificate (`ca-manager provider add`, `ca-manager acme`). This script is a
+# shim for one release: it asks for a credential at a terminal when ca-manager has
+# none for the domain, registers it there, and lets ca-manager issue. Then, as
+# before, it registers the split-horizon wildcard DNS.
+#
 # What it does (idempotent):
 #   1. Reads the environment's domain (config/environments/<env>.json, via
 #      get_variant_config) and the installer email (site.json .email, via
@@ -106,12 +112,15 @@ info "  firewall      : ${FIREWALL}"
 info "  cert subject  : *.${DOMAIN}  (+ bare apex)"
 echo
 
-# ── Source credentials: file first, then prompt for anything missing ───────
+# ── Source credentials: ca-manager's provider, the file, then a prompt ──────
 
 PROVIDER=""
 declare -a CRED_FIELDS=()   # list of "dns_*=value" entries to pass to acme-manager
+REGISTERED="$(ca-manager provider for "$DOMAIN" 2>/dev/null || true)"
 
-if [[ -f "$CREDS_FILE" ]]; then
+if [[ -n "$REGISTERED" && -z "$PROVIDER_OVERRIDE" ]]; then
+    info "Using ca-manager's DNS provider for ${DOMAIN}: ${REGISTERED}"
+elif [[ -f "$CREDS_FILE" ]]; then
     info "Reading credentials from ${CREDS_FILE}"
     # Trim, drop comments + blank lines.
     while IFS= read -r line; do
@@ -130,9 +139,9 @@ fi
 [[ -n "$PROVIDER_OVERRIDE" ]] && PROVIDER="$PROVIDER_OVERRIDE"
 [[ -z "$PROVIDER" ]] && PROVIDER="cloudflare"
 
-info "  DNS provider  : ${PROVIDER}"
+[[ -z "$REGISTERED" || -n "$PROVIDER_OVERRIDE" ]] && info "  DNS provider  : ${PROVIDER}"
 
-if [[ ${#CRED_FIELDS[@]} -eq 0 ]]; then
+if [[ ( -z "$REGISTERED" || -n "$PROVIDER_OVERRIDE" ) && ${#CRED_FIELDS[@]} -eq 0 ]]; then
     case "$PROVIDER" in
         cloudflare|dns_cf)
             read -rsp "  Cloudflare API token (Zone:DNS:Edit + Zone:Read on ${DOMAIN}): " CF_TOKEN; echo
@@ -149,125 +158,26 @@ if [[ ${#CRED_FIELDS[@]} -eq 0 ]]; then
             ;;
     esac
 
-    if [[ $SAVE_CREDS -eq 1 ]]; then
-        echo
-        read -rp "  Save these credentials to ${CREDS_FILE} for future re-runs? [y/N] " ans
-        if [[ "$ans" =~ ^[Yy]$ ]]; then
-            (umask 077
-             {
-                 printf 'provider=%s\n' "$PROVIDER"
-                 printf '%s\n' "${CRED_FIELDS[@]}"
-             } > "$CREDS_FILE")
-            chmod 600 "$CREDS_FILE"
-            info "  saved to ${CREDS_FILE} (chmod 600)"
-        fi
-    fi
 fi
 
-# ── Preflight: ensure acme.sh DNS hooks exist on the firewall (#327) ────────
-# os-acme-client's setup.sh symlinks home/{deploy,dnsapi,notify} into the
-# acme.sh examples dir on the firewall. These can disappear on a /var/etc
-# regeneration, making every DNS-01 provider hook unfindable ("Cannot find DNS
-# API hook for: dns_<provider>"), so the sign fails with a cryptic statusCode
-# 400. Re-run setup.sh idempotently and verify the provider hook resolves
-# before signing, failing fast with a clear message instead of the opaque 400.
-# The hook file is named after the RESOLVED os-acme-client key, not the friendly
-# provider name (cloudflare→dns_cf.sh, route53→dns_aws.sh) — resolve_dns_service
-# mirrors acme-manager so the default provider isn't false-negatived (#327).
-DNS_HOOK="$(resolve_dns_service "$PROVIDER").sh"
-echo
-info "${BOLD}Ensuring acme.sh DNS hooks on ${FIREWALL}${CL}"
-ssh -o ConnectTimeout=5 root@"${FIREWALL}" \
-    'sh /usr/local/opnsense/scripts/OPNsense/AcmeClient/setup.sh' 2>/dev/null \
-    || warn "  could not run os-acme-client setup.sh on ${FIREWALL} (continuing to verify)"
-if ! ssh -o ConnectTimeout=5 root@"${FIREWALL}" \
-        "test -e /var/etc/acme-client/home/dnsapi/${DNS_HOOK}"; then
-    die "acme.sh DNS hook ${DNS_HOOK} missing on ${FIREWALL} after setup.sh (see #327)"
+# The credential goes to ca-manager (ADR-043 D6), which keeps it in its key dir;
+# --no-save-creds is accepted and has nothing left to decline.
+if [[ ${#CRED_FIELDS[@]} -gt 0 ]]; then
+    PROVIDER_NAME="$(printf '%s' "${PROVIDER#dns_}" | tr '[:upper:]_' '[:lower:]-')"
+    printf '%s\n' "${CRED_FIELDS[@]}" | ca-manager provider add "$PROVIDER_NAME" --type "$PROVIDER" --domain "$DOMAIN" \
+        || die "ca-manager provider add ${PROVIDER_NAME} failed"
 fi
-info "  ${GN}✓${CL} dnsapi hook ${DNS_HOOK} present"
-
-# ── Provision + sign via acme-manager ──────────────────────────────────────
-
-STAGING_ARG=()
-ACCOUNT_ARG=()
-if [[ $STAGING -eq 1 ]]; then
-    STAGING_ARG=(--staging)
-    # Use a SEPARATE ACME account for staging (#329). os-acme-client keys the
-    # account by name; reusing the production account name for staging flips its
-    # CA to letsencrypt_test, so the production-registered account becomes
-    # unknown on the staging endpoint and breaks subsequent production
-    # issuance and renewals.
-    ACCOUNT_ARG=(--account-name letsencrypt-staging)
-fi
-
-# Credentials go over stdin, not argv. /proc/<pid>/cmdline is world-readable,
-# so --provider-field published the DNS-API secret to every local user for the
-# whole run — minutes, with dns_sleep. Fall back to argv (loudly) when the
-# installed acme-manager predates --provider-fields-stdin, so an un-rebuilt
-# mothership keeps working instead of dying on an unknown option.
-PROV_ARGS=()
-if acme-manager setup --help 2>/dev/null | grep -q -- '--provider-fields-stdin'; then
-    PROV_ARGS=(--provider-fields-stdin)
-else
-    warn "  installed acme-manager predates --provider-fields-stdin; passing"
-    warn "  credentials on the command line, where they are visible in \`ps\`."
-    warn "  Rebuild the control plane (update-tappaas) to close this."
-    for f in "${CRED_FIELDS[@]}"; do
-        PROV_ARGS+=(--provider-field "$f")
-    done
-fi
-
-echo
-info "${BOLD}Running acme-manager setup${CL}  (drives os-acme-client end-to-end; live progress below)"
-LOG_FILE="$(mktemp /tmp/acme-setup.XXXXXX.log)"
-
-# --dns-sleep is the propagation wait os-acme-client applies BEFORE asking the
-# CA to validate; --timeout is only how long we then poll for the result. Passing
-# it to --timeout alone (the shape before this fix) left the validation object on
-# its 45s default, so raising the flag could not affect the outcome it documents.
-#
-# PYTHONUNBUFFERED also line-buffers an acme-manager built before the CLI began
-# reconfiguring its own stdout — without it, `tee` makes Python block-buffer and
-# the run below prints nothing at all until it finishes, which reads as a hang.
-#
-# `set -o pipefail` (top of file) is what makes the `if !` see acme-manager's
-# exit status rather than tee's — do not remove it.
-if ! printf '%s\n' "${CRED_FIELDS[@]}" \
-    | PYTHONUNBUFFERED=1 acme-manager --firewall "$FIREWALL" --no-ssl-verify setup \
-        --domain "$DOMAIN" --email "$EMAIL" \
-        --provider "$PROVIDER" \
-        --dns-sleep "$DNS_SLEEP" \
-        --timeout "$(( DNS_SLEEP + 180 ))" \
-        "${ACCOUNT_ARG[@]}" \
-        "${PROV_ARGS[@]}" \
-        "${STAGING_ARG[@]}" 2>&1 | tee "$LOG_FILE"; then
-    die "acme-manager setup failed (see ${LOG_FILE})"
-fi
-info "  ${GN}✓${CL} Let's Encrypt issued the certificate (statusCode 200)"
-
-# Capture the refid from the script's terminal output (last "refid: ..." line).
-REFID="$(awk '/^[[:space:]]+refid:[[:space:]]/ {print $2}' "$LOG_FILE" | tail -1)"
-[[ -n "$REFID" ]] || die "could not capture certificate refid from acme-manager output"
-
-# ── Persist refid into the runtime cert-refids.json (ADR-007c) ──────────────
-# tlsCertRefid is reconciler-populated runtime state, not authored config. Write
-# it to ${CONFIG_DIR}/cert-refids.json keyed by ENVIRONMENT name. The env name is
-# the named environment when set, else the default environment (site.json .name).
 
 ENV_NAME="$VARIANT"
 [[ -z "$ENV_NAME" ]] && ENV_NAME="$(default_environment_name)"
-CERT_REFIDS="$(cert_refids_path)"
 
 echo
-info "${BOLD}Recording refid in cert-refids.json${CL}"
-TMP="$(mktemp)"
-if [[ -f "$CERT_REFIDS" ]]; then
-    jq --arg e "$ENV_NAME" --arg refid "$REFID" '. + { ($e): $refid }' "$CERT_REFIDS" > "$TMP"
-else
-    jq -n --arg e "$ENV_NAME" --arg refid "$REFID" '{ ($e): $refid }' > "$TMP"
-fi
-mv "$TMP" "$CERT_REFIDS"
-info "  ${GN}✓${CL} cert-refids.json[\"${ENV_NAME}\"] = ${REFID}"
+info "${BOLD}ca-manager acme ${ENV_NAME}${CL}  (drives os-acme-client end-to-end; a few minutes)"
+ACME_ARGS=(acme "$ENV_NAME" --domain "$DOMAIN" --dns-sleep "$DNS_SLEEP")
+[[ $STAGING -eq 1 ]] && ACME_ARGS+=(--staging)
+ca-manager "${ACME_ARGS[@]}" || die "ca-manager acme failed for ${DOMAIN}"
+REFID="$(jq -r --arg e "$ENV_NAME" '.[$e] // empty' "$(cert_refids_path)")"
+[[ -n "$REFID" ]] || die "ca-manager reported success but cert-refids.json has no refid for ${ENV_NAME}"
 
 # ── Split-horizon wildcard DNS (ADR-005 §6, #269) ──────────────────────────
 # In wildcard mode, point *.<domain> at the DMZ gateway (where os-caddy listens)
@@ -364,8 +274,4 @@ info "  • Wildcard *.${DOMAIN} is issued and lives in OPNsense Trust (refid ${
 info "  • The 'caddy-reload' action will reload Caddy automatically on renewal"
 info "  • From here, ${BL}rest-of-foundation.sh${CL} will install modules whose"
 info "    proxyTls=dns01 binds this refid via Caddy's CustomCertificate"
-# The transcript used to be deleted by an EXIT trap, which fired on the failure
-# path too — so `die "... (see $LOG_FILE)"` pointed at a file that no longer
-# existed, and a successful run left no record of what was issued. Keep it and
-# say where it is.
-info "  • Transcript: ${LOG_FILE}"
+info "  • The DNS provider and the certificate are ca-manager's: ${BL}ca-manager provider list${CL}, ${BL}ca-manager status${CL}"
