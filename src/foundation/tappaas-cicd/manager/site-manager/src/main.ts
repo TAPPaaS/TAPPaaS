@@ -251,12 +251,15 @@ export const HELP: HelpSpec = {
     { usage: "repository list [--json]", note: "(alias: repo)" },
     { usage: "repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>] [--signer <fp>]... [--unsigned]", effect: { noPreview: "clones the repository into ~/<name> and registers it in site.json" },
       options: [
-        ["--branch <b>", "Branch to check out (default stable)."],
-        ["--managed full|tracked", "full: carries modules, its catalog is validated; tracked: registered without catalog requirements. The sweep pulls both."],
-        ["--catalog <p>", "Path of the module catalog inside the repository."],
-        ["--signer SHA256:<fp>", "ADR-033 D5: the fingerprint of a key the repository's owners sign releases with (ssh-keygen -l), from them, out of band. Once per key. Required on a staging/production branch: its current release must be signed by one of them. Recorded as the entry's trust."],
+        ["--branch <b>", "Branch to check out (default stable, or the repository's default branch when it has no stable)."],
+        ["--managed full|tracked", "full (default): the repository holds modules; its module catalog is checked and its modules can be installed. tracked: a repository without modules; the nightly update keeps it current, nothing is installed from it."],
+        ["--catalog <p>", "Where the module catalog is in the repository (default src/module-catalog.json); full only."],
+        ["--signer SHA256:<fp>", "The fingerprint of the key the repository's owners sign releases with; get it from them, out of band. Once per key. If a site runs in trusted mode, only stable/staging branches with matching key fingerprints are accepted."],
         ["--unsigned", "Add a staging/production branch without signer fingerprints: a repository that signs nothing, or one trusted from the revision cloned now (D9)."],
       ] },
+    { usage: "repository probe <url> [--branch <b>] [--json]",
+      note: "(what add would find, as JSON, without cloning: the branches, the one add checks out, its channel, whether it signs)",
+      options: [["--branch <b>", "The branch to look at (default stable, or the repository's default branch when it has no stable)."], ["--json", "The answer as JSON (it is always JSON)."]] },
     { usage: "repository introduce <name> [--signer <fp>]...",
       note: "(ADR-033 D5: check the checkout against its signers' fingerprints and record it)",
       options: [
@@ -1314,6 +1317,14 @@ function cmdRepository(o: Opts, client: SiteClient): void {
     if (o.boolFlags.has("--unsigned")) args.push("--unsigned");
     const rc = client.repositoryAdd(args);
     if (rc !== 0) throw new DieError(`repository.sh add exited ${rc}`);
+    return;
+  }
+
+  if (sub === "probe") {
+    const url = o.rest[1];
+    if (!url) die("repository probe: expected <url>");
+    const rc = client.repositoryProbe([url, ...fwdFlags(["--branch"])]);
+    if (rc !== 0) throw new DieError(`repository probe ${url}: not looked at (repository.sh exited ${rc})`);
     return;
   }
 

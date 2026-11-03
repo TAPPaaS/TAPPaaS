@@ -22,6 +22,7 @@ import { EnrolButton } from "./Enrol";
 import { RestOfFoundationButton } from "./RestOfFoundation";
 import { Day2 } from "./Day2";
 import { PASSPHRASE_TEXT, SiteSsid, WIFI_ZONE_TYPES, broadcastText, passphraseOf } from "../wizards";
+import { AddRepositoryButton } from "./AddRepository";
 
 export interface SetupDoc {
   steps: SetupStep[];
@@ -284,10 +285,7 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
     ) : null,
     repos: (
       <p className="small toolbar">
-        {(d?.inputs.repositories ?? []).includes("Community") ? null : (
-          <OperateButton label="Add Community…" title="site-manager repository add codeberg.org/TAPPaaS/Community" steps={[{ title: "site-manager repository add codeberg.org/TAPPaaS/Community --branch main", bin: "site-manager", verb: "repository add", fixed: ["codeberg.org/TAPPaaS/Community"], initial: { "--branch": "main" }, note: "Community: modules maintained outside the core project, such as UniFi OS and MikroTik." }]} />
-        )}
-        <OperateButton label="Add a repository…" title="site-manager repository add" steps={[{ title: "site-manager repository add <url>", bin: "site-manager", verb: "repository add" }]} />
+        <AddRepositoryButton installed={d?.inputs.repositories ?? []} />
         <AnswerButton step="repos" answer="tappaas-only" label="TAPPaaS only" given={ans("repos")} onChanged={r.reload} />
       </p>
     ),

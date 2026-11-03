@@ -2054,7 +2054,7 @@
           "arg": "<b>",
           "choices": null,
           "repeatable": false,
-          "description": "Branch to check out (default stable)."
+          "description": "Branch to check out (default stable, or the repository's default branch when it has no stable)."
         },
         {
           "flag": "--managed",
@@ -2065,7 +2065,7 @@
             "tracked"
           ],
           "repeatable": false,
-          "description": "full: carries modules, its catalog is validated; tracked: registered without catalog requirements. The sweep pulls both."
+          "description": "full (default): the repository holds modules; its module catalog is checked and its modules can be installed. tracked: a repository without modules; the nightly update keeps it current, nothing is installed from it."
         },
         {
           "flag": "--catalog",
@@ -2073,7 +2073,7 @@
           "arg": "<p>",
           "choices": null,
           "repeatable": false,
-          "description": "Path of the module catalog inside the repository."
+          "description": "Where the module catalog is in the repository (default src/module-catalog.json); full only."
         },
         {
           "flag": "--signer",
@@ -2081,7 +2081,7 @@
           "arg": "<fp>",
           "choices": null,
           "repeatable": true,
-          "description": "ADR-033 D5: the fingerprint of a key the repository's owners sign releases with (ssh-keygen -l), from them, out of band. Once per key. Required on a staging/production branch: its current release must be signed by one of them. Recorded as the entry's trust."
+          "description": "The fingerprint of the key the repository's owners sign releases with; get it from them, out of band. Once per key. If a site runs in trusted mode, only stable/staging branches with matching key fingerprints are accepted."
         },
         {
           "flag": "--unsigned",

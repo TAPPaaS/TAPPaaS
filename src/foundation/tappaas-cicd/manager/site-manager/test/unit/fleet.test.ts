@@ -225,6 +225,11 @@ function captured(argv: string[], c: FakeSiteClient): { rc: number; out: string;
 }
 {
   const c = new FakeSiteClient();
+  check(run(["repository", "probe", "codeberg.org/x/y", "--branch", "main", "--json", "--config-dir", cfg], c) === 0
+    && c.log.includes("repository.sh probe codeberg.org/x/y --branch main"), "repository probe <url> --branch delegates to repository.sh");
+}
+{
+  const c = new FakeSiteClient();
   check(run(["repository", "sync", "extra", "--dry-run", "--config-dir", cfg], c) === 0
     && c.log.includes("repository.sh sync extra --dry-run"), "repository sync <name> --dry-run delegates to repository.sh");
   for (const argv of [["repository", "sync"], ["repository", "sync", "a", "b"]]) {

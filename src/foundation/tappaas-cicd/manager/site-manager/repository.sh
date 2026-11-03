@@ -117,6 +117,10 @@ Commands:
                            repository that signs nothing, or one taken on trust
                            from the revision cloned now (D9).
 
+    probe <url> [--branch <branch>]
+        What add would find, as JSON, without cloning: the branches, the one
+        add checks out, its channel, whether it signs, its catalog.
+
     introduce <name> [--signer SHA256:<fp>]...
         Check <name>'s checkout against its signers' fingerprints and record
         it as the last verified release (ADR-033 D5) — the ones in site.json,
@@ -1505,6 +1509,61 @@ cmd_validate_catalog() {
 # Check a checkout against its signers' fingerprints and record it (ADR-033 D5):
 # the ones in site.json, or the ones given with --signer, written to site.json
 # once the checkout verifies against them.
+# cmd_probe <url> [--branch <branch>] — what `add` would find, as JSON, without
+# cloning or writing anything: the remote's branches, the one add would check out
+# (the given one; else stable when it has one, else its default branch), that
+# branch's channel, whether it signs its releases, and its module catalog.
+cmd_probe() {
+    local url="" branch=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --branch) [[ -n "${2:-}" ]] || die "Option --branch requires a value"; branch="$2"; shift 2 ;;
+            --json) shift ;;
+            --*) die "Unknown option: $1" ;;
+            *) url="$(normalize_repo_url "$1")"; shift ;;
+        esac
+    done
+    [[ -n "${url}" ]] || die "Repository URL is required. Usage: ${SCRIPT_NAME} probe <url> [--branch <branch>]"
+    local remote="https://${url}" refs head branches
+    refs="$(GIT_TERMINAL_PROMPT=0 git ls-remote --symref "${remote}" HEAD 'refs/heads/*' 2>/dev/null)" || die "Cannot reach repository: ${remote}"
+    head="$(awk '$1 == "ref:" && $3 == "HEAD" { sub("refs/heads/", "", $2); print $2 }' <<<"${refs}")"
+    branches="$(awk '$1 != "ref:" && $2 ~ /^refs\/heads\// { sub("refs/heads/", "", $2); print $2 }' <<<"${refs}" | sort)"
+    if [[ -z "${branch}" ]]; then
+        if grep -qxF stable <<<"${branches}"; then branch=stable; else branch="${head}"; fi
+    fi
+    local found=false channel="" signs=false catalog="" name existing installed=false
+    name="$(derive_repo_name "${url}")"
+    existing="$(get_repo_by_name "${name}" 2>/dev/null || echo null)"
+    [[ -n "${existing}" && "${existing}" != "null" ]] && installed=true
+    if [[ -n "${branch}" ]] && grep -qxF "${branch}" <<<"${branches}"; then
+        found=true
+        local tmp; tmp="$(mktemp -d)"
+        # A shallow, blobless fetch: the few files read come on demand.
+        if git -C "${tmp}" init -q && git -C "${tmp}" remote add origin "${remote}" \
+           && GIT_TERMINAL_PROMPT=0 git -C "${tmp}" fetch -q --depth 1 --filter=blob:none origin "refs/heads/${branch}" 2>/dev/null; then
+            git -C "${tmp}" show FETCH_HEAD:channels.json >"${tmp}/channels.json" 2>/dev/null || rm -f "${tmp}/channels.json"
+            channel="$(branch_channel "${tmp}" "${branch}")"
+            verify_repo_signs "${tmp}" FETCH_HEAD && signs=true
+            local c
+            for c in src/module-catalog.json src/modules.json; do
+                if git -C "${tmp}" cat-file -e "FETCH_HEAD:${c}" 2>/dev/null; then catalog="${c}"; break; fi
+            done
+        fi
+        rm -rf "${tmp}"
+    fi
+    jq -n --arg url "${url}" --arg name "${name}" --argjson installed "${installed}" \
+        --arg default "${head}" --arg branches "${branches}" --arg branch "${branch}" --argjson found "${found}" \
+        --arg channel "${channel}" --argjson signs "${signs}" --arg catalog "${catalog}" '
+        { url: $url, name: $name, installed: $installed,
+          defaultBranch: (if $default == "" then null else $default end),
+          branches: ($branches | split("\n") | map(select(. != ""))),
+          branch: (if $branch == "" then null else $branch end), branchFound: $found,
+          channel: (if $channel == "" then null else $channel end),
+          verified: ($channel == "staging" or $channel == "production"),
+          signs: $signs,
+          catalog: (if $catalog == "" then null else $catalog end) }'
+}
+
 cmd_introduce() {
     local name="" signers="" entry path branch
     while [[ $# -gt 0 ]]; do
@@ -1579,6 +1638,7 @@ main() {
     case "${command}" in
         add)    cmd_add "$@" ;;
         introduce) cmd_introduce "$@" ;;
+        probe)  cmd_probe "$@" ;;
         remove) cmd_remove "$@" ;;
         modify) cmd_modify "$@" ;;
         list)   cmd_list ;;

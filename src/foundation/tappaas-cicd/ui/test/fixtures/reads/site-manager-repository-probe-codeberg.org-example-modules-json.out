@@ -1,0 +1,17 @@
+{
+  "url": "codeberg.org/example/modules",
+  "name": "modules",
+  "installed": false,
+  "defaultBranch": "main",
+  "branches": [
+    "main",
+    "stable",
+    "staging"
+  ],
+  "branch": "stable",
+  "branchFound": true,
+  "channel": "production",
+  "verified": true,
+  "signs": true,
+  "catalog": "src/module-catalog.json"
+}

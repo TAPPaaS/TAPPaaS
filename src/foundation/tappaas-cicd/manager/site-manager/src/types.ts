@@ -257,6 +257,7 @@ export interface SiteClient {
   //   repository validate-catalog → repository.sh validate-catalog [<name>] [--strict]
   repositoryValidateCatalog(args: string[]): number;
   //   repository introduce → repository.sh introduce <name> [--signer fp]... (ADR-033 D5)
+  repositoryProbe(args: string[]): number;
   repositoryIntroduce(args: string[]): number;
   //   repository stash  → repository.sh stash [list|show|restore|discard] … (#681)
   repositoryStash(args: string[]): number;

@@ -122,6 +122,10 @@ export class FakeSiteClient implements SiteClient {
     this.log.push(`repository.sh validate-catalog ${args.join(" ")}`);
     return this.delegateRc;
   }
+  repositoryProbe(args: string[]): number {
+    this.log.push(`repository.sh probe ${args.join(" ")}`);
+    return this.delegateRc;
+  }
   repositoryIntroduce(args: string[]): number {
     this.log.push(`repository.sh introduce ${args.join(" ")}`);
     return this.delegateRc;

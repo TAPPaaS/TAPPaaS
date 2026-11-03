@@ -231,6 +231,10 @@ export class CliSiteClient implements SiteClient {
     return runStreaming(REPOSITORY_SH(), ["add", ...args]);
   }
 
+  repositoryProbe(args: string[]): number {
+    return runStreaming(REPOSITORY_SH(), ["probe", ...args]);
+  }
+
   repositoryIntroduce(args: string[]): number {
     // ADR-033 D5: repository.sh introduce <name> [--signer <fp>]...
     return runStreaming(REPOSITORY_SH(), ["introduce", ...args]);

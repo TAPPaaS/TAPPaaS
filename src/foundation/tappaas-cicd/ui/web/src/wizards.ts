@@ -403,3 +403,32 @@ export function previewRefuses(j: { exit: number | null; output: string; preview
   if (j.exit !== 0 && !(j.preview.kind === "apply-flag" && j.exit === 2)) return true;
   return /^\[refused\]/m.test(j.output);
 }
+
+// ── Add a repository ──────────────────────────────────────────────────
+export const COMMUNITY_URL = "codeberg.org/TAPPaaS/Community";
+
+// The URL the form opens with: Community until the site has it.
+export const repositoryPrefill = (installed: string[]): string => (installed.includes("Community") ? "" : COMMUNITY_URL);
+
+// What repository probe says of a URL (repository.sh cmd_probe).
+export interface RepositoryProbe {
+  url: string;
+  name: string;
+  installed: boolean;
+  defaultBranch: string | null;
+  branches: string[];
+  branch: string | null;
+  branchFound: boolean;
+  channel: string | null;
+  verified: boolean; // a staging or production branch: its releases are checked
+  signs: boolean; // it lists keys its releases are signed with
+  catalog: string | null;
+}
+
+// Which of the add form's choices apply: the catalog for a repository of
+// modules; on a verified branch --unsigned, and the signers unless it is ticked
+// and only when the repository signs.
+export function repositoryChoices(probe: RepositoryProbe | null, managed: string, unsigned: boolean): { catalog: boolean; unsigned: boolean; signer: boolean } {
+  const verified = probe?.verified === true;
+  return { catalog: managed !== "tracked", unsigned: verified, signer: verified && probe?.signs === true && !unsigned };
+}

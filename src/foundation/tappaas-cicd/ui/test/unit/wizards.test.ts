@@ -10,7 +10,7 @@ import { join } from "path";
 import { buildArgv, confirmMatches, confirmObject, missingFields, requiredOptions, stepFlow } from "../../web/src/argv";
 import { previewStop } from "../../src/jobs";
 import { ManifestVerb } from "../../web/src/types";
-import { BUDDY_KINDS, PASSPHRASE_TEXT, RunJob, jobInApply, jobRunState, previewRefuses, refusalLines, runFailure, SatellitePlan, SessionJob, SiteSsid, StepSpec, argOf, buddyNameProblem, sessionJob, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, broadcastText, defaultSsid, isPlaceholderSsid, needsPassphrase, passphraseOf, queuedBehind, passphraseProblem, ssidProblem, stackModuleOrigin, stackSkips, stacksOf, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
+import { BUDDY_KINDS, PASSPHRASE_TEXT, RunJob, jobInApply, jobRunState, previewRefuses, refusalLines, runFailure, SatellitePlan, SessionJob, SiteSsid, StepSpec, argOf, buddyNameProblem, sessionJob, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, broadcastText, defaultSsid, isPlaceholderSsid, needsPassphrase, passphraseOf, queuedBehind, passphraseProblem, ssidProblem, stackModuleOrigin, stackSkips, stacksOf, repositoryChoices, repositoryPrefill, RepositoryProbe, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
 import { check, done } from "./check";
 import { FIX, pinned } from "./fake-site";
 
@@ -114,6 +114,18 @@ check(confirmObject({ bin: "module-manager" }, delVerb, { "@module": " deconz " 
 const rpVerb = { verb: "remove-port", keys: [["remove-port"]], positionals: [{ name: "switch", optional: false, repeatable: false }, { name: "port", optional: false, repeatable: false }], readWhen: [], destructiveWhen: [], object: { positional: "port", within: ["switch"] } } as unknown as ManifestVerb;
 const rp = confirmObject({ bin: "switch-manager", fixed: ["crs-a"] }, rpVerb, { "@port": "7" }, ["switch-manager", "remove-port", "crs-a", "7"]);
 check(rp.object === "7" && rp.label === "crs-a:7", "…or the positional its verb declares, within its container");
+
+// Add a repository: Community until the site has it; the signing choices only on a verified branch.
+{
+  check(repositoryPrefill(["TAPPaaS"]) === "codeberg.org/TAPPaaS/Community" && repositoryPrefill(["TAPPaaS", "Community"]) === "", "the form opens on Community until the site has it");
+  const p: RepositoryProbe = { url: "x", name: "x", installed: false, defaultBranch: "main", branches: ["main", "stable"], branch: "stable", branchFound: true, channel: "production", verified: true, signs: true, catalog: "src/module-catalog.json" };
+  const c = (pr: RepositoryProbe | null, managed = "full", unsigned = false) => JSON.stringify(repositoryChoices(pr, managed, unsigned));
+  check(c(p) === JSON.stringify({ catalog: true, unsigned: true, signer: true }), "a signed, verified branch: --unsigned and --signer");
+  check(c(p, "full", true) === JSON.stringify({ catalog: true, unsigned: true, signer: false }), "--signer goes once --unsigned is ticked");
+  check(c({ ...p, signs: false }) === JSON.stringify({ catalog: true, unsigned: true, signer: false }), "a verified branch that signs nothing: --unsigned only");
+  check(c({ ...p, verified: false, channel: "unstable" }) === JSON.stringify({ catalog: true, unsigned: false, signer: false }) && c(null) === c({ ...p, verified: false }), "an unchecked branch, or not looked at yet: neither");
+  check(c(p, "tracked").includes('"catalog":false'), "no catalog for a tracked repository");
+}
 
 // Add a stack: the stacks the catalogues name, foundation aside, their modules as the note.
 {

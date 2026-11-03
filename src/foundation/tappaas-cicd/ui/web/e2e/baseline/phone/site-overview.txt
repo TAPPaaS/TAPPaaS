@@ -159,6 +159,7 @@
 - definition: 2026-11-01 02:42:48 · 31 of 31 ok
 - 'button "Release train: preview"'
 - 'button "Release train: status"'
+- button "Add a repository…"
 - button "Reconcile repositories…"
 - table:
   - rowgroup:

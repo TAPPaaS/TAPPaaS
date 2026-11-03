@@ -1139,6 +1139,12 @@ export class Reads {
     return runJson<unknown>(this.cfg.run, "module-manager", ["add-stack", stack, ...(environment ? ["--environment", environment] : []), "--dry-run", "--json"], { timeoutMs: 60_000 });
   }
 
+  // What repository add would find at a URL (its branches, the one it checks
+  // out, whether that one is verified and signs), read fresh each time.
+  repositoryProbe(url: string, branch: string | null): Promise<unknown> {
+    return runJson<unknown>(this.cfg.run, "site-manager", ["repository", "probe", url, ...(branch ? ["--branch", branch] : []), "--json"], { timeoutMs: 60_000 });
+  }
+
   // Where Rest of foundation puts each guest, read fresh each time: every
   // machine is asked once for its pools, bridges and guests.
   foundationPlacement(): Promise<unknown> {

@@ -22,6 +22,7 @@ import { locationAnchor } from "../locations";
 import { publicAddress, publicText } from "../zonegraph";
 import { PHYSICAL_TABS, PhysicalView, VIEW_NAME, VIEW_PATH } from "../physical/views";
 import { AddNodeButton } from "./AddNode";
+import { AddRepositoryButton } from "./AddRepository";
 import { AdoptButton } from "./Adopt";
 import { SatelliteButton } from "./Satellite";
 import { Physical } from "./Physical";
@@ -234,6 +235,7 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
           <div className="toolbar">
             <OperateButton label="Release train: preview" title="tappaas-train.sh preview" steps={[{ title: "tappaas-train.sh preview — the last release against 'if released now'", bin: "tappaas-train.sh", verb: "preview", note: "Nothing built, nothing moved; it writes config/train-preview.json. Text output: the train has no --json yet." }]} />
             <OperateButton label="Release train: status" title="tappaas-train.sh status" steps={[{ title: "tappaas-train.sh status", bin: "tappaas-train.sh", verb: "status" }]} />
+            <AddRepositoryButton installed={repos.map((x) => x.name)} />
             <OperateButton label="Reconcile repositories…" title="site-manager repository reconcile" steps={[sm("site-manager repository reconcile", "repository reconcile")]} />
           </div>
           <table className="table compact">

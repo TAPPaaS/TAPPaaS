@@ -262,6 +262,18 @@ export class ConsoleServer {
           return sendJson(res, 200, { data: null, at: null, ageSeconds: null, refreshing: false, error: (e as Error).message });
         }
       }
+      case "repository-probe": {
+        // What repository add would find: repository-probe?url=<host/path>[&branch=<branch>].
+        const u = url.searchParams.get("url") ?? "";
+        const branch = url.searchParams.get("branch");
+        if (!/^(https?:\/\/)?[A-Za-z0-9][A-Za-z0-9._~\/-]{0,200}$/.test(u) || (branch && !/^[A-Za-z0-9][A-Za-z0-9._\/-]{0,100}$/.test(branch))) return sendJson(res, 400, { error: "repository-probe?url=<host/path>[&branch=<branch>]" });
+        try {
+          const data = await r.repositoryProbe(u, branch);
+          return sendJson(res, 200, { data, at: new Date().toISOString(), ageSeconds: 0, refreshing: false, error: null });
+        } catch (e) {
+          return sendJson(res, 200, { data: null, at: null, ageSeconds: null, refreshing: false, error: (e as Error).message });
+        }
+      }
       case "stack-plan": {
         // The modules of a stack and what add-stack would do with each: stack-plan/<stack>[?environment=<env>].
         const environment = url.searchParams.get("environment");
