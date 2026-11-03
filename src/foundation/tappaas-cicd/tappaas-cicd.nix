@@ -462,9 +462,10 @@ in
         "-/etc/secrets/backup-fs"
         # A module add or update builds the guest's NixOS system here (#774):
         # the guest's /etc/nixos staged, and the result rooted. Read-only, the
-        # build falls back to the guest itself (lab2, 2026-11-03).
-        "/var/lib/tappaas-guest-build"
-        "/nix/var/nix/gcroots/tappaas-guests"
+        # build falls back to the guest itself (lab2, 2026-11-03). "-": a switch
+        # may restart this unit before tmpfiles has made them.
+        "-/var/lib/tappaas-guest-build"
+        "-/nix/var/nix/gcroots/tappaas-guests"
       ];
       ReadOnlyPaths = [
         "-/home/tappaas/.ssh/authorized_keys"
