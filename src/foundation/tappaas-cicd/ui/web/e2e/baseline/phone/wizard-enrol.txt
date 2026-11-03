@@ -117,7 +117,7 @@
   - paragraph: Register a laptop or other device running WireGuard to be able to connect to the TAPPaaS management zone.
   - list:
     - listitem:
-      - button "warn 0 · How the tunnel is made pending ▾" [expanded]: 0 · How the tunnel is made pending ▾
+      - button "pass 0 · How the tunnel is made done ▾" [expanded]: 0 · How the tunnel is made done ▾
       - paragraph: "Four steps: a key pair on this device, the device registered with the site, its WireGuard file, the tunnel."
       - list:
         - listitem: A key pair on this device. A private key that never leaves it, and its public half.

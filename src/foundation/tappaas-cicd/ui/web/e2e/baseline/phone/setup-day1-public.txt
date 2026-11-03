@@ -66,17 +66,8 @@
     - button "pass The admin VPN done ▸": The admin VPN done ▸
     - paragraph: "peer(s): lars-mac"
   - listitem:
-    - button "pass Backup (PBS) done ▸": Backup (PBS) done ▸
-    - paragraph: installed; updated and tested by the sweep (2026-11-01 01:42:48Z)
-  - listitem:
-    - button "pass Identity (Authentik) done ▸": Identity (Authentik) done ▸
-    - paragraph: installed; updated and tested by the sweep (2026-11-01 01:42:48Z)
-  - listitem:
-    - button "pass Logging (Loki, Grafana) done ▸": Logging (Loki, Grafana) done ▸
-    - paragraph: installed; updated and tested by the sweep (2026-11-01 01:42:48Z)
-  - listitem:
-    - button "pass Rest of foundation — your organization and you done ▸": Rest of foundation — your organization and you done ▸
-    - paragraph: "config/identities: 1 organization(s), 3 user(s)"
+    - button "pass Rest of foundation — backup, identity, logging, and you done ▸": Rest of foundation — backup, identity, logging, and you done ▸
+    - paragraph: "backup: tested by the sweep (2026-11-01 01:42:48Z); identity: tested by the sweep (2026-11-01 01:42:48Z); logging: tested by the sweep (2026-11-01 01:42:48Z); you: 1 organization(s), 3 user(s)"
   - listitem:
     - button "pass Repositories (optional) done ▸": Repositories (optional) done ▸
     - paragraph: "registered: TAPPaaS, Community"
