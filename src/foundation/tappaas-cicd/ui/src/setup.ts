@@ -93,7 +93,7 @@ export interface WifiInputs {
   aps: { name: string; ssids: { name: string; zone: string | null }[] }[] | null; // null: ap-manager list could not be read
 }
 
-export type StepId = "firstnode" | "nodes" | "vpn" | "backup" | "identity" | "logging" | "bootstrap" | "repos" | "switch" | "wifi" | "physical" | "stacks" | "public";
+export type StepId = "firstnode" | "nodes" | "vpn" | "bootstrap" | "repos" | "switch" | "wifi" | "physical" | "stacks" | "public";
 
 export interface SetupStep {
   id: StepId;
@@ -103,7 +103,16 @@ export interface SetupStep {
   detail: string;
 }
 
-const MODULE_TITLES = { backup: "Backup (PBS)", identity: "Identity (Authentik)", logging: "Logging (Loki, Grafana)" };
+const MODULE_NAMES = { backup: "backup", identity: "identity", logging: "logging" };
+
+// One foundation module's part of its step: installed, and its test passed.
+export function moduleState(s: { config: boolean; test: TestResult | null }): { done: boolean | null; detail: string } {
+  if (!s.config) return { done: false, detail: "not installed" };
+  if (s.test === null) return { done: null, detail: "installed, not tested yet: Check runs it" };
+  const when = s.test.at.replace("T", " ").replace(/\.\d+Z$/, "Z");
+  if (s.test.rc === 0) return { done: true, detail: s.test.sweep ? `tested by the sweep (${when})` : `test passed (${when})` };
+  return { done: false, detail: `test failed (${when}): ${s.test.tail}` };
+}
 
 export function setupSteps(i: SetupInputs): SetupStep[] {
   const steps: SetupStep[] = [];
@@ -136,16 +145,17 @@ export function setupSteps(i: SetupInputs): SetupStep[] {
   if (i.vpnPeers === null) steps.push({ id: "vpn", title: "The admin VPN", required: true, done: null, detail: "network-manager wgvpn list could not be read" });
   else steps.push({ id: "vpn", title: "The admin VPN", required: true, done: i.vpnPeers.length > 0, detail: i.vpnPeers.length ? `peer(s): ${i.vpnPeers.join(", ")}` : "no peer yet: enrol a device" });
 
-  // 4 · the foundation, and you in it.
-  for (const m of SETUP_MODULES) {
-    const s = i.modules[m];
-    const done = !s.config ? false : s.test === null ? null : s.test.rc === 0;
-    const when = s.test ? ` (${s.test.at.replace("T", " ").replace(/\.\d+Z$/, "Z")})` : "";
-    const detail = !s.config ? `config/${m}.json does not exist: not installed` : s.test === null ? `installed (config/${m}.json); its test has not run yet: Check runs it, and so does the next sweep` : s.test.rc === 0 ? (s.test.sweep ? `installed; updated and tested by the sweep${when}` : `installed; its test passed${when}`) : `installed, but its test failed${when}: ${s.test.tail}`;
-    steps.push({ id: m, title: MODULE_TITLES[m], required: true, done, detail });
-  }
+  // 4 · the rest of the foundation, and you in it: one step, one job (Rest of
+  // foundation). Backup, identity and logging are its parts: each installed and
+  // its test passed, and an organization with a user.
+  const parts = SETUP_MODULES.map((m) => ({ m, ...moduleState(i.modules[m]) }));
   const boot = i.identities.organizations > 0 && i.identities.users > 0;
-  steps.push({ id: "bootstrap", title: "Rest of foundation — your organization and you", required: true, done: boot, detail: boot ? `config/identities: ${i.identities.organizations} organization(s), ${i.identities.users} user(s)` : "config/identities has no organization or no user yet" });
+  const fdone = parts.some((p) => p.done === false) || !boot ? false : parts.some((p) => p.done === null) ? null : true;
+  const fdetail = [
+    ...parts.map((p) => `${MODULE_NAMES[p.m]}: ${p.detail}`),
+    boot ? `you: ${i.identities.organizations} organization(s), ${i.identities.users} user(s)` : "you: no organization or user yet",
+  ].join("; ");
+  steps.push({ id: "bootstrap", title: "Rest of foundation — backup, identity, logging, and you", required: true, done: fdone, detail: fdetail });
 
   // 5 · repositories (optional).
   const repos = i.repositories ?? [];

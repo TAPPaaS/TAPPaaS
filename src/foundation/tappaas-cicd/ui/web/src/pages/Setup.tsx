@@ -11,7 +11,6 @@ import { ReactNode, useEffect, useState } from "react";
 import { Read, post, useRead } from "../api";
 import { JobOutput, JobStatusLine, quote, stripAnsi } from "../jobs";
 import { OperateButton, Step } from "../operate";
-import { fieldsStep } from "../fields";
 import { useJobRun } from "../run";
 import { JobSummary, SiteRead } from "../types";
 import { Dot, Link, ReadState, canOperate, replacePath, since, useMe } from "../ui";
@@ -34,6 +33,7 @@ export interface SetupDoc {
     firstNode?: { name: string; pools: string[] } | null;
     repositories?: string[];
     answers?: Record<string, string>;
+    modules?: Record<string, { config: boolean; test: { rc: number; at: string } | null }>;
     wifi?: { zones: { name: string; type: string | null; state: string | null; ssid: string | null }[]; aps: { name: string; ssids: { name: string; zone: string | null }[] }[] | null };
   };
   token: { active: boolean; present: boolean; identityInstalled: boolean };
@@ -308,7 +308,6 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
         </p>
       </>
     ),
-    bootstrap: <RestOfFoundationButton email={email} />,
     nodes: (
       <span className="toolbar">
         <AddNodeButton session={adding} />
@@ -341,17 +340,36 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
       </p>
     ),
   };
-  for (const m of ["backup", "identity", "logging"]) {
-    body[m] = (
-      <span className="toolbar">
-        <OperateButton label={`Install ${m}…`} title={`module-manager add ${m}`} steps={() => [fieldsStep({ title: `module-manager add ${m} --environment mgmt`, bin: "module-manager", verb: "add", fixed: [m], kind: "module", name: m, mode: "add", keep: ["--environment"], initial: { "--environment": "mgmt" }, choices: { "--environment": ["mgmt"] }, note: m === "identity" ? "Once identity is installed the console deletes the setup token: from then on it is reached through console.<domain> behind the gate (publish it below)." : undefined })]} />
-        <OperateButton label="Test" title={`module-manager test ${m}`} steps={[mm(`module-manager test ${m}`, "test", { fixed: [m], hide: ["--vmid", "--zone0"] })]} />
-        {m === "identity" ? (
-          <OperateButton label="Publish the console…" title="module-manager add console" steps={[mm("module-manager add console --proxyDomain console.<domain>", "add", { fixed: ["console"], initial: { "@extra": [`--proxyDomain console.${domain}`] }, note: "The console's route through Caddy and the Authentik gate (the console module): mgmt and the admin VPN only." })]} />
-        ) : null}
-      </span>
-    );
-  }
+  // Rest of foundation: one job installs what is missing; each part's state and
+  // its test below it, and the console's publishing beside identity.
+  const mods = d?.inputs.modules ?? {};
+  const partText = (m: string): string => {
+    const x = mods[m];
+    if (!x || !x.config) return "not installed";
+    if (!x.test) return "installed, not tested yet";
+    return x.test.rc === 0 ? "test passed" : "test failed";
+  };
+  body.bootstrap = (
+    <>
+      <p className="small toolbar"><RestOfFoundationButton email={email} /><span className="muted">Installs what is missing of backup, identity and logging, then your organization and you.</span></p>
+      <table className="table compact">
+        <tbody>
+          {["backup", "identity", "logging"].map((m) => (
+            <tr key={m}>
+              <td>{m}</td>
+              <td className="muted">{partText(m)}</td>
+              <td className="toolbar">
+                {mods[m]?.config ? <OperateButton label="Test" title={`module-manager test ${m}`} steps={[mm(`module-manager test ${m}`, "test", { fixed: [m], hide: ["--vmid", "--zone0"] })]} /> : null}
+                {m === "identity" && mods[m]?.config ? (
+                  <OperateButton label="Publish the console…" title="module-manager add console" steps={[mm("module-manager add console --proxyDomain console.<domain>", "add", { fixed: ["console"], initial: { "@extra": [`--proxyDomain console.${domain}`] }, note: "The console's route through Caddy and the Authentik gate (the console module): mgmt and the admin VPN only." })]} />
+                ) : null}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
 
   return (
     <>

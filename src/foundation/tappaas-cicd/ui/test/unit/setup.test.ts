@@ -15,6 +15,9 @@ import { parseKv, secretCommand, secretStatus, writeSecret } from "../../src/sec
 import { SetupInputs, TESTS_FILE, readSetupAnswers, recordSetupAnswer, physicalStep, readPhysical, WifiInputs, clientZonesWithoutWifi, closeSetupToken, gatherSetup, parseApList, parseSwitches, parseWgvpnPeers, readSetupTests, readWifiZones, recordSetupTest, setupCheckModules, setupComplete, setupSteps, wifiStep } from "../../src/setup";
 import { testGate } from "./gate-fixture";
 import { check, done } from "./check";
+
+// One module's part of the Rest of foundation step's detail.
+const part = (st: { id: string; detail: string }[], m: string): string => st.find((s) => s.id === "bootstrap")!.detail.split("; ").find((x) => x.startsWith(`${m}: `)) ?? "";
 import { FIX, PIN } from "./fake-site";
 
 const fx = (f: string): string => readFileSync(join(FIX, "setup", f), "utf8");
@@ -53,8 +56,8 @@ async function main(): Promise<void> {
     answers: {},
   };
   let steps = setupSteps(hrossen);
-  check(steps.map((s) => s.id).join() === "firstnode,nodes,vpn,backup,identity,logging,bootstrap,repos,switch,wifi,physical,stacks,public", "Day 1's order: first node, nodes, VPN, foundation, repositories, switches, Wi-Fi, physical, stacks, make it public");
-  check(steps.filter((s) => s.required).map((s) => s.id).join() === "firstnode,vpn,backup,identity,logging,bootstrap", "…required: the first node, the VPN and the foundation");
+  check(steps.map((s) => s.id).join() === "firstnode,nodes,vpn,bootstrap,repos,switch,wifi,physical,stacks,public", "Day 1's order: first node, nodes, VPN, foundation, repositories, switches, Wi-Fi, physical, stacks, make it public");
+  check(steps.filter((s) => s.required).map((s) => s.id).join() === "firstnode,vpn,bootstrap", "…required: the first node, the VPN and the foundation");
   check(!steps.some((s) => (s.id as string) === "tls"), "…and no TLS step (ADR-043 D10)");
   check(steps.filter((s) => s.id !== "wifi").every((s) => s.done === true) && setupComplete(steps), "hrossen: every step reads as done but the optional WiFi");
 
@@ -83,10 +86,11 @@ async function main(): Promise<void> {
   check(one({ repositories: ["TAPPaaS"] }, "repos").done === false && one({ repositories: ["TAPPaaS"], answers: { repos: "tappaas-only" } }, "repos").done === true, "TAPPaaS alone: not done until \"TAPPaaS only\"");
   check(one({ siteNodes: ["tappaas1"], clusterNodes: ["tappaas1"] }, "nodes").done === false && one({ siteNodes: ["tappaas1"], clusterNodes: ["tappaas1"], answers: { nodes: "no-more" } }, "nodes").done === true, "one node: not done until \"no more machines\"");
   check(one({ switches: [], answers: { switch: "none" } }, "switch").done === true && one({ switches: null, answers: { switch: "none" } }, "switch").done === true, "no switch managed: \"none\" answers it, even unreadable");
-  check(one({ modules: { ...hrossen.modules, logging: { config: false, test: null } } }, "logging").done === false, "no config/logging.json: logging not done");
-  check(one({ modules: { ...hrossen.modules, backup: { config: true, test: { rc: 1, tail: "FAIL pbs", at: "2026-10-18T09:00:00.000Z" } } } }, "backup").done === false, "installed but its test fails: not done");
-  check(/passed \(2026-10-18 09:00:00Z\)/.test(steps.find((s) => s.id === "backup")!.detail), "…and a step says when its test last ran");
-  check(one({ modules: { ...hrossen.modules, identity: { config: true, test: null } } }, "identity").done === null, "installed, test not run: unknown");
+  const nolog = one({ modules: { ...hrossen.modules, logging: { config: false, test: null } } }, "bootstrap");
+  check(nolog.done === false && nolog.detail.includes("logging: not installed"), "no config/logging.json: the rest of the foundation is not done, and says logging is missing");
+  check(one({ modules: { ...hrossen.modules, backup: { config: true, test: { rc: 1, tail: "FAIL pbs", at: "2026-10-18T09:00:00.000Z" } } } }, "bootstrap").done === false, "installed but its test fails: not done");
+  check(/passed \(2026-10-18 09:00:00Z\)/.test(part(steps, "backup")), "…and a step says when its test last ran");
+  check(one({ modules: { ...hrossen.modules, identity: { config: true, test: null } } }, "bootstrap").done === null, "installed, test not run: unknown");
   check(one({ identities: { organizations: 0, users: 0 } }, "bootstrap").done === false, "an empty config/identities: bootstrap not done");
   const nd = one({ clusterNodes: ["tappaas1", "tappaas2"] }, "nodes");
   check(nd.done === false && nd.detail.includes("tappaas3"), "a declared node outside the cluster: not done, and named");
@@ -151,17 +155,17 @@ async function main(): Promise<void> {
   inputs = await gather();
   steps = setupSteps(inputs);
   check(ran.filter((r) => r.startsWith("module-manager test")).length === 0, "a read with the modules installed still runs no test (finding 7)");
-  check(steps.filter((s) => s.done === null).map((s) => s.id).join() === "backup,identity,logging" && /Check runs it/.test(steps.find((s) => s.id === "backup")!.detail), "…their steps are unknown until the explicit refresh runs the tests");
+  check(steps.filter((s) => s.done === null).map((s) => s.id).join() === "bootstrap" && /Check runs it/.test(part(steps, "backup")), "…their steps are unknown until the explicit refresh runs the tests");
   // a successful sweep counts as the tests: last-update-result.json says every module was updated (and so tested)
   writeFileSync(join(cfg, "last-update-result.json"), JSON.stringify({ ok: true, end_time: "2099-01-01 03:00:00", failed_modules: [] }));
   steps = setupSteps(await gather());
-  check(steps.filter((s) => ["backup", "identity", "logging"].includes(s.id)).every((s) => s.done === true) && /tested by the sweep/.test(steps.find((s) => s.id === "backup")!.detail), "a successful sweep that ended after the configs were written counts as their tests");
+  check(steps.find((s) => s.id === "bootstrap")!.done === true && /tested by the sweep/.test(part(steps, "backup")), "a successful sweep that ended after the configs were written counts as their tests");
   writeFileSync(join(cfg, "last-update-result.json"), JSON.stringify({ ok: true, end_time: "2099-01-01 03:00:00", failed_modules: ["identity"] }));
   steps = setupSteps(await gather());
-  check(steps.find((s) => s.id === "identity")!.done === null && steps.find((s) => s.id === "backup")!.done === true, "…but not for a module that run failed on");
+  check(steps.find((s) => s.id === "bootstrap")!.done === null && /tested by the sweep/.test(part(steps, "backup")) && /not tested yet/.test(part(steps, "identity")), "…but not for a module that run failed on");
   writeFileSync(join(cfg, "last-update-result.json"), JSON.stringify({ ok: true, end_time: "2000-01-01 03:00:00", failed_modules: [] }));
   steps = setupSteps(await gather());
-  check(steps.find((s) => s.id === "backup")!.done === null, "…nor from a run that ended before the module was installed");
+  check(/not tested yet/.test(part(steps, "backup")), "…nor from a run that ended before the module was installed");
   unlinkSync(join(cfg, "last-update-result.json"));
   // Check (POST /setup/check): a test job per installed module, its result kept as it ends
   const checked = setupCheckModules(cfg, state);
@@ -195,16 +199,15 @@ async function main(): Promise<void> {
   // passed, and the step still said its test had not run.
   writeFileSync(join(cfg, "logging.json"), "{}");
   rmSync(join(state, TESTS_FILE));
-  check(setupSteps(await gather()).find((s) => s.id === "identity")!.done === null, "no result kept: the identity step is unknown");
+  check(/not tested yet/.test(part(setupSteps(await gather()), "identity")), "no result kept: identity's test is unknown");
   const job = (argv: string[], exit: number | null, state_ = "done") => ({ argv, state: state_, exit, ended: "2026-10-18T16:22:09.765Z" });
   check(recordSetupTest(state, job(["module-manager", "test", "identity"], 0), "[Info] Test Step 4\n[Info] All tests passed for module 'identity'") === "identity", "a finished test job of a foundation module is recorded");
   steps = setupSteps(await gather());
-  const idStep = steps.find((s) => s.id === "identity")!;
-  check(idStep.done === true && idStep.detail.includes("passed (2026-10-18 16:22:09Z)"), "…and its step is done, with the job's time");
+  check(part(steps, "identity").includes("passed (2026-10-18 16:22:09Z)"), "…and its part reads passed, with the job's time");
   check(readSetupTests(state).identity?.tail === "[Info] All tests passed for module 'identity'", "…keeping the last line of its output");
-  check(steps.find((s) => s.id === "backup")!.done === null, "…the other steps keep what they had");
+  check(/not tested yet/.test(part(steps, "backup")), "…the other parts keep what they had");
   recordSetupTest(state, job(["module-manager", "test", "backup"], 1), "FAIL pbs");
-  check(setupSteps(await gather()).find((s) => s.id === "backup")!.done === false, "a failed test job marks its step failed");
+  check(/test failed/.test(part(setupSteps(await gather()), "backup")) && setupSteps(await gather()).find((s) => s.id === "bootstrap")!.done === false, "a failed test job marks its part failed, and the step not done");
   check(recordSetupTest(state, job(["module-manager", "test", "immich"], 0), "") === null && recordSetupTest(state, job(["module-manager", "show", "logging"], 0), "") === null, "a test of another module, or another verb, is not a setup result");
   check(recordSetupTest(state, job(["module-manager", "test", "logging"], -1), "could not run") === null && recordSetupTest(state, job(["module-manager", "test", "logging"], null, "running"), "") === null, "a job that could not run, or has not finished, says nothing");
   check(readSetupTests(state).logging === undefined, "…and nothing is kept for it");
@@ -220,7 +223,7 @@ async function main(): Promise<void> {
   const lars: Me = { user: "lars", name: "Lars", email: null, groups: ["installer"], role: "installer", via: "gate", route: "console" };
   const created = await jobs.create(lars, { active: false, identityInstalled: true, tokenPresent: false }, { argv: ["module-manager", "test", "logging"] });
   for (let i = 0; i < 50 && readSetupTests(state).logging === undefined; i++) await new Promise<void>((r) => setTimeout(r, 2));
-  check(created.job?.kind === "read" && setupSteps(await gather()).find((s) => s.id === "logging")!.done === true, "a Test job run through the job runner marks the logging step done");
+  check(created.job?.kind === "read" && /test passed/.test(part(setupSteps(await gather()), "logging")), "a Test job run through the job runner marks logging passed");
 
   // ── the setup token closes itself (T6) ──────────────────────────────
   const access: AccessConfig = { firewall: ["10.0.0.1"], allow: ["127.0.0.1"], setupAllow: ["10.0.0.0/24"], tokenFile: join(cfg, "console-setup-token"), identityFile: join(dir, "no-identity.json"), trustLocalHeaders: false, gate: testGate() };
