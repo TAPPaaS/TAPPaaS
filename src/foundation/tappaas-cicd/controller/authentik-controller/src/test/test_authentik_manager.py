@@ -272,6 +272,50 @@ class TestProxyAppEnsureClientSideFiltering(unittest.TestCase):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+class TestDefaultFlowWait(unittest.TestCase):
+    """A fresh Authentik answers before its blueprints made the default flows (lab2, 2026-11-03)."""
+
+    def setUp(self):
+        import identity_controller.authentik_manager as am
+        self.am = am
+        self.saved = (am.FLOW_WAIT_SECONDS, am.FLOW_WAIT_STEP)
+        am.FLOW_WAIT_SECONDS, am.FLOW_WAIT_STEP = 0.2, 0.01
+
+    def tearDown(self):
+        self.am.FLOW_WAIT_SECONDS, self.am.FLOW_WAIT_STEP = self.saved
+
+    def test_a_default_flow_that_appears_is_waited_for(self):
+        mgr, calls = _make_manager({})
+        asked = []
+        flow = {"results": [{"pk": "F1", "slug": DEFAULT_AUTHORIZATION_FLOW_SLUG}]}
+        inner = mgr._client.get.side_effect  # noqa: SLF001
+
+        def get(path, params=None):
+            if path == "/flows/instances/":
+                asked.append(path)
+                r = MagicMock()
+                r.json.return_value = flow if len(asked) >= 3 else {"results": []}
+                r.status_code = 200
+                return r
+            return inner(path, params)
+
+        mgr._client.get.side_effect = get  # noqa: SLF001
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(mgr._flow_pk(DEFAULT_AUTHORIZATION_FLOW_SLUG), "F1")  # noqa: SLF001
+        self.assertEqual(len(asked), 3)
+
+    def test_a_default_flow_that_never_comes_fails_after_the_wait(self):
+        mgr, _ = _make_manager({("GET", "/flows/instances/"): {"results": []}})
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaisesRegex(RuntimeError, "not found"):
+            mgr._flow_pk(DEFAULT_AUTHORIZATION_FLOW_SLUG)  # noqa: SLF001
+
+    def test_a_flow_of_our_own_is_not_waited_for(self):
+        mgr, calls = _make_manager({("GET", "/flows/instances/"): {"results": []}})
+        with self.assertRaisesRegex(RuntimeError, "not found"):
+            mgr._flow_pk(RECOVERY_FLOW_SLUG)  # noqa: SLF001
+        self.assertEqual(len([c for c in calls if c["path"] == "/flows/instances/"]), 1)
+
+
 class TestEmbeddedOutpostLookup(unittest.TestCase):
     def test_picks_the_embedded_outpost_from_full_list(self):
         # Authentik returns the WHOLE outpost list regardless of ?name= filter

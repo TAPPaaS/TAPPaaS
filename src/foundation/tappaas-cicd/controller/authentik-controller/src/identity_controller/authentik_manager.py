@@ -20,7 +20,9 @@ from dataclasses import dataclass
 
 import httpx
 import hashlib
+import os
 import sys
+import time
 from xml.sax.saxutils import escape as _xml_escape
 
 
@@ -108,6 +110,9 @@ def app_icon_svg(name: str) -> str:
 
 # Authentik's default well-known slugs (created on first boot, never change).
 DEFAULT_AUTHORIZATION_FLOW_SLUG = "default-provider-authorization-implicit-consent"
+# How long a default flow is waited for, and how often it is asked for.
+FLOW_WAIT_SECONDS = float(os.environ.get("AUTHENTIK_FLOW_WAIT_SECONDS", "600"))
+FLOW_WAIT_STEP = 5.0
 DEFAULT_INVALIDATION_FLOW_SLUG = "default-provider-invalidation-flow"
 EMBEDDED_OUTPOST_NAME = "authentik Embedded Outpost"
 
@@ -369,6 +374,15 @@ class AuthentikManager:
         if slug in self._flow_cache:
             return self._flow_cache[slug]
         results = self._get_json("/flows/instances/", slug=slug).get("results", [])
+        # Authentik's own flows (default-*) come from blueprints its worker applies
+        # after the first start, minutes after the API answers: a fresh install
+        # waits for them (lab2, 2026-11-03).
+        deadline = time.monotonic() + FLOW_WAIT_SECONDS if slug.startswith("default-") else 0.0
+        if not results and deadline:
+            print(f"  waiting for Authentik to create its default flows ({slug})", file=sys.stderr)
+        while not results and time.monotonic() < deadline:
+            time.sleep(FLOW_WAIT_STEP)
+            results = self._get_json("/flows/instances/", slug=slug).get("results", [])
         if not results:
             raise RuntimeError(f"Authentik flow {slug!r} not found")
         self._flow_cache[slug] = results[0]["pk"]
