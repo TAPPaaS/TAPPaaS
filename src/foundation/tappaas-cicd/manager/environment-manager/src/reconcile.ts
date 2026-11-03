@@ -61,31 +61,46 @@ function planWildcardState(
   notes: string[],
 ): void {
   const domains = env.domains;
-  if (!domains || domains.dnsMode !== "wildcard") return; // per-service: nothing here
+  if (!domains || (domains.dnsMode !== "wildcard" && domains.dnsMode !== "local")) return; // per-service: nothing here
+  const mode = domains.dnsMode;
 
   const domain = domains.primary;
   if (!domain || domain.startsWith("CHANGE")) {
     warnings.push(
-      `environment '${env.name}': dnsMode=wildcard but domains.primary is unset — ` +
+      `environment '${env.name}': dnsMode=${mode} but domains.primary is unset — ` +
         `no wildcard DNS/cert to reconcile`,
     );
     return;
   }
   if (!dt) {
     warnings.push(
-      `environment '${env.name}': dnsMode=wildcard but no DNS/TLS client available — ` +
+      `environment '${env.name}': dnsMode=${mode} but no DNS/TLS client available — ` +
         `wildcard DNS and cert refid were NOT reconciled`,
     );
     return;
+  }
+
+  // ── TLS, dnsMode local (ADR-043 D4): the domain's site CA issues it ──
+  // ca-manager decides whether anything is due, so it is asked every time; a
+  // current wildcard costs it a read and the firewall nothing.
+  if (mode === "local") {
+    actions.push({
+      kind: "issue-local-wildcard",
+      scope: "environment",
+      target: `ensure *.${domain} from the site CA, on the firewall, refid recorded (ca-manager wildcard ${env.name})`,
+      domain,
+    });
   }
 
   // ── TLS: record an issued cert's refid, or issue it (creds permitting) ──
   // Decide this first because ISSUING (via acme-setup.sh) also registers the
   // wildcard DNS itself, so we skip the separate DNS action in that case.
   let issuing = false;
-  const issued = dt.issuedCertRefid(domain);
+  const issued = mode === "wildcard" ? dt.issuedCertRefid(domain) : undefined;
   const recorded = dt.recordedCertRefid(env.name);
-  if (issued) {
+  if (mode === "local") {
+    // nothing from ACME
+  } else if (issued) {
     if (issued !== recorded) {
       actions.push({
         kind: "record-cert-refid",
@@ -426,6 +441,18 @@ export function applyPlan(
         applied++;
       } catch (e) {
         failures.push({ target: `cert-refids['${env.name}']`, error: e instanceof Error ? e.message : String(e) });
+      }
+    } else if (a.kind === "issue-local-wildcard") {
+      if (!dt || !a.domain) {
+        failures.push({ target: `*.${a.domain ?? "?"}`, error: dt ? "no domain in the planned action" : "no DNS/TLS client available" });
+        continue;
+      }
+      try {
+        dt.issueLocalWildcard(env.name, a.domain);
+        applied++;
+      } catch (e) {
+        if (e instanceof NetworkUnreachable) throw e;
+        failures.push({ target: `*.${a.domain}`, error: e instanceof Error ? e.message : String(e) });
       }
     } else if (a.kind === "issue-wildcard-cert") {
       if (!dt) {

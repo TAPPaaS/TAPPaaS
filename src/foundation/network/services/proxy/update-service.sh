@@ -157,6 +157,8 @@ CHANGES_MADE=false
 #                 publicly reachable on :80) + a split-horizon Unbound override.
 DNS_MODE="$(jq -r '.dnsMode // "per-service"' <<<"${VCFG}")"
 PROXY_TLS=$(get_config_value 'proxyTls' '')
+[[ "${DNS_MODE}" == "local" && "${PROXY_TLS}" == "http01" ]] \
+    && die "proxyTls http01 under dnsMode local: nothing public can answer HTTP-01 — drop proxyTls, or make the environment public first"
 case "${PROXY_TLS}" in
     dns01)  DNS_MODE="wildcard" ;;
     http01) DNS_MODE="per-service" ;;
@@ -246,8 +248,8 @@ else
             warn "       Renew it: environment-manager reconcile '${ENVIRONMENT:-$(default_environment_name)}' --apply"
         fi
     else
-        debug "  TLS: wildcard but no tlsCertRefid for environment '${ENVIRONMENT:-default}' yet."
-        debug "       Run: acme-setup.sh --variant '${ENVIRONMENT}' — internal LAN access still works meanwhile."
+        debug "  TLS: ${DNS_MODE} but no tlsCertRefid for environment '${ENVIRONMENT:-default}' yet."
+        debug "       Run: environment-manager reconcile '${ENVIRONMENT:-$(default_environment_name)}' --apply — internal LAN access still works meanwhile."
     fi
 fi
 
@@ -350,6 +352,8 @@ case "${_dns_rc}" in
     0) debug "  public DNS A: ${BL}${DNS_RESULT}${CL}" ;;
     1) if [[ "${DNS_MODE}" == "per-service" ]]; then
            warn "${PROXY_DOMAIN} has no public DNS A record — no certificate; reachable only at ${MODULE}.${ZONE}.internal (no TLS, no identity gate)"
+       elif [[ "${DNS_MODE}" == "local" ]]; then
+           debug "  dnsMode local: ${PROXY_DOMAIN} is served inside the site, by the site's CA"
        else
            warn "${PROXY_DOMAIN} has no public DNS A record — not reachable from the internet (the wildcard certificate is unaffected)"
        fi

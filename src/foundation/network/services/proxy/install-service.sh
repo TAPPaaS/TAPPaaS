@@ -170,11 +170,12 @@ fi
 # the moment a domain has no public record — the very case this check exists to
 # report (same hazard the jq guards above call out). Capture the code instead.
 _dns_rc=0
+NO_PUBLIC_A=0
 DNS_RESULT="$(public_a_record "${PROXY_DOMAIN}")" || _dns_rc=$?
 case "${_dns_rc}" in
     0) debug "  public DNS A: ${BL}${DNS_RESULT}${CL}" ;;
-    1) warn "${PROXY_DOMAIN} has no public DNS A record — not published: no certificate under dnsMode=per-service; reachable only at ${MODULE}.${ZONE}.internal"
-       debug "  checked against the authoritative nameservers, not the local resolver" ;;
+    1) NO_PUBLIC_A=1   # said below, once dnsMode is known: what it means depends on it
+       debug "  no public DNS A record (checked against the authoritative nameservers, not the local resolver)" ;;
     *) debug "  public DNS A: not checked (no dig, or no resolver reachable)" ;;
 esac
 
@@ -193,12 +194,22 @@ VCFG="$(get_variant_config "${ENVIRONMENT}" 2>/dev/null || echo '{}')"
 DNS_MODE="$(jq -r '.dnsMode // "per-service"' <<<"${VCFG}")"
 ENV_REFID="$(jq -r '.tlsCertRefid // ""' <<<"${VCFG}")"
 
-# Explicit proxyTls override (back-compat with #254).
+# Explicit proxyTls override (back-compat with #254). A local environment has no
+# public certificate to fall back to, so HTTP-01 there is refused (ADR-043 D4).
 PROXY_TLS=$(get_config_value 'proxyTls' '')
+[[ "${DNS_MODE}" == "local" && "${PROXY_TLS}" == "http01" ]] \
+    && die "proxyTls http01 under dnsMode local: nothing public can answer HTTP-01 — drop proxyTls, or make the environment public first"
 case "${PROXY_TLS}" in
     dns01)  DNS_MODE="wildcard" ;;
     http01) DNS_MODE="per-service" ;;
 esac
+if [[ "${NO_PUBLIC_A}" == "1" ]]; then
+    case "${DNS_MODE}" in
+        per-service) warn "${PROXY_DOMAIN} has no public DNS A record — not published: no certificate under dnsMode=per-service; reachable only at ${MODULE}.${ZONE}.internal" ;;
+        local)       debug "  dnsMode local: ${PROXY_DOMAIN} is served inside the site, by the site's CA" ;;
+        *)           warn "${PROXY_DOMAIN} has no public DNS A record — not reachable from the internet (the wildcard certificate is unaffected)" ;;
+    esac
+fi
 
 UNPUBLISHED=0
 CADDY_DOMAIN_ARGS=()
@@ -268,8 +279,8 @@ else
         debug "  TLS: DNS-01 wildcard (dnsMode=wildcard) — refid ${TLS_CERT_REFID}"
         CADDY_DOMAIN_ARGS=(--custom-certificate "${TLS_CERT_REFID}")
     else
-        debug "  TLS: wildcard but no tlsCertRefid for environment '${ENVIRONMENT:-default}' yet."
-        debug "       Run: acme-setup.sh --variant '${ENVIRONMENT}' (flag name unchanged; internal LAN access still works meanwhile)."
+        debug "  TLS: ${DNS_MODE} but no tlsCertRefid for environment '${ENVIRONMENT:-default}' yet."
+        debug "       Run: environment-manager reconcile '${ENVIRONMENT:-$(default_environment_name)}' --apply (internal LAN access still works meanwhile)."
     fi
 fi
 

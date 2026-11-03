@@ -965,5 +965,23 @@ function wildcardEnv(name: string, _zone: string, domain: string): Environment {
   );
 }
 
+// dnsMode local (ADR-043 D4): the site CA's wildcard, and the DNS like wildcard;
+// nothing from ACME, whatever the credentials.
+{
+  const net = new FakeNetworkClient();
+  net.seedZone("foo");
+  const mod = new FakeModuleClient();
+  const dt = new FakeDnsTlsClient();
+  dt.seedGateway("dmz", "10.6.0.1");
+  dt.credsPresent = true;
+  const e: Environment = { name: "foo", displayName: "foo", ownerOrg: "", domains: { primary: "lab9.example.org", dnsMode: "local" } };
+  const plan = computePlan(e, net, mod, { deep: false, skipNetwork: true }, dt);
+  check(plan.actions.some((a) => a.kind === "issue-local-wildcard" && a.domain === "lab9.example.org"), "local plans the site CA's wildcard");
+  check(!plan.actions.some((a) => a.kind === "issue-wildcard-cert" || a.kind === "record-cert-refid"), "…and nothing from ACME");
+  check(plan.actions.some((a) => a.kind === "register-wildcard-dns"), "…and the wildcard DNS, as for wildcard");
+  const r = applyPlan(e, plan, net, mod, true, () => {}, dt);
+  check(r.failures.length === 0 && dt.log.includes("issue-local-wildcard foo lab9.example.org"), "applying it asks ca-manager for the wildcard");
+}
+
 console.log(`\n${passed} passed, ${failed} failed.`);
 if (failed > 0) process.exit(1);

@@ -2189,6 +2189,8 @@ function tmpZones(): string {
   check(!coveredBySiteWildcard(envs, "console.other.example.org"), "…a per-service environment's name is not");
   check(!coveredBySiteWildcard(envs, "notlab.example.org"), "…nor a name that only ends in the same letters");
   check(!coveredBySiteWildcard(join(envs, "absent"), "x.lab.example.org"), "…and no environments directory covers nothing");
+  writeFileSync(join(envs, "home.json"), JSON.stringify({ domains: { primary: "lab9.home.arpa", dnsMode: "local" } }));
+  check(coveredBySiteWildcard(envs, "grafana.lab9.home.arpa"), "…a dnsMode local environment's names are covered too (ADR-043 D4)");
 
   // No dmz zone at all → ERROR: the site cannot express an answer.
   const noDmz = resolveSplitHorizonTarget(docOf({ srv: { ip: "10.2.0.0/24" } }), "x.example.org", true);

@@ -40,7 +40,7 @@ export function parseEnvironment(raw: unknown, fallbackName?: string): Environme
       primary: asString(d.primary),
       aliases: asStringArray(d.aliases),
       aliasMode: d.aliasMode === "mirror" ? "mirror" : "redirect",
-      dnsMode: d.dnsMode === "wildcard" ? "wildcard" : "per-service",
+      dnsMode: d.dnsMode === "wildcard" || d.dnsMode === "local" ? d.dnsMode : "per-service",
     };
   }
   if (o.dataResidency === "global" || o.dataResidency === "eu-only") {

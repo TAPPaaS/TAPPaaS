@@ -299,8 +299,10 @@ function validateReferences(
     }
   }
 
-  // ownerOrg (when non-empty) must reference an existing organization.
+  // ownerOrg (when non-empty) must reference an existing organization. Empty is
+  // the state before the identity bootstrap (ADR-043 D7): a warning, not a refusal.
   const owner = typeof obj.ownerOrg === "string" ? obj.ownerOrg : "";
+  if (!owner) warnings.push(`${base}: ownerOrg is empty — the identity bootstrap sets it`);
   if (owner) {
     const orgfile = join(identityDir(configDir), "organizations", `${owner}.json`);
     if (!existsSync(orgfile)) {

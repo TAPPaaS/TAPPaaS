@@ -14,7 +14,9 @@ environment (see "Env ↔ service zone"). Environments live at
 `environment-fields.json`. Mandatory fields: `name`, `displayName`, `ownerOrg`.
 `domains` is optional in the schema, though bootstrap seeds it
 on `mgmt` and the default environment alike when a site domain is known;
-`domains.dnsMode` defaults to `per-service`. The schema is
+`domains.dnsMode` defaults to `per-service`; `wildcard` gets one certificate through ACME, and
+`local` one from the site's CA (`ca-manager wildcard`, ADR-043), with nothing public. `ownerOrg` is
+empty until the identity bootstrap, so `modify` works before it. The schema is
 `additionalProperties:false`, so an authored `tlsCertRefid` is **rejected** — a
 cert refid is runtime state, not authored config.
 

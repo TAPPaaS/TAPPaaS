@@ -25,6 +25,7 @@ const MODULE_MANAGER_BIN = (): string => process.env.MODULE_MANAGER_BIN ?? "modu
 const UNBOUND_MANAGER_BIN = (): string => process.env.UNBOUND_MANAGER_BIN ?? "unbound-manager";
 const ACME_MANAGER_BIN = (): string => process.env.ACME_MANAGER_BIN ?? "acme-manager";
 const ACME_SETUP_BIN = (): string => process.env.ACME_SETUP_BIN ?? "acme-setup.sh";
+const CA_MANAGER_BIN = (): string => process.env.CA_MANAGER_BIN ?? "ca-manager";
 
 // A cert this close to expiry (or already expired) is treated by reconcile as
 // "needs (re)issuing", not "issued" (#548). 30 days mirrors os-acme-client's
@@ -381,6 +382,14 @@ export class CliDnsTlsClient implements DnsTlsClient {
     if (!r.ran) throw new NetworkUnreachable(`${ACME_MANAGER_BIN()} delete: ${r.stderr}`);
     if (r.rc !== 0) throw new Error(`acme-manager delete --domain ${domain}: ${(r.stderr || r.stdout).trim()}`);
     return r.stdout.split("\n").map((l) => l.trim()).filter((l) => l !== "");
+  }
+
+  issueLocalWildcard(envName: string, domain: string): string {
+    const rc = stream(CA_MANAGER_BIN(), ["wildcard", envName, "--domain", domain]);
+    if (rc !== 0) throw new Error(`ca-manager wildcard ${envName} --domain ${domain} failed (exit ${rc})`);
+    const refid = this.recordedCertRefid(envName);
+    if (!refid) throw new Error(`ca-manager reported success but cert-refids.json['${envName}'] is still empty`);
+    return refid;
   }
 
   issueWildcardCert(envName: string): string {

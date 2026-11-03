@@ -65,7 +65,7 @@ export function coveredBySiteWildcard(envDir: string, domain: string): boolean {
       try {
         const d = (JSON.parse(readFileSync(join(envDir, f), "utf8")) as { domains?: { primary?: string; dnsMode?: string } }).domains;
         const primary = d?.primary?.toLowerCase();
-        return d?.dnsMode === "wildcard" && !!primary && (name === primary || name.endsWith(`.${primary}`));
+        return (d?.dnsMode === "wildcard" || d?.dnsMode === "local") && !!primary && (name === primary || name.endsWith(`.${primary}`));
       } catch {
         return false;
       }

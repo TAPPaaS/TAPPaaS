@@ -10,7 +10,7 @@
 // Management) zone in zones.json whose `environment` names it.
 
 // ── Environment config entity ────────────────────────────────────────
-export type DnsMode = "per-service" | "wildcard";
+export type DnsMode = "per-service" | "wildcard" | "local";
 export type AliasMode = "redirect" | "mirror";
 export type DataResidency = "eu-only" | "global";
 
@@ -190,6 +190,10 @@ export interface DnsTlsClient {
   // registers the wildcard DNS and writes cert-refids.json itself. Throws on
   // failure.
   issueWildcardCert(envName: string): string;
+  // dnsMode local (ADR-043 D4): the domain's site CA issues the wildcard, and
+  // ca-manager imports it into the firewall and records its refid. Idempotent:
+  // a current wildcard is left as it is. Returns the refid.
+  issueLocalWildcard(envName: string, domain: string): string;
 
   // ── Teardown (#790): what add/reconcile/acme-setup created for an env ──
   // Delete every `*` override for <domain>; returns how many there were. With
@@ -237,7 +241,8 @@ export type ActionKind =
   | "record-cert-refid"
   // #537: issue the `*.<domain>` wildcard cert via acme-setup.sh when none exists
   // yet and ACME DNS-API credentials are on disk, then record its refid.
-  | "issue-wildcard-cert";
+  | "issue-wildcard-cert"
+  | "issue-local-wildcard";
 
 // How much of the system an action actually touches (#461). "environment" =
 // scoped to the environment being reconciled; "system-wide" = converges the

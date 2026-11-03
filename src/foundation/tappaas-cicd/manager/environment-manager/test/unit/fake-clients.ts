@@ -206,6 +206,12 @@ export class FakeDnsTlsClient implements DnsTlsClient {
   acmeCredsAvailable(): boolean {
     return this.credsPresent;
   }
+  issueLocalWildcard(envName: string, domain: string): string {
+    this.log.push(`issue-local-wildcard ${envName} ${domain}`);
+    if (this.issueError) throw this.issueError;
+    this.refids.set(envName, this.issueYields);
+    return this.issueYields;
+  }
   issueWildcardCert(envName: string): string {
     this.log.push(`issue-wildcard-cert ${envName}`);
     if (this.issueError) throw this.issueError;

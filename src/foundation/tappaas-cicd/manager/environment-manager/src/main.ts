@@ -176,7 +176,7 @@ interface Opts {
   // ADR-014 D1: author the environment's Service zone in the same command.
   createZone: boolean;
   display?: string;
-  dnsMode?: "per-service" | "wildcard";
+  dnsMode?: "per-service" | "wildcard" | "local";
   schemaDir?: string;
   zones?: string;
   quiet: boolean;
@@ -235,8 +235,8 @@ export function parseOpts(args: string[]): Opts {
       case "--dns-mode":
       case "--dnsMode": {
         const v = need("--dns-mode");
-        if (v !== "per-service" && v !== "wildcard") {
-          die(`--dns-mode must be 'per-service' or 'wildcard' (got '${v}')`);
+        if (v !== "per-service" && v !== "wildcard" && v !== "local") {
+          die(`--dns-mode must be 'per-service', 'wildcard' or 'local' (got '${v}')`);
         }
         o.dnsMode = v;
         break;

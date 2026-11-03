@@ -22,10 +22,10 @@
       "minLength": 1
     },
     "ownerOrg": {
-      "description": "Reference to the owning Organization.name (config/identities/organizations/<ownerOrg>.json), validated.",
+      "description": "Reference to the owning Organization.name (config/identities/organizations/<ownerOrg>.json), validated. Empty until the identity bootstrap creates the organization.",
       "references": "organizations",
       "type": "string",
-      "pattern": "^[A-Za-z0-9_-]+$"
+      "pattern": "^[A-Za-z0-9_-]*$"
     },
     "domains": {
       "description": "Public domain configuration. Optional — mgmt-type environments (internal-DNS only) omit it.",
@@ -59,11 +59,12 @@
           "default": "redirect"
         },
         "dnsMode": {
-          "description": "DNS / certificate strategy. 'per-service' (default): Caddy issues per-host HTTP-01 certs, nothing to store. 'wildcard': OPNsense ACME issues one *.<primary> cert, refid is runtime state (NOT authored here). Decides cert ownership.",
+          "description": "Who issues the certificate for published names (ADR-043 D4). 'per-service' (default): Caddy issues per-host HTTP-01 certs, nothing to store. 'wildcard': OPNsense ACME issues one *.<primary> cert through a DNS provider. 'local': the site's CA for this domain tree issues one *.<primary> cert (ca-manager wildcard), and nothing needs to be public. In both wildcard modes the refid is runtime state (NOT authored here).",
           "type": "string",
           "enum": [
             "per-service",
-            "wildcard"
+            "wildcard",
+            "local"
           ],
           "default": "per-service"
         }
