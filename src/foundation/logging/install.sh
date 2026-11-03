@@ -17,5 +17,5 @@ info "  - Retrieve the initial Grafana admin password:"
 info "      ssh tappaas@${VMNAME}.${ZONE0NAME}.internal -- sudo cat /root/grafana-admin-password.initial"
 info "      Then change it in the UI and:"
 info "      ssh tappaas@${VMNAME}.${ZONE0NAME}.internal -- sudo rm /root/grafana-admin-password.initial"
-info "  - Other VMs: install an Alloy client pointing at http://${VMNAME}.${ZONE0NAME}.internal:3100"
+info "  - Other VMs ship to it through logging:logs: https://${VMNAME}.${ZONE0NAME}.internal:3111 (TLS, #787)"
 

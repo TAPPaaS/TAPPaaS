@@ -55,18 +55,48 @@
 #   log_shipping_sync_logging                     write both htpasswd files on the
 #                                                 logging VM, reload nginx
 #   log_shipping_curl_admin <curl args...>        curl against :3100 as admin
+#   log_shipping_push_url / log_shipping_query_url  where to push and query: the
+#                                                 TLS ports once logging serves them (#787)
 
-LOG_SHIPPING_PUSH_URL="${LOG_SHIPPING_PUSH_URL:-http://logging.mgmt.internal:3101/loki/api/v1/push}"
+# An override wins; otherwise log_shipping_push_url / log_shipping_query_url
+# choose TLS (#787) once logging serves it.
+LOG_SHIPPING_PUSH_URL="${LOG_SHIPPING_PUSH_URL:-}"
 LOG_SHIPPING_FRAGMENT="/etc/nixos/tappaas-logging.nix"
 LOG_SHIPPING_VM_SECRET="/etc/secrets/tappaas-logging-push"
 LOG_SHIPPING_CRED_DIR="${LOG_SHIPPING_CRED_DIR:-/home/tappaas/.loki-push}"
 LOG_SHIPPING_ADMIN_FILE="${LOG_SHIPPING_ADMIN_FILE:-/home/tappaas/.loki-admin-password}"
 LOG_SHIPPING_ADMIN_USER="tappaas"
-LOG_SHIPPING_QUERY_URL="${LOG_SHIPPING_QUERY_URL:-http://logging.mgmt.internal:3100}"
+LOG_SHIPPING_QUERY_URL="${LOG_SHIPPING_QUERY_URL:-}"
+LOG_SHIPPING_HOST="${LOG_SHIPPING_HOST:-logging.mgmt.internal}"
 # Units every TAPPaaS VM may have that write secrets: never shipped.
 LOG_SHIPPING_BASE_DROP="generate-.*-secrets.*"
 
 _ls_config_dir() { echo "${CONFIG_DIR:-/home/tappaas/config}"; }
+
+# TLS (#787): logging serves push and query on :3111 and :3110 with a
+# certificate from the site's internal CA. A sender moves to them only once
+# they answer with a certificate this mothership verifies — the guests trust the
+# same CA (ADR-043 D8) — so a guest updated before logging keeps shipping on the
+# plain port rather than losing its lines and failing its test. Asked once per
+# process: 401 is nginx asking for the credential over a verified TLS connection.
+log_shipping_tls_ready() {
+    if [[ -z "${_LS_TLS:-}" ]]; then
+        local code
+        code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "https://${LOG_SHIPPING_HOST}:3111/loki/api/v1/push" 2>/dev/null || true)"
+        if [[ "${code}" == "401" ]]; then _LS_TLS=1; else _LS_TLS=0; fi
+    fi
+    [[ "${_LS_TLS}" == "1" ]]
+}
+log_shipping_push_url() {
+    if [[ -n "${LOG_SHIPPING_PUSH_URL}" ]]; then echo "${LOG_SHIPPING_PUSH_URL}"
+    elif log_shipping_tls_ready; then echo "https://${LOG_SHIPPING_HOST}:3111/loki/api/v1/push"
+    else echo "http://${LOG_SHIPPING_HOST}:3101/loki/api/v1/push"; fi
+}
+log_shipping_query_url() {
+    if [[ -n "${LOG_SHIPPING_QUERY_URL}" ]]; then echo "${LOG_SHIPPING_QUERY_URL}"
+    elif log_shipping_tls_ready; then echo "https://${LOG_SHIPPING_HOST}:3110"
+    else echo "http://${LOG_SHIPPING_HOST}:3100"; fi
+}
 
 # 32 characters from [A-Za-z0-9]: 190 bits, nothing a shell or nginx quotes.
 # A finite read, cut in bash: `tr < /dev/urandom | head` ends tr with SIGPIPE,
@@ -277,7 +307,7 @@ EOF
 
     loki.write "default" {
       endpoint {
-        url = "${LOG_SHIPPING_PUSH_URL}"
+        url = "$(log_shipping_push_url)"
         basic_auth {
           username      = "${host}"
           password_file = sys.env("CREDENTIALS_DIRECTORY") + "/loki-push"

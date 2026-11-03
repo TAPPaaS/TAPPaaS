@@ -164,6 +164,25 @@ check_syslog_port() {
     fi
 }
 
+check_tls() {
+    info "Check 7c: The same ports over TLS, with the site's internal CA (#787)"
+    # Verified against this mothership's trust, which holds the internal CA
+    # (ADR-043 D8): a placeholder or a stranger's certificate fails here.
+    local code
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "https://${VM_HOST}:3111/loki/api/v1/push" 2>/dev/null || true)"
+    if [[ "${code}" == "401" ]]; then check_pass "Push over TLS: a verified certificate, and a credential asked for (401)"
+    else check_fail "Push over TLS on :3111 got ${code:-no answer} — is the certificate delivered? (ca-manager cert deliver ${VM_HOST%%.*})"; fi
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "https://${VM_HOST}:3110/loki/api/v1/labels" 2>/dev/null || true)"
+    if [[ "${code}" == "401" ]]; then check_pass "Query over TLS: a verified certificate, and a credential asked for (401)"
+    else check_fail "Query over TLS on :3110 got ${code:-no answer}"; fi
+    # shellcheck disable=SC2086
+    if ssh ${SSH_OPTS} "tappaas@${VM_HOST}" "ss -lnt 'sport = :6514' | grep -q LISTEN && ss -lnt 'sport = :6515' | grep -q LISTEN" &>/dev/null; then
+        check_pass "Syslog over TLS listening on 6514/tcp and 6515/tcp"
+    else
+        check_fail "Syslog over TLS is NOT listening on 6514/tcp and 6515/tcp"
+    fi
+}
+
 check_push_receiver() {
     info "Check 7b: Push and query need a credential; a VM writes only as itself (#770, #165)"
     # From here (mgmt), with the mothership's own push credential — the path
@@ -344,6 +363,7 @@ main() {
     check_alloy_metrics
     check_syslog_port
     check_push_receiver
+    check_tls
     check_loki_query
     check_alert_rules
     check_alert_delivery

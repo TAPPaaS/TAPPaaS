@@ -37,6 +37,16 @@ let
   grafanaPort       = 3000;
   syslogOpnsensePort = 1514;   # OPNsense → Alloy (source=opnsense)
   syslogProxmoxPort  = 1515;   # Proxmox nodes → Alloy (source=proxmox)
+  # The same four over TLS (#787, ADR-043 D5), with a certificate from the
+  # site's internal CA for logging.mgmt.internal. The plain ports stay for one
+  # release, while every sender moves.
+  lokiTlsPort        = 3110;
+  pushTlsPort        = 3111;
+  syslogOpnsenseTlsPort = 6514;
+  syslogProxmoxTlsPort  = 6515;
+  tlsDir  = "/etc/tappaas-tls";
+  tlsCert = "${tlsDir}/logging.pem";  # the certificate, then the internal CA
+  tlsKey  = "${tlsDir}/logging.key";
   alloyHttp         = 9080;
   retentionHours    = "720h";  # 30 days
 
@@ -158,6 +168,10 @@ in
       pushPort       # Push only (3101) via nginx, a credential per VM (#770)
       syslogOpnsensePort     # Syslog ingest (1514) — from OPNsense
       syslogProxmoxPort      # Syslog ingest (1515) — from Proxmox nodes
+      lokiTlsPort            # the same four over TLS (#787)
+      pushTlsPort
+      syslogOpnsenseTlsPort
+      syslogProxmoxTlsPort
     ];
   };
 
@@ -523,6 +537,25 @@ in
       relabel_rules = discovery.relabel.syslog_opnsense.rules
     }
 
+    // The same over TLS (#787): RFC 5425, the site's internal CA.
+    loki.source.syslog "syslog_opnsense_tls" {
+      listener {
+        address               = "0.0.0.0:${toString syslogOpnsenseTlsPort}"
+        idle_timeout          = "1m0s"
+        tls_config {
+          cert_file = "${tlsCert}"
+          key_file  = "${tlsKey}"
+        }
+        label_structured_data = true
+        labels                = {
+          job    = "syslog",
+          source = "opnsense",
+        }
+      }
+      forward_to    = [loki.write.default.receiver]
+      relabel_rules = discovery.relabel.syslog_opnsense.rules
+    }
+
     discovery.relabel "syslog_proxmox" {
       targets = []
 
@@ -553,6 +586,25 @@ in
       listener {
         address               = "0.0.0.0:${toString syslogProxmoxPort}"
         idle_timeout          = "1m0s"
+        label_structured_data = true
+        labels                = {
+          job    = "syslog",
+          source = "proxmox",
+        }
+      }
+      forward_to    = [loki.write.default.receiver]
+      relabel_rules = discovery.relabel.syslog_proxmox.rules
+    }
+
+    // The same over TLS (#787): RFC 5425, the site's internal CA.
+    loki.source.syslog "syslog_proxmox_tls" {
+      listener {
+        address               = "0.0.0.0:${toString syslogProxmoxTlsPort}"
+        idle_timeout          = "1m0s"
+        tls_config {
+          cert_file = "${tlsCert}"
+          key_file  = "${tlsKey}"
+        }
         label_structured_data = true
         labels                = {
           job    = "syslog",
@@ -602,6 +654,38 @@ in
   '';
 
   # ============================================================================
+  # TLS — the certificate the site's internal CA signs for this VM (#787)
+  # ============================================================================
+  #
+  # ca-manager delivers it from the mothership (`ca-manager cert deliver`, on
+  # every install and update of this module, and again on each renewal) into
+  # ${tlsDir}, readable by the tappaas-tls group: nginx and Alloy are in it.
+  # Until it arrives — a first boot, a rebuild before the delivery — a
+  # self-signed placeholder stands in, so neither fails to start and the plain
+  # ports keep working; a sender verifying TLS refuses the placeholder.
+  users.groups.tappaas-tls = { };
+  users.users.nginx.extraGroups = [ "tappaas-tls" ];
+  systemd.services.alloy.serviceConfig.SupplementaryGroups = [ "tappaas-tls" ];
+  systemd.services.tappaas-tls-placeholder = {
+    description = "A placeholder TLS certificate until the site's is delivered";
+    wantedBy = [ "multi-user.target" ];
+    before = [ "nginx.service" "alloy.service" ];
+    requiredBy = [ "nginx.service" "alloy.service" ];
+    serviceConfig = { Type = "oneshot"; RemainAfterExit = true; };
+    script = ''
+      ${pkgs.coreutils}/bin/install -d -m 0750 -o root -g tappaas-tls ${tlsDir}
+      if [ ! -s ${tlsCert} ] || [ ! -s ${tlsKey} ]; then
+        ${pkgs.openssl}/bin/openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes \
+          -keyout ${tlsKey} -out ${tlsCert} -days 30 -subj "/CN=placeholder for logging" 2>/dev/null
+        echo "TLS: a placeholder certificate until the site's arrives (ca-manager cert deliver)"
+      fi
+      ${pkgs.coreutils}/bin/chown root:tappaas-tls ${tlsCert} ${tlsKey}
+      ${pkgs.coreutils}/bin/chmod 0644 ${tlsCert}
+      ${pkgs.coreutils}/bin/chmod 0640 ${tlsKey}
+    '';
+  };
+
+  # ============================================================================
   # NGINX — who may push, who may read (#165 §1)
   # ============================================================================
   #
@@ -632,6 +716,38 @@ in
     };
     virtualHosts."loki-api" = {
       listen = [ { addr = "0.0.0.0"; port = lokiPort; } ];
+      locations."/" = {
+        proxyPass = "http://127.0.0.1:${toString lokiInternal}";
+        extraConfig = ''
+          auth_basic "TAPPaaS log store";
+          auth_basic_user_file /etc/loki-auth/admin.htpasswd;
+          client_max_body_size 16m;
+          proxy_read_timeout 300s;
+        '';
+      };
+    };
+    # The same two over TLS (#787): the credentials no longer cross the wire in the clear.
+    virtualHosts."loki-push-tls" = {
+      listen = [ { addr = "0.0.0.0"; port = pushTlsPort; ssl = true; } ];
+      onlySSL = true;
+      sslCertificate = tlsCert;
+      sslCertificateKey = tlsKey;
+      locations."= /loki/api/v1/push" = {
+        proxyPass = "http://127.0.0.1:${toString pushInternal}";
+        extraConfig = ''
+          auth_basic "TAPPaaS log push";
+          auth_basic_user_file /etc/loki-auth/push.htpasswd;
+          proxy_set_header X-Scope-OrgID $remote_user;
+          client_max_body_size 16m;
+        '';
+      };
+      locations."/".return = "404";
+    };
+    virtualHosts."loki-api-tls" = {
+      listen = [ { addr = "0.0.0.0"; port = lokiTlsPort; ssl = true; } ];
+      onlySSL = true;
+      sslCertificate = tlsCert;
+      sslCertificateKey = tlsKey;
       locations."/" = {
         proxyPass = "http://127.0.0.1:${toString lokiInternal}";
         extraConfig = ''

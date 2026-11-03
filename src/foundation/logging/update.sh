@@ -38,6 +38,25 @@ if [[ -n "${HANODE}" && "${HANODE}" != "NONE" ]]; then
 fi
 debug "${_SUMMARY}"
 
+# ── TLS: the internal CA's certificate for this VM (#787, ADR-043 D5) ──
+# On every install and update: made once, delivered each time (unchanged files
+# leave nginx and Alloy alone), and put there again on each renewal by
+# `ca-manager cert renew`. Until it arrives the VM serves a placeholder on its
+# TLS ports, and senders stay on the plain ones (log-shipping.sh).
+_TLS_NAME="${VMNAME}.${ZONE0NAME}.internal"
+if command -v ca-manager >/dev/null 2>&1; then
+    if ca-manager cert issue "${VMNAME}" --dns "${_TLS_NAME}" --if-absent >/dev/null 2>&1 \
+        && ca-manager cert deliver "${VMNAME}" --host "${_TLS_NAME}" --dir /etc/tappaas-tls --as logging \
+              --group tappaas-tls --reload nginx,alloy >/dev/null 2>&1; then
+        debug "  TLS: ${_TLS_NAME}'s certificate is on the VM"
+    else
+        warn "  TLS: ${_TLS_NAME}'s certificate is not on the VM — senders stay on the plain ports:"
+        warn "    ca-manager cert issue ${VMNAME} --dns ${_TLS_NAME} --if-absent && ca-manager cert deliver ${VMNAME} --host ${_TLS_NAME} --dir /etc/tappaas-tls --as logging --group tappaas-tls --reload nginx,alloy"
+    fi
+else
+    warn "  TLS: no ca-manager on this mothership yet — senders stay on the plain ports"
+fi
+
 # ── The firewall's and the nodes' syslog (ADR-039 D9) ─────────────────
 # They are logging:logs consumers like every other (their client is a syslog
 # target, lib/log-shipping.sh); set up here too, so a logging that arrives after
