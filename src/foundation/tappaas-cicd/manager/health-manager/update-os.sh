@@ -873,7 +873,12 @@ update_nixos() {
         local _running_rev
         _running_rev="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "tappaas@${vm_ip}" \
             "nixos-version --json 2>/dev/null" 2>/dev/null | jq -r '.nixpkgsRevision // empty' 2>/dev/null || true)"
-        if [[ -n "${_running_rev}" && "${_running_rev}" != "${pinned_rev}" ]]; then
+        if [[ -n "${_running_rev}" && "${_running_rev}" != "${pinned_rev}" ]] \
+           && git -C "${flake_lock%/src/foundation/templates/flake.lock}" log --format=%H -S "${_running_rev}" -- src/foundation/templates/flake.lock 2>/dev/null | grep -q .; then
+            # An earlier pin of ours (a guest cloned from an image built before the
+            # last pin bump): the switch moves it forward, not back.
+            info "nixpkgs moves forward on ${vmname}: ${_running_rev:0:12}, an earlier pin → ${pinned_rev:0:12}"
+        elif [[ -n "${_running_rev}" && "${_running_rev}" != "${pinned_rev}" ]]; then
             warn "nixpkgs revision changes on ${vmname}: running ${_running_rev:0:12} → pinned ${pinned_rev:0:12}"
             warn "  If the running revision is the newer one this rebuild is a DOWNGRADE (#680); a service"
             warn "  whose data ratchets forward (Nextcloud) will refuse to start — pin its package in its .nix."
