@@ -356,7 +356,7 @@ fi
 # else a placeholder. A non-satellite with the role, or a satellite without it,
 # is not a relay.
 EPDIR="${wgtmp}/epcfg"; mkdir -p "${EPDIR}"
-disc() { ( . "${WGLIB}" >/dev/null 2>&1; av_discover_endpoint "${EPDIR}" ); }
+disc() { ( export TAPPAAS_WAN_ADDRESS_FILE="${TAPPAAS_WAN_ADDRESS_FILE:-${EPDIR}/none.json}"; . "${WGLIB}" >/dev/null 2>&1; av_discover_endpoint "${EPDIR}" ); }
 ep_none="$(disc)"
 printf '%s' '{"roles":["reverse-proxy"],"moduleSource":"/x/src/foundation/satellite","address":"9.9.9.9"}' > "${EPDIR}/satellite.json"
 printf '%s' '{"roles":["admin-vpn"],"moduleSource":"/x/src/foundation/debianhost","address":"8.8.8.8"}' > "${EPDIR}/dh1.json"
@@ -372,6 +372,19 @@ if [[ "${ep_none}" == "<satellite-or-cluster-public-ip>:51821" \
     ok "av_discover_endpoint: an admin-vpn satellite's address (instance or legacy), else placeholder"
 else
     bad "av_discover_endpoint (none='${ep_none}' norole='${ep_norole}' found='${ep_found}' legacy='${ep_legacy}')"
+fi
+# No satellite: the site's own address — fixed in site.json, else the WAN the last
+# network update read, else the install's console address.
+EP2="${wgtmp}/epcfg2"; mkdir -p "${EP2}"
+disc2() { ( export TAPPAAS_WAN_ADDRESS_FILE="${EP2}/wan.json"; . "${WGLIB}" >/dev/null 2>&1; av_discover_endpoint "${EP2}" ); }
+printf '%s\n' 'http://192.168.14.141:9097/setup/day1' > "${EP2}/console-setup-url"; ep_url="$(disc2)"
+printf '%s' '{"ipv4":"203.0.113.9","private":false}' > "${EP2}/wan.json"; ep_wan="$(disc2)"
+printf '%s' '{"network":{"publicIp":"198.51.100.7"}}' > "${EP2}/site.json"; ep_fixed="$(disc2)"
+printf '%s' '{"network":{"publicIp":"auto"}}' > "${EP2}/site.json"; ep_auto="$(disc2)"
+if [[ "${ep_url}" == "192.168.14.141:51821" && "${ep_wan}" == "203.0.113.9:51821" && "${ep_fixed}" == "198.51.100.7:51821" && "${ep_auto}" == "203.0.113.9:51821" ]]; then
+    ok "av_discover_endpoint: no satellite — the site's fixed address, else its WAN's, else the console's"
+else
+    bad "av_discover_endpoint, no satellite (url='${ep_url}' wan='${ep_wan}' fixed='${ep_fixed}' auto='${ep_auto}')"
 fi
 
 # the WAN :51821 rule goes through the opnsense-controller CLI, not raw REST

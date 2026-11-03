@@ -445,6 +445,22 @@ av_discover_endpoint() {
         printf '%s:%s\n' "${ip}" "${port}"
         return 0
     done
+    # No satellite: the firewall is reached directly, at the site's own address —
+    # a fixed one the site records, else the WAN address the last network update
+    # read, else the one the install opened the console on (a fresh site, before
+    # any network update). Behind another router that is its LAN address: right
+    # from that network, and from the internet once the router forwards UDP ${port}.
+    local site="${cfgdir}/site.json" wanfile="${TAPPAAS_WAN_ADDRESS_FILE:-/var/lib/tappaas/wan-address.json}" url
+    ip="$(jq -r '.network.publicIp // empty' "${site}" 2>/dev/null || true)"
+    [[ "${ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || ip=""
+    [[ -n "${ip}" ]] || ip="$(jq -r '.ipv4 // empty' "${wanfile}" 2>/dev/null || true)"
+    if [[ -z "${ip}" && -s "${cfgdir}/console-setup-url" ]]; then
+        url="$(cat "${cfgdir}/console-setup-url")"; url="${url#*://}"; ip="${url%%[:/]*}"
+    fi
+    if [[ "${ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        printf '%s:%s\n' "${ip}" "${port}"
+        return 0
+    fi
     printf '<satellite-or-cluster-public-ip>:%s\n' "${port}"
 }
 
