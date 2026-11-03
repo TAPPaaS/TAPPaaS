@@ -816,10 +816,12 @@ if [ "$IMAGETYPE" == "clone" ]; then
   fi
 
   # Helper: clone with live progress output via pvesh task log
-  # Usage: _clone_with_progress <node> <src-vmid> <new-vmid> <name> [via-ssh]
+  # Usage: _clone_with_progress <node> <src-vmid> <new-vmid> <name> [via-ssh] [storage]
+  # Without a storage the clone's disks stay on the template's (the boot pool when
+  # the template was built before the node had a data pool).
   _clone_with_progress() {
-    local _node="$1" _src="$2" _new="$3" _name="$4" _via_ssh="${5:-}"
-    local _pvesh_cmd="pvesh create /nodes/${_node}/qemu/${_src}/clone --newid ${_new} --name '${_name}' --full 1 2>&1"
+    local _node="$1" _src="$2" _new="$3" _name="$4" _via_ssh="${5:-}" _storage="${6:-}"
+    local _pvesh_cmd="pvesh create /nodes/${_node}/qemu/${_src}/clone --newid ${_new} --name '${_name}' --full 1${_storage:+ --storage ${_storage}} 2>&1"
     debug "  Cloning template ${_src} → VM ${_new} on ${_node}..."
     # Progress: 'transferred X of Y (Z%)' lines → a single dot each (visible
     # progress without flooding); every other clone line → [Debug].
@@ -851,7 +853,7 @@ if [ "$IMAGETYPE" == "clone" ]; then
   # Check if we're running on the node that has the template
   if [ "$CURRENT_NODE" == "$TEMPLATE_NODE" ]; then
     # Local clone - template is on this node
-    _clone_with_progress "${CURRENT_NODE}" "${IMAGE}" "${VMID}" "${VMNAME}"
+    _clone_with_progress "${CURRENT_NODE}" "${IMAGE}" "${VMID}" "${VMNAME}" "" "${STORAGE}"
   else
     # Remote clone - need to clone on template node then migrate to current node
     debug "Template is on ${TEMPLATE_NODE}, current node is ${CURRENT_NODE}"
@@ -870,7 +872,7 @@ if [ "$IMAGETYPE" == "clone" ]; then
 
     # Migrate the VM to the current node (online=0 means offline migration)
     debug " - Migrating VM ${VMID} from ${TEMPLATE_NODE} to ${NODE}..."
-    ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR root@${TEMPLATE_NODE}.mgmt.internal "qm migrate $VMID $NODE --online 0" >/dev/null
+    ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR root@${TEMPLATE_NODE}.mgmt.internal "qm migrate $VMID $NODE --online 0 --targetstorage ${STORAGE}" >/dev/null
     debug " - Migration complete"
   fi
 

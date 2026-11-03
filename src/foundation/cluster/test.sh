@@ -434,6 +434,15 @@ fi
 # default, making a missing vmtag a hard error mid-install, while the LXC path
 # quietly defaulted. (That no manifest reintroduces a per-field opt-out is
 # asserted in module-manager's manifest.test.ts, across every field.)
+info "${BOLD}Test 3a1: a clone is built on the resolved storage${CL}"
+# lab2 2026-11-03: identity cloned onto local-zfs, the template's pool, with tanka1 there.
+if grep -q '_clone_with_progress "${CURRENT_NODE}" "${IMAGE}" "${VMID}" "${VMNAME}" "" "${STORAGE}"' "${SCRIPT_DIR}/Create-TAPPaaS-VM.sh" \
+   && grep -q 'qm migrate $VMID $NODE --online 0 --targetstorage ${STORAGE}' "${SCRIPT_DIR}/Create-TAPPaaS-VM.sh"; then
+    pass "a local clone takes --storage, a remote one migrates with --targetstorage"
+else
+    fail "a clone stays on the template's storage, not the one resolve_storage chose"
+fi
+
 info "${BOLD}Test 3a2: the create paths agree with the schema default${CL}"
 
 _vm_tag="$(sed -n "s/^VMTAG=\"\$(get_config_value 'vmtag' *'\([^']*\)')\"/\1/p" "${SCRIPT_DIR}/Create-TAPPaaS-VM.sh")"
