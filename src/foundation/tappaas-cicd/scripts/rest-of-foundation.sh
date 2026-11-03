@@ -211,7 +211,8 @@ if [[ " ${FAILED[*]} " != *" identity "* ]]; then
           fi
         done
         if [[ -n "$OWNER_PASSWORD" ]]; then
-          printf '%s\n' "$OWNER_PASSWORD" | identity-manager user reset-password "$inst_user" --password-stdin \
+          # identity-manager's own line is for a password handed to someone else: not this one.
+          printf '%s\n' "$OWNER_PASSWORD" | identity-manager user reset-password "$inst_user" --password-stdin >/dev/null \
             && info "  ${GN}✓${CL} password set for ${inst_user}" \
             || warn "  the password of ${inst_user} was not set — identity-manager user reset-password ${inst_user} --link"
         else
@@ -251,8 +252,9 @@ if [[ -z "$nodes" ]]; then
             'pvesh get /cluster/resources --type node --output-format json' 2>/dev/null \
             | jq -r '.[].node' 2>/dev/null | paste -sd', ' - || true)"
 fi
-installed="$(find "${CONFIG_DIR}" -maxdepth 1 -name '*.json' -printf '%f\n' 2>/dev/null \
-              | sed 's/\.json$//' | grep -vE '^(configuration|zones)$' | sort | paste -sd', ' - || true)"
+# The modules: the configs that name their module source, not the site's other records.
+installed="$(for f in "${CONFIG_DIR}"/*.json; do jq -e '.moduleSource // .location' "$f" >/dev/null 2>&1 && basename "$f" .json; done \
+              | sort | paste -sd, - | sed 's/,/, /g' || true)"
 
 echo ""
 if [[ ${#FAILED[@]} -eq 0 ]]; then
