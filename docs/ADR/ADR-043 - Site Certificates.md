@@ -317,7 +317,10 @@ removed from the firewall. It needed four things by hand, each a gap to close:
 Logging's update failed once on the way, its OIDC setup meeting Caddy's cached certificate, and
 passed when rerun after the reload.
 
-All four are closed in code, not yet proven live: a new CA rebuilds the mothership (`--no-rebuild`
+All four are closed, and proven on lab2 the same day: a throwaway TAPPaaS certificate bound to
+the `network` route was moved off by `ca-manager wildcard`, Caddy reloaded, and the throwaway
+removed while its CA, still signing, stayed; a throwaway domain CA rebuilt the mothership, which
+then trusted it, and rebuilt again when it was removed. How it works: a new CA rebuilds the mothership (`--no-rebuild`
 for the install and the update, which rebuild anyway); a changed refid moves every route with
 `caddy-manager rebind-certificate`, reloads Caddy, and retires the old certificate with
 `trust-manager cert-retire`, which removes only what TAPPaaS made and nothing still served.
@@ -326,7 +329,7 @@ for the install and the update, which rebuild anyway); a changed refid moves eve
 
 | Step | State |
 |---|---|
-| 1 `ca-manager` | built: `init`, `domain add`, `cert issue|renew`, `wildcard`, `status`, `validate`, `report` |
+| 1 `ca-manager` | built and proven on lab2: `init`, `domain add`, `cert issue|renew`, `wildcard`, `status`, `validate`, `report` |
 | 2 trust, `init` in the install, SSO failure fatal | built; the Debian and node path is unproven on a real host |
 | 3 `dnsMode: local` | built and proven on lab2; a new site defaults to it, with `<site>.home.arpa` when no domain is given (unproven until a fresh install) |
 | D11 CAs in the CMDB | built: `certificate-authority` CIs; `depends-on` relations and `escrowed` still to do |
