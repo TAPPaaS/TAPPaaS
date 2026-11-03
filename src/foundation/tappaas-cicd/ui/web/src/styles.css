@@ -446,6 +446,7 @@ ol.setup { list-style: none; padding: 0; margin: 14px 0; display: grid; grid-tem
 .setup-head { display: flex; gap: 10px; align-items: center; width: 100%; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-align: left; }
 .setup-detail { margin: var(--sp-4) 0 0 18px; color: var(--muted); }
 .setup-body { margin: var(--sp-8) 0 0 18px; display: grid; gap: var(--sp-8); }
+.setup-placement { border-top: 1px solid var(--line); padding-top: var(--sp-8); display: grid; gap: var(--sp-4); }
 .setup-body[hidden] { display: none; } /* collapsed: kept mounted, not shown */
 .secret { border: 1px dashed var(--line); border-radius: var(--radius-control); padding: var(--sp-8) 10px; }
 

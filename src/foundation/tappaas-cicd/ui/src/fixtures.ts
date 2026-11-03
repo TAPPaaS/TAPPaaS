@@ -152,6 +152,8 @@ export function fixtureSite(dir: string, opts: FixtureOptions = {}): FixtureSite
         if (args[1] === "show" && kind[args[2]]) return ok(JSON.stringify(kind[args[2]]));
         return { rc: 1, stdout: "", stderr: `[Error] no ${args[0]} '${args[2]}'`, ran: true };
       }
+      case "rest-of-foundation.sh --proposal": // lab2's on 2026-11-03: one machine, the bootstrap on the boot pool
+        return ok(file("foundation-placement.json"));
       case "ap-manager list":
         return ok(file("aps.json"));
       case "ap-manager ssid":

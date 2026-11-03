@@ -36,6 +36,9 @@ async function main(): Promise<void> {
   const rf = secretCommand("rest-of-foundation", { password: PASS });
   check(typeof rf === "object" && rf !== null && rf.bin === "rest-of-foundation.sh" && rf.job === true && rf.input === `${PASS}\n` && !rf.args.join(" ").includes(PASS), "rest-of-foundation: a job, the owner's password on stdin only");
   check(typeof secretCommand("rest-of-foundation", { password: "short" }) === "string", "…and a password under 8 characters is refused");
+  const placed = secretCommand("rest-of-foundation", { password: PASS, place: [{ module: "identity", node: "tappaas1", ha: "", storage: "tanka1" }] });
+  check(typeof placed === "object" && placed !== null && placed.args.slice(-2).join(" ") === "--place identity=tappaas1,,tanka1", "the placement goes to the script as --place, one per module");
+  check(typeof secretCommand("rest-of-foundation", { password: PASS, place: [{ module: "identity", node: "tappaas1;rm", ha: "", storage: "tanka1" }] }) === "string", "…and a part that is not a name is refused");
 
   // ── backup-keys: the stick's password to backup-manager key export, on stdin ──
   const bk = secretCommand("backup-keys", { node: "tappaas1", device: "/dev/sdb", password: PASS, format: true });

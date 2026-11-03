@@ -1139,6 +1139,12 @@ export class Reads {
     return runJson<unknown>(this.cfg.run, "module-manager", ["add-stack", stack, ...(environment ? ["--environment", environment] : []), "--dry-run", "--json"], { timeoutMs: 60_000 });
   }
 
+  // Where Rest of foundation puts each guest, read fresh each time: every
+  // machine is asked once for its pools, bridges and guests.
+  foundationPlacement(): Promise<unknown> {
+    return runJson<unknown>(this.cfg.run, "rest-of-foundation.sh", ["--proposal"], { timeoutMs: 2 * MIN });
+  }
+
   private async loadSite(): Promise<Record<string, unknown>> {
     const run = this.cfg.run;
     const [site, listed, repositories, guests] = await Promise.all([

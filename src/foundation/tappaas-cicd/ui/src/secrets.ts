@@ -148,10 +148,21 @@ export const SECRETS: Record<SecretName, SecretSpec> = {
     command: (f) => {
       const password = str(f.password);
       if (!password || password.length < 8 || password.length > 1024 || !/^[\x20-\x7e]+$/.test(password)) return "password: 8 to 1024 printable characters";
+      // The operator's placement: one --place per module, each part a name.
+      const place: string[] = [];
+      if (f.place !== undefined) {
+        if (!Array.isArray(f.place) || f.place.length > 8) return "place: a list of {module, node, ha, storage}";
+        for (const p of f.place as Record<string, unknown>[]) {
+          const parts = [p?.module, p?.node ?? "", p?.ha ?? "", p?.storage ?? ""];
+          if (!parts.every((v) => typeof v === "string") || !/^[a-z0-9-]+$/.test(parts[0] as string) || !parts.slice(1).every((v) => /^[A-Za-z0-9_-]*$/.test(v as string)))
+            return "place: module, node, ha and storage are names";
+          place.push("--place", `${parts[0]}=${parts[1]},${parts[2]},${parts[3]}`);
+        }
+      }
       return {
         bin: "rest-of-foundation.sh",
         // The sweep restarts this console, so the job stops before it; the next sweep does that part.
-        args: ["--skip-update", "--owner-password-stdin"],
+        args: ["--skip-update", "--owner-password-stdin", ...place],
         input: `${password}\n`,
         keys: ["owner"],
         timeoutMs: 120 * 60_000,

@@ -1,0 +1,137 @@
+{
+  "nodes": [
+    {
+      "name": "tappaas1",
+      "memoryGiB": 64,
+      "pools": [
+        {
+          "name": "local-zfs",
+          "sizeGiB": 444,
+          "freeGiB": 424,
+          "boot": true
+        },
+        {
+          "name": "tanka1",
+          "sizeGiB": 1798,
+          "freeGiB": 1798,
+          "boot": false
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "module": "network",
+      "kind": "guest",
+      "installed": true,
+      "current": {
+        "node": "tappaas1",
+        "storage": "local-zfs",
+        "ha": ""
+      },
+      "proposal": {
+        "node": "tappaas1",
+        "storage": "tanka1",
+        "ha": ""
+      },
+      "choices": {
+        "tappaas1": {
+          "ha": [],
+          "pools": {
+            "": [
+              "tanka1",
+              "local-zfs"
+            ]
+          }
+        }
+      },
+      "note": "needs the WAN bridge on its machine"
+    },
+    {
+      "module": "tappaas-cicd",
+      "kind": "guest",
+      "installed": true,
+      "current": {
+        "node": "tappaas1",
+        "storage": "local-zfs",
+        "ha": ""
+      },
+      "proposal": {
+        "node": "tappaas1",
+        "storage": "tanka1",
+        "ha": ""
+      },
+      "choices": {
+        "tappaas1": {
+          "ha": [],
+          "pools": {
+            "": [
+              "tanka1",
+              "local-zfs"
+            ]
+          }
+        }
+      },
+      "note": null
+    },
+    {
+      "module": "backup",
+      "kind": "backup",
+      "installed": false,
+      "current": null,
+      "proposal": {
+        "node": "",
+        "storage": "",
+        "ha": ""
+      },
+      "choices": {},
+      "note": "no tankc pool on any machine: backup is a placeholder until one is added"
+    },
+    {
+      "module": "identity",
+      "kind": "guest",
+      "installed": false,
+      "current": null,
+      "proposal": {
+        "node": "tappaas1",
+        "storage": "tanka1",
+        "ha": ""
+      },
+      "choices": {
+        "tappaas1": {
+          "ha": [],
+          "pools": {
+            "": [
+              "tanka1",
+              "local-zfs"
+            ]
+          }
+        }
+      },
+      "note": null
+    },
+    {
+      "module": "logging",
+      "kind": "guest",
+      "installed": false,
+      "current": null,
+      "proposal": {
+        "node": "tappaas1",
+        "storage": "tanka1",
+        "ha": ""
+      },
+      "choices": {
+        "tappaas1": {
+          "ha": [],
+          "pools": {
+            "": [
+              "tanka1",
+              "local-zfs"
+            ]
+          }
+        }
+      },
+      "note": null
+    }
+  ]
+}

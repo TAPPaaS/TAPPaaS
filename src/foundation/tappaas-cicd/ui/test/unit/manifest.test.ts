@@ -145,6 +145,8 @@ async function main(): Promise<void> {
   check(bad(["ap-manager", "ssid", "set-passphrase", "rossen-home", "--file", "/etc/shadow"], "unknown option"), "#889: …nor --file from the console");
   check(ok(["acme-setup.sh", "--no-save-creds"]).ok, "acme-setup.sh is its own verb (an empty key)");
   check(ok(["rest-of-foundation.sh", "--skip-update", "--owner-password-stdin"]).ok, "rest-of-foundation.sh is a verb, its password flag allowed");
+  check(ok(["rest-of-foundation.sh", "--skip-update", "--owner-password-stdin", "--place", "identity=tappaas1,,tanka1", "--place", "network=tappaas1,,tanka1"]).ok, "…and --place, once per module");
+  { const pr = ok(["rest-of-foundation.sh", "--proposal"]); check(pr.ok && pr.read, "…--proposal is a read"); }
   check(bad(["switch-manager", "remove-switch", "a", "--force"], "unknown option"), "remove-switch takes no option");
   // #855: the typed name is the object, not the first positional.
   const rp = ok(["switch-manager", "remove-port", "USW Pro XG 10 PoE", "1"]);

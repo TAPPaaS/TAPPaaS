@@ -252,6 +252,16 @@ export class ConsoleServer {
       }
       case "catalogs":
         return sendJson(res, 200, envelope(await r.catalogs.get()));
+      case "foundation-placement": {
+        // Rest of foundation's proposal: the machines in short, and where each
+        // foundation guest goes, with its choices (rest-of-foundation.sh --proposal).
+        try {
+          const data = await r.foundationPlacement();
+          return sendJson(res, 200, { data, at: new Date().toISOString(), ageSeconds: 0, refreshing: false, error: null });
+        } catch (e) {
+          return sendJson(res, 200, { data: null, at: null, ageSeconds: null, refreshing: false, error: (e as Error).message });
+        }
+      }
       case "stack-plan": {
         // The modules of a stack and what add-stack would do with each: stack-plan/<stack>[?environment=<env>].
         const environment = url.searchParams.get("environment");
