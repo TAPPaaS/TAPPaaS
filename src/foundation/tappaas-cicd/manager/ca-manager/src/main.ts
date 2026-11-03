@@ -274,7 +274,7 @@ const FIREWALL = process.env.OPNSENSE_HOST ?? "firewall.mgmt.internal";
 function refreshOwnTrust(): void {
   const cmd = process.env.CA_MANAGER_REBUILD ?? "systemctl";
   const unit = `tappaas-rebuild@${hostname().split(".")[0]}.service`;
-  info(`  rebuilding this mothership so it trusts the new CA (${unit})…`);
+  info(`  the site's CAs changed: rebuilding this mothership so its own trust follows (${unit})…`);
   const r = spawnSync(cmd, ["start", "--wait", unit], { encoding: "utf8" });
   if (r.status === 0) info(`${GN}✓${CL} this mothership trusts the site's CAs`);
   else warn(`the mothership was not rebuilt (${(r.stderr ?? "").trim() || r.error?.message || `exit ${r.status}`}): until it is, its calls to the new CA's names fail — systemctl start --wait ${unit}`);
