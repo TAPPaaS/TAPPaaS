@@ -49,12 +49,14 @@ set -euo pipefail
 shopt -s inherit_errexit nullglob
 
 RD=$(echo "\033[01;31m"); YW=$(echo "\033[33m"); GN=$(echo "\033[1;92m")
-CL=$(echo "\033[m"); BL=$(echo "\033[36m"); BOLD=$(echo "\033[1m")
-BFR="\\r\\033[K"; HOLD="-"; CM="${GN}✓${CL}"; CROSS="${RD}✗${CL}"
+CL=$(echo "\033[m"); BL=$(echo "\033[36m"); BOLD=$(echo "\033[1m"); DGN=$(echo "\033[32m")
+CM="${GN}✓${CL}"; CROSS="${RD}✗${CL}"
 
-msg_info()  { echo -ne " ${HOLD} ${YW}${1}..."; }
-msg_ok()    { echo -e "${BFR} ${CM} ${GN}${1}${CL}"; }
-msg_error() { echo -e "${BFR} ${CROSS} ${RD}${1}${CL}"; }
+# Same output as cluster/install.sh: [Info] ✓ per outcome, the step on the way
+# at [Debug] (TAPPAAS_DEBUG=1).
+msg_info()  { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo -e "${BL}[Debug]${CL} ${1}..."; }
+msg_ok()    { echo -e "${DGN}[Info]${CL} ${CM} ${1}"; }
+msg_error() { echo -e "${RD}[Error]${CL} ${CROSS} ${1}"; }
 
 # Robust download (see the long note in cluster/install.sh): temp file, checks
 # curl status + non-empty, fatal on failure so a broken node is never "good".
@@ -84,14 +86,14 @@ if [[ -z "${TMUX:-}${STY:-}${TAPPAAS_NO_TMUX:-}" && -t 0 && -t 1 \
     _cmd="bash $(printf '%q' "$0")"
     for _a in "$@"; do _cmd+=" $(printf '%q' "$_a")"; done
     _cmd+=" --no-tmux"
-    echo -e "${GN}${BOLD}Running the install inside tmux session '${_sess}' so an SSH drop won't abort it.${CL}"
-    echo -e "If you get disconnected: reconnect to this node and run  ${BOLD}tmux attach -t ${_sess}${CL}\n"
+    echo -e "${DGN}[Info]${CL} Running the install inside tmux session '${_sess}' so an SSH drop won't abort it."
+    echo -e "${DGN}[Info]${CL} If you get disconnected: reconnect to this node and run  ${BOLD}tmux attach -t ${_sess}${CL}"
     tmux kill-session -t "${_sess}" 2>/dev/null || true
     exec tmux new-session -s "${_sess}" \
       "${_cmd}; _ec=\$?; printf '\n[TAPPaaS install exited %s — press any key to close this pane]' \"\$_ec\"; read -rn1"
   else
-    echo -e "${YW}[warn] tmux not found — running attached. If your SSH connection drops, the install will ABORT.${CL}"
-    echo -e "${YW}       For a resilient remote install, run under 'screen'/'tmux' or from a stable console.${CL}"
+    echo -e "${YW}[Warning]${CL} tmux not found — running attached. If your SSH connection drops, the install will ABORT."
+    echo -e "${YW}[Warning]${CL}   For a resilient remote install, run under 'screen'/'tmux' or from a stable console."
     sleep 3
   fi
 fi

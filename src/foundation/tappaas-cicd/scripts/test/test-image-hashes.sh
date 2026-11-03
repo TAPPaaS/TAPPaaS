@@ -66,9 +66,9 @@ cp "${T}/img.qcow2.zst" "${T}/a"; out="$(check "${T}/a" "deadbeef")"; rc=$?
 ck "a malformed hash is refused" "1" "${rc}"
 
 echo "── Create-TAPPaaS-VM.sh: every download is checked, the hash is read from the JSON ──"
-_dl="$(grep -c 'curl -fSLo' "${CREATE}")"
-_ck="$(grep -A1 'curl -fSLo' "${CREATE}" | grep -c 'image_sha256_check')"
-[[ "${_dl}" -ge 4 && "${_dl}" -eq "${_ck}" ]] && ok "all ${_dl} curl -fSLo downloads are followed by the check" \
+_dl="$(grep -c 'curl -fsSLo' "${CREATE}")"
+_ck="$(grep -A1 'curl -fsSLo' "${CREATE}" | grep -c 'image_sha256_check')"
+[[ "${_dl}" -ge 4 && "${_dl}" -eq "${_ck}" ]] && ok "all ${_dl} curl -fsSLo downloads are followed by the check" \
     || bad "${_ck} of ${_dl} downloads are checked"
 _read="$(grep -m1 '^  IMAGESHA256=' "${CREATE}")"
 JSON='{"vmname":"x","config":{"cluster:vm":{"image":"i","imageLocation":"https://e/","imageSha256":"'"${GOOD}"'"}}}'

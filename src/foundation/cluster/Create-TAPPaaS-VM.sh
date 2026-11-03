@@ -310,7 +310,7 @@ function zfs_recv_preflight() {
   local node
   node="$(hostname -s)"
 
-  info "Pre-flight check for stale ZFS state on ${node} (pool ${BL}${pool}${CL})..."
+  debug "Pre-flight check for stale ZFS state on ${node} (pool ${BL}${pool}${CL})..."
 
   # D-state 'zfs recv'/'zfs receive' whose target dataset is in THIS pool. The
   # hang is pool-local, so we only abort when the stuck recv targets ${pool}.
@@ -536,7 +536,7 @@ if [[ "$BRIDGE1" != "NONE" ]]; then
     TRUNKS1=$(resolve_trunks "$TRUNKS1")
   fi
 else
-  info "     - No second bridge configured"
+  debug "No second bridge configured"
 fi
 CLOUDINIT="$(get_config_value 'cloudInit' 'true')"
 DESCRIPTION="$(get_config_value 'description')"
@@ -572,21 +572,21 @@ if [ "${IMAGETYPE:-}" != "clone" ]; then
       # Decompress to a plain .iso under template/iso; ISO_NAME is what qm attaches.
       if [[ "$IMAGE" == *.bz2 ]]; then
         ISO_NAME="$(basename "${IMAGE%.bz2}")"
-        curl -fSLo "/tmp/${IMAGE##*/}" "$URL"
+        curl -fsSLo "/tmp/${IMAGE##*/}" "$URL"
         image_sha256_check "/tmp/${IMAGE##*/}" "${IMAGESHA256:-}"
         info "Decompressing ISO, have patience"
         bzip2 -dc "/tmp/${IMAGE##*/}" > "/var/lib/vz/template/iso/${ISO_NAME}"
         rm -f "/tmp/${IMAGE##*/}"
       elif [[ "$IMAGE" == *.xz ]]; then
         ISO_NAME="$(basename "${IMAGE%.xz}")"
-        curl -fSLo "/tmp/${IMAGE##*/}" "$URL"
+        curl -fsSLo "/tmp/${IMAGE##*/}" "$URL"
         image_sha256_check "/tmp/${IMAGE##*/}" "${IMAGESHA256:-}"
         info "Decompressing ISO, have patience"
         xz -dc "/tmp/${IMAGE##*/}" > "/var/lib/vz/template/iso/${ISO_NAME}"
         rm -f "/tmp/${IMAGE##*/}"
       else
         ISO_NAME="$(basename "$IMAGE")"
-        curl -fSLo "/var/lib/vz/template/iso/${ISO_NAME}" "$URL"
+        curl -fsSLo "/var/lib/vz/template/iso/${ISO_NAME}" "$URL"
         image_sha256_check "/var/lib/vz/template/iso/${ISO_NAME}" "${IMAGESHA256:-}"
       fi
       info "Downloaded ISO file to /var/lib/vz/template/iso/${ISO_NAME}"
@@ -606,7 +606,7 @@ if [ "${IMAGETYPE:-}" != "clone" ]; then
       info "Using the downloaded, hash-verified Disk Image: ${PREFETCHED}"
     else
       info "Retrieving the Disk Image: $URL"
-      curl -fSLo "$IMAGE" "$URL"
+      curl -fsSLo "$IMAGE" "$URL"
       image_sha256_check "$IMAGE" "${IMAGESHA256:-}"
     fi
     if [[ "$IMAGE" == *.bz2 ]]; then
@@ -665,7 +665,7 @@ if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a fire
     dd if=/usr/share/pve-edk2-firmware/OVMF_VARS_4M.fd \
        of=/dev/zvol/${STORAGE_DATASET}/${DISK1} bs=1M 2>/dev/null || true
     qm set $VMID -efidisk0 ${DISK1_REF},efitype=4m 1>/dev/null
-    info " - Created persistent EFI disk (NVRAM initialised from OVMF_VARS_4M.fd)"
+    debug " - Created persistent EFI disk (NVRAM initialised from OVMF_VARS_4M.fd)"
   fi
   qm set $VMID \
     -scsi0 ${DISK0_REF} \
@@ -798,7 +798,7 @@ if [ "$IMAGETYPE" == "clone" ]; then
   
   while read -r node; do
     debug "Checking for template $IMAGE on node: $node"
-    if ssh -n -o StrictHostKeyChecking=no root@"${node}.mgmt.internal" "qm status $IMAGE" >/dev/null 2>&1; then
+    if ssh -n -o StrictHostKeyChecking=no -o LogLevel=ERROR root@"${node}.mgmt.internal" "qm status $IMAGE" >/dev/null 2>&1; then
       TEMPLATE_NODE="$node"
       debug "Found template $IMAGE on ${node}.mgmt.internal"
       break
@@ -808,7 +808,7 @@ if [ "$IMAGETYPE" == "clone" ]; then
   # Use a management cluster node to list all cluster nodes (pvesh may only
   # return local node info on some hosts). We use the current node's hostname
   # to query the cluster via pvesh.
-  done < <(ssh -n -o StrictHostKeyChecking=no "root@$(hostname).mgmt.internal" "pvesh get /cluster/resources --type node --output-format json | jq --raw-output '.[] | select(.type==\"node\") | .node'")
+  done < <(ssh -n -o StrictHostKeyChecking=no -o LogLevel=ERROR "root@$(hostname).mgmt.internal" "pvesh get /cluster/resources --type node --output-format json | jq --raw-output '.[] | select(.type==\"node\") | .node'")
   
   if [ -z "$TEMPLATE_NODE" ]; then
     error "Template $IMAGE not found on any cluster node"
@@ -821,27 +821,28 @@ if [ "$IMAGETYPE" == "clone" ]; then
     local _node="$1" _src="$2" _new="$3" _name="$4" _via_ssh="${5:-}"
     local _pvesh_cmd="pvesh create /nodes/${_node}/qemu/${_src}/clone --newid ${_new} --name '${_name}' --full 1 2>&1"
     debug "  Cloning template ${_src} → VM ${_new} on ${_node}..."
-    # Progress: 'transferred X of Y (Z%)' lines → a single dot each (visible
-    # progress without flooding); every other clone line → [Debug].
+    # Progress: 'transferred X of Y (Z%)' lines → a single dot each at a
+    # terminal (none into a log); every other clone line → [Debug].
+    local _dots=0; [ -t 1 ] && _dots=1
     if [[ -n "$_via_ssh" ]]; then
       # shellcheck disable=SC2029
-      ssh -o StrictHostKeyChecking=no "root@${_node}.mgmt.internal" "${_pvesh_cmd}" \
+      ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR "root@${_node}.mgmt.internal" "${_pvesh_cmd}" \
         | while IFS= read -r _line; do
             [[ "$_line" =~ ^UPID: ]] && continue
             [[ -z "$_line" ]] && continue
-            if [[ "$_line" == *transferred* ]]; then printf '.'; else debug "  ${_line}"; fi
+            if [[ "$_line" == *transferred* ]]; then (( _dots )) && printf '.' || true; else debug "  ${_line}"; fi
           done
     else
       eval "${_pvesh_cmd}" \
         | while IFS= read -r _line; do
             [[ "$_line" =~ ^UPID: ]] && continue
             [[ -z "$_line" ]] && continue
-            if [[ "$_line" == *transferred* ]]; then printf '.'; else debug "  ${_line}"; fi
+            if [[ "$_line" == *transferred* ]]; then (( _dots )) && printf '.' || true; else debug "  ${_line}"; fi
           done
     fi
     _clone_rc=${PIPESTATUS[0]}
+    (( _dots )) && printf '\n' || true
     if [[ $_clone_rc -ne 0 ]]; then
-      printf '\n'
       error "Clone failed (exit ${_clone_rc})"
       exit 1
     fi
@@ -870,13 +871,12 @@ if [ "$IMAGETYPE" == "clone" ]; then
 
     # Migrate the VM to the current node (online=0 means offline migration)
     debug " - Migrating VM ${VMID} from ${TEMPLATE_NODE} to ${NODE}..."
-    ssh -o StrictHostKeyChecking=no root@${TEMPLATE_NODE}.mgmt.internal "qm migrate $VMID $NODE --online 0" >/dev/null
+    ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR root@${TEMPLATE_NODE}.mgmt.internal "qm migrate $VMID $NODE --online 0" >/dev/null
     debug " - Migration complete"
   fi
 
   # Set CPU type after cloning (clone inherits from template)
   qm set $VMID --cpu "$CPU_TYPE" >/dev/null
-  printf '\n'   # terminate the clone progress-dot line
 fi
 
 info "${BOLD}Configuring the $VMNAME VM settings..."
@@ -908,7 +908,7 @@ if [ "$TRUNKS0" != "NONE" ]; then
 fi
 qm set $VMID --net0 "${NET0_OPTS}" >/dev/null
 if [[ "$BRIDGE1" == "NONE" ]]; then
-  info "No second bridge configured"
+  debug "No second bridge configured"
 else
   NET1_OPTS="virtio,bridge=${BRIDGE1},macaddr=${MAC1}"
   if [ "$VLANTAG1" != "0" ]; then
@@ -918,7 +918,7 @@ else
     NET1_OPTS="${NET1_OPTS},trunks=${TRUNKS1}"
   fi
   qm set $VMID --net1 "${NET1_OPTS}" >/dev/null
-  info "Configured second bridge on $BRIDGE1"
+  debug "Configured second bridge on $BRIDGE1"
 fi
 if [[ "$CLOUDINIT" == "true" ]]; then
   info "Configuring Cloud-init for VM $VMNAME"
@@ -932,10 +932,10 @@ if [[ "$CLOUDINIT" == "true" ]]; then
   elif [[ -f ~/tappaas/tappaas-cicd.pub ]]; then
     qm set $VMID --sshkey ~/tappaas/tappaas-cicd.pub >/dev/null
   fi
-  info " - Hostname set to $VMNAME via cloud-init"
+  debug " - Hostname set to $VMNAME via cloud-init"
   qm cloudinit update $VMID >/dev/null
 else
-  info "Cloud-init configuration skipped as per JSON configuration"
+  debug "Cloud-init configuration skipped as per JSON configuration"
 fi
 
 
@@ -961,19 +961,19 @@ function resize_disk_in_vm() {
     fi
   done
 
-  info "VM $vm_hostname guest agent is responding"
+  debug "VM $vm_hostname guest agent is responding"
 
   # Detect OS type via guest agent exec (no SSH needed)
   local os_id=""
   local exec_result
   exec_result=$(qm guest exec "$vmid" -- grep '^ID=' /etc/os-release 2>/dev/null) || true
   os_id=$(echo "$exec_result" | jq -r '."out-data" // ""' 2>/dev/null | cut -d= -f2 | tr -d '"' | tr -d '[:space:]')
-  info "Detected OS: $os_id"
+  debug "Detected OS: $os_id"
 
   case "$os_id" in
     nixos)
       # NixOS handles partition and filesystem growth automatically via boot.growPartition
-      info "NixOS detected — boot.growPartition handles disk resize automatically, skipping manual resize"
+      debug "NixOS detected — boot.growPartition handles disk resize automatically, skipping manual resize"
       return 0
       ;;
     debian|ubuntu)

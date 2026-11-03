@@ -322,7 +322,7 @@ build_cicd() {
   fi
 
   # B.1 — clone the repo + rebuild the NixOS system (bootstrap.sh).
-  info "Running bootstrap.sh on cicd (git clone + nixos-rebuild switch)..."
+  info "Running bootstrap.sh on cicd (git clone + nixos-rebuild switch): 5-15 minutes..."
   if ! cicd_ssh "curl -fsSL '${REPO}${BRANCH}/src/foundation/tappaas-cicd/bootstrap.sh' -o /tmp/bootstrap.sh && bash /tmp/bootstrap.sh 'https://codeberg.org/TAPPaaS/TAPPaaS.git' '${BRANCH}'"; then
     warn "bootstrap.sh failed on cicd. Finish manually:"
     print_manual_cicd "$cicdid" "$dom"

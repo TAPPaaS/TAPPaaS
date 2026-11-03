@@ -17,9 +17,9 @@ set -uo pipefail   # not -e: we want to run every check and summarise
 
 readonly RD=$'\033[01;31m' YW=$'\033[33m' GN=$'\033[1;92m' BL=$'\033[36m' CL=$'\033[m' BOLD=$'\033[1m'
 info()  { echo -e "${GN}[sanity]${CL} $*"; }
-pass()  { echo -e "  ${GN}✓${CL} $*"; PASS=$((PASS+1)); }
-fail()  { echo -e "  ${RD}✗${CL} $*"; FAIL=$((FAIL+1)); }
-warn()  { echo -e "  ${YW}!${CL} $*"; WARN=$((WARN+1)); }
+pass()  { echo -e "${GN}[sanity]${CL}   ${GN}✓${CL} $*"; PASS=$((PASS+1)); }
+fail()  { echo -e "${RD}[sanity][error]${CL} ${RD}✗${CL} $*"; FAIL=$((FAIL+1)); }
+warn()  { echo -e "${YW}[sanity][warn]${CL} ${YW}!${CL} $*"; WARN=$((WARN+1)); }
 
 usage() { sed -n '2,/^set -uo/p' "$0" | sed 's/^# \{0,1\}//; /^set -uo/d'; }
 

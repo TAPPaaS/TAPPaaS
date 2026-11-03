@@ -346,7 +346,7 @@ done
 
 [[ ${#PORTS[@]} -ge 1 ]] || die "No physical network ports found."
 info "Physical ports found: ${#PORTS[@]}"
-for i in "${!PORTS[@]}"; do echo "    ${BL}${PORTS[$i]}${CL}  ${PORT_DESCS[$i]}"; done
+for i in "${!PORTS[@]}"; do debug "    ${BL}${PORTS[$i]}${CL}  ${PORT_DESCS[$i]}"; done
 
 # Comma-separated list of a bridge's member ports ("" if none), glob-based so it
 # needs no `ls` parsing and is safe on an empty bridge.

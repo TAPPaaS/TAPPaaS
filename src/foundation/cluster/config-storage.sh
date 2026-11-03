@@ -576,7 +576,7 @@ if [[ ${#POOL_SPECS[@]} -gt 0 ]]; then
 fi
 
 if [[ "$INTERACTIVE" != "1" ]]; then
-  warn "Non-interactive and no --pool specs given — nothing to do."
+  debug "Non-interactive and no --pool specs given — nothing to do."
   exit 0
 fi
 

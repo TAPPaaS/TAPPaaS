@@ -16,60 +16,46 @@
 # TODO: Throw warning if no mirror on zpools and boot. Configure power management
 
 
-header_info() {
-  # generated with https://patorjk.com/software/taag/#p=display&f=Big&t=TAPPaaS%20Post%20PVE%20Install
-  cat <<"EOF"
-  _______       _____  _____             _____   _____          _     _______      ________   _____           _        _ _ 
- |__   __|/\   |  __ \|  __ \           / ____| |  __ \        | |   |  __ \ \    / /  ____| |_   _|         | |      | | |
-    | |  /  \  | |__) | |__) |_ _  __ _| (___   | |__) |__  ___| |_  | |__) \ \  / /| |__      | |  _ __  ___| |_ __ _| | |
-    | | / /\ \ |  ___/|  ___/ _` |/ _` |\___ \  |  ___/ _ \/ __| __| |  ___/ \ \/ / |  __|     | | | '_ \/ __| __/ _` | | |
-    | |/ ____ \| |    | |  | (_| | (_| |____) | | |  | (_) \__ \ |_  | |      \  /  | |____   _| |_| | | \__ \ || (_| | | |
-    |_/_/    \_\_|    |_|   \__,_|\__,_|_____/  |_|   \___/|___/\__| |_|       \/   |______| |_____|_| |_|___/\__\__,_|_|_|
-                                                                                                                           
-EOF
-}
-
 RD=$(echo "\033[01;31m")
 YW=$(echo "\033[33m")
 GN=$(echo "\033[1;92m")
+DGN=$(echo "\033[32m")
+BL=$(echo "\033[36m")
 CL=$(echo "\033[m")
-BFR="\\r\\033[K"
-HOLD="-"
 CM="${GN}✓${CL}"
 CROSS="${RD}✗${CL}"
 
 set -euo pipefail
 shopt -s inherit_errexit nullglob
 
-msg_info() {
-  local msg="$1"
-  echo -ne " ${HOLD} ${YW}${msg}..."
-}
+# Output: one [Info] ✓ line per outcome; the step on the way is [Debug]
+# (TAPPAAS_DEBUG=1). See src/misc/00-Template/DEVELOP.md, "Output".
+info()  { echo -e "${DGN}[Info]${CL} $*"; }
+debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo -e "${BL}[Debug]${CL} $*"; }
 
-msg_ok() {
-  local msg="$1"
-  echo -e "${BFR} ${CM} ${GN}${msg}${CL}"
-}
-
-msg_error() {
-  local msg="$1"
-  echo -e "${BFR} ${CROSS} ${RD}${msg}${CL}"
-}
+msg_info()  { debug "$1..."; }
+msg_ok()    { info "${CM} $1"; }
+msg_error() { echo -e "${RD}[Error]${CL} ${CROSS} $1"; }
 
 # with_dots <log> <command...>
 #
-# Run a long command with one dot per line of its output, so a step that takes
-# minutes shows it is alive (#266). The full output goes to <log>; on failure the
-# last lines are shown. Ends the dots with a newline: msg_ok/msg_error clear only
-# the current terminal line, and a long run of dots wraps over several.
+# Run a long command with its output in <log>; on failure the last lines are
+# shown. At a terminal it prints a dot per line of output so a step that takes
+# minutes shows it is alive (#266); into a log (the install's tee) nothing.
 with_dots() {
-  local log="$1" rc=0
+  local log="$1" rc=0 tty=0
   shift
+  [ -t 1 ] && tty=1
   set +e
-  "$@" 2>&1 | tee -a "${log}" | while IFS= read -r _; do printf '.'; done
-  rc=${PIPESTATUS[0]}
+  if [ "${tty}" = 1 ]; then
+    "$@" 2>&1 | tee -a "${log}" | while IFS= read -r _; do printf '.'; done
+    rc=${PIPESTATUS[0]}
+    echo
+  else
+    "$@" >>"${log}" 2>&1
+    rc=$?
+  fi
   set -e
-  echo
   if [ "${rc}" -ne 0 ]; then
     tail -n 5 "${log}" | sed 's/^/    /'
   fi
@@ -114,8 +100,6 @@ fetch() {
 #
 # here we go: Check that the PVE is right version and have two zfs pools
 #
-
-header_info
 
 # ── Arguments ────────────────────────────────────────────────────────
 # Backward-compatible with the documented `install.sh <REPO> <BRANCH>`:
@@ -210,7 +194,7 @@ configure_cluster() {
   echo -e "\n${GN}=== Cluster configuration ===${CL}"
   if pvecm status >/dev/null 2>&1; then
     msg_ok "Node is already a cluster member"
-    pvecm status 2>/dev/null | grep -E 'Name:|Nodes:|Quorate:' || true
+    debug "$(pvecm status 2>/dev/null | grep -E 'Name:|Nodes:|Quorate:' || true)"
     # Already clustered → this is a RE-RUN. Recover the FOUNDING intent instead of
     # blindly recording "member". Otherwise a first node whose first run created the
     # cluster but then failed later (e.g. a storage misconfig aborting AFTER pvecm
@@ -257,14 +241,13 @@ configure_cluster() {
     join)
       if [ "$INTERACTIVE_TTY" != 1 ]; then
         msg_ok "Non-interactive: not joining automatically. Run on this node:"
-        echo "      pvecm add tappaas1.mgmt.internal"
+        info "      pvecm add tappaas1.mgmt.internal"
         return 0
       fi
-      echo "  This node ('${host}') will JOIN the existing cluster."
+      info "  This node ('${host}') will JOIN the existing cluster."
       read -r -p "  Existing cluster node address [tappaas1.mgmt.internal]: " peer
       peer="${peer:-tappaas1.mgmt.internal}"
-      msg_info "Joining cluster via ${peer} (ring0 ${mgmt}) — you'll be prompted for that node's root password"
-      echo ""
+      info "Joining cluster via ${peer} (ring0 ${mgmt}): it asks for that node's root password"
       # pvecm add is interactive (password + SSH fingerprint); run on the TTY.
       # --link0 binds this node's ring to its mgmt IP (already on `lan`).
       # NOTE: the join inherits the cluster IDENTITY (name + config) from the
@@ -510,7 +493,7 @@ msg_info "Enabling high availability"
   systemctl enable -q --now corosync
 msg_ok "Enabled high availability"
 
-msg_ok "Using TAPPaaS repo ${REPO} branch ${BRANCH}"
+debug "Using TAPPaaS repo ${REPO} branch ${BRANCH}"
 
 msg_info "Install TAPPaaS helper script"
 cd
@@ -604,7 +587,7 @@ fi
 # curl -fsSL https://pkgs.netbird.io/install.sh | sh
 
 
-msg_info "Updating Proxmox VE (Patience — a dot per package step; log: /root/tappaas/pve-update.log)"
+info "Updating Proxmox VE: a few minutes (log: /root/tappaas/pve-update.log)"
 : > /root/tappaas/pve-update.log
 _upd_ok=1
 with_dots /root/tappaas/pve-update.log apt-get update || { _upd_ok=0; msg_error "apt update failed"; }
@@ -612,7 +595,7 @@ with_dots /root/tappaas/pve-update.log apt-get -y dist-upgrade || { _upd_ok=0; m
 [ "${_upd_ok}" -eq 1 ] && msg_ok "Updated Proxmox VE"
 
 echo "The TAPPaaS post proxmox install script was run" "$(date)" >/var/log/tappaas.step1
-msg_ok "Completed TAPPaaS base post-install"
+debug "Completed TAPPaaS base post-install"
 
 fi   # ── end RUN_BASE ────────────────────────────────────────────────
 
@@ -681,7 +664,6 @@ print_summary
 # chain (firewall → gateway cutover → sanity → platform) lives in the
 # orchestrator (foundation/install.sh), which reads ~/tappaas/.cluster-role
 # (written above) to decide whether to continue. So we just report node status.
-echo ""
 case "$CLUSTER_ROLE" in
   created)
     msg_ok "Node base + cluster '${ORGNAME:-TAPPaaS}' + storage ready (this node CREATED the cluster)." ;;
