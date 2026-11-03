@@ -3,13 +3,14 @@
 // next to its target and renamed over it, so a renewal never leaves a key and a
 // certificate that do not belong together.
 
-import { spawnSync } from "child_process";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
+import { chmodGuarded, mkdirGuarded, renameGuarded, rmGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
+import { spawnGuarded } from "../../../lib/ts/src/exec";
 import { constraintExt } from "./ca";
 
 function openssl(args: string[]): string {
-  const r = spawnSync("openssl", args, { encoding: "utf8" });
+  const r = spawnGuarded("openssl", args, { encoding: "utf8" });
   if (r.error) throw new Error(`openssl: ${r.error.message}`);
   if (r.status !== 0) {
     const last = (r.stderr ?? "").trim().split("\n").slice(-1)[0] || `exit ${r.status}`;
@@ -24,17 +25,19 @@ function serial(): string {
 
 // A scratch dir beside `file`, removed after `fn`.
 function beside<T>(file: string, fn: (dir: string) => T): T {
-  const dir = mkdtempSync(join(dirname(file), ".tmp-"));
+  const dir = join(dirname(file), `.tmp-${process.pid}-${Date.now()}`);
+  mkdirGuarded(dir);
+  chmodGuarded(dir, 0o700);
   try {
     return fn(dir);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmGuarded(dir, { recursive: true, force: true });
   }
 }
 
 function newKey(path: string): void {
   openssl(["genpkey", "-algorithm", "EC", "-pkeyopt", "ec_paramgen_curve:P-256", "-out", path]);
-  chmodSync(path, 0o600);
+  chmodGuarded(path, 0o600);
 }
 
 // A self-signed root: a CA, allowed to sign certificates only, for the names
@@ -53,8 +56,8 @@ export function makeCa(keyFile: string, certFile: string, cn: string, permitted:
       "-addext", "subjectKeyIdentifier=hash",
       "-addext", constraintExt(permitted),
     ]);
-    renameSync(key, keyFile);
-    renameSync(cert, certFile);
+    renameGuarded(key, keyFile);
+    renameGuarded(cert, certFile);
   });
 }
 
@@ -68,7 +71,7 @@ export function issue(caKey: string, caCert: string, keyFile: string, chainFile:
     const cert = join(dir, "cert");
     newKey(key);
     openssl(["req", "-new", "-key", key, "-out", csr, "-subj", `/CN=${names[0]}`]);
-    writeFileSync(
+    writeFileGuarded(
       ext,
       [
         `subjectAltName=${names.map((n) => `DNS:${n}`).join(",")}`,
@@ -85,10 +88,10 @@ export function issue(caKey: string, caCert: string, keyFile: string, chainFile:
     openssl(["verify", "-CAfile", caCert, cert]);
     const chain = join(dir, "chain");
     const pem = readFileSync(cert, "utf8");
-    writeFileSync(chain, pem.trim() + "\n" + readFileSync(caCert, "utf8").trim() + "\n", "utf8");
-    chmodSync(chain, 0o644);
-    renameSync(key, keyFile);
-    renameSync(chain, chainFile);
+    writeFileGuarded(chain, pem.trim() + "\n" + readFileSync(caCert, "utf8").trim() + "\n", "utf8");
+    chmodGuarded(chain, 0o644);
+    renameGuarded(key, keyFile);
+    renameGuarded(chain, chainFile);
     return pem;
   });
 }

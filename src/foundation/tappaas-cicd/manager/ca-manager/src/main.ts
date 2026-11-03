@@ -12,7 +12,7 @@
 import { join } from "path";
 import { CL, GN, YW, die, guarded, info, requireOperator, warn } from "../../../lib/ts/src/cli";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
-import { defaultConfigDir, readJsonObject, simulating, writeJsonAtomic } from "../../../lib/ts/src/config-io";
+import { chmodGuarded, defaultConfigDir, readJsonObject, renameGuarded, simulating, unlinkGuarded, writeFileGuarded, writeJsonAtomic } from "../../../lib/ts/src/config-io";
 import {
   CA_DAYS,
   CERT_DAYS,
@@ -40,9 +40,9 @@ import { Store, certInfo } from "./store";
 import { EnvDomain, buildCaReport } from "./cmdbreport";
 import { printOrSend, reportChange } from "../../../lib/ts/src/cmdb-reporter";
 import { readdirSync } from "fs";
-import { chmodSync, existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { hostname } from "os";
-import { spawnSync } from "child_process";
+import { spawnGuarded } from "../../../lib/ts/src/exec";
 
 const VERSION = "0.1.0";
 
@@ -338,13 +338,13 @@ function refreshOwnTrust(): void {
   const cmd = process.env.CA_MANAGER_REBUILD ?? "systemctl";
   const unit = `tappaas-rebuild@${hostname().split(".")[0]}.service`;
   info(`  the site's CAs changed: rebuilding this mothership so its own trust follows (${unit})…`);
-  const r = spawnSync(cmd, ["start", "--wait", unit], { encoding: "utf8" });
+  const r = spawnGuarded(cmd, ["start", "--wait", unit], { encoding: "utf8" });
   if (r.status === 0) info(`${GN}✓${CL} this mothership trusts the site's CAs`);
   else warn(`the mothership was not rebuilt (${(r.stderr ?? "").trim() || r.error?.message || `exit ${r.status}`}): until it is, its calls to the new CA's names fail — systemctl start --wait ${unit}`);
 }
 
 function caddyReload(): void {
-  const reload = spawnSync("ssh", ["-n", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", `root@${FIREWALL}`, "configctl caddy reload"], { encoding: "utf8" });
+  const reload = spawnGuarded("ssh", ["-n", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", `root@${FIREWALL}`, "configctl caddy reload"], { encoding: "utf8" });
   if (reload.status !== 0) warn(`Caddy was not reloaded (${(reload.stderr ?? "").trim() || `exit ${reload.status}`}): it serves the old certificate until it is`);
 }
 
@@ -352,7 +352,7 @@ function caddyReload(): void {
 function trustManager(args: string[], input?: string): { refid: string; changed: boolean } {
   // The firewall's API certificate is self-signed, as every other caller of its API
   // assumes (acme-manager, caddy-manager): until it comes from the internal CA.
-  const r = spawnSync("trust-manager", ["--no-ssl-verify", ...args], { encoding: "utf8", ...(input !== undefined ? { input } : {}) });
+  const r = spawnGuarded("trust-manager", ["--no-ssl-verify", ...args], { encoding: "utf8", ...(input !== undefined ? { input } : {}) });
   if (r.error) throw new Error(`trust-manager: ${r.error.message}`);
   if (r.status !== 0) throw new Error(`trust-manager ${args[0]}: ${(r.stderr ?? "").trim().split("\n").slice(-1)[0] || `exit ${r.status}`}`);
   const refid = (r.stdout ?? "").trim().split("\n").slice(-1)[0] ?? "";
@@ -376,7 +376,7 @@ function pushToFirewall(store: Store, doc: CaDoc, name: string): string {
 }
 
 function moveOff(old: string, refid: string): void {
-  const rb = spawnSync("caddy-manager", ["--no-ssl-verify", "rebind-certificate", "--from", old, "--to", refid], { encoding: "utf8" });
+  const rb = spawnGuarded("caddy-manager", ["--no-ssl-verify", "rebind-certificate", "--from", old, "--to", refid], { encoding: "utf8" });
   if (rb.status !== 0) {
     warn(`the routes on ${old} were not moved to ${refid} (${(rb.stderr ?? "").trim().split("\n").slice(-1)[0] || `exit ${rb.status}`}): caddy-manager rebind-certificate --from ${old} --to ${refid}`);
     return;
@@ -384,7 +384,7 @@ function moveOff(old: string, refid: string): void {
   const moved = (rb.stdout ?? "").split("\n").filter((l) => l.startsWith("moved: ")).map((l) => l.slice(7));
   if (moved.length) info(`${GN}✓${CL} moved ${moved.length} route(s) onto it: ${moved.join(", ")}`);
   caddyReload();
-  const rt = spawnSync("trust-manager", ["--no-ssl-verify", "cert-retire", "--refid", old], { encoding: "utf8" });
+  const rt = spawnGuarded("trust-manager", ["--no-ssl-verify", "cert-retire", "--refid", old], { encoding: "utf8" });
   if (rt.status !== 0) warn(`the old certificate ${old} stays on the firewall: ${(rt.stderr ?? "").trim().split("\n").slice(-1)[0] || `exit ${rt.status}`}`);
   else for (const l of (rt.stdout ?? "").split("\n").filter((x) => x.startsWith("removed: "))) info(`  ${l}`);
 }
@@ -464,9 +464,9 @@ function providerAdd(store: Store, name: string, type: string, domains: string[]
   store.ensureKeyDir();
   const file = store.providerSecret(name);
   const tmp = `${file}.tmp`;
-  writeFileSync(tmp, keys.map((k) => `${k}=${cred.fields[k]}`).join("\n") + "\n", "utf8");
-  chmodSync(tmp, 0o600);
-  renameSync(tmp, file);
+  writeFileGuarded(tmp, keys.map((k) => `${k}=${cred.fields[k]}`).join("\n") + "\n", "utf8");
+  chmodGuarded(tmp, 0o600);
+  renameGuarded(tmp, file);
   doc.providers = { ...(doc.providers ?? {}), [name]: { type, domains, keys, added: stamp() } };
   store.save(doc);
   info(`${GN}✓${CL} provider ${name} (${type}) for ${domains.length ? domains.join(", ") : "any domain"}: ${keys.join(", ")}`);
@@ -493,7 +493,7 @@ function providerRemove(store: Store, name: string): number {
   if (!doc.providers?.[name]) die(`no provider ${name} (ca-manager provider list)`);
   delete doc.providers[name];
   store.save(doc);
-  if (existsSync(store.providerSecret(name))) unlinkSync(store.providerSecret(name));
+  if (existsSync(store.providerSecret(name))) unlinkGuarded(store.providerSecret(name));
   info(`${GN}✓${CL} removed provider ${name} — the firewall keeps its copy in os-acme-client until it is removed there`);
   return 0;
 }
@@ -517,12 +517,12 @@ function acme(store: Store, env: string, domain: string, staging: boolean, dnsSl
   }
   const secret = readFileSync(store.providerSecret(name), "utf8");
   // acme.sh's DNS hooks are put in place by os-acme-client's own setup (#327).
-  spawnSync("ssh", ["-n", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", `root@${FIREWALL}`, "sh /usr/local/opnsense/scripts/OPNsense/AcmeClient/setup.sh"], { encoding: "utf8" });
+  spawnGuarded("ssh", ["-n", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", `root@${FIREWALL}`, "sh /usr/local/opnsense/scripts/OPNsense/AcmeClient/setup.sh"], { encoding: "utf8" });
   const args = ["--firewall", FIREWALL, "--no-ssl-verify", "setup", "--domain", domain, "--email", email, "--provider", p.type,
     "--dns-sleep", String(dnsSleep), "--timeout", String(dnsSleep + 180), "--provider-fields-stdin",
     ...(staging ? ["--staging", "--account-name", "letsencrypt-staging"] : [])];
   info(`getting *.${domain} from Let's Encrypt${staging ? " (staging)" : ""} through ${name} — a few minutes`);
-  const r = spawnSync("acme-manager", args, { encoding: "utf8", input: secret, env: { ...process.env, PYTHONUNBUFFERED: "1" } });
+  const r = spawnGuarded("acme-manager", args, { encoding: "utf8", input: secret, env: { ...process.env, PYTHONUNBUFFERED: "1" } });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
   if (r.status !== 0) {
     process.stderr.write(out.split("\n").slice(-15).join("\n") + "\n");
@@ -541,7 +541,7 @@ function acme(store: Store, env: string, domain: string, staging: boolean, dnsSl
 function deliver(store: Store, name: string, d: Delivery): boolean {
   const script = deliveryScript(d, readFileSync(store.certChain(name), "utf8"), readFileSync(store.certKey(name), "utf8"));
   const ssh = process.env.CA_MANAGER_SSH ?? "ssh";
-  const r = spawnSync(ssh, ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", `tappaas@${d.host}`, "sudo sh -s"], { encoding: "utf8", input: script });
+  const r = spawnGuarded(ssh, ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", `tappaas@${d.host}`, "sudo sh -s"], { encoding: "utf8", input: script });
   if (r.status !== 0) throw new Error(`${d.host}: ${(r.stderr ?? "").trim().split("\n").slice(-1)[0] || r.error?.message || `exit ${r.status}`}`);
   return (r.stdout ?? "").trim().split("\n").slice(-1)[0] === "changed";
 }
