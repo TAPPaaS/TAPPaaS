@@ -101,7 +101,7 @@
       "example": true
     },
     "pauseOk": {
-      "description": "May the nightly update suspend this module for a while to make room on a node that is too full — to patch a suspended module, or to move guests off a node it reboots (#891)? Only in the maintenance window (automaticReboot, or --allow-disruption), lowest pausePriority first; the update resumes it once every module is patched and the nodes are rebooted. A foundation module is never paused.",
+      "description": "May the nightly update suspend this module for a while to make room on a node that is too full — to patch a suspended module, or to move guests off a node it reboots? Only in the maintenance window (automaticReboot, or --allow-disruption), lowest pausePriority first; the update resumes it once every module is patched and the nodes are rebooted. A foundation module is never paused.",
       "type": "boolean",
       "requiredBy": [],
       "usedBy": [
@@ -111,7 +111,7 @@
       "example": true
     },
     "pausePriority": {
-      "description": "Among pauseOk modules, which the update suspends first when it needs room (#891): the lowest number first; equal numbers, the largest memory first.",
+      "description": "Among pauseOk modules, which the update suspends first when it needs room: the lowest number first; equal numbers, the largest memory first.",
       "type": "integer",
       "requiredBy": [],
       "usedBy": [
@@ -121,7 +121,7 @@
       "example": 10
     },
     "suspendedNoUpdate": {
-      "description": "A suspended module the nightly update leaves alone: 'module-manager suspend --no-update' sets it, for a module stopped because it is broken, and 'resume' clears it. Without it a suspended module is patched in the update's closing pass (#890).",
+      "description": "A suspended module the nightly update leaves alone: 'module-manager suspend --no-update' sets it, for a module stopped because it is broken, and 'resume' clears it. Without it a suspended module is patched in the update's closing pass.",
       "type": "boolean",
       "requiredBy": [],
       "usedBy": [
@@ -161,7 +161,7 @@
       "example": "Nextcloud file sharing and collaboration platform"
     },
     "version": {
-      "description": "Version of the module (not the TAPPaaS system), SemVer x.y.z. Used for tracking running versions and determining if upgrades exist. #248: start at 0.1.0 and stay below 1.0.0 while only the author has run it — 0.x says pre-stable, and claiming 1.0.0 early is the misleading case this rule exists for. 1.0.0 is earned when an install other than the author's is confirmed working, the same step that takes status to Production.",
+      "description": "Version of the module (not the TAPPaaS system), SemVer x.y.z. Used for tracking running versions and determining if upgrades exist. Start at 0.1.0 and stay below 1.0.0 while only the author has run it — 0.x says pre-stable, and claiming 1.0.0 early is the misleading case this rule exists for. 1.0.0 is earned when an install other than the author's is confirmed working, the same step that takes status to Production.",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
@@ -169,7 +169,7 @@
       ],
       "format": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
       "example": "0.5.3",
-      "note": "Major < 1 indicates the module is not production-ready. The two-part form (0.5) is accepted by the schema for modules written before #248; the classification lint warns and asks for 0.5.0."
+      "note": "Major < 1 indicates the module is not production-ready. The two-part form (0.5) is accepted by the schema for older modules; the classification lint warns and asks for 0.5.0."
     },
     "appVersion": {
       "description": "Upstream application version deployed by this module. Optional but recommended. Distinct from 'version' (module semver). Treated as an informational string — no format enforced.",
@@ -226,7 +226,7 @@
       "note": "Was set when --variant <name> was used at install time, and until its retirement was also MIRRORED from --environment for suffixed environments. Everything that read it (provider pairing, name-suffix stripping) now reads 'environment'. A migrated site should carry no .variant at all: strip it with scripts/migrate-drop-variant.sh."
     },
     "environment": {
-      "description": "Target environment this module was installed into (ADR-007 P5). Persisted by copy-update-json.sh when --environment <name> is used so `module-manager module modify`/`delete` can resolve the source module file and the environment. Not present for legacy/no-environment installs.",
+      "description": "Target environment this module was installed into. Persisted by copy-update-json.sh when --environment <name> is used so `module-manager module modify`/`delete` can resolve the source module file and the environment. Not present for legacy/no-environment installs.",
       "type": "string",
       "references": "environments",
       "requiredBy": [],
@@ -248,7 +248,7 @@
       "note": "Typically a GitHub username prefixed with @"
     },
     "status": {
-      "description": "How far the module has got (#248). A maturity the author claims, read by anyone deciding whether to install it — not a state of a deployment. Development → Testing when the author has run test-module.sh against a live install; Testing → Production when at least one install other than the author's is confirmed working. `archived` and `external` are not maturities: they are states a DEPLOYED config carries (ADR-022g moves them to `management`), and a released module naming one fails the classification lint.",
+      "description": "How far the module has got. A maturity the author claims, read by anyone deciding whether to install it — not a state of a deployment. Development → Testing when the author has run test-module.sh against a live install; Testing → Production when at least one install other than the author's is confirmed working. `archived` and `external` are not maturities: they are states a DEPLOYED config carries (moving to `management`), and a released module naming one fails the classification lint.",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
@@ -266,7 +266,7 @@
       "example": "Development"
     },
     "rebootOk": {
-      "description": "May an UNATTENDED converge disrupt this module's guest — reboot it, or migrate it offline — in order to apply a declared change (ADR-020 D8)? A field's change class says a change NEEDS disruption; this says whether we are ALLOWED to cause it without a human present. It is therefore a property of the WORKLOAD, not of the field: a stateless front-end can be bounced at 03:00, a database only in a window. Default false, so silence never authorizes downtime.",
+      "description": "May an UNATTENDED converge disrupt this module's guest — reboot it, or migrate it offline — in order to apply a declared change? A field's change class says a change NEEDS disruption; this says whether we are ALLOWED to cause it without a human present. It is therefore a property of the WORKLOAD, not of the field: a stateless front-end can be bounced at 03:00, a database only in a window. Default false, so silence never authorizes downtime.",
       "type": "boolean",
       "requiredBy": [],
       "usedBy": [
@@ -274,10 +274,10 @@
       ],
       "default": false,
       "example": true,
-      "note": "Disruption is authorized iff '--allow-disruption' was passed (an operator, now: 'module-manager module update <m> --allow-disruption', or 'site-manager update --allow-disruption' for a run), OR rebootOk is true AND the scheduled run has automaticReboot (ADR-020 v0.10 D8). '--force' is a different lever: it proceeds past a refusal and never reboots. When a disruptive change is not authorized the converge applies everything else, prints a machine-parseable 'DEFERRED:' line and still exits 0; update-tappaas collects those into an end-of-sweep summary."
+      "note": "Disruption is authorized iff '--allow-disruption' was passed (an operator, now: 'module-manager module update <m> --allow-disruption', or 'site-manager update --allow-disruption' for a run), OR rebootOk is true AND the scheduled run has automaticReboot. '--force' is a different lever: it proceeds past a refusal and never reboots. When a disruptive change is not authorized the converge applies everything else, prints a machine-parseable 'DEFERRED:' line and still exits 0; update-tappaas collects those into an end-of-sweep summary."
     },
     "sshKeyOnly": {
-      "description": "Key-only SSH on a machine TAPPaaS manages (#756, ADR-026 D8.1): sshd refuses password and keyboard-interactive logins for every user, and root logs in by key only — the settings the cluster nodes enforce (#19). The console keeps the root password. Applied when the machine is adopted or provisioned and re-applied by every update, so a password login someone switches back on is closed again; test.sh asserts it from what sshd enforces. false returns the machine to its own sshd_config (TAPPaaS removes only the drop-in it wrote).",
+      "description": "Key-only SSH on a machine TAPPaaS manages: sshd refuses password and keyboard-interactive logins for every user, and root logs in by key only — the settings the cluster nodes enforce. The console keeps the root password. Applied when the machine is adopted or provisioned and re-applied by every update, so a password login someone switches back on is closed again; test.sh asserts it from what sshd enforces. false returns the machine to its own sshd_config (TAPPaaS removes only the drop-in it wrote).",
       "type": "boolean",
       "requiredBy": [],
       "usedBy": [
@@ -288,7 +288,7 @@
       "note": "Read by kind: machine modules that log in to their machine: debianhost and the satellite (whose update and test run debianhost's). Opt out when adopting: module-manager module adopt <address> --set sshKeyOnly=false; later: module-manager module modify <instance> --set sshKeyOnly=false. Machines adopted before this field existed were given false by migration 0013, which is what adoption promised them then."
     },
     "tier": {
-      "description": "RETIRED (ADR-022e, #676) — replaced by scope, which is DERIVED from `stack`: the foundation stack is site-scoped, everything else environment-scoped. No module sets it any more; a deployed config that still carries it loses it on its next update (the release no longer defines it), and until then it is read only when the config has no `stack`. The name `tier` now means `zone.tier` alone (ADR-014).",
+      "description": "RETIRED — replaced by scope, which is DERIVED from `stack`: the foundation stack is site-scoped, everything else environment-scoped. No module sets it any more; a deployed config that still carries it loses it on its next update (the release no longer defines it), and until then it is read only when the config has no `stack`. The name `tier` now means `zone.tier` alone.",
       "type": "string",
       "requiredOnModule": false,
       "requiredBy": [],
@@ -299,10 +299,10 @@
         "foundation": "Retired: read as site-scoped only when the config has no stack.",
         "app": "Retired: read as environment-scoped only when the config has no stack."
       },
-      "note": "Kept in the schema for one release so a config that still carries it is not reported as holding an unknown field; removed the release after (#676)."
+      "note": "Kept in the schema for one release so a config that still carries it is not reported as holding an unknown field; removed the release after."
     },
     "kind": {
-      "description": "What type of workload the module is (ADR-022f D1) — equivalently, which Controller builds it. AUTHORED in the module's source JSON and adopted by deployments through the 3-way merge. Not what it runs on: that is its Host, named in `node` (ADR-022c D3).",
+      "description": "What type of workload the module is — equivalently, which Controller builds it. AUTHORED in the module's source JSON and adopted by deployments through the 3-way merge. Not what it runs on: that is its Host, named in `node`.",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
@@ -317,10 +317,10 @@
         "module": "LEGACY, never authored: ADR-007's object-type marker, once stamped into every deployed config. Migration 0004 removes it; it survives only where it is a config's sole module signal, so discovery can still find that module."
       },
       "example": "vm",
-      "note": "Every official module declares it: `cluster` is an application (it configures the Proxmox cluster on the pvehost machines), `templates` a vm (it owns the template guests) (#669, operator decision 2026-09-19) — interim values until the composite-module ADR, recorded in ADR-022d (#705). A module that declares none and is not official — a Community module — is a vm (lib/ts/src/kind.ts effectiveKind). Before #611 this field was the object-type marker, stamped \"module\" by install-module.sh; that stamping is gone."
+      "note": "Every official module declares it: `cluster` is an application (it configures the Proxmox cluster on the pvehost machines), `templates` a vm (it owns the template guests) (operator decision 2026-09-19) — interim values until composite modules are designed. A module that declares none and is not official — a Community module — is a vm (lib/ts/src/kind.ts effectiveKind). Formerly this field was the object-type marker, stamped \"module\" by install-module.sh; that stamping is gone."
     },
     "source": {
-      "description": "Origin & trust of the catalog entry (ADR-007b). Answers 'Where does the catalog entry come from?'. Orthogonal to 'tier'. Normally INFERRED at deploy time from the repository the module is catalogued in (sourceMetadata lives in Site → repositories, CR-05); only set explicitly when the module file itself must pin it.",
+      "description": "Origin & trust of the catalog entry. Answers 'Where does the catalog entry come from?'. Orthogonal to 'tier'. Normally INFERRED at deploy time from the repository the module is catalogued in (sourceMetadata lives in Site → repositories, CR-05); only set explicitly when the module file itself must pin it.",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
@@ -334,7 +334,7 @@
         "local": "⚪ Local — local dev, not in any catalog."
       },
       "example": "official",
-      "note": "Optional. Defaults to 'official'. Lint rule (validate-module-tier-source.sh, `module validate`): a site-scoped module (stack foundation, ADR-022e) requires source:official unless --allow-fork is given."
+      "note": "Optional. Defaults to 'official'. Lint rule (validate-module-tier-source.sh, `module validate`): a site-scoped module (stack foundation) requires source:official unless --allow-fork is given."
     },
     "moduleSource": {
       "description": "Absolute path to the module directory containing install.sh, update.sh, etc.",
@@ -344,10 +344,10 @@
         "general"
       ],
       "example": "/home/tappaas/TAPPaaS/src/collaboration/nextcloud",
-      "note": "Automatically set by copy-update-json.sh based on the directory where the module JSON resides. Named `location` before #609; migration 0006 renames it."
+      "note": "Automatically set by copy-update-json.sh based on the directory where the module JSON resides. Formerly named `location`; migration 0006 renames it."
     },
     "location": {
-      "description": "Where a machine is: the name of one of the site's locations (site.json locations{}, site-manager location list). Absent, it is at the primary location. A satellite or any machine away from the site names a location of its own, which is how backup-manager validate tells an off-site copy from an on-site one. Before #609 this field held the module's source directory (now moduleSource): a value with a '/' is that old field, never a place.",
+      "description": "Where a machine is: the name of one of the site's locations (site.json locations{}, site-manager location list). Absent, it is at the primary location. A satellite or any machine away from the site names a location of its own, which is how backup-manager validate tells an off-site copy from an on-site one. Formerly this field held the module's source directory (now moduleSource): a value with a '/' is that old field, never a place.",
       "type": "string",
       "references": "locations",
       "requiredBy": [],
@@ -387,7 +387,7 @@
       "example": [
         "vllm-amd:inference"
       ],
-      "note": "Soft counterpart to dependsOn: missing provider = skip (no error); installed provider = same install-service.sh logic. Do NOT list a coordinate in both dependsOn and integratesWith. The two differ in LIFECYCLE, not reachability (#632): a cross-zone coordinate here earns the same network:rules auto-pinhole a dependsOn entry would."
+      "note": "Soft counterpart to dependsOn: missing provider = skip (no error); installed provider = same install-service.sh logic. Do NOT list a coordinate in both dependsOn and integratesWith. The two differ in LIFECYCLE, not reachability: a cross-zone coordinate here earns the same network:rules auto-pinhole a dependsOn entry would."
     },
     "provides": {
       "description": "List of services this module provides. Service names only (the module is implicit from the JSON filename).",
@@ -406,7 +406,7 @@
       "note": "Each listed service must have a corresponding services/<service>/install-service.sh and update-service.sh"
     },
     "controllers": {
-      "description": "The extended controllers this module contributes to the control plane (ADR-035): code that drives a system for a manager, or reconciles state inside the module's application. Each is {name, path, plugsInto}: `name` is `<application>-controller` (the application it controls, e.g. unifi-controller), `path` its directory in the module (`controller/<name>`, laid out as tappaas-cicd's controllers), `plugsInto` the managers that drive it (e.g. [\"switch-manager\"]). module-manager builds, links and registers each on install and update (config/control-plane.json) and removes it on delete.",
+      "description": "The extended controllers this module contributes to the control plane: code that drives a system for a manager, or reconciles state inside the module's application. Each is {name, path, plugsInto}: `name` is `<application>-controller` (the application it controls, e.g. unifi-controller), `path` its directory in the module (`controller/<name>`, laid out as tappaas-cicd's controllers), `plugsInto` the managers that drive it (e.g. [\"switch-manager\"]). module-manager builds, links and registers each on install and update (config/control-plane.json) and removes it on delete.",
       "type": "array",
       "requiredBy": [],
       "usedBy": [
@@ -427,7 +427,7 @@
       "note": "The module's lifecycle scripts (install.sh, update.sh, test.sh, delete.sh, the hooks) are its basic controller and are not listed here. A name another module already registered is refused. Checked by `module-manager validate --blueprint`."
     },
     "managers": {
-      "description": "The managers this module contributes to the control plane (ADR-035): the operator's and the console's verbs for a domain no standard manager covers. Each is {name, path}: `name` ends in `-manager` and is first come, first served across the site; `path` is its directory in the module (`manager/<name>`, laid out as tappaas-cicd's managers, answering --help and --help --json). module-manager builds, links and registers each on install and update and removes it on delete.",
+      "description": "The managers this module contributes to the control plane: the operator's and the console's verbs for a domain no standard manager covers. Each is {name, path}: `name` ends in `-manager` and is first come, first served across the site; `path` is its directory in the module (`manager/<name>`, laid out as tappaas-cicd's managers, answering --help and --help --json). module-manager builds, links and registers each on install and update and removes it on delete.",
       "type": "array",
       "requiredBy": [],
       "usedBy": [
@@ -475,7 +475,7 @@
       "note": "Convert between forms with module-format.sh (to-flat | to-config). Backward compatible: flat modules are untouched."
     },
     "os": {
-      "description": "The operating system a system runs — ADR-022f's OS facet, held as its `id` (the freedesktop os-release ID); the family follows from it: debian, ubuntu, nixos → linux; windows → windows. For a VM it also drives cloud-init bootstrapping (the Debian vendor-data snippet). For a machine, `module adopt` reads it from /etc/os-release, and it selects the machine module (ADR-026 D7).",
+      "description": "The operating system a system runs, held as its `id` (the freedesktop os-release ID); the family follows from it: debian, ubuntu, nixos → linux; windows → windows. For a VM it also drives cloud-init bootstrapping (the Debian vendor-data snippet). For a machine, `module adopt` reads it from /etc/os-release, and it selects the machine module.",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
@@ -494,7 +494,7 @@
       "note": "Optional. If omitted, Create-TAPPaaS-VM.sh falls back to sniffing the 'image' filename. Set explicitly to override the sniff."
     },
     "zone0": {
-      "description": "The security zone the FIRST network interface connects to; it must exist in zones.json. For a VM or LXC: which Proxmox bridge VLAN its virtual NIC is attached to. For a machine (kind: machine, ADR-026): which network its first physical NIC is cabled to — recorded, not yet enforced (connecting a machine's port on the switch is its own issue).",
+      "description": "The security zone the FIRST network interface connects to; it must exist in zones.json. For a VM or LXC: which Proxmox bridge VLAN its virtual NIC is attached to. For a machine (kind: machine): which network its first physical NIC is cabled to — recorded, not yet enforced (connecting a machine's port on the switch is its own issue).",
       "type": "string",
       "references": "zones",
       "requiredBy": [],
@@ -506,7 +506,7 @@
       "default": "mgmt",
       "format": "^[a-z][a-zA-Z0-9]*$",
       "example": "srvHome",
-      "note": "Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens. ADR-007 P5: when zone0 is unset it DEFAULTS to the target environment's zone (the Service zone in zones.json whose environment names it); pre-cutover (no site.json/environments) it falls back to resolve_default_zone()'s behaviour. An explicit zone0 in the module JSON always wins. #349: a RELEASED module names zone0 only when it must live in a particular kind of zone (dmz, an IoT zone, edge); a foundation module that names none is recorded as mgmt by copy-update-json.sh. Once deployed it is the site's: the update merge keeps it (apply-json-merge.sh rule 1b) — move an install with module modify --set zone0=…"
+      "note": "Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens. When zone0 is unset it DEFAULTS to the target environment's zone (the Service zone in zones.json whose environment names it); pre-cutover (no site.json/environments) it falls back to resolve_default_zone()'s behaviour. An explicit zone0 in the module JSON always wins. A RELEASED module names zone0 only when it must live in a particular kind of zone (dmz, an IoT zone, edge); a foundation module that names none is recorded as mgmt by copy-update-json.sh. Once deployed it is the site's: the update merge keeps it (apply-json-merge.sh rule 1b) — move an install with module modify --set zone0=…"
     },
     "zone1": {
       "description": "The security zone the SECOND network interface connects to, if there is one; it must exist in zones.json. For a VM: which Proxmox bridge VLAN its second virtual NIC is attached to. For a machine: which network its second physical NIC is cabled to — recorded, not yet enforced.",
@@ -544,7 +544,7 @@
     },
 
     "uplinks": {
-      "description": "A cluster node's network uplinks (#40, pvehost instances): which physical ports carry its `lan` bridge — one port, or two or more bonded as `lanbond` — and its `wan` bridge. Ports by MAC address, the permanent one, because kernel interface names move. `lan.mode` is `single`, `active-backup` (one leg carries traffic, `primary` when it is up; any switches, any mix of speeds) or `lacp` (802.3ad: equal speeds, and the switch side one LAG). `lan.mtu` when not 1500.",
+      "description": "A cluster node's network uplinks (pvehost instances): which physical ports carry its `lan` bridge — one port, or two or more bonded as `lanbond` — and its `wan` bridge. Ports by MAC address, the permanent one, because kernel interface names move. `lan.mode` is `single`, `active-backup` (one leg carries traffic, `primary` when it is up; any switches, any mix of speeds) or `lacp` (802.3ad: equal speeds, and the switch side one LAG). `lan.mtu` when not 1500.",
       "type": "object",
       "requiredBy": [],
       "usedBy": [
@@ -605,10 +605,10 @@
         "S7HENJ0X100001",
         "S7HENJ0X100002"
       ],
-      "note": "Recorded by `site-manager node add` once the node has joined (ADR-037 D4). Informational: a disk replacement reads it to know which disk is which."
+      "note": "Recorded by `site-manager node add` once the node has joined. Informational: a disk replacement reads it to know which disk is which."
     },
     "stack": {
-      "description": "The one stack a module belongs to (#463): what a catalogue lists it under, and the directory it lives in: src/<stack>/<module> for the purpose stacks and misc, src/foundation/<module> for foundation (#421). An enumerated field, and this schema is the list's owner: every module carries exactly one of the values below, as a field in its own module JSON. Three of them say what a module IS rather than what it is for — `foundation`, `template` and `test`; the rest group application modules by what they are for. `foundation` also decides a module's scope (ADR-022e v1.1): a foundation-stack module is site-scoped — it belongs to the Site, serves every Environment, installs in mgmt, must come from an official source (or --allow-fork) and needs --force to delete; every other module is environment-scoped. A module becomes site-scoped by moving into the foundation stack, and in no other way.",
+      "description": "The one stack a module belongs to: what a catalogue lists it under, and the directory it lives in: src/<stack>/<module> for the purpose stacks and misc, src/foundation/<module> for foundation. An enumerated field, and this schema is the list's owner: every module carries exactly one of the values below, as a field in its own module JSON. Three of them say what a module IS rather than what it is for — `foundation`, `template` and `test`; the rest group application modules by what they are for. `foundation` also decides a module's scope: a foundation-stack module is site-scoped — it belongs to the Site, serves every Environment, installs in mgmt, must come from an official source (or --allow-fork) and needs --force to delete; every other module is environment-scoped. A module becomes site-scoped by moving into the foundation stack, and in no other way.",
       "type": "string",
       "values": {
         "foundation": "Part of the platform every site runs.",
@@ -632,7 +632,7 @@
       "note": "A repository's catalogue repeats it so `repository list` can group without opening every module file; the catalogue check reports a disagreement. A module with no stack reads as an application module and breaks nothing, but the value is not free-form: use `misc` rather than inventing one, so a catalogue cannot grow a group nobody declared. The list is kept deliberately short — a stack with a single member is usually `misc` in disguise. The list is descriptive — `module-manager validate` does not reject an unlisted value today."
     },
     "roles": {
-      "description": "What a machine is for (ADR-022h: a facet, not what it is) — for a satellite, the roles it carries: `reverse-proxy`, `admin-vpn`, and `backup` once it is locked down as a pull vault (ADR-010 §8.4). Given at `module add` as a JSON array, e.g. --roles '[\"reverse-proxy\"]'.",
+      "description": "What a machine is for (a facet, not what it is) — for a satellite, the roles it carries: `reverse-proxy`, `admin-vpn`, and `backup` once it is locked down as a pull vault. Given at `module add` as a JSON array, e.g. --roles '[\"reverse-proxy\"]'.",
       "type": "array",
       "requiredBy": [],
       "usedBy": [
@@ -645,7 +645,7 @@
       "note": "The module decides which roles it accepts; the satellite refuses `backup` at add — `module modify <instance> --lockdown` sets it."
     },
     "address": {
-      "description": "How the mothership reaches a machine (kind: machine, ADR-026 D8.1): an IP address or FQDN, logged into as root with the mothership's key. Written by `module adopt`. A VM or LXC is reached by its name and zone instead and has no `address`.",
+      "description": "How the mothership reaches a machine (kind: machine): an IP address or FQDN, logged into as root with the mothership's key. Written by `module adopt`. A VM or LXC is reached by its name and zone instead and has no `address`.",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
@@ -655,7 +655,7 @@
       "note": "Changing it records where the machine is now; it moves nothing."
     },
     "management": {
-      "description": "Whether TAPPaaS runs a lifecycle against this module (ADR-022g): `managed` — it installs, updates, tests and deletes it; `unmanaged` — registered so the Site knows it exists, with no lifecycle. Absent means managed.",
+      "description": "Whether TAPPaaS runs a lifecycle against this module: `managed` — it installs, updates, tests and deletes it; `unmanaged` — registered so the Site knows it exists, with no lifecycle. Absent means managed.",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
@@ -666,7 +666,7 @@
         "managed": "TAPPaaS runs the module's lifecycle",
         "unmanaged": "registered only; no install, update, test or delete"
       },
-      "note": "The sweep skips an `unmanaged` module (logged `management=unmanaged`), as it does `status: archived | external`. A locked-down satellite is the case in use (ADR-010 §8.4.4)."
+      "note": "The sweep skips an `unmanaged` module (logged `management=unmanaged`), as it does `status: archived | external`. A locked-down satellite is the case in use."
     },
     "publicDomain": {
       "description": "Public FQDN for a NON-HTTP service the module exposes on the firewall's WAN interface through network:nat (TURN, SMTP, SSH, ...). network:proxy publishes HTTP(S) under proxyDomain; this is the counterpart for raw ports. The operator creates its public A record.",
@@ -789,7 +789,7 @@
         "required": "if module provides services"
       },
       "services/<service-name>/pinhole.json": {
-        "description": "Declares the network ports a service exposes. When a consumer module depends on this service across zones, network:rules synthesises an auto-pinhole rule per declared port (subject to the destination zone's pinhole-allowed-from policy). Issue #173.",
+        "description": "Declares the network ports a service exposes. When a consumer module depends on this service across zones, network:rules synthesises an auto-pinhole rule per declared port (subject to the destination zone's pinhole-allowed-from policy).",
         "required": false,
         "schema": {
           "ports": {

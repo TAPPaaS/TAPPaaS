@@ -45,7 +45,7 @@
       "default": 0,
       "minimum": 0,
       "example": 512,
-      "note": "cluster:lxc's update-service.sh has always read this from config with a default of 0; it was simply never declared here, so no path could report or classify it. Declared in ADR-020 P5.",
+      "note": "cluster:lxc's update-service.sh has always read this from config with a default of 0; it was simply never declared here, so no path could report or classify it.",
       "class": "in-place",
       "apply": "set",
       "liveKey": "swap",

@@ -950,7 +950,7 @@
        "arg": null,
        "choices": null,
        "repeatable": false,
-       "description": "Read only: park nothing (the read after every sweep, #860)."
+       "description": "Read only: park nothing (the read after every sweep)."
       }
      ],
      "open": false,

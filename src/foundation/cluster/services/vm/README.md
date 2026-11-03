@@ -47,7 +47,7 @@ Name of the VM, also used as module name and OS hostname
 | Reported as | `name` |
 | Provider flag | `--name` |
 
-**About the field.** ADR-007 P5: vmname is COMPUTED at install time and need not be authored in the module JSON. The installer derives it from the module name and the target environment: '<module>' when the environment is the default environment, else '<module>-<environment>'. An explicit vmname in the JSON still wins (back-compat). The field is retained in the schema for legacy module configs.
+**About the field.** vmname is COMPUTED at install time and need not be authored in the module JSON. The installer derives it from the module name and the target environment: '<module>' when the environment is the default environment, else '<module>-<environment>'. An explicit vmname in the JSON still wins (back-compat). The field is retained in the schema for legacy module configs.
 
 **Why this change class.** Proxmox spells the guest name 'name'. Only reconciled when the guest reports one.
 
@@ -150,7 +150,7 @@ Proxmox bridge for the VM's first network interface (net0)
 
 ### `zone0`
 
-The security zone the FIRST network interface connects to; it must exist in zones.json. For a VM or LXC: which Proxmox bridge VLAN its virtual NIC is attached to. For a machine (kind: machine, ADR-026): which network its first physical NIC is cabled to — recorded, not yet enforced (connecting a machine's port on the switch is its own issue).
+The security zone the FIRST network interface connects to; it must exist in zones.json. For a VM or LXC: which Proxmox bridge VLAN its virtual NIC is attached to. For a machine (kind: machine): which network its first physical NIC is cabled to — recorded, not yet enforced (connecting a machine's port on the switch is its own issue).
 
 | Attribute | Value |
 |---|---|
@@ -166,7 +166,7 @@ The security zone the FIRST network interface connects to; it must exist in zone
 | Reported as | `net0.tag` |
 | Composite input to | `net0` |
 
-**About the field.** Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens. ADR-007 P5: when zone0 is unset it DEFAULTS to the target environment's zone (the Service zone in zones.json whose environment names it); pre-cutover (no site.json/environments) it falls back to resolve_default_zone()'s behaviour. An explicit zone0 in the module JSON always wins. #349: a RELEASED module names zone0 only when it must live in a particular kind of zone (dmz, an IoT zone, edge); a foundation module that names none is recorded as mgmt by copy-update-json.sh. Once deployed it is the site's: the update merge keeps it (apply-json-merge.sh rule 1b) — move an install with module modify --set zone0=…
+**About the field.** Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens. When zone0 is unset it DEFAULTS to the target environment's zone (the Service zone in zones.json whose environment names it); pre-cutover (no site.json/environments) it falls back to resolve_default_zone()'s behaviour. An explicit zone0 in the module JSON always wins. A RELEASED module names zone0 only when it must live in a particular kind of zone (dmz, an IoT zone, edge); a foundation module that names none is recorded as mgmt by copy-update-json.sh. Once deployed it is the site's: the update merge keeps it (apply-json-merge.sh rule 1b) — move an install with module modify --set zone0=…
 
 **Why this change class.** The zone resolves to net0's VLAN tag; a new tag is a new subnet, so the guest must renew DHCP and re-register DNS.
 
@@ -228,7 +228,7 @@ Proxmox bridge for the VM's second network interface (net1). The sentinel 'NONE'
 | Reported as | `net1.bridge` |
 | Composite input to | `net1` |
 
-**About the field.** cluster:vm only — a container has ONE NIC in TAPPaaS: neither Create-TAPPaaS-LXC.sh nor cluster:lxc's install/update service mentions net1, so the cluster:lxc claim these fields used to carry (bridge1/mac1/zone1/trunks1) was ownership that did not exist, removed in ADR-020 P5. Only used if a second network interface is needed. The default was 'lan' until ADR-020 P1, which contradicted both acting paths — Create-TAPPaaS-VM.sh and cluster:vm/update-service.sh have always read it as 'NONE' — and made the drift report claim a desired second NIC that nothing would ever create. Declaring a bridge1 on a VM that has none ADDS the NIC; removing it (back to the 'NONE' default) DELETES the live net1, which reboots the guest.
+**About the field.** cluster:vm only — a container has ONE NIC in TAPPaaS: neither Create-TAPPaaS-LXC.sh nor cluster:lxc's install/update service mentions net1, so the cluster:lxc claim these fields used to carry (bridge1/mac1/zone1/trunks1) was ownership that did not exist, and was removed. Only used if a second network interface is needed. The default was once 'lan', which contradicted both acting paths — Create-TAPPaaS-VM.sh and cluster:vm/update-service.sh have always read it as 'NONE' — and made the drift report claim a desired second NIC that nothing would ever create. Declaring a bridge1 on a VM that has none ADDS the NIC; removing it (back to the 'NONE' default) DELETES the live net1, which reboots the guest.
 
 **Why this change class.** Also the ADD/REMOVE switch for the second NIC. Its module-fields.json default is the sentinel 'NONE', so an undeclared bridge1 resolves to 'no second NIC' — the same reading Create-TAPPaaS-VM.sh and update-service.sh have always had. 'NONE' with a live net1 means the NIC is removed, which likewise reboots.
 
@@ -346,7 +346,7 @@ The largest size automatic growth takes this guest's disk to. Not declared: no c
 
 ### `thinDisk`
 
-Thin-provision the guest's ZFS disks (#773): every zvol gets refreservation=none, so a disk takes pool space as it fills instead of reserving its full size on day one — on the HA node too, since replication carries the property. Opt-in per module: a thin disk can overcommit its pool, and a full pool fails writes for every guest on it, so choose it for disks that fill slowly from empty (immich's photo library) and watch the pool. Not declared = not managed: the guest keeps what its storage creates (thick on the tank pools).
+Thin-provision the guest's ZFS disks: every zvol gets refreservation=none, so a disk takes pool space as it fills instead of reserving its full size on day one — on the HA node too, since replication carries the property. Opt-in per module: a thin disk can overcommit its pool, and a full pool fails writes for every guest on it, so choose it for disks that fill slowly from empty (immich's photo library) and watch the pool. Not declared = not managed: the guest keeps what its storage creates (thick on the tank pools).
 
 | Attribute | Value |
 |---|---|
@@ -387,7 +387,7 @@ Name of the Proxmox/TAPPaaS node where the module should be installed. If null, 
 
 ### `storage`
 
-Name of the storage pool for the module. Left undeclared, the pool is resolved against the target node at create time: 'tanka1' when that node has it, otherwise the node's first ZFS pool that can hold VM disks (#692).
+Name of the storage pool for the module. Left undeclared, the pool is resolved against the target node at create time: 'tanka1' when that node has it, otherwise the node's first ZFS pool that can hold VM disks.
 
 | Attribute | Value |
 |---|---|
@@ -401,7 +401,7 @@ Name of the storage pool for the module. Left undeclared, the pool is resolved a
 | Reported as | `storage` |
 | Hook | `update-storage.sh` |
 
-**About the field.** Must exist on the target node. A declared pool the node does not have is refused before the image is downloaded, naming the pools it does have (#692) — it is not silently replaced, because a declared pool is the operator's word.
+**About the field.** Must exist on the target node. A declared pool the node does not have is refused before the image is downloaded, naming the pools it does have — it is not silently replaced, because a declared pool is the operator's word.
 
 **Why this change class.** A declared storage the guest is not on moves its disks there, live (qm disk move --delete 1): no restart, only IO. The case it exists for is ADR-037 D1's — a firewall or mothership the bootstrap built on the boot pool (local-zfs) before the node had a data pool, moved onto tanka1 once it has one so HA replication has a data pool to go to; update-storage.sh removes the guest's replication first and has cluster:ha make it again to the new storage. The cloud-init drive goes with the disks, made again on the new storage: Proxmox never replicates it (a CD-ROM) and full-sends it on a migration to the same storage name on the target (#146), so left behind it would tie every move to the target's boot pool. Only a DECLARED value acts (applyOnlyDeclared): the schema default 'tanka1' is a preference (#692), both create paths fall back from it to the node's own ZFS pool, and a guest that never asked for a storage is not moved by a default — that stays the skipped case #679 records. The hook refuses (exit 20) a storage the node lacks or one with too little free space. adoptWhenAbsentFrom (ADR-037 D1): when the storage config names is not on the guest's node at all — a firewall or mothership the bootstrap built on the boot pool, before any config existed — the guest standing elsewhere is that preference's fallback, and config adopts where it is.
 
@@ -437,7 +437,7 @@ Proxmox guest OS profile. Controls QEMU clock, ACPI, and balloon-driver behaviou
 | Apply mode | `none` |
 | Reported as | `ostype` |
 
-**About the field.** Pick the value that matches your guest OS. It also decides how the guest reads the emulated hardware clock: a Windows ostype gets Proxmox's localtime=1, everything else keeps the RTC in UTC (#699). A wrong ostype therefore boots the guest a whole timezone offset away from real time until NTP walks it back, and changes power-management behaviour, but does not prevent the VM from booting.
+**About the field.** Pick the value that matches your guest OS. It also decides how the guest reads the emulated hardware clock: a Windows ostype gets Proxmox's localtime=1, everything else keeps the RTC in UTC. A wrong ostype therefore boots the guest a whole timezone offset away from real time until NTP walks it back, and changes power-management behaviour, but does not prevent the VM from booting.
 
 **Why this change class.** A creation-time hint that selects emulated hardware defaults; never reconciled on a live guest.
 
@@ -495,7 +495,7 @@ Unique VM ID across all TAPPaaS nodes
 
 ### `os`
 
-The operating system a system runs — ADR-022f's OS facet, held as its `id` (the freedesktop os-release ID); the family follows from it: debian, ubuntu, nixos → linux; windows → windows. For a VM it also drives cloud-init bootstrapping (the Debian vendor-data snippet). For a machine, `module adopt` reads it from /etc/os-release, and it selects the machine module (ADR-026 D7).
+The operating system a system runs, held as its `id` (the freedesktop os-release ID); the family follows from it: debian, ubuntu, nixos → linux; windows → windows. For a VM it also drives cloud-init bootstrapping (the Debian vendor-data snippet). For a machine, `module adopt` reads it from /etc/os-release, and it selects the machine module.
 
 | Attribute | Value |
 |---|---|

@@ -15,7 +15,7 @@
       "default": "<computed from module name + environment>",
       "pattern": "^[a-zA-Z][a-zA-Z0-9-]*$",
       "example": "nextcloud",
-      "note": "ADR-007 P5: vmname is COMPUTED at install time and need not be authored in the module JSON. The installer derives it from the module name and the target environment: '<module>' when the environment is the default environment, else '<module>-<environment>'. An explicit vmname in the JSON still wins (back-compat). The field is retained in the schema for legacy module configs."
+      "note": "vmname is COMPUTED at install time and need not be authored in the module JSON. The installer derives it from the module name and the target environment: '<module>' when the environment is the default environment, else '<module>-<environment>'. An explicit vmname in the JSON still wins (back-compat). The field is retained in the schema for legacy module configs."
     },
     "vmid": {
       "description": "Unique VM ID across all TAPPaaS nodes",
@@ -101,7 +101,7 @@
       "note": "G=gigabytes, M=megabytes, K=kilobytes"
     },
     "storage": {
-      "description": "Name of the storage pool for the module. Left undeclared, the pool is resolved against the target node at create time: 'tanka1' when that node has it, otherwise the node's first ZFS pool that can hold VM disks (#692).",
+      "description": "Name of the storage pool for the module. Left undeclared, the pool is resolved against the target node at create time: 'tanka1' when that node has it, otherwise the node's first ZFS pool that can hold VM disks.",
       "type": "string",
       "references": "storage",
       "requiredBy": [],
@@ -111,7 +111,7 @@
       ],
       "default": "tanka1",
       "example": "tanka1",
-      "note": "Must exist on the target node. A declared pool the node does not have is refused before the image is downloaded, naming the pools it does have (#692) — it is not silently replaced, because a declared pool is the operator's word."
+      "note": "Must exist on the target node. A declared pool the node does not have is refused before the image is downloaded, naming the pools it does have — it is not silently replaced, because a declared pool is the operator's word."
     },
     "imageType": {
       "description": "How the guest's image/rootfs is sourced. Applies to both VMs (cluster:vm) and containers (cluster:lxc); whether the guest is a VM or an LXC is determined by dependsOn (cluster:vm vs cluster:lxc), not by this field.",

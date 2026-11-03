@@ -1,7 +1,7 @@
 {
   "$schema": "../../../schemas/service-fields.json",
   "service": "backup:filesystem",
-  "description": "File-level backup of named paths INSIDE a guest (ADR-012 §3.1) — the subset capability, as opposed to backup:vm's whole-guest snapshot.",
+  "description": "File-level backup of named paths INSIDE a guest — the subset capability, as opposed to backup:vm's whole-guest snapshot.",
   "_note": "install/update-service.sh provision the PBS side (namespace fs/<module>, a write-no-delete login scoped to it, the client-side encryption key) and deploy the guest-side runner + timer. The `backup` policy object this service reads (filesystemPaths and the shared cascade fields) is defined once in the module tier, backup/fields.json — a field defined in two tiers is exactly what the composer refuses.",
   "fields": {
     "backup": {

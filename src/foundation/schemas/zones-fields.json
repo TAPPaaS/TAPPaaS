@@ -38,7 +38,7 @@
           "typeId": 6
         },
         "Overlay": {
-          "description": "Non-VLAN overlay network (e.g. NetBird/WireGuard) whose peers carry their own source CIDR (e.g. 100.64.0.0/10). Has no interface, DHCP or firewall rules \u2014 always state=Manual with vlantag=0. Exists so consumers like network:proxy access-list.sh can resolve the overlay CIDR. See zones.json 'netbird' (issue #367).",
+          "description": "Non-VLAN overlay network (e.g. NetBird/WireGuard) whose peers carry their own source CIDR (e.g. 100.64.0.0/10). Has no interface, DHCP or firewall rules \u2014 always state=Manual with vlantag=0. Exists so consumers like network:proxy access-list.sh can resolve the overlay CIDR. See zones.json 'netbird'.",
           "typeId": 7
         }
       },
@@ -120,7 +120,7 @@
       "changeNote": "The zone's subnet. Every guest in it is addressed from here, so a change re-addresses all of them; that is a migration, not a field edit."
     },
     "ipv6Subnet": {
-      "description": "The zone's IPv6 network: its /64 within the site's first /56 (ADR-030). Absent: the zone has no IPv6.",
+      "description": "The zone's IPv6 network: its /64 within the site's first /56. Absent: the zone has no IPv6.",
       "type": "integer",
       "required": false,
       "minimum": 0,
@@ -142,7 +142,7 @@
       "changeNote": "Adds or removes the zone's interface in the repeater and its mDNS pass rule at the next network update; no guest is touched."
     },
     "bridge": {
-      "description": "Network interface the zone is associated with. For a VLAN zone this is the physical trunk it rides. For a non-VLAN zone (vlantag 0 — Overlay/Manual) it is the OPNsense interface token its traffic arrives on, e.g. 'wireguard' for a WireGuard overlay; ADR-021 D3a needs it to place that overlay's caddy-reach rule",
+      "description": "Network interface the zone is associated with. For a VLAN zone this is the physical trunk it rides. For a non-VLAN zone (vlantag 0 — Overlay/Manual) it is the OPNsense interface token its traffic arrives on, e.g. 'wireguard' for a WireGuard overlay; it is needed to place that overlay's caddy-reach rule",
       "type": "string",
       "required": true,
       "default": "lan",
@@ -192,12 +192,12 @@
       "changeNote": "Which zones may be masqueraded into this one. Same cost as pinhole-allowed-from: a rule swap. Removing a zone here strands any module still requesting it \u2014 the next network:snat reconcile refuses the request and removes the live rule."
     },
     "tier": {
-      "description": "Trust rank in the ADR-014 strict lattice (0 = most trusted). Governs the direction of 'access-to': an edge may only run downward. Authored (stamped by the archetype), never derived \u2014 it records declared security intent so a zone configured against its intent can be caught. Absent on the types listed in 'tier_exempt_types'.",
+      "description": "Trust rank in the strict trust lattice (0 = most trusted). Governs the direction of 'access-to': an edge may only run downward. Authored (stamped by the archetype), never derived \u2014 it records declared security intent so a zone configured against its intent can be caught. Absent on the types listed in 'tier_exempt_types'.",
       "type": "integer",
       "required": false,
       "minimum": 0,
       "maximum": 6,
-      "note": "Tier 5 is reserved for the 'internet' boundary token and is never authored on a real zone. See 'tier_model' and 'invariants.I1' below. NOT an IEC 62443 Security Level: tier counts DOWN to privilege (0 = most trusted) while SL counts UP to protection (SL 4 = most demanding), and the two measure different things — see ADR-014 D5, which declines the mapping (#707).",
+      "note": "Tier 5 is reserved for the 'internet' boundary token and is never authored on a real zone. See 'tier_model' and 'invariants.I1' below. NOT an IEC 62443 Security Level: tier counts DOWN to privilege (0 = most trusted) while SL counts UP to protection (SL 4 = most demanding), and the two measure different things, so neither is mapped onto the other.",
       "example": 2,
       "changeClass": "in-place",
       "changeNote": "Trust rank in the ADR-014 lattice. Changing it re-derives which access-to edges are legal: validate warns (I1) about an edge the new tier forbids. No firewall rule reads it, so a reconcile changes nothing."
@@ -207,7 +207,7 @@
       "type": "boolean",
       "required": false,
       "default": false,
-      "note": "This is the ADR-007 isolation invariant expressed as a field rather than prose. Enforced by 'invariants.I2'.",
+      "note": "This is the isolation invariant expressed as a field rather than prose. Enforced by 'invariants.I2'.",
       "changeClass": "in-place",
       "changeNote": "Inbound quarantine. Turning it on withdraws every zone-wide pass INTO this zone at the next reconcile \u2014 disruptive to traffic, but not to any guest, and instantly reversible."
     },
@@ -298,7 +298,7 @@
     }
   },
   "tier_model": {
-    "description": "The ADR-014 strict trust lattice. 'access-to' is the coarse, zone-wide, DOWNWARD trust flow; everything that must go UPWARD is a narrow per-module pinhole. This replaces the descriptive tier prose that used to live in zones.json._README.tier_model, which could not be machine-checked because its own edges violated it.",
+    "description": "The strict trust lattice. 'access-to' is the coarse, zone-wide, DOWNWARD trust flow; everything that must go UPWARD is a narrow per-module pinhole. This replaces the descriptive tier prose that used to live in zones.json._README.tier_model, which could not be machine-checked because its own edges violated it.",
     "rule": "R1 \u2014 for every edge 'A access-to B', tier(A) <= tier(B). Never upward.",
     "tiers": {
       "0": {
@@ -507,7 +507,7 @@
     "description": "The key for each zone entry in zones.json",
     "type": "string",
     "pattern": "^[a-z][a-zA-Z0-9]*$",
-    "note": "camelCase only \u2014 no underscores or hyphens (#278). This is what network-manager authorZone() enforces; the schema previously allowed hyphens, which no code path would accept.",
+    "note": "camelCase only \u2014 no underscores or hyphens. This is what network-manager authorZone() enforces; the schema previously allowed hyphens, which no code path would accept.",
     "examples": [
       "mgmt",
       "srv",

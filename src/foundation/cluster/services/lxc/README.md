@@ -38,7 +38,7 @@ Name of the VM, also used as module name and OS hostname
 | Reported as | `hostname` |
 | Provider flag | `--hostname` |
 
-**About the field.** ADR-007 P5: vmname is COMPUTED at install time and need not be authored in the module JSON. The installer derives it from the module name and the target environment: '<module>' when the environment is the default environment, else '<module>-<environment>'. An explicit vmname in the JSON still wins (back-compat). The field is retained in the schema for legacy module configs.
+**About the field.** vmname is COMPUTED at install time and need not be authored in the module JSON. The installer derives it from the module name and the target environment: '<module>' when the environment is the default environment, else '<module>-<environment>'. An explicit vmname in the JSON still wins (back-compat). The field is retained in the schema for legacy module configs.
 
 **Why this change class.** Proxmox calls a container's name 'hostname'. It is also the DNS name the guest registers as.
 
@@ -123,7 +123,7 @@ Swap in MB for an LXC container. A container has no BIOS and no virtual disk con
 | Reported as | `swap` |
 | Provider flag | `--swap` |
 
-**About the field.** cluster:lxc's update-service.sh has always read this from config with a default of 0; it was simply never declared here, so no path could report or classify it. Declared in ADR-020 P5.
+**About the field.** cluster:lxc's update-service.sh has always read this from config with a default of 0; it was simply never declared here, so no path could report or classify it.
 
 **Why this change class.** Container-only: a VM's swap is inside its guest, a container's is a host-side cgroup limit. Live, like cores and memory. TAPPaaS defaults it to 0 — a container that needs swap says so.
 
@@ -147,7 +147,7 @@ Proxmox bridge for the VM's first network interface (net0)
 
 ### `zone0`
 
-The security zone the FIRST network interface connects to; it must exist in zones.json. For a VM or LXC: which Proxmox bridge VLAN its virtual NIC is attached to. For a machine (kind: machine, ADR-026): which network its first physical NIC is cabled to — recorded, not yet enforced (connecting a machine's port on the switch is its own issue).
+The security zone the FIRST network interface connects to; it must exist in zones.json. For a VM or LXC: which Proxmox bridge VLAN its virtual NIC is attached to. For a machine (kind: machine): which network its first physical NIC is cabled to — recorded, not yet enforced (connecting a machine's port on the switch is its own issue).
 
 | Attribute | Value |
 |---|---|
@@ -163,7 +163,7 @@ The security zone the FIRST network interface connects to; it must exist in zone
 | Reported as | `net0.tag` |
 | Composite input to | `net0` |
 
-**About the field.** Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens. ADR-007 P5: when zone0 is unset it DEFAULTS to the target environment's zone (the Service zone in zones.json whose environment names it); pre-cutover (no site.json/environments) it falls back to resolve_default_zone()'s behaviour. An explicit zone0 in the module JSON always wins. #349: a RELEASED module names zone0 only when it must live in a particular kind of zone (dmz, an IoT zone, edge); a foundation module that names none is recorded as mgmt by copy-update-json.sh. Once deployed it is the site's: the update merge keeps it (apply-json-merge.sh rule 1b) — move an install with module modify --set zone0=…
+**About the field.** Zone determines VLAN tag. 'mgmt' is untagged traffic. camelCase only — no underscores or hyphens. When zone0 is unset it DEFAULTS to the target environment's zone (the Service zone in zones.json whose environment names it); pre-cutover (no site.json/environments) it falls back to resolve_default_zone()'s behaviour. An explicit zone0 in the module JSON always wins. A RELEASED module names zone0 only when it must live in a particular kind of zone (dmz, an IoT zone, edge); a foundation module that names none is recorded as mgmt by copy-update-json.sh. Once deployed it is the site's: the update merge keeps it (apply-json-merge.sh rule 1b) — move an install with module modify --set zone0=…
 
 **Why this change class.** The zone resolves to net0's VLAN tag; a new tag is a new subnet, so the container restarts and re-registers DNS.
 
@@ -249,7 +249,7 @@ Disk size with unit suffix
 
 ### `storage`
 
-Name of the storage pool for the module. Left undeclared, the pool is resolved against the target node at create time: 'tanka1' when that node has it, otherwise the node's first ZFS pool that can hold VM disks (#692).
+Name of the storage pool for the module. Left undeclared, the pool is resolved against the target node at create time: 'tanka1' when that node has it, otherwise the node's first ZFS pool that can hold VM disks.
 
 | Attribute | Value |
 |---|---|
@@ -262,7 +262,7 @@ Name of the storage pool for the module. Left undeclared, the pool is resolved a
 | Apply mode | `none` |
 | Reported as | `storage` |
 
-**About the field.** Must exist on the target node. A declared pool the node does not have is refused before the image is downloaded, naming the pools it does have (#692) — it is not silently replaced, because a declared pool is the operator's word.
+**About the field.** Must exist on the target node. A declared pool the node does not have is refused before the image is downloaded, naming the pools it does have — it is not silently replaced, because a declared pool is the operator's word.
 
 **Why this change class.** As cluster:vm, and for a bind-mounted container this is not a move at all. The schema default 'tanka1' is what Create-TAPPaaS-LXC.sh builds on, so an undeclared container is in sync from install and the manual-class report is restored rather than suppressed (ADR-020 D9).
 

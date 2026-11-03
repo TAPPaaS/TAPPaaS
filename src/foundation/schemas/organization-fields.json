@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "organization-fields.json",
   "title": "TAPPaaS Organization",
-  "description": "An Organization is the top level of the 3-level People hierarchy (Organization -> Group -> User). The name is used as the Authentik tenant identifier. See ADR-007 P1 (ADR-007a).",
+  "description": "An Organization is the top level of the 3-level People hierarchy (Organization -> Group -> User). The name is used as the Authentik tenant identifier.",
   "type": "object",
   "additionalProperties": false,
   "required": [

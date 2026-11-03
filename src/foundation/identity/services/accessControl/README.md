@@ -62,7 +62,7 @@ as a warning, not a failure.
 
 ### `gateGroups`
 
-The Authentik groups whose members pass the module's gate. Unset: the team group `users` is bound, and other bindings an operator made on the gate's application are left as they are. Set: exactly these groups are bound — a binding to any other group is removed, a binding to a user (a service account, ADR-032) stays.
+The Authentik groups whose members pass the module's gate. Unset: the team group `users` is bound, and other bindings an operator made on the gate's application are left as they are. Set: exactly these groups are bound — a binding to any other group is removed, a binding to a user (a service account) stays.
 
 | Attribute | Value |
 |---|---|

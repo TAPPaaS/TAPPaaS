@@ -1,11 +1,11 @@
 {
   "$schema": "../../../schemas/service-fields.json",
   "service": "storage:nfs",
-  "description": "NFS shares mounted into a consumer guest (ADR-029 v0.9): a share declared in config/shares.json (reached through its alias nfs-<share>.mgmt.internal), or an unmodelled server's path.",
+  "description": "NFS shares mounted into a consumer guest: a share declared in config/shares.json (reached through its alias nfs-<share>.mgmt.internal), or an unmodelled server's path.",
   "_note": "The consumer's side. Share declarations are Site state in config/shares.json, changed only through storage-manager (ADR-029 v0.9 D17, D18) — not module fields. This service checks a consumer's mounts against them, has the share's server converge (its hook) and the alias follow, recompiles the consumer's network:rules when a mount crosses the firewall, and mounts or migrates.",
   "fields": {
     "mounts": {
-      "description": "The NFS shares this guest mounts (ADR-029 v0.9 D3). Each entry: {path, share, subdir?, access?, required?, stopUnits?, stopCommand?, startCommand?}. share is a Site-unique share NAME — never the machine that carries it; it is reached through its DNS alias nfs-<share>.mgmt.internal — or <ip-or-host>:/<path> for an unmodelled server. A share not declared in config/shares.json leaves the mount pending: the directory stays local, and is migrated into once the share appears (with consent).",
+      "description": "The NFS shares this guest mounts. Each entry: {path, share, subdir?, access?, required?, stopUnits?, stopCommand?, startCommand?}. share is a Site-unique share NAME — never the machine that carries it; it is reached through its DNS alias nfs-<share>.mgmt.internal — or <ip-or-host>:/<path> for an unmodelled server. A share not declared in config/shares.json leaves the mount pending: the directory stays local, and is migrated into once the share appears (with consent).",
       "type": "array",
       "requiredBy": [],
       "usedBy": [
@@ -22,13 +22,13 @@
             "example": "/var/lib/jellyfin/media"
           },
           "share": {
-            "description": "A Site-unique share name (reached through nfs-<share>.mgmt.internal, ADR-029 D2b), or <ip-or-host>:/<path> for an unmodelled server. The <instance>:<name> form of v0.1–v0.7 is withdrawn.",
+            "description": "A Site-unique share name (reached through nfs-<share>.mgmt.internal), or <ip-or-host>:/<path> for an unmodelled server. The <instance>:<name> form of v0.1–v0.7 is withdrawn.",
             "type": "string",
             "required": true,
             "example": "media"
           },
           "subdir": {
-            "description": "A directory inside the share to mount instead of its root (ADR-029 D15). Relative, no . or ..; created on first use, owned by the share's owner. Organisation, not isolation: the grant is per share.",
+            "description": "A directory inside the share to mount instead of its root. Relative, no . or ..; created on first use, owned by the share's owner. Organisation, not isolation: the grant is per share.",
             "type": "string",
             "example": "jellyfin"
           },
@@ -47,7 +47,7 @@
             "default": false
           },
           "stopUnits": {
-            "description": "systemd units in the guest to stop while the directory is migrated into its share, and start again after (ADR-029 D14). An open-files guard aborts the migration if anything else still holds the directory.",
+            "description": "systemd units in the guest to stop while the directory is migrated into its share, and start again after. An open-files guard aborts the migration if anything else still holds the directory.",
             "type": "array",
             "items": "string",
             "default": [],
@@ -56,11 +56,11 @@
             ]
           },
           "stopCommand": {
-            "description": "A command run in the guest (sudo) before stopUnits stop, for what is not a systemd unit (ADR-029 D14).",
+            "description": "A command run in the guest (sudo) before stopUnits stop, for what is not a systemd unit.",
             "type": "string"
           },
           "startCommand": {
-            "description": "A command run in the guest (sudo) after stopUnits start again (ADR-029 D14).",
+            "description": "A command run in the guest (sudo) after stopUnits start again.",
             "type": "string"
           }
         }

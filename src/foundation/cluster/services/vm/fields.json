@@ -1,7 +1,7 @@
 {
   "$schema": "../../../schemas/service-fields.json",
   "service": "cluster:vm",
-  "description": "Change semantics for every module field cluster:vm owns — the reference manifest for ADR-020 D3/D4.",
+  "description": "Change semantics for every module field cluster:vm owns — the reference manifest for the others.",
   "_note": "Every class below is a STATEMENT OF EXISTING BEHAVIOUR, read off update-service.sh as it stood before ADR-020: what it applies via the single batched `qm set`, what it grows, what it migrates, what it warns about and what it refuses. Nothing here changes what happens today; P3 makes update-service.sh read this file instead of hardcoding the same knowledge in an imperative drift loop.",
   "fields": {
     "vmname": {
@@ -88,7 +88,7 @@
       ],
       "default": "NONE",
       "example": "lan",
-      "note": "cluster:vm only — a container has ONE NIC in TAPPaaS: neither Create-TAPPaaS-LXC.sh nor cluster:lxc's install/update service mentions net1, so the cluster:lxc claim these fields used to carry (bridge1/mac1/zone1/trunks1) was ownership that did not exist, removed in ADR-020 P5. Only used if a second network interface is needed. The default was 'lan' until ADR-020 P1, which contradicted both acting paths — Create-TAPPaaS-VM.sh and cluster:vm/update-service.sh have always read it as 'NONE' — and made the drift report claim a desired second NIC that nothing would ever create. Declaring a bridge1 on a VM that has none ADDS the NIC; removing it (back to the 'NONE' default) DELETES the live net1, which reboots the guest.",
+      "note": "cluster:vm only — a container has ONE NIC in TAPPaaS: neither Create-TAPPaaS-LXC.sh nor cluster:lxc's install/update service mentions net1, so the cluster:lxc claim these fields used to carry (bridge1/mac1/zone1/trunks1) was ownership that did not exist, and was removed. Only used if a second network interface is needed. The default was once 'lan', which contradicted both acting paths — Create-TAPPaaS-VM.sh and cluster:vm/update-service.sh have always read it as 'NONE' — and made the drift report claim a desired second NIC that nothing would ever create. Declaring a bridge1 on a VM that has none ADDS the NIC; removing it (back to the 'NONE' default) DELETES the live net1, which reboots the guest.",
       "class": "in-place-reboot",
       "apply": "composite",
       "composite": "net1",
@@ -171,7 +171,7 @@
       "changeNote": "A policy read by auto-grow.sh; nothing on the cluster to compare. A disk already larger is left alone, never shrunk."
     },
     "thinDisk": {
-      "description": "Thin-provision the guest's ZFS disks (#773): every zvol gets refreservation=none, so a disk takes pool space as it fills instead of reserving its full size on day one — on the HA node too, since replication carries the property. Opt-in per module: a thin disk can overcommit its pool, and a full pool fails writes for every guest on it, so choose it for disks that fill slowly from empty (immich's photo library) and watch the pool. Not declared = not managed: the guest keeps what its storage creates (thick on the tank pools).",
+      "description": "Thin-provision the guest's ZFS disks: every zvol gets refreservation=none, so a disk takes pool space as it fills instead of reserving its full size on day one — on the HA node too, since replication carries the property. Opt-in per module: a thin disk can overcommit its pool, and a full pool fails writes for every guest on it, so choose it for disks that fill slowly from empty (immich's photo library) and watch the pool. Not declared = not managed: the guest keeps what its storage creates (thick on the tank pools).",
       "type": "string",
       "requiredBy": [],
       "usedBy": [
@@ -235,7 +235,7 @@
         "cluster:vm"
       ],
       "default": "l26",
-      "note": "Pick the value that matches your guest OS. It also decides how the guest reads the emulated hardware clock: a Windows ostype gets Proxmox's localtime=1, everything else keeps the RTC in UTC (#699). A wrong ostype therefore boots the guest a whole timezone offset away from real time until NTP walks it back, and changes power-management behaviour, but does not prevent the VM from booting.",
+      "note": "Pick the value that matches your guest OS. It also decides how the guest reads the emulated hardware clock: a Windows ostype gets Proxmox's localtime=1, everything else keeps the RTC in UTC. A wrong ostype therefore boots the guest a whole timezone offset away from real time until NTP walks it back, and changes power-management behaviour, but does not prevent the VM from booting.",
       "values": {
         "l26": "Linux kernel 2.6 and later — NixOS, Debian, Ubuntu, and any modern Linux distro. Enables KVM paravirtual clock, assumes UTC hardware clock. USE THIS for all TAPPaaS NixOS and Debian/Ubuntu VMs.",
         "l24": "Linux kernel 2.4 — legacy, rarely needed.",

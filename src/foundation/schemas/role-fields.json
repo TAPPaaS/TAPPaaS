@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "role-fields.json",
   "title": "TAPPaaS Role",
-  "description": "A Role is a cross-cutting permission label associated with users (directly via User.roles or inherited via Group.roles). Standalone entity, NOT nested under org/group/user. Actual permissions are configured in Authentik via policies/entitlements. See ADR-007 P1 (ADR-007a).",
+  "description": "A Role is a cross-cutting permission label associated with users (directly via User.roles or inherited via Group.roles). Standalone entity, NOT nested under org/group/user. Actual permissions are configured in Authentik via policies/entitlements.",
   "type": "object",
   "additionalProperties": false,
   "required": [

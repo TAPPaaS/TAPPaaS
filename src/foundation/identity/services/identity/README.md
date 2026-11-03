@@ -43,7 +43,7 @@ is legible.
 
 ### `identity`
 
-OIDC integration contract for a module that dependsOn identity:identity (ADR-006). Consumed by services/identity/install-service.sh. Omit for forward-auth modules (those use identity:accessControl).
+OIDC integration contract for a module that dependsOn identity:identity. Consumed by services/identity/install-service.sh. Omit for forward-auth modules (those use identity:accessControl).
 
 | Attribute | Value |
 |---|---|

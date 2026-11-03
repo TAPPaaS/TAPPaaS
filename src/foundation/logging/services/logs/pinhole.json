@@ -3,6 +3,6 @@
   "fromZones": "any",
   "ports": [
     { "port": 3101, "protocol": "TCP", "description": "Loki push-only receiver (Alloy loki.source.api)" },
-    { "port": 3111, "protocol": "TCP", "description": "The same over TLS (#787)" }
+    { "port": 3111, "protocol": "TCP", "description": "The same over TLS" }
   ]
 }

@@ -71,7 +71,7 @@ out to `set` and leaving only the cascade on `reconcile`.
 
 ### `alwaysBackup`
 
-DEPRECATED (ADR-012 §2.7) — being replaced by 'integratesWith: ["backup:vm"]' on the foundation modules that bootstrap before the backup server. Read for one release, then the field and its code path are removed; backup stays opt-in. Set only on the backup module. List of module names whose VMs are always added to the PBS backup job, even though they do not (and cannot) declare dependsOn backup:vm — typically foundation VMs that bootstrap before the backup server (firewall, tappaas-cicd).
+DEPRECATED — being replaced by 'integratesWith: ["backup:vm"]' on the foundation modules that bootstrap before the backup server. Read for one release, then the field and its code path are removed; backup stays opt-in. Set only on the backup module. List of module names whose VMs are always added to the PBS backup job, even though they do not (and cannot) declare dependsOn backup:vm — typically foundation VMs that bootstrap before the backup server (firewall, tappaas-cicd).
 
 | Attribute | Value |
 |---|---|
@@ -107,7 +107,7 @@ Name of the Proxmox Backup Server datastore / Proxmox storage used for backups. 
 
 ### `immutableSnapshots`
 
-Backup module, optional WORM-ish immutability (ADR-012 §3.5 / ADR-010 §7.3). When enabled, periodic read-only ZFS snapshots of the datastore dataset are taken on the PBS node and pruned to `keep`, so backup history cannot be rewritten by a sync/push credential holder or PBS prune/GC — only by node-local root. The weaker of the two tiers; S3 Object Lock (ADR-010 satellite) is the stronger one and is provisioned satellite-side.
+Backup module, optional WORM-ish immutability. When enabled, periodic read-only ZFS snapshots of the datastore dataset are taken on the PBS node and pruned to `keep`, so backup history cannot be rewritten by a sync/push credential holder or PBS prune/GC — only by node-local root. The weaker of the two tiers; S3 Object Lock (on a satellite) is the stronger one and is provisioned satellite-side.
 
 | Attribute | Value |
 |---|---|
@@ -125,7 +125,7 @@ Backup module, optional WORM-ish immutability (ADR-012 §3.5 / ADR-010 §7.3). W
 
 ### `placementState`
 
-Resolved backup placement (ADR-012 §2.1) and the single source of truth for where PBS lives. Ships EMPTY on the released module; backup/install.sh resolves it once and writes it back. Values: 'node' (PBS software + datastore realized on the Host named by .node — a cluster node or a kind: machine instance; ADR-012 §2.1, #600), 'shim' (no datastore anywhere — still satisfies dependsOn:backup:vm, promoted in place by `module-manager module update backup` once storage appears), 'external' (an externally-managed PBS at .pbsUrl is consumed; nothing is provisioned — set at install time and sticky thereafter — left only by `backup-manager placement reset`, #607). The legacy values 'local' and 'remote-only' are accepted for one release and migrated in place by update.sh to 'node' / 'external' (§4.1); the pre-#600 'node:<name>' is read until migration 0007 rewrites it to 'node' + .node.
+Resolved backup placement and the single source of truth for where PBS lives. Ships EMPTY on the released module; backup/install.sh resolves it once and writes it back. Values: 'node' (PBS software + datastore realized on the Host named by .node — a cluster node or a kind: machine instance), 'shim' (no datastore anywhere — still satisfies dependsOn:backup:vm, promoted in place by `module-manager module update backup` once storage appears), 'external' (an externally-managed PBS at .pbsUrl is consumed; nothing is provisioned — set at install time and sticky thereafter — left only by `backup-manager placement reset`). The legacy values 'local' and 'remote-only' are accepted for one release and migrated in place by update.sh to 'node' / 'external' (§4.1); the older 'node:<name>' is read until migration 0007 rewrites it to 'node' + .node.
 
 | Attribute | Value |
 |---|---|
@@ -143,7 +143,7 @@ Resolved backup placement (ADR-012 §2.1) and the single source of truth for whe
 
 ### `pushTarget`
 
-DEPRECATED (ADR-012 v0.3) — subsumed by placementState:'external' + pbsUrl, which name the external PBS clients push to directly. Read for one release (update.sh seeds pbsUrl from this target's remoteHost when migrating a legacy remote-only install), then removed. Backup module, remote-only placement only (ADR-012 P4). Name of the default off-site push target — a config/push-<name>.json describing a REMOTE PBS this cluster pushes its VM backups to when there is no local PBS. Empty/absent means no default; onboard with `backup-manager peer add push <name> …`.
+DEPRECATED — subsumed by placementState:'external' + pbsUrl, which name the external PBS clients push to directly. Read for one release (update.sh seeds pbsUrl from this target's remoteHost when migrating a legacy remote-only install), then removed. Backup module, remote-only placement only. Name of the default off-site push target — a config/push-<name>.json describing a REMOTE PBS this cluster pushes its VM backups to when there is no local PBS. Empty/absent means no default; onboard with `backup-manager peer add push <name> …`.
 
 | Attribute | Value |
 |---|---|
@@ -161,7 +161,7 @@ DEPRECATED (ADR-012 v0.3) — subsumed by placementState:'external' + pbsUrl, wh
 
 ### `pbsUrl`
 
-The PBS that backup clients push their snapshots to (ADR-012 §1.4/§2.1). Defaults to the local PBS DNS name; overridden to the externally-managed PBS's URL (a satellite's tunnel address, a public host, or a pre-existing LAN PBS) when placementState is 'external'. The credential for it is prompted at onboarding and never stored here.
+The PBS that backup clients push their snapshots to. Defaults to the local PBS DNS name; overridden to the externally-managed PBS's URL (a satellite's tunnel address, a public host, or a pre-existing LAN PBS) when placementState is 'external'. The credential for it is prompted at onboarding and never stored here.
 
 | Attribute | Value |
 |---|---|
@@ -179,7 +179,7 @@ The PBS that backup clients push their snapshots to (ADR-012 §1.4/§2.1). Defau
 
 ### `backup`
 
-Module-level backup policy (ADR-007 P9). The leaf of the Site -> Environment -> Module backup cascade: backup-manager resolves the effective policy by merging site.json backup.defaultRetention, the environment's backup.retention/residency, then these module overrides. `module-manager module add` persists the resolved policy onto the deployed module config. Does NOT replace the dependsOn backup:vm wiring (which decides whether the VM is in the shared PBS job) — it records the resolved retention/exclude/enabled state.
+Module-level backup policy. The leaf of the Site -> Environment -> Module backup cascade: backup-manager resolves the effective policy by merging site.json backup.defaultRetention, the environment's backup.retention/residency, then these module overrides. `module-manager module add` persists the resolved policy onto the deployed module config. Does NOT replace the dependsOn backup:vm wiring (which decides whether the VM is in the shared PBS job) — it records the resolved retention/exclude/enabled state.
 
 | Attribute | Value |
 |---|---|

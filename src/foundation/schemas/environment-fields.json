@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "environment-fields.json",
   "title": "TAPPaaS Environment",
-  "description": "An Environment is a per-tenant deployment context (ADR-007c). It owns the public domain(s), DNS mode, data-residency, backup retention, and legal processor for a set of services. It replaces the configuration.json '.tappaas.variants' construct. ownerOrg references a People Organization by name, not a free string. The environment names no zone: its zone is the Service (or, for mgmt, Management) zone in zones.json whose 'environment' names it. NOTE: tlsCertRefid is NOT an authored field here — whether a cert ref exists is decided by domains.dnsMode and the refid (if any) is reconciler-populated runtime state owned by the network/cert layer, so it is REJECTED by this schema. mgmt-type environments may omit 'domains'. See ADR-007 P3.",
+  "description": "An Environment is a per-tenant deployment context. It owns the public domain(s), DNS mode, data-residency, backup retention, and legal processor for a set of services. It replaces the configuration.json '.tappaas.variants' construct. ownerOrg references a People Organization by name, not a free string. The environment names no zone: its zone is the Service (or, for mgmt, Management) zone in zones.json whose 'environment' names it. NOTE: tlsCertRefid is NOT an authored field here — whether a cert ref exists is decided by domains.dnsMode and the refid (if any) is reconciler-populated runtime state owned by the network/cert layer, so it is REJECTED by this schema. mgmt-type environments may omit 'domains'.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -59,7 +59,7 @@
           "default": "redirect"
         },
         "dnsMode": {
-          "description": "Who issues the certificate for published names (ADR-043 D4). 'per-service' (default): Caddy issues per-host HTTP-01 certs, nothing to store. 'wildcard': OPNsense ACME issues one *.<primary> cert through a DNS provider. 'local': the site's CA for this domain tree issues one *.<primary> cert (ca-manager wildcard), and nothing needs to be public. In both wildcard modes the refid is runtime state (NOT authored here).",
+          "description": "Who issues the certificate for published names. 'per-service' (default): Caddy issues per-host HTTP-01 certs, nothing to store. 'wildcard': OPNsense ACME issues one *.<primary> cert through a DNS provider. 'local': the site's CA for this domain tree issues one *.<primary> cert (ca-manager wildcard), and nothing needs to be public. In both wildcard modes the refid is runtime state (NOT authored here).",
           "type": "string",
           "enum": [
             "per-service",
@@ -89,12 +89,12 @@
       "additionalProperties": false,
       "properties": {
         "retention": {
-          "description": "Backup retention period (e.g. 7y, 5y, 1y). Overrides the site backup.defaultRetention for modules in this environment (ADR-007 P9 cascade).",
+          "description": "Backup retention period (e.g. 7y, 5y, 1y). Overrides the site backup.defaultRetention for modules in this environment (site → environment → module).",
           "type": "string",
           "default": "7y"
         },
         "residency": {
-          "description": "Data residency for this environment's backups (ADR-007 P9). eu-only forbids targeting a non-EU offsite. Defaults to the environment's top-level dataResidency when unset.",
+          "description": "Data residency for this environment's backups. eu-only forbids targeting a non-EU offsite. Defaults to the environment's top-level dataResidency when unset.",
           "type": "string",
           "enum": [
             "eu-only",
@@ -103,7 +103,7 @@
           "default": "eu-only"
         },
         "schedule": {
-          "description": "Backup frequency for this environment — the middle layer of the ADR-012 §3.2 cascade. 'daily' | 'weekly' | 'monthly', or a bare 'HH:MM' (daily at that time). null inherits site.backup.defaultSchedule. Never more frequent than once a day.",
+          "description": "Backup frequency for this environment — the middle layer of the site → environment → module cascade. 'daily' | 'weekly' | 'monthly', or a bare 'HH:MM' (daily at that time). null inherits site.backup.defaultSchedule. Never more frequent than once a day.",
           "type": [
             "string",
             "null"
