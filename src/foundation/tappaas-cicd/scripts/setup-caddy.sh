@@ -64,11 +64,10 @@ else
             warn "os-caddy installation failed or returned non-zero"
         }
     else
-        ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y os-caddy'" 2>&1 | while IFS= read -r _; do printf "."; done || {
-            echo ""
-            warn "os-caddy installation failed or returned non-zero"
-        }
-        echo ""
+        _pkg_log="$(mktemp)"
+        run_with_dots "${_pkg_log}" ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y os-caddy'" \
+            || warn "os-caddy installation failed or returned non-zero"
+        rm -f "${_pkg_log}"
     fi
 
     # Verify the package actually got installed
@@ -88,10 +87,10 @@ for pkg in os-acme-client os-ddclient; do
         debug "  $pkg already installed"
     else
         info "Step 1b: Installing $pkg..."
-        ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y $pkg'" 2>&1 \
-            | while IFS= read -r _; do printf "."; done || \
-            warn "$pkg installation returned non-zero"
-        echo ""
+        _pkg_log="$(mktemp)"
+        run_with_dots "${_pkg_log}" ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg install -y $pkg'" \
+            || warn "$pkg installation returned non-zero"
+        rm -f "${_pkg_log}"
         if ! ssh root@"$FIREWALL_FQDN" "/bin/sh -c 'pkg info $pkg'" &>/dev/null; then
             die "$pkg installation failed"
         fi
@@ -323,8 +322,6 @@ else
     warn "Please check Caddy status in the OPNsense GUI (Services > Caddy)."
 fi
 
-echo ""
-
 # Apply the os-caddy ToDomain underscore patch (#237). os-caddy's HostnameField
 # default rejects underscored hostnames; the patch adds <IsDNSName>Y</IsDNSName>
 # so internal DNS labels like litellm.srvHome.internal work as reverse-proxy
@@ -336,10 +333,10 @@ echo ""
 # right after this script) would hit the OPNsense ToDomain validator.
 PATCH_SCRIPT="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/controller/opnsense-controller/patches/apply-caddy-isdnsname.sh"
 if [[ -f "${PATCH_SCRIPT}" ]]; then
-    info "Applying os-caddy ToDomain underscore patch..."
+    debug "Applying os-caddy ToDomain underscore patch..."
     scp -q "${PATCH_SCRIPT}" root@"$FIREWALL_FQDN":/tmp/apply-caddy-isdnsname.sh
     ssh root@"$FIREWALL_FQDN" 'sh /tmp/apply-caddy-isdnsname.sh' \
-        | while IFS= read -r line; do info "  $line"; done \
+        | while IFS= read -r line; do debug "  $line"; done \
         || warn "  os-caddy patch reported an error"
 else
     warn "os-caddy patch script not found at ${PATCH_SCRIPT} — underscored upstreams will be rejected by OPNsense"

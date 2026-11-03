@@ -99,7 +99,7 @@ if ! declare -F info >/dev/null 2>&1; then
         : "${DGN:=$'\033[32m'}"
         : "${CL:=$'\033[m'}"
         info()  { echo -e "${DGN}[Info]${CL} $*"; }
-        debug() { :; }  # no-op unless TAPPAAS_DEBUG is set
+        debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo -e "${BL}[Debug]${CL} $*"; }
         warn()  { echo -e "${YW}[Warning]${CL} $*"; }
         error() { echo -e "${RD}[Error]${CL} $*" >&2; }
         die()   { error "$*"; exit 1; }
@@ -386,7 +386,7 @@ site_primary_node() {
 # ---------------------------------------------------------------------------
 NODES=()
 discover_cluster() {
-    info "Discovering Proxmox cluster nodes..."
+    debug "Discovering Proxmox cluster nodes..."
 
     local primary_node
     if [[ -n "$PRIMARY_NODE_OVERRIDE" ]]; then
@@ -428,7 +428,7 @@ discover_cluster() {
 
     # One line: the node list is newline-separated, and every line after the
     # first would otherwise print without its [Info] label.
-    info "  Found nodes: $(tr '\n' ' ' <<< "${cluster_nodes}" | sed 's/ *$//')"
+    debug "  Found nodes: $(tr '\n' ' ' <<< "${cluster_nodes}" | sed 's/ *$//')"
 
     for node in $cluster_nodes; do
         if [[ ! "$node" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$ ]]; then
@@ -438,7 +438,7 @@ discover_cluster() {
         NODES+=("$node")
     done
 
-    info "  Total nodes: ${#NODES[@]}"
+    debug "  Total nodes: ${#NODES[@]}"
 }
 
 # ---------------------------------------------------------------------------
@@ -553,7 +553,7 @@ apply_tappaas_anchor() {
 # Build and write site.json.
 # ---------------------------------------------------------------------------
 build_and_write_site() {
-    info "Generating site.json..."
+    debug "Generating site.json..."
 
     local tz country locale keyboard version schedule_json repos_json email
     tz="$(master_timezone)"
@@ -687,7 +687,7 @@ build_and_write_site() {
 
     mv "$TMP_SITE" "$SITE_FILE"
     TMP_SITE=""
-    info "${GN:-}site.json written:${CL:-} ${SITE_FILE}"
+    debug "site.json written: ${SITE_FILE}"
 }
 
 # ---------------------------------------------------------------------------
@@ -695,11 +695,11 @@ build_and_write_site() {
 # ---------------------------------------------------------------------------
 run_validation() {
     [[ -x "$VALIDATE_SITE" ]] || { warn "validate-site.sh not found/executable — skipping validation."; return 0; }
-    info "Validating site.json against site-fields.json..."
+    debug "Validating site.json against site-fields.json..."
     if ! "$VALIDATE_SITE" --schema-dir "$SCHEMA_DIR" --quiet "$SITE_FILE"; then
         die "site.json failed schema validation (see errors above)."
     fi
-    info "${GN:-}site.json passed schema validation.${CL:-}"
+    debug "site.json passed schema validation."
 }
 
 # ---------------------------------------------------------------------------
@@ -725,11 +725,8 @@ main() {
     build_and_write_site
     run_validation
 
-    echo ""
     info "${GN:-}✓${CL:-} site.json created — site code '${NAME}', default org/environment '${ORG}' (${#NODES[@]} node(s) discovered)."
-    info "Next steps:"
-    info "  1. Review: cat ${SITE_FILE}"
-    info "  2. Create the mgmt + '${ORG}' environments (environment-manager add) with domain '${DOMAIN:-<set later>}'."
+    debug "Next steps: review ${SITE_FILE}; create the mgmt + '${ORG}' environments (environment-manager add) with domain '${DOMAIN:-<set later>}'."
 }
 
 # Sourceable for tests: TAPPAAS_CREATE_SITE_LIB=1 loads the helpers

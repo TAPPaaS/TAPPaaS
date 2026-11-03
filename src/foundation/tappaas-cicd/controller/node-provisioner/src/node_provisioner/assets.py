@@ -41,7 +41,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from .log import info, warn
+from .log import debug, info, warn
 from .util import DEFAULT_PORT, pxe_dir, run
 
 KERNEL_IN_ISO = "boot/linux26"
@@ -462,7 +462,7 @@ def _patched_init(initrd_path: Path, dest: Path) -> Path | None:
     out = dest / "init"
     out.write_text(init_text.replace(INIT_ANCHOR, INIT_PATCH, 1))
     out.chmod(0o755)
-    info("staged patched /init (dhclient timeout 10s -> 60s in the "
+    debug("staged patched /init (dhclient timeout 10s -> 60s in the "
          "installer overlay)")
     return out
 
@@ -499,8 +499,9 @@ def prepare(iso: str, directory=None, port: int = DEFAULT_PORT) -> Path:
     # 1. + first half of 3.: extract kernel + initrd via loop mount.
     mnt = Path(tempfile.mkdtemp(prefix="tappaas-pxe-iso."))
     initrd_out = dest / "initrd"
+    prepared = False
     try:
-        info(f"loop-mounting {iso_path.name}...")
+        debug(f"loop-mounting {iso_path.name}...")
         run(["mount", "-o", "loop,ro", str(iso_path), str(mnt)],
             privileged=True)
         try:
@@ -511,9 +512,12 @@ def prepare(iso: str, directory=None, port: int = DEFAULT_PORT) -> Path:
                     raise FileNotFoundError(
                         f"{src.relative_to(mnt)} not in ISO — not a PVE "
                         "installer ISO? (layout drift: V-2)")
-            info(f"extracting {KERNEL_IN_ISO} -> {dest / 'linux26'}")
+            # prepare-iso adds this file; without it the installer never
+            # fetches its answer.
+            prepared = (mnt / "auto-installer-mode.toml").is_file()
+            debug(f"extracting {KERNEL_IN_ISO} -> {dest / 'linux26'}")
             shutil.copyfile(kernel_src, dest / "linux26")
-            info(f"extracting {INITRD_IN_ISO} -> {initrd_out}")
+            debug(f"extracting {INITRD_IN_ISO} -> {initrd_out}")
             shutil.copyfile(initrd_src, initrd_out)
         finally:
             run(["umount", str(mnt)], privileged=True, check=False)
@@ -523,9 +527,9 @@ def prepare(iso: str, directory=None, port: int = DEFAULT_PORT) -> Path:
     # 2. whole ISO for HTTP serving + cpio embedding.
     iso_dest = dest / ISO_ASSET_NAME
     if iso_dest.exists() and iso_dest.stat().st_size == iso_path.stat().st_size:
-        info(f"{ISO_ASSET_NAME} already staged (same size) — keeping it")
+        debug(f"{ISO_ASSET_NAME} already staged (same size) — keeping it")
     else:
-        info(f"copying ISO -> {iso_dest} ({iso_path.stat().st_size} bytes)")
+        debug(f"copying ISO -> {iso_dest} ({iso_path.stat().st_size} bytes)")
         shutil.copyfile(iso_path, iso_dest)
 
     # 3. append the ISO to the initrd as a newc cpio archive (the PVE
@@ -542,7 +546,7 @@ def prepare(iso: str, directory=None, port: int = DEFAULT_PORT) -> Path:
     if pad:
         with open(initrd_out, "ab") as f:
             f.write(b"\0" * pad)
-        info(f"padded initrd by {pad} byte(s) to a 4-byte segment boundary")
+        debug(f"padded initrd by {pad} byte(s) to a 4-byte segment boundary")
     usb_initrd = None
     if patched_init:
         # The stick's initrd: the same /init over the stock one, no ISO inside
@@ -553,7 +557,7 @@ def prepare(iso: str, directory=None, port: int = DEFAULT_PORT) -> Path:
             subprocess.run(["cpio", "-L", "-H", "newc", "-o"], input=b"init\n",
                            stdout=f, stderr=subprocess.PIPE, cwd=str(dest), check=True)
     cpio_members = (["init"] if patched_init else []) + [ISO_ASSET_NAME]
-    info("appending %s to initrd (newc cpio)..." % " + ".join(cpio_members))
+    debug("appending %s to initrd (newc cpio)..." % " + ".join(cpio_members))
     with open(initrd_out, "ab") as f:
         subprocess.run(
             ["cpio", "-L", "-H", "newc", "-o"],
@@ -567,7 +571,7 @@ def prepare(iso: str, directory=None, port: int = DEFAULT_PORT) -> Path:
     _usb_iso(iso_path, usb_initrd, dest)
     (dest / STAMP_NAME).write_text(json.dumps({"patch": patch_stamp(),
                                                "iso": str(iso_path)}) + "\n")
-    return _finish(dest, port)
+    return _finish(dest, port, prepared)
 
 
 def _usb_iso(iso_path: Path, usb_initrd: Path | None, dest: Path) -> None:
@@ -584,7 +588,7 @@ def _usb_iso(iso_path: Path, usb_initrd: Path | None, dest: Path) -> None:
         warn(f"xorriso is not installed — no {USB_ISO_NAME}")
         usb_initrd.unlink(missing_ok=True)
         return
-    info(f"building the installer stick image {out} ...")
+    debug(f"building the installer stick image {out} ...")
     shutil.copyfile(iso_path, out)
     r = subprocess.run(["xorriso", "-boot_image", "any", "keep", "-dev", str(out),
                         "-map", str(usb_initrd), "/" + INITRD_IN_ISO],
@@ -597,12 +601,12 @@ def _usb_iso(iso_path: Path, usb_initrd: Path | None, dest: Path) -> None:
     out.chmod(0o644)
 
 
-def _finish(dest: Path, port: int) -> Path:
+def _finish(dest: Path, port: int, prepared: bool = False) -> Path:
     # 4. iPXE boot script.
     boot_script = dest / "boot.ipxe"
     from .util import detect_mgmt_ip
     write_boot_script(dest, detect_mgmt_ip(), port)
-    info(f"wrote {boot_script}")
+    debug(f"wrote {boot_script}")
 
     # World-readable assets (dnsmasq tftp runs unprivileged; http serves them).
     for name in ("linux26", "initrd", ISO_ASSET_NAME, "boot.ipxe"):
@@ -613,7 +617,9 @@ def _finish(dest: Path, port: int) -> Path:
     (dest / "tftp").chmod(0o755)
 
     info(f"netboot assets staged under {dest}")
-    warn("reminder: the ISO must be pre-prepared with "
+    if prepared:
+        return dest
+    warn("the ISO is not prepared: run "
          "'proxmox-auto-install-assistant prepare-iso --fetch-from http "
          "--url http://<cicd-mgmt-ip>:{}/answer' or the installer will not "
          "fetch its answer (V-2)".format(port))

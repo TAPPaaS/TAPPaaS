@@ -66,14 +66,14 @@ CICD_IP="$(ip -4 route get 10.0.0.1 2>/dev/null | grep -oE 'src [0-9.]+' | awk '
 if [[ -z "$ISO_URL" ]]; then
   PVE_VER="$(_ssh "pveversion" | sed -E 's|^pve-manager/([0-9]+\.[0-9]+).*|\1|')"
   [[ -n "$PVE_VER" ]] || die "cannot read the PVE version from ${NODE}"
-  info "cluster runs PVE ${PVE_VER} — locating the matching installer ISO..."
+  debug "cluster runs PVE ${PVE_VER} — locating the matching installer ISO..."
   ISO_NAME="$(_ssh "wget -qO- http://download.proxmox.com/iso/ | grep -oE 'proxmox-ve_${PVE_VER}-[0-9]+\\.iso' | sort -V | tail -1" || true)"
   [[ -n "$ISO_NAME" ]] || die "no proxmox-ve_${PVE_VER}-*.iso found on download.proxmox.com — pass --iso-url"
   ISO_URL="http://download.proxmox.com/iso/${ISO_NAME}"
 else
   ISO_NAME="$(basename "$ISO_URL")"
 fi
-info "installer ISO: ${ISO_URL}"
+debug "installer ISO: ${ISO_URL}"
 
 # 2. Download + prepare on the PVE node (assistant needs a PVE/Debian box).
 PREPARED="/root/${ISO_NAME%.iso}-tappaas-netboot.iso"
@@ -81,14 +81,14 @@ _ssh "[ -f /root/${ISO_NAME} ] || wget -q -O /root/${ISO_NAME} '${ISO_URL}'" \
   || die "ISO download failed on ${NODE}"
 _ssh "command -v proxmox-auto-install-assistant >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y proxmox-auto-install-assistant >/dev/null" \
   || die "cannot install proxmox-auto-install-assistant on ${NODE}"
-info "preparing the answer-fetching ISO (answer URL http://${CICD_IP}:8090/answer)..."
+debug "preparing the answer-fetching ISO (answer URL http://${CICD_IP}:8090/answer)..."
 _ssh "proxmox-auto-install-assistant prepare-iso /root/${ISO_NAME} \
         --fetch-from http --url 'http://${CICD_IP}:8090/answer' \
         --output ${PREPARED} >/dev/null" \
   || die "prepare-iso failed on ${NODE}"
 
 # 3. Copy to the mothership + stage the netboot assets.
-info "copying the prepared ISO to ${DEST_ISO} (~1.5 GB)..."
+debug "copying the prepared ISO to ${DEST_ISO} (~1.5 GB)..."
 scp -q -o BatchMode=yes "root@${NODE}:${PREPARED}" "${DEST_ISO}" \
   || die "copying the prepared ISO failed"
 sudo node-provisioner prepare --iso "${DEST_ISO}" \

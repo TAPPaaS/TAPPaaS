@@ -215,7 +215,7 @@ main() {
         validate_update_schedule
     fi
 
-    echo ""
+    if [[ "$QUIET" == "false" ]]; then echo ""; fi
     if [[ $ERRORS -gt 0 ]]; then
         error "Site validation failed: $ERRORS error(s), $WARNINGS warning(s)"
         exit 1

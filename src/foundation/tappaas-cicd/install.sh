@@ -20,6 +20,19 @@ set -euo pipefail
 _info()  { echo -e "\033[32m[Info]\033[m $*"; }
 _warn()  { echo -e "\033[33m[Warning]\033[m $*"; }
 _error() { echo -e "\033[01;31m[Error]\033[m $*" >&2; }
+_debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo -e "\033[36m[Debug]\033[m $*"; }
+
+# The TS managers print their results without a level (CLI output); in the
+# install's log every line carries one. _tagged runs a command and tags its
+# untagged stdout lines [Info]; tagged lines pass as they are, blank ones are
+# dropped. stderr is left alone, so an error is never relabelled.
+_tagged() {
+  "$@" | awk '{ p = $0; gsub(/\033\[[0-9;]*m/, "", p)
+    if (p ~ /^[[:space:]]*$/) next
+    if (p ~ /^\[/) print; else print "\033[32m[Info]\033[m " $0
+    fflush() }'
+  return "${PIPESTATUS[0]}"
+}
 
 # check that hostname is tappaas-cicd
 if [ "$(hostname)" != "tappaas-cicd" ]; then
@@ -85,16 +98,18 @@ MGMTVLAN="mgmt"
 NODE1_FQDN="${TAPPAAS_PRIMARY_NODE:-tappaas1}.$MGMTVLAN.internal"
 export FIREWALL_FQDN="firewall.$MGMTVLAN.internal"  # Used by sourced scripts
 
-# Accept SSH host keys on first connection (but still reject changed keys)
-SSH_ACCEPT="-o StrictHostKeyChecking=accept-new"
+# Accept SSH host keys on first connection (but still reject changed keys);
+# LogLevel=ERROR keeps ssh's "Permanently added ..." notice out of the output.
+SSH_ACCEPT="-o StrictHostKeyChecking=accept-new -o LogLevel=ERROR"
 
 # copy the public keys to the root account of every proxmox host
-echo ""
-_info "Installing SSH keys on Proxmox nodes..."
 while read -r node; do
   NODE_FQDN="$node.$MGMTVLAN.internal"
-  printf "  %s " "$node"
-  ssh-copy-id $SSH_ACCEPT -i /home/tappaas/.ssh/id_ed25519.pub root@"$NODE_FQDN" < /dev/null 2>&1 | while IFS= read -r _; do printf "."; done || echo " (failed or already installed)"
+  if _copy_out="$(ssh-copy-id $SSH_ACCEPT -i /home/tappaas/.ssh/id_ed25519.pub root@"$NODE_FQDN" < /dev/null 2>&1)"; then
+    _debug "  ${node}: ${_copy_out##*$'\n'}"
+  else
+    _warn "  ${node}: ssh-copy-id failed: ${_copy_out##*$'\n'}"
+  fi
   # also make the key available for the tappaas script that configure cloud-init on the vms
   ssh -n $SSH_ACCEPT root@"$NODE_FQDN" "mkdir -p /root/tappaas" 2>/dev/null
   scp $SSH_ACCEPT /home/tappaas/.ssh/id_ed25519.pub root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.pub < /dev/null 2>/dev/null
@@ -103,7 +118,7 @@ while read -r node; do
   # reaches the mothership (and from there every VM) when nothing else does. No script
   # reads it. cicd-key.sh rotate/recover refresh it, never delete it (#122).
   scp $SSH_ACCEPT /home/tappaas/.ssh/id_ed25519 root@"$NODE_FQDN":/root/tappaas/tappaas-cicd.key < /dev/null 2>/dev/null
-  echo " done"
+  _info "  \033[1;92m✓\033[m ${node}: the mothership's SSH key installed"
 done < <(ssh -n $SSH_ACCEPT root@"$NODE1_FQDN" pvesh get /cluster/resources --type node --output-format json | jq --raw-output ".[].node" )
 
 # create tappaas binary director and config directory
@@ -122,7 +137,7 @@ for rcfile in /home/tappaas/.profile /home/tappaas/.bashrc; do
     if ! grep -q '/home/tappaas/bin' "$rcfile" 2>/dev/null; then
         echo -e '\n# TAPPaaS bin directory' >> "$rcfile"
         echo "$TAPPAAS_PATH_EXPORT" >> "$rcfile"
-        _info "Added /home/tappaas/bin to PATH in $rcfile"
+        _debug "Added /home/tappaas/bin to PATH in $rcfile"
     fi
 done
 
@@ -154,9 +169,9 @@ fi
 # hold operator customizations, and release drift is reconciled by
 # `network-manager merge` on every update-tappaas (#209 / ADR-007 Design A).
 if [ -f /home/tappaas/config/zones.json ]; then
-  _info "Preserving existing /home/tappaas/config/zones.json (not overwriting)"
+  _debug "Preserving existing /home/tappaas/config/zones.json (not overwriting)"
 else
-  _info "zones.json will be created by 'network-manager init core' below"
+  _debug "zones.json will be created by 'network-manager init core' below"
 fi
 # zones.json.orig (the 3-way merge baseline) and zones.rename.json are ALSO
 # seeded by init, from the FULL renamed template — the merge source must contain
@@ -164,8 +179,7 @@ fi
 # to an uninstalled zone could never be adopted later.
 
 # --- Install scripts as symlinks into /home/tappaas/bin/ ---
-echo ""
-_info "Installing scripts to /home/tappaas/bin/..."
+_debug "Installing scripts to /home/tappaas/bin/..."
 cd
 cd TAPPaaS || { _error "TAPPaaS directory not found!"; exit 1; }
 # get to the right directory
@@ -202,7 +216,7 @@ done
 # ui/ is one component, the console (ADR-034), whose install.sh builds and links it.
 for _disp in manager controller ui; do
   if [ -x "${_disp}/install.sh" ]; then
-    _info "  linking ${_disp}/ components..."
+    _debug "  linking ${_disp}/ components..."
     "./${_disp}/install.sh" || _error "  ${_disp}/install.sh reported non-zero rc"
   fi
 done
@@ -234,7 +248,7 @@ if [ ! -f "/home/tappaas/config/environments/${ORG}.json" ]; then
   # segment set is OPT-IN: run `network-manager init iot --name <ORG>` on a site
   # that has smart-home/IoT devices. init also seeds zones.rename.json and
   # zones.json.orig from the full renamed template (Design A).
-  /home/tappaas/bin/network-manager init core --name "$ORG" --force \
+  _tagged /home/tappaas/bin/network-manager init core --name "$ORG" --force \
     || _error "  init reported a non-zero rc"
   _info "Creating the mgmt + ${ORG} environments..."
   # `environment-manager add` with no positional <env> seeds the minimal set
@@ -244,7 +258,7 @@ if [ ! -f "/home/tappaas/config/environments/${ORG}.json" ]; then
   # managers ("linking manager/ components...").
   CME_ARGS=(--name "$ORG" --dns-mode local)
   [[ -n "$DOMAIN" ]] && CME_ARGS+=(--domain "$DOMAIN")
-  /home/tappaas/bin/environment-manager add "${CME_ARGS[@]}" \
+  _tagged /home/tappaas/bin/environment-manager add "${CME_ARGS[@]}" \
     || _error "  environment bootstrap (environment-manager add) reported a non-zero rc"
 else
   _info "Environments already initialised (config/environments/${ORG}.json exists) — skipping init/environments."
@@ -252,12 +266,12 @@ fi
 
 # The site's internal CA (ADR-043 D1): before any guest but the firewall and this
 # one is built, so every guest trusts it from its first build.
-/home/tappaas/bin/ca-manager init --no-rebuild || _error "  ca-manager init failed: no internal CA, so guests get no site trust"
+_tagged /home/tappaas/bin/ca-manager init --no-rebuild || _error "  ca-manager init failed: no internal CA, so guests get no site trust"
 
 # Both environments start in dnsMode local: their wildcard from the site's CA, on
 # the firewall, and the Unbound wildcard. The network reconcile follows later.
 for _env in mgmt "$ORG"; do
-  /home/tappaas/bin/environment-manager reconcile "$_env" --apply --skip-network \
+  _tagged /home/tappaas/bin/environment-manager reconcile "$_env" --apply --skip-network \
     || _warn "  the ${_env} environment's certificate is not in place yet — environment-manager reconcile ${_env} --apply"
 done
 
@@ -371,7 +385,7 @@ if [[ "$FIREWALL_AVAILABLE" == "true" ]]; then
     # Runs AFTER the network update so its rules are not reconciled away; kept
     # non-fatal like Caddy — admin-vpn is an operator convenience, not required.
     debug "Setting up admin-vpn OPNsense termination (network-manager wgvpn setup)..."
-    /home/tappaas/bin/network-manager wgvpn setup || {
+    _tagged /home/tappaas/bin/network-manager wgvpn setup || {
         warn "admin-vpn setup encountered issues. Run 'network-manager wgvpn setup' manually (see manager/network-manager/ADMIN-VPN.md)."
     }
 else

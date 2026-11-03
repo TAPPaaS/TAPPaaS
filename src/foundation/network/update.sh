@@ -112,7 +112,7 @@ if [[ "$_fw_reboot_needed" -eq 0 ]]; then
     debug "${GN}✓${CL} OPNsense already current (${_fw_ver_after%%|*}) — no base/kernel update, skipping reboot."
 elif automatic_reboot_enabled; then
     debug "Rebooting firewall to apply updates..."
-    ssh root@"$FIREWALL_FQDN" "shutdown -r now" 2>/dev/null || true
+    ssh root@"$FIREWALL_FQDN" "shutdown -r now" >/dev/null 2>&1 || true
 
     # Wait for SSH to go down (firewall is rebooting)
     debug "Waiting for firewall to reboot..."

@@ -69,7 +69,7 @@ import { runZonesMerge } from "./zonesmerge";
 import { readFirewallOccupancy } from "./firewall-occupancy";
 import { MOVE_ADVICE, collisionOf } from "./occupancy";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
-import { CL, DieError, GN, RD, YW, die, guarded, info, warn } from "../../../lib/ts/src/cli";
+import { CL, DieError, GN, RD, YW, debug, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { writeJsonAtomic } from "../../../lib/ts/src/config-io";
 import {
   ParsedSet,
@@ -1299,9 +1299,9 @@ function cmdZonesInit(opts: Opts): void {
     info(`  init: carried the existing 'srv' zone forward as '${name}' (config preserved)`);
   }
   if (result.added.length) {
-    info(`  init: added ${result.added.length} zone(s): ${result.added.join(", ")}`);
+    debug(`  init: added ${result.added.length} zone(s): ${result.added.join(", ")}`);
   } else {
-    info(`  init: profile '${profile}' already applied — no zone added (idempotent)`);
+    debug(`  init: profile '${profile}' already applied — no zone added (idempotent)`);
   }
   if (result.granted.length) {
     info(`  init: granted reach needed by this profile:`);
@@ -1332,7 +1332,7 @@ function cmdZonesInit(opts: Opts): void {
   const origFile = out === defaultZonesFile() ? defaultOrigFile() : join(outDir, "zones.json.orig");
   writeJsonAtomic(renameFile, fullRenamed);
   writeJsonAtomic(origFile, fullRenamed);
-  info(`  ${GN}✓${CL} init: seeded '${renameFile}' (renamed source) and '${origFile}' (merge baseline)`);
+  debug(`  init: seeded '${renameFile}' (renamed source) and '${origFile}' (merge baseline)`);
 
   // Render the effective document so an environment-bound shipped zone resolves
   // immediately. Non-fatal: on the install path the environments do not exist
@@ -1345,7 +1345,6 @@ function cmdZonesInit(opts: Opts): void {
   }
 
   if (profile === "core") {
-    info("");
     info("  IoT segments are opt-in. To add them:");
     info(`    network-manager init iot --name ${name}`);
   }

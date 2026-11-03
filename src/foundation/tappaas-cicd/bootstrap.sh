@@ -9,11 +9,11 @@ set -euo pipefail
 # This runs over SSH from install-platform.sh, so keep the console quiet:
 # bootstrap's own status lines go to [Debug] (shown only when TAPPAAS_DEBUG=1),
 # the noisy git/keygen output is redirected to $BOOTSTRAP_LOG, and the
-# nixos-rebuild output is rendered as a row of progress dots (one per line).
+# nixos-rebuild output goes there too (a row of progress dots at a terminal).
 BOOTSTRAP_LOG="${BOOTSTRAP_LOG:-/tmp/tappaas-bootstrap.log}"
 : >"$BOOTSTRAP_LOG" 2>/dev/null || BOOTSTRAP_LOG=/dev/null
-msg_info() { if [ "${TAPPAAS_DEBUG:-0}" = "1" ]; then echo "DEBUG: $*"; fi; }
-msg_ok()   { if [ "${TAPPAAS_DEBUG:-0}" = "1" ]; then echo "DEBUG: $*"; fi; }
+msg_info() { if [ "${TAPPAAS_DEBUG:-0}" = "1" ]; then echo "[Debug] $*"; fi; }
+msg_ok()   { if [ "${TAPPAAS_DEBUG:-0}" = "1" ]; then echo "[Debug] $*"; fi; }
 
 # Find the repo version of TAPPaaS to use
 msg_info "Determining TAPPaaS repo to use"
@@ -60,7 +60,7 @@ bootstrap_signed_release() {
   if ! grep -qvE '^[[:space:]]*(#|$)' "${signers}"; then
     rm -f "${signers}"
     if [[ -n "${fps}" ]]; then
-      echo "ERROR: ${branch} lists no release keys, but signers are published (${fps}) — refusing an unsigned TAPPaaS" >&2
+      echo "[Error] ${branch} lists no release keys, but signers are published (${fps}) — refusing an unsigned TAPPaaS" >&2
       return 1
     fi
     msg_info "TAPPaaS signs no releases yet — installing unverified"
@@ -69,11 +69,11 @@ bootstrap_signed_release() {
   if [[ -z "${fps}" ]]; then
     rm -f "${signers}"
     if [[ "${TAPPAAS_UNSIGNED:-0}" == "1" ]]; then
-      echo "WARN: TAPPaaS signs its releases, but no signer fingerprint was given — installing unverified (TAPPAAS_UNSIGNED=1)" >&2
+      echo "[Warning] TAPPaaS signs its releases, but no signer fingerprint was given — installing unverified (TAPPAAS_UNSIGNED=1)" >&2
       return 0
     fi
-    echo "ERROR: TAPPaaS signs its releases, but no signer fingerprint was given to check them with." >&2
-    echo "       Pass the fingerprints published in INSTALL.md as the third argument." >&2
+    echo "[Error] TAPPaaS signs its releases, but no signer fingerprint was given to check them with." >&2
+    echo "[Error]   Pass the fingerprints published in INSTALL.md as the third argument." >&2
     return 1
   fi
   for t in $(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+(\.[0-9]+)?$' | sort -rV); do
@@ -86,10 +86,10 @@ bootstrap_signed_release() {
   done
   rm -f "${signers}"
   if [[ -z "${INTRO_TAG}" ]]; then
-    echo "ERROR: ${branch} ($(git rev-parse --short HEAD)) is not a release signed by ${fps} — refusing to install it" >&2
+    echo "[Error] ${branch} ($(git rev-parse --short HEAD)) is not a release signed by ${fps} — refusing to install it" >&2
     return 1
   fi
-  echo "TAPPaaS ${INTRO_TAG}: signed by ${INTRO_FP} — compare it with the fingerprint in INSTALL.md"
+  echo "[Info] TAPPaaS ${INTRO_TAG}: signed by ${INTRO_FP} — compare it with the fingerprint in INSTALL.md"
 }
 
 # clone the tappaas-cicd repo (idempotent: reuse an existing checkout so this
@@ -130,15 +130,16 @@ fi
 
 # rebuild the nixos configuration. NixOS version is pinned in ./flake.lock
 # (declared in git); --impure only to read /etc/nixos/hardware-configuration.nix.
-# The very verbose build output is rendered as a row of progress dots (one per
-# line) and captured in full to $BOOTSTRAP_LOG; on failure its tail is shown.
-msg_info "Rebuilding NixOS (nixos-rebuild switch) — progress dots follow"
+# The very verbose build output is captured in full to $BOOTSTRAP_LOG (a row
+# of progress dots at a terminal, none into a log); on failure its tail is shown.
+msg_info "Rebuilding NixOS (nixos-rebuild switch)"
+_dots=0; [ -t 1 ] && _dots=1
 if sudo nixos-rebuild switch --flake .#tappaas-cicd --impure 2>&1 \
      | tee -a "$BOOTSTRAP_LOG" \
-     | { while IFS= read -r _; do printf '.'; done; printf '\n'; }; then
+     | { if [ "$_dots" = 1 ]; then while IFS= read -r _; do printf '.'; done; printf '\n'; else cat >/dev/null; fi; }; then
   msg_ok "NixOS rebuild complete"
 else
-  echo "ERROR: nixos-rebuild switch failed — tail of ${BOOTSTRAP_LOG}:" >&2
+  echo "[Error] nixos-rebuild switch failed — tail of ${BOOTSTRAP_LOG}:" >&2
   tail -n 40 "$BOOTSTRAP_LOG" >&2
   exit 1
 fi
@@ -152,7 +153,7 @@ if [[ -n "${INTRO_TAG}" ]]; then
   . /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/lib/repo-sync.sh
   REPO_SYNC_TRUST_DIR="${TRUST_DIR}"
   if ! repo_sync_introduce /home/tappaas/TAPPaaS "$BRANCH" TAPPaaS "$SIGNERS" 0 >>"$BOOTSTRAP_LOG" 2>&1; then
-    echo "ERROR: TAPPaaS ${INTRO_TAG} does not verify against the published signers — tail of ${BOOTSTRAP_LOG}:" >&2
+    echo "[Error] TAPPaaS ${INTRO_TAG} does not verify against the published signers — tail of ${BOOTSTRAP_LOG}:" >&2
     tail -n 5 "$BOOTSTRAP_LOG" >&2
     exit 1
   fi

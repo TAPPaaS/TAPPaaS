@@ -29,9 +29,16 @@ _ow_api() {  # _ow_api <curl-args...> <path>
     curl -sk -u "$(_ow_creds)" "$@" "https://${OPNSENSE_HOST}:${OPNSENSE_PORT}${path}"
 }
 
-# Generate a WireGuard keypair -> echoes "PRIV PUB".
+# Generate a WireGuard keypair -> echoes "PRIV PUB". nix-shell's own fetch
+# lines ("this path will be fetched") are shown only when it fails.
 ow_genkey() {
-    nix-shell -p wireguard-tools --run 'p=$(wg genkey); printf "%s %s" "$p" "$(printf %s "$p" | wg pubkey)"'
+    local out err rc
+    err="$(mktemp)"
+    out="$(nix-shell -p wireguard-tools --run 'p=$(wg genkey); printf "%s %s" "$p" "$(printf %s "$p" | wg pubkey)"' 2>"${err}")" && rc=0 || rc=$?
+    (( rc == 0 )) || cat "${err}" >&2
+    rm -f "${err}"
+    printf '%s' "${out}"
+    return "${rc}"
 }
 
 # Ensure the home WG server instance. Args: name tunneladdress-cidr(home) privkey pubkey

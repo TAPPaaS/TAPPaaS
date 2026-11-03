@@ -44,7 +44,7 @@ import { runValidate } from "./validate";
 import { DnsTlsClient, Environment, ModuleClient, NetworkClient, RefSources } from "./types";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { MODIFY_SHORTCUTS, SetError, expandSet } from "../../../lib/ts/src/setfields";
-import { RD, GN, CL, die, guarded, info, warn } from "../../../lib/ts/src/cli";
+import { RD, GN, CL, debug, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { reportChange, sendObservation } from "../../../lib/ts/src/cmdb-source";
 import { SOURCE, environmentObservation } from "./cmdb-report";
@@ -440,10 +440,10 @@ function cmdAdd(opts: Opts, net: NetworkClient): void {
     });
     for (const w of res.warnings) warn(w);
     for (const p of res.skipped) info(`${p} already exists — left untouched (use --force).`);
-    for (const p of res.wrote) info(`${GN}Wrote ${p}${CL}`);
-    info(
-      `Minimal environments bootstrap complete (name=${res.name}, ownerOrg=${res.owner || "<unset>"}).`,
-    );
+    for (const p of res.wrote) debug(`Wrote ${p}`);
+    if (res.wrote.length > 0) {
+      info(`${GN}✓${CL} environments mgmt + ${res.name} created (ownerOrg=${res.owner || "<unset>"})`);
+    }
     return;
   }
 
@@ -718,7 +718,10 @@ function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient, dt: Dns
   }
 
   const planErrors = plan.errors ?? [];
-  info(
+  // A preview shows the plan; an apply shows what it established (the ✓ lines
+  // of the steps), the plan under --debug.
+  const planLine = opts.apply ? debug : info;
+  planLine(
     `Reconcile environment '${name}' (zone '${net.environmentZones(name).join(", ") || "none"}'${opts.deep ? ", --deep" : ""}): ` +
       `${plan.actions.length} action(s), ${plan.warnings.length} warning(s)` +
       (planErrors.length > 0 ? `, ${RD}${planErrors.length} error(s)${CL}` : ""),
@@ -737,9 +740,9 @@ function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient, dt: Dns
   // The scope tag is load-bearing (#461): it is what stops an operator reading
   // the system-wide network pass as an environment-sized one.
   for (const a of plan.actions) {
-    info(`  ${opts.apply ? "" : "[preview] "}${a.kind} [${a.scope}]: ${a.target}`);
+    planLine(`  ${opts.apply ? "" : "[preview] "}${a.kind} [${a.scope}]: ${a.target}`);
   }
-  for (const n of plan.notes) info(`  note: ${n}`);
+  for (const n of plan.notes) planLine(`  note: ${n}`);
 
   if (!opts.apply) {
     info("");
@@ -750,7 +753,6 @@ function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient, dt: Dns
     const res = applyPlan(env, plan, net, mod, opts.apply, (e) =>
       writeEnvironment(opts.configDir, e), dt
     );
-    info("");
     // A module that ran and failed is named here rather than propagated as a
     // raw error (#454); the rest of the cascade already ran.
     for (const f of res.failures) {

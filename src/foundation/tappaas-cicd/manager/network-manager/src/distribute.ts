@@ -25,6 +25,7 @@ import { join } from "path";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { clusterNodeNames } from "../../../lib/ts/src/nodes";
 import { captureResult } from "../../../lib/ts/src/exec";
+import { debug } from "../../../lib/ts/src/cli";
 
 // Where node-side tooling expects the file (mirrors the bash literal).
 export const NODE_ZONES_PATH = "/root/tappaas/zones.json";
@@ -154,7 +155,9 @@ export function distributeZones(
 
   const hostnames = enumerateNodes(opts.cfgDir);
   if (hostnames.length === 0) {
-    log("distribute: no Proxmox nodes configured (tappaas-nodes empty) — nothing to do");
+    // On the install this runs before cluster.json is in place; the cluster
+    // update distributes zones.json once it is.
+    debug("distribute: no Proxmox nodes known yet — nothing to do");
     return { rc: 0, pushed: 0, nodes: [], dryRun };
   }
 
