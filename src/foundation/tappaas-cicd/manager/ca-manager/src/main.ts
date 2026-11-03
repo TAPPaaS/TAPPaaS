@@ -219,7 +219,9 @@ const FIREWALL = process.env.OPNSENSE_HOST ?? "firewall.mgmt.internal";
 
 // trust-manager <verb> …: the refid it prints last, and whether it changed the store.
 function trustManager(args: string[], input?: string): { refid: string; changed: boolean } {
-  const r = spawnSync("trust-manager", args, { encoding: "utf8", ...(input !== undefined ? { input } : {}) });
+  // The firewall's API certificate is self-signed, as every other caller of its API
+  // assumes (acme-manager, caddy-manager): until it comes from the internal CA.
+  const r = spawnSync("trust-manager", ["--no-ssl-verify", ...args], { encoding: "utf8", ...(input !== undefined ? { input } : {}) });
   if (r.error) throw new Error(`trust-manager: ${r.error.message}`);
   if (r.status !== 0) throw new Error(`trust-manager ${args[0]}: ${(r.stderr ?? "").trim().split("\n").slice(-1)[0] || `exit ${r.status}`}`);
   const refid = (r.stdout ?? "").trim().split("\n").slice(-1)[0] ?? "";

@@ -85,6 +85,7 @@ mkdir -p "${FIX}/bin" "${FIX}/fw"
 cat > "${FIX}/bin/trust-manager" <<STUB
 #!/usr/bin/env bash
 echo "\$*" >> "${FIX}/fw/calls"
+[[ \$1 == --no-ssl-verify ]] && shift
 v=\$1; name=""; pem=""
 while [[ \$# -gt 0 ]]; do case \$1 in --name) name=\$2; shift;; --pem-file) pem=\$2; shift;; esac; shift; done
 f="${FIX}/fw/\$(printf %s "\${name}" | tr -c 'a-zA-Z0-9' _)"
