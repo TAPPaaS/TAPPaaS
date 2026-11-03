@@ -42,8 +42,10 @@ export function duration(ms: number | null): string {
   return s < 120 ? `${s} s` : `${Math.round(s / 60)} min`;
 }
 
-export function Command({ argv, label }: { argv: string[]; label?: string }) {
-  const text = quote(argv);
+// A command on a line of its own, with Copy. `line` is shell text as written (a
+// pipe, a $(…)), for a command the operator runs themselves; argv is quoted.
+export function Command({ argv, line, label }: { argv?: string[]; line?: string; label?: string }) {
+  const text = line ?? quote(argv ?? []);
   const [copied, setCopied] = useState(false);
   const copy = () => {
     void navigator.clipboard?.writeText(text).then(() => {
