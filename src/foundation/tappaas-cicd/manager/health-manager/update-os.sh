@@ -610,7 +610,7 @@ guest_build_on_cicd() {
     if ! binary_cache_reachable; then
         substitute=false
         # To stderr: this function's stdout is the store path it returns.
-        warn "No binary cache answers — building ${vmname} from the mothership's store alone (#774)" >&2
+        warn "No binary cache answers — building ${vmname} from what the mothership already has; anything missing is built from source (slower)" >&2
     fi
     run_quiet_rc "building ${vmname}'s system on the mothership" \
         sudo -n unshare --mount --propagation private -- /bin/sh -c '
@@ -629,7 +629,7 @@ guest_build_on_cicd() {
     local key="" check=()
     if ! declare -F nix_site_key_ensure >/dev/null 2>&1 || ! nix_site_key_ensure \
         || ! key="$(nix_site_key_public)" || ! nix_site_key_sign "${out}" >&2; then
-        warn "could not sign ${vmname}'s system with the site's Nix key (ADR-033 D8)" >&2
+        warn "could not sign ${vmname}'s system with the site's Nix key — it is built on the guest instead" >&2
         return 1
     fi
     # The guest checks every path against the keys it trusts. One that has not
@@ -639,7 +639,12 @@ guest_build_on_cicd() {
     # user — tappaas is, through the baseline's trusted-users = @wheel.
     # No --substitute-on-destination: the guest is to fetch nothing itself.
     if ! guest_trusts_site_key "${vm_ip}" "${key}"; then
-        warn "${vmname} does not trust the site's Nix key yet — this copy is unchecked; the system it gets trusts ${key%%:*} (ADR-033 D8)" >&2
+        # Expected on a guest's first build: the image does not know the site's key.
+        if [[ "${_UO_FIRST_BUILD:-0}" == 1 ]]; then
+            info "  first build of ${vmname}: its system is copied without a signature check this once; from now on it trusts the site's key (${key%%:*})" >&2
+        else
+            warn "${vmname} does not trust the site's Nix key (${key%%:*}): this copy is not signature-checked; the system it gets trusts the key, so the next one is" >&2
+        fi
         check=(--no-check-sigs)
     fi
     run_quiet_rc "copying ${vmname}'s system to ${vm_ip}" \
@@ -870,18 +875,24 @@ update_nixos() {
         # A guest last built from a NEWER revision moves backwards on this switch,
         # silently — and an application whose data ratchets forward then refuses to
         # start. Name the change before it happens (#680 owns the refresh cadence).
-        local _running_rev
+        local _running_rev _generations
         _running_rev="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "tappaas@${vm_ip}" \
             "nixos-version --json 2>/dev/null" 2>/dev/null | jq -r '.nixpkgsRevision // empty' 2>/dev/null || true)"
-        if [[ -n "${_running_rev}" && "${_running_rev}" != "${pinned_rev}" ]] \
-           && git -C "${flake_lock%/src/foundation/templates/flake.lock}" log --format=%H -S "${_running_rev}" -- src/foundation/templates/flake.lock 2>/dev/null | grep -q .; then
-            # An earlier pin of ours (a guest cloned from an image built before the
-            # last pin bump): the switch moves it forward, not back.
-            info "nixpkgs moves forward on ${vmname}: ${_running_rev:0:12}, an earlier pin → ${pinned_rev:0:12}"
-        elif [[ -n "${_running_rev}" && "${_running_rev}" != "${pinned_rev}" ]]; then
-            warn "nixpkgs revision changes on ${vmname}: running ${_running_rev:0:12} → pinned ${pinned_rev:0:12}"
-            warn "  If the running revision is the newer one this rebuild is a DOWNGRADE (#680); a service"
-            warn "  whose data ratchets forward (Nextcloud) will refuse to start — pin its package in its .nix."
+        # A guest still on the image it was cloned from has one system generation:
+        # it holds no data a version change could break.
+        _generations="$(ssh -n -o BatchMode=yes -o ConnectTimeout=10 "tappaas@${vm_ip}" \
+            "ls -d /nix/var/nix/profiles/system-*-link 2>/dev/null | wc -l" 2>/dev/null || echo 0)"
+        [[ "${_generations}" =~ ^[0-9]+$ && "${_generations}" -le 1 ]] && _UO_FIRST_BUILD=1
+        if [[ -z "${_running_rev}" || "${_running_rev}" == "${pinned_rev}" ]]; then
+            :
+        elif [[ "${_UO_FIRST_BUILD:-0}" == 1 ]]; then
+            info "  first build of ${vmname}: from the image's NixOS packages (${_running_rev:0:12}) to the site's (${pinned_rev:0:12})"
+        elif git -C "${flake_lock%/src/foundation/templates/flake.lock}" log --format=%H -S "${_running_rev}" -- src/foundation/templates/flake.lock 2>/dev/null | grep -c . >/dev/null; then
+            # An earlier pin of ours: the switch moves it forward, not back.
+            info "  ${vmname}'s NixOS packages move forward: ${_running_rev:0:12} → ${pinned_rev:0:12}"
+        else
+            warn "${vmname}'s NixOS packages change: ${_running_rev:0:12} → ${pinned_rev:0:12}, and ${_running_rev:0:12} is not a version this site pinned before."
+            warn "  If it is newer, this is a step back: a service whose data only moves forward (Nextcloud) may then refuse to start — pin that package in the module's .nix."
         fi
     else
         warn "Could not read pinned nixpkgs rev from ${flake_lock} — falling back to the VM's nix-channel"
@@ -908,14 +919,14 @@ update_nixos() {
     local _built="" _src="" _stage_cmd
     if [[ "${TAPPAAS_GUEST_BUILD:-cicd}" != "guest" && "${vmname}" != "$(hostname)" ]]; then
         if ! _src="$(pinned_nixpkgs_source "${flake_lock}")" || [[ -z "${_src}" ]]; then
-            warn "Building ${vmname} on the guest: the pinned nixpkgs could not be resolved from ${flake_lock} (#774)"
+            warn "Building ${vmname} on the guest (slower): the site's NixOS packages could not be read from ${flake_lock}"
         elif _built="$(guest_build_on_cicd "${vmname}" "${vm_ip}" "${nix_basename}" "${_src}")"; then
             info "  ${GN}✓${CL} built on the mothership and copied: ${_built##*/}"
             _rebuild_cmd="$(guest_activate_cmd "${_built}" switch)"
         else
             _built=""
             guest_build_promote "${vmname}" 0
-            warn "Building ${vmname} on the guest: building it on the mothership failed (#774)"
+            warn "Building ${vmname} on the guest (slower): building it on the mothership failed — see the lines above"
         fi
     fi
 
@@ -936,7 +947,7 @@ update_nixos() {
         _stage_cmd="sudo nixos-rebuild boot ${nixpkgs_arg} -I nixos-config=${remote_nix_path}"
     fi
     if [[ -n "${_move}" ]]; then
-        info "Release move on ${vmname}: ${_move% *} -> ${_move#* } — staging it for the next boot (#728)"
+        info "New NixOS release on ${vmname}: ${_move% *} → ${_move#* }, staged for its next boot"
         ( run_quiet "staging the release move on ${vm_ip}" \
             timeout -k 30 "${REBUILD_MAX_SECONDS}" \
             ssh "${SSH_REBUILD_OPTS[@]}" "tappaas@${vm_ip}" "${_stage_cmd}" ) \
