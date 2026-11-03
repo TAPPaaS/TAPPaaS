@@ -36,7 +36,9 @@ trap 'rm -rf "${FIX}" "${DIST}"' EXIT
 mkdir -p "${FIX}/cfg"
 echo '{"name":"lab9"}' > "${FIX}/cfg/site.json"
 K="${FIX}/keys"
-CA() { TAPPAAS_CONFIG="${FIX}/cfg" CONFIG_DIR="${FIX}/cfg" TAPPAAS_CA_DIR="${K}" run_ts "node '${DIST}/manager/ca-manager/src/main.js' $*"; }
+mkdir -p "${FIX}/bin"; printf '#!/bin/sh\necho "$*" >> "%s/rebuilds"\n' "${FIX}" > "${FIX}/bin/rebuild"; chmod +x "${FIX}/bin/rebuild"
+CA() { TAPPAAS_CONFIG="${FIX}/cfg" CONFIG_DIR="${FIX}/cfg" TAPPAAS_CA_DIR="${K}" CA_MANAGER_REBUILD="${FIX}/bin/rebuild" run_ts "node '${DIST}/manager/ca-manager/src/main.js' $*"; }
+rebuilds() { grep -c . "${FIX}/rebuilds" 2>/dev/null || echo 0; }
 vfy() { run_ts "openssl verify -CAfile '$1' -verify_hostname '$3' '$2'" >/dev/null 2>&1; }
 
 # A bundle with a CA put there by hand is not taken from the guests.
@@ -45,18 +47,21 @@ CA init >/dev/null 2>&1 && bad "init: a hand-made CA in the bundle refused" || o
 [[ ! -e "${K}" && "$(grep -c BEGIN "${FIX}/cfg/site-ca.pem")" == "1" ]] && ok "…before anything is made" || bad "…something was made"
 CA init --replace-bundle >/dev/null 2>&1 && ! grep -q 'hand CA' <(run_ts "openssl crl2pkcs7 -nocrl -certfile '${FIX}/cfg/site-ca.pem' | openssl pkcs7 -print_certs -noout") \
     && [[ "$(grep -c BEGIN "${FIX}/cfg/site-ca.pem")" == "1" ]] && ok "init --replace-bundle takes it over" || bad "init --replace-bundle"
-rm -rf "${K}" "${FIX}/cfg/certificates.json" "${FIX}/cfg/site-ca.pem"
+rm -rf "${K}" "${FIX}/cfg/certificates.json" "${FIX}/cfg/site-ca.pem" "${FIX}/rebuilds"
 
 CA init --check >/dev/null 2>&1; [[ ! -e "${K}" && ! -e "${FIX}/cfg/certificates.json" ]] && ok "init --check makes nothing" || bad "init --check made something"
 CA init >/dev/null 2>&1 && ok "init: the internal CA" || bad "init"
+[[ "$(rebuilds)" == "1" ]] && grep -q 'start --wait tappaas-rebuild@' "${FIX}/rebuilds" && ok "init: the mothership rebuilt to trust it" || bad "init: no rebuild"
 [[ "$(mode "${K}")" == "700" ]] && ok "init: the key dir is 700" || bad "init: key dir mode"
 [[ "$(mode "${K}/ca/internal.key")" == "600" ]] && ok "init: the CA key is 600" || bad "init: CA key mode"
 run_ts "openssl x509 -in '${K}/ca/internal.pem' -noout -subject -ext nameConstraints" 2>/dev/null | grep -q 'DNS:internal' && ok "init: constrained to internal" || bad "init: constraint"
 run_ts "openssl x509 -in '${K}/ca/internal.pem' -noout -subject" 2>/dev/null | grep -q 'TAPPaaS lab9 internal CA' && ok "init: named after the site" || bad "init: CA name"
 fp="$(jq -r '.cas.internal.fingerprint' "${FIX}/cfg/certificates.json")"
 CA init >/dev/null 2>&1; [[ "$(jq -r '.cas.internal.fingerprint' "${FIX}/cfg/certificates.json")" == "${fp}" ]] && ok "init again changes nothing" || bad "init again replaced the CA"
+[[ "$(rebuilds)" == "1" ]] && ok "…and rebuilds nothing" || bad "…rebuilt for nothing"
 
-CA domain add my-org.tld >/dev/null 2>&1 && ok "domain add: the first domain" || bad "domain add"
+CA domain add my-org.tld --no-rebuild >/dev/null 2>&1 && ok "domain add: the first domain" || bad "domain add"
+[[ "$(rebuilds)" == "1" ]] && ok "…--no-rebuild leaves the mothership alone" || bad "…--no-rebuild rebuilt"
 CA domain add test.my-org.tld 2>&1 | grep -q 'needs no CA of its own' && ok "domain add: a subdomain is covered" || bad "domain add: subdomain"
 CA domain add other-org.tld >/dev/null 2>&1 && ok "domain add: an unrelated domain" || bad "domain add: unrelated"
 [[ "$(jq -r '.cas | keys | join(",")' "${FIX}/cfg/certificates.json")" == "domain-my-org.tld,domain-other-org.tld,internal" ]] && ok "three CAs recorded" || bad "CAs recorded"
@@ -87,6 +92,7 @@ cat > "${FIX}/bin/trust-manager" <<STUB
 echo "\$*" >> "${FIX}/fw/calls"
 [[ \$1 == --no-ssl-verify ]] && shift
 v=\$1; name=""; pem=""
+[[ \$v == cert-retire ]] && { echo "removed: TAPPaaS: old"; exit 0; }
 while [[ \$# -gt 0 ]]; do case \$1 in --name) name=\$2; shift;; --pem-file) pem=\$2; shift;; esac; shift; done
 f="${FIX}/fw/\$(printf %s "\${name}" | tr -c 'a-zA-Z0-9' _)"
 [[ \$v == cert-ensure ]] && cat > /dev/null
@@ -95,6 +101,7 @@ if [[ -f "\$f" ]] && cmp -s "\$f" "\$pem"; then echo "present: \$name" >&2; else
 echo "\${id}"
 STUB
 printf '#!/bin/sh\necho "$*" >> "%s/fw/ssh"\n' "${FIX}" > "${FIX}/bin/ssh"; chmod +x "${FIX}/bin/trust-manager" "${FIX}/bin/ssh"
+printf '#!/bin/sh\necho "$*" >> "%s/fw/caddy"\necho "moved: console.lab9.example.org"\n' "${FIX}" > "${FIX}/bin/caddy-manager"; chmod +x "${FIX}/bin/caddy-manager"
 W() { PATH="${FIX}/bin:${PATH}" CA "$@"; }
 W wildcard mgmt --domain lab9.example.org --check >/dev/null 2>&1; [[ ! -e "${FIX}/fw/calls" ]] && ok "wildcard --check touches nothing" || bad "wildcard --check touched the firewall"
 W wildcard mgmt --domain lab9.example.org >/dev/null 2>&1 && ok "wildcard: an environment's CA and wildcard" || bad "wildcard"
@@ -108,6 +115,15 @@ W wildcard lab9 --domain test.lab9.example.org >/dev/null 2>&1 && [[ "$(jq -r '.
 CA_MANAGER_NOW=2027-10-15T00:00:00Z W cert renew wildcard-mgmt >/dev/null 2>&1 && grep -q 'configctl caddy reload' "${FIX}/fw/ssh" && ok "a renewed wildcard is replaced on the firewall and Caddy reloaded" || bad "renewal onto the firewall"
 [[ "$(jq -r '.mgmt' "${FIX}/cfg/cert-refids.json")" == "${r}" ]] && ok "…its refid unchanged" || bad "…refid changed"
 W wildcard x --domain lab9.internal >/dev/null 2>&1 && bad "wildcard: an internal domain refused" || ok "wildcard: an internal domain refused"
+grep -q . "${FIX}/rebuilds" && [[ "$(grep -c . "${FIX}/rebuilds")" -ge 2 ]] && ok "wildcard: a new domain CA rebuilt the mothership" || bad "wildcard: no rebuild for its new CA"
+
+# An environment that had another certificate (ACME's, or a hand-made one): its
+# routes move to the new one, Caddy reloads, and the old one is retired.
+jq '. + {"moved": "0ld0ld0ld"}' "${FIX}/cfg/cert-refids.json" > "${FIX}/t" && mv "${FIX}/t" "${FIX}/cfg/cert-refids.json"
+: > "${FIX}/fw/ssh"; W wildcard moved --domain lab9.example.org >/dev/null 2>&1
+grep -q -- '--from 0ld0ld0ld --to' "${FIX}/fw/caddy" && ok "the old certificate's routes move to the new one" || bad "no rebind"
+grep -q 'configctl caddy reload' "${FIX}/fw/ssh" && ok "…Caddy reloads" || bad "…no Caddy reload"
+grep -q -- 'cert-retire --refid 0ld0ld0ld' "${FIX}/fw/calls" && ok "…and the old one is retired" || bad "…old certificate not retired"
 
 CA validate >/dev/null 2>&1 && ok "validate: all consistent" || bad "validate"
 chmod 644 "${K}/certs/wild.key"; CA validate >/dev/null 2>&1 && bad "validate: a readable key is a finding" || ok "validate: a readable key is a finding"; chmod 600 "${K}/certs/wild.key"

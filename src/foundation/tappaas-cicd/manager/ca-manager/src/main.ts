@@ -32,6 +32,7 @@ import {
 import { issue, makeCa } from "./openssl";
 import { Store, certInfo } from "./store";
 import { existsSync, readFileSync } from "fs";
+import { hostname } from "os";
 import { spawnSync } from "child_process";
 
 const VERSION = "0.1.0";
@@ -44,9 +45,10 @@ export const HELP: HelpSpec = {
     { usage: "status [--json]", effect: "read", options: [["--json", "status: the record as JSON, with days left."]] },
     { usage: "validate", note: "(the record against the key dir and the trust bundle)" },
     {
-      usage: "init [--replace-bundle] [--check]",
+      usage: "init [--replace-bundle] [--no-rebuild] [--check]",
       options: [
         ["--replace-bundle", "Rewrite config/site-ca.pem even when it holds CAs ca-manager did not make."],
+        ["--no-rebuild", "Leave the mothership's own trust to its next rebuild (the install and the update rebuild anyway)."],
         ["--check", "Say what it would make; change nothing."],
       ],
       details:
@@ -55,8 +57,11 @@ export const HELP: HelpSpec = {
         "nothing.",
     },
     {
-      usage: "domain add <domain> [--check]",
-      options: [["--check", "Say what it would make; change nothing."]],
+      usage: "domain add <domain> [--no-rebuild] [--check]",
+      options: [
+        ["--no-rebuild", "Leave the mothership's own trust to its next rebuild."],
+        ["--check", "Say what it would make; change nothing."],
+      ],
       details:
         "Makes a CA for <domain> and its subdomains, for a domain with no public certificates. A domain\n" +
         "an existing domain CA already covers needs none, and is told so.",
@@ -71,16 +76,19 @@ export const HELP: HelpSpec = {
       details: "Signs a certificate for the names, by the one CA whose constraint covers them all, and keeps\nits key in the key dir. <name> is how ca-manager knows it.",
     },
     {
-      usage: "wildcard <environment> --domain <domain> [--check]",
+      usage: "wildcard <environment> --domain <domain> [--no-rebuild] [--check]",
       options: [
         ["--domain D", "The environment's primary domain."],
+        ["--no-rebuild", "Leave the mothership's own trust to its next rebuild."],
         ["--check", "Say what it would make and import; change nothing."],
       ],
       details:
         "For an environment in dnsMode local: its domain's CA (made when no CA covers the domain yet), a\n" +
         "wildcard for *.<domain> and <domain> signed by it, both imported into the firewall's trust store\n" +
         "(the CA without its key), and the wildcard's refid written to config/cert-refids.json for Caddy.\n" +
-        "Run again, it renews a wildcard that is due and re-imports it in place: the refid stays.",
+        "Run again, it renews a wildcard that is due and re-imports it in place: the refid stays.\n" +
+        "When the environment had another certificate, every route on it moves to the new one,\n" +
+        "Caddy is reloaded, and the old one leaves the firewall once nothing serves it.",
     },
     {
       usage: "cert renew [<name>] [--within <days>] [--force] [--check]",
@@ -133,7 +141,7 @@ function now(): Date {
 }
 
 // The CA made, recorded, and the bundle rewritten.
-function createCa(store: Store, doc: CaDoc, id: string, scope: "internal" | "domain", permitted: string[], cn: string, replace = false): void {
+function createCa(store: Store, doc: CaDoc, id: string, scope: "internal" | "domain", permitted: string[], cn: string, replace = false): boolean {
   // Refuse before anything is made: a CA that could not join the bundle would
   // be recorded and trusted by nothing.
   const foreign = replace ? [] : store.foreignInBundle(doc);
@@ -143,7 +151,7 @@ function createCa(store: Store, doc: CaDoc, id: string, scope: "internal" | "dom
   const ci = certInfo(readFileSync(store.caCert(id), "utf8"));
   doc.cas[id] = { scope, permitted, subject: ci.subject, fingerprint: ci.fingerprint, notBefore: ci.notBefore, notAfter: ci.notAfter, state: "active", created: stamp() };
   store.save(doc);
-  store.writeBundle(doc, replace);
+  return store.writeBundle(doc, replace);
 }
 
 function signCert(store: Store, doc: CaDoc, name: string, names: string[], ca: string): CertRecord {
@@ -156,13 +164,16 @@ function signCert(store: Store, doc: CaDoc, name: string, names: string[], ca: s
   return rec;
 }
 
-function init(store: Store, check: boolean, replace: boolean): number {
+function init(store: Store, check: boolean, replace: boolean, rebuild: boolean): number {
   const doc = store.load();
   if (doc.cas[INTERNAL_ID]) {
     info(`${GN}✓${CL} the internal CA exists (${doc.cas[INTERNAL_ID].subject})`);
     if (!check && !simulating()) {
       try {
-        if (store.writeBundle(doc, replace)) info(`  wrote ${store.bundleFile}`);
+        if (store.writeBundle(doc, replace)) {
+          info(`  wrote ${store.bundleFile}`);
+          if (rebuild) refreshOwnTrust();
+        }
       } catch (e) {
         die((e as Error).message);
       }
@@ -174,13 +185,14 @@ function init(store: Store, check: boolean, replace: boolean): number {
     info(`would make ${cn}, for names under ${INTERNAL_NAME}, and write ${store.bundleFile}`);
     return 0;
   }
-  createCa(store, doc, INTERNAL_ID, "internal", [INTERNAL_NAME], cn, replace);
+  const changed = createCa(store, doc, INTERNAL_ID, "internal", [INTERNAL_NAME], cn, replace);
   info(`${GN}✓${CL} made ${cn}, for names under ${INTERNAL_NAME}`);
   info(`  its key: ${store.caKey(INTERNAL_ID)} — escrow it with the backup keys`);
+  if (changed && rebuild) refreshOwnTrust();
   return 0;
 }
 
-function domainAdd(store: Store, domain: string, check: boolean): number {
+function domainAdd(store: Store, domain: string, check: boolean, rebuild: boolean): number {
   const doc = store.load();
   const need = domainNeed(doc, domain);
   if (need.kind === "refused") die(need.why);
@@ -193,9 +205,10 @@ function domainAdd(store: Store, domain: string, check: boolean): number {
     info(`would make ${cn}, for ${domain} and its subdomains`);
     return 0;
   }
-  createCa(store, doc, need.id, "domain", [domain], cn);
+  const changed = createCa(store, doc, need.id, "domain", [domain], cn);
   info(`${GN}✓${CL} made ${cn}, for ${domain} and its subdomains`);
   info(`  people using ${domain} import ${store.caCert(need.id)} into their browsers`);
+  if (changed && rebuild) refreshOwnTrust();
   return 0;
 }
 
@@ -217,6 +230,24 @@ function certIssue(store: Store, name: string, names: string[], check: boolean):
 
 const FIREWALL = process.env.OPNSENSE_HOST ?? "firewall.mgmt.internal";
 
+// The mothership's own trust follows the bundle only when it rebuilds (D8): its
+// checks and the modules' tests call the site's names with it. So a bundle that
+// changed is followed by its rebuild, which renders tappaas-site.nix first.
+// polkit lets the operator start the unit; nothing here needs root.
+function refreshOwnTrust(): void {
+  const cmd = process.env.CA_MANAGER_REBUILD ?? "systemctl";
+  const unit = `tappaas-rebuild@${hostname().split(".")[0]}.service`;
+  info(`  rebuilding this mothership so it trusts the new CA (${unit})…`);
+  const r = spawnSync(cmd, ["start", "--wait", unit], { encoding: "utf8" });
+  if (r.status === 0) info(`${GN}✓${CL} this mothership trusts the site's CAs`);
+  else warn(`the mothership was not rebuilt (${(r.stderr ?? "").trim() || r.error?.message || `exit ${r.status}`}): until it is, its calls to the new CA's names fail — systemctl start --wait ${unit}`);
+}
+
+function caddyReload(): void {
+  const reload = spawnSync("ssh", ["-n", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", `root@${FIREWALL}`, "configctl caddy reload"], { encoding: "utf8" });
+  if (reload.status !== 0) warn(`Caddy was not reloaded (${(reload.stderr ?? "").trim() || `exit ${reload.status}`}): it serves the old certificate until it is`);
+}
+
 // trust-manager <verb> …: the refid it prints last, and whether it changed the store.
 function trustManager(args: string[], input?: string): { refid: string; changed: boolean } {
   // The firewall's API certificate is self-signed, as every other caller of its API
@@ -237,14 +268,25 @@ function pushToFirewall(store: Store, doc: CaDoc, name: string): string {
   const trust = rec.trust ?? `TAPPaaS: ${name}`;
   trustManager(["ca-ensure", "--name", `TAPPaaS: ${rec.ca}`, "--pem-file", store.caCert(rec.ca)]);
   const r = trustManager(["cert-ensure", "--name", trust, "--pem-file", store.certChain(name), "--key-stdin"], readFileSync(store.certKey(name), "utf8"));
-  if (r.changed && rec.refid === r.refid) {
-    const reload = spawnSync("ssh", ["-n", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", `root@${FIREWALL}`, "configctl caddy reload"], { encoding: "utf8" });
-    if (reload.status !== 0) warn(`Caddy was not reloaded (${(reload.stderr ?? "").trim() || `exit ${reload.status}`}): it serves the old certificate until it is`);
-  }
+  if (r.changed && rec.refid === r.refid) caddyReload();
   rec.trust = trust;
   rec.refid = r.refid;
   store.save(doc);
   return r.refid;
+}
+
+function moveOff(old: string, refid: string): void {
+  const rb = spawnSync("caddy-manager", ["--no-ssl-verify", "rebind-certificate", "--from", old, "--to", refid], { encoding: "utf8" });
+  if (rb.status !== 0) {
+    warn(`the routes on ${old} were not moved to ${refid} (${(rb.stderr ?? "").trim().split("\n").slice(-1)[0] || `exit ${rb.status}`}): caddy-manager rebind-certificate --from ${old} --to ${refid}`);
+    return;
+  }
+  const moved = (rb.stdout ?? "").split("\n").filter((l) => l.startsWith("moved: ")).map((l) => l.slice(7));
+  if (moved.length) info(`${GN}✓${CL} moved ${moved.length} route(s) onto it: ${moved.join(", ")}`);
+  caddyReload();
+  const rt = spawnSync("trust-manager", ["--no-ssl-verify", "cert-retire", "--refid", old], { encoding: "utf8" });
+  if (rt.status !== 0) warn(`the old certificate ${old} stays on the firewall: ${(rt.stderr ?? "").trim().split("\n").slice(-1)[0] || `exit ${rt.status}`}`);
+  else for (const l of (rt.stdout ?? "").split("\n").filter((x) => x.startsWith("removed: "))) info(`  ${l}`);
 }
 
 function recordRefid(store: Store, env: string, refid: string): void {
@@ -254,7 +296,7 @@ function recordRefid(store: Store, env: string, refid: string): void {
   writeJsonAtomic(file, { ...cur, [env]: refid });
 }
 
-function wildcard(store: Store, env: string, domain: string, check: boolean): number {
+function wildcard(store: Store, env: string, domain: string, check: boolean, rebuild: boolean): number {
   if (!CERT_NAME.test(env)) die(`${env}: not an environment name`);
   const doc = store.load();
   const need = domainNeed(doc, domain);
@@ -270,10 +312,13 @@ function wildcard(store: Store, env: string, domain: string, check: boolean): nu
     info(`would import the CA and ${name} into the firewall's trust store and record the refid for ${env}`);
     return 0;
   }
+  let bundleChanged = false;
   if (need.kind === "new") {
-    createCa(store, doc, need.id, "domain", [domain], `TAPPaaS ${domain} CA`);
+    bundleChanged = createCa(store, doc, need.id, "domain", [domain], `TAPPaaS ${domain} CA`);
     info(`${GN}✓${CL} made TAPPaaS ${domain} CA — people using ${domain} import ${store.caCert(need.id)}`);
   }
+  // The mothership trusts the new CA before anything calls a name it signs.
+  if (bundleChanged && rebuild) refreshOwnTrust();
   const ca = signerFor(doc, names);
   if (!ca) die(`no active CA covers ${names.join(", ")}`);
   if (reissue || renew) {
@@ -289,8 +334,13 @@ function wildcard(store: Store, env: string, domain: string, check: boolean): nu
   } catch (e) {
     die(`${name} could not be put on the firewall: ${(e as Error).message}`);
   }
+  const before = readJsonObject(join(store.configDir, "cert-refids.json"))?.[env];
   recordRefid(store, env, refid);
   info(`${GN}✓${CL} ${name} on the firewall, refid ${refid}, recorded for ${env}`);
+  // The environment had another certificate (ACME's, or one made by hand): every
+  // route on it moves together, Caddy drops its cached copy, and the old one
+  // leaves the firewall once nothing serves it.
+  if (typeof before === "string" && before && before !== refid) moveOff(before, refid);
   return 0;
 }
 
@@ -409,11 +459,11 @@ export function run(argv: string[]): number {
   if (args[0] === "status") return status(store, args.includes("--json"));
   if (args[0] === "validate") return validate(store);
   requireOperator();
-  if (args[0] === "init") return init(store, check, args.includes("--replace-bundle"));
+  if (args[0] === "init") return init(store, check, args.includes("--replace-bundle"), !args.includes("--no-rebuild"));
   if (args[0] === "domain" && args[1] === "add") {
     const [domain] = positional(args, 2, []);
     if (!domain) die("domain add <domain>");
-    return domainAdd(store, domain, check);
+    return domainAdd(store, domain, check, !args.includes("--no-rebuild"));
   }
   if (args[0] === "cert" && args[1] === "issue") {
     const [name] = positional(args, 2, ["--dns"]);
@@ -425,7 +475,7 @@ export function run(argv: string[]): number {
     const [env] = positional(args, 1, ["--domain"]);
     const domain = opt(args, "--domain");
     if (!env || !domain) die("wildcard <environment> --domain <domain>");
-    return wildcard(store, env, domain, check);
+    return wildcard(store, env, domain, check, !args.includes("--no-rebuild"));
   }
   if (args[0] === "cert" && args[1] === "renew") {
     const [name] = positional(args, 2, ["--within"]);

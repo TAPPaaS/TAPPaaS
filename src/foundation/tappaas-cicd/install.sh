@@ -244,7 +244,7 @@ fi
 
 # The site's internal CA (ADR-043 D1): before any guest but the firewall and this
 # one is built, so every guest trusts it from its first build.
-/home/tappaas/bin/ca-manager init || _error "  ca-manager init failed: no internal CA, so guests get no site trust"
+/home/tappaas/bin/ca-manager init --no-rebuild || _error "  ca-manager init failed: no internal CA, so guests get no site trust"
 
 # Install the cluster and network jsons
 cd ../cluster || { _error "Cluster directory not found!"; exit 1; }
