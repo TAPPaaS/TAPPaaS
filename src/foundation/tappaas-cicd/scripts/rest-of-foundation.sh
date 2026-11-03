@@ -13,11 +13,18 @@
 # Idempotent: install-module.sh and update-tappaas reconcile an already-installed
 # module rather than duplicating it, so this script is safe to re-run.
 #
+# Before the installs it places the foundation's guests: network and
+# tappaas-cicd move to a data pool when the bootstrap left them on the boot pool,
+# and each module goes to the machine, HA machine and pool of the proposal
+# (lib/foundation-placement.sh), or of --place where the operator chose.
+#
 # The first run also seeds config/identities with the site owner and sets the
 # owner's password: asked for up front at a terminal, or read as one line of stdin
 # with --owner-password-stdin (the console's way). It is never stored.
 #
-# Usage: rest-of-foundation.sh [--skip-update] [--owner-password-stdin] [-h|--help]
+# Usage: rest-of-foundation.sh [--skip-update] [--owner-password-stdin]
+#                              [--place <module>=<node>,<ha-node>,<pool>]... [-h|--help]
+#        rest-of-foundation.sh --proposal     the proposal and its choices, as JSON
 #
 # Exit codes: 0 all good, 1 one or more modules failed.
 
@@ -30,15 +37,48 @@ readonly SRC="/home/tappaas/TAPPaaS/src/foundation"
 readonly CONFIG_DIR="/home/tappaas/config"
 readonly FOUNDATION_MODULES=(backup identity logging)
 
+# shellcheck source=../../cluster/lib/storage-placement.sh disable=SC1091
+. "${SRC}/cluster/lib/storage-placement.sh"
+# shellcheck source=../lib/foundation-placement.sh disable=SC1091
+. /home/tappaas/bin/foundation-placement.sh
+
 SKIP_UPDATE=0
 PASSWORD_STDIN=0
+PROPOSAL_ONLY=0
+declare -A PLACE=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip-update) SKIP_UPDATE=1; shift ;;
     --owner-password-stdin) PASSWORD_STDIN=1; shift ;;
-    -h|--help) echo "Usage: rest-of-foundation.sh [--skip-update] [--owner-password-stdin]"; exit 0 ;;
+    --proposal) PROPOSAL_ONLY=1; shift ;;
+    --place)
+      [[ "${2:-}" =~ ^([a-z0-9-]+)=([a-z0-9-]*),([a-z0-9-]*),([A-Za-z0-9_-]*)$ ]] || die "--place <module>=<node>,<ha-node>,<pool> (got '${2:-}')"
+      PLACE["${BASH_REMATCH[1]}"]="${BASH_REMATCH[2]}|${BASH_REMATCH[3]}|${BASH_REMATCH[4]}"
+      shift 2 ;;
+    -h|--help) echo "Usage: rest-of-foundation.sh [--skip-update] [--owner-password-stdin] [--place <module>=<node>,<ha-node>,<pool>]... | --proposal"; exit 0 ;;
     *) die "Unknown argument: $1" ;;
   esac
+done
+
+if [[ "${PROPOSAL_ONLY}" == 1 ]]; then
+  fp_proposal "$(fp_facts)"
+  exit 0
+fi
+
+# ── Where each guest goes: the proposal, with the operator's choices ─
+PROPOSAL="$(fp_proposal "$(fp_facts)")"
+declare -A TARGET=()
+for m in "${FP_MODULES[@]}"; do
+  TARGET["$m"]="$(jq -r --arg m "$m" '.rows[] | select(.module == $m) | .proposal | "\(.node)|\(.ha)|\(.storage)"' <<<"${PROPOSAL}")"
+done
+for m in "${!PLACE[@]}"; do
+  [[ -n "${TARGET[$m]:-}" ]] || die "--place ${m}: not one of ${FP_MODULES[*]}"
+  IFS='|' read -r _n _h _s <<<"${PLACE[$m]}"
+  # backup with no machine: a placeholder, as on a site with no tankc pool.
+  why=""
+  [[ "$m" == backup && -z "${_n}" ]] || why="$(fp_check "${PROPOSAL}" "$m" "${_n}" "${_h}" "${_s}")"
+  [[ -z "${why}" ]] || die "--place ${why}"
+  TARGET["$m"]="${PLACE[$m]}"
 done
 
 [[ "$(hostname -s)" == "tappaas-cicd" ]] \
@@ -63,9 +103,37 @@ if [[ ! -d "$identities_dir" || -z "$(ls -A "$identities_dir" 2>/dev/null)" ]]; 
   fi
 fi
 
+# A guest's place now, as "node|ha|pool"; empty when it is not running.
+current_of() {
+  jq -r --arg m "$1" '.rows[] | select(.module == $m) | .current // empty | "\(.node)|\(.ha)|\(.storage)"' <<<"${PROPOSAL}"
+}
+
+# An installed guest that is not where it should be moves there: the pool live
+# (cluster:vm's storage hook), the machine and HA machine by their fields.
+move_one() {
+  local m="$1" n h s cn ch cs args=()
+  IFS='|' read -r n h s <<<"${TARGET[$m]}"
+  IFS='|' read -r cn ch cs <<<"$(current_of "$m")"
+  [[ -n "${cn:-}" ]] || return 0
+  [[ "${s}" != "${cs}" && -n "${s}" ]] && args+=(--set "storage=${s}")
+  [[ "${n}" != "${cn}" && -n "${n}" ]] && args+=(--set "node=${n}")
+  if [[ "${h}" != "${ch}" ]]; then
+    if [[ -z "${h}" ]]; then args+=(--unset HANode); else args+=(--set "HANode=${h}"); fi
+  fi
+  [[ ${#args[@]} -gt 0 ]] || { info "  ${m} stays on ${cn}, ${cs}"; return 0; }
+  echo ""
+  info "${BOLD}── Move: ${m} (${cn}, ${cs} → ${n}, ${s}) ──${CL}"
+  module-manager modify "$m" "${args[@]}" || { error "  the move of ${m} failed"; return 1; }
+  info "  ${GN}✓${CL} ${m} is on ${n}, ${s}"
+}
+
 # install-module.sh reads ./<module>.json from the current directory, so cd in.
 install_one() {
-  local m="$1"; local dir="${SRC}/${m}"
+  local m="$1"; local dir="${SRC}/${m}" n h s place=()
+  IFS='|' read -r n h s <<<"${TARGET[$m]}"
+  [[ -n "${n}" ]] && place+=(--node "${n}")
+  [[ -n "${s}" ]] && place+=(--storage "${s}")
+  [[ -n "${h}" ]] && place+=(--HANode "${h}")
   echo ""
   info "${BOLD}── Foundation module: ${m} ──${CL}"
   if [[ ! -d "$dir" || ! -f "${dir}/${m}.json" ]]; then
@@ -83,13 +151,19 @@ install_one() {
   fi
   # Foundation modules live in the mgmt environment — pass it explicitly (the
   # a site-scoped (foundation-stack) module resolves to mgmt too, but be explicit + self-documenting).
-  ( cd "$dir" && install-module.sh "$m" --environment mgmt ) || { error "  install of ${m} failed"; return 1; }
+  ( cd "$dir" && install-module.sh "$m" --environment mgmt "${place[@]}" ) || { error "  install of ${m} failed"; return 1; }
   info "  ${GN}✓${CL} ${m} installed"
 }
 
+# ── Moves first, so the guests are on their pool before anything else ─
+declare -a FAILED=()
+info "${BOLD}Placing the foundation${CL}"
+for m in network tappaas-cicd; do
+  move_one "$m" || FAILED+=("$m (move)")
+done
+
 # ── Install the foundation modules ───────────────────────────────────
 info "${BOLD}Installing the rest of the TAPPaaS foundation${CL} (${FOUNDATION_MODULES[*]})"
-declare -a FAILED=()
 for m in "${FOUNDATION_MODULES[@]}"; do
   install_one "$m" || FAILED+=("$m")
 done
