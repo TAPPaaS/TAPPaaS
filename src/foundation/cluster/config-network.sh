@@ -578,7 +578,16 @@ if [[ "$DRY_RUN" != "1" ]] && ip link show lan &>/dev/null && ip link show wan &
 fi
 
 valid_port() { local p="$1" x; for x in "${PORTS[@]}"; do [[ "$x" == "$p" ]] && return 0; done; return 1; }
-other_port() { local exclude="$1" p; for p in "${PORTS[@]}"; do [[ "$p" == "$exclude" ]] || { echo "$p"; return 0; }; done; return 1; }
+# The first port other than <exclude> that has a link (the one cabled to the
+# switch), else the first other port. Only a default: Day 1 asks which.
+other_port() {
+  local exclude="$1" p
+  for p in "${PORTS[@]}"; do
+    [[ "$p" != "$exclude" && "$(cat "${SYS_NET:-/sys/class/net}/${p}/carrier" 2>/dev/null)" == "1" ]] && { echo "$p"; return 0; }
+  done
+  for p in "${PORTS[@]}"; do [[ "$p" == "$exclude" ]] || { echo "$p"; return 0; }; done
+  return 1
+}
 
 # The physical NIC that currently carries the install IP (member of the bridge
 # that owns the default route, e.g. vmbr0 on a fresh PVE install).
@@ -689,6 +698,12 @@ if [[ -z "$LAN_PORT" ]]; then
     LAN_PORT="$DEFAULT_LAN"
     [[ -n "$LAN_PORT" ]] || die "No --lan-port given, not interactive, and could not auto-detect the LAN NIC."
     info "Auto-selected LAN port ${BL}${LAN_PORT}${CL}."
+    # More than one candidate: say which others there were, and where to choose.
+    _others=()
+    for _p in "${PORTS[@]}"; do [[ "$_p" == "$LAN_PORT" || "$_p" == "$WAN_PORT" ]] || _others+=("$_p"); done
+    if [[ ${#_others[@]} -gt 0 ]]; then
+      info "  the other ports: ${_others[*]} — confirm or change the LAN port in the console's Day 1 (First node), or with site-manager node network set"
+    fi
   fi
 fi
 prepare_usb_ports   # a USB lan port is pinned and rejoins its bond (#849), as with --set-lan
