@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "fields-schema.json",
   "title": "TAPPaaS Field Definition Schema",
-  "description": "The meta-schema for a FIELD ENTRY, wherever it lives (#567). One entry now carries two things: the field's DEFINITION (what it is — type, default, allowed values) and, when a service owns it, its CHANGE SEMANTICS (what changing it costs — the ADR-020 class and apply mode). Both halves are described here so a single validator covers every tier: schemas/module-fields.json (the generic fields), <module>/fields.json (shared by a module's services), and <module>/services/<svc>/fields.json (owned by one service). The two halves each have a free-text note and they mean different things, so they have different names: 'note' explains what the FIELD is, 'changeNote' explains why that CHANGE CLASS. Validated by scripts/test/test-fields-schema.sh under --deep.",
+  "description": "The meta-schema for a FIELD ENTRY, wherever it lives. One entry now carries two things: the field's DEFINITION (what it is — type, default, allowed values) and, when a service owns it, its CHANGE SEMANTICS (what changing it costs — the ADR-020 class and apply mode). Both halves are described here so a single validator covers every tier: schemas/module-fields.json (the generic fields), <module>/fields.json (shared by a module's services), and <module>/services/<svc>/fields.json (owned by one service). The two halves each have a free-text note and they mean different things, so they have different names: 'note' explains what the FIELD is, 'changeNote' explains why that CHANGE CLASS. Validated by scripts/test/test-fields-schema.sh under --deep.",
   "$defs": {
     "definitionKeys": {
       "type": "object",
@@ -37,7 +37,7 @@
           "description": "Coordinates for which the field is mandatory; [] when always optional."
         },
         "default": {
-          "description": "Applied when a module declares nothing (ADR-020 D9: this IS desired state, and install records what it used). A '<computed ...>' string is a placeholder, never applied."
+          "description": "Applied when a module declares nothing (this IS desired state, and install records what it used). A '<computed ...>' string is a placeholder, never applied."
         },
         "example": {
           "description": "An illustrative value for documentation. Never applied."
@@ -50,7 +50,7 @@
           "enum": [
             "documentation"
           ],
-          "description": "What the field means on a module that wires none of its usedBy consumers. 'documentation': it describes the module and nothing acts on it; it is not an orphan, so validate and the config merge say nothing. Absent: such a field is an orphan, which validate reports (#683)."
+          "description": "What the field means on a module that wires none of its usedBy consumers. 'documentation': it describes the module and nothing acts on it; it is not an orphan, so validate and the config merge say nothing. Absent: such a field is an orphan, which validate reports."
         },
         "format": {
           "type": "string",
@@ -120,7 +120,7 @@
     },
     "changeKeys": {
       "type": "object",
-      "description": "The CHANGE half — what changing it costs (ADR-020). Present only in a service or module manifest.",
+      "description": "The CHANGE half — what changing it costs. Present only in a service or module manifest.",
       "properties": {
         "class": {
           "$ref": "#/$defs/changeClass"
@@ -150,7 +150,7 @@
         },
         "adoptWhenAbsentFrom": {
           "type": "string",
-          "description": "A reporter key listing, comma-separated, the values this guest's node can take (cluster:vm storage: storagesOnNode). When the desired value is not among them, the guest's actual value is a fallback the create path chose (ADR-037 D1: a module's storage is a preference) — config adopts it instead of reporting drift. A desired value the node does have keeps the class's verdict."
+          "description": "A reporter key listing, comma-separated, the values this guest's node can take (cluster:vm storage: storagesOnNode). When the desired value is not among them, the guest's actual value is a fallback the create path chose (a module's storage is a preference) — config adopts it instead of reporting drift. A desired value the node does have keeps the class's verdict."
         },
         "applyOnlyDeclared": {
           "type": "boolean",
@@ -202,7 +202,7 @@
           "description": "Coordinates for which the field is mandatory; [] when always optional."
         },
         "default": {
-          "description": "Applied when a module declares nothing (ADR-020 D9: this IS desired state, and install records what it used). A '<computed ...>' string is a placeholder, never applied."
+          "description": "Applied when a module declares nothing (this IS desired state, and install records what it used). A '<computed ...>' string is a placeholder, never applied."
         },
         "example": {
           "description": "An illustrative value for documentation. Never applied."
@@ -215,7 +215,7 @@
           "enum": [
             "documentation"
           ],
-          "description": "What the field means on a module that wires none of its usedBy consumers. 'documentation': it describes the module and nothing acts on it; it is not an orphan, so validate and the config merge say nothing. Absent: such a field is an orphan, which validate reports (#683)."
+          "description": "What the field means on a module that wires none of its usedBy consumers. 'documentation': it describes the module and nothing acts on it; it is not an orphan, so validate and the config merge say nothing. Absent: such a field is an orphan, which validate reports."
         },
         "format": {
           "type": "string",
@@ -309,7 +309,7 @@
         },
         "adoptWhenAbsentFrom": {
           "type": "string",
-          "description": "A reporter key listing, comma-separated, the values this guest's node can take (cluster:vm storage: storagesOnNode). When the desired value is not among them, the guest's actual value is a fallback the create path chose (ADR-037 D1: a module's storage is a preference) — config adopts it instead of reporting drift. A desired value the node does have keeps the class's verdict."
+          "description": "A reporter key listing, comma-separated, the values this guest's node can take (cluster:vm storage: storagesOnNode). When the desired value is not among them, the guest's actual value is a fallback the create path chose (a module's storage is a preference) — config adopts it instead of reporting drift. A desired value the node does have keeps the class's verdict."
         },
         "applyOnlyDeclared": {
           "type": "boolean",
@@ -329,7 +329,7 @@
     },
     "changeClass": {
       "type": "string",
-      "description": "What changing this field after install costs (ADR-020 D3). immutable/recreate are rejected by the static pre-gate before 'modify --set' writes anything; grow-only/migrate/in-place-reboot refuse (or defer) at apply time, where live state is known.",
+      "description": "What changing this field after install costs. immutable/recreate are rejected by the static pre-gate before 'modify --set' writes anything; grow-only/migrate/in-place-reboot refuse (or defer) at apply time, where live state is known.",
       "enum": [
         "immutable",
         "in-place",
@@ -369,7 +369,7 @@
     },
     "normalizer": {
       "type": "string",
-      "description": "Declared normalization, applied by the MANAGER to BOTH sides of the diff (ADR-020 D7). Services report raw values and never normalize, so there is one comparison rule per field rather than one per code path.",
+      "description": "Declared normalization, applied by the MANAGER to BOTH sides of the diff. Services report raw values and never normalize, so there is one comparison rule per field rather than one per code path.",
       "enum": [
         "string",
         "integer",
@@ -485,7 +485,7 @@
           },
           "adoptWhenAbsentFrom": {
             "type": "string",
-            "description": "A reporter key listing, comma-separated, the values this guest's node can take (cluster:vm storage: storagesOnNode). When the desired value is not among them, the guest's actual value is a fallback the create path chose (ADR-037 D1: a module's storage is a preference) — config adopts it instead of reporting drift. A desired value the node does have keeps the class's verdict."
+            "description": "A reporter key listing, comma-separated, the values this guest's node can take (cluster:vm storage: storagesOnNode). When the desired value is not among them, the guest's actual value is a fallback the create path chose (a module's storage is a preference) — config adopts it instead of reporting drift. A desired value the node does have keeps the class's verdict."
           },
           "applyOnlyDeclared": {
             "type": "boolean",

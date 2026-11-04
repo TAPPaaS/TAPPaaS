@@ -54,10 +54,10 @@ update_schedule_oncalendar() {
             # leaving a site with no timer over a field it could default is a
             # worse failure than the field being wrong.
             if [[ "$(jq -r 'has("hour")' <<<"${json}")" != "true" ]]; then
-                echo "warn: updateSchedule has no hour — using 02:00; ADR-017 D7 wants the hour a site updates at written down" >&2
+                echo "warn: updateSchedule has no hour — using 02:00; set it: site-manager site modify --updateHour <0-23>" >&2
             fi
             if [[ -n "${weekday}" && ( "${freq}" == daily || "${freq}" == none ) ]]; then
-                echo "warn: updateSchedule has a weekday under '${freq}', where no reader honours it — remove it (ADR-017 D7)" >&2
+                echo "warn: updateSchedule has a weekday under '${freq}', where no reader honours it — remove it" >&2
             fi
             ;;
         array)

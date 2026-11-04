@@ -20,7 +20,7 @@ this module on every pass and deletes what is no longer declared.
 
 ## Fields
 
-`network:rules` owns **6** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`network:rules` owns **6** declared field(s). Each table below carries the field's full definition and, where the service applies it, what a change to it does (in place, a restart, a rebuild).
 
 ### `ingress`
 
@@ -72,7 +72,7 @@ Network ports this module exposes for inbound traffic. Source of truth for ingre
 | Change class | `in-place` |
 | Apply mode | `reconcile` |
 
-**About the field.** Ingress entries must reference ports declared here. Activated when network:rules is in dependsOn. On a module that does not wire network:rules (one published through the proxy only, say) it documents what the module listens on, and opens nothing (#683).
+**About the field.** Ingress entries must reference ports declared here. Activated when network:rules is in dependsOn. On a module that does not wire network:rules (one published through the proxy only, say) it documents what the module listens on, and opens nothing.
 
 **Why this change class.** The module's declared service surface, from which the default ingress rules are derived.
 
@@ -109,7 +109,7 @@ OPNsense alias type for the module's firewall alias (tappaas_module_<vmname>). '
 | Change class | `in-place` |
 | Apply mode | `reconcile` |
 
-**About the field.** When 'network', the alias content is derived from the zone0 subnet — no separate field is needed. The module's zone0 must define an 'ip' (subnet) in zones.json. Owned by network:rules (#704): rules_manager.py builds and validates the alias, and network:proxy never reads this field at all — the old attribution made every device module that declares network:rules and not network:proxy warn as an orphan on each conversion.
+**About the field.** When 'network', the alias content is derived from the zone0 subnet — no separate field is needed. The module's zone0 must define an 'ip' (subnet) in zones.json. Owned by network:rules: rules_manager.py builds and validates the alias, and network:proxy never reads this field at all — the old attribution made every device module that declares network:rules and not network:proxy warn as an orphan on each conversion.
 
 **Why this change class.** How the module is addressed in the generated firewall alias (host vs network). A change is made to the existing alias in place at the next reconcile, so the rules that use it keep working throughout.
 
@@ -128,7 +128,7 @@ Type of firewall in use. Set to 'NONE' when the TAPPaaS OPNsense firewall is not
 | Change class | `in-place` |
 | Apply mode | `reconcile` |
 
-**About the field.** When set to 'NONE', network:proxy prints manual configuration instructions instead of calling caddy-manager. Owned by network:rules (#704), which is the only service that reads it from a MODULE's config. network:proxy's delete-service.sh reads a firewallType too, but from the estate's config/firewall.json — a different value in a different place, so it is not a usedBy of the module field.
+**About the field.** When set to 'NONE', network:proxy prints manual configuration instructions instead of calling caddy-manager. Owned by network:rules, which is the only service that reads it from a MODULE's config. network:proxy's delete-service.sh reads a firewallType too, but from the estate's config/firewall.json — a different value in a different place, so it is not a usedBy of the module field.
 
 **Why this change class.** Which firewall implementation serves this estate. 'NONE' makes the service print manual instructions instead of calling a controller; that branch is the non-field logic update-service.sh keeps.
 

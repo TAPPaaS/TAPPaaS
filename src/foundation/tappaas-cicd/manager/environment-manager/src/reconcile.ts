@@ -225,7 +225,7 @@ export function computePlan(
     });
     notes.push(
       `no zone names environment '${env.name}': zone '${zone}' will be authored as its ` +
-        `Service zone (ADR-014 D1). It converges in the network pass below.`,
+        `Service zone. It converges in the network pass below.`,
     );
   } else if (own.length === 0) {
     const t = net.zoneType(env.name);
@@ -314,7 +314,7 @@ export function computePlan(
       notes.push(
         "identity is reconciled because this is the default environment: its Authentik " +
           "self-config (app launch URL, proxy external_host, oauth2 redirect_uris, outpost " +
-          "authentik_host) tracks this environment's domain (#474).",
+          "authentik_host) tracks this environment's domain.",
       );
     }
   }

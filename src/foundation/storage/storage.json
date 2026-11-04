@@ -1,5 +1,5 @@
 {
-  "description": "Storage for consumer modules (ADR-029): NFS shares declared in config/shares.json through storage-manager, served by the cluster nodes, mounted into consumer guests by storage:nfs. A virtual module, like cluster — nothing of its own to install.",
+  "description": "Storage for consumer modules: NFS shares declared in config/shares.json through storage-manager, served by the cluster nodes, mounted into consumer guests by storage:nfs. A virtual module, like cluster — nothing of its own to install.",
   "kind": "application",
   "version": "0.1.0",
   "stack": "foundation",

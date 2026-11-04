@@ -186,7 +186,7 @@ EOF
 )" || true
 case "${_qga_state}" in
     unchanged) debug "${GN}✓${CL} QEMU guest agent reopens its channel after a migration (-r)" ;;
-    changed)   info "  ${GN}✓${CL} QEMU guest agent: -r added, so it survives a live migration (#793)" ;;
+    changed)   info "  ${GN}✓${CL} QEMU guest agent: -r added, so it survives a live migration" ;;
     absent)    warn "QEMU guest agent plugin is not installed on the firewall — Proxmox cannot reach it" ;;
     *)         warn "Could not set the QEMU guest agent's -r flag on the firewall: ${_qga_state:-no answer}" ;;
 esac

@@ -222,7 +222,7 @@ resolve_storage() {
   fi
   if [[ "${chosen}" != "${want}" ]]; then
     # To stderr: this function's stdout IS the storage name.
-    warn "storage '${want}' is not on node '${node}' — building on '${chosen}' (a module's storage is a preference, ADR-037 D1); the module's config records it" >&2
+    warn "storage '${want}' is not on node '${node}' — building on '${chosen}' (a module's storage is a preference, not a requirement); the module's config records it" >&2
   fi
   printf '%s' "${chosen}"
 }

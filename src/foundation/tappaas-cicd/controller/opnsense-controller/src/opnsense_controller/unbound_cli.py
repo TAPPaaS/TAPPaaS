@@ -69,7 +69,7 @@ def _verify_resolver_after_write(firewall: str, what: str) -> bool:
         f"ERROR: {what} was applied but Unbound at {probe_ip}:53 stopped "
         f"answering — the write broke the resolver config (typically a "
         f"per-service override colliding with a wildcard redirect zone: "
-        f"local-data must sit at the zone apex, #474). Cluster DNS is DOWN.\n"
+        f"local-data must sit at the zone apex). Cluster DNS is DOWN.\n"
         f"  unbound-checkconf on the firewall reports:\n"
         f"    {cause}\n"
         f"  Recover via the firewall's mgmt IP ({probe_ip}), NOT by name — name "
@@ -242,7 +242,7 @@ def _check_redirect_zone(rows: list, args):
         if not below:
             return None
         print(f"ERROR: refusing *.{args.domain}: its redirect zone would contain "
-              f"{len(below)} existing record(s), which Unbound rejects (#649). "
+              f"{len(below)} existing record(s), which Unbound rejects. "
               f"Delete them first:", file=sys.stderr)
         for r in below:
             print(f"    unbound-manager delete '{r.get('hostname', '')}' "
@@ -254,11 +254,11 @@ def _check_redirect_zone(rows: list, args):
     name = f"{args.hostname}.{args.domain}"
     if wc.get("server") == args.ip:
         print(f"Covered by wildcard *.{wc.get('domain')} -> {args.ip}: "
-              f"{name} resolves already, no override written (#649)")
+              f"{name} resolves already, no override written")
         return True
     print(f"ERROR: refusing {name} -> {args.ip}: it lies inside the redirect zone "
           f"of *.{wc.get('domain')} -> {wc.get('server')}, and Unbound cannot hold "
-          f"a different answer below a wildcard (#649).", file=sys.stderr)
+          f"a different answer below a wildcard.", file=sys.stderr)
     return False
 
 

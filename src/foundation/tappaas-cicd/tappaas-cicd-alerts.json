@@ -13,7 +13,7 @@
         "impacted": "\"impacted\":\"(?P<impacted>[^\"]*)\""
       },
       "window": 300,
-      "summary": "A condition became a critical root cause: the failure nothing else explains (ADR-041 D3), with what it impacts by class. What it impacts is not mailed separately; a warning root waits for the daily digest.",
+      "summary": "A condition became a critical root cause: the failure nothing else explains, with what it impacts by class. What it impacts is not mailed separately; a warning root waits for the daily digest.",
       "mail": {
         "subject": "{state}: critical root cause {label.name} (impacts {label.impacted})",
         "body": "== Critical root cause: {label.name}\nreason: {label.reason}\nimpacts: {label.impacted}\nsince: {since}\n\nhealth-manager roots shows what it impacts; health-manager ack {label.name} --note <why> silences it and its symptoms.\nIn Grafana (Explore, Loki): {query}"
@@ -43,7 +43,7 @@
       "match": "(\"to\":\"warning\".*\"kind\":\"causal\".*\"silenced\":false|\"expected\":false)",
       "window": 86400,
       "repeat": "24h",
-      "summary": "In the last 24 hours a condition became a warning root cause, or the discovery sweep found drift, something unmanaged, missing, or differing from config/ (ADR-040 D15). One mail a day while this fires; nothing when a day passes quietly. health-manager digest writes the mail, an ALERT when it has something new and a STATUS when not; the template below goes out only when it cannot.",
+      "summary": "In the last 24 hours a condition became a warning root cause, or the discovery sweep found drift, something unmanaged, missing, or differing from config/. One mail a day while this fires; nothing when a day passes quietly. health-manager digest writes the mail, an ALERT when it has something new and a STATUS when not; the template below goes out only when it cannot.",
       "mail": {
         "subject": "{state}: daily digest could not be built",
         "body": "== Daily digest\nhealth-manager could not write today's digest, so this mail does not say what is new.\n\nhealth-manager list shows every condition that is not ok; cmdb sweep --last the last sweep's differences.\nIn Grafana (Explore, Loki): {query}"

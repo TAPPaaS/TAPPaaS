@@ -1,5 +1,5 @@
 {
-  "description": "A Debian machine TAPPaaS manages: its OS kept patched under the sweep's reboot rules (ADR-026 D3)",
+  "description": "A Debian machine TAPPaaS manages: its OS kept patched under the sweep's reboot rules",
   "kind": "machine",
   "version": "0.1.0",
   "stack": "foundation",

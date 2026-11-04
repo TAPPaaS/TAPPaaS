@@ -26,7 +26,7 @@ const VERSION = "0.1.0";
 export const HELP: HelpSpec = {
   name: "storage-manager",
   version: VERSION,
-  tagline: "TAPPaaS storage control plane — NFS shares in config/shares.json (ADR-029)",
+  tagline: "TAPPaaS storage control plane — NFS shares in config/shares.json",
   verbs: [
     { usage: "validate", note: "(config/shares.json, against the deployed instances)" },
     {
@@ -46,12 +46,12 @@ export const HELP: HelpSpec = {
     },
     {
       usage: "report [--json] [--no-smart] [--discover]",
-      name: "report (to the CMDB, ADR-040)",
+      name: "report (to the CMDB)",
       effect: "read",
       options: [
         ["--json", "report: print it instead of sending it."],
         ["--no-smart", "report: skip the SMART reads of the inventory it makes."],
-        ["--discover", "report: accepted for the CMDB's sweep (ADR-040 D15); the report is already its full depth (disks and layouts are proxmox-controller's)."],
+        ["--discover", "report: accepted for the CMDB's sweep; the report is already its full depth (disks and layouts are proxmox-controller's)."],
       ],
       details:
         "Sends the storage to the CMDB (cmdb-controller) as one observation: each ZFS pool `inventory` reads\n" +
@@ -71,7 +71,7 @@ export const HELP: HelpSpec = {
         ["--server I", "The module instance that carries the share."],
         ["--pool P", "A managed Host's ZFS pool."],
         ["--quota Q", "ZFS quota (e.g. 4T)."],
-        ["--backup B", "true|false — required for a managed share (ADR-029 D9)."],
+        ["--backup B", "true|false — required for a managed share."],
         ["--backup-exclude L", "Patterns relative to the share root, comma-separated."],
         ["--prop K=V", "ZFS property: recordsize, compression, atime (repeatable)."],
         ["--path P", "A registered, unmanaged server's exported path."],

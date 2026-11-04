@@ -107,7 +107,7 @@ Commands:
                            src/modules.json accepted).
         --managed tracked  register the repo without catalog requirements.
         --signer SHA256:<fp>
-                           ADR-033 D5: the fingerprint of a key the repository's
+                           The fingerprint of a key the repository's
                            owners sign releases with, from them, not from the
                            repository. Give it once per key. Required on a
                            staging or production branch: the branch's current
@@ -115,7 +115,7 @@ Commands:
                            the entry's trust.
         --unsigned         add a staging/production branch without them: a
                            repository that signs nothing, or one taken on trust
-                           from the revision cloned now (D9).
+                           from the revision cloned now.
 
     probe <url> [--branch <branch>]
         What add would find, as JSON, without cloning: the branches, the one
@@ -123,7 +123,7 @@ Commands:
 
     introduce <name> [--signer SHA256:<fp>]...
         Check <name>'s checkout against its signers' fingerprints and record
-        it as the last verified release (ADR-033 D5) — the ones in site.json,
+        it as the last verified release — the ones in site.json,
         or the ones given here, written to site.json once they hold. After a
         clone (site-manager repository reconcile does this), or to confirm the
         keys an existing repository trusts are its owners'.
@@ -136,11 +136,11 @@ Commands:
         Modify a repository's URL and/or branch. If only changing
         branch, fetches and checks out the new branch in place; a
         staging or production branch only at a verified release
-        (ADR-033 D6), as a sweep would. For the TAPPaaS repository it warns when the new branch
-        disagrees with the site's channel (ADR-028 D9: unstable=main,
+        only, as a sweep would. For the TAPPaaS repository it warns when the new branch
+        disagrees with the site's channel (unstable=main,
         staging=staging, production=stable), and REFUSES a branch whose
         newest migration is older than the newest this site has applied
-        — migrations do not run backwards (ADR-025). --force lifts it.
+        — migrations do not run backwards. --force lifts it.
         If changing URL, re-clones and updates module locations.
         A URL change converges the checkout with a hard reset; it is
         refused when the branch carries commits that exist only there
@@ -149,7 +149,7 @@ Commands:
 
     sync <name> [--dry-run]
         Bring one repository to the tip of its declared branch without the
-        sweep (#814). Honours a pull hold, auto-stashes local changes and
+        sweep. Honours a pull hold, auto-stashes local changes and
         never discards commits that exist only in the checkout. REFUSES,
         and proposes site-manager update, when the new tip carries a
         config migration this site has not applied or changes the
@@ -163,7 +163,7 @@ Commands:
         and available module count.
 
     validate-catalog [<name>|<path>] [--strict]
-        Does the repository's module catalog say true things (#463): the
+        Does the repository's module catalog say true things: the
         shape, the fields, a moduleJson that exists, `stack` and `vmid`
         agreeing with the module's own file, one name and one VMID per
         module, and every module in the tree listed. With no argument,
@@ -171,7 +171,7 @@ Commands:
         exits non-zero on any finding (for CI and before a pull request).
 
     stash [list [<name>]|show <name> <sha>|restore <name> <sha>|discard <name> <sha> --force]
-        The local changes a sync had to set aside (#681). `list` names every
+        The local changes a sync had to set aside. `list` names every
         auto-stash entry held in a managed checkout with its age and files;
         `show` prints its diff; `restore` puts it back when it still applies;
         `discard` drops it, only with --force. Entries stashed by hand are
@@ -509,7 +509,7 @@ cmd_add() {
     fi
     if ! repo_sync_introduce "${repo_path}" "${branch}" "${name}" "${signers}" "${unsigned}"; then
         rm -rf "${repo_path}"
-        die "Repository not added: it does not verify (ADR-033 D5)"
+        die "Repository not added: its release is not signed by a key you gave (see above) — check the --signer fingerprints with its owners, or add it with --unsigned"
     fi
     if [[ -n "${REPO_SYNC_INTRO_SIGNERS}" ]]; then
         info "  ${GN}✓${CL} Verified against its signers' fingerprints"
@@ -882,7 +882,7 @@ cmd_modify() {
                         | sed -n 's#.*/\([0-9][0-9][0-9][0-9]\)-.*#\1#p' | sort -n | tail -1 || true)"
         if [[ -n "${_applied}" && -n "${_target_max}" && "${_target_max}" -lt "${_applied}" ]]; then
             warn "  '${new_branch}' carries migrations up to ${_target_max}, but this site has applied ${_applied}."
-            warn "    That code predates this site's config: migrations do not run backwards (ADR-025),"
+            warn "    That code predates this site's config: migrations do not run backwards,"
             warn "    so the older code cannot undo what ${_applied} did — it will read a shape it does not know."
             if [[ "${force}" != "true" ]]; then
                 die "Refusing to move a site behind its own migrations. Re-run with --force if that is what you mean."
@@ -897,7 +897,7 @@ cmd_modify() {
         if [[ "${force}" == "true" ]]; then allow_discard=1; fi
         REPO_SYNC_ASKED=1 reconcile_repo_checkout "${current_path}" "${current_url}" "${new_branch}" "${allow_discard}" "${name}" || rc=$?
         if [[ ${rc} -eq 3 ]]; then
-            die "Refused: the tip of '${new_branch}' is not a verified release (ADR-033, listed above). The checkout is unchanged."
+            die "Refused: the tip of '${new_branch}' is not a verified release (why is listed above). The checkout is unchanged."
         elif [[ ${rc} -ne 0 ]]; then
             die "Failed to switch ${current_path} to '${new_branch}'"
         fi
@@ -1004,7 +1004,7 @@ cmd_modify() {
         local rc=0
         reconcile_repo_checkout "${current_path}" "${new_url}" "${target_branch}" "${allow_discard}" "${name}" || rc=$?
         if [[ ${rc} -eq 3 ]]; then
-            die "Refused: the tip of '${target_branch}' is not a verified release (ADR-033, listed above). The checkout is unchanged."
+            die "Refused: the tip of '${target_branch}' is not a verified release (why is listed above). The checkout is unchanged."
         elif [[ ${rc} -eq 2 ]]; then
             die "Refused: '${target_branch}' carries commits that exist only in ${current_path} (listed above). Push them, or re-run with --force to snapshot and discard them."
         elif [[ ${rc} -ne 0 ]]; then
@@ -1264,7 +1264,7 @@ cmd_sync() {
     pending="$(sync_pending_migrations "${path}" "${tip}")"
     if [[ -n "${pending}" ]]; then
         refuse=1
-        error "  the new tip carries config migration(s) this site has not applied (ADR-025):"
+        error "  the new tip carries config migration(s) this site has not applied:"
         printf '%s\n' "${pending}" | while IFS= read -r m; do error "    ${m}"; done
         error "    migrations run before the rebuild and the sweep; code past them reads a config shape it does not know"
     fi
@@ -1326,7 +1326,7 @@ cmd_sync() {
     case "${rc}" in
         0) ;;
         2) die "sync: refused — commits exist only in ${path} (listed above)" ;;
-        3) die "sync: refused — the tip of ${branch} is not a verified release (ADR-033, above); ${name} is unchanged" ;;
+        3) die "sync: refused — the tip of ${branch} is not a verified release (why is listed above); ${name} is unchanged" ;;
         *) die "sync: ${name} did not sync (rc ${rc}) — see above" ;;
     esac
     info "  ${GN}✓${CL} ${name} at origin/${branch} (${tip:0:8})"
@@ -1595,7 +1595,7 @@ cmd_introduce() {
         info "  No signer fingerprints in site.json"
     fi
     repo_sync_introduce "${path}" "${branch}" "${name}" "${signers}" 0 \
-        || die "${name} is not trusted on '${branch}' (ADR-033 D5, above)"
+        || die "${name} is not trusted on '${branch}': its release is not signed by a key site.json lists (see above)"
     if [[ "${given}" -eq 1 ]]; then
         local tmp; tmp="$(mktemp)"
         jq --arg n "${name}" --arg s "${REPO_SYNC_INTRO_SIGNERS}" \

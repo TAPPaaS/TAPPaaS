@@ -133,7 +133,7 @@ if [[ ${#matches[@]} -eq 0 ]]; then
   # visible, never silent: a caller that discards stderr still gets a usable
   # value instead of an empty string it has to interpret.
   if [[ "$FIELD" == "scope" && "$SCOPE_DEFAULTABLE" -eq 1 ]]; then
-    echo "resolve-module.sh: '${MODULE}' has no stack and is in no catalog — using the default scope 'environment' (ADR-022e)" >&2
+    echo "resolve-module.sh: '${MODULE}' has no stack and is in no catalog — using the default scope 'environment'; give the module a stack to say otherwise" >&2
     printf 'environment\n'
     exit 0
   fi

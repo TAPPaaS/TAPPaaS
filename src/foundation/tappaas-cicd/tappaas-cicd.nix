@@ -303,7 +303,7 @@ in
   # (scripts/notify-update-failure.sh; ADR-007e v1.3). If no node takes the
   # mail this unit fails too, so a lost notice is visible in `systemctl --failed`.
   systemd.services.update-tappaas-failure = {
-    description = "Surface a failed update-tappaas sweep (OnFailure handler, #506, #651)";
+    description = "Surface a failed update-tappaas sweep";
     serviceConfig = {
       Type = "oneshot";
       User = "tappaas";
@@ -338,7 +338,7 @@ in
   # mothership share mgmt, so no firewall rule is involved, and the token is
   # what decides.
   systemd.services.tappaas-alert-token = {
-    description = "Generate the token Grafana's alert webhook presents (#126)";
+    description = "Generate the token Grafana's alert webhook presents";
     wantedBy = [ "multi-user.target" ];
     before = [ "tappaas-alert-receiver.service" ];
     unitConfig.ConditionPathExists = "!/etc/secrets/tappaas-alert-token";
@@ -354,7 +354,7 @@ in
   };
 
   systemd.services.tappaas-alert-receiver = {
-    description = "Receive Grafana alert webhooks and mail them to the site owner (#126)";
+    description = "Receive Grafana alert webhooks and mail them to the site owner";
     wantedBy = [ "multi-user.target" ];
     after = [ "network-online.target" "tappaas-alert-token.service" ];
     wants = [ "network-online.target" ];
@@ -390,13 +390,13 @@ in
   # from P2, changes it only by running their verbs as jobs (the operator's own
   # verbs, as tappaas, in this unit's sandbox): what they write is listed below.
   systemd.paths.tappaas-console = {
-    description = "Start the TAPPaaS console once its bin is built (ADR-034)";
+    description = "Start the TAPPaaS console once its bin is built";
     wantedBy = [ "multi-user.target" ];
     pathConfig.PathExists = "/home/tappaas/bin/console";
   };
 
   systemd.services.tappaas-console = {
-    description = "TAPPaaS console — the site's web UI (ADR-034)";
+    description = "TAPPaaS console — the site's web UI";
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     unitConfig.ConditionPathExists = "/home/tappaas/bin/console";
@@ -524,7 +524,7 @@ in
   # ensureDBOwnership needs the database named after its owner; cmdb is not.
   # btree_gist carries the history's exclusion constraints (cmdb-v1.sql).
   systemd.services.cmdb-db = {
-    description = "Give the CMDB's database to tappaas (ADR-040 D12)";
+    description = "Give the CMDB's database to tappaas";
     wantedBy = [ "multi-user.target" ];
     after = [ "postgresql.service" "postgresql-setup.service" ];
     requires = [ "postgresql.service" ];
@@ -541,7 +541,7 @@ in
   };
 
   systemd.services.cmdb-token = {
-    description = "Generate the token the CMDB's loopback listener asks for (ADR-040 D2)";
+    description = "Generate the token the CMDB's loopback listener asks for";
     wantedBy = [ "multi-user.target" ];
     before = [ "cmdb.service" ];
     unitConfig.ConditionPathExists = "!/etc/secrets/cmdb-token";
@@ -559,7 +559,7 @@ in
   # What cmdb.service's sandbox leaves writable has to exist before it starts.
   # As tappaas, so a fresh install's config/ and ~/.ssh are tappaas's.
   systemd.services.cmdb-paths = {
-    description = "Make the two paths a rescan source may write (ADR-040 D2)";
+    description = "Make the two paths a rescan source may write";
     serviceConfig = {
       Type = "oneshot";
       User = "tappaas";
@@ -572,13 +572,13 @@ in
   };
 
   systemd.paths.cmdb = {
-    description = "Start cmdb-controller once its bin is built (ADR-040)";
+    description = "Start cmdb-controller once its bin is built";
     wantedBy = [ "multi-user.target" ];
     pathConfig.PathExists = "/home/tappaas/bin/cmdb-controller";
   };
 
   systemd.services.cmdb = {
-    description = "cmdb-controller — the CMDB, the actual state of the site (ADR-040)";
+    description = "cmdb-controller — the CMDB, the actual state of the site";
     after = [ "postgresql.service" "cmdb-db.service" "cmdb-token.service" "cmdb-paths.service" ];
     requires = [ "postgresql.service" "cmdb-db.service" ];
     wants = [ "cmdb-token.service" "cmdb-paths.service" ];
@@ -630,7 +630,7 @@ in
   # beside update-tappaas.timer, an hour before the site's update hour: the
   # hour is site.json's, which this file cannot read at build time.
   systemd.services.cmdb-sweep = {
-    description = "CMDB discovery sweep (ADR-040 D15)";
+    description = "CMDB discovery sweep";
     after = [ "cmdb.service" ];
     wants = [ "cmdb.service" ];
     unitConfig.ConditionPathExists = "/home/tappaas/bin/cmdb";
@@ -652,7 +652,7 @@ in
   # this unit also follows every sweep. The sandbox is cmdb.service's: the
   # checks run the same reads as its rescan, and config/ holds emit's cursor.
   systemd.services.health-assess = {
-    description = "Assess the site's health and emit its events (ADR-041)";
+    description = "Assess the site's health and emit its events";
     after = [ "cmdb.service" "cmdb-sweep.service" ];
     wants = [ "cmdb.service" ];
     wantedBy = [ "cmdb-sweep.service" ];
@@ -694,7 +694,7 @@ in
     };
   };
   systemd.services.cmdb-refresh = {
-    description = "Refresh what the topology reads from the CMDB (ADR-040)";
+    description = "Refresh what the topology reads from the CMDB";
     after = [ "cmdb.service" ];
     wants = [ "cmdb.service" ];
     unitConfig.ConditionPathExists = "/home/tappaas/bin/site-manager";
@@ -733,7 +733,7 @@ in
   # backup.filesystemPaths. The dependency is stated here: the capture's unit is
   # the baseline's (#324).
   systemd.services.cmdb-dump = {
-    description = "Dump the CMDB for tappaas-cicd's file backup (ADR-040 D12)";
+    description = "Dump the CMDB for tappaas-cicd's file backup";
     after = [ "postgresql.service" "cmdb-db.service" ];
     requires = [ "postgresql.service" ];
     wantedBy = [ "tappaas-fs-backup.service" ];
@@ -758,7 +758,7 @@ in
   # naming what does not answer (#905), so a dead logging VM, Grafana, Loki or
   # token cannot leave the site silently unwatched.
   systemd.services.tappaas-alert-watchdog = {
-    description = "Mail when the log alerting has stopped reporting (#126)";
+    description = "Mail when the log alerting has stopped reporting";
     serviceConfig = {
       Type = "oneshot";
       User = "tappaas";
@@ -774,7 +774,7 @@ in
   };
 
   systemd.timers.tappaas-alert-watchdog = {
-    description = "Check the log alerting's heartbeat every 5 minutes (#126)";
+    description = "Check the log alerting's heartbeat every 5 minutes";
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnBootSec = "30min";
@@ -790,7 +790,7 @@ in
   # marks a sweep failed. Its scanner databases (~4.4 GB, ~/.cache/{grype,trivy})
   # live on the root disk; the scan refuses to download them without room.
   systemd.services.tappaas-security-scan = {
-    description = "TAPPaaS security scan — SBOM and CVE status after a sweep (ADR-011)";
+    description = "TAPPaaS security scan — SBOM and CVE status after a sweep";
     serviceConfig = {
       Type = "oneshot";
       User = "tappaas";
@@ -822,7 +822,7 @@ in
   # read logs in to the switch controller and validate reaches the nodes. A
   # separate unit, so a switch that cannot be read never marks a sweep failed.
   systemd.services.tappaas-switch-read = {
-    description = "TAPPaaS switch read — the switches as they are, after a sweep (#860)";
+    description = "TAPPaaS switch read — the switches as they are, after a sweep";
     serviceConfig = {
       Type = "oneshot";
       User = "tappaas";
@@ -835,7 +835,7 @@ in
   # renders it from site.json .updateSchedule into /run at boot, after every
   # self-rebuild and on every schedule change (Persistent=false, D1).
   systemd.services.update-tappaas-schedule = {
-    description = "Render update-tappaas.timer from site.json (ADR-017 D2)";
+    description = "Render update-tappaas.timer from site.json";
     wantedBy = [ "timers.target" ];
     # A fresh mothership has neither yet: bootstrap.sh's first switch runs before
     # install.sh writes config/ and links ~/bin. Skipped then (a condition is no

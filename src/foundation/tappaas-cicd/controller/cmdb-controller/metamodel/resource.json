@@ -1,5 +1,5 @@
 {
-  "description": "The resource branch (ADR-040 D3, D7, D9): IT4IT's Resource — an asset or other limited thing, allocated to a CI or free. Its lifecycle is the asset's (ordered … disposed, reusable), not the CI's. allowedBy: the values a field may take depend on another field of the same object (a port's speed on its kind); a value of that other field not listed admits none. keyVia: a key that is a field of a related object — an asset is known by any of its ports' MACs (D5); its rank orders it among the class's own keys.",
+  "description": "The resource branch: IT4IT's Resource — an asset or other limited thing, allocated to a CI or free. Its lifecycle is the asset's (ordered … disposed, reusable), not the CI's. allowedBy: the values a field may take depend on another field of the same object (a port's speed on its kind); a value of that other field not listed admits none. keyVia: a key that is a field of a related object — an asset is known by any of its ports' MACs (D5); its rank orders it among the class's own keys.",
   "classes": {
     "resource": {
       "parent": "object",
@@ -57,7 +57,7 @@
         "cpu": { "type": "string" },
         "memory": { "type": "integer", "description": "MiB." },
         "nics": { "type": "array", "volatile": true, "description": "Every physical NIC, used or not (D15): name, MAC, kind, speed, link, bond or bridge. Volatile: its link state moves." },
-        "disks": { "type": "array", "description": "Every disk in it (D15), by by-id name: device, vendor, model, serial, wwn, size, type, bus, SMART health, what it holds, partitions. No measurements (SMART attributes, temperature, wear): those are a disk CI's, volatile there. A disk its asset records is a disk CI besides (ADR-042)." }
+        "disks": { "type": "array", "description": "Every disk in it (D15), by by-id name: device, vendor, model, serial, wwn, size, type, bus, SMART health, what it holds, partitions. No measurements (SMART attributes, temperature, wear): those are a disk CI's, volatile there. A disk its asset records is a disk CI besides." }
       }
     },
     "network-device": {
@@ -127,14 +127,14 @@
     "disk": {
       "parent": "resource",
       "physical": true,
-      "description": "A disk in an asset (ADR-042): named by its tag (dsk-NN), its by-id name shown. Known by the asset it is in and its name; its serial is unique across all disks (asset-manager refuses a second). Moving it to another asset ends this CI and begins one there, so its history of placements is its CIs'. A pool is built-on it.",
+      "description": "A disk in an asset: named by its tag (dsk-NN), its by-id name shown. Known by the asset it is in and its name; its serial is unique across all disks (asset-manager refuses a second). Moving it to another asset ends this CI and begins one there, so its history of placements is its CIs'. A pool is built-on it.",
       "fields": {
         "name": { "key": 1, "description": "The disk asset's tag (dsk-NN)." },
         "asset": { "type": "relation", "relation": "part-of", "required": true, "immutable": true, "key": 1, "description": "The asset it is in (a server)." },
         "bay": { "type": "string", "description": "The slot it is in: the server's label for it, else its by-id name." },
         "vendor": { "type": "string" },
         "model": { "type": "string" },
-        "serial": { "type": "string", "description": "Its identity (ADR-042 D2): unique across all disks, compared case-insensitively without whitespace and dashes." },
+        "serial": { "type": "string", "description": "Its identity: unique across all disks, compared case-insensitively without whitespace and dashes." },
         "wwn": { "type": "string", "description": "Its World Wide Name, the identity after the serial." },
         "size": { "type": "integer", "description": "Bytes." },
         "kind": { "type": "string", "enum": ["nvme", "ssd", "hdd", "usb"] },

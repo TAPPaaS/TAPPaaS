@@ -82,7 +82,7 @@ export const CHANGE_CLASSES: Readonly<Record<string, ChangeClassSpec>> = {
     preGate: false,
     disruptive: true,
     rank: 3,
-    summary: "relocates or rebuilds runtime state (ADR-019)",
+    summary: "relocates or rebuilds runtime state",
   },
   manual: {
     applies: false,
@@ -420,7 +420,7 @@ export function lintServiceFieldManifest(
       const f = e as FieldEntry;
       if (!declared.has(name)) {
         err(
-          `${what}: not declared by any field tier — a manifest may only classify fields the schema defines (#567: schemas/module-fields.json + <module>/fields.json + this file)`,
+          `${what}: not declared by any field tier — a manifest may only classify fields the schema defines (schemas/module-fields.json + <module>/fields.json + this file)`,
         );
       }
       if (apply === "composite") {
@@ -470,7 +470,7 @@ export function lintServiceFieldManifest(
   if (missing.length > 0) {
     err(
       `fields.json does not classify ${missing.length} field(s) the composed schema says '${opts.coordinate}' owns: ` +
-        `${missing.join(", ")} — every usedBy field needs a change class (ADR-020 D4)`,
+        `${missing.join(", ")} — every usedBy field needs a change class`,
     );
   }
 }

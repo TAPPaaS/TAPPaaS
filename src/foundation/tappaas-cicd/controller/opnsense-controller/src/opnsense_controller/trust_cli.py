@@ -76,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     gp.add_argument("--no-ssl-verify", action="store_true")
     gp.add_argument("--debug", action="store_true")
 
-    parser = StrictArgumentParser(prog="trust-manager", description="The OPNsense trust store, for ca-manager (ADR-043).", parents=[gp])
+    parser = StrictArgumentParser(prog="trust-manager", description="The OPNsense trust store, for ca-manager.", parents=[gp])
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("ca-ensure", parents=[gp], help="Import a CA's certificate (never its key); print its refid")

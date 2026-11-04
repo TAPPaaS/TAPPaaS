@@ -55,7 +55,7 @@ const NODE = /^[A-Za-z0-9_][A-Za-z0-9_-]{0,62}$/;
 export const SECRETS: Record<SecretName, SecretSpec> = {
   "acme-dns": {
     file: null,
-    what: "a DNS provider's API credential for the ACME wildcard certificate, kept by ca-manager (ADR-043 D6)",
+    what: "a DNS provider's API credential for the ACME wildcard certificate, kept by ca-manager",
     lines: () => "acme-dns: registered with ca-manager provider add, never written here",
     command: (f) => {
       const provider = str(f.provider);

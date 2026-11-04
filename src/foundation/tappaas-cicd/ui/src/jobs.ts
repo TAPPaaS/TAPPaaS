@@ -472,7 +472,7 @@ export class Jobs {
     if (v.read) return this.startRead(me, v, card);
     if (req.apply === true) return this.createApply(me, setup, v, card, req.confirm);
     if (req.preview !== true) {
-      return { status: 409, error: "a change is previewed first (ADR-034 T3): POST /jobs {argv, preview: true}, then POST /jobs/<id>/apply; or {argv, apply: true}, which runs the preview first" };
+      return { status: 409, error: "a change is previewed first: POST /jobs {argv, preview: true}, then POST /jobs/<id>/apply; or {argv, apply: true}, which runs the preview first" };
     }
     const job = this.newJob(me, v, "preview", previewArgv(v), null, card);
     this.add(job);

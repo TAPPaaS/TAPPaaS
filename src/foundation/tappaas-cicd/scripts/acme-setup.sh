@@ -69,7 +69,7 @@ Options:
                          validation (default 150; raise for slow providers).
                          45 was enough until Let's Encrypt widened its
                          multi-perspective validation; secondary perspectives
-                         then began failing with "No TXT record found". #328
+                         then began failing with "No TXT record found".
   --help                 Show this help
 
 Credentials file (~/.acme-dns-credentials.txt, chmod 600), one KEY=VALUE per line:

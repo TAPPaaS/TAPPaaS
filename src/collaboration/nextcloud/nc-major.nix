@@ -24,17 +24,17 @@ let
   # /etc/nixos/tappaas-build-facts.env as an attrset: one KEY=value per line.
   facts =
     if !(builtins.pathExists factsFile) then
-      throw "nextcloud: no build facts (${factsFile}) — update this guest through module-manager, which collects what it runs before it builds (#797)"
+      throw "nextcloud: no build facts (${factsFile}) — update this guest through module-manager, which collects what it runs before it builds"
     else builtins.listToAttrs (map (m: { name = builtins.elemAt m 0; value = builtins.elemAt m 1; })
       (builtins.filter (m: m != null)
         (map (l: builtins.match "([A-Z_]+)=(.*)" l)
           (builtins.filter builtins.isString (builtins.split "\n" (builtins.readFile factsFile))))));
-  said = facts.NEXTCLOUD_INSTALLED_MAJOR or (throw "nextcloud: the build facts (${factsFile}) do not say which major the guest runs (#797)");
+  said = facts.NEXTCLOUD_INSTALLED_MAJOR or (throw "nextcloud: the build facts (${factsFile}) do not say which major the guest runs");
   installed =
     if said == "none" then null
     else if said == "unknown" then
-      throw "nextcloud: the guest has an instance but its major cannot be read from config.php — cannot choose a major (#797)"
-    else if builtins.match "[0-9]+" said == null then throw "nextcloud: '${said}' is not a major (#797)"
+      throw "nextcloud: the guest has an instance but its major cannot be read from config.php — cannot choose a major"
+    else if builtins.match "[0-9]+" said == null then throw "nextcloud: '${said}' is not a major"
     else builtins.fromJSON said;
   step = if installed == null then targetMajor
          else if installed + 1 < targetMajor then installed + 1

@@ -197,7 +197,7 @@ if [[ -z "${mig}" ]]; then
     chmod +x "${TEST_DIR}/test-migration-${id}-modules-moved.sh"
     readme="${MIG_DIR}/README.md"
     if [[ -f "${readme}" ]] && ! grep -q "${id}-modules-moved.sh" "${readme}"; then
-        row="| \`${id}-modules-moved.sh\` | Installed modules follow the moves in its table (written by \`scripts/move-module.sh\`, #500): a config whose \`moduleSource\` is a moved module's old directory points at the new one, in this site's checkout of the target repository. Refuses a target repository the site has not registered, a missing target directory, and a rename another config still depends on. | yes — restore \`.migrations/backup/${id}/<file>\` |"
+        row="| \`${id}-modules-moved.sh\` | Installed modules follow the moves in its table (written by \`scripts/move-module.sh\`): a config whose \`moduleSource\` is a moved module's old directory points at the new one, in this site's checkout of the target repository. Refuses a target repository the site has not registered, a missing target directory, and a rename another config still depends on. | yes — restore \`.migrations/backup/${id}/<file>\` |"
         # insert after the last migration row of the "What ships here now" table
         n="$(grep -n '^| `[0-9]\{4\}-' "${readme}" | tail -1 | cut -d: -f1)"
         if [[ -n "${n}" ]]; then

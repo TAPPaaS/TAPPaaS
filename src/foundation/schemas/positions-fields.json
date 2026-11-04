@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "positions-fields.json",
   "title": "TAPPaaS Positions",
-  "description": "config/positions.json — the site's physical assets and where they are inside its locations: the rooms (each in a location of site.json), the racks, every placement, the assets (with their ports and lifecycle, ADR-040 D7-D9), the cables nothing can see, and the faceplates the site adds to the catalog. Site state, written only by asset-manager. A placement and a cable end name a device as the physical topology does (a node, a switch, an access point, a machine, an asset's role) or an asset with no role by its own name; the device's own record is never touched. A cable between two devices the switches or LLDP already see is not recorded here: the topology draws it. An absent file is an empty one. assets{} is interim: ADR-040 step 3 moves it into the CMDB, its shape the CMDB's asset and port classes'.",
+  "description": "config/positions.json — the site's physical assets and where they are inside its locations: the rooms (each in a location of site.json), the racks, every placement, the assets (with their ports and lifecycle), the cables nothing can see, and the faceplates the site adds to the catalog. Site state, written only by asset-manager. A placement and a cable end name a device as the physical topology does (a node, a switch, an access point, a machine, an asset's role) or an asset with no role by its own name; the device's own record is never touched. A cable between two devices the switches or LLDP already see is not recorded here: the topology draws it. An absent file is an empty one. assets{} is interim: it moves into the CMDB, its shape the CMDB's asset and port classes'.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -24,7 +24,7 @@
       "items": { "$ref": "#/$defs/cable" }
     },
     "assets": {
-      "description": "The physical assets, keyed by name (a tag per kind — srv-01, sw-01, ap-01, dev-01 — or the operator's own): each with its kind, its records (vendor, model, serial, asset tag, procurement, disposal), its ports, its lifecycle stage, a faulty flag, and the role it plays — the topology's name for the node, switch, access point or device it is allocated to (ADR-040 D7). One that plays no node, switch or AP is a device of the topology, by its role's name or its own: placeable and a cable end.",
+      "description": "The physical assets, keyed by name (a tag per kind — srv-01, sw-01, ap-01, dev-01 — or the operator's own): each with its kind, its records (vendor, model, serial, asset tag, procurement, disposal), its ports, its lifecycle stage, a faulty flag, and the role it plays — the topology's name for the node, switch, access point or device it is allocated to. One that plays no node, switch or AP is a device of the topology, by its role's name or its own: placeable and a cable end.",
       "type": "object",
       "propertyNames": { "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._-]{0,62}$" },
       "additionalProperties": { "$ref": "#/$defs/asset" }
@@ -201,7 +201,7 @@
           "changeClass": "immutable"
         },
         "linkSpeed": {
-          "description": "The link speed seen on the cable (ADR-040 D9): the connection's, where a port's speed is its maximum — a 10G cage holding a 1G module shows 1g here. A number and its unit, lowercase.",
+          "description": "The link speed seen on the cable: the connection's, where a port's speed is its maximum — a 10G cage holding a 1G module shows 1g here. A number and its unit, lowercase.",
           "type": "string",
           "pattern": "^\\d+(\\.\\d+)?[mg]$",
           "examples": ["1g", "10g", "100m"],
@@ -222,7 +222,7 @@
           "changeNote": "A cable names the port: remove the port and add it under the new name."
         },
         "kind": {
-          "description": "The connector (ADR-040 D9): what one plugs a cable into. A BMC is an rj45 port with role bmc; power, video and serial are no ports.",
+          "description": "The connector: what one plugs a cable into. A BMC is an rj45 port with role bmc; power, video and serial are no ports.",
           "type": "string",
           "enum": ["rj45", "sfp", "wifi", "usb-a", "usb-c"],
           "changeClass": "in-place"
@@ -312,7 +312,7 @@
         },
         "assetTag": { "description": "The site's own tag on the case, if it has one.", "type": "string", "changeClass": "in-place" },
         "ports": {
-          "description": "Its ports (ADR-040 D9), merged over its model's plate's by name.",
+          "description": "Its ports, merged over its model's plate's by name.",
           "type": "array",
           "items": { "$ref": "#/$defs/port" },
           "changeClass": "in-place"
@@ -324,7 +324,7 @@
           "changeClass": "in-place"
         },
         "stage": {
-          "description": "Its lifecycle stage as recorded (ADR-040 D7): ordered, stock, placed or disposed. The view derives operational (it has a role) and placed (it has a placement); the verbs keep this in step. An ordered or disposed asset has no placement and no role.",
+          "description": "Its lifecycle stage as recorded: ordered, stock, placed or disposed. The view derives operational (it has a role) and placed (it has a placement); the verbs keep this in step. An ordered or disposed asset has no placement and no role.",
           "type": "string",
           "enum": ["ordered", "stock", "placed", "disposed"],
           "default": "stock",

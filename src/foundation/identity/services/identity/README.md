@@ -39,11 +39,11 @@ is legible.
 
 ## Fields
 
-`identity:identity` owns **1** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`identity:identity` owns **1** declared field(s). Each table below carries the field's full definition and, where the service applies it, what a change to it does (in place, a restart, a rebuild).
 
 ### `identity`
 
-OIDC integration contract for a module that dependsOn identity:identity (ADR-006). Consumed by services/identity/install-service.sh. Omit for forward-auth modules (those use identity:accessControl).
+OIDC integration contract for a module that dependsOn identity:identity. Consumed by services/identity/install-service.sh. Omit for forward-auth modules (those use identity:accessControl).
 
 | Attribute | Value |
 |---|---|

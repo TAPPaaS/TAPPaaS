@@ -1,5 +1,5 @@
 {
-  "description": "The root of the class tree and its ci branch (ADR-040 D3): what IT4IT's Actual Product Instance is made of. A field is declared as a service's field is (ADR-020 fields.json: type, required, immutable, description), plus key — the rank of the identity key it is part of (D5; fields with one rank form one key, the lowest rank is tried first) — and identifying with otel — which OpenTelemetry resource attributes name the CI (D14). volatile: the value changes by itself (a pool's used, a lease): it has history like any other, and never counts as drift. A member of an object or of an array's items marked volatile (a condition's lastChecked) is not history at all: a value that differs only there is rewritten in place. desiredRecord on a class: a config/ record can declare it, so one without is unmanaged in a sweep (D15). A class's expiry (on ci, inherited; a number and s, m, h or d) is how long a CI may go unreported before it is marked unseen (D5); it is never deleted. A field a subclass declares again with only some properties refines the inherited one (a key on name). type relation: the value is another object, kept as a row in relation, not in attribute.",
+  "description": "The root of the class tree and its ci branch: what IT4IT's Actual Product Instance is made of. A field is declared as a service's field is (ADR-020 fields.json: type, required, immutable, description), plus key — the rank of the identity key it is part of (D5; fields with one rank form one key, the lowest rank is tried first) — and identifying with otel — which OpenTelemetry resource attributes name the CI (D14). volatile: the value changes by itself (a pool's used, a lease): it has history like any other, and never counts as drift. A member of an object or of an array's items marked volatile (a condition's lastChecked) is not history at all: a value that differs only there is rewritten in place. desiredRecord on a class: a config/ record can declare it, so one without is unmanaged in a sweep (D15). A class's expiry (on ci, inherited; a number and s, m, h or d) is how long a CI may go unreported before it is marked unseen (D5); it is never deleted. A field a subclass declares again with only some properties refines the inherited one (a key on name). type relation: the value is another object, kept as a row in relation, not in attribute.",
   "classes": {
     "object": {
       "parent": null,
@@ -28,11 +28,11 @@
               "rootCause": { "type": ["string", "null"], "description": "The id of the object it follows from." },
               "acknowledged": { "type": ["object", "null"], "properties": { "by": { "type": "string" }, "note": { "type": "string" }, "until": { "type": "string" }, "sticky": { "type": "boolean" } }, "description": "An operator's acknowledgement: it keeps its status and stops counting." },
               "maintenance": { "type": ["object", "null"], "properties": { "until": { "type": "string" }, "note": { "type": "string" } }, "description": "A maintenance window: transitions are recorded, not counted." },
-              "flapping": { "description": "health-manager emit's (ADR-041 D4): assess carries it over." },
-              "flappingHeld": { "description": "health-manager emit's (ADR-041 D4): assess carries it over." }
+              "flapping": { "description": "health-manager emit's: assess carries it over." },
+              "flappingHeld": { "description": "health-manager emit's: assess carries it over." }
             }
           },
-          "description": "Its health, one per kind (ADR-041 D1), as Kubernetes gives a resource's status.conditions. health-manager assess is the only writer. Volatile: never drift. Every change but lastChecked opens a new period, so its history is the object's health history."
+          "description": "Its health, one per kind, as Kubernetes gives a resource's status.conditions. health-manager assess is the only writer. Volatile: never drift. Every change but lastChecked opens a new period, so its history is the object's health history."
         }
       }
     },
@@ -51,7 +51,7 @@
       "parent": "ci",
       "abstract": true,
       "desiredRecord": true,
-      "description": "What runs software (ArchiMate Node, ADR-022c): a module of kind vm, lxc, machine or device (ADR-022d).",
+      "description": "What runs software (ArchiMate Node): a module of kind vm, lxc, machine or device.",
       "fields": {
         "zone": { "type": "string", "description": "The zone it is in: the zone0 of its record (ADR-040 step 4)." },
         "maturity": { "type": "string", "description": "The status of its record: Development, Testing, Production." },
@@ -99,7 +99,7 @@
     },
     "machine": {
       "parent": "node",
-      "description": "A module of kind machine: a cluster member, a satellite, a managed host (ADR-026).",
+      "description": "A module of kind machine: a cluster member, a satellite, a managed host.",
       "fields": {
         "network": { "type": "object", "volatile": true, "description": "`site-manager node network show`: its uplinks declared and live, LLDP, HA, corosync. An attribute, as nics[]: a port needs an asset, this does not." },
         "name": { "key": 1, "description": "The Proxmox node name within the cluster (D5)." },
@@ -175,15 +175,15 @@
     },
     "controller": {
       "parent": "software",
-      "description": "A controller of the control plane (ADR-007f).",
+      "description": "A controller of the control plane.",
       "fields": {
-        "registry": { "type": "object", "description": "Its config/control-plane.json entry (ADR-035)." },
+        "registry": { "type": "object", "description": "Its config/control-plane.json entry." },
         "aliases": { "type": "array", "items": { "type": "string" } }
       }
     },
     "manager": {
       "parent": "software",
-      "description": "A manager of the control plane (ADR-007f).",
+      "description": "A manager of the control plane.",
       "fields": {
         "registry": { "type": "object" },
         "aliases": { "type": "array", "items": { "type": "string" } }
@@ -247,7 +247,7 @@
     },
     "certificate-authority": {
       "parent": "network-element",
-      "description": "One of the site's CAs (ADR-043 D11): the internal CA, or a CA for a domain tree. Its fingerprint is part of its key, so a replaced CA is a new CI and its history stays with the old one.",
+      "description": "One of the site's CAs: the internal CA, or a CA for a domain tree. Its fingerprint is part of its key, so a replaced CA is a new CI and its history stays with the old one.",
       "fields": {
         "name": { "key": 1, "description": "ca-manager's id: internal, or domain-<domain>." },
         "fingerprint": { "type": "string", "key": 1, "immutable": true, "description": "SHA-256 of its certificate." },
@@ -368,7 +368,7 @@
           "type": "array",
           "volatile": true,
           "items": { "type": "object", "properties": { "id": { "type": "string", "required": true }, "type": { "type": "string", "required": true }, "impactedCount": { "type": "integer", "required": true } } },
-          "description": "The current root causes, most impact first (ADR-041 D3): the object, the condition type, how many objects it explains. Written by health-manager assess."
+          "description": "The current root causes, most impact first: the object, the condition type, how many objects it explains. Written by health-manager assess."
         },
         "assessment": {
           "type": "object",

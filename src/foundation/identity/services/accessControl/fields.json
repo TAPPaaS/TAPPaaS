@@ -4,7 +4,7 @@
   "description": "Who the Authentik gate in front of the module lets through.",
   "fields": {
     "gateGroups": {
-      "description": "The Authentik groups whose members pass the module's gate. Unset: the team group `users` is bound, and other bindings an operator made on the gate's application are left as they are. Set: exactly these groups are bound — a binding to any other group is removed, a binding to a user (a service account, ADR-032) stays.",
+      "description": "The Authentik groups whose members pass the module's gate. Unset: the team group `users` is bound, and other bindings an operator made on the gate's application are left as they are. Set: exactly these groups are bound — a binding to any other group is removed, a binding to a user (a service account) stays.",
       "type": "array",
       "requiredBy": [],
       "usedBy": [

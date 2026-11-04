@@ -146,7 +146,7 @@ case "${MODE}" in
     # datastore (§2.2 rule 3, #602). Installing one here would be a second PBS
     # beside it. Using someone else's PBS is `external`, and that is forced by
     # the operator, never inferred.
-    error "A PBS already answers at ${STORAGE} on a host this Site does not manage — not installing a second one (ADR-012 §2.2, #602)."
+    error "A PBS already answers at ${STORAGE} on a host this Site does not manage — not installing a second one."
     error "  To back up to it, consume it (prompts for its credential):"
     error "    backup-manager placement use-external ${STORAGE}"
     exit 1
@@ -167,7 +167,7 @@ case "${MODE}" in
         # Nothing serves there yet: install it. The pool is required, as on a
         # node — for a VPS, a ZFS pool named tankc* on an attached volume.
         [[ -n "${STORAGE}" ]] || die "${NODE} has no ZFS pool named tankc* — create one (a VPS: on an attached volume), then re-run. Nothing was recorded."
-        info "${BOLD}Installing PBS onto the machine ${BGN}${NODE}${CL}${BOLD} (not a cluster node, ADR-012 §1.3), datastore on ${BGN}${STORAGE}${CL}"
+        info "${BOLD}Installing PBS onto the machine ${BGN}${NODE}${CL}${BOLD} (not a cluster node), datastore on ${BGN}${STORAGE}${CL}"
         pbs_install_on_machine "${NODE}" "${ZONE}" || die "Installing PBS on ${NODE} failed — nothing was recorded"
         pbs_write_placement_state "${MODE}" "${STORAGE}"
         MACHINE_HOST=1
@@ -412,7 +412,7 @@ pbs_ensure_verify
 #
 # `remote` peers (a PBS that pulls OURS) create no namespace here — that
 # relationship is a read grant on data we already hold.
-info "${BOLD}Ensuring multi-source backup namespaces (issue #227)${CL}"
+info "${BOLD}Ensuring multi-source backup namespaces${CL}"
 pbs_ns_ensure pull
 pbs_ns_ensure receive
 

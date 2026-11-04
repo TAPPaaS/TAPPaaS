@@ -138,7 +138,7 @@ if [[ -z "${STATE}" ]]; then
     # is not a cluster member (§1.3).
     if SERVING="$(pbs_find_serving_pbs "$(get_config_value 'node' '')" "${ZONE}" "$(get_node_hostname 0)")"; then
         if [[ "${SERVING}" == unmanaged\ * ]]; then
-            error "A PBS answers at ${SERVING#unmanaged } but no Host this Site manages holds the datastore — not recording a placement (ADR-012 §2.2, #602)."
+            error "A PBS answers at ${SERVING#unmanaged } but no Host this Site manages holds the datastore — not recording a placement."
             error "  If that is the PBS to use: backup-manager placement use-external ${SERVING#unmanaged }"
             exit 1
         fi

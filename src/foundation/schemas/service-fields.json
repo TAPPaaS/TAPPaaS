@@ -48,7 +48,7 @@
   "$defs": {
     "changeClass": {
       "type": "string",
-      "description": "What changing this field after install costs (ADR-020 D3). immutable/recreate are rejected by the static pre-gate before 'modify --set' writes anything; grow-only/migrate/in-place-reboot refuse (or defer) at apply time, where live state is known.",
+      "description": "What changing this field after install costs. immutable/recreate are rejected by the static pre-gate before 'modify --set' writes anything; grow-only/migrate/in-place-reboot refuse (or defer) at apply time, where live state is known.",
       "enum": [
         "immutable",
         "in-place",
@@ -88,7 +88,7 @@
     },
     "normalizer": {
       "type": "string",
-      "description": "Declared normalization, applied by the MANAGER to BOTH sides of the diff (ADR-020 D7). Services report raw values and never normalize, so there is one comparison rule per field rather than one per code path.",
+      "description": "Declared normalization, applied by the MANAGER to BOTH sides of the diff. Services report raw values and never normalize, so there is one comparison rule per field rather than one per code path.",
       "enum": [
         "string",
         "integer",
@@ -161,7 +161,7 @@
         },
         "adoptWhenAbsentFrom": {
           "type": "string",
-          "description": "A reporter key listing, comma-separated, the values this guest's node can take (cluster:vm storage: storagesOnNode). When the desired value is not among them, the guest's actual value is a fallback the create path chose (ADR-037 D1: a module's storage is a preference) — config adopts it instead of reporting drift. A desired value the node does have keeps the class's verdict."
+          "description": "A reporter key listing, comma-separated, the values this guest's node can take (cluster:vm storage: storagesOnNode). When the desired value is not among them, the guest's actual value is a fallback the create path chose (a module's storage is a preference) — config adopts it instead of reporting drift. A desired value the node does have keeps the class's verdict."
         },
         "applyOnlyDeclared": {
           "type": "boolean",

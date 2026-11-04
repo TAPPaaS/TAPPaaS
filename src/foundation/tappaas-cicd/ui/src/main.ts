@@ -44,7 +44,7 @@ export const DEFAULT_PORT = 9097;
 export const HELP: HelpSpec = {
   name: "console",
   version: VERSION,
-  tagline: "the TAPPaaS console backend (ADR-034)",
+  tagline: "the TAPPaaS console backend",
   verbs: [
     {
       usage: "serve [--listen <addr:port>] [--allow <addr>] [--web <dir>] [--state-dir <dir>] [--trust-local-headers]",
@@ -59,7 +59,7 @@ export const HELP: HelpSpec = {
         "Accepts connections only from the firewall (where Caddy and the Authentik gate run) and from\n" +
         "--allow; the X-Authentik-* headers are believed only from the firewall. While the setup\n" +
         "token file exists, the mgmt and admin networks are accepted too, each request with the token;\n" +
-        "the first installer through the gate deletes the file (ADR-034 D10).",
+        "the first installer through the gate deletes the file.",
     },
   ],
   common: [["--config-dir DIR", "Config root (default: $TAPPAAS_CONFIG, $CONFIG_DIR or /home/tappaas/config)."]],

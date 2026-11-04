@@ -82,14 +82,14 @@ case "${stage}" in
     prepare|rebuild|migrate)
         jq -n --arg stage "${stage}" --arg t "$(date -Is)" \
             '{ok: false, stage: $stage, end_time: $t, failed: 0, failed_modules: [],
-              note: "stopped before the sweep (ADR-017 D3); no module was updated"}' \
+              note: "stopped before the sweep; no module was updated"}' \
             > "${RESULT}.tmp" 2>/dev/null && mv -f "${RESULT}.tmp" "${RESULT}" || true ;;
 esac
 rm -f "${CONFIG_DIR}/.update-stage"
 case "${stage}" in
     prepare) stage_line="Stopped in: the mothership's pull and builds (prepare), before any module was updated." ;;
     rebuild) stage_line="Stopped in: the mothership's nixos-rebuild, before any module was updated." ;;
-    migrate) stage_line="Stopped in: a config migration, before any module was updated (ADR-025 D5). The migration that failed is named in the log below." ;;
+    migrate) stage_line="Stopped in: a config migration, before any module was updated; the config is as it was. The migration that failed is named in the log below." ;;
     sweep)   stage_line="Stopped in: the module sweep." ;;
     *)       stage_line="" ;;
 esac

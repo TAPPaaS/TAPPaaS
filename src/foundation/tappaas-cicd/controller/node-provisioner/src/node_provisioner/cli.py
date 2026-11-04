@@ -197,7 +197,7 @@ placement is what scopes it (see README.md).
                         "identical pair unmirrored")
     p.add_argument("--boot-filesystem", default="zfs", choices=("zfs", "ext4"),
                    help="zfs (default): the boot pool carries the guests when "
-                        "the node has no data disk (ADR-037 D1); ext4 only for "
+                        "the node has no data disk; ext4 only for "
                         "a node with data disks")
     p.set_defaults(func=cmd_register)
 

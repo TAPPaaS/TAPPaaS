@@ -90,14 +90,14 @@ cpc_register() {
         owner="$(jq -r --arg n "${name}" '[.components[]? | select(.name == $n or ((.aliases // []) | index($n))) | .module][0] // empty' <<<"${reg}")"
         ownsrc="$(jq -r --arg n "${name}" '[.components[]? | select(.name == $n) | .source][0] // empty' <<<"${reg}")"
         if [[ "${owner}" == "tappaas-cicd" ]]; then
-            _cpc_error "control plane: ${module}: '${name}' is a standard component of tappaas-cicd — choose another name (ADR-035 D3)"
+            _cpc_error "control plane: ${module}: '${name}' is a standard component of tappaas-cicd — choose another name"
             _cpc_rollback; return 1
         elif [[ -n "${owner}" && "${ownsrc}" != "${src}" ]]; then
-            _cpc_error "control plane: ${module}: '${name}' is registered by module '${owner}' (${ownsrc}) — remove that module first to use this one (ADR-035 D3)"
+            _cpc_error "control plane: ${module}: '${name}' is registered by module '${owner}' (${ownsrc}) — remove that module first to use this one"
             _cpc_rollback; return 1
         elif [[ -z "${owner}" && -e "${CPC_BIN}/${name}" && "$(readlink -f "${CPC_BIN}/${name}")" != "${src}"/* \
                  && "$(readlink -f "${CPC_BIN}/${name}")" != /nix/store/* ]]; then
-            _cpc_error "control plane: ${module}: ${CPC_BIN}/${name} already exists and is not a registered component — not shadowed (ADR-035 D5)"
+            _cpc_error "control plane: ${module}: ${CPC_BIN}/${name} already exists and is not a registered component — not replaced; remove it by hand if it is stale"
             _cpc_rollback; return 1
         fi
         [[ -x "${src}/install.sh" ]] || { _cpc_error "control plane: ${module}: ${name} has no install.sh"; _cpc_rollback; return 1; }
@@ -122,7 +122,7 @@ cpc_register() {
         n=$((n + 1))
         if [[ "${kind}" == controller && "${verified}" != true ]]; then
             local fm; fm="$(jq -r --argjson f "${foundation}" '[.[] | select(. as $x | $f | index($x))] | join(", ")' <<<"${plugs}")"
-            [[ -n "${fm}" ]] && _cpc_warn "control plane: ${name} comes from ${repo}, whose release is not verified, and plugs into the foundation's ${fm} (ADR-035 D7)"
+            [[ -n "${fm}" ]] && _cpc_warn "control plane: ${name} comes from ${repo}, whose release is not verified, and plugs into the foundation's ${fm}"
         fi
     done
     _cpc_write "${reg}" || { _cpc_error "control plane: could not write ${CPC_REGISTRY}"; _cpc_rollback; return 1; }

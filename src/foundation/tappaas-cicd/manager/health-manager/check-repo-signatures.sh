@@ -135,7 +135,7 @@ expiring="$(jq -r '.repositories[] | .name as $n | .expiringKeys[] | "\($n): key
 if [[ -n "${changes}" ]] && [[ "${prev}" != "{}" ]]; then
     info "tappaas-repo-signature-changed: $(paste -sd';' <<<"${changes}")"
     if [[ -x "${NOTIFY}" ]]; then
-        { echo "The signing status of a repository this site runs has changed (ADR-033):"
+        { echo "The signing status of a repository this site runs has changed:"
           echo; sed 's/^/  /' <<<"${changes}"
           [[ -n "${expiring}" ]] && { echo; echo "Signing keys about to expire:"; sed 's/^/  /' <<<"${expiring}"; }
           echo; echo "Look at:"; echo "  health-manager validate      (the signature-status gate)"; echo "  ${OUT}"

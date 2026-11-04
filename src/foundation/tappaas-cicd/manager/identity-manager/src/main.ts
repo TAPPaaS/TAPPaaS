@@ -45,7 +45,7 @@ const KINDS = "role|org|organization|group|user";
 
 const FIELD_FLAGS = `modify also takes --set <field>=<value> (repeatable) and --unset <field>, by the
 schema's field name (user: displayName, primaryEmail, state, roles, memberOf); the
-flags below are shortcuts for them, one field each (ADR-020 D11).
+flags below are shortcuts for them, one field each.
 Field flags (write the validated config, then push it to the identity service):
   role:  --displayName V  --description V
   org:   --displayName V  --type V  --owner USER  --parentOrg ORG
@@ -84,10 +84,10 @@ export const HELP: HelpSpec = {
     { usage: "validate" },
     {
       usage: "report [--json] [--discover]",
-      note: "(ADR-040: send the organizations, roles, groups and users to the CMDB)",
+      note: "(send the organizations, roles, groups and users to the CMDB)",
       options: [
         ["--json", "Print the report instead of sending it."],
-        ["--discover", "Full depth (D15): also Authentik's providers, applications, outposts and flows, on the identity module's CI."],
+        ["--discover", "Full depth: also Authentik's providers, applications, outposts and flows, on the identity module's CI."],
       ],
     },
     {

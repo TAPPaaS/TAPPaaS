@@ -127,7 +127,7 @@ no module declares is reported as unowned; it is never silently deleted.
 
 ## Fields
 
-`network:snat` owns **2** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`network:snat` owns **2** declared field(s). Each table below carries the field's full definition and, where the service applies it, what a change to it does (in place, a restart, a rebuild).
 
 ### `snatFrom`
 

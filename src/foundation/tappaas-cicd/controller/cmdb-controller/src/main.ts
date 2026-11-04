@@ -154,7 +154,7 @@ async function serve(): Promise<void> {
   process.on("SIGINT", stop);
 }
 
-const HELP = `cmdb-controller — keeps the CMDB, the actual state of the site (ADR-040)
+const HELP = `cmdb-controller — keeps the CMDB, the actual state of the site
 
   cmdb-controller serve    run the service (cmdb.service): apply the schema, load
                            the metamodel, serve the API on the socket and loopback

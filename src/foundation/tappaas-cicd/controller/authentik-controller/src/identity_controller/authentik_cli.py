@@ -448,7 +448,7 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="authentik-controller",
         allow_abbrev=False,
-        description="Drive Authentik over its REST API for TAPPaaS (issue #45).",
+        description="Drive Authentik over its REST API for TAPPaaS.",
     )
     p.add_argument("--credential-file", default=str(DEFAULT_CRED_FILE),
                    help=f"path to credentials file (default: {DEFAULT_CRED_FILE})")
@@ -499,7 +499,7 @@ def main(argv: list[str] | None = None) -> int:
     oh.set_defaults(handler=cmd_outpost_set_authentik_host)
 
     cs = sub.add_parser("check-self-config",
-                        help="report drift of the identity self-config vs the expected public host (#474)")
+                        help="report drift of the identity self-config vs the expected public host")
     cs.add_argument("--external-host", required=True,
                     help="expected public URL, e.g. https://identity.<domain>")
     cs.set_defaults(handler=cmd_check_self_config)
@@ -584,14 +584,14 @@ def main(argv: list[str] | None = None) -> int:
     bg.set_defaults(handler=cmd_app_bind_groups)
 
     sa = sub.add_parser("service-account-ensure",
-                        help="a service account for a machine caller of one gated app (client credentials, ADR-032 D1)")
+                        help="a service account for a machine caller of one gated app (client credentials)")
     sa.add_argument("name", help="the account's username, e.g. the calling system's name")
     sa.add_argument("--app", required=True, help="the gated application's slug (identity:accessControl, e.g. <module> or <module>-gate)")
     sa.add_argument("--out", default="", help="where to write the credentials (default ~/.tappaas-service-accounts/<name>.json, 0600)")
     sa.set_defaults(handler=cmd_service_account_ensure)
 
     ev = sub.add_parser("oidc-email-verified-ensure",
-                        help="put the TAPPaaS email mapping (email_verified=true) on every OIDC provider (#748)")
+                        help="put the TAPPaaS email mapping (email_verified=true) on every OIDC provider")
     ev.set_defaults(handler=cmd_oidc_email_verified_ensure)
 
     oe = sub.add_parser("oidc-app-ensure",
@@ -613,7 +613,7 @@ def main(argv: list[str] | None = None) -> int:
     # ── People PRIMITIVES (S2b-2) — JSON to stdout for the TS identity-manager ─
     sub.add_parser("list-users", help="JSON array of users (name/uuid/active/email/displayName/groups/roles)")\
        .set_defaults(handler=cmd_list_users)
-    sub.add_parser("discover", help="JSON of the flows, providers, applications and outposts (ADR-040 D15)")\
+    sub.add_parser("discover", help="JSON of the flows, providers, applications and outposts")\
        .set_defaults(handler=cmd_discover)
     sub.add_parser("list-groups", help="JSON array of {name, uuid, displayName} (excludes roles)")\
        .set_defaults(handler=cmd_list_groups)

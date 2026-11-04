@@ -159,17 +159,17 @@ done
 EOF
 }
 want_service() {
-    printf '%s\n' '[Unit]' 'Description=TAPPaaS: log changes to the set of root SSH keys (#128)' \
+    printf '%s\n' '[Unit]' 'Description=TAPPaaS: log changes to the set of root SSH keys' \
         '[Service]' 'Type=oneshot' 'ExecStart=/usr/local/sbin/tappaas-rootkeys-check'
 }
 want_pve_unit() {
-    printf '%s\n' '[Unit]' 'Description=TAPPaaS: audit rules for /etc/pve, once pmxcfs is up (#128)' \
+    printf '%s\n' '[Unit]' 'Description=TAPPaaS: audit rules for /etc/pve, once pmxcfs is up' \
         'After=pve-cluster.service auditd.service audit-rules.service' 'Requires=pve-cluster.service' 'Wants=auditd.service' \
         '[Service]' 'Type=oneshot' 'RemainAfterExit=yes' 'ExecStart=/usr/sbin/auditctl -R /etc/audit/tappaas-pve.rules' \
         '' '[Install]' 'WantedBy=multi-user.target'
 }
 want_timer() {
-    printf '%s\n' '[Unit]' 'Description=TAPPaaS: check the set of root SSH keys every 5 minutes (#128)' \
+    printf '%s\n' '[Unit]' 'Description=TAPPaaS: check the set of root SSH keys every 5 minutes' \
         '[Timer]' 'OnBootSec=2min' 'OnUnitActiveSec=5min' 'AccuracySec=30s' '' '[Install]' 'WantedBy=timers.target'
 }
 # write_if_changed <file> <content> [mode] — echoes "changed" when it wrote.

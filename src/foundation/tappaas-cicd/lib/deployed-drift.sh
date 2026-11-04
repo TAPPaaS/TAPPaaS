@@ -40,7 +40,7 @@ deployed_drift() {
             continue
         fi
         while IFS= read -r src; do cmp -s "${f}" "${src}" && continue 2; done <<<"${srcs}"
-        echo "${f} differs from ${srcs%%$'\n'*} — patched in place? (ADR-028 D12)"
+        echo "${f} differs from ${srcs%%$'\n'*} — patched in place? A fix belongs in the repository, not in the deployed copy"
     done
     return 0
 }

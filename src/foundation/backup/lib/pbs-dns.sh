@@ -116,7 +116,7 @@ pbs_dns_ensure() {
     previous="$(_pbs_dns_alias_target "${name}")"
     if _pbs_dns_is_host_entry "${name}"; then
         old_ip="$(_pbs_dns_entry_ip "${name}")"
-        info "  replacing the A record ${name} with an alias of ${host}.${zone}.internal (#612)"
+        info "  replacing the A record ${name} with an alias of ${host}.${zone}.internal"
         dns-manager --no-ssl-verify delete "${instance}" "${zone}.internal" >/dev/null \
             || { warn "  could not remove the old A record ${name}"; return 1; }
     fi

@@ -2328,12 +2328,12 @@ class ZoneManager:
         """
         dmz = self.get_zone_by_name("dmz")
         if dmz is None:
-            warn("  Caddy reachability (#366): no 'dmz' zone in zones.json — skipping")
+            warn("  Caddy reachability: no 'dmz' zone in zones.json — skipping")
             return
         try:
             caddy_dest = f"{dmz.gateway_ip}/32"
         except Exception as e:  # noqa: BLE001 - malformed dmz.ip should not abort reconcile
-            warn(f"  Caddy reachability (#366): cannot derive DMZ gateway: {e} — skipping")
+            warn(f"  Caddy reachability: cannot derive DMZ gateway: {e} — skipping")
             return
 
         # ADR-021 D3/D3a/D3b — the candidate set is every zone whose clients may
@@ -2395,7 +2395,7 @@ class ZoneManager:
             # rather than create a rule that looks right and protects nothing.
             if zone.zone_type == "Overlay" and zone_interface.lower() in ("lan", "wan"):
                 warn(
-                    f"  Caddy reachability (ADR-021 D3a): overlay zone "
+                    f"  Caddy reachability: overlay zone "
                     f"'{zone.name}' has bridge '{zone.bridge}', which is a shared "
                     f"trunk, not an overlay interface — set its 'bridge' to the "
                     f"OPNsense interface its peers arrive on (e.g. 'wireguard'). "
@@ -2405,7 +2405,7 @@ class ZoneManager:
             if (zone.zone_type == "Overlay" and rule_ifaces is not None
                     and zone_interface not in rule_ifaces):
                 warn(
-                    f"  Caddy reachability (ADR-021 D3a): overlay zone "
+                    f"  Caddy reachability: overlay zone "
                     f"'{zone.name}' interface '{zone_interface}' does not exist "
                     f"on the firewall (tunnel not deployed) — skipping."
                 )
@@ -2785,7 +2785,7 @@ def main():
         "--force-rename-labels",
         action="store_true",
         help="Reconcile a drifted interface label to the normalized (underscore) "
-             "zone name via a DISRUPTIVE unassign+reassign API call (issue #213). "
+             "zone name via a DISRUPTIVE unassign+reassign API call. "
              "Default warns only. Re-run zone-manager --firewall-rules-only afterwards.",
     )
     parser.add_argument(
@@ -2812,7 +2812,7 @@ def main():
         "--summary",
         action="store_true",
         help=("Only show zone summary and run the pinhole-allowed-from "
-              "policy validator (issue #163); don't configure anything"),
+              "policy validator; don't configure anything"),
     )
     parser.add_argument(
         "--detailed-exitcode",
@@ -2836,14 +2836,14 @@ def main():
     parser.add_argument(
         "--skip-preflight",
         action="store_true",
-        help="Skip the pre-flight AND post-flight DNS/egress health gates (#307). "
+        help="Skip the pre-flight AND post-flight DNS/egress health gates. "
              "Use for recovery or air-gapped runs where the 10.0.0.1/1.1.1.1 probes "
              "do not apply. By default --execute aborts if DNS/egress is degraded.",
     )
     parser.add_argument(
         "--skip-egress-check",
         action="store_true",
-        help="Skip only the egress probe (1.1.1.1:443) in the health gates (#307), "
+        help="Skip only the egress probe (1.1.1.1:443) in the health gates, "
              "keeping the Unbound DNS check. Use on air-gapped clusters with no "
              "internet egress but a working local resolver.",
     )

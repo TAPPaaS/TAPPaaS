@@ -448,7 +448,7 @@ Examples:
   dns-manager delete backup mgmt.internal
 
   # Remove the entry TAPPaaS created for a machine — never a DHCP
-  # reservation, an entry with aliases, or one it did not create (#672)
+  # reservation, an entry with aliases, or one it did not create
   dns-manager release dh-test1 mgmt.internal
 
   # List all DNS entries
@@ -504,7 +504,7 @@ Examples:
         "--placeholder", action="store_true",
         help="Also release an unused node entry: no description (the shape the firewall's "
              "base config ships) or 'TAPPaaS node <host>' (the shape dhcp-manager writes). "
-             "Every other guard still applies (#673).",
+             "Every other guard still applies.",
     )
 
     # List command

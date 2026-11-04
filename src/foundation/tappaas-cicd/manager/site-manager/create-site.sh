@@ -546,7 +546,7 @@ apply_tappaas_anchor() {
             printf '%s\n' "$repos"; return 0
         fi
     done
-    die "TAPPaaS signer fingerprints do not hold (ADR-033 D5): none of ${fps} is a key ${path} lists in .tappaas/allowed_signers"
+    die "TAPPaaS signer fingerprints do not hold: none of ${fps} is a key ${path} lists in .tappaas/allowed_signers"
 }
 
 # ---------------------------------------------------------------------------

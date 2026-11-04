@@ -105,12 +105,12 @@ export const HELP: HelpSpec = {
       ],
     },
     { usage: "add <module>", effect: { noPreview: "wires the module's guest into the shared PBS job" }, name: "add", note: "(wire into the shared PBS job)" },
-    { usage: "backup <module>...", effect: { noPreview: "takes each module's backup now, through its PBS job" }, name: "backup", note: "(take each module's backup now, through its job — #759)" },
+    { usage: "backup <module>...", effect: { noPreview: "takes each module's backup now, through its PBS job" }, name: "backup", note: "(take each module's backup now, through its job)" },
     { usage: "delete <module>", effect: { noPreview: "un-wires the module from the shared PBS job; its backups stay" }, name: "delete", note: "(un-wire from the shared PBS job)" },
     {
       usage: "purge <module|vmid> [--yes]", effect: { noPreview: "deletes every backup of the module from PBS" },
       name: "purge",
-      note: "(erase a removed guest's restore points + start GC — #789)",
+      note: "(erase a removed guest's restore points + start GC)",
       options: [["--yes", "purge: do not ask; without it you type the VMID to confirm."]],
     },
     {
@@ -141,7 +141,7 @@ export const HELP: HelpSpec = {
     {
       usage: "placement reset [--peer NAME] [--yes] [--no-update]", effect: { noPreview: "moves PBS back to a node of this site" }, destructive: true,
       name: "placement reset",
-      note: "(leave an external PBS for a local one — ADR-012 §2.3, #607)",
+      note: "(leave an external PBS for a local one)",
       options: [
         ["--peer NAME", "placement reset: the pull-peer name the old PBS gets (default former-<its host>)."],
         ["--yes", "placement reset / finish-reset: do not ask for confirmation."],
@@ -151,7 +151,7 @@ export const HELP: HelpSpec = {
     {
       usage: "placement use-external <url> [--datastore D] [--namespace NS] [--fingerprint FP]", effect: { noPreview: "points the site's backups at an external PBS" },
       name: "placement use-external",
-      note: "(back up to a PBS this site already runs, provisioning nothing — #456)",
+      note: "(back up to a PBS this site already runs, provisioning nothing)",
       options: [
         ["--datastore D", "placement use-external: its datastore (default: pbsStorageName, tappaas_backup)."],
         ["--namespace NS", "placement use-external: the namespace on it to push into."],
@@ -182,15 +182,15 @@ export const HELP: HelpSpec = {
         ["--label TEXT", "key stamp: what the stick is (node, vendor, serial)."],
       ],
     },
-    { usage: "coverage <module> [--json]", name: "coverage", note: "(every backup job covering the module's VM — TAPPaaS's own and any other, #554)" },
+    { usage: "coverage <module> [--json]", name: "coverage", note: "(every backup job covering the module's VM — TAPPaaS's own and any other)" },
     { usage: "peers", name: "peers", note: "(the off-site PBS relationships this site has)" },
     {
       usage: "report [--json] [--discover]",
-      name: "report (to the CMDB, ADR-040)",
+      name: "report (to the CMDB)",
       effect: "read",
       options: [
         ["--json", "print the report instead of sending it (with --discover, an array)"],
-        ["--discover", "add every datastore with its GC state, each restore-point group's age and the sync jobs (ADR-040 D15)"],
+        ["--discover", "add every datastore with its GC state, each restore-point group's age and the sync jobs"],
       ],
       details:
         "Sends the backups to the CMDB (cmdb-controller) as one observation: the PBS datastore (size,\n" +
@@ -221,12 +221,12 @@ export const HELP: HelpSpec = {
         ["--country CC", "peer add: instead of --location, the country it is in (ISO code): the site's location at that place is used, or a new one (kind remote) is added."],
         ["--city C", "peer add: with --country, its city — needed to tell it apart from a Site in the same country."],
         ["--building B", "peer add: with --country, its building or data centre (the location's address) — needed when it shares the Site's city."],
-        ["--tunnel serve|dial", "peer add: carry this pull over its own WireGuard tunnel (#796, BUDDY.md). The pulled site serves (remote), the puller dials (pull)."],
+        ["--tunnel serve|dial", "peer add: carry this pull over its own WireGuard tunnel (see BUDDY.md). The pulled site serves (remote), the puller dials (pull)."],
         ["--tunnel-net CIDR", "peer add: the tunnel's /30. serve: default the next free /30 of zones.json buddy.ip (10.255.2.0/24). dial: the serving side's."],
         ["--listen-port P", "peer add remote --tunnel serve: UDP port to listen on (default the next free from 51830)."],
         ["--endpoint H:P", "peer add pull --tunnel dial: the serving side's public address (or its satellite's) and port."],
         ["--peer-key K", "peer add: the other side's WireGuard public key. serve may add it later: re-run with --force."],
-        ["--contact EMAIL", "peer add: the other site's operator — mailed by the pulse when their PBS stops answering (ADR-031)."],
+        ["--contact EMAIL", "peer add: the other site's operator — mailed by the pulse when their PBS stops answering."],
         ["--mtu N", "peer add: tunnel MTU (e.g. 1340 through a satellite relay; default OPNsense's)."],
         ["--config-only", "peer add: write the config, skip onboarding (no PBS contact)."],
         ["--force", "peer add: overwrite an existing peer config (keeps its tunnel /30 and port unless given)."],
@@ -235,9 +235,9 @@ export const HELP: HelpSpec = {
     {
       usage: "peer modify pull|remote <name> --contact EMAIL", effect: { noPreview: "changes a buddy's contact" },
       name: "peer modify",
-      options: [["--contact EMAIL", "peer modify: the other site's operator, mailed by the pulse (ADR-031); '' clears it."]],
+      options: [["--contact EMAIL", "peer modify: the other site's operator, mailed by the pulse; '' clears it."]],
     },
-    { usage: "pulse", name: "pulse", note: "(ADR-031: what the backup node's pulse watches — buddies, uplink, firewall, mothership, PBS — and since when each is down)" },
+    { usage: "pulse", name: "pulse", note: "(what the backup node's pulse watches — buddies, uplink, firewall, mothership, PBS — and since when each is down)" },
     { usage: "peer check pull|remote <name>", effect: "read", name: "peer check", note: "(the buddy tunnel's live state: instance, key, handshake, PBS reach)" },
     {
       usage: "peer delete pull|remote|receive <name> [--purge] [--config-only]", effect: { noPreview: "removes the off-site relationship (--purge also its data)" },
@@ -288,7 +288,7 @@ export const HELP: HelpSpec = {
               'placement reset' leaves an external PBS for a local one: the old PBS is
               kept as a pull peer and its storage as <name>_former, so no backup is
               lost; 'placement finish-reset' drops that storage once the history
-              is pulled and a test restore worked (#607).
+              is pulled and a test restore worked.
   peers       Off-site relationships: PBS instances this site pulls from, receives
               pushes from, or pushes to. 'peer add' and 'peer delete' create and
               remove them.
@@ -1045,7 +1045,7 @@ function cmdCoverage(opts: Opts, client: Client): number {
   }
   const on = jobs.filter((j) => j.enabled).length;
   if (on === 0) warn(`no enabled job covers ${module}`);
-  if (on > 1) warn(`${on} enabled jobs cover ${module} — it is backed up more than once (#554)`);
+  if (on > 1) warn(`${on} enabled jobs cover ${module} — it is backed up more than once`);
   return 0;
 }
 

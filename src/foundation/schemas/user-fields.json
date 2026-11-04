@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "user-fields.json",
   "title": "TAPPaaS User",
-  "description": "A User is the leaf of the 3-level People hierarchy (Organization -> Group -> User). The name is used as the Authentik user identifier. Group membership (memberOf) and role assignment (roles) are many-to-many and can span multiple organizations. See ADR-007 P1 (ADR-007a).",
+  "description": "A User is the leaf of the 3-level People hierarchy (Organization -> Group -> User). The name is used as the Authentik user identifier. Group membership (memberOf) and role assignment (roles) are many-to-many and can span multiple organizations.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -38,7 +38,7 @@
       "default": "active"
     },
     "memberOf": {
-      "description": "Group.name references. Membership is modeled here on the User. May span multiple organizations. Mirrors the Group.name pattern, which allows internal spaces so an Authentik-created group can be referenced (e.g. \"authentik Admins\", issue #476).",
+      "description": "Group.name references. Membership is modeled here on the User. May span multiple organizations. Mirrors the Group.name pattern, which allows internal spaces so an Authentik-created group can be referenced (e.g. \"authentik Admins\").",
       "type": "array",
       "references": "groups",
       "items": {

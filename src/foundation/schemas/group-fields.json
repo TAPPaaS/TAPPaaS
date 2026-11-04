@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "group-fields.json",
   "title": "TAPPaaS Group",
-  "description": "A Group is the middle level of the 3-level People hierarchy (Organization -> Group -> User). Named {org}__{name} and used as the Authentik group identifier. Membership is modeled on the User (User.memberOf), NOT here. Roles listed here are inherited by all members. See ADR-007 P1 (ADR-007a).",
+  "description": "A Group is the middle level of the 3-level People hierarchy (Organization -> Group -> User). Named {org}__{name} and used as the Authentik group identifier. Membership is modeled on the User (User.memberOf), NOT here. Roles listed here are inherited by all members.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -12,7 +12,7 @@
   ],
   "properties": {
     "name": {
-      "description": "Group identifier, e.g. myOrg__admins. Used as the Authentik group identifier — so it must be able to name a group Authentik itself created: internal spaces are allowed for exactly that reason (the built-in \"authentik Admins\" superuser group TAPPaaS adopts, issue #476). Identity key.",
+      "description": "Group identifier, e.g. myOrg__admins. Used as the Authentik group identifier — so it must be able to name a group Authentik itself created: internal spaces are allowed for exactly that reason (the built-in \"authentik Admins\" superuser group TAPPaaS adopts). Identity key.",
       "type": "string",
       "pattern": "^[A-Za-z0-9]([A-Za-z0-9 _-]*[A-Za-z0-9_-])?$"
     },

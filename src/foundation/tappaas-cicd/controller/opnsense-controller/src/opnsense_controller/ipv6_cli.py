@@ -591,7 +591,7 @@ def main():
     gp.add_argument("--check-mode", action="store_true", help="Dry-run (no changes)")
 
     parser = StrictArgumentParser(
-        description="The site's IPv6 stance on OPNsense: the global 'Allow IPv6' switch (#149)",
+        description="The site's IPv6 stance on OPNsense: the global 'Allow IPv6' switch",
         parents=[gp],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""

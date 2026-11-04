@@ -193,7 +193,7 @@ export interface AddZoneOpts {
 export function authorZone(doc: ZonesDoc, name: string, opts: AddZoneOpts): Zone {
   if (!/^[a-z][a-zA-Z0-9]*$/.test(name)) {
     throw new Error(
-      `zone name '${name}' must be camelCase (^[a-z][a-zA-Z0-9]*$, no hyphens — see #278)`,
+      `zone name '${name}' must be camelCase (^[a-z][a-zA-Z0-9]*$, no hyphens)`,
     );
   }
   if (zoneExists(doc, name)) {

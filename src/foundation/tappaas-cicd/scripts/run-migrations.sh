@@ -113,7 +113,7 @@ load_ledger() {
         [[ "${line}" == \#* ]] && continue
         if [[ ! "${line}" =~ ^[0-9]{4}[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+ ]]; then
             fatal "${SCRIPT_NAME}: ${LEDGER} line ${n} is not 'NNNN  <date>  <commit>  <reason>': ${line}"
-            fail "  refusing to guess which migrations have run — repair it from ${BACKUP_DIR}/ or the site backup (#545)"
+            fail "  refusing to guess which migrations have run — repair it from ${BACKUP_DIR}/ or the site backup"
             exit 1
         fi
         LEDGER_IDS+="${line:0:4}"$'\n'

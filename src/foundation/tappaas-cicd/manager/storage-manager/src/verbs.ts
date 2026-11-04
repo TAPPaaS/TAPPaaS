@@ -47,7 +47,7 @@ export function addShare(doc: SharesDoc, name: string, spec: AddSpec, managed: b
   if (managed) {
     if (spec.path) return { refused: `--path is for a registered, unmanaged server; ${spec.server} is managed — give --pool` };
     if (!spec.pool) return { refused: `--pool is required: ${spec.server} is a managed Host and builds the dataset` };
-    if (spec.backup === undefined) return { refused: "--backup true|false is required — whether this share is backed up is a decision, not a default (ADR-029 D9)" };
+    if (spec.backup === undefined) return { refused: "--backup true|false is required — whether this share is backed up is a decision, not a default" };
     share.pool = spec.pool;
     if (spec.quota) share.quota = spec.quota;
     if (spec.properties && Object.keys(spec.properties).length) share.properties = spec.properties;
@@ -77,7 +77,7 @@ export function modifyShare(doc: SharesDoc, name: string, sets: Array<[string, s
   if (!cur) return { refused: `share ${name} is not declared` };
   for (const [k] of sets) {
     if (k === "server" || k === "pool")
-      return { refused: `${k} is a data migration, not a change in place (ADR-029 D7): send the dataset to its new place, then redeclare — a 'share move' verb comes later` };
+      return { refused: `${k} is a data migration, not a change in place: send the dataset to its new place, then redeclare — a 'share move' verb comes later` };
     if (k === "name") return { refused: "a share is renamed by declaring a new one and moving the data — every consumer names it" };
     if (k === "owner" || k.startsWith("owner.")) return { refused: "owner is immutable once allocated — changing it needs a recursive chown of the dataset" };
     if (k === "grants" || k.startsWith("grants.")) return { refused: "grants change with 'nfs grant' / 'nfs revoke'" };
@@ -125,7 +125,7 @@ export function revoke(doc: SharesDoc, name: string, consumer: string, mounts: b
   const cur = sharesOf(doc)[name];
   if (!cur) return { refused: `share ${name} is not declared` };
   if (!(consumer in (cur.grants ?? {}))) return { refused: `share ${name} grants ${consumer} nothing` };
-  if (mounts) return { refused: `${consumer} still mounts ${name} — remove the mount from its config first (ADR-029 D6)` };
+  if (mounts) return { refused: `${consumer} still mounts ${name} — remove the mount from its config first` };
   return {
     doc: withShares(doc, (s) => {
       const g = { ...(s[name].grants ?? {}) };
@@ -141,7 +141,7 @@ export function revoke(doc: SharesDoc, name: string, consumer: string, mounts: b
 export function deleteShare(doc: SharesDoc, name: string, mountedBy: string[]): Result {
   if (!sharesOf(doc)[name]) return { refused: `share ${name} is not declared` };
   if (mountedBy.length)
-    return { refused: `share ${name} is mounted by ${mountedBy.join(", ")} — remove those mounts first (ADR-029 D6)` };
+    return { refused: `share ${name} is mounted by ${mountedBy.join(", ")} — remove those mounts first` };
   return {
     doc: withShares(doc, (s) => void delete s[name]),
     summary: `share ${name} deleted — unshared and its data kept; 'nfs share purge ${name} --server ${sharesOf(doc)[name].server}' destroys it`,

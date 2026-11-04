@@ -145,4 +145,4 @@ if [[ -n "${PRUNE_SCHEDULE:-}" ]]; then
 fi
 
 info "Backup role provisioned. The satellite now PULLS from home; the encryption key"
-info "stays at home (§3.2) so this vault holds only ciphertext."
+info "stays at home, so this vault holds only ciphertext."

@@ -119,7 +119,7 @@ nfs_check_export() {
            (if (.pool | type) != "string" or .pool == "" then "share \($nm): pool is required on a managed Host" else empty end),
            (if has("path") then "share \($nm): path is for a registered, unmanaged server — a managed Host builds the dataset from pool" else empty end),
            (if (.backup.enabled | type) != "boolean"
-              then "share \($nm): backup.enabled must be stated, true or false (ADR-029 D9 — there is no default)" else empty end),
+              then "share \($nm): backup.enabled must be stated, true or false — there is no default" else empty end),
            (if has("owner") and ((.owner.uid | type) != "number" or (.owner.gid | type) != "number"
                                  or .owner.uid < $min or .owner.uid > $max or .owner.gid < $min or .owner.gid > $max)
               then "share \($nm): owner must be {uid, gid} in \($min)-\($max)" else empty end),
@@ -207,7 +207,7 @@ nfs_check_mount() {
     [[ "${access}" == "ro" || "${access}" == "rw" ]] || { echo "mount ${path}: access ${access} (ro|rw)"; bad=1; }
     if [[ -n "${subdir}" ]]; then
         if [[ "${subdir}" == /* || "/${subdir}/" == *"/../"* || "/${subdir}/" == *"/./"* || ! "${subdir}" =~ ^[A-Za-z0-9._/-]+$ ]]; then
-            echo "mount ${path}: subdir '${subdir}' must be a relative path inside the share — no leading /, no . or .. (ADR-029 D15)"; bad=1
+            echo "mount ${path}: subdir '${subdir}' must be a relative path inside the share — no leading /, no . or .."; bad=1
         fi
     fi
     jq -e '(.stopUnits // []) | type == "array" and all(.[]; type == "string")' <<< "${m}" >/dev/null 2>&1 \
@@ -218,11 +218,11 @@ nfs_check_mount() {
     if [[ "${kind}" == "literal" ]]; then
         host="${name}"
         if nfs_is_instance "${host}"; then
-            echo "mount ${path}: ${host} is a module instance — name its share, a literal path would go around the grant (ADR-029 D2)"
+            echo "mount ${path}: ${host} is a module instance — name its share, a literal path would go around the grant"
             return 1
         fi
         if nfs_is_public_ipv4 "${host}"; then
-            echo "mount ${path}: ${host} is a public address — NFS with sec=sys is cleartext and trusts the client's UID; only a server on the site's own or a private routed network is mounted (ADR-029 D2a)"
+            echo "mount ${path}: ${host} is a public address — NFS with sec=sys is cleartext and trusts the client's UID; only a server on the site's own or a private routed network is mounted"
             return 1
         fi
         nfs_check_path "${consumer}" "${m}" || bad=1
@@ -230,12 +230,12 @@ nfs_check_mount() {
     fi
     server="$(nfs_find_share "${name}")" || return "${bad}"    # pending: not a problem (D11)
     if [[ "$(jq -r '.zone0 // ""' "${NFS_CONFIG_DIR}/${server}.json")" == "wan" ]]; then
-        echo "mount ${path}: share ${name} is on ${server}, in the wan zone — NFS is never mounted across it (ADR-029 D2a)"
+        echo "mount ${path}: share ${name} is on ${server}, in the wan zone — NFS is never mounted across it"
         return 1
     fi
     grant="$(nfs_grant_for "${name}" "${consumer}")"
     if [[ -z "${grant}" ]]; then
-        echo "mount ${path}: share ${name} grants ${consumer} nothing — run: storage-manager nfs grant ${name} ${consumer} ${access}  (or remove the mount, ADR-029 D11)"
+        echo "mount ${path}: share ${name} grants ${consumer} nothing — run: storage-manager nfs grant ${name} ${consumer} ${access}  (or remove the mount)"
         return 1
     fi
     if [[ "${access}" == "rw" && "${grant}" == "ro" ]]; then
@@ -253,7 +253,7 @@ nfs_check_path() {
     local consumer="$1" m="$2"
     nfs_mount_crosses_zone "${consumer}" "${m}" || return 0
     nfs_wires_rules "${consumer}" && return 0
-    echo "mount $(jq -r .path <<< "${m}"): share $(jq -r .share <<< "${m}") is reached through the firewall — ${consumer} must depend on network:rules, which derives the tcp/2049 rule from its mounts (ADR-029 D5)"
+    echo "mount $(jq -r .path <<< "${m}"): share $(jq -r .share <<< "${m}") is reached through the firewall — ${consumer} must depend on network:rules, which derives the tcp/2049 rule from its mounts"
     return 1
 }
 

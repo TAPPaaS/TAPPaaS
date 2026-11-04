@@ -65,7 +65,7 @@ if [[ ${#todo[@]} -eq 0 ]]; then
 fi
 
 if [[ "${CHECK}" -eq 1 ]]; then
-    for f in "${todo[@]}"; do say "would set sshKeyOnly=false on $(basename "${f}" .json) (adopted before #756: password SSH stays as it is)"; done
+    for f in "${todo[@]}"; do say "would set sshKeyOnly=false on $(basename "${f}" .json) (adopted before key-only SSH was the default: password SSH stays as it is)"; done
     exit 0
 fi
 
@@ -81,6 +81,6 @@ for f in "${todo[@]}"; do
     jq empty "${tmp}" 2>/dev/null || { rm -f "${tmp}"; stop "the rewritten $(basename "${f}") is not valid JSON — it is unchanged"; }
     chmod --reference="${BACKUP_DIR}/$(basename "${f}")" "${tmp}" 2>/dev/null || true
     mv -f "${tmp}" "${f}"
-    say "$(basename "${f}" .json): sshKeyOnly=false — adopted before #756, it keeps password SSH; to harden it: module-manager module modify $(basename "${f}" .json) --set sshKeyOnly=true"
+    say "$(basename "${f}" .json): sshKeyOnly=false — adopted before key-only SSH was the default, it keeps password SSH; to harden it: module-manager module modify $(basename "${f}" .json) --set sshKeyOnly=true"
 done
 note "backup: ${BACKUP_DIR}"

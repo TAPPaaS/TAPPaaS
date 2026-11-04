@@ -86,7 +86,7 @@ nfs_node_ensure_dataset() {
         if [[ "${cur}" != "${want}" ]]; then
             used="$(pn_ssh "zfs get -H -p -o value used '${ds}'")"
             if (( want < used )); then
-                error "  ${ds}: quota ${quota} is below what is already used — refused (ADR-029 D7)"; return 1
+                error "  ${ds}: quota ${quota} is below what is already used — refused; raise the quota or free space first"; return 1
             fi
             pn_ssh "zfs set quota='${quota}' '${ds}'" || { error "  could not set quota on ${ds}"; return 1; }
             info "  ${GN}✓${CL} ${ds}: quota ${quota}"

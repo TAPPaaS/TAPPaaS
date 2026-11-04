@@ -59,7 +59,7 @@ instance_name_ok "${NEW}" \
 
 kind="$(jq -r '(.kind // (.config? // {} | to_entries[]?.value.kind?)) // ""' "${OLD_CFG}" | head -1)"
 [[ "${kind}" != "machine" ]] \
-    || die "'${OLD}' is a machine: it is named after the host it is (ADR-026 D8). Rename the host, then re-register it with 'module-manager module adopt <address> --instance ${NEW}'"
+    || die "'${OLD}' is a machine: it is named after the host it is. Rename the host, then re-register it with 'module-manager module adopt <address> --instance ${NEW}'"
 
 # What moves, and what points at the old name.
 files=()

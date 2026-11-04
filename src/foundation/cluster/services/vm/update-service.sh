@@ -392,7 +392,7 @@ if [[ "${CHECK_MODE}" != "1" && -n "${VMID}" && -n "${NODE}" ]]; then
                "qm set ${VMID} --localtime ${_rtc_want}" >/dev/null 2>&1; then
             info "  ${GN}✓${CL} RTC interpretation corrected for ${MODULE} (localtime ${_rtc_actual} → ${_rtc_want}); applies at its next boot"
         else
-            warn "  Could not set localtime=${_rtc_want} on VM ${VMID} — it will keep booting with a skewed clock (#699)"
+            warn "  Could not set localtime=${_rtc_want} on VM ${VMID} — it keeps booting with its clock off by the timezone offset; set it by hand: qm set ${VMID} --localtime ${_rtc_want}"
         fi
     fi
 fi

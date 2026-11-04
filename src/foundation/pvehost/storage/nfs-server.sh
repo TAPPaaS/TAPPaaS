@@ -53,7 +53,7 @@ case "${VERB}" in
             if [[ "${mnt}" != "${NFS_MOUNT_ROOT}/${name}" ]]; then error "  ✗ share ${name}: ${ds} is ${mnt:-not built}"; fails=$((fails + 1)); continue; fi
             want="$(nfs_node_expected_share "${e}")"; live="$(pn_ssh "zfs get -H -o value sharenfs '${ds}'")"
             if [[ "${live}" == "${want}" ]]; then info "  ${GN}✓${CL} share ${name}: built at ${mnt}, client list as declared"
-            else error "  ✗ share ${name}: client list drift (D16) — live '${live}', declared '${want}'"; fails=$((fails + 1)); fi
+            else error "  ✗ share ${name}: client list drift — live '${live}', declared '${want}'"; fails=$((fails + 1)); fi
         done 3< <(nfs_exports "${INSTANCE}")
         (( fails == 0 )) ;;
     subdir)

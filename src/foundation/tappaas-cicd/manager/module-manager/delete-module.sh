@@ -111,7 +111,7 @@ Options:
     --vmid <id>    Target a specific VM instance by VMID (required when several
                    VMs share the module name). If it differs from the config
                    VMID, only that VM is destroyed and the config is kept.
-    --environment <name>  Target environment (ADR-007 P5). Resolves the installed
+    --environment <name>  Target environment. Resolves the installed
                    config name (<module>-<env> for a non-default/non-mgmt env).
     --variant <name>      DEPRECATED alias for --environment.
     --yes, -y      Skip the destroy confirmation prompt (for automation)
@@ -120,7 +120,7 @@ Options:
     --decommission A machine only: also run its module's delete.sh, which takes the
                    Site's side of it down (a satellite: OPNsense peer, tunnel, edge
                    rules). Without it a machine is only unregistered; the machine
-                   itself is never touched (ADR-026, ADR-010 §8.4.5).
+                   itself is never touched.
     -h, --help     Show this help message
 
 Examples:
@@ -388,7 +388,7 @@ main() {
     # machine is not (a stand-in VM that happens to share its name, say).
     if [[ "$(echo "${_cfg}" | jq -r '.kind // empty')" == "machine" ]]; then
         [[ -z "${OPT_VMID}" ]] \
-            || die "'${module}' is a machine (kind: machine) — delete unregisters it and never destroys anything; --vmid does not apply (ADR-026)"
+            || die "'${module}' is a machine (kind: machine) — delete unregisters it and never destroys anything; --vmid does not apply"
         if [[ "${OPT_DECOMMISSION}" == true ]]; then
             info "  '${module}' is a machine — decommissioning the Site's side of it, then unregistering; the machine itself is left untouched"
         else
@@ -403,7 +403,7 @@ main() {
         local _hosted
         _hosted="$(machine_hosted_modules "${module}")"
         [[ -z "${_hosted}" ]] \
-            || die "'${module}' is still the Host (node) of: ${_hosted} — move or delete them first; unregistering it now would leave them pointing at a machine TAPPaaS no longer knows (#672)"
+            || die "'${module}' is still the Host (node) of: ${_hosted} — move or delete them first; unregistering it now would leave them pointing at a machine TAPPaaS no longer knows"
     elif [[ "${OPT_DECOMMISSION}" == true ]]; then
         die "--decommission is for a machine (kind: machine); '${module}' is not one — its delete already takes it down"
     elif [[ -z "${config_vmid}" && -z "${OPT_VMID}" ]]; then

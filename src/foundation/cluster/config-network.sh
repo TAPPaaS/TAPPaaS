@@ -454,7 +454,7 @@ prepare_usb_ports() {
     if ! is_usb "$p"; then out+="${out:+,}${p}"; continue; fi
     name="$p"; mac="$(cat "/sys/class/net/$p/bonding_slave/perm_hwaddr" 2>/dev/null || cat "/sys/class/net/$p/address")"
     [[ "$p" == usblan* ]] || name="$(next_usb_name)"
-    info "  ${p} is a USB NIC (${mac}): pinned as ${BL}${name}${CL}, USB autosuspend off, rejoins its bond when it reappears (#849)"
+    info "  ${p} is a USB NIC (${mac}): pinned as ${BL}${name}${CL}, USB autosuspend off, rejoins its bond when it reappears"
     if [[ "$DRY_RUN" != 1 ]]; then
       if [[ "$name" != "$p" ]]; then
         # The pinning tool also writes its rename into interfaces.new (and

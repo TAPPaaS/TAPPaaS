@@ -40,7 +40,7 @@ Forgejo is cheap.
 
 ## Fields
 
-`forgejo:repo` owns **1** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`forgejo:repo` owns **1** declared field(s). Each table below carries the field's full definition and, where the service applies it, what a change to it does (in place, a restart, a rebuild).
 
 ### `repoEditors`
 

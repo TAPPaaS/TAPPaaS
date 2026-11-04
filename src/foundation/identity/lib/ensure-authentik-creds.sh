@@ -60,7 +60,7 @@ _authentik_resolve_identity_host() {
         sleep 5
     done
 
-    warn "${fqdn} did not resolve in DNS — attempting IP fallback (DNS-registration race, #379)"
+    warn "${fqdn} did not resolve in DNS — its DNS record may not be registered yet; trying its IP address instead"
 
     # 2) IP fallback — an explicit static IP from identity.json, if provided.
     local identity_cfg="${CONFIG_DIR}/identity.json"

@@ -162,7 +162,7 @@ converge_apply() {
             else
                 # A preference its node cannot take (ADR-037 D1): the guest is
                 # where the create path had to put it, and config now says so.
-                info "  ${af}: ${adesired} is not on this guest's node — it runs on ${aactual}, which config now records (a preference, ADR-037 D1)"
+                info "  ${af}: ${adesired} is not on this guest's node — it runs on ${aactual}, which config now records (the storage is a preference)"
             fi
             CONVERGE_APPLIED=$((CONVERGE_APPLIED + 1))
         else

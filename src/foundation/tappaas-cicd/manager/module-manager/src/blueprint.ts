@@ -125,15 +125,15 @@ export function checkModule(t: BlueprintTarget, fs: BlueprintFs, schema: SchemaF
   // ── D2: the module's own artifacts ──
   const jsonRel = basename(t.moduleJson);
   const mj = fs.isFile(t.moduleJson) ? fs.readJson(t.moduleJson) : null;
-  if (!fs.isFile(t.moduleJson)) add("error", jsonRel, `missing ${jsonRel} — the module's own file (ADR-027 D2)`);
+  if (!fs.isFile(t.moduleJson)) add("error", jsonRel, `missing ${jsonRel} — the module's own file`);
   else if (!mj) add("error", jsonRel, `${jsonRel} is not a JSON object`);
-  must("install.sh", "module add runs it; a module another module provisions ships one that says so (ADR-027 D2)");
-  must("update.sh", "the nightly sweep runs it (ADR-027 D2)");
-  should("test.sh", "the update gate and module test run it; without one the module is never tested (ADR-027 D2)");
+  must("install.sh", "module add runs it; a module another module provisions ships one that says so");
+  must("update.sh", "the nightly sweep runs it");
+  should("test.sh", "the update gate and module test run it; without one the module is never tested");
   // ADR-013: the two documents a catalogue entry needs. Reported here, by
   // ADR-013's rule — ADR-027 does not restate it.
-  must("README.md", "what an end user gets — mandatory for catalogue inclusion (ADR-013)");
-  must("INSTALL.md", "what an admin must do that automation cannot — mandatory for catalogue inclusion (ADR-013)");
+  must("README.md", "what an end user gets — mandatory for catalogue inclusion");
+  must("INSTALL.md", "what an admin must do that automation cannot — mandatory for catalogue inclusion");
 
   // A field this module declares that no tier defines is one it must define
   // itself, in fields.json (#567).
@@ -150,7 +150,7 @@ export function checkModule(t: BlueprintTarget, fs: BlueprintFs, schema: SchemaF
     }
     const own = [...keys].filter((k) => !k.startsWith("_") && !schema.defined.has(k)).sort();
     if (own.length > 0) {
-      add("error", "fields.json", `missing fields.json — ${jsonRel} declares ${own.map((k) => `'${k}'`).join(", ")}, which no schema defines (ADR-027 D2, #567)`);
+      add("error", "fields.json", `missing fields.json — ${jsonRel} declares ${own.map((k) => `'${k}'`).join(", ")}, which no schema defines`);
     }
   }
 
@@ -158,7 +158,7 @@ export function checkModule(t: BlueprintTarget, fs: BlueprintFs, schema: SchemaF
   const provides = Array.isArray(mj?.provides) ? (mj!.provides as unknown[]).filter((s): s is string => typeof s === "string") : [];
   for (const s of provides) {
     if (!fs.isDir(join(t.dir, "services", s))) {
-      add("error", `services/${s}/`, `provides '${s}' but has no services/${s}/ — a consumer's dependency runs it (ADR-027 D2)`);
+      add("error", `services/${s}/`, `provides '${s}' but has no services/${s}/ — a consumer's dependency runs it`);
     }
   }
   // … and a directory for a service it does not declare is either dead or a
@@ -173,13 +173,13 @@ export function checkModule(t: BlueprintTarget, fs: BlueprintFs, schema: SchemaF
   // ── D3: each service directory ──
   for (const s of dirs) {
     const rel = (f: string): string => `services/${s}/${f}`;
-    must(rel("install-service.sh"), "gives the service to a consumer (ADR-027 D3)");
-    must(rel("update-service.sh"), "re-applies it when a consumer's declaration changes (ADR-027 D3, #495)");
-    must(rel("delete-service.sh"), "takes it away again (ADR-027 D3)");
-    should(rel("test-service.sh"), "is this consumer's instance working (ADR-027 D3)");
-    must(rel("README.md"), "what a consumer gets and must declare (ADR-027 D3)");
+    must(rel("install-service.sh"), "gives the service to a consumer");
+    must(rel("update-service.sh"), "re-applies it when a consumer's declaration changes");
+    must(rel("delete-service.sh"), "takes it away again");
+    should(rel("test-service.sh"), "is this consumer's instance working");
+    must(rel("README.md"), "what a consumer gets and must declare");
     if (schema && schema.usedBy.has(`${t.name}:${s}`) && !fs.isFile(join(t.dir, rel("fields.json")))) {
-      add("error", rel("fields.json"), `missing ${rel("fields.json")} — fields name ${t.name}:${s} in usedBy, so the service declares fields (ADR-027 D3, #567)`);
+      add("error", rel("fields.json"), `missing ${rel("fields.json")} — fields name ${t.name}:${s} in usedBy, so the service declares fields`);
     }
   }
 
@@ -213,7 +213,7 @@ function checkComponents(
 ): void {
   const raw = mj?.[field];
   if (raw !== undefined && !Array.isArray(raw)) {
-    add("error", field, `${field} must be a list of {name, path${field === "controllers" ? ", plugsInto" : ""}} (ADR-035 D3)`);
+    add("error", field, `${field} must be a list of {name, path${field === "controllers" ? ", plugsInto" : ""}}`);
     return;
   }
   const declared: string[] = [];
@@ -224,34 +224,34 @@ function checkComponents(
     const path = typeof o?.path === "string" ? o.path.replace(/\/+$/, "") : "";
     const at = `${field}[${i}]`;
     if (!name || !path) {
-      add("error", at, `${at} needs a name and a path (ADR-035 D3)`);
+      add("error", at, `${at} needs a name and a path`);
       continue;
     }
     if (!name.endsWith(suffix) || !/^[a-z][a-z0-9-]*$/.test(name)) {
-      add("error", at, `${field === "controllers" ? "a controller" : "a manager"} is named <${field === "controllers" ? "application" : "domain"}>${suffix}, in lower case: '${name}' is not (ADR-035 D3)`);
+      add("error", at, `${field === "controllers" ? "a controller" : "a manager"} is named <${field === "controllers" ? "application" : "domain"}>${suffix}, in lower case: '${name}' is not`);
     }
     if (seen.has(name)) add("error", at, `'${name}' is declared twice`);
     seen.add(name);
     if (field === "controllers") {
       const plugs = Array.isArray(o?.plugsInto) ? (o!.plugsInto as unknown[]) : [];
       if (plugs.length === 0 || plugs.some((m) => typeof m !== "string" || !m.endsWith("-manager"))) {
-        add("error", at, `${name}: plugsInto names the managers that drive it (e.g. ["switch-manager"]) (ADR-035 D3)`);
+        add("error", at, `${name}: plugsInto names the managers that drive it (e.g. ["switch-manager"])`);
       }
     }
     if (path.split("/")[0] !== dirName || path.split("/").length !== 2) {
-      add("error", at, `${name}: its path is ${dirName}/<name> in the module, not '${path}' (ADR-035 D2)`);
+      add("error", at, `${name}: its path is ${dirName}/<name> in the module, not '${path}'`);
     }
     if (!fs.isDir(join(dir, path))) {
-      add("error", `${path}/`, `declares ${name} but has no ${path}/ (ADR-035 D2)`);
+      add("error", `${path}/`, `declares ${name} but has no ${path}/`);
       continue;
     }
     declared.push(path.split("/").slice(-1)[0]);
     const r = (f: string): string => `${path}/${f}`;
-    must(r("install.sh"), "builds and links it when the module installs (ADR-035 D2)");
-    must(r("update.sh"), "rebuilds and relinks it when the module updates (ADR-035 D2)");
-    must(r("README.md"), "what it does and how to use it, published with the module (ADR-035 D8)");
-    should(r("test.sh"), "its offline self-test (ADR-035 D2)");
-    should(r("DESIGN.md"), `how it works${field === "controllers" ? " and the contract it answers" : ""} (ADR-035 D2, D4)`);
+    must(r("install.sh"), "builds and links it when the module installs");
+    must(r("update.sh"), "rebuilds and relinks it when the module updates");
+    must(r("README.md"), "what it does and how to use it, published with the module");
+    should(r("test.sh"), "its offline self-test");
+    should(r("DESIGN.md"), `how it works${field === "controllers" ? " and the contract it answers" : ""}`);
   }
   // tappaas-cicd declares its standard components in components.json (ADR-035
   // D5), not in its module JSON: those directories are declared too.
@@ -263,7 +263,7 @@ function checkComponents(
   const dirs = fs.isDir(join(dir, dirName)) ? fs.list(join(dir, dirName)).filter((d) => fs.isDir(join(dir, dirName, d))) : [];
   for (const d of dirs) {
     if (!declared.includes(d)) {
-      add("warning", `${dirName}/${d}/`, `${dirName}/${d}/ is not declared in ${field} — declare it, or remove the directory; an undeclared ${dirName} is never linked (ADR-035 D3)`);
+      add("warning", `${dirName}/${d}/`, `${dirName}/${d}/ is not declared in ${field} — declare it, or remove the directory; an undeclared ${dirName} is never linked`);
     }
   }
 }

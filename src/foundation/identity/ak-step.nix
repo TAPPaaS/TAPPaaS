@@ -45,16 +45,16 @@ let
   # /etc/nixos/tappaas-build-facts.env as an attrset: one KEY=value per line.
   facts =
     if !(builtins.pathExists factsFile) then
-      throw "authentik: no build facts (${factsFile}) — update this guest through module-manager, which collects what it runs before it builds (#797)"
+      throw "authentik: no build facts (${factsFile}) — update this guest through module-manager, which collects what it runs before it builds"
     else builtins.listToAttrs (map (m: { name = builtins.elemAt m 0; value = builtins.elemAt m 1; })
       (builtins.filter (m: m != null)
         (map (l: builtins.match "([A-Z_]+)=(.*)" l)
           (builtins.filter builtins.isString (builtins.split "\n" (builtins.readFile factsFile))))));
-  said = facts.AUTHENTIK_INSTALLED or (throw "authentik: the build facts (${factsFile}) do not say what the guest runs (#797)");
+  said = facts.AUTHENTIK_INSTALLED or (throw "authentik: the build facts (${factsFile}) do not say what the guest runs");
   installed =
     if said == "none" then null
     else if said == "unknown" then
-      throw "authentik: the guest has a database but no record of the Authentik version it runs — cannot choose a step. Write it to /var/lib/authentik/tappaas-version on the guest (what `podman inspect authentik-server` runs), then update again (#797)"
+      throw "authentik: the guest has a database but no record of the Authentik version it runs — cannot choose a step. Write it to /var/lib/authentik/tappaas-version on the guest (what `podman inspect authentik-server` runs), then update again"
     else trim said;
 
   # index of the installed version's line in `lines`, or null
@@ -78,7 +78,7 @@ let
   running = let r = trim (facts.AUTHENTIK_RUNNING or "none"); in if r == "none" || r == "" then null else r;
 in
 if running != null && older step running then
-  throw "authentik: the guest's server runs ${running}, newer than the step ${step} this build would install — Authentik cannot go back a version; check /var/lib/authentik/tappaas-version on the guest (#797)"
+  throw "authentik: the guest's server runs ${running}, newer than the step ${step} this build would install — Authentik cannot go back a version; check /var/lib/authentik/tappaas-version on the guest"
 else if installed != null && older target installed then
   throw "authentik: the guest runs ${installed}, newer than this release's ${target} — Authentik cannot go back a version"
 else if installed != null && step != installed && blocked != "" && !(older step "2025.12.0") then

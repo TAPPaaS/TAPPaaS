@@ -332,7 +332,7 @@ while read -r node; do
     if [[ "${_dm}" == "1" ]]; then
         debug "PVE default-matcher already disabled"
     elif ssh -n -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=no root@"$NODE_FQDN" \
-            "pvesh set /cluster/notifications/matchers/default-matcher --disable 1 --comment 'Disabled by TAPPaaS: alerts come from the logging module (#126)'" >/dev/null 2>&1; then
+            "pvesh set /cluster/notifications/matchers/default-matcher --disable 1 --comment 'Disabled by TAPPaaS: alerts come from the logging module'" >/dev/null 2>&1; then
         info "  ${GN}✓${CL} PVE notification mails off (default-matcher disabled, cluster-wide)"
     else
         warn "  could not disable PVE's default-matcher via $node — PVE keeps mailing as before"

@@ -1,5 +1,5 @@
 {
-  "description": "The place branch (ADR-040 D3): where a CI or a resource stands. Physical. A room is named within its location, a rack within its room.",
+  "description": "The place branch: where a CI or a resource stands. Physical. A room is named within its location, a rack within its room.",
   "classes": {
     "place": {
       "parent": "object",
@@ -10,7 +10,7 @@
     },
     "location": {
       "parent": "place",
-      "description": "A place with an address: the site's building, a provider's data centre, a buddy's site (site.json locations, ADR-036 D1).",
+      "description": "A place with an address: the site's building, a provider's data centre, a buddy's site (site.json locations).",
       "fields": {
         "kind": { "type": "string", "enum": ["site", "remote"] },
         "country": { "type": "string" },

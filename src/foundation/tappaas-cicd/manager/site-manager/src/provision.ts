@@ -307,7 +307,7 @@ export function adoptNode(o: ProvisionOpts, ip: string): void {
     info(`  ${o.name} is already in a cluster — skipping straight to capture`);
     const noKvm = kvmProblem(o.name, stdIp);
     if (noKvm) warn(`  ${noKvm}`);
-    step("registering the node as a pvehost module instance (ADR-026 D4, #665)");
+    step("registering the node as a pvehost module instance");
     registerNode(o.name, []);
     return;
   }
@@ -664,7 +664,7 @@ function joinAndCapture(
   // capture ------------------------------------------------------------------
   // The pvehost record first: it is the node, and it carries the pools the
   // storage registration below reads.
-  step("registering the node as a pvehost module instance (ADR-026 D4, #665)");
+  step("registering the node as a pvehost module instance");
   registerNode(o.name, [], true);
   recordBootDisks(o.name, stdIp);
 
@@ -768,7 +768,7 @@ function joinAndCapture(
   //
   // A failure is a warning, never a failed join: the node IS in the cluster by
   // now, and the remedy is one idempotent command the operator can re-run.
-  step("reconciling the backup client onto the new node (ADR-012 §2.4)");
+  step("reconciling the backup client onto the new node");
   if (runStream("module-manager", ["update", "backup", "--silent"]) !== 0) {
     warn(`  could not reconcile the backup client onto ${o.name} — ` +
          `run ${YW}module-manager update backup${CL} once it is reachable, ` +
@@ -778,7 +778,7 @@ function joinAndCapture(
   // key-only SSH now, not at the next sweep (#19; #729 §3 — the rejoined node
   // took root passwords over ssh for hours). Same drop-in and guard as the
   // cluster update's Step 5: fed over the key login, so it cannot lock us out.
-  step("key-only SSH on the new node (#19)");
+  step("key-only SSH on the new node");
   const keyOnly = `${REPO_DIR}/src/foundation/tappaas-cicd/scripts/ssh-key-only.sh`;
   const hard = fs.existsSync(keyOnly)
     ? spawnGuarded("ssh", ["-o", "BatchMode=yes", "-o", "PasswordAuthentication=no", "-o", "ConnectTimeout=10",

@@ -1,5 +1,5 @@
 {
-  "description": "The relation types of ADR-040 D3. ends: the [from, to] class pairs a relation may join; a subclass of either end may stand in it (placed-in for asset holds for a server). cardinality: n:1 — a from object has one current relation of the type (a new one closes the old); 1:n — a to object has one; 1:1 — both; n:m — neither. dependant (ADR-041 D3): the end that is hurt when the other fails: from, to, or both for a cable; a type without one carries no health. tree (ADR-041 D5): the end the Health view's tree nests under the other: from, to, or both when each end lists the other as a leaf (a cable); a type without one is no containment. required (default false): a dependant needs the provider. A relation row may say otherwise in its attributes: required (boolean), and redundancyGroup (string): relations of one dependant in one group are satisfied while any one provider is healthy.",
+  "description": "The relation types of ADR-040 D3. ends: the [from, to] class pairs a relation may join; a subclass of either end may stand in it (placed-in for asset holds for a server). cardinality: n:1 — a from object has one current relation of the type (a new one closes the old); 1:n — a to object has one; 1:1 — both; n:m — neither. dependant: the end that is hurt when the other fails: from, to, or both for a cable; a type without one carries no health. tree: the end the Health view's tree nests under the other: from, to, or both when each end lists the other as a leaf (a cable); a type without one is no containment. required (default false): a dependant needs the provider. A relation row may say otherwise in its attributes: required (boolean), and redundancyGroup (string): relations of one dependant in one group are satisfied while any one provider is healthy.",
   "relations": {
     "allocated-to": {
       "description": "A resource is allocated to a CI: the box a node runs on, for now. Later a pool's allocation (O10).",
@@ -16,14 +16,14 @@
       "ends": [["vm", "machine"], ["lxc", "machine"], ["software", "node"], ["storage-pool", "node"], ["datastore", "node"], ["certificate-authority", "node"]]
     },
     "part-of": {
-      "description": "A port is part of its asset (D9); a disk of the asset it is in (ADR-042).",
+      "description": "A port is part of its asset (D9); a disk of the asset it is in.",
       "tree": "from",
       "dependant": "from", "required": true,
       "cardinality": "n:1",
       "ends": [["port", "asset"], ["disk", "asset"]]
     },
     "built-on": {
-      "description": "A storage pool is built on its member disks (ADR-042 D3): site-manager reports one per member, matched by serial; the members of a mirror or raidz vdev carry redundancyGroup <node>:<pool>:<vdev>, a log, cache or spare member required false.",
+      "description": "A storage pool is built on its member disks: site-manager reports one per member, matched by serial; the members of a mirror or raidz vdev carry redundancyGroup <node>:<pool>:<vdev>, a log, cache or spare member required false.",
       "dependant": "from", "required": true,
       "cardinality": "n:m",
       "ends": [["storage-pool", "disk"]]

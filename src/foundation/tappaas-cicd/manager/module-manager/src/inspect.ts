@@ -808,7 +808,7 @@ export function inspectModule(module: string, opts: InspectOptions = {}): number
         error(`Failed to read the live config for VMID ${vmid} on the node the cluster reports it running`);
         break;
       case "no-reporter":
-        error(`No ${outcome.path} — this provider is not on the ADR-020 report contract yet`);
+        error(`No ${outcome.path} — this provider does not report its live state yet`);
         break;
       default:
         error(`report-service.sh failed for ${module} (rc ${outcome.rc}): ${outcome.detail}`);

@@ -5,7 +5,7 @@
   "_note": "update-service.sh execs install-service.sh, which is fully reconcile-in-place (ADR-006 Phase 4, #56): it refreshes the OIDC app/provider, re-applies the access bindings and rewrites the VM secrets env, and is safe on every update cycle. There is no per-field drift loop to extract.",
   "fields": {
     "identity": {
-      "description": "OIDC integration contract for a module that dependsOn identity:identity (ADR-006). Consumed by services/identity/install-service.sh. Omit for forward-auth modules (those use identity:accessControl).",
+      "description": "OIDC integration contract for a module that dependsOn identity:identity. Consumed by services/identity/install-service.sh. Omit for forward-auth modules (those use identity:accessControl).",
       "type": "object",
       "requiredBy": [],
       "usedBy": [

@@ -96,7 +96,7 @@ export function resolveSplitHorizonTarget(
       status: "error",
       reason:
         `no '${DMZ_ZONE}' zone in zones.json — the split-horizon answer is the ` +
-        `DMZ gateway (ADR-021 D2), so a site without one cannot publish a name ` +
+        `DMZ gateway, so a site without one cannot publish a name ` +
         `internally at all`,
     };
   }

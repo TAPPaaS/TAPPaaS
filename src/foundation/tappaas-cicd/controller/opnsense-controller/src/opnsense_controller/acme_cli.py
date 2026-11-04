@@ -157,7 +157,7 @@ def cmd_setup(mgr: AcmeManager, args: argparse.Namespace) -> int:
     print(f"==> [2/4] validation ({args.validation_name}, dns_service={dns_service})")
     print(f"    Creating the DNS-01 validation. On sign, acme.sh writes the")
     print(f"    _acme-challenge TXT then waits dns_sleep={args.dns_sleep}s for it to propagate")
-    print(f"    before the CA verifies (dns_sleep=0 caused the #328 'No TXT found' race).")
+    print(f"    before the CA verifies (with dns_sleep=0 the CA can find no TXT record yet).")
     validation_uuid = mgr.validation_ensure(AcmeValidation(
         name=args.validation_name,
         dns_service=dns_service,
@@ -316,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = StrictArgumentParser(
         prog="acme-manager",
-        description="Drive OPNsense os-acme-client end-to-end (issue #254).",
+        description="Drive OPNsense os-acme-client end-to-end.",
         parents=[gp],
     )
 
@@ -350,8 +350,8 @@ def main(argv: list[str] | None = None) -> int:
     p_setup.add_argument("--dns-sleep", type=int, default=150,
                          help="Seconds to wait for DNS-01 TXT propagation before "
                          "triggering LE validation (os-acme-client dns_sleep; default 150). "
-                         "45 was too short for LE multi-perspective validation (#539/#541); "
-                         "0 reproduces the #328 race. Raise for slow DNS providers.")
+                         "45 was too short for LE multi-perspective validation; "
+                         "0 fails with 'No TXT found'. Raise for slow DNS providers.")
     p_setup.add_argument("--action-name", default="caddy-reload", help="Action name")
     p_setup.add_argument("--staging", action="store_true",
                          help="Use Let's Encrypt staging CA (untrusted but no rate limits — for testing)")
@@ -366,7 +366,7 @@ def main(argv: list[str] | None = None) -> int:
     p_delete = sub.add_parser(
         "delete", parents=[gp],
         help="Delete the wildcard certificate for a domain and its Trust certificate "
-             "(#790). The shared account, validation and action stay.")
+             "The shared account, validation and action stay.")
     p_delete.add_argument("--domain", required=True)
     p_delete.add_argument("--dry-run", action="store_true",
                           help="Show what would be deleted, change nothing")

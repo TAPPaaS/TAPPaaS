@@ -45,7 +45,7 @@ nfs_converge_server() {
     case "${kind}" in
         hook)      hook="$(nfs_server_hook "${inst}")"; "${hook}" converge "${inst}" "${args[@]}" ;;
         unmanaged) debug "  ${inst}: a registered, unmanaged server — nothing to build there (ADR-029 D2a)" ;;
-        nohook)    error "  ${inst}: its module ships no NFS server hook — it cannot serve shares (ADR-029 D19)"; return 1 ;;
+        nohook)    error "  ${inst}: its module ships no NFS server hook — it cannot serve shares; declare them on another server"; return 1 ;;
         missing)   error "  ${inst}: no config/${inst}.json — not a module instance"; return 1 ;;
     esac
 }

@@ -292,7 +292,7 @@ def ensure_default_environment(
             json.dump(config, f, indent=2)
             f.write("\n")
         log.info(
-            "Backfilled site.json defaultEnvironment=%s (was missing; ADR-007d #426)",
+            "Backfilled site.json defaultEnvironment=%s (it was missing)",
             value,
         )
     except OSError as e:
@@ -1524,7 +1524,7 @@ def main():
     )
     parser.add_argument(
         "--force", action="store_true",
-        help="DEPRECATED (ADR-017 D5): no effect under update-tappaas.service; "
+        help="DEPRECATED: no effect under update-tappaas.service; "
              "run an update now with `site-manager update`",
     )
     parser.add_argument(
@@ -1554,12 +1554,12 @@ def main():
                     json.dumps(request, sort_keys=True))
         request = None
     if args.force:
-        log.warning("update-tappaas --force is deprecated (ADR-017 D5)%s — run an "
+        log.warning("update-tappaas --force is deprecated%s — run an "
                     "update now with: site-manager update",
                     "; it has no effect under update-tappaas.service" if ctx["path"] == "unit" else "")
     if not UNDER_SYSTEMD and not args.dry_run:
         log.warning("update-tappaas outside update-tappaas.service does not update the "
-                    "mothership itself (ADR-017 D3) — use: site-manager update")
+                    "mothership itself — use: site-manager update")
     if request:
         log.debug("Operator request: %s", json.dumps(request, sort_keys=True))
 
@@ -1624,10 +1624,10 @@ def main():
         if allow_disruption:
             log.info("(--allow-disruption: modules with rebootOk may have disruptive "
                      "changes applied now; the others keep them deferred)")
-        log.info("Before the sweep - update-tappaas.service ExecStartPre (ADR-017 D3):")
+        log.info("Before the sweep - update-tappaas.service ExecStartPre:")
         log.info("  pull (holds respected) + relink ~/bin + component builds: %s",
                  REFRESH_CONTROL_PLANE_CMD)
-        log.info("  config migrations (ADR-025): %s", RUN_MIGRATIONS_CMD)
+        log.info("  config migrations: %s", RUN_MIGRATIONS_CMD)
         for line in pending_migrations():
             log.info("  %s", line)
         log.info("  nixos-rebuild switch of the mothership (tappaas-self-rebuild.sh)")
@@ -1655,7 +1655,7 @@ def main():
         log.info("  where a node or a suspended module needs room, pauseOk modules are paused %s",
                  "and resumed after the reboots" if disruption_window_open(automatic_reboot, scheduled, allow_disruption)
                  else "— not in this run: outside the maintenance window")
-        log.info("Phase 4 - Postgres collation reconciliation (#726)")
+        log.info("Phase 4 - Postgres collation reconciliation")
         reboot_pass(automatic_reboot, dry_run=True)
         log.info("To run these updates: site-manager update")
         sys.exit(0)
@@ -1842,7 +1842,7 @@ def main():
                 log.warning("  %s", _line)
             log.warning(
                 "collation reconciliation needs attention — a database's indexes did "
-                "not verify, so its recorded version was left alone on purpose (#726)"
+                "not verify, so its recorded version was left alone on purpose; the lines above name it"
             )
     else:
         log.info("Phase 4: Postgres collation reconciliation")

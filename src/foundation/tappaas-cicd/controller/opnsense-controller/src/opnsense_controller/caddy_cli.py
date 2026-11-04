@@ -736,7 +736,7 @@ def reconfigure_cmd(manager: CaddyManager, check_mode: bool = False) -> bool:
     print(
         f"ERROR: Caddy reconfigure was accepted but the service is '{state}', "
         f"not running — the generated configuration was refused and EVERY "
-        f"proxied domain is now offline (#589).\n"
+        f"proxied domain is now offline.\n"
         f"  Inspect on the firewall: configctl caddy status ; "
         f"tail -n50 /var/log/caddy/caddy.log\n"
         f"  Re-check state via tooling: caddy-manager status",
@@ -796,7 +796,7 @@ Examples:
   # Add a reverse-proxy handler for a domain
   caddy-manager add-handler app.test.tapaas.org --upstream myapp.srv.internal --port 8080 --description "TAPPaaS: myapp"
 
-  # Add a redirect handler (issue #270): www.example.com -> https://identity.example.com (preserves path; 302)
+  # Add a redirect handler: www.example.com -> https://identity.example.com (preserves path; 302)
   caddy-manager add-handler www.example.com --redir https://identity.example.com --description "TAPPaaS: www-redir"
 
   # Delete a handler by description
@@ -832,7 +832,7 @@ Examples:
         metavar="REFID",
         help="Use an existing OPNsense Trust certificate (refid) instead of "
         "letting Caddy fetch one via ACME. Typically the wildcard refid issued "
-        "by os-acme-client (issue #254). Mutually exclusive with --dns-challenge.",
+        "by os-acme-client. Mutually exclusive with --dns-challenge.",
     )
 
     # add-handler
@@ -844,24 +844,24 @@ Examples:
     handler_target.add_argument(
         "--redir",
         help="Redirect target URL (e.g. https://identity.example.com) — configures a Caddy "
-        "'redir' handler instead of reverse_proxy (issue #270). The request path/query is "
+        "'redir' handler instead of reverse_proxy. The request path/query is "
         "preserved unless --redir-path is given. NOTE: os-caddy emits no status code, so "
         "Caddy's default (302) applies — the redirect code is not configurable via the plugin.",
     )
     add_handler_parser.add_argument("--redir-path", default="", help="For --redir: fixed target path (e.g. /ui/); omit to preserve the request path/query")
     add_handler_parser.add_argument("--port", default="80", help="Upstream port (default: 80; reverse_proxy only)")
     add_handler_parser.add_argument("--description", default="", help="Description for the handler")
-    add_handler_parser.add_argument("--access-list", default="", help="Name of an access list to attach (issue #206) — restrict client networks")
+    add_handler_parser.add_argument("--access-list", default="", help="Name of an access list to attach — restrict client networks")
     add_handler_parser.add_argument("--upstream-tls", action="store_true", help="Reverse-proxy to an HTTPS upstream (e.g. the OPNsense GUI on :8443); skips upstream cert verification")
-    add_handler_parser.add_argument("--upstream-http1", action="store_true", help="Force HTTP/1.1 to the upstream (os-caddy HttpVersion=http1). Required for WebSocket apps behind a TLS upstream (e.g. the UniFi OS console), which otherwise 500 on the WS over HTTP/2 (#339)")
-    add_handler_parser.add_argument("--preserve-host", action="store_true", help="Force the upstream Host header to the public domain (header_up Host <domain>). Needed for apps that validate a WebSocket's Origin against the Host header (e.g. UniFi OS), which otherwise 500 because Caddy sends the upstream's own hostname (#339)")
+    add_handler_parser.add_argument("--upstream-http1", action="store_true", help="Force HTTP/1.1 to the upstream (os-caddy HttpVersion=http1). Required for WebSocket apps behind a TLS upstream (e.g. the UniFi OS console), which otherwise 500 on the WS over HTTP/2")
+    add_handler_parser.add_argument("--preserve-host", action="store_true", help="Force the upstream Host header to the public domain (header_up Host <domain>). Needed for apps that validate a WebSocket's Origin against the Host header (e.g. UniFi OS), which otherwise 500 because Caddy sends the upstream's own hostname")
     add_handler_parser.add_argument("--forward-auth", action="store_true",
                                     help="Enable Caddy per-handle forward_auth — redirects unauthenticated "
-                                    "requests through the global Authentik outpost (issue #45). Requires "
+                                    "requests through the global Authentik outpost. Requires "
                                     "the global AuthProvider to be configured (done by identity install).")
 
     add_handler_parser.add_argument("--path", default="",
-                                    help="Serve only this request path (a Caddy matcher, e.g. /api/webhook/*) — ADR-023 path handle")
+                                    help="Serve only this request path (a Caddy matcher, e.g. /api/webhook/*) — a path handle beside the domain's own")
     gate = add_handler_parser.add_mutually_exclusive_group()
     gate.add_argument("--forward-auth-like", default="",
                       help="Copy forward-auth from the handler with this description (the route's catch-all)")
@@ -927,7 +927,7 @@ Examples:
     prune_match = prune_parser.add_mutually_exclusive_group(required=True)
     prune_match.add_argument("--description", default=None, help="Exact module description to match (e.g. 'TAPPaaS: nextcloud')")
     prune_match.add_argument("--description-prefix", dest="description_prefix", default=None,
-                             help="Match every description with this prefix (e.g. 'TAPPaaS: nextcloud#' — sweep proxyRoutes, #597)")
+                             help="Match every description with this prefix (e.g. 'TAPPaaS: nextcloud#' — every proxyRoutes handle of a module)")
     prune_parser.add_argument("--keep", action="append", default=None, metavar="FQDN",
                               help="An FQDN to keep; repeat for several (e.g. --keep a.example.com --keep b.example.com). "
                                    "Required with --description; may be omitted with --description-prefix to sweep every matching route.")

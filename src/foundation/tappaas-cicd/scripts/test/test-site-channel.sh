@@ -57,7 +57,7 @@ grep -q 'rank(v) > rank(from)' "${MAIN}" \
     || bad "no directional check on a channel change"
 grep -q 'Re-run with --force if that is what you mean' "${MAIN}" \
     && ok "and is refused without --force, saying so" || bad "backwards move is not gated"
-grep -q 'migrations (ADR-025) do not run backwards' "${MAIN}" \
+grep -q 'migrations do not run backwards' "${MAIN}" \
     && ok "the refusal explains WHY, not just that it refused" \
     || bad "the refusal does not give the reason"
 # The warning must not become a refusal: disagreement is a legitimate moment.

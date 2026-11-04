@@ -1,7 +1,7 @@
 {
   "$schema": "../../../schemas/service-fields.json",
   "service": "logging:logs",
-  "description": "The consumer's systemd journal shipped to the site's Loki by the NixOS baseline's journal client (#770), through logging's push-only receiver on tcp/3101.",
+  "description": "The consumer's systemd journal shipped to the site's Loki by the NixOS baseline's journal client, through logging's push-only receiver on tcp/3101.",
   "fields": {
     "dropUnits": {
       "description": "Units whose journal lines never leave the VM, on top of the platform's generate-.*-secrets.* — the units that read or write the module's own secrets. Unit-name patterns (regex): letters, digits, _ . * @ - only.",

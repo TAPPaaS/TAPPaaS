@@ -266,7 +266,7 @@ EOF
         echo "AUTHENTIK SECRETS generated and saved to:"
         echo "/etc/secrets/authentik.env"
         echo "  AUTHENTIK_SECRET_KEY (server signing key)"
-        echo "  AUTHENTIK_BOOTSTRAP_TOKEN (admin API token for TAPPaaS — #45)"
+        echo "  AUTHENTIK_BOOTSTRAP_TOKEN (admin API token for TAPPaaS)"
         echo "  AUTHENTIK_BOOTSTRAP_PASSWORD (akadmin web-UI password)"
         echo "================================================"
       '';

@@ -98,7 +98,7 @@ set for this module is re-derived and anything no longer declared is removed.
 
 ## Fields
 
-`network:nat` owns **1** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`network:nat` owns **1** declared field(s). Each table below carries the field's full definition and, where the service applies it, what a change to it does (in place, a restart, a rebuild).
 
 ### `natRules`
 

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "module-catalog-fields.json",
   "title": "TAPPaaS Module Catalog Schema",
-  "description": "Field schema for module-catalog.json — the per-repository module registry (renamed from modules.json, #305). Every 'managed: full' repository carries one, and `repository validate-catalog` checks it against this schema (#463).\n\nA catalogue answers two questions and no others: WHERE is a module in this repository (moduleJson, found by moduleName or a legacyName it used to have), and WHICH VMID block is taken. Everything else about a module — tier, source, status, version, description — is read from the module's own JSON and is never restated here, because two copies of one fact drift (they had, by #463). The single exception is `stack`, repeated so a listing can group without opening every module file; the check reports a disagreement.\n\n`stack` also says what a module IS: `foundation` a foundation module, `template` a template to copy rather than install (a Proxmox VM template, the module skeleton), `test` a fixture the suites install. Any other value, or none, is an application module — so an author unsure where a module belongs leaves it out and nothing breaks.",
+  "description": "Field schema for module-catalog.json — the per-repository module registry (renamed from modules.json). Every 'managed: full' repository carries one, and `repository validate-catalog` checks it against this schema.\n\nA catalogue answers two questions and no others: WHERE is a module in this repository (moduleJson, found by moduleName or a legacyName it used to have), and WHICH VMID block is taken. Everything else about a module — tier, source, status, version, description — is read from the module's own JSON and is never restated here, because two copies of one fact drift (they had, by #463). The single exception is `stack`, repeated so a listing can group without opening every module file; the check reports a disagreement.\n\n`stack` also says what a module IS: `foundation` a foundation module, `template` a template to copy rather than install (a Proxmox VM template, the module skeleton), `test` a fixture the suites install. Any other value, or none, is an application module — so an author unsure where a module belongs leaves it out and nothing breaks.",
 
   "type": "object",
   "required": ["modules"],
@@ -15,33 +15,33 @@
     "source": {
       "type": "string",
       "enum": ["official", "community", "private", "local"],
-      "description": "Where the modules in THIS repository come from (ADR-007b), stated once for the repository instead of on every entry — which is how the pre-#463 shape carried it. A module whose own JSON declares a `source` overrides it; a repository that states none is not official. Read by lib/ts/src/kind.ts, which defaults a non-official module with no authored `kind` to `vm`."
+      "description": "Where the modules in THIS repository come from, stated once for the repository instead of on every entry — which is how the pre-#463 shape carried it. A module whose own JSON declares a `source` overrides it; a repository that states none is not official. Read by lib/ts/src/kind.ts, which defaults a non-official module with no authored `kind` to `vm`."
     },
 
     "modules": {
       "type": "array",
-      "description": "Every module this repository ships, in one list (#463). The shape before it split these across foundationModules / applicationModules / proxmoxTemplates / testModules with `tier` on each entry; readers accept that for one stable cycle, and this schema still permits it below.",
+      "description": "Every module this repository ships, in one list. The shape before it split these across foundationModules / applicationModules / proxmoxTemplates / testModules with `tier` on each entry; readers accept that for one stable cycle, and this schema still permits it below.",
       "items": { "$ref": "#/$defs/entry" }
     },
 
     "foundationModules": {
       "type": "array",
-      "description": "DEPRECATED (#463) — the pre-flat shape, still read for a stable cycle. A repository on it should move its entries into `modules`, where `stack: foundation` says what this list said.",
+      "description": "DEPRECATED — the pre-flat shape, still read for a stable cycle. A repository on it should move its entries into `modules`, where `stack: foundation` says what this list said.",
       "items": { "$ref": "#/$defs/legacyEntry" }
     },
     "applicationModules": {
       "type": "array",
-      "description": "DEPRECATED (#463) — the pre-flat shape. In `modules`, an application module is any entry whose stack is not foundation, template or test.",
+      "description": "DEPRECATED — the pre-flat shape. In `modules`, an application module is any entry whose stack is not foundation, template or test.",
       "items": { "$ref": "#/$defs/legacyEntry" }
     },
     "proxmoxTemplates": {
       "type": "array",
-      "description": "DEPRECATED (#463) — now entries with `stack: template`.",
+      "description": "DEPRECATED — now entries with `stack: template`.",
       "items": { "$ref": "#/$defs/legacyEntry" }
     },
     "testModules": {
       "type": "array",
-      "description": "DEPRECATED (#463) — now entries with `stack: test`.",
+      "description": "DEPRECATED — now entries with `stack: test`.",
       "items": { "$ref": "#/$defs/legacyEntry" }
     }
   },
@@ -56,7 +56,7 @@
         "moduleName": {
           "type": "string",
           "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
-          "description": "The name this module is looked up by — the module's own directory name (ADR-026 D6.2)."
+          "description": "The name this module is looked up by — the module's own directory name."
         },
         "legacyName": {
           "type": "string",

@@ -792,7 +792,7 @@ update_nixos() {
     if [[ -f ./build-facts.sh ]]; then
         local _facts
         _facts="$(ssh -o BatchMode=yes "tappaas@${vm_ip}" 'sudo -n bash -s' < ./build-facts.sh)" \
-            || die "collecting the build facts on ${vmname} failed — its build would not know what the guest runs (#797)"
+            || die "collecting the build facts on ${vmname} failed — its build would not know what the guest runs; nothing on it was changed"
         printf '%s\n' "${_facts}" | ssh -o BatchMode=yes "tappaas@${vm_ip}" \
             "sudo -n tee /etc/nixos/tappaas-build-facts.env >/dev/null" \
             || die "failed to write the build facts on ${vm_ip}"
@@ -938,7 +938,7 @@ update_nixos() {
         if [[ -n "${pinned_rev}" ]]; then
             local _gsrc
             _gsrc="$(guest_pinned_nixpkgs "${vm_ip}" "${flake_lock}")" \
-                || die "could not fetch the pinned nixpkgs on ${vmname} by the narHash in ${flake_lock} (ADR-033 D8) — not building against an unchecked one"
+                || die "could not fetch the pinned nixpkgs on ${vmname} by the narHash in ${flake_lock} — not building against packages that fail their checksum; nothing on it was changed"
             nixpkgs_arg="-I nixpkgs=${_gsrc}"
         fi
         _rebuild_cmd="sudo nixos-rebuild switch ${nixpkgs_arg} -I nixos-config=${remote_nix_path}"

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "shares-fields.json",
   "title": "TAPPaaS Shares",
-  "description": "config/shares.json — the Site's storage shares (ADR-029 v0.9 D4, D18). Site state, written only by storage-manager; never part of a module's release merge. A section per protocol: nfs now. An absent file is an empty one.",
+  "description": "config/shares.json — the Site's storage shares. Site state, written only by storage-manager; never part of a module's release merge. A section per protocol: nfs now. An absent file is an empty one.",
   "type": "object",
   "additionalProperties": false,
   "properties": {

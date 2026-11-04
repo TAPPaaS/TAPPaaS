@@ -39,7 +39,7 @@ def main(argv=None) -> int:
     gp.add_argument("--no-ssl-verify", action="store_true")
     gp.add_argument("--debug", action="store_true")
 
-    p = StrictArgumentParser(prog="opnsense-wg", description="ADR-010 home-side WireGuard (scaffold)",
+    p = StrictArgumentParser(prog="opnsense-wg", description="Home-side WireGuard for satellites (scaffold)",
                                 parents=[gp])
     p.add_argument("--dry-run", action="store_true", default=True,
                    help="record intended ops only (default; live binding pending P2 deep test)")

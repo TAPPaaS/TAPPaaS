@@ -36,7 +36,6 @@ def firewall_key_present() -> bool:
             f"firewall key {FIREWALL_KEY} is not provisioned — the general "
             "id_ed25519 is NOT authorized on the firewall, so this SSH falls "
             "back to the ambient identity and will fail under sudo/root. "
-            "Provision it with config-firewall.sh (grant_cicd_firewall_access, "
-            "#226)."
+            "Provision it with config-firewall.sh (grant_cicd_firewall_access)."
         )
     return False

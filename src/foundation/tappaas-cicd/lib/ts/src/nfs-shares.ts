@@ -109,8 +109,8 @@ export function checkShare(
   else if (!srv) err(`server ${server} is not a module instance (no config/${server}.json)`);
   const managed = managedOf(srv);
   if (srv && managed && !hasHook(server))
-    err(`server ${server}'s module ships no NFS server hook — it cannot serve shares (ADR-029 D19)`);
-  if (srv && str(srv.zone0) === "wan") err(`server ${server} is in the wan zone — NFS is never served across it (ADR-029 D2a)`);
+    err(`server ${server}'s module ships no NFS server hook — it cannot serve shares`);
+  if (srv && str(srv.zone0) === "wan") err(`server ${server} is in the wan zone — NFS is never served across it`);
   const grants = s.grants;
   if (grants !== undefined && (typeof grants !== "object" || grants === null || Array.isArray(grants)))
     err("grants must be a map of consumer to ro|rw");
@@ -121,7 +121,7 @@ export function checkShare(
   if (!srv || managed) {
     if (!str(s.pool)) err("pool is required on a managed Host");
     if ("path" in s) err("path is for a registered, unmanaged server — a managed Host builds the dataset from pool");
-    if (typeof obj(s.backup).enabled !== "boolean") err("backup.enabled must be stated, true or false (ADR-029 D9 — there is no default)");
+    if (typeof obj(s.backup).enabled !== "boolean") err("backup.enabled must be stated, true or false — there is no default");
     if ("owner" in s) {
       const o = obj(s.owner);
       if (![o.uid, o.gid].every((v) => typeof v === "number" && v >= OWNER_MIN && v <= OWNER_MAX))
@@ -151,7 +151,7 @@ export function checkShares(doc: SharesDoc | Obj | null, read: ConfigReader, has
     out.push(...checkShare(name, share, read, hasHook));
     const uid = obj(obj(share).owner).uid;
     if (typeof uid === "number") {
-      if (owners.has(uid)) out.push({ severity: "error", message: `share ${name}: owner ${uid} is also ${owners.get(uid)}'s — one owner per share (ADR-029 D5)` });
+      if (owners.has(uid)) out.push({ severity: "error", message: `share ${name}: owner ${uid} is also ${owners.get(uid)}'s — one owner per share` });
       owners.set(uid, name);
     }
   }
@@ -200,7 +200,7 @@ export function checkMounts(name: string, cfg: Obj, read: ConfigReader): NfsFind
     if (access !== "ro" && access !== "rw") err(`${at}: access ${String(access)} (ro|rw)`);
     const subdir = str(m.subdir);
     if (subdir && (subdir.startsWith("/") || !SUBDIR_RE.test(subdir) || subdir.split("/").some((s) => s === ".." || s === ".")))
-      err(`${at}: subdir '${subdir}' must be a relative path inside the share — no leading /, no . or .. (ADR-029 D15)`);
+      err(`${at}: subdir '${subdir}' must be a relative path inside the share — no leading /, no . or ..`);
     if ("stopUnits" in m && !(Array.isArray(m.stopUnits) && m.stopUnits.every((u) => typeof u === "string")))
       err(`${at}: stopUnits must be a list of unit names`);
     const ref = parseShareRef(str(m.share));
@@ -211,28 +211,28 @@ export function checkMounts(name: string, cfg: Obj, read: ConfigReader): NfsFind
     let crosses: boolean;
     if (ref.kind === "literal") {
       if (read(ref.host)) {
-        err(`${at}: ${ref.host} is a module instance — name its share, a literal path would go around the grant (ADR-029 D2)`);
+        err(`${at}: ${ref.host} is a module instance — name its share, a literal path would go around the grant`);
         continue;
       }
       if (isPublicIpv4(ref.host)) {
-        err(`${at}: ${ref.host} is a public address — NFS with sec=sys is cleartext and trusts the client's UID; only a server on the site's own or a private routed network is mounted (ADR-029 D2a)`);
+        err(`${at}: ${ref.host} is a public address — NFS with sec=sys is cleartext and trusts the client's UID; only a server on the site's own or a private routed network is mounted`);
         continue;
       }
       crosses = true; // an unmodelled server's zone cannot be known
     } else {
       const share = shares[ref.share];
       if (!share) {
-        out.push({ severity: "warning", message: `${at}: share ${ref.share} is not declared — pending, the directory stays local until it is (ADR-029 D11)` });
+        out.push({ severity: "warning", message: `${at}: share ${ref.share} is not declared — pending, the directory stays local until it is` });
         continue;
       }
       const server = read(str(share.server)) ?? {};
       if (str(server.zone0) === "wan") {
-        err(`${at}: share ${ref.share} is on ${str(share.server)}, in the wan zone — NFS is never mounted across it (ADR-029 D2a)`);
+        err(`${at}: share ${ref.share} is on ${str(share.server)}, in the wan zone — NFS is never mounted across it`);
         continue;
       }
       const grant = obj(share.grants)[name];
       if (!grant) {
-        err(`${at}: share ${ref.share} grants ${name} nothing — run: storage-manager nfs grant ${ref.share} ${name} ${String(access)}  (or remove the mount, ADR-029 D11)`);
+        err(`${at}: share ${ref.share} grants ${name} nothing — run: storage-manager nfs grant ${ref.share} ${name} ${String(access)}  (or remove the mount)`);
         continue;
       }
       if (access === "rw" && grant === "ro") {
@@ -242,7 +242,7 @@ export function checkMounts(name: string, cfg: Obj, read: ConfigReader): NfsFind
       crosses = str(server.zone0) !== zone;
     }
     if (crosses && !rules)
-      err(`${at}: share ${str(m.share)} is reached through the firewall — ${name} must depend on network:rules, which derives the tcp/2049 rule from its mounts (ADR-029 D5)`);
+      err(`${at}: share ${str(m.share)} is reached through the firewall — ${name} must depend on network:rules, which derives the tcp/2049 rule from its mounts`);
   }
   return out;
 }

@@ -85,7 +85,7 @@ export const TOOLS: Record<string, { line: string; description: string; paramete
   },
   module_show: {
     line: "module_show(module): one module: its findings, config, resolved fields, and the fields modify --set may change",
-    description: "One module: its summary, every health finding that names it, its config as module-manager shows it, its resolved fields, and the fields `modify --set` may change with their ADR-020 change class.",
+    description: "One module: its summary, every health finding that names it, its config as module-manager shows it, its resolved fields, and the fields `modify --set` may change with their change class (what a change costs: in place, a restart, a rebuild).",
     parameters: obj({ module: str("the module's name") }, ["module"]),
   },
   module_drift: {

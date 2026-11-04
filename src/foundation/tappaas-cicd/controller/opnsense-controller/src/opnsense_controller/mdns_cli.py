@@ -326,7 +326,7 @@ def main():
     gp.add_argument("--check-mode", action="store_true", help="Dry-run (no changes)")
 
     parser = StrictArgumentParser(
-        description="mDNS discovery across zones: os-mdns-repeater and its rule (#257)",
+        description="mDNS discovery across zones: os-mdns-repeater and its rule",
         parents=[gp], formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

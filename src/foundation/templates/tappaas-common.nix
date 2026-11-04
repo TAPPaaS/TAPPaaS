@@ -256,10 +256,10 @@
   assertions = [
     { assertion = config.nix.settings.require-sigs == true
         && !(lib.hasInfix "require-sigs" config.nix.extraOptions);
-      message = "TAPPaaS baseline (ADR-033 D8): nix require-sigs must stay true."; }
+      message = "TAPPaaS baseline: nix require-sigs must stay true."; }
     { assertion = builtins.elem "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
         config.nix.settings.trusted-public-keys;
-      message = "TAPPaaS baseline (ADR-033 D8): cache.nixos.org's key must stay trusted."; }
+      message = "TAPPaaS baseline: cache.nixos.org's key must stay trusted."; }
   ];
   nixpkgs.config.allowUnfree = true; # Allow unfree packages
 
@@ -327,7 +327,7 @@
   # checks both halves, so a guest that predates this baseline fails its drift
   # check instead of silently never capturing.
   systemd.services.tappaas-fs-backup = {
-    description = "TAPPaaS file-level backup of this guest's declared paths (ADR-012 §3.1)";
+    description = "TAPPaaS file-level backup of this guest's declared paths";
     unitConfig.ConditionPathExists = "/home/tappaas/bin/tappaas-fs-backup.sh";
     serviceConfig = {
       Type = "oneshot";

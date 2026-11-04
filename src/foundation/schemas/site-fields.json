@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "site-fields.json",
   "title": "TAPPaaS Site",
-  "description": "The Site is the top-level umbrella for a TAPPaaS installation (ADR-007d). It holds site-wide identity, its locations (the primary one is where it is), backup target, update schedule, module catalog repositories, and references to the organization config files. The cluster's nodes are not listed here either: they are their pvehost instances (config/<node>.json). Environments are NOT listed here — they are simply whatever is present under config/environments/*.json (enumerated from the directory, not from site.json). Domain, DNS, and identity are per-environment (NOT site-wide) and live in config/environments/*.json. site.json replaces configuration.json at cutover; during the phased migration both files may coexist. See ADR-007 P2.",
+  "description": "The Site is the top-level umbrella for a TAPPaaS installation. It holds site-wide identity, its locations (the primary one is where it is), backup target, update schedule, module catalog repositories, and references to the organization config files. The cluster's nodes are not listed here either: they are their pvehost instances (config/<node>.json). Environments are NOT listed here — they are simply whatever is present under config/environments/*.json (enumerated from the directory, not from site.json). Domain, DNS, and identity are per-environment (NOT site-wide) and live in config/environments/*.json. site.json replaces configuration.json at cutover; during the phased migration both files may coexist.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -84,14 +84,14 @@
   },
   "properties": {
     "name": {
-      "description": "Neutral site code (e.g. warmelo1 — place plus number). Aligned with the Proxmox cluster name at creation, informational afterwards (ADR-007d #426). Not used to name any environment, organization, or zone — those key on defaultEnvironment.",
+      "description": "Neutral site code (e.g. warmelo1 — place plus number). Aligned with the Proxmox cluster name at creation, informational afterwards. Not used to name any environment, organization, or zone — those key on defaultEnvironment.",
       "type": "string",
       "pattern": "^[A-Za-z0-9_.-]+$",
       "changeClass": "immutable",
       "changeNote": "The site's code, given when the site was created and aligned with its Proxmox cluster's name then. Nothing renames the cluster, so the two would no longer match."
     },
     "defaultEnvironment": {
-      "description": "Name of the default (tenant) environment — also its network zone and owner organization. Decoupled from the site code so site.name can be renamed with a single edit without touching any environment/org/zone (ADR-007d #426). Must be a valid zone/environment slug.",
+      "description": "Name of the default (tenant) environment — also its network zone and owner organization. Decoupled from the site code so site.name can be renamed with a single edit without touching any environment/org/zone. Must be a valid zone/environment slug.",
       "type": "string",
       "references": "environments",
       "pattern": "^[a-z][a-z0-9-]*$",
@@ -116,14 +116,14 @@
       "changeClass": "in-place"
     },
     "supportEmail": {
-      "description": "Where the site's operator sends a support bundle (#883): an alert that carries one tells them to forward it here. One e-mail address. Empty by default — set it as a day-two step; unset, the alert still carries the bundle and says to forward it to the site's support contact.",
+      "description": "Where the site's operator sends a support bundle: an alert that carries one tells them to forward it here. One e-mail address. Empty by default — set it as a day-two step; unset, the alert still carries the bundle and says to forward it to the site's support contact.",
       "type": "string",
       "format": "email",
       "pattern": "^[^@\\s<>,;\"()]+@[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$",
       "changeClass": "in-place"
     },
     "version": {
-      "description": "The TAPPaaS release this site was installed from, written once by create-site.sh. Not the version it runs: that is read from the checkout (git describe; site-manager site show, ADR-028 D13).",
+      "description": "The TAPPaaS release this site was installed from, written once by create-site.sh. Not the version it runs: that is read from the checkout (git describe; site-manager site show).",
       "type": "string",
       "default": "1.0",
       "changeClass": "immutable",
@@ -186,7 +186,7 @@
           "default": "auto"
         },
         "wan": {
-          "description": "How the firewall's WAN gets its addresses (ADR-030 D2). Converged by the network update; a WAN edited by hand in OPNsense is drift and is put back. Absent: IPv4 by DHCP and, when ipv6 is true, IPv6 dynamic.",
+          "description": "How the firewall's WAN gets its addresses. Converged by the network update; a WAN edited by hand in OPNsense is drift and is put back. Absent: IPv4 by DHCP and, when ipv6 is true, IPv6 dynamic.",
           "type": "object",
           "additionalProperties": false,
           "properties": {
@@ -204,7 +204,7 @@
               "then": { "required": ["address", "gateway"] }
             },
             "ipv6": {
-              "description": "dynamic (default when ipv6 is true): DHCPv6 and a delegated prefix of prefixLength. static: a fixed WAN address and the prefix the ISP routes to it. none: no IPv6 on the WAN. The site prefix must be /56 or larger (ADR-030 D3).",
+              "description": "dynamic (default when ipv6 is true): DHCPv6 and a delegated prefix of prefixLength. static: a fixed WAN address and the prefix the ISP routes to it. none: no IPv6 on the WAN. The site prefix must be /56 or larger.",
               "type": "object",
               "additionalProperties": false,
               "required": ["mode"],
@@ -256,12 +256,12 @@
           "default": null
         },
         "defaultRetention": {
-          "description": "Site-wide default backup retention period (e.g. 7y, 5y, 1y). The base of the Site -> Environment -> Module retention cascade (ADR-007 P9): environments and modules may override it.",
+          "description": "Site-wide default backup retention period (e.g. 7y, 5y, 1y). The base of the Site -> Environment -> Module retention cascade: environments and modules may override it.",
           "type": "string",
           "default": "7y"
         },
         "offsiteResidency": {
-          "description": "Data residency of the offsite backup buddy (ADR-007 P9). Used by 'backup-manager validate' to reject backing an eu-only environment up to a non-EU offsite. eu-only by default; set global only when the offsite is outside the EU.",
+          "description": "Data residency of the offsite backup buddy. Used by 'backup-manager validate' to reject backing an eu-only environment up to a non-EU offsite. eu-only by default; set global only when the offsite is outside the EU.",
           "type": "string",
           "enum": [
             "eu-only",
@@ -270,7 +270,7 @@
           "default": "eu-only"
         },
         "defaultSchedule": {
-          "description": "Site-wide default backup frequency and the base of the Site -> Environment -> Module schedule cascade (ADR-012 §3.2). One of 'daily' | 'weekly' | 'monthly', or a bare 'HH:MM' meaning daily at that time. Environments and modules may override it, but never with anything more frequent than once a day — that ceiling is the platform's, not a policy.",
+          "description": "Site-wide default backup frequency and the base of the Site -> Environment -> Module schedule cascade. One of 'daily' | 'weekly' | 'monthly', or a bare 'HH:MM' meaning daily at that time. Environments and modules may override it, but never with anything more frequent than once a day — that ceiling is the platform's, not a policy.",
           "type": "string",
           "default": "daily"
         }
@@ -278,7 +278,7 @@
       "changeClass": "in-place"
     },
     "updateSchedule": {
-      "description": "Site-wide update schedule (ADR-017 D7). {frequency: none|daily|weekly|monthly, weekday: day name, hour: 0-23}. weekday is read only under weekly and monthly; hour defaults to 2. The legacy [period, day, hour] triple is still read, and migration 0003 rewrites it.",
+      "description": "Site-wide update schedule. {frequency: none|daily|weekly|monthly, weekday: day name, hour: 0-23}. weekday is read only under weekly and monthly; hour defaults to 2. The legacy [period, day, hour] triple is still read, and migration 0003 rewrites it.",
       "type": "object",
       "properties": {
         "frequency": {
@@ -308,11 +308,11 @@
       "changeClass": "in-place"
     },
     "channel": {
-      "description": "Which release channel this site takes, and therefore how much risk it accepts (ADR-028 D9). `unstable` is where development is proven, `staging` soaks a revision under real use for one boundary, `production` is what everyone else runs. The channel is a promise about risk; the branch each repository tracks is where the code sits — they are expected to agree (TAPPaaS: unstable=main, staging=staging, production=stable) and `site-manager` warns when they do not.",
+      "description": "Which release channel this site takes, and therefore how much risk it accepts. `unstable` is where development is proven, `staging` soaks a revision under real use for one boundary, `production` is what everyone else runs. The channel is a promise about risk; the branch each repository tracks is where the code sits — they are expected to agree (TAPPaaS: unstable=main, staging=staging, production=stable) and `site-manager` warns when they do not.",
       "type": "string",
       "enum": ["unstable", "staging", "production"],
       "default": "production",
-      "note": "Changing it is allowed in both directions, but moving towards production takes the site to OLDER code: `site modify --channel` warns and requires --force, because ADR-025 config migrations are forward-only and a site that has applied a migration cannot run code that predates it.",
+      "note": "Changing it is allowed in both directions, but moving towards production takes the site to OLDER code: `site modify --channel` warns and requires --force, because config migrations are forward-only and a site that has applied a migration cannot run code that predates it.",
       "changeClass": "in-place"
     },
     "automaticReboot": {
@@ -322,7 +322,7 @@
       "changeClass": "in-place"
     },
     "alerts": {
-      "description": "How the site's alert mails are put together (ADR-039).",
+      "description": "How the site's alert mails are put together.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -336,7 +336,7 @@
       "changeClass": "in-place"
     },
     "health": {
-      "description": "How the site's health is kept (ADR-041).",
+      "description": "How the site's health is kept.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -413,7 +413,7 @@
       "changeClass": "in-place"
     },
     "repositories": {
-      "description": "Registry of checked-out repositories whose module catalogs back NAME-based module resolution (resolve-module.sh, ADR-004). This is NOT the only way a module is located and NOT required for a module to work: install-module.sh takes the current directory first, recording the module's source dir as .location in its deployed config, so a module installed from an unregistered path resolves through .location alone (issue #460).",
+      "description": "Registry of checked-out repositories whose module catalogs back NAME-based module resolution (resolve-module.sh). This is NOT the only way a module is located and NOT required for a module to work: install-module.sh takes the current directory first, recording the module's source dir as .location in its deployed config, so a module installed from an unregistered path resolves through .location alone.",
       "type": "array",
       "items": {
         "type": "object",
@@ -459,7 +459,7 @@
             "default": "stable"
           },
           "trust": {
-            "description": "The fingerprints of the keys the repository's owners sign its releases with (ADR-033 D5) — from them, out of band, never from the repository. A fresh clone runs nothing to take its signers from, so the current release on a staging or production branch must be signed by one of these keys, which that release's own .tappaas/allowed_signers lists; from then on the site verifies each update against the signers of the release it last verified (config/.trust/<name>.json). `repository introduce` checks the checkout against them again at any time. Written by the installer for the TAPPaaS repository and by `repository add --signer` for others. Absent: the repository was added with --unsigned, or predates ADR-033 and verifies from the revision it runs. When the owners' keys change, put their new fingerprints here.",
+            "description": "The fingerprints of the keys the repository's owners sign its releases with — from them, out of band, never from the repository. A fresh clone runs nothing to take its signers from, so the current release on a staging or production branch must be signed by one of these keys, which that release's own .tappaas/allowed_signers lists; from then on the site verifies each update against the signers of the release it last verified (config/.trust/<name>.json). `repository introduce` checks the checkout against them again at any time. Written by the installer for the TAPPaaS repository and by `repository add --signer` for others. Absent: the repository was added with --unsigned, or was added before releases were signed and verifies from the revision it runs. When the owners' keys change, put their new fingerprints here.",
             "type": "object",
             "additionalProperties": false,
             "required": [
@@ -483,7 +483,7 @@
       "changeNote": "Has verbs of its own: site-manager repository add, modify, delete."
     },
     "requireSigned": {
-      "description": "Refuse to update a repository on the staging or production channel unless it signs its releases (ADR-033 D9). false (the default): a repository that lists no signing keys in .tappaas/allowed_signers still updates, and the health check reports it as unsigned. A repository that does list keys is always verified, whatever this says.",
+      "description": "Refuse to update a repository on the staging or production channel unless it signs its releases. false (the default): a repository that lists no signing keys in .tappaas/allowed_signers still updates, and the health check reports it as unsigned. A repository that does list keys is always verified, whatever this says.",
       "type": "boolean",
       "default": false,
       "note": "Turn it on when the site must show that everything it runs comes from signed releases. Unstable branches are never signed and are not affected. A repository that declares no channels (no channels.json at its root) has only unstable branches: it still updates, unverified, and each move is warned.",

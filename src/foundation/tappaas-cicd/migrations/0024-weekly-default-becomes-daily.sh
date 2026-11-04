@@ -57,7 +57,7 @@ if ! jq -e '.updateSchedule | .frequency == "weekly" and (.weekday == "Tuesday" 
 fi
 
 if [[ "${CHECK}" -eq 1 ]]; then
-    say "would change updateSchedule ${was} to daily at 02:00 (the old weekly default; #801)"
+    say "would change updateSchedule ${was} to daily at 02:00 (it is the old weekly default)"
     exit 0
 fi
 
@@ -72,4 +72,4 @@ jq empty "${tmp}" 2>/dev/null || { rm -f "${tmp}"; stop "the rewritten site.json
 chmod --reference="${BACKUP_DIR}/site.json" "${tmp}" 2>/dev/null || true
 mv -f "${tmp}" "${SITE}"
 day="$(jq -r '.weekday' <<<"${was}")"
-warn "the site updated weekly on ${day}s at 02:00 — the old default — and now updates daily at 02:00 (#801). To keep weekly: site-manager site modify --updateFrequency weekly --updateWeekday ${day} --updateHour 2"
+warn "the site updated weekly on ${day}s at 02:00 — the old default — and now updates daily at 02:00. To keep weekly: site-manager site modify --updateFrequency weekly --updateWeekday ${day} --updateHour 2"

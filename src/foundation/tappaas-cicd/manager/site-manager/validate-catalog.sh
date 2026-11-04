@@ -64,7 +64,7 @@ if jq -e '(.modules | type) == "array"' "${CATALOG}" >/dev/null 2>&1; then
 else
     SHAPE=legacy
     ENTRIES='((.foundationModules // []) + (.applicationModules // []) + (.proxmoxTemplates // []) + (.testModules // []))'
-    flag "this catalog still uses the pre-#463 lists (foundationModules/…). Move the entries into one \`modules\` list; \`stack\` on each says what the list said."
+    flag "this catalog still uses the old separate lists (foundationModules/…). Move the entries into one \`modules\` list; \`stack\` on each says what the list said."
 fi
 
 # ── per entry: the fields, their form, and what they point at ────────
