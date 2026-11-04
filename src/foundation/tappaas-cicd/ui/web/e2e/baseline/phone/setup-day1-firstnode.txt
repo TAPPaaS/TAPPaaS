@@ -1,0 +1,132 @@
+- navigation:
+  - list:
+    - listitem:
+      - link "Overview":
+        - /url: /
+    - listitem:
+      - link "Day 1 setup wizard":
+        - /url: /setup/day1
+    - listitem:
+      - link "Day 2 wizards":
+        - /url: /setup/day2
+    - listitem:
+      - link "Health":
+        - /url: /health
+    - listitem:
+      - link "Operations":
+        - /url: /operations
+    - listitem:
+      - link "Site":
+        - /url: /site
+    - listitem:
+      - link "Environments":
+        - /url: /environments
+    - listitem:
+      - link "Network":
+        - /url: /zones
+    - listitem:
+      - link "Modules":
+        - /url: /modules
+    - listitem:
+      - link "Identity":
+        - /url: /identity
+    - listitem:
+      - link "Assets":
+        - /url: /assets
+    - listitem:
+      - link "Backup":
+        - /url: /backup
+    - listitem: Security
+    - listitem:
+      - link "Activity":
+        - /url: /activity
+- banner:
+  - text: site rossen
+  - button "Refresh"
+  - text: operator · installer
+- heading "Day 1 setup wizard" [level=1]
+- text: the installation, derived from the records · done · 09:54
+- 'button "Check: run the module tests"'
+- paragraph:
+  - text: "Every required step is done: the foundation is installed."
+  - link "Overview":
+    - /url: /
+  - text: is the site from here, and
+  - link "Day 2":
+    - /url: /setup/day2
+  - text: "grows it. The setup token is closed: the console is reached through the gate."
+- list:
+  - listitem:
+    - button "pass First node — its disks and LAN uplink done ▾" [expanded]: First node — its disks and LAN uplink done ▾
+    - paragraph: "tappaas1: disks: tanka1, tankb1; LAN on 00:07:43:38:aa:f0, 00:07:43:38:aa:f8, which the other nodes reach it on"
+    - heading "Its disks" [level=3]
+    - paragraph:
+      - button "Add data pools…"
+      - button "Boot pool only"
+      - text: A data pool on the free disks holds the guests and lets HA replicate them; a machine with one disk keeps the boot pool.
+    - heading "Its LAN uplink" [level=3]
+    - paragraph: "Which port goes to the switch? Plug the switch's cable into the port meant for LAN and press Rescan: that port gets a green dot. The WAN is the port the install ran on, to the router."
+    - table:
+      - rowgroup:
+        - row "port link now":
+          - columnheader
+          - columnheader "port"
+          - columnheader "link"
+          - columnheader "now"
+      - rowgroup:
+        - row "nic0 nic0 30:c5:99:56:2b:6f no link":
+          - cell "nic0":
+            - radio "nic0" [disabled]
+          - cell "nic0 30:c5:99:56:2b:6f"
+          - cell "no link"
+          - cell
+        - row "nic2 nic2 00:07:43:38:aa:f0 up 10G · crs-a sfp-sfpplus1 LAN":
+          - cell "nic2":
+            - radio "nic2" [disabled]
+          - cell "nic2 00:07:43:38:aa:f0"
+          - cell "up 10G · crs-a sfp-sfpplus1"
+          - cell "LAN"
+        - row "nic3 nic3 00:07:43:38:aa:f8 up 10G · crs-b sfp-sfpplus1 LAN":
+          - cell "nic3":
+            - radio "nic3" [disabled]
+          - cell "nic3 00:07:43:38:aa:f8"
+          - cell "up 10G · crs-b sfp-sfpplus1"
+          - cell "LAN"
+        - row "nic4 nic4 30:c5:99:56:2b:70 up 10G · USW-Pro-XG-10-PoE Port 6 WAN":
+          - cell "nic4":
+            - radio "nic4" [disabled]
+          - cell "nic4 30:c5:99:56:2b:70"
+          - cell "up 10G · USW-Pro-XG-10-PoE Port 6"
+          - cell "WAN"
+    - paragraph:
+      - button "Rescan"
+      - button "This machine alone"
+    - paragraph: "LAN is a bond of nic2 and nic3: its ports change on Day 2 (the node's network). Confirm it here as it is, or say the machine stands alone."
+    - button "Confirm the bond as the LAN uplink"
+  - listitem:
+    - button "pass More nodes (optional) done ▸": More nodes (optional) done ▸
+    - paragraph: "4 node(s), all cluster members: tappaas1, tappaas2, tappaas3, tappaas4"
+  - listitem:
+    - button "pass The admin VPN done ▸": The admin VPN done ▸
+    - paragraph: "peer(s): lars-mac"
+  - listitem:
+    - button "pass Rest of foundation — backup, identity, logging, and you done ▸": Rest of foundation — backup, identity, logging, and you done ▸
+    - paragraph: "backup: tested by the sweep (2026-11-01 01:42:48Z); identity: tested by the sweep (2026-11-01 01:42:48Z); logging: tested by the sweep (2026-11-01 01:42:48Z); you: 1 organization(s), 3 user(s)"
+  - listitem:
+    - button "pass Repositories (optional) done ▸": Repositories (optional) done ▸
+    - paragraph: "registered: TAPPaaS, Community"
+  - listitem:
+    - button "pass Switch fabric (optional) done ▸": Switch fabric (optional) done ▸
+    - paragraph: "USW Pro XG 10 PoE: 12 port(s), 12 discovered via unifi-controller; crs-a: 17 port(s), 17 discovered; crs-b: 17 port(s), 17 discovered"
+  - listitem:
+    - button "pass WiFi (optional) done ▸": WiFi (optional) done ▸
+    - paragraph: "every active Client zone has an SSID: rossen-home → home"
+  - listitem:
+    - button "pass The physical site (optional) done ▸": The physical site (optional) done ▸
+    - paragraph: "3 room(s): basement at knudanchersvej95, stue at knudanchersvej95, diningroom; every node and switch placed; recorded: ISP modem (modem), patchpanel1 (patch-panel), patchpanel 2 (patch-panel)"
+  - listitem:
+    - button "pass Stacks (optional) done ▸": Stacks (optional) done ▸
+    - paragraph: "installed: ai, collaboration, devops, home, misc, security"
+  - listitem:
+    - button "pass Make it public (optional) done ▸": Make it public (optional) done ▸
+    - paragraph: rossen is public (dnsMode per-service)

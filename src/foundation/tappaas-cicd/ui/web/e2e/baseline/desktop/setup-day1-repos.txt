@@ -61,8 +61,8 @@
   - text: "grows it. The setup token is closed: the console is reached through the gate."
 - list:
   - listitem:
-    - button "pass First node — its disks done ▸": First node — its disks done ▸
-    - paragraph: "tappaas1: tanka1, tankb1"
+    - button "pass First node — its disks and LAN uplink done ▸": First node — its disks and LAN uplink done ▸
+    - paragraph: "tappaas1: disks: tanka1, tankb1; LAN on 00:07:43:38:aa:f0, 00:07:43:38:aa:f8, which the other nodes reach it on"
   - listitem:
     - button "pass More nodes (optional) done ▸": More nodes (optional) done ▸
     - paragraph: "4 node(s), all cluster members: tappaas1, tappaas2, tappaas3, tappaas4"

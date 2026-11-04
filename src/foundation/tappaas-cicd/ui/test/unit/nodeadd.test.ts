@@ -2,7 +2,7 @@
 // D4): the switch ports a new node can be cabled to, the trunk a hand-configured
 // port needs, and the data pool proposed from the node's free disks.
 
-import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName, switchPortChoices, writeProgress, POOL_CLASSES, NodeNetwork, NodePort, lanCandidates, lldpSwitchPort, portLabel, wanCandidates, wanPort, AddNodeFacts, NodeAddJob, SESSION_MS, STAGE_NUMBER, addNodeStage, addNodeUnderway, latestNodeAdd, nodeAddName, nodeAddOngoing, setupFromOutput, dismissJob, dismissedJobs, declaredLine } from "../../web/src/nodeadd";
+import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName, switchPortChoices, writeProgress, POOL_CLASSES, NodeNetwork, NodePort, lanCandidates, firstLanRows, lldpSwitchPort, portLabel, wanCandidates, wanPort, AddNodeFacts, NodeAddJob, SESSION_MS, STAGE_NUMBER, addNodeStage, addNodeUnderway, latestNodeAdd, nodeAddName, nodeAddOngoing, setupFromOutput, dismissJob, dismissedJobs, declaredLine } from "../../web/src/nodeadd";
 import { lastLines } from "../../web/src/wizards";
 import { StorageDisk, TopoPort, TopoSwitch } from "../../web/src/types";
 import { check, done } from "./check";
@@ -72,6 +72,7 @@ check(humanSize(2e12) === "2.0 TB" && humanSize(8001563222016) === "8.0 TB" && h
   const net: NodeNetwork = { node: "tappaas4", live: { ports: [w, e1, e2], lan: { mode: "single", bond: "", members: [e1] }, wan: { members: [w] } }, declared: { lan: { ports: ["m:87"] }, wan: { ports: ["m:8c"] } }, findings: [] };
   check(portLabel(e1) === "enp4s0 · up 2.5G · USW-Pro-XG-10-PoE Port 1" && portLabel(w) === "eno1 · no link", "a port says its link and the switch port behind it");
   check(lanCandidates(net).map((p) => p.name).join() === "enp5s0", "a lan leg comes from neither lan nor the WAN");
+  check(firstLanRows(net).map((x) => `${x.port.name}:${x.role}`).join() === "eno1:wan,enp4s0:lan,enp5s0:free", "Day 1's first node: every port with its role, the WAN marked, in name order");
   check(wanCandidates(net).map((p) => p.name).join() === "eno1,enp5s0", "the WAN takes any port lan does not have");
   check(wanPort(net)?.name === "eno1" && wanPort({ ...net, declared: { lan: net.declared!.lan } }) === null, "the declared WAN port, or none");
   const choices = [{ value: "USW Pro XG 10 PoE:8", label: "" }, { value: "USW Pro XG 10 PoE:10", label: "" }];

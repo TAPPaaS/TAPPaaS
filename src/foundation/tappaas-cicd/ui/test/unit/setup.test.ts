@@ -51,7 +51,7 @@ async function main(): Promise<void> {
     wifi,
     physical: { rooms: [{ name: "basement", location: "knudanchersvej95" }], placed: ["tappaas1", "tappaas2", "tappaas3", ...sw!.map((x) => x.name)], recorded: [] },
     stacks: ["home", "test"],
-    firstNode: { name: "tappaas1", pools: ["tanka1"] },
+    firstNode: { name: "tappaas1", pools: ["tanka1"], lanPorts: ["58:47:ca:7d:d0:41"] },
     repositories: ["TAPPaaS", "Community"],
     answers: {},
   };
@@ -81,7 +81,16 @@ async function main(): Promise<void> {
   check(one({ dnsMode: "local" }, "public").done === false && !one({ dnsMode: "local" }, "public").required, "local: not public yet, and that is optional");
   check(one({ dnsMode: "local", answers: { public: "stay-local" } }, "public").done === true, "…\"stay local\" answers it");
   check(one({ firstNode: { name: "tappaas1", pools: [] } }, "firstnode").done === false, "the first node without a data pool: not done");
-  check(one({ firstNode: { name: "tappaas1", pools: [] }, answers: { firstnode: "boot-only" } }, "firstnode").done === true, "…\"boot pool only\" answers it");
+  check(one({ firstNode: { name: "tappaas1", pools: [], lanPorts: ["aa"] }, answers: { firstnode: "boot-only" } }, "firstnode").done === true, "…\"boot pool only\" answers it");
+  // The LAN uplink: the install's guess counts once confirmed, or on a site whose other nodes use it.
+  const lone = (fn: { pools: string[]; lanPorts: string[] }, answers: SetupInputs["answers"]) => one({ siteNodes: ["tappaas1"], clusterNodes: ["tappaas1"], firstNode: { name: "tappaas1", ...fn }, answers }, "firstnode");
+  const guessed = lone({ pools: ["tanka1"], lanPorts: ["aa:bb"] }, {});
+  check(guessed.done === false && /LAN on aa:bb, as the install guessed: confirm it/.test(guessed.detail), "one node, the LAN port as the install guessed it: not done, and says so");
+  check(lone({ pools: ["tanka1"], lanPorts: ["aa:bb"] }, { firstlan: "port" }).done === true, "…confirmed or chosen: done");
+  check(lone({ pools: ["tanka1"], lanPorts: [] }, { firstlan: "alone" }).done === true, "…\"this machine alone\": done with no LAN port");
+  check(lone({ pools: ["tanka1"], lanPorts: [] }, { firstlan: "port" }).done === false, "…\"port\" with no port recorded is not done");
+  check(lone({ pools: [], lanPorts: [] }, { firstlan: "alone" }).done === false, "…the disks still count");
+  check(one({ firstNode: { name: "tappaas1", pools: ["tanka1"], lanPorts: ["aa:bb"] } }, "firstnode").done === true, "several nodes on its LAN port: done without asking");
   check(one({ firstNode: null }, "firstnode").done === null, "…no node record: unknown");
   check(one({ repositories: ["TAPPaaS"] }, "repos").done === false && one({ repositories: ["TAPPaaS"], answers: { repos: "tappaas-only" } }, "repos").done === true, "TAPPaaS alone: not done until \"TAPPaaS only\"");
   check(one({ siteNodes: ["tappaas1"], clusterNodes: ["tappaas1"] }, "nodes").done === false && one({ siteNodes: ["tappaas1"], clusterNodes: ["tappaas1"], answers: { nodes: "no-more" } }, "nodes").done === true, "one node: not done until \"no more machines\"");
@@ -123,6 +132,8 @@ async function main(): Promise<void> {
     const sd = mkdtempSync(join(tmpdir(), "console-answers-"));
     check(recordSetupAnswer(sd, "switch", "no-more") === null && readSetupAnswers(sd).switch === "no-more", "an answer is recorded and read back");
     check(recordSetupAnswer(sd, "wifi", "no-more") === null && readSetupAnswers(sd).wifi === "no-more", "…Wi-Fi's too");
+    check(recordSetupAnswer(sd, "firstlan", "alone") === null && readSetupAnswers(sd).firstlan === "alone" && recordSetupAnswer(sd, "firstlan", "port") === null && readSetupAnswers(sd).firstlan === "port", "…the LAN uplink takes either of its two answers");
+    check(recordSetupAnswer(sd, "firstlan", "maybe") !== null, "…and nothing else");
     check(recordSetupAnswer(sd, "switch", "maybe") !== null && recordSetupAnswer(sd, "vpn", "none") !== null, "…a wrong answer, or a step that takes none, is refused");
     check(recordSetupAnswer(sd, "switch", null) === null && readSetupAnswers(sd).switch === undefined, "…and null withdraws it");
     rmSync(sd, { recursive: true, force: true });
@@ -186,6 +197,8 @@ async function main(): Promise<void> {
   check(!ran.some((r) => r.startsWith("module-manager test")), "the next read is from the kept results: no test ran");
   check(steps.filter((s) => s.done !== true).map((s) => s.id).join() === "firstnode,vpn,repos,physical,stacks", "with the records in place every step is done but the first node's pool, the VPN peer (and the optional repositories, physical site and stacks)");
   check(inputs.firstNode?.name === "tappaas1" && inputs.firstNode.pools.length === 0, "the first node and its pools come from its record");
+  writeFileSync(join(cfg, "tappaas1.json"), JSON.stringify({ kind: "machine", moduleSource: "/x/pvehost", address: "tappaas1.mgmt.internal", uplinks: { lan: { mode: "single", ports: ["20:7c:14:f4:d0:8c"] }, wan: { ports: ["20:7c:14:f4:d0:87"] } } }));
+  check((await gather()).firstNode?.lanPorts?.join() === "20:7c:14:f4:d0:8c", "…and its LAN ports, by MAC, from its uplinks");
   check(readPhysical(cfg)?.rooms.length === 0, "no positions.json: an empty one");
   writeFileSync(join(cfg, "racks.json"), JSON.stringify({ rooms: { basement: {} }, mounts: { tappaas1: { rack: "rack1", u: 1 } } }));
   check(readPhysical(cfg)?.placed.join() === "tappaas1", "racks.json's mounts until migration 0020 has run");

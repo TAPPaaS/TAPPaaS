@@ -137,6 +137,19 @@ export function lanCandidates(n: NodeNetwork): NodePort[] {
   return (n.live?.ports ?? []).filter((p) => !p.usb && !lan.has(p.mac) && !wan.has(p.mac));
 }
 
+// Day 1's first node: every physical port with its role — the WAN (greyed: the
+// port the install ran on), lan's, or free — in name order.
+export type PortRole = "wan" | "lan" | "free";
+export function firstLanRows(n: NodeNetwork): { port: NodePort; role: PortRole }[] {
+  const lan = new Set((n.live?.lan.members ?? []).map((p) => p.mac));
+  const wan = new Set([...(n.declared?.wan?.ports ?? []), ...(n.live?.wan.members ?? []).map((p) => p.mac)]);
+  return (n.live?.ports ?? [])
+    .filter((p) => !p.usb)
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+    .map((port) => ({ port, role: wan.has(port.mac) ? "wan" : lan.has(port.mac) ? "lan" : "free" }));
+}
+
 // The ports the WAN can take: physical and not lan's.
 export function wanCandidates(n: NodeNetwork): NodePort[] {
   const lan = new Set((n.live?.lan.members ?? []).map((p) => p.mac));

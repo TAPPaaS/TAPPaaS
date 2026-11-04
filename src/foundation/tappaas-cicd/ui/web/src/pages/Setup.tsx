@@ -23,6 +23,7 @@ import { RestOfFoundationButton } from "./RestOfFoundation";
 import { Day2 } from "./Day2";
 import { PASSPHRASE_TEXT, SiteSsid, WIFI_ZONE_TYPES, ZoneIn, broadcastText, passphraseOf, wifiZones } from "../wizards";
 import { AddSwitchButton } from "./AddSwitch";
+import { FirstLanUplink } from "./FirstLan";
 import { WifiButton } from "./Wifi";
 import { AddRepositoryButton } from "./AddRepository";
 
@@ -275,11 +276,16 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
 
   const body: Record<string, ReactNode> = {
     firstnode: d?.inputs.firstNode ? (
-      <p className="small toolbar">
-        <AddPoolButton node={d.inputs.firstNode.name} />
-        <AnswerButton step="firstnode" answer="boot-only" label="Boot pool only" given={ans("firstnode")} onChanged={r.reload} />
-        <span className="muted">A data pool on the free disks holds the guests and lets HA replicate them; a machine with one disk keeps the boot pool.</span>
-      </p>
+      <>
+        <h3>Its disks</h3>
+        <p className="small toolbar">
+          <AddPoolButton node={d.inputs.firstNode.name} />
+          <AnswerButton step="firstnode" answer="boot-only" label="Boot pool only" given={ans("firstnode")} onChanged={r.reload} />
+          <span className="muted">A data pool on the free disks holds the guests and lets HA replicate them; a machine with one disk keeps the boot pool.</span>
+        </p>
+        <h3>Its LAN uplink</h3>
+        <FirstLanUplink node={d.inputs.firstNode.name} answer={d.inputs.answers?.firstlan} onChanged={r.reload} />
+      </>
     ) : null,
     repos: (
       <p className="small toolbar">

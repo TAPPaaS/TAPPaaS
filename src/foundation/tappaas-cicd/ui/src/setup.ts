@@ -57,10 +57,15 @@ export const TESTS_FILE = "setup-tests.json"; // in the state directory
 export const ANSWERS_FILE = "setup-answers.json"; // in the state directory
 
 // What each step that can be answered takes as its answer.
-export const ANSWERS = { firstnode: "boot-only", nodes: "no-more", repos: "tappaas-only", switch: "no-more", wifi: "no-more", public: "stay-local" } as const;
+export const ANSWERS = { firstnode: "boot-only", firstlan: ["port", "alone"], nodes: "no-more", repos: "tappaas-only", switch: "no-more", wifi: "no-more", public: "stay-local" } as const;
+// The answers a step takes: one, or (firstlan) a choice.
+const choices = (step: AnswerStep): readonly string[] => {
+  const v: string | readonly string[] = ANSWERS[step];
+  return typeof v === "string" ? [v] : v;
+};
 // An answer an older console recorded, read as today's: "none" (no switch managed) is "no more switches".
 const LEGACY_ANSWERS: Partial<Record<AnswerStep, string[]>> = { switch: ["none"] };
-const answered = (a: SetupAnswers, step: AnswerStep): boolean => a[step] === ANSWERS[step] || (LEGACY_ANSWERS[step] ?? []).includes(a[step] ?? "");
+const answered = (a: SetupAnswers, step: AnswerStep): boolean => choices(step).includes(a[step] ?? "") || (LEGACY_ANSWERS[step] ?? []).includes(a[step] ?? "");
 export type AnswerStep = keyof typeof ANSWERS;
 export type SetupAnswers = Partial<Record<AnswerStep, string>>;
 
@@ -78,7 +83,7 @@ export interface SetupInputs {
   wifi: WifiInputs;
   physical?: PhysicalInputs | null; // null: positions.json could not be read
   stacks: string[];
-  firstNode?: { name: string; pools: string[] } | null; // its record's storagePools; null: no node record
+  firstNode?: { name: string; pools: string[]; lanPorts?: string[] } | null; // its record's storagePools and uplinks.lan.ports (MACs); null: no node record
   repositories?: string[]; // site.json repositories[].name
   answers?: SetupAnswers;
 }
@@ -121,12 +126,31 @@ export function setupSteps(i: SetupInputs): SetupStep[] {
   const steps: SetupStep[] = [];
   const answer = i.answers ?? {};
 
-  // 1 · the first node's disks: a data pool, or the boot pool alone, said so.
+  // 1 · the first node: its disks (a data pool, or the boot pool alone, said so)
+  // and its LAN uplink. The install guesses the LAN port; it counts once
+  // confirmed or chosen here, or "this machine alone" is answered — or on a site
+  // whose other nodes already reach it on that port.
   const fn = i.firstNode;
-  if (fn === undefined || fn === null) steps.push({ id: "firstnode", title: "First node — its disks", required: true, done: null, detail: "no node record yet" });
-  else if (fn.pools.length) steps.push({ id: "firstnode", title: "First node — its disks", required: true, done: true, detail: `${fn.name}: ${fn.pools.join(", ")}` });
-  else if (answer.firstnode === ANSWERS.firstnode) steps.push({ id: "firstnode", title: "First node — its disks", required: true, done: true, detail: `${fn.name}: the boot pool only, as answered` });
-  else steps.push({ id: "firstnode", title: "First node — its disks", required: true, done: false, detail: `${fn.name} has no data pool: make one from its free disks, or answer "boot pool only"` });
+  const fnTitle = "First node — its disks and LAN uplink";
+  if (fn === undefined || fn === null) steps.push({ id: "firstnode", title: fnTitle, required: true, done: null, detail: "no node record yet" });
+  else {
+    const disks = fn.pools.length
+      ? { done: true, text: `disks: ${fn.pools.join(", ")}` }
+      : answer.firstnode === ANSWERS.firstnode
+        ? { done: true, text: "disks: the boot pool only, as answered" }
+        : { done: false, text: 'no data pool: make one from its free disks, or answer "boot pool only"' };
+    const lanPorts = fn.lanPorts ?? [];
+    const lan = answer.firstlan === "alone"
+      ? { done: true, text: "LAN: this machine alone, as answered" }
+      : answer.firstlan === "port" && lanPorts.length
+        ? { done: true, text: `LAN on ${lanPorts.join(", ")}` }
+        : i.siteNodes.length > 1 && lanPorts.length
+          ? { done: true, text: `LAN on ${lanPorts.join(", ")}, which the other nodes reach it on` }
+          : lanPorts.length
+            ? { done: false, text: `LAN on ${lanPorts.join(", ")}, as the install guessed: confirm it, or choose the port the switch is on` }
+            : { done: false, text: 'no LAN port: choose the port the switch is on, or answer "this machine alone"' };
+    steps.push({ id: "firstnode", title: fnTitle, required: true, done: disks.done && lan.done, detail: `${fn.name}: ${disks.text}; ${lan.text}` });
+  }
 
   // 2 · more nodes (optional).
   if (i.clusterNodes === null) {
@@ -469,18 +493,23 @@ export async function gatherSetup(d: GatherDeps): Promise<SetupInputs> {
 }
 
 // The first node: the first of the cluster's nodes, with its record's pools.
-function firstNodeOf(configDir: string, siteNodes: string[]): { name: string; pools: string[] } | null {
+function firstNodeOf(configDir: string, siteNodes: string[]): { name: string; pools: string[]; lanPorts: string[] } | null {
   const name = siteNodes[0];
   if (!name) return null;
   const rec = readJson(join(configDir, `${name}.json`));
   const pools = Array.isArray(rec?.storagePools) ? (rec!.storagePools as unknown[]).filter((p): p is string => typeof p === "string") : [];
-  return { name, pools };
+  const lan = (rec?.uplinks as { lan?: { ports?: unknown } } | undefined)?.lan?.ports;
+  const lanPorts = Array.isArray(lan) ? lan.filter((p): p is string => typeof p === "string") : [];
+  return { name, pools, lanPorts };
 }
 
 export function readSetupAnswers(stateDir: string): SetupAnswers {
   const doc = readJson(join(stateDir, ANSWERS_FILE)) ?? {};
   const out: SetupAnswers = {};
-  for (const k of Object.keys(ANSWERS) as AnswerStep[]) if (doc[k] === ANSWERS[k]) out[k] = ANSWERS[k];
+  for (const k of Object.keys(ANSWERS) as AnswerStep[]) {
+    const v = doc[k];
+    if (typeof v === "string" && choices(k).includes(v)) out[k] = v;
+  }
   return out;
 }
 
@@ -488,11 +517,11 @@ export function readSetupAnswers(stateDir: string): SetupAnswers {
 // caller, or null.
 export function recordSetupAnswer(stateDir: string, step: string, answer: string | null): string | null {
   if (!(step in ANSWERS)) return `${step}: not a step that takes an answer (${Object.keys(ANSWERS).join(", ")})`;
-  const want = ANSWERS[step as AnswerStep];
-  if (answer !== null && answer !== want) return `${step}: the answer is '${want}'`;
+  const want = choices(step as AnswerStep);
+  if (answer !== null && !want.includes(answer)) return `${step}: the answer is ${want.map((w) => `'${w}'`).join(" or ")}`;
   const doc = readSetupAnswers(stateDir);
   if (answer === null) delete doc[step as AnswerStep];
-  else doc[step as AnswerStep] = want;
+  else doc[step as AnswerStep] = answer;
   mkdirSync(stateDir, { recursive: true });
   writeJsonAtomic(join(stateDir, ANSWERS_FILE), doc);
   return null;
