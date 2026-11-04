@@ -410,6 +410,12 @@ export class Reads {
         stateDir: cfg.stateDir,
         run,
         clusterNodes: cfg.clusterNodes ?? (() => null),
+        // What the health read has now: Day 1 never waits for a validate run.
+        health: async () => {
+          const h = this.health.peek();
+          if (h.at === null || this.health.stale()) void this.health.refresh();
+          return (h.value?.gates as { name: string; status: string; detail: string }[] | undefined) ?? null;
+        },
         stacks: async () => {
           const m = await this.modules.get();
           return [...new Set((m.value?.modules ?? []).map((x) => x.stack).filter((x): x is string => !!x && x !== "foundation"))].sort();

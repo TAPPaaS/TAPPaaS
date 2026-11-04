@@ -12,7 +12,7 @@ import { AccessConfig, Me, decide, setupState } from "../../src/access";
 import { Jobs } from "../../src/jobs";
 import { Runner, Streamer } from "../../src/run";
 import { parseKv, secretCommand, secretStatus, writeSecret } from "../../src/secrets";
-import { SetupInputs, TESTS_FILE, readSetupAnswers, recordSetupAnswer, physicalStep, readPhysical, WifiInputs, clientZonesWithoutWifi, closeSetupToken, gatherSetup, parseApList, parseSwitches, parseWgvpnPeers, readSetupTests, readWifiZones, recordSetupTest, setupCheckModules, setupComplete, setupSteps, wifiStep } from "../../src/setup";
+import { SetupInputs, TESTS_FILE, healthStep, readSetupAnswers, recordSetupAnswer, physicalStep, readPhysical, WifiInputs, clientZonesWithoutWifi, closeSetupToken, gatherSetup, parseApList, parseSwitches, parseWgvpnPeers, readSetupTests, readWifiZones, recordSetupTest, setupCheckModules, setupComplete, setupSteps, wifiStep } from "../../src/setup";
 import { testGate } from "./gate-fixture";
 import { check, done } from "./check";
 
@@ -54,10 +54,29 @@ async function main(): Promise<void> {
     firstNode: { name: "tappaas1", pools: ["tanka1"], lanPorts: ["58:47:ca:7d:d0:41"] },
     repositories: ["TAPPaaS", "Community"],
     answers: {},
+    health: {
+      gates: [
+        { name: "service-liveness", status: "pass", detail: "21 managed module(s) running" },
+        { name: "pulse", status: "pass", detail: "3 node(s) answer" },
+        { name: "quorum", status: "pass", detail: "3/3 votes" },
+        { name: "internet", status: "pass", detail: "the mothership reaches codeberg.org" },
+      ],
+      reach: { at: "2026-11-04T20:00:00.000Z", nodes: ["tappaas1", "tappaas2", "tappaas3"], ok: true, vlans: [{ vid: 210, zone: "srv", missing: [] }], lanPorts: {} },
+    },
   };
   let steps = setupSteps(hrossen);
-  check(steps.map((s) => s.id).join() === "firstnode,nodes,vpn,bootstrap,repos,switch,wifi,physical,stacks,public", "Day 1's order: first node, nodes, VPN, foundation, repositories, switches, Wi-Fi, physical, stacks, make it public");
-  check(steps.filter((s) => s.required).map((s) => s.id).join() === "firstnode,vpn,bootstrap", "…required: the first node, the VPN and the foundation");
+  check(steps.map((s) => s.id).join() === "firstnode,nodes,vpn,bootstrap,health,switch,public,repos,stacks,wifi,physical", "Day 1's order: first node, nodes, VPN, foundation, health, then switches, make it public, repositories, stacks, Wi-Fi, physical");
+  check(steps.filter((s) => s.required).map((s) => s.id).join() === "firstnode,vpn,bootstrap,health", "…required: the first node, the VPN, the foundation and the health checks");
+  check(steps.filter((s) => !s.required).every((s) => s.title.endsWith("(optional, can be done as a Day 2 operation)")), "…every optional step says it can wait for Day 2");
+  // Status and health checks: the modules, the nodes, the internet, the VLANs across the nodes.
+  const hs = (h: Partial<NonNullable<SetupInputs["health"]>>, nodes = 3) => healthStep({ ...hrossen, siteNodes: hrossen.siteNodes.slice(0, nodes), health: { ...hrossen.health!, ...h } });
+  check(hs({}).done === true && /modules: 21 managed module\(s\) running; nodes: 3\/3 votes; internet: the mothership reaches codeberg\.org; VLANs: 1 reach every node/.test(hs({}).detail), "health: every part passes — done, each part said");
+  check(hs({ gates: hrossen.health!.gates!.map((g) => (g.name === "internet" ? { ...g, status: "fail", detail: "no internet from the mothership" } : g)) }).done === false, "…no internet: not done");
+  check(hs({ gates: null }).done === null && /modules: not checked yet/.test(hs({ gates: null }).detail), "…the health read not there yet: unknown");
+  check(hs({ reach: null }).done === null && /VLANs across the nodes: not tested yet/.test(hs({ reach: null }).detail), "…several nodes, the VLANs never probed: unknown");
+  check(hs({ reach: null }, 1).done === true && /one node, none crosses a switch/.test(hs({ reach: null }, 1).detail), "…one node: no VLAN to probe");
+  const split = hs({ reach: { ...hrossen.health!.reach!, ok: false, vlans: [{ vid: 410, zone: "home", missing: [{ from: "tappaas1", to: "tappaas2" }] }] } });
+  check(split.done === false && /VLANs not crossing: 410 \(home\)/.test(split.detail), "…a VLAN that does not cross: not done, named");
   check(!steps.some((s) => (s.id as string) === "tls"), "…and no TLS step (ADR-043 D10)");
   check(steps.filter((s) => s.id !== "wifi").every((s) => s.done === true) && setupComplete(steps), "hrossen: every step reads as done but the optional WiFi");
 
@@ -174,7 +193,7 @@ async function main(): Promise<void> {
   inputs = await gather();
   steps = setupSteps(inputs);
   check(ran.filter((r) => r.startsWith("module-manager test")).length === 0, "a read with the modules installed still runs no test (finding 7)");
-  check(steps.filter((s) => s.done === null).map((s) => s.id).join() === "bootstrap" && /Check runs it/.test(part(steps, "backup")), "…their steps are unknown until the explicit refresh runs the tests");
+  check(steps.filter((s) => s.done === null).map((s) => s.id).join() === "bootstrap,health" && /Check runs it/.test(part(steps, "backup")), "…their steps are unknown until the explicit refresh runs the tests");
   // a successful sweep counts as the tests: last-update-result.json says every module was updated (and so tested)
   writeFileSync(join(cfg, "last-update-result.json"), JSON.stringify({ ok: true, end_time: "2099-01-01 03:00:00", failed_modules: [] }));
   steps = setupSteps(await gather());
@@ -195,7 +214,7 @@ async function main(): Promise<void> {
   inputs = await gather();
   steps = setupSteps(inputs);
   check(!ran.some((r) => r.startsWith("module-manager test")), "the next read is from the kept results: no test ran");
-  check(steps.filter((s) => s.done !== true).map((s) => s.id).join() === "firstnode,vpn,repos,physical,stacks", "with the records in place every step is done but the first node's pool, the VPN peer (and the optional repositories, physical site and stacks)");
+  check(steps.filter((s) => s.done !== true).map((s) => s.id).join() === "firstnode,vpn,health,repos,stacks,physical", "with the records in place every step is done but the first node's pool, the VPN peer (and the optional repositories, physical site and stacks)");
   check(inputs.firstNode?.name === "tappaas1" && inputs.firstNode.pools.length === 0, "the first node and its pools come from its record");
   writeFileSync(join(cfg, "tappaas1.json"), JSON.stringify({ kind: "machine", moduleSource: "/x/pvehost", address: "tappaas1.mgmt.internal", uplinks: { lan: { mode: "single", ports: ["20:7c:14:f4:d0:8c"] }, wan: { ports: ["20:7c:14:f4:d0:87"] } } }));
   check((await gather()).firstNode?.lanPorts?.join() === "20:7c:14:f4:d0:8c", "…and its LAN ports, by MAC, from its uplinks");

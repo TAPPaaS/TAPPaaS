@@ -83,7 +83,10 @@ export interface SetupInputs {
   wifi: WifiInputs;
   physical?: PhysicalInputs | null; // null: positions.json could not be read
   stacks: string[];
-  firstNode?: { name: string; pools: string[]; lanPorts?: string[] } | null; // its record's storagePools and uplinks.lan.ports (MACs); null: no node record
+  firstNode?: { name: string; pools: string[]; lanPorts?: string[] } | null;
+  // Status and health checks: the gates it reads (null: not read yet) and the
+  // last VLAN probe across the nodes (null: never run).
+  health?: { gates: { name: string; status: string; detail: string }[] | null; reach: VlanReach | null }; // its record's storagePools and uplinks.lan.ports (MACs); null: no node record
   repositories?: string[]; // site.json repositories[].name
   answers?: SetupAnswers;
 }
@@ -101,7 +104,7 @@ export interface WifiInputs {
   aps: { name: string; ssids: { name: string; zone: string | null }[] }[] | null; // null: ap-manager list could not be read
 }
 
-export type StepId = "firstnode" | "nodes" | "vpn" | "bootstrap" | "repos" | "switch" | "wifi" | "physical" | "stacks" | "public";
+export type StepId = "firstnode" | "nodes" | "vpn" | "bootstrap" | "health" | "repos" | "switch" | "wifi" | "physical" | "stacks" | "public";
 
 export interface SetupStep {
   id: StepId;
@@ -122,6 +125,12 @@ export function moduleState(s: { config: boolean; test: TestResult | null }): { 
   return { done: false, detail: `test failed (${when}): ${s.test.tail}` };
 }
 
+// An optional step says it can wait for Day 2.
+export const OPTIONAL = "(optional, can be done as a Day 2 operation)";
+
+// Day 1's order: the required steps, the health check, then the optional ones.
+export const STEP_ORDER = ["firstnode", "nodes", "vpn", "bootstrap", "health", "switch", "public", "repos", "stacks", "wifi", "physical"] as const;
+
 export function setupSteps(i: SetupInputs): SetupStep[] {
   const steps: SetupStep[] = [];
   const answer = i.answers ?? {};
@@ -131,7 +140,7 @@ export function setupSteps(i: SetupInputs): SetupStep[] {
   // confirmed or chosen here, or "this machine alone" is answered — or on a site
   // whose other nodes already reach it on that port.
   const fn = i.firstNode;
-  const fnTitle = "First node — its disks and LAN uplink";
+  const fnTitle = "Finish the first node's setup: its LAN port and disks";
   if (fn === undefined || fn === null) steps.push({ id: "firstnode", title: fnTitle, required: true, done: null, detail: "no node record yet" });
   else {
     const disks = fn.pools.length
@@ -149,12 +158,13 @@ export function setupSteps(i: SetupInputs): SetupStep[] {
           : lanPorts.length
             ? { done: false, text: `LAN on ${lanPorts.join(", ")}, as the install guessed: confirm it, or choose the port the switch is on` }
             : { done: false, text: 'no LAN port: choose the port the switch is on, or answer "this machine alone"' };
-    steps.push({ id: "firstnode", title: fnTitle, required: true, done: disks.done && lan.done, detail: `${fn.name}: ${disks.text}; ${lan.text}` });
+    // LAN first: a cabling problem shows before the disks' longer work.
+    steps.push({ id: "firstnode", title: fnTitle, required: true, done: disks.done && lan.done, detail: `${fn.name}: ${lan.text}; ${disks.text}` });
   }
 
   // 2 · more nodes (optional).
   if (i.clusterNodes === null) {
-    steps.push({ id: "nodes", title: "More nodes (optional)", required: false, done: null, detail: "the cluster's membership could not be read" });
+    steps.push({ id: "nodes", title: `Add more nodes ${OPTIONAL}`, required: false, done: null, detail: "the cluster's membership could not be read" });
   } else {
     const missing = i.siteNodes.filter((n) => !i.clusterNodes!.includes(n));
     const done = missing.length === 0 && (i.siteNodes.length > 1 || answer.nodes === ANSWERS.nodes);
@@ -165,7 +175,7 @@ export function setupSteps(i: SetupInputs): SetupStep[] {
         : answer.nodes === ANSWERS.nodes
           ? `${i.siteNodes.join(", ")} alone, as answered`
           : `${i.siteNodes.join(", ") || "no node"} alone: add a machine, or answer "no more machines"`;
-    steps.push({ id: "nodes", title: "More nodes (optional)", required: false, done, detail });
+    steps.push({ id: "nodes", title: `Add more nodes ${OPTIONAL}`, required: false, done, detail });
   }
 
   // 3 · the admin VPN: the gate is reachable from mgmt and the VPN only.
@@ -184,12 +194,14 @@ export function setupSteps(i: SetupInputs): SetupStep[] {
   ].join("; ");
   steps.push({ id: "bootstrap", title: "Rest of foundation — backup, identity, logging, and you", required: true, done: fdone, detail: fdetail });
 
+  steps.push(healthStep(i));
+
   // 5 · repositories (optional).
   const repos = i.repositories ?? [];
   const extra = repos.filter((r) => r !== "TAPPaaS");
   steps.push({
     id: "repos",
-    title: "Repositories (optional)",
+    title: `Repositories ${OPTIONAL}`,
     required: false,
     done: extra.length > 0 || answer.repos === ANSWERS.repos,
     detail: extra.length ? `registered: ${repos.join(", ")}` : answer.repos === ANSWERS.repos ? "TAPPaaS only, as answered" : "TAPPaaS only: add Community or another, or answer \"TAPPaaS only\"",
@@ -199,7 +211,7 @@ export function setupSteps(i: SetupInputs): SetupStep[] {
   // more switches". A switch TAPPaaS programs counts once its ports are read; one
   // managed outside TAPPaaS counts as recorded.
   if (i.switches === null) {
-    steps.push({ id: "switch", title: "Switch fabric (optional)", required: false, done: answered(answer, "switch") ? true : null, detail: "switch-configuration-actual.json could not be read" });
+    steps.push({ id: "switch", title: `Switch fabric ${OPTIONAL}`, required: false, done: answered(answer, "switch") ? true : null, detail: "switch-configuration-actual.json could not be read" });
   } else {
     const line = (s: NonNullable<SetupInputs["switches"]>[number]) =>
       s.manual ? `${s.name}: managed outside TAPPaaS, ${s.ports} port(s) recorded` : `${s.name}: ${s.ports} port(s), ${s.discovered} discovered${s.controller ? ` via ${s.controller}` : ""}`;
@@ -215,19 +227,19 @@ export function setupSteps(i: SetupInputs): SetupStep[] {
         : answered(answer, "switch")
           ? `${list}; no more switches, as answered`
           : list;
-    steps.push({ id: "switch", title: "Switch fabric (optional)", required: false, done, detail });
+    steps.push({ id: "switch", title: `Switch fabric ${OPTIONAL}`, required: false, done, detail });
   }
 
   // 7–9 · Wi-Fi, the physical site, stacks.
   steps.push(wifiStep(i.wifi, answered(answer, "wifi")));
   steps.push(physicalStep(i.physical, i.siteNodes, (i.switches ?? []).map((s) => s.name)));
-  steps.push({ id: "stacks", title: "Stacks (optional)", required: false, done: i.stacks.length > 0, detail: i.stacks.length ? `installed: ${i.stacks.join(", ")}` : "none yet" });
+  steps.push({ id: "stacks", title: `Stacks ${OPTIONAL}`, required: false, done: i.stacks.length > 0, detail: i.stacks.length ? `installed: ${i.stacks.join(", ")}` : "none yet" });
 
   // 10 · make it public (optional, ADR-043 D10): the issuer of published names.
   const pub = i.dnsMode === "wildcard" || i.dnsMode === "per-service";
   steps.push({
     id: "public",
-    title: "Make it public (optional)",
+    title: `Make it public ${OPTIONAL}`,
     required: false,
     done: pub || answer.public === ANSWERS.public,
     detail: pub
@@ -238,7 +250,7 @@ export function setupSteps(i: SetupInputs): SetupStep[] {
           : "local: the site's own CA signs its names, and each person imports it. Going public needs a DNS provider or public records"
         : "no default environment",
   });
-  return steps;
+  return steps.sort((a, b) => STEP_ORDER.indexOf(a.id as (typeof STEP_ORDER)[number]) - STEP_ORDER.indexOf(b.id as (typeof STEP_ORDER)[number]));
 }
 
 // The zones that should have WiFi: active (no state is Active) and of type Client.
@@ -252,7 +264,7 @@ export function clientZonesWithoutWifi(w: WifiInputs): { name: string; declared:
 // As More nodes: add Wi-Fi until every Client zone has an SSID, or until "no
 // more Wi-Fi" says the rest stay without.
 export function wifiStep(w: WifiInputs, noMore = false): SetupStep {
-  const title = "WiFi (optional)";
+  const title = `WiFi ${OPTIONAL}`;
   const clients = w.zones.filter((z) => z.type === "Client" && (z.state ?? "Active") === "Active").map((z) => z.name);
   if (clients.length === 0) return { id: "wifi", title, required: false, done: true, detail: "no active Client zone: nothing to broadcast" };
   if (w.aps === null) return { id: "wifi", title, required: false, done: null, detail: "ap-manager list could not be read" };
@@ -268,7 +280,7 @@ export function wifiStep(w: WifiInputs, noMore = false): SetupStep {
 
 // The physical site: the rooms, then every node and switch placed (Day 2).
 export function physicalStep(p: PhysicalInputs | null | undefined, nodes: string[], switches: string[]): SetupStep {
-  const title = "The physical site (optional)";
+  const title = `The physical site ${OPTIONAL}`;
   if (p === null) return { id: "physical", title, required: false, done: null, detail: "config/positions.json could not be read" };
   const rooms = p?.rooms ?? [];
   const placed = new Set(p?.placed ?? []);
@@ -388,6 +400,9 @@ export interface GatherDeps {
   run: Runner;
   clusterNodes: (siteNodes: string[]) => string[] | null;
   stacks: () => Promise<string[]>;
+  // health-manager validate's gates, as the console's health read has them.
+  health?: () => Promise<{ name: string; status: string; detail: string }[] | null>;
+  vlanReachFile?: string; // health-manager vlan-reach's last result
 }
 
 // The last result of each foundation module's test, as its job left it
@@ -487,12 +502,61 @@ export async function gatherSetup(d: GatherDeps): Promise<SetupInputs> {
     physical: readPhysical(d.configDir),
     stacks: await d.stacks().catch(() => []),
     firstNode: firstNodeOf(d.configDir, siteNodes),
+    health: {
+      gates: d.health ? await d.health().catch(() => null) : null,
+      reach: readVlanReach(d.vlanReachFile ?? "/var/lib/tappaas/vlan-reach.json"),
+    },
     repositories: Array.isArray(site.repositories) ? (site.repositories as { name?: unknown }[]).map((r) => (typeof r.name === "string" ? r.name : "")).filter(Boolean) : [],
     answers: readSetupAnswers(d.stateDir),
   };
 }
 
 // The first node: the first of the cluster's nodes, with its record's pools.
+// health-manager vlan-reach's result: which VLANs did not cross, and each node's LAN ports.
+export interface VlanReach {
+  at: string;
+  nodes: string[];
+  ok: boolean;
+  error?: string;
+  vlans: { vid: number; zone: string; missing: { from: string; to: string }[] }[];
+  lanPorts: Record<string, string[]>;
+}
+export function readVlanReach(file: string): VlanReach | null {
+  const r = readJson(file) as unknown as VlanReach | null;
+  return r && typeof r.ok === "boolean" && Array.isArray(r.vlans) ? r : null;
+}
+
+// Status and health checks: the modules running, the nodes in quorum and
+// answering, the internet, and every zone's VLAN across the nodes.
+export function healthStep(i: SetupInputs): SetupStep {
+  const title = "Status and health checks";
+  const h = i.health;
+  const gate = (n: string) => h?.gates?.find((g) => g.name === n) ?? null;
+  const part = (label: string, gs: ({ status: string; detail: string } | null)[]): { done: boolean | null; text: string } => {
+    const got = gs.filter((g): g is { status: string; detail: string } => g !== null);
+    if (!got.length) return { done: null, text: `${label}: not checked yet` };
+    const bad = got.find((g) => g.status === "fail");
+    return { done: bad ? false : true, text: `${label}: ${bad ? bad.detail : got.map((g) => g.detail).join(", ")}` };
+  };
+  const modules = part("modules", [gate("service-liveness")]);
+  // The cluster's own nodes: quorum (pulse also judges machines outside it, such as a backup buddy).
+  const nodes = part("nodes", [gate("quorum")]);
+  const internet = part("internet", [gate("internet")]);
+  const r = h?.reach ?? null;
+  const vlans = i.siteNodes.length < 2
+    ? { done: true as boolean | null, text: "VLANs: one node, none crosses a switch" }
+    : !r
+      ? { done: null, text: "VLANs across the nodes: not tested yet" }
+      : r.error
+        ? { done: false, text: `VLANs across the nodes: ${r.error}` }
+        : r.ok
+          ? { done: true, text: `VLANs: ${r.vlans.length} reach every node (${r.at.replace("T", " ").replace(/\.\d+Z$/, "Z")})` }
+          : { done: false, text: `VLANs not crossing: ${r.vlans.filter((v) => v.missing.length).map((v) => `${v.vid} (${v.zone})`).join(", ")}` };
+  const parts = [modules, nodes, internet, vlans];
+  const done = parts.some((p) => p.done === false) ? false : parts.some((p) => p.done === null) ? null : true;
+  return { id: "health", title, required: true, done, detail: parts.map((p) => p.text).join("; ") };
+}
+
 function firstNodeOf(configDir: string, siteNodes: string[]): { name: string; pools: string[]; lanPorts: string[] } | null {
   const name = siteNodes[0];
   if (!name) return null;

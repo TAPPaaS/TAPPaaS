@@ -24,6 +24,7 @@ import { Day2 } from "./Day2";
 import { PASSPHRASE_TEXT, SiteSsid, WIFI_ZONE_TYPES, ZoneIn, broadcastText, passphraseOf, wifiZones } from "../wizards";
 import { AddSwitchButton } from "./AddSwitch";
 import { FirstLanUplink } from "./FirstLan";
+import { HealthChecks } from "./HealthChecks";
 import { WifiButton } from "./Wifi";
 import { AddRepositoryButton } from "./AddRepository";
 
@@ -39,6 +40,10 @@ export interface SetupDoc {
     siteNodes?: string[];
     answers?: Record<string, string>;
     modules?: Record<string, { config: boolean; test: { rc: number; at: string } | null }>;
+    health?: {
+      gates: { name: string; status: string; detail: string }[] | null;
+      reach: { at: string; nodes: string[]; ok: boolean; error?: string; vlans: { vid: number; zone: string; missing: { from: string; to: string }[] }[]; lanPorts: Record<string, string[]> } | null;
+    };
     wifi?: { zones: { name: string; type: string | null; state: string | null; ssid: string | null }[]; aps: { name: string; ssids: { name: string; zone: string | null }[] }[] | null };
   };
   token: { active: boolean; present: boolean; identityInstalled: boolean };
@@ -277,14 +282,14 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
   const body: Record<string, ReactNode> = {
     firstnode: d?.inputs.firstNode ? (
       <>
+        <h3>Its LAN port</h3>
+        <FirstLanUplink node={d.inputs.firstNode.name} answer={d.inputs.answers?.firstlan} onChanged={r.reload} />
         <h3>Its disks</h3>
         <p className="small toolbar">
           <AddPoolButton node={d.inputs.firstNode.name} />
           <AnswerButton step="firstnode" answer="boot-only" label="Boot pool only" given={ans("firstnode")} onChanged={r.reload} />
           <span className="muted">A data pool on the free disks holds the guests and lets HA replicate them; a machine with one disk keeps the boot pool.</span>
         </p>
-        <h3>Its LAN uplink</h3>
-        <FirstLanUplink node={d.inputs.firstNode.name} answer={d.inputs.answers?.firstlan} onChanged={r.reload} />
       </>
     ) : null,
     repos: (
@@ -326,6 +331,7 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
       </>
     ),
     vpn: <EnrolButton />,
+    health: <HealthChecks doc={d ?? null} done={d ? (r.env?.data?.steps ?? []).find((x) => x.id === "health")?.done ?? null : null} />,
     stacks: <AddStackButton opens={false} />,
     wifi: (
       <>

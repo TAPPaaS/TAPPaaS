@@ -49,26 +49,14 @@
   - button "Refresh"
   - text: operator · installer
 - heading "Day 1 setup wizard" [level=1]
-- text: the installation, derived from the records · done · 09:54
+- text: the installation, derived from the records · 1 to do · 09:54
 - 'button "Check: run the module tests"'
-- paragraph:
-  - text: "Every required step is done: the foundation is installed."
-  - link "Overview":
-    - /url: /
-  - text: is the site from here, and
-  - link "Day 2":
-    - /url: /setup/day2
-  - text: "grows it. The setup token is closed: the console is reached through the gate."
+- paragraph: "The site is not complete yet: the steps below are what remains, in order. The setup token is closed: the console is reached through the gate."
 - list:
   - listitem:
-    - button "pass First node — its disks and LAN uplink done ▾" [expanded]: First node — its disks and LAN uplink done ▾
-    - paragraph: "tappaas1: disks: tanka1, tankb1; LAN on 00:07:43:38:aa:f0, 00:07:43:38:aa:f8, which the other nodes reach it on"
-    - heading "Its disks" [level=3]
-    - paragraph:
-      - button "Add data pools…"
-      - button "Boot pool only"
-      - text: A data pool on the free disks holds the guests and lets HA replicate them; a machine with one disk keeps the boot pool.
-    - heading "Its LAN uplink" [level=3]
+    - 'button "pass Finish the first node''s setup: its LAN port and disks done ▾" [expanded]': "Finish the first node's setup: its LAN port and disks done ▾"
+    - paragraph: "tappaas1: LAN on 00:07:43:38:aa:f0, 00:07:43:38:aa:f8, which the other nodes reach it on; disks: tanka1, tankb1"
+    - heading "Its LAN port" [level=3]
     - paragraph: "Which port goes to the switch? Plug the switch's cable into the port meant for LAN and press Rescan: that port gets a green dot. The WAN is the port the install ran on, to the router."
     - table:
       - rowgroup:
@@ -107,8 +95,13 @@
       - button "This machine alone"
     - paragraph: "LAN is a bond of nic2 and nic3: its ports change on Day 2 (the node's network). Confirm it here as it is, or say the machine stands alone."
     - button "Confirm the bond as the LAN uplink"
+    - heading "Its disks" [level=3]
+    - paragraph:
+      - button "Add data pools…"
+      - button "Boot pool only"
+      - text: A data pool on the free disks holds the guests and lets HA replicate them; a machine with one disk keeps the boot pool.
   - listitem:
-    - button "pass More nodes (optional) done ▸": More nodes (optional) done ▸
+    - button "pass Add more nodes (optional, can be done as a Day 2 operation) done ▸": Add more nodes (optional, can be done as a Day 2 operation) done ▸
     - paragraph: "4 node(s), all cluster members: tappaas1, tappaas2, tappaas3, tappaas4"
   - listitem:
     - button "pass The admin VPN done ▸": The admin VPN done ▸
@@ -117,20 +110,35 @@
     - button "pass Rest of foundation — backup, identity, logging, and you done ▸": Rest of foundation — backup, identity, logging, and you done ▸
     - paragraph: "backup: tested by the sweep (2026-11-01 01:42:48Z); identity: tested by the sweep (2026-11-01 01:42:48Z); logging: tested by the sweep (2026-11-01 01:42:48Z); you: 1 organization(s), 3 user(s)"
   - listitem:
-    - button "pass Repositories (optional) done ▸": Repositories (optional) done ▸
-    - paragraph: "registered: TAPPaaS, Community"
+    - button "warn Status and health checks pending ▾" [expanded]: Status and health checks pending ▾
+    - paragraph: "modules: 21 managed module(s) running; nodes: 4 vote(s); internet: not checked yet; VLANs across the nodes: not tested yet"
+    - list:
+      - listitem: "Modules: 21 managed module(s) running"
+      - listitem: "Nodes: 4 vote(s)"
+      - listitem: "Internet: not checked yet"
+      - listitem: "VLANs across the nodes: not tested yet"
+    - paragraph:
+      - button "Check again"
+    - heading "health-manager vlan-reach" [level=3]
+    - text: Each node gets a probe interface on its LAN bridge for every zone's VLAN for a few seconds, pings the other nodes on it, and removes it. No guest, route or address of the site is touched. runs
+    - code: $ health-manager vlan-reach
+    - button "Copy"
+    - button "Test the VLANs across the nodes"
   - listitem:
-    - button "pass Switch fabric (optional) done ▸": Switch fabric (optional) done ▸
+    - button "pass Switch fabric (optional, can be done as a Day 2 operation) done ▸": Switch fabric (optional, can be done as a Day 2 operation) done ▸
     - paragraph: "USW Pro XG 10 PoE: 12 port(s), 12 discovered via unifi-controller; crs-a: 17 port(s), 17 discovered; crs-b: 17 port(s), 17 discovered"
   - listitem:
-    - button "pass WiFi (optional) done ▸": WiFi (optional) done ▸
-    - paragraph: "every active Client zone has an SSID: rossen-home → home"
+    - button "pass Make it public (optional, can be done as a Day 2 operation) done ▸": Make it public (optional, can be done as a Day 2 operation) done ▸
+    - paragraph: rossen is public (dnsMode per-service)
   - listitem:
-    - button "pass The physical site (optional) done ▸": The physical site (optional) done ▸
-    - paragraph: "3 room(s): basement at knudanchersvej95, stue at knudanchersvej95, diningroom; every node and switch placed; recorded: ISP modem (modem), patchpanel1 (patch-panel), patchpanel 2 (patch-panel)"
+    - button "pass Repositories (optional, can be done as a Day 2 operation) done ▸": Repositories (optional, can be done as a Day 2 operation) done ▸
+    - paragraph: "registered: TAPPaaS, Community"
   - listitem:
-    - button "pass Stacks (optional) done ▸": Stacks (optional) done ▸
+    - button "pass Stacks (optional, can be done as a Day 2 operation) done ▸": Stacks (optional, can be done as a Day 2 operation) done ▸
     - paragraph: "installed: ai, collaboration, devops, home, misc, security"
   - listitem:
-    - button "pass Make it public (optional) done ▸": Make it public (optional) done ▸
-    - paragraph: rossen is public (dnsMode per-service)
+    - button "pass WiFi (optional, can be done as a Day 2 operation) done ▸": WiFi (optional, can be done as a Day 2 operation) done ▸
+    - paragraph: "every active Client zone has an SSID: rossen-home → home"
+  - listitem:
+    - button "pass The physical site (optional, can be done as a Day 2 operation) done ▸": The physical site (optional, can be done as a Day 2 operation) done ▸
+    - paragraph: "3 room(s): basement at knudanchersvej95, stue at knudanchersvej95, diningroom; every node and switch placed; recorded: ISP modem (modem), patchpanel1 (patch-panel), patchpanel 2 (patch-panel)"

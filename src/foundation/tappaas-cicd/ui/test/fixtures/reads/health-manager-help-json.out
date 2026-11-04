@@ -23,7 +23,7 @@
       ],
       "usage": "validate [--live] [--threshold PCT] [--memory-threshold PCT] [--json] [--config-dir DIR]",
       "note": null,
-      "details": "Reads the conditions the last assess wrote (ADR-041): the gates' table, and exit 1 on any critical\ncondition that is neither derived, acknowledged nor in maintenance. With no recent assess, or a\nthreshold given, it assesses first; with no CMDB it runs the gates itself.",
+      "details": "Reads the conditions the last assess wrote: the gates' table, and exit 1 on any critical\ncondition that is neither derived, acknowledged nor in maintenance. With no recent assess, or a\nthreshold given, it assesses first; with no CMDB it runs the gates itself.",
       "positionals": [],
       "options": [
         {
@@ -104,7 +104,7 @@
           "arg": "<module>",
           "choices": null,
           "repeatable": false,
-          "description": "Instead: would starting this suspended module fit on its node, and which pauseOk modules there — lowest pausePriority first — would make it fit (#891). Exit 1 when even that does not."
+          "description": "Instead: would starting this suspended module fit on its node, and which pauseOk modules there — lowest pausePriority first — would make it fit. Exit 1 when even that does not."
         },
         {
           "flag": "--drain",
@@ -143,6 +143,47 @@
       "effect": "read",
       "preview": {
         "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "vlan-reach",
+      "keys": [
+        [
+          "vlan-reach"
+        ]
+      ],
+      "usage": "vlan-reach [--json] [--config-dir DIR]",
+      "note": null,
+      "details": "Whether each active zone's VLAN reaches from every node to every other: a switch between the nodes that does not carry a VLAN splits that zone. Says which VLANs must be carried on which nodes' LAN ports. Exit 2 when a VLAN does not cross. The result is kept for the console's Day 1.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the result as JSON."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "adds a probe VLAN interface on each node's lan bridge for a few seconds, pings the other nodes over IPv6 link-local, and removes it"
       },
       "destructive": false,
       "destructiveWhen": [],
@@ -255,7 +296,7 @@
       ],
       "usage": "scan security [--if-new-sweep] [--notify]",
       "note": null,
-      "details": "Inventories every target — the mothership, each module's VM or container, the containers\nrunning inside them (by registry digest), the nodes and the firewall — and matches each\nagainst its layer's CVE source (ADR-011 v0.3). Read-only on every target. Writes\n~/config/sbom/site.cdx.json (CycloneDX) and ~/config/sbom/cve-status.json; the previous\nstatus is kept as cve-status.previous.json. Runs after every sweep (tappaas-security-scan).",
+      "details": "Inventories every target — the mothership, each module's VM or container, the containers\nrunning inside them (by registry digest), the nodes and the firewall — and matches each\nagainst its layer's CVE source. Read-only on every target. Writes\n~/config/sbom/site.cdx.json (CycloneDX) and ~/config/sbom/cve-status.json; the previous\nstatus is kept as cve-status.previous.json. Runs after every sweep (tappaas-security-scan).",
       "positionals": [],
       "options": [
         {
@@ -305,7 +346,7 @@
       ],
       "usage": "scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update] [--no-vex]",
       "note": null,
-      "details": "Matches a package list against the CVE database as if it ran (#788): the release train's\n`tappaas-train preview` uses it for the packages the NEXT nixpkgs pin would bring, which\nnothing runs yet. Same CPE rule, matcher and VEX as `scan security`; writes nothing.\nPrints {\"findings\": [{id, severity, pkg, installed, fixed, purl}], \"suppressed\": [...], \"error\": \"\"}:\n`suppressed` holds what a VEX statement decided.",
+      "details": "Matches a package list against the CVE database as if it ran: the release train's\n`tappaas-train preview` uses it for the packages the NEXT nixpkgs pin would bring, which\nnothing runs yet. Same CPE rule, matcher and VEX as `scan security`; writes nothing.\nPrints {\"findings\": [{id, severity, pkg, installed, fixed, purl}], \"suppressed\": [...], \"error\": \"\"}:\n`suppressed` holds what a VEX statement decided.",
       "positionals": [],
       "options": [
         {
@@ -371,7 +412,7 @@
       ],
       "usage": "scan images --refs <file> [--no-db-update] [--no-vex]",
       "note": null,
-      "details": "Scans container images by registry reference, none of which has to run here (#788): the\nrelease preview compares a past release's images with the next one's. trivy fetches each\nimage (layers are cached). Same VEX as `scan security`. Writes nothing. Prints\n{\"<ref>\": {\"findings\": [...], \"suppressed\": [...], \"error\": \"\"}}.",
+      "details": "Scans container images by registry reference, none of which has to run here: the\nrelease preview compares a past release's images with the next one's. trivy fetches each\nimage (layers are cached). Same VEX as `scan security`. Writes nothing. Prints\n{\"<ref>\": {\"findings\": [...], \"suppressed\": [...], \"error\": \"\"}}.",
       "positionals": [],
       "options": [
         {
@@ -453,7 +494,7 @@
           "arg": null,
           "choices": null,
           "repeatable": false,
-          "description": "Accepted for the CMDB's sweep (ADR-040 D15); the report is already its full depth."
+          "description": "Accepted for the CMDB's sweep; the report is already its full depth."
         },
         {
           "flag": "--config-dir",
@@ -569,7 +610,7 @@
       ],
       "usage": "rules list|check [--file F] [--json]",
       "note": null,
-      "details": "The correlation rules of metamodel/health-rules.json (ADR-041 D3). check exits 1 on a rule it cannot place.",
+      "details": "The correlation rules of metamodel/health-rules.json. check exits 1 on a rule it cannot place.",
       "positionals": [],
       "options": [
         {
@@ -705,7 +746,7 @@
       ],
       "usage": "alerts [--module M] [--host H] [--node N] [--json]",
       "note": null,
-      "details": "The site's alerts (ADR-039): open — state alerts firing now, from Grafana on the logging VM;\nrecent — event alerts of the last 24 hours, from the mothership's alert receiver. Each is\nplaced on the module, machine or node it is about. The heartbeat is never listed.",
+      "details": "The site's alerts: open — state alerts firing now, from Grafana on the logging VM;\nrecent — event alerts of the last 24 hours, from the mothership's alert receiver. Each is\nplaced on the module, machine or node it is about. The heartbeat is never listed.",
       "positionals": [],
       "options": [
         {
@@ -769,7 +810,7 @@
       ],
       "usage": "emit [--since <time>] [--json]",
       "note": null,
-      "details": "One event per condition transition since the last run (ADR-041 D4), as a JSON line in the\njournal, identifier tappaas-health; the ack, maintenance and rootcause events beside them.\nTracks flapping, and ends acks and maintenance windows when they expire. Runs after every\nassess (health-assess.timer). The cursor is config/.health-emit-cursor.",
+      "details": "One event per condition transition since the last run, as a JSON line in the\njournal, identifier tappaas-health; the ack, maintenance and rootcause events beside them.\nTracks flapping, and ends acks and maintenance windows when they expire. Runs after every\nassess (health-assess.timer). The cursor is config/.health-emit-cursor.",
       "positionals": [],
       "options": [
         {
@@ -1267,6 +1308,55 @@
       "effect": "read",
       "preview": {
         "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "digest",
+      "keys": [
+        [
+          "digest"
+        ]
+      ],
+      "usage": "digest [--json] [--mark]",
+      "note": null,
+      "details": "The daily digest's mail: what is new since the last one, what is still open, what cleared. An\nALERT with something new, else a STATUS. tappaas-alert-receiver asks for it when\nHealthDailyDigest fires. Without --mark it changes nothing. The record is config/.health-digest-seen.json.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the mail as JSON, with the keys --mark takes."
+        },
+        {
+          "flag": "--mark",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Read {\"keys\": [...]} on stdin: the digest that went out. The next one compares with these."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "with --mark, records what the last digest told"
       },
       "destructive": false,
       "destructiveWhen": [],

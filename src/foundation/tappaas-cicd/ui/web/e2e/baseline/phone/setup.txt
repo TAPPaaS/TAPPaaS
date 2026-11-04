@@ -44,83 +44,53 @@
   - text: site rossen
   - button "Refresh"
   - text: operator · installer
-- heading "Day 2 wizards" [level=1]
-- text: the guided sequences that grow and run the site
-- heading "The site" [level=2]
-- text: Add a node
-- paragraph: Adding a new physical machine as a Proxmox node of this site. This includes defining its connectivity and its boot disk, configuring it in the cluster, and setting up its data pools.
-- button "Add a node…"
-- text: Remove a node
-- paragraph: Takes a machine out of the cluster for good. The console first checks that nothing still needs it (something running on it, a copy kept on it, the site's backup server) and says where to move each; then the machine leaves the cluster, its switch ports are parked and the node is gone from the site. The other nodes are untouched.
-- button "Remove a node…"
-- text: Adopt a machine
-- paragraph: A machine that already runs — a Debian host in a cupboard or a data centre — becomes a module of the site, at the location it is at. The mothership's key is added for root, its config is written and nothing else on it changes.
-- button "Adopt a machine…"
-- text: Add a satellite
-- paragraph: A rented machine with a public IPv4 gives a site without one public ingress and the admin-VPN relay.
-- button "Add a satellite…"
-- text: Add a repository
-- paragraph: A repository of modules, such as Community, whose stacks can then be added; or one without modules that the nightly update keeps current.
-- button "Add a repository…"
-- heading "The physical view" [level=2]
-- text: Record the rooms
-- paragraph:
-  - text: Where the hardware stands, at one of the site's locations (the primary unless you choose another; a location the site lacks is added in the Site page's
-  - link "Locations":
-    - /url: /site#locations
-  - text: ).
-  - link "KnudAnchersVej95":
-    - /url: /site#location-knudanchersvej95
-  - text: ":"
-  - link "Basement":
-    - /url: /site/physical?select=room%3Abasement
-  - text: ","
-  - link "DiningRoom":
-    - /url: /site/physical?select=room%3Adiningroom
-  - text: ","
-  - link "LivingRoom":
-    - /url: /site/physical?select=room%3Astue
-  - text: .
-- button "Add a room…"
-- text: Add a rack
-- paragraph: "A rack the site's hardware stands in: its height in units, its width, how its units are numbered, and its room."
-- button "Add a rack…"
-- text: Place the nodes and switches
-- paragraph: Every device is placed.
-- combobox [disabled]
-- button "Place…" [disabled]
-- text: Record what the cluster cannot see
-- paragraph: "A device nothing manages — the ISP's modem, an ONT, a UPS, a patch panel — with its kind, ports and location; then place it. Recorded: ISP modem, patchpanel1, patchpanel 2."
-- button "Record a device…"
-- paragraph:
-  - text: "3 room(s): basement at knudanchersvej95, stue at knudanchersvej95, diningroom; every node and switch placed; recorded: ISP modem (modem), patchpanel1 (patch-panel), patchpanel 2 (patch-panel) · Done when every node and switch is placed. The"
-  - link "Physical view":
-    - /url: /site/physical
-  - text: draws the result by location, room and rack.
-- heading "Environments, people and stacks" [level=2]
-- text: Add an environment
-- paragraph: A new environment — its record, its zone, its domain — then the reconcile that makes it live.
-- button "Add an environment…"
-- text: Add a user
-- paragraph: "A person who signs in: their name, email, groups and roles, staged and then pushed to Authentik."
-- button "Add a user…"
-- text: Reset a user's password
-- paragraph: "Gives a user who cannot sign in a new way in: a one-time link where they set a password of their own, or a temporary password you hand over."
-- button "Reset a user's password…"
-- text: Add a stack
-- paragraph: The modules of a stack you choose, installed in dependency order; the preview is the plan.
-- button "Add a stack…"
-- heading "Access and backup" [level=2]
-- text: Enrol a device for mgmt access
-- paragraph: Register a laptop or other device running WireGuard to be able to connect to the TAPPaaS management zone.
-- button "Enrol a device…"
-- text: Add a backup buddy
-- paragraph: Another site's PBS keeps an off-site copy — pulled through its own tunnel — or this site keeps theirs.
-- button "Add a backup buddy…"
-- text: Write the backup keys to a USB stick
-- paragraph: "Writes the backup encryption keys, encrypted with a password of your choice, to a USB stick in a node: the copy of the keys that leaves the building. Without it an encrypted off-site backup cannot be restored after a full loss. Keep two sticks, and the password apart from them."
-- button "Write the backup keys…"
-- heading "WiFi" [level=2]
-- text: Add WiFi to a zone
-- paragraph: Creates or changes a site-wide SSID with its passphrase and associates it with a zone. If access points are managed, they are configured with the SSID and route it to the zone.
-- button "Add or change WiFi…"
+- heading "Day 1 setup wizard" [level=1]
+- text: the installation, derived from the records · 1 to do · 09:54
+- 'button "Check: run the module tests"'
+- paragraph: "The site is not complete yet: the steps below are what remains, in order. The setup token is closed: the console is reached through the gate."
+- list:
+  - listitem:
+    - 'button "pass Finish the first node''s setup: its LAN port and disks done ▸"': "Finish the first node's setup: its LAN port and disks done ▸"
+    - paragraph: "tappaas1: LAN on 00:07:43:38:aa:f0, 00:07:43:38:aa:f8, which the other nodes reach it on; disks: tanka1, tankb1"
+  - listitem:
+    - button "pass Add more nodes (optional, can be done as a Day 2 operation) done ▸": Add more nodes (optional, can be done as a Day 2 operation) done ▸
+    - paragraph: "4 node(s), all cluster members: tappaas1, tappaas2, tappaas3, tappaas4"
+  - listitem:
+    - button "pass The admin VPN done ▸": The admin VPN done ▸
+    - paragraph: "peer(s): lars-mac"
+  - listitem:
+    - button "pass Rest of foundation — backup, identity, logging, and you done ▸": Rest of foundation — backup, identity, logging, and you done ▸
+    - paragraph: "backup: tested by the sweep (2026-11-01 01:42:48Z); identity: tested by the sweep (2026-11-01 01:42:48Z); logging: tested by the sweep (2026-11-01 01:42:48Z); you: 1 organization(s), 3 user(s)"
+  - listitem:
+    - button "warn Status and health checks pending ▾" [expanded]: Status and health checks pending ▾
+    - paragraph: "modules: 21 managed module(s) running; nodes: 4 vote(s); internet: not checked yet; VLANs across the nodes: not tested yet"
+    - list:
+      - listitem: "Modules: 21 managed module(s) running"
+      - listitem: "Nodes: 4 vote(s)"
+      - listitem: "Internet: not checked yet"
+      - listitem: "VLANs across the nodes: not tested yet"
+    - paragraph:
+      - button "Check again"
+    - heading "health-manager vlan-reach" [level=3]
+    - text: Each node gets a probe interface on its LAN bridge for every zone's VLAN for a few seconds, pings the other nodes on it, and removes it. No guest, route or address of the site is touched. runs
+    - code: $ health-manager vlan-reach
+    - button "Copy"
+    - button "Test the VLANs across the nodes"
+  - listitem:
+    - button "pass Switch fabric (optional, can be done as a Day 2 operation) done ▸": Switch fabric (optional, can be done as a Day 2 operation) done ▸
+    - paragraph: "USW Pro XG 10 PoE: 12 port(s), 12 discovered via unifi-controller; crs-a: 17 port(s), 17 discovered; crs-b: 17 port(s), 17 discovered"
+  - listitem:
+    - button "pass Make it public (optional, can be done as a Day 2 operation) done ▸": Make it public (optional, can be done as a Day 2 operation) done ▸
+    - paragraph: rossen is public (dnsMode per-service)
+  - listitem:
+    - button "pass Repositories (optional, can be done as a Day 2 operation) done ▸": Repositories (optional, can be done as a Day 2 operation) done ▸
+    - paragraph: "registered: TAPPaaS, Community"
+  - listitem:
+    - button "pass Stacks (optional, can be done as a Day 2 operation) done ▸": Stacks (optional, can be done as a Day 2 operation) done ▸
+    - paragraph: "installed: ai, collaboration, devops, home, misc, security"
+  - listitem:
+    - button "pass WiFi (optional, can be done as a Day 2 operation) done ▸": WiFi (optional, can be done as a Day 2 operation) done ▸
+    - paragraph: "every active Client zone has an SSID: rossen-home → home"
+  - listitem:
+    - button "pass The physical site (optional, can be done as a Day 2 operation) done ▸": The physical site (optional, can be done as a Day 2 operation) done ▸
+    - paragraph: "3 room(s): basement at knudanchersvej95, stue at knudanchersvej95, diningroom; every node and switch placed; recorded: ISP modem (modem), patchpanel1 (patch-panel), patchpanel 2 (patch-panel)"
