@@ -394,27 +394,41 @@ converge() {  # <declaration>
         || die "the node refused the change (above) — nothing written"
     [[ -n "${sw_remove}" ]] && info "  switch side: take apart LAG $(lag_name) on ${sw_remove} first (switch-manager)"
     [[ -n "${sw_set}" ]] && info "  switch side: ports ${sw_ports} of ${sw_set} become LAG $(lag_name) once ${NODE} speaks LACP (switch-manager)"
+    # The cluster's only node (a first node on Day 1): there is nowhere to drain
+    # its guests to, and alone it keeps quorum, so the HA watchdog cannot fence it
+    # while the change runs. It is changed in place, under the same rollback.
+    local alone=0
+    [[ "$(get_all_node_hostnames 2>/dev/null | grep -c .)" -le 1 ]] && alone=1
     if [[ "${EXECUTE}" != 1 ]]; then
         info "${YW}Preview only.${CL} To apply: site-manager node network set ${NODE} --apply"
-        info "  It drains ${NODE} (HA maintenance), applies under a ${ROLLBACK_SECS}s rollback, checks from here, brings ${NODE} back."
+        if [[ "${alone}" == 1 ]]; then
+            info "  ${NODE} is the cluster's only node: its guests stay where they are; it applies under a ${ROLLBACK_SECS}s rollback and checks from here."
+        else
+            info "  It drains ${NODE} (HA maintenance), applies under a ${ROLLBACK_SECS}s rollback, checks from here, brings ${NODE} back."
+        fi
         return 0
     fi
 
     exec 9>"${LOCK}"
     flock -n 9 || die "another lan uplink change is running on this site — one node at a time"
-    confirm "Re-carry ${NODE}'s lan bridge: its HA guests move off first, and lan blips while the uplink changes."
-
-    RN_DRAIN_FOR=changed
-    local drc=0
-    rn_drain_node "${NODE}" || drc=$?
-    [[ ${drc} -eq 0 ]] || { [[ ${drc} -eq 3 ]] && exit 3; die "${NODE} not drained — nothing changed"; }
+    if [[ "${alone}" == 1 ]]; then
+        confirm "Re-carry ${NODE}'s lan bridge in place (the cluster's only node): lan blips while the uplink changes."
+        info "  ${NODE} is the cluster's only node: nothing to drain it to, and it keeps quorum alone — changed in place"
+        rn_undrain_node() { :; }   # nothing was drained
+    else
+        confirm "Re-carry ${NODE}'s lan bridge: its HA guests move off first, and lan blips while the uplink changes."
+        RN_DRAIN_FOR=changed
+        local drc=0
+        rn_drain_node "${NODE}" || drc=$?
+        [[ ${drc} -eq 0 ]] || { [[ ${drc} -eq 3 ]] && exit 3; die "${NODE} not drained — nothing changed"; }
+    fi
 
     # A rollback past the watchdog's 60s is only safe on a node whose LRM has
     # released it: a node cut off longer than that would otherwise fence itself.
     # `ha-manager status` says "watchdog active" for any LRM in maintenance, so
     # ask what the LRM does instead: in maintenance (or idle) with no HA service
     # left on the node it gives the watchdog up (PVE::HA::LRM). Wait for that.
-    if (( ROLLBACK_SECS > 45 )); then
+    if (( ROLLBACK_SECS > 45 )) && [[ "${alone}" != 1 ]]; then
         local w=0
         until watchdog_released; do
             (( w == 0 )) && info "  Waiting for ${NODE}'s LRM to release its HA watchdog before a ${ROLLBACK_SECS}s rollback window..."

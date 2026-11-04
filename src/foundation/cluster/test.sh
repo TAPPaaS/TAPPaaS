@@ -434,6 +434,15 @@ fi
 # default, making a missing vmtag a hard error mid-install, while the LXC path
 # quietly defaulted. (That no manifest reintroduces a per-field opt-out is
 # asserted in module-manager's manifest.test.ts, across every field.)
+info "${BOLD}Test 3a0: the cluster's only node changes its lan uplink in place${CL}"
+# lab2 2026-11-04: a first node cannot be drained (no other node), so its LAN port could not move.
+if grep -q 'rn_undrain_node() { :; }   # nothing was drained' "${SCRIPT_DIR}/lan-uplink.sh" \
+   && grep -q '\[\[ "${alone}" != 1 \]\]' "${SCRIPT_DIR}/lan-uplink.sh"; then
+    pass "lan-uplink set skips the drain and the watchdog wait on a one-node cluster"
+else
+    fail "lan-uplink set drains even the cluster's only node — the first node's LAN port cannot move"
+fi
+
 info "${BOLD}Test 3a1: a clone is built on the resolved storage${CL}"
 # lab2 2026-11-03: identity cloned onto local-zfs, the template's pool, with tanka1 there.
 if grep -q '_clone_with_progress "${CURRENT_NODE}" "${IMAGE}" "${VMID}" "${VMNAME}" "" "${STORAGE}"' "${SCRIPT_DIR}/Create-TAPPaaS-VM.sh" \
