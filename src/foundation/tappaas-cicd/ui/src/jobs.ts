@@ -163,8 +163,10 @@ const STOP_GRACE = 30_000;
 // ui/install.sh, having linked a new build while a job runs, leaves this file
 // in the state directory instead of restarting the service (which would kill
 // the job — refresh-control-plane.sh runs from `module update tappaas-cicd`,
-// a console job). The console takes it when the runner is idle and exits;
-// the unit's Restart=always brings up the new build.
+// a console job). So does the unit's ExecReload, which a NixOS switch runs
+// when it changes the unit (reloadIfChanged, tappaas-cicd.nix). The console
+// takes it when the runner is idle and exits; the unit's Restart=always
+// brings up the new build under the current definition.
 export const RESTART_MARKER = "restart-pending";
 
 // The lock the runner holds while a write job runs: the sweep's prepare step
@@ -182,6 +184,12 @@ export function takeRestartMarker(stateDir: string): boolean {
     return false;
   }
   return true;
+}
+
+// Whether the console should exit now for a pending restart: a marker is
+// there and nothing runs or waits (taking the marker when so).
+export function restartDue(stateDir: string, busy: boolean): boolean {
+  return !busy && takeRestartMarker(stateDir);
 }
 
 type Listener = (ev: { type: "output"; chunk: string } | { type: "state"; job: JobSummary } | { type: "end"; job: JobSummary }) => void;

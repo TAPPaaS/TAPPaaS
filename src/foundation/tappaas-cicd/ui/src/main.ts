@@ -22,7 +22,7 @@ import { AccessConfig, Me, addrMatches, setupState } from "./access";
 import { GateKeys, authentikKeyFetch } from "./gate";
 import { Cmdb } from "./cmdb";
 import { HealthLive } from "./healthlive";
-import { Jobs, takeRestartMarker } from "./jobs";
+import { Jobs, RESTART_MARKER, restartDue, takeRestartMarker } from "./jobs";
 import { KEY_FILE, LiteLLM } from "./litellm";
 import { Assistant } from "./assistant";
 import { lokiConfig } from "./assistant-tools";
@@ -268,6 +268,14 @@ async function serve(o: ServeOpts): Promise<number> {
   });
   const healthLive = new HealthLive(reads.healthGraph, cmdb, log);
   let assistant: Assistant | null = null;
+  // This start runs the linked build under the unit's current definition: a
+  // marker left for the previous process is spent.
+  if (takeRestartMarker(o.stateDir)) log("a restart was pending: taken up by this start");
+  const restartIfDue = (): void => {
+    if (!restartDue(o.stateDir, jobs.busy())) return;
+    log("a new build or unit definition is pending: restarting into it now that the runner is idle");
+    process.exit(0);
+  };
   const jobs = new Jobs({
     stateDir: o.stateDir,
     configDir: o.configDir,
@@ -293,13 +301,10 @@ async function serve(o: ServeOpts): Promise<number> {
         }
       }
     },
-    // A new build linked while a job ran (ui/install.sh left restart-pending):
-    // now that nothing runs, exit; the unit's Restart=always starts the new one.
-    onIdle: () => {
-      if (!takeRestartMarker(o.stateDir)) return;
-      log("a new build was linked while a job ran: restarting into it now that the runner is idle");
-      process.exit(0);
-    },
+    // A new build linked while a job ran (ui/install.sh left restart-pending),
+    // or a switch changed the unit (its ExecReload did): now that nothing
+    // runs, exit; the unit's Restart=always starts the new one.
+    onIdle: restartIfDue,
   });
   // The assistant (D7): LiteLLM with the key litellm:models provisioned.
   const litellm = new LiteLLM({ keyFile: process.env.CONSOLE_LITELLM_KEY_FILE ?? KEY_FILE, configDir: o.configDir, run, log });
@@ -351,6 +356,11 @@ async function serve(o: ServeOpts): Promise<number> {
       info("  control-plane.json changed: reloading the verb manifests");
       reloadManifests();
     }
+  });
+  // A marker left while the runner is already idle (the reload of a switch
+  // from the nightly sweep or a shell): no job end will come to take it.
+  watchFile(join(o.stateDir, RESTART_MARKER), { interval: 5_000, persistent: false }, (cur, prev) => {
+    if (cur.mtimeMs > 0 && cur.mtimeMs !== prev.mtimeMs) restartIfDue();
   });
   return new Promise<number>(() => undefined); // serve until stopped
 }

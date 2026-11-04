@@ -283,7 +283,8 @@ Both change the site through the same managers, so they never overlap — in eit
 The same reasoning keeps the console's own restart off a running job: `ui/install.sh`, having
 linked a new build, leaves `restart-pending` in the console's state directory when a job runs
 (it is reached from `module update tappaas-cicd`, itself a job) and the console exits into
-the new build when its runner is idle.
+the new build when its runner is idle. A NixOS switch that changes the console's unit does the
+same: the unit is reloaded, not restarted (`reloadIfChanged`), and its reload leaves the marker.
 
 ## Notices: one mailer, conditions, support bundles
 
