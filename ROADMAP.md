@@ -111,13 +111,13 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 6 | G6.3 Data model | M | M | 9 | – | 2 |
 | 5 | G5.1 Satellite & off-site | H | M | 1 | – | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
-| 4 | G4.4 Storage & physical devices | H | L | 5 | – | 1 |
+| 4 | G4.4 Storage & physical devices | H | L | 5 | – | 3 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 6 | 1 | 2 |
 | 4 | ✅ G4.6 Community module extension points | H | M | – | 7 | – |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 29 | 2 | 5 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
-| 3 | G3.4 AI stack maturity | M | M | 4 | – | 5 |
+| 3 | G3.4 AI stack maturity | M | M | 4 | – | 8 |
 | 3 | G3.5 Installer UX | L | L | 2 | – | 2 |
 | 2 | G2.1 Firewall exposure & rule order | M | H | 26 | – | 2 |
 | 2 | G2.2 DNS resolver robustness | L | M | 7 | – | 1 |
@@ -160,9 +160,11 @@ met gates are recorded in the releases that carried their waves.
 | Legal/processor | #359 | Wave 4 |
 | IPv6 | #26 — [ADR-030](docs/ADR/ADR-030%20-%20IPv6.md) **Accepted v1.0 2026-10-13**: built and on `main`; inbound verified from a phone over IPv6 via the public AAAA. Remaining outside it: public DNS that follows a dynamic WAN (#383) | #26 closable |
 | Locations and placement | [ADR-036](docs/ADR/ADR-036%20-%20Locations%20and%20Placement.md) **Accepted, built 2026-10-23** (#869–#873, migrations 0019–0022): site-manager owns locations with a primary one, every device names its location, rack-manager becomes position-manager owning every placement, the nodes are `pvehost` machines and `site.hardware.nodes` goes; steps #869–#873 | G6.3 |
-| Asset lifecycle and CMDB | #906 — [ADR-040](docs/ADR/ADR-040%20-%20Asset%20Lifecycle%20and%20CMDB.md) **Accepted v1.0 2026-10-29**: the IT4IT 3.0.1 Digital Product Backbone end to end, checked against the standard; resources (assets) beside the CIs with two lifecycles; the actual state as a CMDB kept by cmdb-controller and fed by every manager; physical assets with a lifecycle of their own as one kind of CI | G6.3 |
+| Asset lifecycle and CMDB | #906 — [ADR-040](docs/ADR/ADR-040%20-%20Asset%20Lifecycle%20and%20CMDB.md) **Accepted v1.0 2026-10-29**, mostly built and live-tested on hrossen ([plan](docs/plans/adr-040-live-test-plan.md)); alerts carry no CI id yet (its implementation plan step 5): the IT4IT 3.0.1 Digital Product Backbone end to end, checked against the standard; resources (assets) beside the CIs with two lifecycles; the actual state as a CMDB kept by cmdb-controller and fed by every manager; physical assets with a lifecycle of their own as one kind of CI | G6.3 |
 | Resource allocation | #907: pools consumed by allocations — RAM, CPU, storage, addresses, VLANs — with limits and breach; builds on ADR-040's `pool` class | G3.1 |
-| Health in the CMDB | [ADR-041](docs/ADR/ADR-041%20-%20Health%20in%20the%20CMDB%2C%20Root%20Cause%20and%20the%20Health%20View.md) **Accepted v1.0 2026-10-30** (O3, O5, O6 open): conditions on every CMDB object, health-manager split into assess and emit, root cause derived along relations, a Health view in the console; #908 | G6.2, G6.3 |
+| Health in the CMDB | [ADR-041](docs/ADR/ADR-041%20-%20Health%20in%20the%20CMDB%2C%20Root%20Cause%20and%20the%20Health%20View.md) **Accepted v1.0 2026-10-30** (O3, O5, O6 open), built and live-tested on hrossen ([plan](docs/plans/adr-041-live-test-plan.md)): conditions on every CMDB object, health-manager split into assess and emit, root cause derived along relations, a Health view in the console; #908 | G6.2, G6.3 |
+| Disks as assets | [ADR-042](docs/ADR/ADR-042%20-%20Disks%20as%20Assets%20and%20CIs.md) **Accepted v1.0 2026-10-31** (ADR-040 O4): a disk is an asset identified by its serial, placed in a bay of a server, with a `disk` CI built on by the pools; implementation steps 1–4 built (metamodel, site-manager, health, console); step 5, `disk adopt` and a sweep on the test system, not yet recorded | G6.3 |
+| Site certificates | [ADR-043](docs/ADR/ADR-043%20-%20Site%20Certificates.md) **Draft v0.3 2026-11-02, for sign-off**: one internal CA per site for `<module>.<zone>.internal`, one more per domain tree without public certificates; `ca-manager` owns every certificate and the DNS providers. Steps 1–6 built (progress 2026-11-03), proven on lab2; on hrossen the internal CA, logging's and the firewall's syslog certificates are live. Step 7, a fresh lab2, not started. Its header still says nothing is built | #787, #310, #771 |
 | Install | #403, #377 — [ADR-037](docs/ADR/ADR-037%20-%20Install.md) **Accepted v1.2 2026-10-27**: ZFS on the boot disk by default, a module's `storage` a preference with the boot pool last (P1, live on the spare machine as a mirrored tappaas4); adding a node is two verbs — `node add` stands it up (joined, patched, rebooted), `node storage add` gives it pools; boot disks by size, model or serial, the MAC learned from the switch port, the console's Add node wizard (D4, P4a–P4d built, not yet run in a real node add); a hosted server on one IP (P2); the bootstrap ends at the console (P3). Next: Stage 2 on the spare machine, then P2 | G3.1, G3.5 |
 | User interface | #844 — [ADR-034](docs/ADR/ADR-034%20-%20TAPPaaS%20User%20Interface.md) **Accepted v1.0 2026-10-18**, built: the console at `console.<domain>` | #844 closed |
 | Service exposure | #845 — [ADR-032](docs/ADR/ADR-032%20-%20Service%20Exposure.md) **Accepted v1.0, built** (2026-10-17): the gate authenticates machine callers (service accounts, client-credentials JWT); a module without `network:proxy` is unpublished by design, in the DMZ when it runs third-party code without user data (ADR-021 R1 amended); Jellyfin published without the gate for friends and family, hardened. all phases built (P0–P4); rate limiting is #851 | #845 closed |
@@ -172,7 +174,7 @@ met gates are recorded in the releases that carried their waves.
 
 ### Housekeeping
 
-- **Merge pairs** the issues themselves say belong together: #385 + #222,
+- **Merge pairs** the issues themselves say belong together: #385 + #222, #800 + #828,
   #160 + #256, #642 + #643, #119 / #120 / #121.
 - **Close or park:** #154 → *Parking lot* (#223 parked 2026-10-13) (#284 went to Future Work 2026-10-06). The forge's *Release 2.0: Build out Stacks* milestone still has 4 open issues —
   move them per this plan and close it.
@@ -209,12 +211,13 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #897 | network:proxy: extra hostnames, redirects, wildcard routes | Design agreed on the issue (2026-10-30), no blockers, large. `proxyRoutes` entries take `name` or `domain`, with `aliases` (`mirror`, `redirect`); the environment's aliases applied by the same code. Certificates for a second DNS zone are the hard part, and hosting's preview needs them. First: does os-caddy have a redirect handler? Path routes to another module rejected. From @AndreasJe (hosting) |
 | #900 | cluster:ha for containers | `ct:` resources, restart-mode migration only, `pvesr` replication; refused with `bindMounts` or passthrough. From @AndreasJe (hosting) |
 | #896 | Module-supplied CT templates, hash-verified, placed on the node | **Rejected and closed 2026-10-31:** hosting uses the stock Debian template with signed repositories, so no unvalidated image runs |
+| #894 | cluster:lxc: volume mount points (`volumes`) for LXC modules | A volume (`mpN: <storage>:<size>`) instead of a bind mount, so a container with separate data keeps snapshot rollback in `module update`; size grow-only, storage from the module's placement. Small. From @AndreasJe (hosting) |
 | #898 | cluster:lxc linked clones (`ctclone`) | Ties a clone to the template's node and storage, against #900 and migration. An optimisation, not a need: @AndreasJe's narrow version is linked clones only on the template's node and storage, a full clone elsewhere, never with `cluster:ha` (hosting) |
 | #899 | schemas: module-owned config fields that validate | [ADR-038](docs/ADR/ADR-038%20-%20Component%20Declarations.md) Proposed v0.2, waiting for sign-off: reworked 2026-10-29 into ADR-035 D11 declarations (hosting's sites in `hosting-manager.json`), not fields in the module JSON. Parked 2026-10-31 for the operator's decision; @AndreasJe's five gaps on the issue go into the ADR when it is picked up (per-template options, values known only at runtime, rules across fields, `grow-only`, adding and removing list elements) |
 | #911 | network:rules: `egressPolicy: restricted`, a module's egress below its zone's `access-to` | Worth building; the proposal needs four changes. Module egress (band 7) runs before the zone baseline (band 8), so the block must come with passes for the gateway's DNS, NTP, DHCP and ICMP. Slots may be shared because all rules are passes, so the block needs a reserved last position and a pass through `rule_overlap.py`. Traffic within a zone probably never reaches the firewall, so sites in one zone may still reach each other, and `to: hosting` in the same zone would have no effect: test that first. IPv4 and IPv6 both; an unresolved host alias makes the block fail open; a restricted NixOS guest loses its package source. From @AndreasJe (hosting) |
 | #771 | NFS over TLS for `pvehost:nfs` | ADR-029 v0.7: OpenZFS `sharenfs` cannot carry `xprtsec` |
-| #787 | logging: TLS for syslog ingest and Loki's ports | From #165 §3 (2026-10-06). Waits for a TAPPaaS CA; traffic stays inside mgmt / the site network meanwhile |
-| #310 | Firewall API certificate verified, not skipped (`--no-ssl-verify`) | **Follows #787:** the same TAPPaaS CA issues the firewall a certificate for `firewall.mgmt.internal`, and the controllers verify it. Rescoped 2026-10-08 out of G2.1: blocking on a pinned self-signed certificate would stop the sweep at every rebuild or renewal for a narrow risk (a foothold on mgmt). Meanwhile a change is detected — `check-firewall-cert`, hourly, mails FirewallCertChanged (`ddf94cdb`) |
+| #787 | logging: TLS for syslog ingest and Loki's ports | **Built 2026-11-03** (`3dd1bec7`, `26901ab1`; ADR-043 step 6): every sender on TLS with the site CA, proven on lab2; live on hrossen. Close when the plain ports go, a release later |
+| #310 | Firewall API certificate verified, not skipped (`--no-ssl-verify`) | **Unblocked 2026-11-03:** the site CA exists (ADR-043), and `ca-manager cert to-firewall` already puts a certificate in the firewall's trust store. Next: a certificate for `firewall.mgmt.internal` on the API, and the controllers verify it. Rescoped 2026-10-08 out of G2.1 |
 
 ---
 
@@ -272,7 +275,7 @@ A general TAPPaaS user experience, starting with a physical view of the site: no
 | #885 | console: agents act through the identity gate | M | M | **Opened 2026-10-26** from #839 P4: a service identity per agent in Authentik, a group limiting its jobs, every job recorded under its name. Builds on #142 |
 | #886 | console: a security view of the SIEM's alerts | M | L | **Opened 2026-10-26** from #839 P4: open alerts per node and module, read-only, linked to the SIEM. After #843 |
 | #887 | console: a status page and badges for the site's users | M | L | **Opened 2026-10-26** from #839 P4: `status.<domain>` with each published app up or down, and badges; needs gated `proxyRoutes` |
-| #908 | ADR-041: health in the CMDB, root cause and a Health view in the console | M | M | **Opened 2026-10-30.** Conditions on every CMDB object, health-manager split into assess and emit, root cause along the relations, the Health view; after #906 is live |
+| #908 | ADR-041: health in the CMDB, root cause and a Health view in the console | M | M | **Built, live-tested on hrossen** (ADR-041, merged with `adr-041` 2026-11-01): conditions on every CMDB object, health-manager split into assess and emit, root cause along the relations, the Health view. Open: ADR-041 O3, O5, O6 |
 
 ### G6.3 Data model — Ease M · Risk M · released: 9 · open: 2
 
@@ -281,7 +284,7 @@ The meta model of the configuration is written down in [`src/DATAMODEL.md`](src/
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #866 | Data model: parked simplifications (backup cascade, module placement, `module:service`) | – | – | **Parked** (operator, 2026-10-23): findings 5–7 of `src/DATAMODEL.md`, recorded so they are not lost |
-| #906 | Asset lifecycle and CMDB: the actual state of the site (assets, nodes, guests, modules, zones, environments, people) in a CMDB along the IT4IT backbone; an asset from procured to disposed, whether or not it is a node, switch or device at the time; ports and Wi-Fi on the asset; an asset-manager beside or replacing position-manager | H | M | **Opened 2026-10-29.** ADR-040 **Accepted v1.0 2026-10-29**; implementation started (cmdb-controller on PostgreSQL, asset-manager): assets as resources beside the CIs, an asset reused and a CI never; a module is a node of its kind with software in it; a class hierarchy with inheritance, cmdb-controller a 24/7 API with the CLI in front, the metamodel as data in PostgreSQL, OpenTelemetry identity on every CI; build cmdb-controller, borrow IT4IT, UCMDB, CIM, NetBox models; event management a later ADR |
+| #906 | Asset lifecycle and CMDB: the actual state of the site (assets, nodes, guests, modules, zones, environments, people) in a CMDB along the IT4IT backbone; an asset from procured to disposed, whether or not it is a node, switch or device at the time; ports and Wi-Fi on the asset; an asset-manager beside or replacing position-manager | H | M | **Opened 2026-10-29.** ADR-040 **Accepted v1.0 2026-10-29**; mostly built and live-tested on hrossen (cmdb-controller on PostgreSQL, asset-manager, the sweep, the console's Assets and Physical views); alerts carry no CI id yet: assets as resources beside the CIs, an asset reused and a CI never; a module is a node of its kind with software in it; a class hierarchy with inheritance, cmdb-controller a 24/7 API with the CLI in front, the metamodel as data in PostgreSQL, OpenTelemetry identity on every CI; build cmdb-controller, borrow IT4IT, UCMDB, CIM, NetBox models; event management a later ADR |
 
 ## Wave 5 — live verification
 
@@ -316,13 +319,15 @@ How tests run (a `test` verb on the managers, #499) and the module tests that st
 
 New capabilities with low upgrade risk.
 
-### G4.4 Storage & physical devices — Ease H · Risk L · released: 5 · open: 1
+### G4.4 Storage & physical devices — Ease H · Risk L · released: 5 · open: 3
 
 Shared storage as a managed part of a site: the rest of the NFS service (#772). The physical network (#668, #697, #706, #731, #155, #158) moved to G6.1.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #772 | ADR-029 NFS: remaining work packages from #766 | M | L | Export backup, NAS servers, storage zone, LXC consumers, quota health, `show`/`purge`. **2026-10-05:** ADR-029 v0.8 (shares by name, pending mounts, `subdir`) built, smoke-tested |
+| #863 | backup: spin down the tankb/tankc backup disks when idle | L | L | **Opened 2026-10-20:** the backup pools' spinning disks run 24/7 for about 30 minutes of writes a night; nothing sets a standby timer |
+| #864 | cluster: check SSD wear, and place the boot and Loki disks on purpose | M | L | **Opened 2026-10-20:** the PVE boot disk writes more than the VM pool (about 100 GB a day measured on hrossen) and nothing watches wear. ADR-042's disk CIs give wear a home |
 
 ### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 6 · done for 2.4: 1 · open: 2
 
@@ -390,7 +395,7 @@ The known rough edges of the app modules, fixed and tested so they stay fixed: N
 | #411 | windows-server: `deploy-instances.sh` missing | L | L | **Verified open 2026-09-26** (low-risk sweep): the script does not exist; writing it is the work |
 | #754 | In-guest backup timers: drop for PBS or say why they stay | L | L | **2026-10-14:** identity, coturn, euro-office, vaultwarden dropped (three had produced empty archives every night). **litellm and openwebui assigned to @ErikDaniel007** — openwebui's `restore.sh` reads `/var/backup` |
 
-### G3.4 AI stack maturity — Ease M · Risk M · released: 4 · open: 5
+### G3.4 AI stack maturity — Ease M · Risk M · released: 4 · open: 8
 
 A production-grade AI stack (its test conventions, #119 and #120, are in G5.2): hardened (#121) and kept current (#621), LiteLLM sized for its workers (#677), and vLLM's models recoverable after a restore (#758).
 
@@ -401,6 +406,9 @@ A production-grade AI stack (its test conventions, #119 and #120, are in G5.2): 
 | #812 | vllm-amd: privileged LXC, unauthenticated vLLM API, sshd password auth | M | L | **Opened 2026-10-09** from the #788 triage of its Debian LXC: root in ct312 is root on tappaas2 (Docker inside, GPU devices); vLLM :8000 on all interfaces with no `--api-key`, bypassing LiteLLM; `PasswordAuthentication yes` |
 | #758 | vllm-amd: the models bind mount is in no backup | M | L | The 33 GB `/tanka1/vllm-models` bind mount is in no backup, so a restored container has no models. Maintainer @ErikDaniel007: re-download, back it up, or call it cache |
 | #677 | litellm's default workers do not fit its default 4 GB | L | L | Found 2026-09-20 by `--deep`: litellm plus four workers leave 43 MB free in the default 4 GB. Either the default memory covers the workers, or the workers follow the memory |
+| #846 | vllm-amd: a new API key does not reach LiteLLM; its tests stay green | M | L | **Opened 2026-10-16:** the sweep updated LiteLLM before vllm-amd, so its consumers kept `none` for about 30 hours and `module test litellm` passed. Maintainer @ErikDaniel007 |
+| #800 | litellm: `trusted_proxy_ranges` and env-credential login (1.103 warnings) | L | L | **Opened 2026-10-08.** Merge pair with #828: name the proxy so failed sign-ins are limited per client; master-key login off where SSO is wired |
+| #828 | litellm: the UI accepts the master key as a static admin login | L | L | **Opened 2026-10-14.** Merge pair with #800: `disable_env_credential_login` once a real admin exists; INSTALL.md calls the master key the fallback login today |
 
 ### G3.5 Installer UX — Ease L · Risk L · released: 2 · open: 2
 
@@ -471,6 +479,14 @@ summary (`release/roadmap-cut.py`) and leaves this block empty again.
 
 <!-- next-release summary -->
 Sites update daily at 02:00 by default: a site still on the old weekly default (Tuesday or Thursday at 02:00) moves to daily on its first update, with a warning that names how to keep weekly; any schedule chosen otherwise stays. An update no longer keeps a configuration value nobody chose: when a release starts to define a field the site already has with another value, the release value is taken and the update warns with the value it replaced, unless the operator set it with `module modify --set`, which now records the fields it sets. Every way a repository moves now goes through the signature checks: a repository that site-manager clones again, or moves to the branch site.json declares, is verified like an update, and a staging or production clone without recorded signers is refused with the command that adds it.
+
+Every site gets its own certificate authority. `ca-manager` owns the site's certificates and its DNS providers, whoever issues them; `acme-setup.sh` stays as a shim, and the old credential file moves into it. Logging takes its journals, queries and syslog over TLS with the site CA's certificates; the plain ports close a release later. A new site starts in local DNS mode, and without a domain it is `<site>.home.arpa` throughout.
+
+The site's actual state is kept in a CMDB: assets and CIs, disks included, fed by every manager and checked by a discovery sweep. Health becomes conditions on those objects, with root cause along their relations, shown in the console's new Health view.
+
+A module can ship its own alert rules as line patterns, and the foundation's alerts are written that way too; `health-manager alerts` lists what is open and what fired. Containers are watched like VMs: health gates, journal shipping, backup listing and purge, and the update's boot wait reach them through their node.
+
+In the console, Day 1 follows the confirmed order and ends with the rest of the foundation placed on the machines; Day 2 gains Add a repository and Add a switch. A memory-tight node holds back only the module that grows, and modules can be paused to make room.
 <!-- /next-release summary -->
 
 ## Release 2.3.3 — staging 2026-10-26 · production at the next boundary
