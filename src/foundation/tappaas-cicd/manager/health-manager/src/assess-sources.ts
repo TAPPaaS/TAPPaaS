@@ -48,6 +48,7 @@ export const GATES: Record<string, GateMap> = {
   quorum: { type: "operational", reason: "quorum-at-risk" },
   "lan-uplink": { type: "operational", reason: "lan-uplink", skip: "ok" }, // a skip is an informational line
   "ipv6-egress": { type: "operational", reason: "ipv6-egress" },
+  internet: { type: "operational", reason: "no-internet" },
   "switch-ports": { type: "operational", reason: "switch-port" },
   "mlag-pairs": { type: "operational", reason: "mlag-pair" },
   pulse: { type: "operational", reason: "pulse" },

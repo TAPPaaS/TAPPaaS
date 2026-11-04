@@ -36,6 +36,7 @@ import { checkControlPlaneTrust } from "./controlplane";
 import { checkCmdb } from "./cmdbsweep";
 import { checkMlagPairs } from "./mlag";
 import { checkIpv6Egress } from "./ipv6egress";
+import { checkInternet } from "./internet";
 import { primaryLocation } from "../../../lib/ts/src/locations";
 import { countedMem } from "./memcount";
 
@@ -1160,6 +1161,7 @@ export function runHealthGates(client: ClusterClient, opts: ValidateOpts): Healt
     gate(() => checkSiteTimezone(client, opts.configDir, opts.defaultNode)),
     gate(() => checkQuorum(client)),
     gate(() => checkLanUplink(client)),
+    gate(() => checkInternet()),
     gate(() => checkIpv6Egress(opts.configDir, opts.defaultNode)),
     gate(() => checkSwitchPorts(opts.configDir)),
     gate(() => checkMlagPairs(opts.configDir)),

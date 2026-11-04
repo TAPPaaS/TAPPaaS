@@ -42,6 +42,7 @@ import { checkUpdateCapacity, probeTarget, runHealthGates } from "./checks";
 import { ALERTS_LOG, alertLine, fetchGrafanaAlerts, filterAlerts, openAlerts, recentEvents } from "./alerts";
 import { checkRoom } from "./room";
 import { nodeGuests } from "./guests";
+import { reachLines, runVlanReach, writeReach } from "./vlanreach";
 import {
   CliSecurityIO, loadVex, scanComponentList, scanImageRefs, PREVIOUS_FILE, SITE_CDX_FILE, STATUS_FILE, notify, readStatus, renderReport, runScan, sbomDir,
   sweepIsNewer, writeScan,
@@ -102,6 +103,11 @@ export const HELP: HelpSpec = {
         ["--install <instance>", "Count this deployed config's memory as new on its node (install-module, before the guest exists)."],
         ["--memory-threshold PCT", `Percent of a node's RAM the projected commitment must stay under (default ${DEFAULT_MEMORY_THRESHOLD}).`],
       ],
+    },
+    {
+      usage: "vlan-reach [--json] [--config-dir DIR]", effect: { noPreview: "adds a probe VLAN interface on each node's lan bridge for a few seconds, pings the other nodes over IPv6 link-local, and removes it" },
+      details: "Whether each active zone's VLAN reaches from every node to every other: a switch between the nodes that does not carry a VLAN splits that zone. Says which VLANs must be carried on which nodes' LAN ports. Exit 2 when a VLAN does not cross. The result is kept for the console's Day 1.",
+      options: [["--json", "Print the result as JSON."]],
     },
     {
       usage: "guests [<node>] [--json] [--config-dir DIR]", effect: "read",
@@ -729,6 +735,13 @@ export function run(argv: string[], client: ClusterClient): number {
         }
         for (const row of r.rows ?? []) info(`    ${row.text}`);
         return r.status === "fail" ? 1 : 0;
+      }
+      case "vlan-reach": {
+        const r = runVlanReach(opts.configDir);
+        writeReach(r);
+        if (opts.rest.includes("--json")) info(JSON.stringify(r, null, 2));
+        else for (const l of reachLines(r)) (l.startsWith("✗") ? warn : info)(l);
+        return r.error ? 1 : r.ok ? 0 : 2;
       }
       case "guests":
         return cmdGuests(opts, client);
