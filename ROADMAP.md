@@ -218,6 +218,7 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #771 | NFS over TLS for `pvehost:nfs` | ADR-029 v0.7: OpenZFS `sharenfs` cannot carry `xprtsec` |
 | #787 | logging: TLS for syslog ingest and Loki's ports | **Built 2026-11-03** (`3dd1bec7`, `26901ab1`; ADR-043 step 6): every sender on TLS with the site CA, proven on lab2; live on hrossen. Close when the plain ports go, a release later |
 | #310 | Firewall API certificate verified, not skipped (`--no-ssl-verify`) | **Unblocked 2026-11-03:** the site CA exists (ADR-043), and `ca-manager cert to-firewall` already puts a certificate in the firewall's trust store. Next: a certificate for `firewall.mgmt.internal` on the API, and the controllers verify it. Rescoped 2026-10-08 out of G2.1 |
+| — | Observe mode for an existing switch controller (UniFi) | **Parked 2026-11-04, to rethink.** Adopting a controller that already runs a network (several switches and APs, one port TAPPaaS needs) must change nothing on it. Today interrogate marks AP uplinks as `ap` trunks and parks free ports, ap-manager takes every AP, and any later push (Add a switch's last stage, `network-manager reconcile --apply` without `--only`, the Wi-Fi wizard, a node's LAN bond) trunks those ports to TAPPaaS's VLANs only and removes SSIDs TAPPaaS has not declared. Idea: a controller `observe` mode (read, never park, never push, APs left alone) and hand-over per port; Add a switch offers observe first |
 
 ---
 
