@@ -161,7 +161,8 @@ else
     if [[ "${_have}" == "${_want}" ]]; then
         debug "  alert webhook token already in place"
     elif ssh -o BatchMode=yes -o ConnectTimeout=10 "${_VM}" \
-            "sudo install -m 0600 -o grafana -g grafana /dev/stdin ${_VM_TOKEN} && sudo systemctl restart grafana" \
+            "sudo install -m 0600 -o grafana -g grafana /dev/stdin ${_VM_TOKEN} && sudo systemctl restart grafana \
+             && for _i in \$(seq 60); do curl -fsS -o /dev/null http://127.0.0.1:3000/api/health && break; sleep 2; done" \
             < "${_ALERT_TOKEN}"; then
         info "  ${GN}✓${CL} alert webhook token delivered to Grafana; Grafana restarted to read it"
     else

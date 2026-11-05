@@ -30,6 +30,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 CONFIG_DIR = os.environ.get("TAPPAAS_CONFIG", "/home/tappaas/config")
 REPO_SRC = os.environ.get("TAPPAAS_REPO_SRC", "/home/tappaas/TAPPaaS/src")
@@ -413,7 +414,21 @@ def logging_vm(config_dir):
     return f"tappaas@{c.get('vmname') or 'logging'}.{c.get('zone0') or 'mgmt'}.internal"
 
 
+GRAFANA_WAIT = 90  # seconds a restarting Grafana gets to answer again
+
+
 def grafana(vm, method, path, body=None):
+    """One call to Grafana's API on the logging VM, retried while Grafana does
+    not answer yet (no connection, or 502/503 during its start)."""
+    deadline = time.monotonic() + GRAFANA_WAIT
+    while True:
+        code, text = grafana_once(vm, method, path, body)
+        if code not in (0, 502, 503) or time.monotonic() >= deadline:
+            return code, text
+        time.sleep(3)
+
+
+def grafana_once(vm, method, path, body=None):
     """One call to Grafana's API on the logging VM, as admin, from that VM's
     localhost: the admin password never leaves it."""
     remote = ("P=$(sudo cat /etc/secrets/grafana-admin-password) && "
