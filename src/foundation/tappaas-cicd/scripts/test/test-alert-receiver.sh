@@ -68,7 +68,8 @@ PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); p
 python3 "${R}" --listen "127.0.0.1:${PORT}" --token-file "${TMP}/token" \
     --notify "${TMP}/notify" --bundle "${TMP}/bundle" --breadcrumb "${TMP}/crumbs" --heartbeat-file "${TMP}/heartbeat" \
     --cluster "${TMP}/cluster" --node-down-dir "${TMP}/node-down" --cluster-cache 0 --alerts-log "${TMP}/alerts.jsonl" \
-    --health "${TMP}/health" --config-dir "${TMP}/cfg" > "${TMP}/log" 2>&1 &
+    --health "${TMP}/health" --config-dir "${TMP}/cfg" --silent-hold 0 --burst-min 1000 \
+    --maintenance-dir "${TMP}/maint" --silent-burst-file "${TMP}/burst.json" > "${TMP}/log" 2>&1 &
 PID=$!
 for _ in $(seq 1 50); do curl -s "http://127.0.0.1:${PORT}/" >/dev/null 2>&1 && break; sleep 0.1; done
 
@@ -284,6 +285,67 @@ waited "${TMP}/subjects" "could not be built"
 ck "health-manager cannot say: the rule's template goes out" "ALERT: daily digest could not be built" "$(tail -1 "${TMP}/subjects")"
 sleep 0.3
 ck "…and nothing is marked" "digest --json" "$(paste -sd'|' - < "${TMP}/health-calls")"
+
+# ── planned disruption and many hosts silent at once ────────────────────
+# A second receiver that holds a HostSilent for a second before mailing it.
+kill "${PID}" 2>/dev/null; wait "${PID}" 2>/dev/null
+PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')"
+python3 "${R}" --listen "127.0.0.1:${PORT}" --token-file "${TMP}/token" \
+    --notify "${TMP}/notify" --bundle "${TMP}/bundle" --breadcrumb "${TMP}/crumbs2" --heartbeat-file "${TMP}/heartbeat" \
+    --cluster "${TMP}/cluster" --node-down-dir "${TMP}/node-down2" --cluster-cache 0 --alerts-log "${TMP}/alerts2.jsonl" \
+    --health "" --config-dir "${TMP}/cfg" --silent-hold 1 --burst-min 3 --burst-window 60 \
+    --maintenance-dir "${TMP}/maint2" --silent-burst-file "${TMP}/burst2.json" > "${TMP}/log2" 2>&1 &
+PID=$!
+for _ in $(seq 1 50); do curl -s "http://127.0.0.1:${PORT}/" >/dev/null 2>&1 && break; sleep 0.1; done
+TOKEN="$(cat "${TMP}/token")"
+echo '{"nodes":[{"name":"tappaas1","online":true},{"name":"tappaas2","online":true}],"quorate":true,"guests":[],"ha_log":[]}' > "${TMP}/cluster.json"
+MW="${HERE}/../tappaas-maintenance.sh"
+: > "${TMP}/subjects"; : > "${TMP}/args"
+
+# A maintenance window for the whole site: a HostSilent is recorded, not mailed.
+TAPPAAS_MAINTENANCE_DIR="${TMP}/maint2" "${MW}" open --name restart-network --scope site --minutes 5 --reason "network restarted by its update"
+ck "a window is listed" "restart-network	site" "$(TAPPAAS_MAINTENANCE_DIR="${TMP}/maint2" "${MW}" list | cut -f1,2)"
+post "${TOKEN}" "$(wh firing state HostSilent immich)" >/dev/null
+post "${TOKEN}" "$(wh resolved state HostSilent immich)" >/dev/null
+sleep 1.5
+ck "inside a site window, a HostSilent is not mailed" "0" "$(grep -c '^ALERT: HostSilent' "${TMP}/subjects")"
+ck "…its RESOLVED is only a reply, which site-notify drops with no ALERT open" "yes" "$(grep -q -- '--key grafana:HostSilent:immich --resolve' "${TMP}/args" && echo yes || echo no)"
+ck "…and the fold is on record" "yes" "$(grep -q 'folded into maintenance (network restarted by its update): HostSilent on immich' "${TMP}/crumbs2" && echo yes || echo no)"
+TAPPAAS_MAINTENANCE_DIR="${TMP}/maint2" "${MW}" close --name restart-network
+# A window for one host covers that host only.
+TAPPAAS_MAINTENANCE_DIR="${TMP}/maint2" "${MW}" open --name restart-forgejo --scope forgejo --minutes 5
+post "${TOKEN}" "$(wh firing state HostSilent forgejo)" >/dev/null
+sleep 1.5
+ck "a host window covers its host" "0" "$(grep -c 'HostSilent on forgejo' "${TMP}/subjects")"
+TAPPAAS_MAINTENANCE_DIR="${TMP}/maint2" "${MW}" close --name restart-forgejo
+ck "a closed window is gone" "" "$(TAPPAAS_MAINTENANCE_DIR="${TMP}/maint2" "${MW}" list)"
+
+# One host silent on its own: mailed, after the hold.
+post "${TOKEN}" "$(wh firing state HostSilent vaultwarden)" >/dev/null
+ck "a lone HostSilent waits for the hold" "0" "$(grep -c 'HostSilent on vaultwarden' "${TMP}/subjects")"
+for _ in $(seq 1 40); do grep -q 'HostSilent on vaultwarden' "${TMP}/subjects" && break; sleep 0.1; done
+ck "…and is then mailed on its own" "1" "$(grep -c 'HostSilent on vaultwarden' "${TMP}/subjects")"
+post "${TOKEN}" "$(wh resolved state HostSilent vaultwarden)" >/dev/null
+rm -f "${TMP}/burst2.json"; : > "${TMP}/subjects"; : > "${TMP}/args"
+
+# Three hosts silent within the window, their nodes up: one notice.
+for h in nextcloud identity litellm; do post "${TOKEN}" "$(wh firing state HostSilent "${h}")" >/dev/null; done
+for _ in $(seq 1 40); do grep -q 'hosts stopped logging at once' "${TMP}/subjects" && break; sleep 0.1; done
+ck "three hosts silent at once make one ALERT" "ALERT: 3 hosts stopped logging at once" "$(grep 'at once' "${TMP}/subjects")"
+ck "…a condition of its own" "yes" "$(grep -q -- '--key grafana:SilentBurst:site$' "${TMP}/args" && echo yes || echo no)"
+ck "…naming every host" "yes" "$(grep -q '  identity' "${TMP}/bodies" && grep -q '  litellm' "${TMP}/bodies" && grep -q '  nextcloud' "${TMP}/bodies" && echo yes || echo no)"
+sleep 1.5
+ck "the held ones fold into it: no HostSilent of their own" "0" "$(grep -c '^ALERT: HostSilent' "${TMP}/subjects")"
+post "${TOKEN}" "$(wh firing state HostSilent jellyfin)" >/dev/null
+sleep 1.5
+ck "a host silent later joins the open notice" "0" "$(grep -c 'HostSilent on jellyfin' "${TMP}/subjects")"
+ck "…and is listed in it" "true" "$(jq -r '.members | index("jellyfin") != null' "${TMP}/burst2.json")"
+for h in nextcloud identity litellm; do post "${TOKEN}" "$(wh resolved state HostSilent "${h}")" >/dev/null; done
+ck "not all back: no RESOLVED yet" "0" "$(grep -c 'log again' "${TMP}/subjects")"
+post "${TOKEN}" "$(wh resolved state HostSilent jellyfin)" >/dev/null
+ck "all back: one RESOLVED" "RESOLVED: 4 hosts log again" "$(grep 'log again' "${TMP}/subjects")"
+ck "…as the reply to its ALERT" "yes" "$(grep -q -- '--key grafana:SilentBurst:site --resolve' "${TMP}/args" && echo yes || echo no)"
+ck "…and the burst is closed" "{}" "$(jq -c . "${TMP}/burst2.json")"
 
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"

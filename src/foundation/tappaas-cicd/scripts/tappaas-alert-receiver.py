@@ -44,6 +44,22 @@ run again. The folded hosts' own RESOLVEDs find no open condition in
 site-notify.sh and send nothing. When the cluster cannot be asked, every
 HostSilent is mailed on its own, as before.
 
+Many hosts silent at once is one notice too, when their nodes are up. A shared
+cause — the firewall restarting, its rules, the logging VM — silences every
+guest that ships logs through it: the firewall's restart on hrossen made 13
+HostSilent ALERTs and 13 RESOLVEDs. So a HostSilent waits --silent-hold seconds
+before it is mailed. When --burst-min hosts have gone silent within
+--burst-window seconds, one "N hosts stopped logging at once" ALERT goes out
+naming them, and the held ones fold into it, as do the ones that follow; when
+they all log again, one RESOLVED answers it. A host mailed on its own before the
+burst opened keeps its own ALERT and RESOLVED.
+
+A planned disruption is quiet. Before an update restarts a guest it is allowed
+to restart, it opens a maintenance window (tappaas-maintenance.sh: a file in
+--maintenance-dir naming the hosts, or the whole site for the firewall, and an
+end time). A HostSilent from inside one is recorded, not mailed, and so is its
+RESOLVED, which finds no ALERT to answer.
+
 A module's rule (ADR-039, tappaas-alert-rules.py) may carry its mail as
 templates (the mailSubject and mailBody annotations): `{placeholder}`
 substitution and nothing else, so a module's text is never run. Without them the
@@ -73,7 +89,8 @@ notice, sent or not, is a line in the breadcrumb file.
 Usage: tappaas-alert-receiver.py [--listen ADDR:PORT] [--token-file F]
                                  [--notify CMD] [--bundle CMD] [--breadcrumb F]
                                  [--cluster CMD] [--node-down-dir D]
-                                 [--health CMD]
+                                 [--health CMD] [--maintenance-dir D]
+                                 [--silent-hold S] [--burst-min N] [--burst-window S]
        tappaas-alert-receiver.py --render < webhook.json   (print the mail; tests)
 """
 
@@ -105,6 +122,11 @@ DEFAULTS = {
     "loki_admin_file": "/home/tappaas/.loki-admin-password",
     "alerts_log": "/var/lib/tappaas/alerts.jsonl",
     "health": "/home/tappaas/bin/health-manager",
+    "maintenance_dir": "/var/lib/tappaas/maintenance",
+    "silent_burst_file": "/var/lib/tappaas/silent-burst.json",
+    "silent_hold": 150,  # seconds a HostSilent waits for others before it is mailed
+    "burst_min": 3,  # hosts silent within the window that make one notice
+    "burst_window": 600,
 }
 ALERTS_LOG_MAX = 2 << 20  # past 2 MB the record keeps its newer half
 MAX_LINES = 20
@@ -645,6 +667,167 @@ def fold_node_down(args, payload):
         return payload if len(keep) == len(alerts) else {**payload, "alerts": keep}
 
 
+# ── planned disruption and many hosts silent at once ─────────────────────
+BURST_STALE = 24 * 3600  # a burst nobody resolved is forgotten after a day
+_burst_lock = threading.Lock()
+
+
+def _host(a):
+    return (a.get("labels") or {}).get("host", "")
+
+
+def _is_silent(a, status="firing"):
+    return (a.get("labels") or {}).get("alertname") == "HostSilent" and _host(a) \
+        and a.get("status", "firing") == status
+
+
+def maintenance_reason(args, host, now=None):
+    """The reason of an open maintenance window that covers host, or None."""
+    now = now or time.time()
+    short = host.split(".")[0]
+    for p in sorted(glob.glob(f"{args.maintenance_dir}/*.json")):
+        try:
+            with open(p, encoding="utf-8") as f:
+                w = json.load(f)
+            if float(w.get("until", 0)) < now:
+                continue
+            scope = w.get("scope")
+            if scope == "site" or (isinstance(scope, list) and short in [str(h).split(".")[0] for h in scope]):
+                return str(w.get("reason") or "maintenance")
+        except (OSError, ValueError, TypeError):
+            continue
+    return None
+
+
+def _load_burst(args):
+    try:
+        with open(args.silent_burst_file, encoding="utf-8") as f:
+            b = json.load(f)
+        return b if isinstance(b, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_burst(args, b):
+    try:
+        os.makedirs(os.path.dirname(args.silent_burst_file) or ".", exist_ok=True)
+        with open(args.silent_burst_file, "w", encoding="utf-8") as f:
+            json.dump(b, f)
+    except OSError as e:
+        print(f"silent burst NOT recorded: {e}", flush=True)
+
+
+def burst_mail(b):
+    members = sorted(b["members"])
+    since = datetime.fromtimestamp(b["since"]).astimezone().strftime("%Y-%m-%d %H:%M")
+    lines = [f"{len(members)} hosts stopped logging within minutes of each other, from {since}:",
+             "", *[f"  {h}" for h in members], "",
+             "Their nodes are up, so the cause is most likely shared: the firewall (restarted, or its",
+             "rules), the logging VM, or the network between them. Check those first.",
+             "",
+             "Their own HostSilent alerts are not mailed; one RESOLVED follows when they all log again.",
+             "", "Sent by the logging module's alert rules through tappaas-alert-receiver."]
+    return f"ALERT: {len(members)} hosts stopped logging at once", "\n".join(lines) + "\n"
+
+
+def burst_back_mail(b):
+    members = sorted(b["members"])
+    lines = [f"The {len(members)} hosts that stopped logging together log again:", "",
+             *[f"  {h}" for h in members], "",
+             "Sent by the logging module's alert rules through tappaas-alert-receiver."]
+    return f"RESOLVED: {len(members)} hosts log again", "\n".join(lines) + "\n"
+
+
+def in_burst(args, host):
+    with _burst_lock:
+        b = _load_burst(args)
+        return bool(b.get("open")) and host in b.get("members", [])
+
+
+def fold_quiet(args, payload):
+    """Take out of the payload the HostSilent alerts a maintenance window covers
+    and those that join a burst of hosts silent at once (see the module doc).
+    Closes a burst whose hosts all log again. Returns what is left to mail as
+    usual, or None when nothing is."""
+    alerts = payload.get("alerts") or []
+    if not any((a.get("labels") or {}).get("alertname") == "HostSilent" for a in alerts):
+        return payload
+    now = time.time()
+    keep = []
+    with _burst_lock:
+        b = _load_burst(args)
+        if b.get("open") and now - b.get("since", now) > BURST_STALE:
+            b = {}
+        recent = {h: t for h, t in (b.get("recent") or {}).items() if now - t <= args.burst_window}
+        changed = False
+        for a in alerts:
+            host = _host(a)
+            if _is_silent(a, "resolved"):
+                if b.get("open") and host in b.get("members", []):
+                    b.setdefault("back", [])
+                    if host not in b["back"]:
+                        b["back"].append(host)
+                    changed = True
+                    if set(b["back"]) >= set(b["members"]):
+                        subject, body = burst_back_mail(b)
+                        ok, out = notify(args, subject, body, key="grafana:SilentBurst:site", resolve=True)
+                        print(f"{'sent' if ok else 'NOT sent'}: {subject}" + (f" — {out}" if out and not ok else ""), flush=True)
+                        b = {}
+                keep.append(a)
+                continue
+            if not _is_silent(a):
+                keep.append(a)
+                continue
+            why = maintenance_reason(args, host, now)
+            if why:
+                print(f"folded: HostSilent on {host} into maintenance ({why})", flush=True)
+                breadcrumb(args, f"alert folded into maintenance ({why}): HostSilent on {host}")
+                continue
+            if b.get("open"):
+                if host not in b["members"]:
+                    b["members"].append(host)
+                    changed = True
+                print(f"folded: HostSilent on {host} into the silent burst", flush=True)
+                breadcrumb(args, f"alert folded into the silent burst: HostSilent on {host}")
+                continue
+            recent[host] = now
+            changed = True
+            if len(recent) >= args.burst_min:
+                b = {"open": True, "since": min(recent.values()), "members": sorted(recent), "mailed": now}
+                subject, body = burst_mail(b)
+                threading.Thread(target=send_with_bundle,
+                                 args=(args, (subject, body),
+                                       {"key": "grafana:SilentBurst:site", "resolve": False,
+                                        "bundle_since": meta({"alerts": [a]})["bundle_since"]}),
+                                 daemon=True).start()
+                print(f"folded: HostSilent on {host} opens a silent burst of {len(recent)}", flush=True)
+                breadcrumb(args, f"silent burst opened: {', '.join(sorted(recent))}")
+                continue
+            keep.append(a)
+        if not b.get("open"):
+            b = {"recent": recent} if recent else {}
+        if changed or not b:
+            _save_burst(args, b)
+    if not keep:
+        return None
+    return payload if len(keep) == len(alerts) else {**payload, "alerts": keep}
+
+
+def send_held(args, mail, m, hosts):
+    """A HostSilent's mail, after --silent-hold: unless its host joined a burst
+    (or a maintenance window) meanwhile."""
+    time.sleep(args.silent_hold)
+    left = [h for h in hosts if not in_burst(args, h) and not maintenance_reason(args, h)]
+    if hosts and not left:
+        print(f"folded after the hold: HostSilent on {', '.join(hosts)}", flush=True)
+        return True
+    if m["bundle_since"]:
+        return send_with_bundle(args, mail, m)
+    ok, out = notify(args, *mail, key=m["key"], resolve=m["resolve"])
+    print(f"{'sent' if ok else 'NOT sent'}: {mail[0]}" + (f" — {out}" if out and not ok else ""), flush=True)
+    return ok
+
+
 def record(args, payload):
     """One JSON line per alert that arrives, mailed or not (ADR-039 D8): what
     `health-manager alerts` lists as recent. The heartbeat is left out."""
@@ -803,6 +986,10 @@ def make_handler(args):
             if payload is None:
                 self.reply(200, "folded into a node-down notice")
                 return
+            payload = fold_quiet(args, payload)
+            if payload is None:
+                self.reply(200, "folded: maintenance or many hosts silent")
+                return
             mail = render(payload, make_lines_for(args))
             if mail is None:
                 self.reply(200, "nothing to send")
@@ -812,6 +999,11 @@ def make_handler(args):
                 self.reply(200, "queued")
                 return
             m = meta(payload)
+            held = [_host(a) for a in payload.get("alerts") or [] if _is_silent(a)]
+            if held and args.silent_hold > 0:
+                threading.Thread(target=send_held, args=(args, mail, m, held), daemon=True).start()
+                self.reply(200, "held")
+                return
             if m["bundle_since"]:
                 threading.Thread(target=send_with_bundle, args=(args, mail, m), daemon=True).start()
                 self.reply(200, "queued")
@@ -844,6 +1036,11 @@ def main():
     p.add_argument("--loki", default=DEFAULTS["loki"])
     p.add_argument("--loki-admin-file", default=DEFAULTS["loki_admin_file"])
     p.add_argument("--health", default=DEFAULTS["health"], help="health-manager, or nothing to run")
+    p.add_argument("--maintenance-dir", default=DEFAULTS["maintenance_dir"])
+    p.add_argument("--silent-burst-file", default=DEFAULTS["silent_burst_file"])
+    p.add_argument("--silent-hold", type=float, default=DEFAULTS["silent_hold"])
+    p.add_argument("--burst-min", type=int, default=DEFAULTS["burst_min"])
+    p.add_argument("--burst-window", type=float, default=DEFAULTS["burst_window"])
     p.add_argument("--render", action="store_true", help="read one webhook on stdin, print the mail")
     p.add_argument("--lines-file", help="--render only: the log lines a lines=\"true\" alert gets (tests)")
     args = p.parse_args()
