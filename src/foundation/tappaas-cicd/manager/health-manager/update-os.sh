@@ -63,16 +63,44 @@ progress() { if [[ "${DOTS}" -eq 1 ]]; then while IFS= read -r _; do printf ".";
 PROGRESS_LINE=0; [[ "${TAPPAAS_OS_PROGRESS:-0}" == "1" ]] && PROGRESS_LINE=1
 # run_logged <desc> <log> <command> [args...] — the command's output to <log>,
 # progress shown; returns the command's exit code.
+# With RUN_WATCH_IP set (the switch), a unit the guest is still starting at two
+# checks 15 s apart is named on a line of its own: what a long switch waits for.
 run_logged() {
-    local desc="$1" log="$2"
+    local desc="$1" log="$2" rc watch=""
     shift 2
     if [[ "${PROGRESS_LINE}" -eq 1 ]]; then
         printf '%b' "${DGN}[Info]${CL}   ${desc} "
-        "$@" 2>&1 | tee "${log}" | { while IFS= read -r _; do printf '.'; done; echo ""; }
-        return "${PIPESTATUS[0]}"
+        [[ -z "${RUN_WATCH_IP:-}" ]] || { watch_starting "${RUN_WATCH_IP}" & watch=$!; }
+        "$@" 2>&1 | tee "${log}" | { while IFS= read -r _; do printf '.'; done; }
+        rc=${PIPESTATUS[0]}
+        [[ -z "${watch}" ]] || { kill "${watch}" 2>/dev/null; wait "${watch}" 2>/dev/null; }
+        echo ""
+        return "${rc}"
     fi
     "$@" 2>&1 | tee "${log}" | progress
     return "${PIPESTATUS[0]}"
+}
+
+# watch_starting <ip> — every 15 s, the units the guest is starting (systemd start
+# jobs running), the switch itself left out; each one seen at two checks in a
+# row is named once, with its description, on a new [Info] line.
+watch_starting() {
+    local ip="$1" prev="" cur shown="" u d
+    while sleep 15; do
+        cur="$(ssh -n -o BatchMode=yes -o ConnectTimeout=5 "tappaas@${ip}" \
+            'systemctl list-jobs --no-legend --plain 2>/dev/null | while read -r _ unit type state _; do
+               [ "$type" = start ] && [ "$state" = running ] && [ "$unit" != tappaas-switch-to-configuration.service ] \
+                 && printf "%s\t%s\n" "$unit" "$(systemctl show -p Description --value "$unit")"
+             done' 2>/dev/null)" || continue
+        while IFS=$'\t' read -r u d; do
+            [[ -n "${u}" ]] || continue
+            grep -qxF "${u}" <<<"$(cut -f1 <<<"${prev}")" || continue
+            grep -qxF "${u}" <<<"${shown}" && continue
+            printf '\n%b' "${DGN}[Info]${CL}     waiting for ${u}${d:+ (${d})} "
+            shown+="${u}"$'\n'
+        done <<<"${cur}"
+        prev="${cur}"
+    done
 }
 
 # Run a command quietly (progress dots in place of its output) while preserving
@@ -966,7 +994,7 @@ update_nixos() {
         else
             # run_quiet_rc, not run_quiet: the latter die()s with exit 1 and would
             # erase the real exit code this classification depends on.
-            run_quiet_rc "nixos-rebuild on ${vm_ip} (attempt ${attempt}/3)" \
+            RUN_WATCH_IP="${vm_ip}" run_quiet_rc "switching ${vmname} to its new system$( (( attempt == 1 )) || echo " (attempt ${attempt}/3)")" \
                 timeout -k 30 "${REBUILD_MAX_SECONDS}" \
                 ssh "${SSH_REBUILD_OPTS[@]}" "tappaas@${vm_ip}" "${_rebuild_cmd}" || rc=$?
         fi
