@@ -184,7 +184,8 @@ options below are **shortcuts**, one field each (ADR-020 D11): `--email a@b.org`
 `--set email=a@b.org`, and both run the same checks. `supportEmail` — where an alert's support
 bundle is to be forwarded — is one e-mail address (the schema refuses anything else), empty
 by default and set as a day-two step. The shortcuts (scalar, site-wide): `--channel`,
-`--displayName`, `--owner`, `--email`, `--supportEmail` (`''` clears it), `--automaticReboot`, `--size`, `--snapshotRetention`, `--backupTarget`,
+`--displayName`, `--owner`, `--email`, `--supportEmail` (`''` clears it), `--automaticReboot`, `--size`, `--snapshotRetention`,
+`--wanIpv6Mode`, `--wanIpv6Address`, `--wanIpv6Gateway`, `--wanIpv6Prefix`, `--wanIpv6PrefixLength` (the WAN's IPv6, `network.wan.ipv6`; see network-manager's IPV6.md), `--backupTarget`,
 `--backupOffsite`, `--primaryLocation`, `--locale`, `--keyboard`, `--networkIsp`, `--networkPublicIp`, `--ipv6`, `--requireSigned`, `--dnssec`, `--alertsIncludeLines`,
 `--brandingLogo`, `--brandingLogoDark`, `--dnsBlocklistsLists|Zones|Allow` (comma lists, `''`
 empties one), `--diskAutoGrowEnabled|Threshold|GrowPercent|MinGrowGB|PoolCeiling`, and the

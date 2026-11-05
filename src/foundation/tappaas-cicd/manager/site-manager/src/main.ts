@@ -110,6 +110,11 @@ export const HELP: HelpSpec = {
         ["--diskAutoGrowPoolCeiling <pct>", "diskAutoGrow.poolCeiling — only while the pool stays at or under this % used (default 80)"],
         ["--networkIsp <s>", "network.isp"],
         ["--networkPublicIp <ip>", "network.publicIp (or auto)"],
+        ["--wanIpv6Mode dynamic|static|none", "network.wan.ipv6.mode — how the firewall's WAN gets IPv6: from the ISP by DHCPv6 (dynamic), a fixed address and routed prefix (static), or not at all. Applied by the next network update"],
+        ["--wanIpv6Address <cidr>", "network.wan.ipv6.address — static: the WAN address with its length, e.g. 2001:db8:0:1::2/64"],
+        ["--wanIpv6Gateway <ip>", "network.wan.ipv6.gateway — static: the ISP's gateway, e.g. 2001:db8:0:1::1"],
+        ["--wanIpv6Prefix <cidr>", "network.wan.ipv6.prefix — static: the prefix the ISP routes to the WAN address, /56 or larger"],
+        ["--wanIpv6PrefixLength <n>", "network.wan.ipv6.prefixLength — dynamic: the prefix size to ask for, 48-56"],
         ["--updateFrequency <f>", "daily | weekly | monthly | none"],
         ["--updateWeekday <Day>", "Monday … Sunday (weekly/monthly only)"],
         ["--updateHour <0-23>", "hour of the update window"],
@@ -761,6 +766,34 @@ function cmdSite(o: Opts): void {
     setStr("--locationBuilding", placeAt(legacy ? "building" : "address"));
     setStr("--networkIsp", ["network", "isp"]);
     setStr("--networkPublicIp", ["network", "publicIp"]);
+    // The WAN's IPv6: checked here so a mistyped address never reaches the
+    // firewall, and a static WAN is complete before it is written.
+    const v6 = (s: string): boolean => /^[0-9a-fA-F:]+$/.test(s) && s.includes(":") && (s.match(/::/g) ?? []).length <= 1;
+    const v6cidr = (s: string, maxLen: number): boolean => {
+      const [a, l, extra] = s.split("/");
+      const n = Number(l);
+      return extra === undefined && v6(a ?? "") && Number.isInteger(n) && n >= 1 && n <= maxLen;
+    };
+    const wanMode = o.flags.get("--wanIpv6Mode");
+    if (wanMode !== undefined && !["dynamic", "static", "none"].includes(wanMode)) no("--wanIpv6Mode must be dynamic, static or none");
+    const wanAddr = o.flags.get("--wanIpv6Address");
+    if (wanAddr !== undefined && !v6cidr(wanAddr, 128)) no("--wanIpv6Address must be an IPv6 address with its length, e.g. 2001:db8:0:1::2/64");
+    const wanGw = o.flags.get("--wanIpv6Gateway");
+    if (wanGw !== undefined && !v6(wanGw)) no("--wanIpv6Gateway must be an IPv6 address, e.g. 2001:db8:0:1::1");
+    const wanPfx = o.flags.get("--wanIpv6Prefix");
+    if (wanPfx !== undefined && !v6cidr(wanPfx, 56)) no("--wanIpv6Prefix must be an IPv6 prefix of /56 or larger, e.g. 2001:db8:6648::/48");
+    setStr("--wanIpv6Mode", ["network", "wan", "ipv6", "mode"]);
+    setStr("--wanIpv6Address", ["network", "wan", "ipv6", "address"]);
+    setStr("--wanIpv6Gateway", ["network", "wan", "ipv6", "gateway"]);
+    setStr("--wanIpv6Prefix", ["network", "wan", "ipv6", "prefix"]);
+    setRange("--wanIpv6PrefixLength", ["network", "wan", "ipv6", "prefixLength"], 48, 56);
+    {
+      const w6 = ((raw.network as Record<string, unknown> | undefined)?.wan as Record<string, unknown> | undefined)?.ipv6 as Record<string, unknown> | undefined;
+      if (w6?.mode === "static") {
+        const miss = ["address", "gateway", "prefix"].filter((k) => typeof w6[k] !== "string" || w6[k] === "");
+        if (miss.length) no(`site modify: a static IPv6 WAN needs ${miss.map((k) => `--wanIpv6${k[0].toUpperCase()}${k.slice(1)}`).join(", ")} as well`);
+      }
+    }
 
     // updateSchedule is a [frequency, weekday, hour] tuple, not a scalar. Edit it
     // by component so a partial change (e.g. only --updateFrequency daily) keeps

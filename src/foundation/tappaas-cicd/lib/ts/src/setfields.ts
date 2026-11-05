@@ -30,6 +30,8 @@ export const MODIFY_SHORTCUTS = {
     "backup.target": "--backupTarget", "backup.offsite": "--backupOffsite", "backup.defaultSchedule": "--backupDefaultSchedule",
     "backup.defaultRetention": "--backupDefaultRetention", primaryLocation: "--primaryLocation", locale: "--locale", keyboard: "--keyboard",
     "branding.logo": "--brandingLogo", "branding.logoDark": "--brandingLogoDark", "network.isp": "--networkIsp", "network.publicIp": "--networkPublicIp",
+    "network.wan.ipv6.mode": "--wanIpv6Mode", "network.wan.ipv6.address": "--wanIpv6Address", "network.wan.ipv6.gateway": "--wanIpv6Gateway",
+    "network.wan.ipv6.prefix": "--wanIpv6Prefix", "network.wan.ipv6.prefixLength": "--wanIpv6PrefixLength",
     dnssec: "--dnssec", "dnsBlocklists.lists": "--dnsBlocklistsLists", "dnsBlocklists.zones": "--dnsBlocklistsZones", "dnsBlocklists.allow": "--dnsBlocklistsAllow",
     "diskAutoGrow.enabled": "--diskAutoGrowEnabled", "diskAutoGrow.threshold": "--diskAutoGrowThreshold", "diskAutoGrow.growPercent": "--diskAutoGrowGrowPercent",
     "diskAutoGrow.minGrowGB": "--diskAutoGrowMinGrowGB", "diskAutoGrow.poolCeiling": "--diskAutoGrowPoolCeiling",

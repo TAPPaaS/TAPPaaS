@@ -51,7 +51,22 @@ The update sweep runs the same step, so the switch is applied by the next sweep 
 
 A dynamic prefix can change when the ISP renumbers; a static one does not. Where the ISP
 offers a static prefix, use it: addresses, names and the firewall's trust in them stay the
-same.
+same. A dynamic WAN's own address can change too, when its lease runs out (an outage of
+an hour or more, or a firewall restart that never released it), and with it the address
+the site's public AAAA records point at.
+
+Set it with `site-manager site modify`, then run the network update:
+
+```bash
+site-manager site modify --wanIpv6Mode static \
+    --wanIpv6Address 2001:db8:0:1::2/64 --wanIpv6Gateway 2001:db8:0:1::1 \
+    --wanIpv6Prefix 2001:db8:6648::/48
+module-manager module update network
+```
+
+(`--set network.wan.ipv6.mode=static` and so on say the same.) A static WAN needs all
+three of address, gateway and prefix; back to the ISP's DHCPv6 is `--wanIpv6Mode dynamic`,
+optionally with `--wanIpv6PrefixLength 48`–`56`.
 
 **The site prefix must be a `/56` or larger.** Zones are numbered within the first `/56` of
 it, which gives room for 256 zones. With a smaller prefix (a `/60` or a `/64`) no zone gets
