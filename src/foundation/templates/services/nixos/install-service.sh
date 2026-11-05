@@ -17,4 +17,6 @@ if [[ -z "${1:-}" ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "${SCRIPT_DIR}/update-service.sh" "$@"
+# A new guest's first build, copy and switch take minutes: show each as a line
+# with progress dots (update-os.sh), also in a console job with no terminal.
+TAPPAAS_OS_PROGRESS=1 exec "${SCRIPT_DIR}/update-service.sh" "$@"

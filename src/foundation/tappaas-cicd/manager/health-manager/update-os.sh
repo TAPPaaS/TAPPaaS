@@ -56,6 +56,27 @@ if [[ "${TAPPAAS_OS_AS_DEBUG:-0}" == "1" ]]; then
 fi
 # progress — one "." per line read, when DOTS; otherwise it only drains.
 progress() { if [[ "${DOTS}" -eq 1 ]]; then while IFS= read -r _; do printf "."; done; echo ""; else cat >/dev/null; fi; }
+# A module install (templates:nixos install-service.sh sets TAPPAAS_OS_PROGRESS=1)
+# runs minutes of build, copy and switch for a new guest: each phase is one [Info]
+# line with a dot every 5 s, terminal or not, so a console job is never silent.
+PROGRESS_LINE=0; [[ "${TAPPAAS_OS_PROGRESS:-0}" == "1" ]] && PROGRESS_LINE=1
+# run_logged <desc> <log> <command> [args...] — the command's output to <log>,
+# progress shown; returns the command's exit code.
+run_logged() {
+    local desc="$1" log="$2" rc tick
+    shift 2
+    if [[ "${PROGRESS_LINE}" -eq 1 ]]; then
+        printf '%b' "${DGN}[Info]${CL}   ${desc} "
+        ( while sleep 5; do printf '.'; done ) & tick=$!
+        "$@" >"${log}" 2>&1
+        rc=$?
+        kill "${tick}" 2>/dev/null; wait "${tick}" 2>/dev/null
+        echo ""
+        return "${rc}"
+    fi
+    "$@" 2>&1 | tee "${log}" | progress
+    return "${PIPESTATUS[0]}"
+}
 
 # An unguarded command that fails ends the script through `set -e`, printing
 # nothing: #711 saw exactly that — the announce line, then silence, then the
@@ -99,8 +120,8 @@ run_quiet() {
     local _log
     _log="$(mktemp /tmp/tappaas-update-os.XXXXXX.log)"
     set +e
-    "$@" 2>&1 | tee "${_log}" | progress
-    rc=${PIPESTATUS[0]}
+    run_logged "${desc}" "${_log}" "$@"
+    rc=$?
     set -e
     if [[ "${rc}" -ne 0 ]]; then
         error "${desc} failed (exit ${rc}) — last 20 lines of output:"
@@ -186,7 +207,7 @@ wait_for_vm_ip() {
             return 0
         fi
 
-        echo "  Attempt ${i}/${max_attempts}: waiting for IP address..." >&2
+        debug "  Attempt ${i}/${max_attempts}: waiting for IP address..." >&2
         sleep 10
     done
 
@@ -328,8 +349,8 @@ run_quiet_rc() {
     shift
     RUN_QUIET_LOG="$(mktemp /tmp/tappaas-update-os.XXXXXX.log)"
     set +e
-    "$@" 2>&1 | tee "${RUN_QUIET_LOG}" | progress
-    rc=${PIPESTATUS[0]}
+    run_logged "${desc}" "${RUN_QUIET_LOG}" "$@"
+    rc=$?
     set -e
     if [[ "${rc}" -ne 0 ]]; then
         error "${desc} failed (exit ${rc}) — last 20 lines of output:"
