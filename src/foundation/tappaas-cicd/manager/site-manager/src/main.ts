@@ -86,7 +86,7 @@ export const HELP: HelpSpec = {
         ["--email <addr>", "admin email"],
         ["--supportEmail <addr>", "where an alert's support bundle is to be forwarded: one e-mail address; empty by default, \"\" clears it"],
         ["--automaticReboot true|false", "allow update reboots"],
-        ["--size small|medium|large", "how big the site is: the cores, memory and disk foundation modules and every environment without a size of its own get — small the module's minimum, medium its plain value, large its maximum. Installed modules follow at their next update"],
+        ["--size small|medium|large", "how big the site is: the cores, memory and disk foundation modules and every environment without a size of its own get — small the module's minimum, medium its plain value, large its maximum (the disk stays at medium and grows as it fills). Installed modules follow at their next update"],
         ["--ipv6 true|false", "the site supports IPv6: OPNsense's 'Allow IPv6', applied by the next network update (default false)"],
         ["--requireSigned true|false", "refuse to update a staging/production repository that signs no releases (default false). A repository that lists signing keys is verified either way; one that declares no channels (no channels.json) is unstable, and moves unverified with a warning."],
         ["--snapshotRetention <n>", "VM snapshots kept per module"],

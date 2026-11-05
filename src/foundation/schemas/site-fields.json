@@ -391,7 +391,7 @@
       }
     },
     "size": {
-      "description": "How big this site is expected to be: small (a few users; one node, or up to three small ones; or a test system), medium (up to about 50 concurrent users, many modules in one or two environments) or large (100+ users, three or more large nodes, possibly many environments). Foundation modules take their cores, memory and disk from it, and so does every environment that does not set a size of its own: small the module's minimum, medium its plain value, large its maximum.",
+      "description": "How big this site is expected to be: small (a few users; one node, or up to three small ones; or a test system), medium (up to about 50 concurrent users, many modules in one or two environments) or large (100+ users, three or more large nodes, possibly many environments). Foundation modules take their cores, memory and disk from it, and so does every environment that does not set a size of its own: small the module's minimum, medium its plain value, large its maximum, except the disk, which starts at medium and grows as it fills.",
       "type": "string",
       "enum": ["small", "medium", "large"],
       "default": "medium",

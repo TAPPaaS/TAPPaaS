@@ -80,7 +80,7 @@
       "default": "eu-only"
     },
     "size": {
-      "description": "How big this environment is expected to be: small (a few users, a test or lab environment), medium (up to about 50 concurrent users) or large (100+ users). Modules installed into the environment take their cores, memory and disk from it: small the module's minimum, medium its plain value, large its maximum. Absent: the site's size.",
+      "description": "How big this environment is expected to be: small (a few users, a test or lab environment), medium (up to about 50 concurrent users) or large (100+ users). Modules installed into the environment take their cores, memory and disk from it: small the module's minimum, medium its plain value, large its maximum, except the disk, which starts at medium and grows as it fills. Absent: the site's size.",
       "type": "string",
       "enum": [
         "small",

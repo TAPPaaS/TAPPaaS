@@ -4,8 +4,9 @@
 #
 #   1. every module JSON in the repository: each MinMax pair is ordered around
 #      its medium value, and a disk floor is never below the template it clones;
-#   2. apply_module_size: small takes the min, large the max, medium the plain
-#      value — flat and Pattern A, and a field without a pair is untouched;
+#   2. apply_module_size: small takes the min, large the max (the disk stays at
+#      medium), medium the plain value — flat and Pattern A, and a field
+#      without a pair is untouched;
 #   3. module_size_for: TAPPAAS_SIZE, the environment's size, the site's, medium;
 #      a foundation module takes the site's even inside an environment;
 #   4. copy-update-json.sh sizes the installed config AND its .orig, and an
@@ -72,7 +73,8 @@ FLAT='{"cores":4,"coresMinMax":[2,8],"memory":8192,"memoryMinMax":[2048,16384],"
 PA='{"stack":"home","config":{"cluster:vm":{"cores":4,"coresMinMax":[2,8],"memory":8192,"diskSize":"32G"},"network:proxy":{"proxyPort":80}}}'
 r() { apply_module_size "$1" <<<"$2" | jq -c "$3"; }
 ck "small: flat takes the min"   '[2,2048,"16G"]'  "$(r small "$FLAT" '[.cores,.memory,.diskSize]')"
-ck "large: flat takes the max"   '[8,16384,"64G"]' "$(r large "$FLAT" '[.cores,.memory,.diskSize]')"
+ck "large: cores and memory take the max" '[8,16384]' "$(r large "$FLAT" '[.cores,.memory]')"
+ck "large: the disk starts at medium (it grows as it fills)" '"32G"' "$(r large "$FLAT" '.diskSize')"
 ck "medium: flat unchanged"      "$(jq -c . <<<"$FLAT")" "$(r medium "$FLAT" '.')"
 ck "a field without a pair stays" 512 "$(r small "$FLAT" '.swap')"
 ck "small: Pattern A cores"      2    "$(r small "$PA" '.config["cluster:vm"].cores')"

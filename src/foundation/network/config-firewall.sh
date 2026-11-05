@@ -144,8 +144,8 @@ size_json_for_site() {
   local f="$1" s="${TAPPAAS_SIZE:-}" tmp
   [[ "$s" == "small" || "$s" == "large" ]] || return 0
   tmp="$(mktemp)"
-  if jq --arg size "$s" 'def sized($o): reduce (["cores","coresMinMax"],["memory","memoryMinMax"],["diskSize","diskMinMax"]) as $p ($o;
-        if ((.[$p[1]]|type) == "array" and (.[$p[1]]|length) == 2) then .[$p[0]] = (if $size == "small" then .[$p[1]][0] else .[$p[1]][1] end) else . end);
+  if jq --arg size "$s" 'def sized($o): reduce (["cores","coresMinMax",true],["memory","memoryMinMax",true],["diskSize","diskMinMax",false]) as $p ($o;
+        if ((.[$p[1]]|type) == "array" and (.[$p[1]]|length) == 2) and ($size == "small" or $p[2]) then .[$p[0]] = (if $size == "small" then .[$p[1]][0] else .[$p[1]][1] end) else . end);
       sized(.) | if (.config|type) == "object" then .config |= with_entries(if (.value|type) == "object" then .value |= sized(.) else . end) else . end' "$f" >"$tmp"; then
     mv "$tmp" "$f"
   else
