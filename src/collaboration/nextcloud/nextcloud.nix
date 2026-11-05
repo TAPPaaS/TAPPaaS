@@ -70,21 +70,13 @@ let
                                 "sha256-stMKO4B148w/AKF0CjT+OR+JDCiN5SfbTOp4j8K5txw=" [];
   };
 
-  # The notify_push daemon must match its app, so it moves to 1.4.1 with it.
-  notifyPushPkg = pkgs.nextcloud-notify_push.overrideAttrs (old: rec {
-    version = "1.4.1";
-    src = pkgs.fetchFromGitHub {
-      owner = "nextcloud";
-      repo  = "notify_push";
-      tag   = "v${version}";
-      hash  = "sha256-lg/gffgfUJHLCL1TOPdYAw7DtRZeGDH+jO9deQSUbEY=";
-    };
-    cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
-      inherit src;
-      name = "notify_push-${version}-vendor";
-      hash = "sha256-skKOCJBtpvtdc594eOxbvSIl+SucaH0jl1gFv9kfvNA=";
-    };
-  });
+  # The notify_push daemon must match its app, so it moves to 1.4.1 with it. The
+  # app's release carries the daemon ready-built (static, per architecture): it is
+  # taken from there. Compiling it needs more memory than a small site's mothership
+  # or guest has (rustc was killed out of memory), and nothing caches a pinned build.
+  notifyPushPkg = pkgs.runCommand "notify_push-1.4.1" { meta.mainProgram = "notify_push"; } ''
+    install -Dm755 ${storeApps.notify_push}/bin/${if pkgs.stdenv.hostPlatform.isAarch64 then "aarch64" else "x86_64"}/notify_push $out/bin/notify_push
+  '';
 
   versions = {
     postgresPkg   = pkgs.postgresql_15;
