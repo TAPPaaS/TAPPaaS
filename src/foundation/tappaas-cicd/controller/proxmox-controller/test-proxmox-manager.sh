@@ -190,6 +190,22 @@ ck "the page shows the matrix: ✗ with the count one way, ✓ the other" \
    "| n1 | — | ✗ −6 |
 | n2 | ✓ | — |" "$(grep -E '^\| n[12] \| (—|✓)' <<< "${md}")"
 
+# ── _bridge_vids_outcome: what one node's ifreload means ─────────────
+echo "── bridge-vids apply outcome ──"
+_bvo() { _bridge_vids_outcome n3 "$1" "$2" >/dev/null 2>"${TMP_CFG}/bvo.err"; echo $?; }
+ck "a clean ifreload is applied"             0 "$(_bvo 0 '')"
+MISS='warning: wan: bridge-fd: value of out range "0": valid attribute range: 2-255
+error: lanbond: skipping slave usblan0, does not exist'
+ck "only a missing bond member: applied, warned" 1 "$(_bvo 1 "${MISS}")"
+w="$(_bridge_vids_outcome n3 1 "${MISS}" 2>&1)"
+[[ "${w}" == *"usblan0 (in lanbond)"* ]] && ck "…the warning names the port and its bond" ok ok || ck "…the warning names the port and its bond" "usblan0 (in lanbond)" "${w}"
+OTHER="${MISS}
+error: lan: netlink: cannot set vlan 298"
+ck "any other ifreload error fails the node"   2 "$(_bvo 1 "${OTHER}")"
+grep -q "cannot set vlan 298" "${TMP_CFG}/bvo.err" && ck "…and prints that error" ok ok || ck "…and prints that error" "cannot set vlan 298" "$(cat "${TMP_CFG}/bvo.err")"
+grep -q "restored" "${TMP_CFG}/bvo.err" && ck "…without claiming a restore it never did" absent present || ck "…without claiming a restore it never did" absent absent
+ck "an ssh failure (255) fails the node"       2 "$(_bvo 255 'ssh: connect to host n3 port 22: Connection refused')"
+
 echo ""
 echo "test-proxmox-manager: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

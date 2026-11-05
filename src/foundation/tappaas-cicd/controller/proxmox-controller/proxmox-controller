@@ -705,6 +705,34 @@ _desired_bridge_vids() {
     vmnet_all_active_tags "${ZONES_FILE}" | tr ';' ' '
 }
 
+# _bridge_vids_outcome <node> <rc> <output> — judge one node's apply.
+#   0  applied cleanly
+#   1  applied, but ifreload complained only about bond members that are not
+#      there (an unplugged standby port): the VLAN change is live, the node
+#      runs on the ports it has. Warned, with the ports named.
+#   2  failed: ifreload's own error lines are printed. The rewritten file stays;
+#      the previous one is /etc/network/interfaces.proxmox-manager.bak.
+_bridge_vids_outcome() {
+    local node="$1" rc="$2" out="$3" errs missing other
+    [[ "${rc}" -eq 0 ]] && return 0
+    errs=$(grep -E '(^|: )error: ' <<< "${out}" | sed -E 's/^.*error: //' || true)
+    missing=$(grep -E 'skipping slave [^ ,]+, does not exist' <<< "${errs}" \
+        | sed -E 's/^([^:]+): skipping slave ([^ ,]+),.*/\2 (in \1)/' | sort -u | paste -sd, - || true)
+    other=$(grep -v -E 'skipping slave [^ ,]+, does not exist' <<< "${errs}" | grep -v '^$' || true)
+    if [[ "${rc}" -eq 1 && -n "${missing}" && -z "${other}" ]]; then
+        warn "  ${node}: bridge-vids applied; ifreload reports a bond member that is not there: ${missing//,/, }"
+        warn "    the node runs on its other ports — plug the port back in, or take it out of the node's lan ports"
+        return 1
+    fi
+    error "  ${node}: bridge-vids apply failed (ifreload exit ${rc}); the previous file is /etc/network/interfaces.proxmox-manager.bak on the node"
+    if [[ -n "${other:-${errs}}" ]]; then
+        sed 's/^/    /' <<< "${other:-${errs}}" | head -8 >&2
+    elif [[ -n "${out}" ]]; then
+        tail -n 5 <<< "${out}" | sed 's/^/    /' >&2
+    fi
+    return 2
+}
+
 reconcile_bridge_vids() {
     local apply="$1"
     info "${BOLD}Node bridge-vids${CL} (lan bridge; least-privilege = active VLAN set)"
@@ -749,7 +777,8 @@ reconcile_bridge_vids() {
         # Operator-gated apply: rewrite the lan stanza's bridge-vids and ifreload.
         # Disruptive on a live node — backup first.
         warn "  ${node}: applying bridge-vids (backup /etc/network/interfaces, then ifreload -a)"
-        if ssh -o BatchMode=yes root@"${node}.mgmt.internal" "
+        local out rc=0
+        out=$(ssh -o BatchMode=yes root@"${node}.mgmt.internal" "
                 set -e
                 cp -a /etc/network/interfaces /etc/network/interfaces.proxmox-manager.bak
                 awk -v want='${desired}' '
@@ -758,14 +787,14 @@ reconcile_bridge_vids() {
                     {print}
                 ' /etc/network/interfaces.proxmox-manager.bak > /etc/network/interfaces
                 ifreload -a
-            " >/dev/null 2>&1; then
-            info "  ${GN}✓${CL} ${node}: bridge-vids applied"
-            CHANGED=$((CHANGED + 1))
-            DRIFT=$((DRIFT - 1))
-        else
-            error "  ${node}: bridge-vids apply failed (interfaces restored from .bak on the node)"
-            ERRORS=$((ERRORS + 1))
-        fi
+            " 2>&1) || rc=$?
+        _bridge_vids_outcome "${node}" "${rc}" "${out}"
+        case $? in
+            0) info "  ${GN}✓${CL} ${node}: bridge-vids applied"
+               CHANGED=$((CHANGED + 1)); DRIFT=$((DRIFT - 1)) ;;
+            1) CHANGED=$((CHANGED + 1)); DRIFT=$((DRIFT - 1)) ;;
+            *) ERRORS=$((ERRORS + 1)) ;;
+        esac
     done
     return 0
 }
