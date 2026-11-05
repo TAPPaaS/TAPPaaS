@@ -33,7 +33,7 @@ TMP="$(mktemp -d "${TMPDIR:-/tmp}/release-move.XXXXXX")"
 trap 'rm -rf "${TMP}"' EXIT INT TERM
 
 awk '/^run_quiet\(\) \{$/{f=1} f{print} f&&/^}$/{exit}' "${SRC}" > "${TMP}/run_quiet.sh"
-for fn in run_quiet_rc nixos_rebuild_exit_meaning; do
+for fn in run_quiet_rc run_logged nixos_rebuild_exit_meaning; do
     awk -v fn="${fn}" '$0 ~ "^"fn"\\(\\) \\{$"{f=1} f{print} f&&/^}$/{exit}' "${SRC}" >> "${TMP}/run_quiet.sh"
 done
 awk '/^release_move_of\(\) \{$/{f=1} f{print} f&&/^}$/{exit}' "${SRC}" > "${TMP}/release_move_of.sh"

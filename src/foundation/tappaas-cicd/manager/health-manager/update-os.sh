@@ -68,7 +68,7 @@ PROGRESS_LINE=0; [[ "${TAPPAAS_OS_PROGRESS:-0}" == "1" ]] && PROGRESS_LINE=1
 run_logged() {
     local desc="$1" log="$2" rc watch=""
     shift 2
-    if [[ "${PROGRESS_LINE}" -eq 1 ]]; then
+    if [[ "${PROGRESS_LINE:-0}" -eq 1 ]]; then
         printf '%b' "${DGN}[Info]${CL}   ${desc} "
         [[ -z "${RUN_WATCH_IP:-}" ]] || { watch_starting "${RUN_WATCH_IP}" & watch=$!; }
         "$@" 2>&1 | tee "${log}" | { while IFS= read -r _; do printf '.'; done; }
