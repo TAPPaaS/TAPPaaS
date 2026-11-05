@@ -113,6 +113,9 @@ DO_ROLLBACK=1 INTERACTIVE=1 DRY_RUN=0 ROLLBACK_SECS=""
 SWAP_GATEWAY=0 DROP_UPSTREAM=0 FW_IP="${MGMT_SUBNET}.1"
 LAN_MODE="" LAN_PRIMARY="" LAN_MTU="" SET_LAN=0 CONFIRM_EXTERNAL=0 NO_WAN=0
 LAN_PORTS="" LAN_BRIDGE_PORT="" LAN_STANZA=""
+# A first node with one port: that port is the WAN, and lan has no port of its own —
+# the machine stands alone (Day 1 › First node: "This machine alone").
+LAN_ALONE=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -365,6 +368,10 @@ bridge_members() {
 in_ports() { local x; for x in "${PORTS[@]}"; do [[ "$x" == "$1" ]] && return 0; done; return 1; }
 resolve_lan() {
   local p n err
+  if [[ "$LAN_ALONE" == 1 ]]; then
+    LAN_PORTS="" LAN_MODE=single LAN_PRIMARY="" LAN_BRIDGE_PORT=none LAN_STANZA=""
+    return 0
+  fi
   err="$(lb_ports "$LAN_PORT" 2>&1 >/dev/null)" || die "--lan-port: ${err}"
   LAN_PORTS="$(lb_ports "$LAN_PORT")"
   for p in $LAN_PORTS; do in_ports "$p" || die "LAN port '${p}' is not a physical port."; done
@@ -385,7 +392,7 @@ resolve_lan() {
   LAN_BRIDGE_PORT="$(lb_bridge_port "$LAN_PORTS")"
   LAN_STANZA="$(lb_bond_stanza "$LAN_PORTS" "$LAN_MODE" "$LAN_PRIMARY" "$LAN_MTU")"
 }
-lan_desc() { echo "${LAN_PORTS}$([[ "$LAN_MODE" == single ]] || echo " as ${LB_BOND} (${LAN_MODE}${LAN_PRIMARY:+, primary ${LAN_PRIMARY}})")${LAN_MTU:+, mtu ${LAN_MTU}}"; }
+lan_desc() { [[ "$LAN_ALONE" == 1 ]] && { echo "no port (this machine alone)"; return; }; echo "${LAN_PORTS}$([[ "$LAN_MODE" == single ]] || echo " as ${LB_BOND} (${LAN_MODE}${LAN_PRIMARY:+, primary ${LAN_PRIMARY}})")${LAN_MTU:+, mtu ${LAN_MTU}}"; }
 
 # ── USB NICs as lan ports (#849) ──────────────────────────────────────
 # A USB NIC's kernel name (enx<mac>) is pinned to usblanN, so the bond names
@@ -686,7 +693,11 @@ elif [[ -z "$WAN_PORT" ]]; then
 fi
 [[ -n "$WAN_PORT" ]] && { valid_port "$WAN_PORT" || die "WAN port '${WAN_PORT}' is not a physical port."; }
 
-if [[ -z "$LAN_PORT" ]]; then
+# One port on a first node: the WAN has it, and nothing is left for lan.
+if [[ -z "$LAN_PORT" && "$ROLE" == "first" && -n "$WAN_PORT" && -z "$(other_port "$WAN_PORT" || true)" ]]; then
+  LAN_ALONE=1
+  info "One network port (${BL}${WAN_PORT}${CL}): it is the WAN; lan has no port — this machine alone. A second port or machine can be added on Day 2."
+elif [[ -z "$LAN_PORT" ]]; then
   if [[ "$INTERACTIVE" == "1" ]]; then
     if [[ "$ROLE" == "first" ]]; then
       LAN_TEXT="This is the PRIMARY node.\n\nSelect the LAN port — the NIC connected to your switch for interconnecting LAN of TAPPaaS systems. This port carries VLAN trunks and hosts the management IP."
