@@ -96,6 +96,7 @@ watch_starting() {
             [[ -n "${u}" ]] || continue
             grep -qxF "${u}" <<<"$(cut -f1 <<<"${prev}")" || continue
             grep -qxF "${u}" <<<"${shown}" && continue
+            [[ "${d}" != "${u}" ]] || d=""   # systemd's stand-in for no description
             printf '\n%b' "${DGN}[Info]${CL}     waiting for ${u}${d:+ (${d})} "
             shown+="${u}"$'\n'
         done <<<"${cur}"

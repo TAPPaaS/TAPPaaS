@@ -331,10 +331,20 @@ rollback_failed_install() {
     fi
     if [[ "${INSTALL_CREATED_VM}" == true ]]; then
         warn "  Deleting the VM and config of '${INSTALL_MODULE_NAME}'..."
-        if /home/tappaas/bin/delete-module.sh "${INSTALL_MODULE_NAME}" --force >/dev/null 2>&1; then
+        local _rb_out _rb_l
+        if _rb_out="$(/home/tappaas/bin/delete-module.sh "${INSTALL_MODULE_NAME}" --force 2>&1)"; then
             info "  ${GN}✓${CL} '${INSTALL_MODULE_NAME}' removed — the site is as it was"
         else
-            error "  Could not remove '${INSTALL_MODULE_NAME}' — do it by hand: module-manager module delete ${INSTALL_MODULE_NAME} --remove"
+            # Say what is left, not only that the removal complained: a delete
+            # that took the VM and the config but stumbled on a later part (a
+            # route, a DNS entry) read as "could not remove" with nothing to go on.
+            if [[ ! -f "${CONFIG_DIR}/${INSTALL_MODULE_NAME}.json" ]] && { [[ -z "${INSTALL_VMID:-}" ]] \
+                   || ! vm_exists_on_cluster "${INSTALL_VMID}" "$(get_node_fqdn 0)" >/dev/null 2>&1; }; then
+                warn "  '${INSTALL_MODULE_NAME}': its VM and config are gone, but the removal reported a problem:"
+            else
+                error "  Could not remove '${INSTALL_MODULE_NAME}' — do it by hand: module-manager module delete ${INSTALL_MODULE_NAME} --remove. It said:"
+            fi
+            while IFS= read -r _rb_l; do warn "    ${_rb_l}"; done < <(sed 's/\x1b\[[0-9;]*m//g' <<<"${_rb_out}" | grep -v '^[[:space:]]*$' | tail -n 6)
         fi
     else
         rm -f "${CONFIG_DIR}/${INSTALL_MODULE_NAME}.json" "${CONFIG_DIR}/${INSTALL_MODULE_NAME}.json.orig" "${CONFIG_DIR}/${INSTALL_MODULE_NAME}.json.operator"
