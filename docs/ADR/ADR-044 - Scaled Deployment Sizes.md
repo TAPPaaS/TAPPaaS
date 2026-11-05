@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** — built on `feat/917-sizing`, not yet live-tested |
-| **Version** | 0.4 |
+| **Version** | 0.5 |
 | **Date** | 2026-11-05 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | #917. Amends ADR-007c (environments gain `size`), ADR-020 (three policy fields on `cluster:vm` and `cluster:lxc`) and the #207 3-way merge (the release side is sized before it is compared). |
-| **Changelog** | v0.1 (2026-11-05): first draft, from the operator's direction of 2026-11-05. v0.2 (2026-11-05): the operator's review. tappaas-cicd tops out at medium (4 cores, 8 GiB). network's medium memory drops to 4 GiB. Immich comes down at every size, with its ML cap a share of the VM. The console lists and edits both sizes (D7), and `make-install-media.sh` asks for the size (D8). v0.3 (2026-11-05): measured on hrossen (D6a). Logging goes up to 2/4/8 GiB, Immich comes down to 3/4/8 GiB, and the minimums for coturn, nomad and litellm move above what those guests use. v0.4 (2026-11-05): the operator's review. tappaas-cicd has 4 cores at every size. The disk max is reviewed for the modules whose data grows with the site (D6b). |
+| **Changelog** | v0.1 (2026-11-05): first draft, from the operator's direction of 2026-11-05. v0.2 (2026-11-05): the operator's review. tappaas-cicd tops out at medium (4 cores, 8 GiB). network's medium memory drops to 4 GiB. Immich comes down at every size, with its ML cap a share of the VM. The console lists and edits both sizes (D7), and `make-install-media.sh` asks for the size (D8). v0.3 (2026-11-05): measured on hrossen (D6a). Logging goes up to 2/4/8 GiB, Immich comes down to 3/4/8 GiB, and the minimums for coturn, nomad and litellm move above what those guests use. v0.4 (2026-11-05): the operator's review. tappaas-cicd has 4 cores at every size. The disk max is reviewed for the modules whose data grows with the site (D6b). v0.5 (2026-11-05): the operator's review. The pairs are renamed `coresSmallLarge`, `memorySmallLarge` and `diskSmallLarge`, since "max" read as a limit. tappaas-cicd's small memory goes to 4 GiB. nextcloud's disk is thin. nextcloud and immich start a large site at twice medium, and auto-grow takes them further. |
 
 A site, and each environment in it, says how big it is: `small`, `medium` or `large`. A module
 states its VM or container size once for `medium` and, optionally, a minimum and a maximum. The
@@ -58,18 +58,18 @@ A size is a sizing hint, not a limit: nothing refuses an install because of it. 
 
 ### D2. Min/max pairs beside the medium value
 
-`cluster:vm` and `cluster:lxc` gain three optional fields, each a pair `[min, max]`:
+`cluster:vm` and `cluster:lxc` gain three optional fields, each a pair `[small, large]`:
 
 | Field | Sizes | Example |
 |---|---|---|
-| `coresMinMax` | `cores` | `[1, 4]` |
-| `memoryMinMax` | `memory` (MiB) | `[1024, 8192]` |
-| `diskMinMax` | `diskSize` | `["16G", "128G"]` |
+| `coresSmallLarge` | `cores` | `[1, 4]` |
+| `memorySmallLarge` | `memory` (MiB) | `[1024, 8192]` |
+| `diskSmallLarge` | `diskSize` | `["16G", "128G"]` |
 
 - The plain `cores` / `memory` / `diskSize` stay the **medium** value, so existing modules,
   docs and tooling read as before.
 - A field without a pair is the same at every size.
-- The pair is validated as `min ≤ medium ≤ max` (medium being the plain value, or the schema
+- The pair is validated as `small ≤ medium ≤ large` (medium being the plain value, or the schema
   default when the module does not state one).
 - A disk minimum is never below the image the VM is cloned from (16 GB for the NixOS template),
   because Proxmox cannot shrink a disk.
@@ -119,22 +119,22 @@ source and nothing changes for it.
 ### D6. Values for this repository's modules
 
 Medium is today's value, except the three in bold (v0.2). The minimums are set so that foundation
-plus home plus office fits **about 25 GiB of guest memory** at `small`, leaving a 32 GB node about 6 GB for Proxmox, the ZFS
+plus home plus office fits **26.25 GiB of guest memory** at `small`, leaving a 32 GB node about 5 GB for Proxmox, the ZFS
 ARC (10 % of RAM by the installer's default) and the gate's 5 % margin.
 
 | Module | cores (min / med / max) | memory MiB (min / med / max) | disk (min / med / max) |
 |---|---|---|---|
 | network | 2 / 4 / 8 | 2048 / **4096** / 8192 | — |
-| tappaas-cicd | **4 / 4 / 4** | 3072 / 8192 / 8192 | 32G / 64G / **256G** |
+| tappaas-cicd | **4 / 4 / 4** | **4096** / 8192 / 8192 | 32G / 64G / **256G** |
 | identity | 2 / 2 / 4 | 2048 / 4096 / 8192 | **32G** / 32G / 64G |
 | logging | 1 / 2 / 4 | 2048 / **4096** / 8192 | 16G / 32G / **256G** |
 | deconz | 1 / 2 / 2 | 1024 / 4096 / 4096 | — |
 | hass | 2 / 2 / 4 | 2048 / 4096 / 8192 | 16G / 32G / 64G |
-| immich | 2 / **2** / 4 | 3072 / **4096** / 8192 | 64G / **250G** / **2000G** |
+| immich | 2 / **2** / 4 | 3072 / **4096** / 8192 | 64G / **250G** / **500G** |
 | jellyfin | 2 / 4 / 8 | 1536 / 2048 / 8192 | 16G / 32G / 64G |
 | karakeep | 1 / 2 / 4 | 1536 / 3072 / 6144 | 16G / 64G / **256G** |
 | nomad | 1 / 2 / 4 | 1536 / 4096 / 8192 | 32G / 128G / 512G |
-| nextcloud | 2 / 4 / 8 | 2048 / 8192 / 16384 | 32G / 80G / **2000G** |
+| nextcloud | 2 / 4 / 8 | 2048 / 8192 / 16384 | 32G / 80G / **160G**, thin |
 | euro-office | 2 / 4 / 8 | 2048 / 8192 / 16384 | — |
 | coturn | 1 / 2 / 4 | 768 / 2048 / 4096 | — |
 | nextcloud-hpb | 2 / 4 / 8 | 1024 / 4096 / 8192 | — |
@@ -151,8 +151,11 @@ ARC (10 % of RAM by the installer's default) and the gate's 5 % margin.
   (a template's disk is the floor every clone starts from).
 - `network`'s disk stays at its image size, and `euro-office`, `coturn` and `nextcloud-hpb`
   keep theirs.
-- Small budget, guest memory: foundation 9 GiB, home 10.5 GiB, office 5.75 GiB, together
-  25.25 GiB. `test-module-sizing.sh` asserts at most 26 GiB.
+- Small budget, guest memory: foundation 10 GiB, home 10.5 GiB, office 5.75 GiB, together
+  26.25 GiB. A 32 GB node reports about 31.3 GiB; Proxmox takes about 1.5 GiB and the ZFS ARC
+  3.1 GiB, leaving about 26.7 GiB. `test-module-sizing.sh` asserts at most 26.5 GiB. The margin
+  is thin: the next module that grows its small memory has to give it back elsewhere.
+- **tappaas-cicd's small memory is 4 GiB** (v0.5): 3 GiB left too little for a build.
 - **tappaas-cicd** does not grow past medium. Its load is the site's builds and sweeps, not the
   number of users.
 - **network** at 4 GiB medium. OPNsense with Caddy, Unbound and the rule set stays well inside
@@ -203,8 +206,8 @@ ARC (10 % of RAM by the installer's default) and the gate's 5 % margin.
 
 | Module | What fills the disk | Used on hrossen (medium) | Max |
 |---|---|---|---|
-| nextcloud | users' files, on the VM's own disk | 10G of 80G | 2000G: 100+ users at ~20G each |
-| immich | photo and video libraries (thin) | 19G of 492G | 2000G |
+| nextcloud | users' files, on the VM's own disk (thin since v0.5) | 10G of 80G | 160G: twice medium; auto-grow takes it further |
+| immich | photo and video libraries (thin) | 19G of 492G | 500G: twice medium; auto-grow takes it further |
 | tappaas-cicd | the Nix store: every guest's build | 38G of 64G | 256G: more environments, more builds |
 | logging | 30 days of logs from every host | 13G of 32G | 256G |
 | karakeep | archived pages and screenshots (thin) | 17G of 64G | 256G |
@@ -213,8 +216,11 @@ ARC (10 % of RAM by the installer's default) and the gate's 5 % margin.
 
 - nomad's disk is filled by the libraries loaded into it, not by users: unchanged at 512G.
   woodpecker (CI caches, thin) unchanged at 256G.
-- nextcloud's disk is thick, so a large site reserves its 2000G on the pool at install. A thin
-  disk (`thinDisk`, as immich has) would reserve nothing up front. To decide separately.
+- **nextcloud and immich fill slowly** (v0.5), so the nightly auto-grow takes them where a site
+  needs. Their large value is twice medium, not a guess at a hundred users' data. nextcloud's
+  disk is thin like immich's, so neither reserves pool space it does not use.
+- **No module sets `diskSizeMax`.** Auto-grow is limited only by the pool's room (`site.json`
+  `diskAutoGrow.poolCeiling`). The large value is never a limit.
 
 ### D6a. What hrossen showed (2026-11-05)
 
@@ -237,7 +243,7 @@ report (`guest-memory-report.sh`) could not run: Loki timed out.
 | Guest | Used | Small min |
 |---|---|---|
 | identity | 1.4 GiB | 2 GiB |
-| tappaas-cicd | 0.9 GiB | 3 GiB (builds) |
+| tappaas-cicd | 0.9 GiB | 4 GiB (builds; v0.5) |
 | network | 1.2 GiB (FreeBSD: active plus wired) | 2 GiB |
 | nextcloud | 0.8 GiB | 2 GiB |
 | euro-office | 1.3 GiB | 2 GiB |
@@ -298,7 +304,7 @@ report (`guest-memory-report.sh`) could not run: Loki timed out.
 - **Tests:** `scripts/test/test-module-sizing.sh` checks:
   - every pair is ordered and the disk floor holds;
   - each size resolves as D2 to D4 say, the merge as D5 says;
-  - foundation + home + office at `small` stays at or under 26 GiB.
+  - foundation + home + office at `small` stays at or under 26.5 GiB.
 - **Console:** `Site.tsx` and `Environments.tsx` show the size. The forms take `size` from the
   schemas and the `setfields.ts` shortcut tables.
 - **Install media:** `make-install-media.sh --size`, asked when not given.
