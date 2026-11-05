@@ -4,7 +4,7 @@
 #
 # A site and each environment are small, medium or large. A module states its
 # cores / memory / diskSize for medium, and optionally a pair beside each:
-# coresMinMax, memoryMinMax, diskMinMax = [min, max]. Small takes the min, large
+# coresSmallLarge, memorySmallLarge, diskSmallLarge = [small, large]. Small takes the small value, large
 # the max, medium the plain value; a field without a pair is the same at every
 # size.
 #
@@ -25,7 +25,7 @@ _MODULE_SIZING_LOADED=1
 # The jq program that sizes one object (flat fields). $size is bound by caller.
 _module_sizing_jq='
   def sized($o):
-    reduce (["cores","coresMinMax"], ["memory","memoryMinMax"], ["diskSize","diskMinMax"]) as $p
+    reduce (["cores","coresSmallLarge"], ["memory","memorySmallLarge"], ["diskSize","diskSmallLarge"]) as $p
       ($o;
        if ($size == "small" or $size == "large")
           and (.[$p[1]] | type) == "array" and (.[$p[1]] | length) == 2

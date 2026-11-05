@@ -126,7 +126,7 @@ step is an application stack, to make the system useful.
 
 - **Small sizes.** At size small every module is installed with less memory, fewer cores
   and a smaller disk than the default. The foundation, the home modules and the
-  collaboration (office) modules then take about 25 GB, leaving the rest for Proxmox
+  collaboration (office) modules then take about 26 GB, leaving the rest for Proxmox
   itself. A module can still be given more by hand, and the whole site moves up with
   `site-manager site modify --size medium` when the machine gets more memory.
 

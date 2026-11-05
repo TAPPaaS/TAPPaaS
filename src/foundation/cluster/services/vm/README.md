@@ -90,9 +90,9 @@ Number of CPU cores allocated to the VM
 | Reported as | `cores` |
 | Provider flag | `--cores` |
 
-### `coresMinMax`
+### `coresSmallLarge`
 
-The cores this guest gets at size small (first) and large (second), exactly two values; cores is the medium value. Absent: cores at every size.
+[small, large]: the cores this guest gets on a small site and on a large one; cores is the medium value. Absent: cores at every size.
 
 | Attribute | Value |
 |---|---|
@@ -104,7 +104,7 @@ The cores this guest gets at size small (first) and large (second), exactly two 
 | Change class | `in-place` |
 | Apply mode | `reconcile` |
 
-**About the field.** min ≤ cores ≤ max. An explicit cores at install (--cores, --set) wins over the size.
+**About the field.** small ≤ cores ≤ large. An explicit cores at install (--cores, --set) wins over the size.
 
 **Why this change class.** A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare.
 
@@ -128,9 +128,9 @@ RAM allocation in megabytes
 
 **About the field.** Value in MB (e.g., 4096 = 4GB)
 
-### `memoryMinMax`
+### `memorySmallLarge`
 
-The memory (MiB) this guest gets at size small (first) and large (second), exactly two values; memory is the medium value. Absent: memory at every size.
+[small, large]: the memory (MiB) this guest gets on a small site and on a large one; memory is the medium value. Absent: memory at every size.
 
 | Attribute | Value |
 |---|---|
@@ -142,7 +142,7 @@ The memory (MiB) this guest gets at size small (first) and large (second), exact
 | Change class | `in-place` |
 | Apply mode | `reconcile` |
 
-**About the field.** min ≤ memory ≤ max. Small minimums are set so foundation, home and office fit one 32 GB node.
+**About the field.** small ≤ memory ≤ large. Small minimums are set so foundation, home and office fit one 32 GB node.
 
 **Why this change class.** A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare.
 
@@ -347,9 +347,9 @@ Disk size with unit suffix
 
 **Why this change class.** A grow goes through resize-disk.sh. The direction is only knowable against the live size, so a SHRINK is refused at apply time (hook exit 20), not by the static pre-gate. The schema default 8G is DESIRED state (ADR-020 D9): it is also what both create paths build with, so an undeclared guest is in sync from install. When the guest is later grown outside the config path — check-disk-threshold.sh, resize-disk.sh by hand, qm resize — config falls BEHIND actual, which reads as a shrink and would be refused on every converge forever. That case is now ADOPTED instead: the converge writes the observed size into config, touching nothing on the cluster. A deliberately smaller value lands in the same place: the disk is kept, config is set back to the real size, and the converge warns that the field only grows. Excluding undeclared modules from the comparison, as v0.5 did, never helped here: a DECLARED module — which is all of them — got the permanent refusal anyway.
 
-### `diskMinMax`
+### `diskSmallLarge`
 
-The disk size this guest gets at size small (first) and large (second), exactly two values; diskSize is the medium value. Absent: diskSize at every size.
+[small, large]: the disk size this guest gets on a small site and on a large one; diskSize is the medium value. Absent: diskSize at every size.
 
 | Attribute | Value |
 |---|---|
@@ -361,7 +361,7 @@ The disk size this guest gets at size small (first) and large (second), exactly 
 | Change class | `in-place` |
 | Apply mode | `reconcile` |
 
-**About the field.** min ≤ diskSize ≤ max, and the min is never below the image the guest is cloned from (16G for the NixOS template): a disk cannot shrink. Not the same as diskSizeMax, which caps automatic growth.
+**About the field.** small ≤ diskSize ≤ large, and the small value is never below the image the guest is cloned from (16G for the NixOS template): a disk cannot shrink. The large value is where a large site starts, not a growth limit: auto-grow takes the disk further as it fills, capped by diskSizeMax when set, else by the pool's room.
 
 **Why this change class.** A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare.
 

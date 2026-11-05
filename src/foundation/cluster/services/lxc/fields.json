@@ -27,7 +27,7 @@
       "normalize": "integer",
       "changeNote": "Applied live — a container's cgroup limit changes without a restart."
     },
-    "coresMinMax": {
+    "coresSmallLarge": {
       "class": "in-place",
       "apply": "reconcile",
       "changeNote": "A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare."
@@ -40,7 +40,7 @@
       "normalize": "integer",
       "changeNote": "Also live, for the same reason."
     },
-    "memoryMinMax": {
+    "memorySmallLarge": {
       "class": "in-place",
       "apply": "reconcile",
       "changeNote": "A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare."
@@ -107,7 +107,7 @@
       "normalize": "size",
       "changeNote": "The rootfs grows live with pct resize (update-disk.sh), and auto-grow.sh grows it before it fills, as for a VM: on every update, under the same threshold, diskSizeMax and pool limits. A SHRINK is refused at apply time (hook exit 20). Only the rootfs is the field; bind mounts and other mount points are never resized. The schema default 8G is what Create-TAPPaaS-LXC.sh builds with, so an undeclared container is in sync from install; a rootfs grown by hand reads as config behind actual and is adopted into config, as for cluster:vm."
     },
-    "diskMinMax": {
+    "diskSmallLarge": {
       "class": "in-place",
       "apply": "reconcile",
       "changeNote": "A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare."

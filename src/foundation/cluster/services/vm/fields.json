@@ -26,7 +26,7 @@
       "setFlag": "--cores",
       "normalize": "integer"
     },
-    "coresMinMax": {
+    "coresSmallLarge": {
       "class": "in-place",
       "apply": "reconcile",
       "changeNote": "A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare."
@@ -38,7 +38,7 @@
       "setFlag": "--memory",
       "normalize": "integer"
     },
-    "memoryMinMax": {
+    "memorySmallLarge": {
       "class": "in-place",
       "apply": "reconcile",
       "changeNote": "A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare."
@@ -153,7 +153,7 @@
       "normalize": "size",
       "changeNote": "A grow goes through resize-disk.sh. The direction is only knowable against the live size, so a SHRINK is refused at apply time (hook exit 20), not by the static pre-gate. The schema default 8G is DESIRED state (ADR-020 D9): it is also what both create paths build with, so an undeclared guest is in sync from install. When the guest is later grown outside the config path — check-disk-threshold.sh, resize-disk.sh by hand, qm resize — config falls BEHIND actual, which reads as a shrink and would be refused on every converge forever. That case is now ADOPTED instead: the converge writes the observed size into config, touching nothing on the cluster. A deliberately smaller value lands in the same place: the disk is kept, config is set back to the real size, and the converge warns that the field only grows. Excluding undeclared modules from the comparison, as v0.5 did, never helped here: a DECLARED module — which is all of them — got the permanent refusal anyway."
     },
-    "diskMinMax": {
+    "diskSmallLarge": {
       "class": "in-place",
       "apply": "reconcile",
       "changeNote": "A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare."

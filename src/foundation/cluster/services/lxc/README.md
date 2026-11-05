@@ -83,9 +83,9 @@ Number of CPU cores allocated to the VM
 
 **Why this change class.** Applied live — a container's cgroup limit changes without a restart.
 
-### `coresMinMax`
+### `coresSmallLarge`
 
-The cores this guest gets at size small (first) and large (second), exactly two values; cores is the medium value. Absent: cores at every size.
+[small, large]: the cores this guest gets on a small site and on a large one; cores is the medium value. Absent: cores at every size.
 
 | Attribute | Value |
 |---|---|
@@ -97,7 +97,7 @@ The cores this guest gets at size small (first) and large (second), exactly two 
 | Change class | `in-place` |
 | Apply mode | `reconcile` |
 
-**About the field.** min ≤ cores ≤ max. An explicit cores at install (--cores, --set) wins over the size.
+**About the field.** small ≤ cores ≤ large. An explicit cores at install (--cores, --set) wins over the size.
 
 **Why this change class.** A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare.
 
@@ -123,9 +123,9 @@ RAM allocation in megabytes
 
 **Why this change class.** Also live, for the same reason.
 
-### `memoryMinMax`
+### `memorySmallLarge`
 
-The memory (MiB) this guest gets at size small (first) and large (second), exactly two values; memory is the medium value. Absent: memory at every size.
+[small, large]: the memory (MiB) this guest gets on a small site and on a large one; memory is the medium value. Absent: memory at every size.
 
 | Attribute | Value |
 |---|---|
@@ -137,7 +137,7 @@ The memory (MiB) this guest gets at size small (first) and large (second), exact
 | Change class | `in-place` |
 | Apply mode | `reconcile` |
 
-**About the field.** min ≤ memory ≤ max. Small minimums are set so foundation, home and office fit one 32 GB node.
+**About the field.** small ≤ memory ≤ large. Small minimums are set so foundation, home and office fit one 32 GB node.
 
 **Why this change class.** A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare.
 
@@ -283,9 +283,9 @@ Disk size with unit suffix
 
 **Why this change class.** The rootfs grows live with pct resize (update-disk.sh), and auto-grow.sh grows it before it fills, as for a VM: on every update, under the same threshold, diskSizeMax and pool limits. A SHRINK is refused at apply time (hook exit 20). Only the rootfs is the field; bind mounts and other mount points are never resized. The schema default 8G is what Create-TAPPaaS-LXC.sh builds with, so an undeclared container is in sync from install; a rootfs grown by hand reads as config behind actual and is adopted into config, as for cluster:vm.
 
-### `diskMinMax`
+### `diskSmallLarge`
 
-The disk size this guest gets at size small (first) and large (second), exactly two values; diskSize is the medium value. Absent: diskSize at every size.
+[small, large]: the disk size this guest gets on a small site and on a large one; diskSize is the medium value. Absent: diskSize at every size.
 
 | Attribute | Value |
 |---|---|
@@ -297,7 +297,7 @@ The disk size this guest gets at size small (first) and large (second), exactly 
 | Change class | `in-place` |
 | Apply mode | `reconcile` |
 
-**About the field.** min ≤ diskSize ≤ max, and the min is never below the image the guest is cloned from (16G for the NixOS template): a disk cannot shrink. Not the same as diskSizeMax, which caps automatic growth.
+**About the field.** small ≤ diskSize ≤ large, and the small value is never below the image the guest is cloned from (16G for the NixOS template): a disk cannot shrink. The large value is where a large site starts, not a growth limit: auto-grow takes the disk further as it fills, capped by diskSizeMax when set, else by the pool's room.
 
 **Why this change class.** A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare.
 

@@ -479,7 +479,7 @@ main() {
     fi
 
     # Size the guest for where it goes (ADR-044): small takes each
-    # <field>MinMax's min, large its max, medium the plain value. Before the
+    # <field>SmallLarge's min, large its max, medium the plain value. Before the
     # explicit --<field> overrides below, so an operator's value wins.
     local module_size="medium"
     if declare -F module_size_for >/dev/null 2>&1; then

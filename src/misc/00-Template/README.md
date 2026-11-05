@@ -53,11 +53,11 @@ Modify it to set good defaults for your module. Installers can further customize
     "vmid": 200,
     "node": "tappaas1",
     "cores": 2,
-    "coresMinMax": [1, 4],
+    "coresSmallLarge": [1, 4],
     "memory": 4096,
-    "memoryMinMax": [2048, 16384],
+    "memorySmallLarge": [2048, 16384],
     "diskSize": "16G",
-    "diskMinMax": ["16G", "128G"],
+    "diskSmallLarge": ["16G", "128G"],
     "storage": "tanka1",
     "imageType": "clone",
     "image": "9000",
@@ -69,10 +69,10 @@ Modify it to set good defaults for your module. Installers can further customize
 ```
 
 `cores`, `memory` and `diskSize` are what the module needs on a **medium** site (up to about 50
-users). If it scales, add the pairs beside them: `coresMinMax`, `memoryMinMax` and `diskMinMax`,
-`[min, max]`. A small site or environment (a few users, one machine, a test system) installs it at
-the min, a large one (100+ users) at the max. Leave a pair out where the value does not change with
-the number of users. Keep `min ≤ value ≤ max`, and the disk's min at or above the template's disk
+users). If it scales, add the pairs beside them: `coresSmallLarge`, `memorySmallLarge` and `diskSmallLarge`,
+`[small, large]`. A small site or environment (a few users, one machine, a test system) installs it at
+the small value, a large one (100+ users) at the large value. Leave a pair out where the value does not change with
+the number of users. Keep `small ≤ value ≤ large`, and the small disk at or above the template's disk
 (16G for the NixOS template); `test-module-sizing.sh` checks both.
 
 `dependsOn` is how the module composes with the rest of the platform — a VM,

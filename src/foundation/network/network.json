@@ -53,12 +53,12 @@
       "bios": "ovmf",
       "ostype": "other",
       "cores": 4,
-      "coresMinMax": [
+      "coresSmallLarge": [
         2,
         8
       ],
       "memory": 4096,
-      "memoryMinMax": [
+      "memorySmallLarge": [
         2048,
         8192
       ],

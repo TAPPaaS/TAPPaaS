@@ -74,8 +74,8 @@
       "maximum": 128,
       "example": 4
     },
-    "coresMinMax": {
-      "description": "The cores this guest gets at size small (first) and large (second), exactly two values; cores is the medium value. Absent: cores at every size.",
+    "coresSmallLarge": {
+      "description": "[small, large]: the cores this guest gets on a small site and on a large one; cores is the medium value. Absent: cores at every size.",
       "type": "array",
       "items": {
         "type": "integer",
@@ -92,7 +92,7 @@
         1,
         4
       ],
-      "note": "min ≤ cores ≤ max. An explicit cores at install (--cores, --set) wins over the size."
+      "note": "small ≤ cores ≤ large. An explicit cores at install (--cores, --set) wins over the size."
     },
     "memory": {
       "description": "RAM allocation in megabytes",
@@ -107,8 +107,8 @@
       "example": 8192,
       "note": "Value in MB (e.g., 4096 = 4GB)"
     },
-    "memoryMinMax": {
-      "description": "The memory (MiB) this guest gets at size small (first) and large (second), exactly two values; memory is the medium value. Absent: memory at every size.",
+    "memorySmallLarge": {
+      "description": "[small, large]: the memory (MiB) this guest gets on a small site and on a large one; memory is the medium value. Absent: memory at every size.",
       "type": "array",
       "items": {
         "type": "integer",
@@ -124,7 +124,7 @@
         1024,
         8192
       ],
-      "note": "min ≤ memory ≤ max. Small minimums are set so foundation, home and office fit one 32 GB node."
+      "note": "small ≤ memory ≤ large. Small minimums are set so foundation, home and office fit one 32 GB node."
     },
     "diskSize": {
       "description": "Disk size with unit suffix",
@@ -139,8 +139,8 @@
       "example": "32G",
       "note": "G=gigabytes, M=megabytes, K=kilobytes"
     },
-    "diskMinMax": {
-      "description": "The disk size this guest gets at size small (first) and large (second), exactly two values; diskSize is the medium value. Absent: diskSize at every size.",
+    "diskSmallLarge": {
+      "description": "[small, large]: the disk size this guest gets on a small site and on a large one; diskSize is the medium value. Absent: diskSize at every size.",
       "type": "array",
       "items": {
         "type": "string",
@@ -156,7 +156,7 @@
         "16G",
         "128G"
       ],
-      "note": "min ≤ diskSize ≤ max, and the min is never below the image the guest is cloned from (16G for the NixOS template): a disk cannot shrink. Not the same as diskSizeMax, which caps automatic growth."
+      "note": "small ≤ diskSize ≤ large, and the small value is never below the image the guest is cloned from (16G for the NixOS template): a disk cannot shrink. The large value is where a large site starts, not a growth limit: auto-grow takes the disk further as it fills, capped by diskSizeMax when set, else by the pool's room."
     },
     "storage": {
       "description": "Name of the storage pool for the module. Left undeclared, the pool is resolved against the target node at create time: 'tanka1' when that node has it, otherwise the node's first ZFS pool that can hold VM disks.",
