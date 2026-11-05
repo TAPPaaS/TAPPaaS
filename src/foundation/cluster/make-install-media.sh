@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
 #
-# make-install-media.sh — build a preconfigured Proxmox VE install ISO for a
-# TAPPaaS FIRST node (issue #404 item 1; docs/design/node-provisioning.md N2).
+# make-install-media.sh — install TAPPaaS on a first node from this computer.
 #
-# Wraps `proxmox-auto-install-assistant prepare-iso` around a stock PVE ISO
-# with a TAPPaaS answer file, so the resulting USB stick installs Proxmox
-# fully unattended. Only the four operator-specific answers (#404) are asked
-# for — email, locale (country/keyboard/timezone), root password, boot disk —
-# everything else is TAPPaaS defaults (network from DHCP; follow-on nodes are
-# provisioned over PXE by node-provisioner instead, see design doc N3/N4).
+# It builds a Proxmox VE install image that installs unattended (a stock ISO with
+# a TAPPaaS answer file), writes it to a USB stick or serves it over the network,
+# waits for the node, and runs the TAPPaaS install on it. Further nodes are added
+# from the running site instead (the console's Add a node).
 #
 # Runs anywhere (first-node chicken-and-egg: no PVE system exists yet):
 #   - a PVE/Debian box with proxmox-auto-install-assistant — used directly;
@@ -18,36 +15,68 @@
 #     required); run it FROM the directory holding the ISO (the CWD is
 #     what gets mounted).
 #
-# The questions and everything after the build run on this machine: when the
-# ISO is ready the script offers to write it to a USB stick, chosen from a list,
-# or to network-boot the target from here, then waits for the node and starts the
-# TAPPaaS install on it over ssh. The ISO carries the public half of a key made
-# for it, <out>.key, which is how the node is found and logged in to.
+# Everything is asked first, before the build: what the options below do not give.
+# Then the image is built, written to a USB stick or served over the network,
+# the node waited for and the TAPPaaS install run on it over ssh, with no further
+# question. The ISO carries the public half of a key made for it, <out>.key,
+# which is how the node is found and logged in to.
 #
 # Usage:
-#   make-install-media.sh [--iso proxmox-ve_9.x.iso] \
-#       [--email <e>] [--country <cc>] [--keyboard <kb>] [--timezone <tz>] \
-#       [--password-file <f>] [--disk <d>] [--disk <d>] [--fqdn <host.domain>] \
-#       [--filesystem zfs|ext4] [--ssh-key <pubkey-file>] [--out <out.iso>] \
-#       [--iso-sha256 <hex>] [--use <built.iso>] [--iface <if>] [--node <ip>] \
-#       [--branch <b>] [--site <code>] [--organization <org>] [--domain <d>] [--log <f>]
+#   make-install-media.sh [options]
+#
+# Mandatory (asked when not given; without a terminal, the script stops):
+#   --email <e>              the admin's email, for email alerting
+#   --password-file <f>      the node's root password, in a file (asked hidden)
+#   --site <name>            the TAPPaaS Site name, when the install is started
+#
+# How the target boots the image (asked when not given):
+#   --boot usb|network|booted|none
+#                            usb: write it to a stick; network: serve it from this
+#                            machine (needs dnsmasq); booted: the target already
+#                            runs it; none: only build it
+#   --stick <device>         the stick to erase (/dev/disk4, /dev/sdb); else chosen
+#                            from a list
+#   --yes                    the stick may be erased without asking
+#   --iface <if>             this machine's interface on the target's network
+#
+# The TAPPaaS install on the node (asked when not given):
+#   --install | --no-install start it over ssh when the node is up, or not
+#   --branch <b>             stable (default), or main for the newest work
+#   --organization <org>     the organisation controlling the Site (default: the
+#                            Site name)
+#   --domain <d>             the Site's domain (default: <site>.home.arpa)
+#   --show-token | --no-show-token
+#                            show the console's access token on this screen at the
+#                            end (never in the log)
+#   --node <ip>              the node's address, when it is not in this /24
+#
+# Not asked (each has a right default, shown before the build):
+#   --country <cc> --keyboard <kb> --timezone <tz>
+#                            the site's, else this machine's settings
+#   --fqdn <host.domain>     the first node's name (tappaas1.mgmt.internal)
+#   --disk <d> [--disk <d>]  the boot disk, chosen on the target (below)
+#   --filesystem zfs|ext4    zfs (default)
+#   --ssh-key <pubkey-file>  another key for root on the node
+#
+# The image:
+#   --iso <proxmox-ve_9.x.iso>   the stock ISO (default: the one in this directory)
+#   --iso-sha256 <hex>           its checksum, when Proxmox does not list it
+#   --out <out.iso>              the built image (default: <iso>-tappaas-auto.iso)
+#   --use <built.iso>            skip the build: an image this script built
+#   --log <f>                    the log (default: make-install-media-<time>.log)
+#   -h, --help                   this text
 #
 # Everything shown, the TAPPaaS install on the node included, also goes to a log in
 # this directory, or to --log; only you can read it, as that output can carry
 # generated credentials.
 #
-# --use skips the build: straight to the stick, network boot and install, with an
-# ISO this script built. --node names the node when it is not in this /24. --iso
-# may be left out when one stock ISO lies in this directory.
-#
-# The boot disk is ZFS by default (ADR-037 D1): the boot pool then carries the
+# The boot disk is ZFS by default: the boot pool then carries the
 # guests on a node with no data disk. A second --disk mirrors it (zfs raid1);
 # each disk then gets its own EFI system partition, and config-storage.sh makes
 # sure proxmox-boot-tool keeps both, so the node boots from either. ext4 is for
 # a node that has data disks: config-storage.sh refuses an ext4 boot disk alone.
 #
-# Anything not given is prompted for — EXCEPT the boot disk, which is chosen ON
-# THE TARGET at install time, like the PXE flow (ADR-037 D4): a hook injected
+# The boot disk is not asked here: it is chosen ON THE TARGET at install time, as with a network-booted node: a hook injected
 # into the installer initrd matches --disk against the machine's real disks and
 # rewrites the answer's placeholder. --disk is a size (2TB, 500GB), a model
 # ("Samsung 990") or a serial; left out, the smallest SSD or NVMe disk not on
@@ -78,6 +107,9 @@ ISO="" OUT="" EMAIL="" COUNTRY="" KEYBOARD="" TIMEZONE="" PASSWORD="" \
 SSH_KEYS=()
 DISKS=()
 LOG="" USE="" PXE_IFACE="" NODE_IP="" BRANCH="" SITE_CODE="" ORG="" DOMAIN=""
+# How the target boots the image, the stick, and whether to install: asked up front
+# when not given, so nothing is asked once the build has started.
+BOOT="" STICK="" YES=0 INSTALL_ANSWER="" SHOW_TOKEN="" SUDO_KEEP="" WANT_INSTALL=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -101,6 +133,13 @@ while [[ $# -gt 0 ]]; do
     --site)          SITE_CODE="${2:?}"; shift 2 ;;
     --organization)  ORG="${2:?}"; shift 2 ;;
     --domain)        DOMAIN="${2:?}"; shift 2 ;;
+    --boot)          BOOT="${2:?}"; shift 2 ;;
+    --stick)         STICK="${2:?}"; shift 2 ;;
+    --yes)           YES=1; shift ;;
+    --install)       INSTALL_ANSWER=yes; shift ;;
+    --no-install)    INSTALL_ANSWER=no; shift ;;
+    --show-token)    SHOW_TOKEN=1; shift ;;
+    --no-show-token) SHOW_TOKEN=0; shift ;;
     -h|--help)       usage ;;
     *) die "Unknown argument: $1 (see --help)" ;;
   esac
@@ -316,9 +355,33 @@ stick_write() {
   sudo eject "$d" 2>/dev/null || true
 }
 
-write_usb() {
-  local iso="$1" size lines line d bytes name note no i pick
-  size="$(wc -c <"$iso" | tr -d ' ')"
+# The stick's size need: the built image when there is one, else the stock ISO
+# and room for what the build adds.
+stick_need() {
+  if [[ -f "${OUT:-}" ]]; then wc -c <"$OUT" | tr -d ' '
+  else echo $(( $(wc -c <"$ISO" | tr -d ' ') + 104857600 )); fi
+}
+
+# choose_stick — the stick to erase, chosen and confirmed up front: --stick (and
+# --yes), or picked from the list here. Sets STICK.
+choose_stick() {
+  local size lines line d bytes name note no i pick
+  size="$(stick_need)"
+  if [[ -n "$STICK" ]]; then
+    lines="$(sticks_read)"
+    line="$(grep -F "${STICK}|" <<<"$lines" | head -1 || true)"
+    [[ -n "$line" ]] || die "--stick ${STICK}: not a USB stick in this machine (plug it in, or leave --stick out to choose one)"
+    IFS='|' read -r d bytes name note no <<<"$line"
+    (( bytes >= size )) || no="${no:-too small for the image}"
+    [[ -z "$no" ]] || die "--stick ${STICK}: ${no}"
+    if [[ "$YES" != 1 ]]; then
+      [[ -t 0 ]] || die "--stick ${STICK} is erased: say so with --yes"
+      read -r -p "${IN} ERASE ${d} (${name}, $(( bytes / 1000000000 )) GB)? Type yes: " pick; logged "$pick"
+      [[ "$pick" == yes ]] || die "the stick is not erased: stopped"
+    fi
+    return 0
+  fi
+  [[ -t 0 ]] || die "--boot usb without a terminal needs --stick <device> and --yes"
   while :; do
     lines="$(sticks_read)"
     if [[ -z "$lines" ]]; then
@@ -339,12 +402,18 @@ write_usb() {
     IFS='|' read -r d bytes name note no <<<"$(sed -n "${pick}p" <<<"$lines")"
     (( bytes >= size )) || no="${no:-too small for the image}"
     if [[ -n "$no" ]]; then warn "${d}: ${no}"; continue; fi
-    read -r -p "${IN} ERASE ${d} (${name}, $(( bytes / 1000000000 )) GB)? Type yes: " pick; logged "$pick"
-    [[ "$pick" == yes ]] || continue
-    stick_write "$d" "$iso"
-    action "The stick is ready. Boot the target from it, with only the NIC to your upstream router connected."
+    if [[ "$YES" != 1 ]]; then
+      read -r -p "${IN} ERASE ${d} (${name}, $(( bytes / 1000000000 )) GB)? Type yes: " pick; logged "$pick"
+      [[ "$pick" == yes ]] || continue
+    fi
+    STICK="$d"
     return 0
   done
+}
+
+write_usb() {
+  stick_write "$STICK" "$1"
+  action "The stick is ready. Boot the target from it, with only the NIC to your upstream router connected."
 }
 
 # Runs in the container, or here when this machine has the tools: the installer's
@@ -431,9 +500,7 @@ pxe_serve() {
   dns="$(PATH="/opt/homebrew/sbin:/usr/local/sbin:/usr/sbin:${PATH}" command -v dnsmasq || true)"
   [[ -n "$dns" ]] || die "dnsmasq is needed for the network boot (brew install dnsmasq, or apt install dnsmasq)."
   command -v python3 >/dev/null 2>&1 || die "python3 is needed for the network boot."
-  net_info "$PXE_IFACE"
-  read -r -p "${IN} Interface on this machine that is wired to the target's network [${NET_IF}]: " pick; logged "$pick"
-  [[ -z "$pick" ]] || net_info "$pick"
+  net_info "$PXE_IFACE"   # chosen up front (ask_up_front)
   info "serving on ${NET_IF} (${NET_IP}/${NET_PREFIX})"
   pxe_stage "$iso"
   PXE_RUN="/tmp/tappaas-pxe.$$"
@@ -568,8 +635,8 @@ show_token() {
   local yn tok key
   key="$(cd "$(dirname "$INSTALL_KEY")" && pwd)/$(basename "$INSTALL_KEY")"
   [[ -t 0 && -w /dev/tty ]] || { info "the setup token, from this machine: ssh -i ${key} root@${NODE_IP} 'ssh -i /root/tappaas/tappaas-cicd.key tappaas@tappaas-cicd.mgmt.internal cat config/console-setup-token'"; return 0; }
-  read -r -p "${IN} Press Enter to show the console's setup token here (it is not written to the log), or n to skip: " yn; logged "$yn"
-  if [[ "$yn" != [nN]* ]]; then
+  # Asked up front (ask_up_front, or --show-token).
+  if [[ "${SHOW_TOKEN:-0}" == 1 ]]; then
     tok="$(node_ssh -n "root@${NODE_IP}" 'ssh -i /root/tappaas/tappaas-cicd.key -o StrictHostKeyChecking=accept-new -o BatchMode=yes tappaas@tappaas-cicd.mgmt.internal cat config/console-setup-token' 2>/dev/null || true)"
     if [[ -n "$tok" ]]; then printf '  Setup token: %s\n' "$tok" >/dev/tty
     else warn "the setup token could not be read: the console may have closed setup already"; fi
@@ -578,50 +645,101 @@ show_token() {
   info "  ssh -i ${key} root@${NODE_IP} 'ssh -i /root/tappaas/tappaas-cicd.key tappaas@tappaas-cicd.mgmt.internal cat config/console-setup-token'"
 }
 
-# The three names the bootstrap takes, asked before the wait so it runs unattended.
-ask_install() {
-  local yn
-  read -r -p "${IN} Start the TAPPaaS install over ssh when the node is up? [Y/n]: " yn; logged "$yn"
-  [[ "$yn" != [nN]* ]] || return 1
-  [[ -n "$BRANCH"    ]] || BRANCH="$(prompt 'Branch (stable, or main for the newest work)' stable)"
-  [[ -n "$SITE_CODE" ]] || SITE_CODE="$(prompt 'The TAPPaaS Site name (lowercase, at most 15 characters)')"
-  [[ -n "$ORG"       ]] || ORG="$(prompt 'Name of Organisation controlling the Site' "$SITE_CODE")"
-  # Blank: <site>.home.arpa, the site's own names with no public DNS (ADR-043 D4);
-  # going public later is Day 1's "Make it public".
-  [[ -n "$DOMAIN"    ]] || DOMAIN="$(prompt 'Domain for the Site (blank: <site>.home.arpa, nothing public needed)')"
-  [[ "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]] || die "not a branch: ${BRANCH}"
-  [[ "$SITE_CODE" =~ ^[a-z0-9-]{1,15}$ ]] || die "the Site name is lowercase, at most 15 characters: ${SITE_CODE}"
-  [[ "$ORG" =~ ^[a-z0-9-]+$ ]] || die "the Organisation name is lowercase: ${ORG}"
-  [[ -z "$DOMAIN" || "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] || die "not a domain: ${DOMAIN}"
+# ask_up_front — everything after the build, asked before it: how the target
+# boots the image (and the stick, or the interface), whether to start the TAPPaaS
+# install and its names, whether to show the setup token at the end, and this
+# computer's password for sudo, kept alive until the script ends. What the options
+# gave is not asked; without a terminal a missing mandatory value stops the script.
+ask_up_front() {
+  local c yn tty=0
+  [[ -t 0 ]] && tty=1
+  if [[ -z "$BOOT" ]]; then
+    if [[ "$tty" == 1 ]]; then
+      info "How does the target boot the image?"
+      info "  1) From a USB stick, written by this script"
+      info "  2) Over the network, served from this machine"
+      info "  3) It is already booted from this image: go on to the install"
+      info "  4) Neither: only build the image"
+      read -r -p "${IN} Choice [1]: " c; logged "$c"
+      case "${c:-1}" in 1) BOOT=usb ;; 2) BOOT=network ;; 3) BOOT=booted ;; *) BOOT=none ;; esac
+    else
+      BOOT=none
+    fi
+  fi
+  case "$BOOT" in usb|network|booted|none) ;; *) die "--boot is usb, network, booted or none" ;; esac
+  [[ "$BOOT" != none ]] || return 0
+
+  case "$BOOT" in
+    usb) choose_stick || { BOOT=none; return 0; } ;;
+    network)
+      pxe_tools_ready
+      PATH="/opt/homebrew/sbin:/usr/local/sbin:/usr/sbin:${PATH}" command -v dnsmasq >/dev/null 2>&1 \
+        || die "dnsmasq is needed for the network boot (brew install dnsmasq, or apt install dnsmasq)."
+      command -v python3 >/dev/null 2>&1 || die "python3 is needed for the network boot."
+      net_info "$PXE_IFACE"
+      if [[ -z "$PXE_IFACE" && "$tty" == 1 ]]; then
+        read -r -p "${IN} Interface on this machine that is wired to the target's network [${NET_IF}]: " c; logged "$c"
+        [[ -z "$c" ]] || net_info "$c"
+      fi
+      PXE_IFACE="$NET_IF" ;;
+  esac
+
+  # The TAPPaaS install, and its three names.
+  if [[ -n "$USE" && ! -f "$INSTALL_KEY" ]]; then
+    warn "no ${INSTALL_KEY} beside the image, so this script cannot log in to the node: build the image again, or run the install from the node's console."
+    INSTALL_ANSWER=no
+  fi
+  if [[ -z "$INSTALL_ANSWER" ]]; then
+    if [[ "$tty" == 1 ]]; then
+      read -r -p "${IN} Start the TAPPaaS install over ssh when the node is up? [Y/n]: " yn; logged "$yn"
+      [[ "$yn" == [nN]* ]] && INSTALL_ANSWER=no || INSTALL_ANSWER=yes
+    else
+      INSTALL_ANSWER=no
+    fi
+  fi
+  if [[ "$INSTALL_ANSWER" == yes ]]; then
+    WANT_INSTALL=1
+    if [[ "$tty" == 1 ]]; then
+      [[ -n "$BRANCH"    ]] || BRANCH="$(prompt 'Branch (stable, or main for the newest work)' stable)"
+      [[ -n "$SITE_CODE" ]] || SITE_CODE="$(prompt 'The TAPPaaS Site name (lowercase, at most 15 characters)')"
+      [[ -n "$ORG"       ]] || ORG="$(prompt 'Name of Organisation controlling the Site' "$SITE_CODE")"
+      # Blank: <site>.home.arpa, the site's own names with no public DNS; going
+      # public later is Day 1's "Make it public".
+      [[ -n "$DOMAIN"    ]] || DOMAIN="$(prompt 'Domain for the Site (blank: <site>.home.arpa, nothing public needed)')"
+      [[ -n "$SHOW_TOKEN" ]] || { read -r -p "${IN} At the end, show the console's access token on this screen (not in the log)? [Y/n]: " yn; logged "$yn"; [[ "$yn" == [nN]* ]] && SHOW_TOKEN=0 || SHOW_TOKEN=1; }
+    else
+      [[ -n "$SITE_CODE" ]] || die "--install without a terminal needs --site <name>"
+      [[ -n "$BRANCH" ]] || BRANCH=stable
+      [[ -n "$ORG" ]] || ORG="$SITE_CODE"
+      [[ -n "$SHOW_TOKEN" ]] || SHOW_TOKEN=0
+    fi
+    [[ "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]] || die "not a branch: ${BRANCH}"
+    [[ "$SITE_CODE" =~ ^[a-z0-9-]{1,15}$ ]] || die "the Site name is lowercase, at most 15 characters: ${SITE_CODE}"
+    [[ "$ORG" =~ ^[a-z0-9-]+$ ]] || die "the Organisation name is lowercase: ${ORG}"
+    [[ -z "$DOMAIN" || "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] || die "not a domain: ${DOMAIN}"
+  fi
+
+  # This computer's password, once, for the stick or the network boot: kept alive
+  # until the script ends, so the write and the boot service ask nothing later.
+  if [[ "$BOOT" == usb || "$BOOT" == network ]]; then
+    sudo_ask "$([[ "$BOOT" == usb ]] && echo "write the stick" || echo "serve the network boot")"
+    ( while sleep 50; do sudo -n -v 2>/dev/null || exit 0; kill -0 $$ 2>/dev/null || exit 0; done ) &
+    SUDO_KEEP=$!
+  fi
+  info "All asked. From here on the script runs without questions."
 }
 
 after_build() {
-  local c want_install=0
-  if [[ ! -t 0 ]]; then
-    info "${GN}✓ ${OUT} is ready.${CL} Write it to a USB stick, or see INSTALL.md, Step 1 Option C for the network."
-    return 0
-  fi
-  echo ""
-  info "What next?"
-  info "  1) Write ${OUT} to a USB stick"
-  info "  2) Network-boot the target from this machine"
-  info "  3) The target is already booted from this image: go on to the install"
-  info "  4) Stop here"
-  read -r -p "${IN} Choice [1]: " c; logged "$c"
-  case "${c:-1}" in
-    1|2|3) ;;
-    *) warn "The ISO embeds the root password — treat the media like a credential, and delete it after the install."; return 0 ;;
+  local c
+  case "$BOOT" in
+    none)
+      info "${GN}✓ ${OUT} is ready.${CL} Write it to a USB stick, or see INSTALL.md, Step 1 Option C for the network."
+      warn "The ISO embeds the root password — treat the media like a credential, and delete it after the install."
+      return 0 ;;
+    usb) write_usb "$OUT" ;;
+    network) pxe_serve "$OUT" ;;
   esac
-  if [[ -f "$INSTALL_KEY" ]]; then
-    ask_install && want_install=1
-  else
-    warn "no ${INSTALL_KEY} beside the image, so this script cannot log in to the node: build the image again, or run the install from the node's console."
-  fi
-  case "${c:-1}" in
-    1) write_usb "$OUT" || return 0 ;;
-    2) pxe_tools_ready; pxe_serve "$OUT" ;;
-  esac
-  if [[ "$want_install" == 1 ]]; then
+  if [[ "$WANT_INSTALL" == 1 ]]; then
     net_info "${NET_IF:-}"
     [[ "$NET_IP" != 10.* ]] || warn "this machine is on 10.x: the cut-over puts the management network 10.0.0.0/24 on the node, and this session can freeze. Drive it from your upstream network."
     wait_for_node
@@ -645,25 +763,27 @@ if [[ -z "${TAPPAAS_MEDIA_CONTAINER:-}" ]]; then
 fi
 
 EXIT_WORK="" EXIT_SEEN=""
-trap '[[ -z "$SCAN_PID" ]] || kill "$SCAN_PID" 2>/dev/null || true; pxe_stop; [[ -z "$EXIT_WORK" ]] || rm -rf "$EXIT_WORK"; rm -f "$EXIT_SEEN"' EXIT
+trap '[[ -z "$SCAN_PID" ]] || kill "$SCAN_PID" 2>/dev/null || true; [[ -z "$SUDO_KEEP" ]] || kill "$SUDO_KEEP" 2>/dev/null || true; pxe_stop; [[ -z "$EXIT_WORK" ]] || rm -rf "$EXIT_WORK"; rm -f "$EXIT_SEEN"' EXIT
 trap 'exit 130' INT TERM
 
 # ── This machine: the ISO, the questions, the key ─────────────────────
 if [[ -z "${TAPPAAS_MEDIA_CONTAINER:-}" && -t 0 ]]; then
   info "This installs TAPPaaS on a first node, in these steps:"
+  info "  1. All the questions first: what is not given as an option (see --help)."
   if [[ -z "$USE" ]]; then
-    info "  1. A few questions, then the Proxmox install image is built (some minutes)."
+    info "  2. The Proxmox install image is built (some minutes)."
   else
-    info "  1. The install image is built already: ${USE}"
+    info "  2. The install image is built already: ${USE}"
   fi
-  info "  2. You choose: write the image to a USB stick, or network-boot the target from here."
-  info "  3. You boot the target. It installs Proxmox unattended and WIPES its boot disk."
-  info "  4. This script finds the node on your network and starts the TAPPaaS install on it."
+  info "  3. It is written to the USB stick, or served over the network, as you chose."
+  info "  4. You boot the target. It installs Proxmox unattended and WIPES its boot disk."
+  info "  5. This script finds the node on your network and runs the TAPPaaS install on it."
 fi
 if [[ -n "$USE" ]]; then
   [[ -f "$USE" ]] || die "--use: no such image: ${USE}"
   OUT="$USE"
   INSTALL_KEY="${OUT%.iso}.key"
+  ask_up_front
   after_build
   exit 0
 fi
@@ -713,14 +833,23 @@ keyboard_of() {
     *) echo en-us ;;
   esac
 }
-[[ -n "$EMAIL"    ]] || EMAIL="$(prompt 'Admin email (Proxmox mailto)' "$([[ -f "$SITE_JSON" ]] && jq -r '.email // ""' "$SITE_JSON" 2>/dev/null)")"
-[[ -n "$COUNTRY"  ]] || { _d="$(site_location country)"; COUNTRY="$(prompt 'Country code' "${_d:-$(_h="$(host_country)"; echo "${_h:-dk}")}")"; }
-[[ -n "$KEYBOARD" ]] || { _d="$(site_location keyboard)"; KEYBOARD="$(prompt 'Keyboard layout' "${_d:-$(keyboard_of "$COUNTRY")}")"; }
-[[ -n "$TIMEZONE" ]] || { _d="$(site_location timezone)"; TIMEZONE="$(prompt 'Timezone' "${_d:-$(_h="$(host_timezone)"; echo "${_h:-Europe/Copenhagen}")}")"; }
-[[ -n "$FQDN"     ]] || FQDN="$(prompt 'Node FQDN' tappaas1.mgmt.internal)"
+# Mandatory: the email and the root password, asked when not given. The rest has a
+# right default and is not asked: the site's (or this machine's) country, keyboard
+# and timezone, and the first node's name; each can still be given as an option.
+if [[ -z "$EMAIL" ]]; then
+  [[ -t 0 ]] || die "--email is needed (the admin's address, for email alerting)"
+  EMAIL="$(prompt 'Admin email (for email alerting)' "$([[ -f "$SITE_JSON" ]] && jq -r '.email // ""' "$SITE_JSON" 2>/dev/null)")"
+fi
+[[ -n "$EMAIL" ]] || die "an admin email is needed (--email)"
+[[ -n "$COUNTRY"  ]] || { _d="$(site_location country)"; COUNTRY="${_d:-$(_h="$(host_country)"; echo "${_h:-dk}")}"; }
+[[ -n "$KEYBOARD" ]] || { _d="$(site_location keyboard)"; KEYBOARD="${_d:-$(keyboard_of "$COUNTRY")}"; }
+[[ -n "$TIMEZONE" ]] || { _d="$(site_location timezone)"; TIMEZONE="${_d:-$(_h="$(host_timezone)"; echo "${_h:-Europe/Copenhagen}")}"; }
+[[ -n "$FQDN"     ]] || FQDN="tappaas1.mgmt.internal"
+[[ -n "${TAPPAAS_MEDIA_CONTAINER:-}" ]] || info "country ${COUNTRY}, keyboard ${KEYBOARD}, timezone ${TIMEZONE}, node ${FQDN} (--country, --keyboard, --timezone, --fqdn to change)"
 if [[ -n "$PASSWORD_FILE" ]]; then
   PASSWORD="$(<"$PASSWORD_FILE")"
 else
+  [[ -t 0 ]] || die "--password-file is needed without a terminal (the node's root password)"
   read -r -s -p "${IN} Root password: " PASSWORD; echo ""
   read -r -s -p "${IN} Root password (again): " PASSWORD2; echo ""
   [[ "$PASSWORD" == "$PASSWORD2" ]] || die "Passwords do not match."
@@ -766,6 +895,8 @@ INSTALL_KEY="${OUT%.iso}.key"
 if [[ -z "${TAPPAAS_MEDIA_CONTAINER:-}" ]]; then
   [[ -f "$INSTALL_KEY" ]] || ssh-keygen -q -t ed25519 -N '' -C "tappaas-install" -f "$INSTALL_KEY"
   SSH_KEYS+=("${INSTALL_KEY}.pub")
+  # Everything after the build, asked now, before it.
+  ask_up_front
 fi
 
 # ── Assistant bootstrap (first-node chicken-and-egg) ───────────────────
