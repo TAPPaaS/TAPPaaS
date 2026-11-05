@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** — built on `feat/917-sizing`, not yet live-tested |
-| **Version** | 0.1 |
+| **Version** | 0.2 |
 | **Date** | 2026-11-05 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | #917. Amends ADR-007c (environments gain `size`), ADR-020 (three policy fields on `cluster:vm` and `cluster:lxc`) and the #207 3-way merge (the release side is sized before it is compared). |
-| **Changelog** | v0.1 (2026-11-05): first draft, from the operator's direction of 2026-11-05. |
+| **Changelog** | v0.1 (2026-11-05): first draft, from the operator's direction of 2026-11-05. v0.2 (2026-11-05): the operator's review. tappaas-cicd tops out at medium (4 cores, 8 GiB). network's medium memory drops to 4 GiB. Immich comes down at every size, with its ML cap a share of the VM. The console lists and edits both sizes (D7), and `make-install-media.sh` asks for the size (D8). |
 
 A site, and each environment in it, says how big it is: `small`, `medium` or `large`. A module
 states its VM or container size once for `medium` and, optionally, a minimum and a maximum. The
@@ -118,19 +118,19 @@ source and nothing changes for it.
 
 ### D6. Values for this repository's modules
 
-Medium is today's value. The minimums are set so that foundation plus home plus office fits
-**≈25 GiB of guest memory** at `small`, leaving a 32 GB node about 6 GB for Proxmox, the ZFS
+Medium is today's value, except the three in bold (v0.2). The minimums are set so that foundation
+plus home plus office fits **24 GiB of guest memory** at `small`, leaving a 32 GB node about 6 GB for Proxmox, the ZFS
 ARC (10 % of RAM by the installer's default) and the gate's 5 % margin.
 
 | Module | cores (min / med / max) | memory MiB (min / med / max) | disk (min / med / max) |
 |---|---|---|---|
-| network | 2 / 4 / 8 | 2048 / 8192 / 16384 | — |
-| tappaas-cicd | 2 / 4 / 8 | 3072 / 8192 / 16384 | 32G / 64G / 128G |
+| network | 2 / 4 / 8 | 2048 / **4096** / 8192 | — |
+| tappaas-cicd | 2 / 4 / 4 | 3072 / 8192 / 8192 | 32G / 64G / 128G |
 | identity | 2 / 2 / 4 | 2048 / 4096 / 8192 | 16G / 32G / 64G |
 | logging | 1 / 2 / 4 | 1536 / 2048 / 8192 | 16G / 32G / 128G |
 | deconz | 1 / 2 / 2 | 1024 / 4096 / 4096 | — |
 | hass | 2 / 2 / 4 | 2048 / 4096 / 8192 | 16G / 32G / 64G |
-| immich | 2 / 4 / 8 | 4096 / 8192 / 16384 | 100G / 500G / 2000G |
+| immich | 2 / **2** / 4 | 3072 / **6144** / 12288 | 64G / **250G** / 1000G |
 | jellyfin | 2 / 4 / 8 | 1536 / 2048 / 8192 | 16G / 32G / 64G |
 | karakeep | 1 / 2 / 4 | 1536 / 3072 / 6144 | 16G / 64G / 128G |
 | nomad | 1 / 2 / 4 | 1024 / 4096 / 8192 | 32G / 128G / 512G |
@@ -151,10 +151,46 @@ ARC (10 % of RAM by the installer's default) and the gate's 5 % margin.
   (a template's disk is the floor every clone starts from).
 - `network`'s disk stays at its image size, and `euro-office`, `coturn` and `nextcloud-hpb`
   keep theirs.
-- Small budget, guest memory: foundation 8.5 GiB, home 11 GiB, office 5.5 GiB, together
-  25 GiB. `test-module-sizing.sh` asserts it.
+- Small budget, guest memory: foundation 8.5 GiB, home 10 GiB, office 5.5 GiB, together
+  24 GiB. `test-module-sizing.sh` asserts at most 26 GiB.
+- **tappaas-cicd** does not grow past medium. Its load is the site's builds and sweeps, not the
+  number of users.
+- **network** at 4 GiB medium. OPNsense with Caddy, Unbound and the rule set stays well inside
+  that; a large site gets 8 GiB.
+- **Immich** comes down at every size. Machine learning, always on, is capped at a share of the
+  VM (MemoryHigh 50 %, MemoryMax 60 %), not at a fixed 4/5 GiB, so the cap follows the size. The
+  models unload after five idle minutes, so the share bounds an import's peak. Postgres takes
+  768 MB of shared buffers at every size. The disk is thin, so a smaller default size costs
+  nothing that auto-grow cannot give back.
+- A changed medium value reaches an existing medium site at its next update, like any release
+  change: network and Immich shrink in memory, unless the operator set it. Immich's 500G disk
+  stays, because disks only grow.
 - The small minimums are a first estimate. Each one is to be confirmed by a live install at
   `small`, and lowered or raised from what the guests use under load.
+
+### D7. The console lists and edits both sizes
+
+- The Site page's card shows the site's size, "medium (the default)" when none is set. The
+  card's Modify form changes it.
+- Each environment's card, and its panel, show its size, or "medium (the site's)" when it has
+  none of its own.
+- The add and modify forms offer small, medium and large, with "the site's size" as the default.
+- Both forms come from the schemas and the managers' `--size` flags, as every other field does.
+
+### D8. The install media asks for the size
+
+- `make-install-media.sh --size small|medium|large` passes it on to `install.sh --size`.
+- Without the option, when the script starts the install, it asks, with medium as the default.
+- Unattended (no terminal), medium.
+
+### D9. Where it is documented
+
+- Install overview, Install Foundation (`--size`, the table, "choose small on one 32 GB
+  machine"), the single-machine install and Configure Environments.
+- The schemas README ("Sizes"), the module-manager README ("How big a guest is"), the
+  site-manager and environment-manager READMEs (`--size`).
+- The module template (how an author states the pairs), and the generated `cluster:vm` /
+  `cluster:lxc` field references.
 
 ## Consequences
 
@@ -201,5 +237,8 @@ ARC (10 % of RAM by the installer's default) and the gate's 5 % margin.
   - every pair is ordered and the disk floor holds;
   - each size resolves as D2 to D4 say, the merge as D5 says;
   - foundation + home + office at `small` stays at or under 26 GiB.
+- **Console:** `Site.tsx` and `Environments.tsx` show the size. The forms take `size` from the
+  schemas and the `setfields.ts` shortcut tables.
+- **Install media:** `make-install-media.sh --size`, asked when not given.
 - **Live test (open):** a fresh `--size small` install on a 32 GB node with foundation, home
   and office, run under load. Then a size change from small to medium and an update.
