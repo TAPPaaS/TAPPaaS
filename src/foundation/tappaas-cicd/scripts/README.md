@@ -526,6 +526,23 @@ Output → journald → Alloy → Loki.
 
 ---
 
+### tappaas-maintenance.sh — hold alerts during a planned disruption
+
+A maintenance window names hosts, or the whole site, and an end time. While it is open
+the log alerts record a host gone silent instead of mailing it, and its RESOLVED then
+has no ALERT to answer. An update that is allowed to restart a guest opens one before
+it restarts it: for an hour, for the guest's own host, or for the whole site when the
+guest is the firewall, since every zone's logs pass through it.
+
+```bash
+tappaas-maintenance.sh open --name N --scope site|HOST[,HOST...] --minutes M [--reason TEXT]
+tappaas-maintenance.sh close --name N
+tappaas-maintenance.sh list
+```
+
+The windows are files in `/var/lib/tappaas/maintenance`; one that has ended is removed by
+the next `open` or `list`.
+
 ### site-notify.sh — mail the site owner (ADR-007e)
 
 The site notification target: a notice goes to `site.json` `email` through a Proxmox

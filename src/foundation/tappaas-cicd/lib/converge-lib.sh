@@ -88,6 +88,27 @@ CONVERGE_APPLIED=0    # count of units actually applied
 # must precede registering that address in DNS.
 readonly CONVERGE_SIDE_EFFECT_ORDER="reboot wait-ip dns ha-repoint"
 
+# converge_open_maintenance <module> — before an authorized restart, open a
+# maintenance window so the alert receiver does not mail the restart as hosts
+# gone silent: the guest's own host, or the whole site for the firewall
+# (network), whose restart cuts every zone's logs. 60 minutes covers the restart
+# and the log shippers catching up afterwards. Best effort: no script, no window.
+converge_open_maintenance() {
+    local module="$1" mw scope host
+    mw="$(command -v tappaas-maintenance.sh 2>/dev/null || true)"
+    [[ -n "${mw}" ]] || mw="$(dirname "${BASH_SOURCE[0]}")/../scripts/tappaas-maintenance.sh"
+    [[ -x "${mw}" ]] || return 0
+    case "${module}" in
+        network|firewall) scope="site" ;;
+        *) host="$(jq -r '[.. | objects | .vmname? // empty] | first // empty' "${CONFIG_DIR:-/home/tappaas/config}/${module}.json" 2>/dev/null || true)"
+           scope="${host:-${module}}" ;;
+    esac
+    "${mw}" open --name "restart-${module}" --scope "${scope}" --minutes 60 \
+        --reason "${module} restarted by its update" >/dev/null 2>&1 \
+        && info "  ${module}: alerts for $( [[ "${scope}" == site ]] && echo "the site" || echo "${scope}" ) held for an hour while it restarts" \
+        || true
+}
+
 # converge_apply <module> <service-dir> <drift-file> <check:0|1> <allow-disruption:0|1> [force:0|1]
 #
 # `allow-disruption` is the D8 authorization, decided by the CALLER: `modify
@@ -321,6 +342,7 @@ converge_apply() {
                     # (#531). Counted applied — the side-effect pass reboots once,
                     # together with any network change in the same record.
                     info "  ${module}: new ${_p_list} take effect on a restart — restarting the VM (authorized)"
+                    converge_open_maintenance "${module}"
                     converge_contains reboot "${side_effects[@]:-}" || side_effects+=(reboot)
                     if declare -F converge_side_effect_wait_ip >/dev/null; then
                         converge_contains wait-ip "${side_effects[@]:-}" || side_effects+=(wait-ip)
