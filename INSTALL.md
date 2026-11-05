@@ -4,6 +4,9 @@ TAPPaaS installs as a set of interlinked foundation modules and platform service
 configured to work together. The process is **seven stages**; each one tells you what it needs and
 what "done" looks like before you move on.
 
+**One machine, fastest path:** [INSTALL-SINGLENODE.md](INSTALL-SINGLENODE.md) — one machine with one disk
+and one network port, installed from a Mac or Linux PC on the same network, up and running on Day 1.
+
 ## The seven stages
 
 | # | Stage | You'll need | Done when |
