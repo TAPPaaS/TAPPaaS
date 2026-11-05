@@ -157,8 +157,8 @@ platform. That is [Operate](https://tappaas.org/operate/) — bookmark it.
 
 ## A production cluster in the Hetzner cloud
 
-*In development, not ready.* Several rented servers joined into one cluster. Hetzner's private
-network between servers (the vSwitch) carries no tagged VLANs the way a switch you own does, so
-the site's internal networks will run over an overlay across it. Until it is ready, a local
-cluster can reach the internet through a [satellite](src/foundation/satellite/INSTALL.md) on a
-rented server.
+*In development, not ready.* Several rented dedicated servers joined into one cluster. The
+first server's public address becomes the firewall's internet side. The servers reach each
+other over Hetzner's private network between them (the vSwitch). That network carries a single
+VLAN, so the site's own networks (management, services, clients and so on) will run tunnelled
+inside it rather than as VLANs on a switch you own. Until it is ready, use a local cluster.
