@@ -206,6 +206,20 @@ grep -q "cannot set vlan 298" "${TMP_CFG}/bvo.err" && ck "…and prints that err
 grep -q "restored" "${TMP_CFG}/bvo.err" && ck "…without claiming a restore it never did" absent present || ck "…without claiming a restore it never did" absent absent
 ck "an ssh failure (255) fails the node"       2 "$(_bvo 255 'ssh: connect to host n3 port 22: Connection refused')"
 
+# The whole loop under set -e, as the controller runs: a node that applies with
+# a warning must not end the run before the next node.
+loop="$(bash -e -c '
+    . "$1" >/dev/null 2>&1; set -e
+    _desired_bridge_vids() { echo "200 298"; }
+    _cluster_nodes() { echo "n3 n1"; }
+    ssh() { case "$*" in
+        *awk*want*) [[ "$*" == *n3.mgmt* ]] && { echo "error: lanbond: skipping slave usblan0, does not exist"; return 1; }; return 0 ;;
+        *) echo "200" ;; esac; }
+    DRIFT=0 CHANGED=0 ERRORS=0
+    reconcile_bridge_vids 1 >/dev/null 2>&1
+    echo "changed=${CHANGED} errors=${ERRORS}"' _ "${PM}" 2>/dev/null)"
+ck "under set -e, a warned node does not stop the next one" "changed=2 errors=0" "${loop}"
+
 echo ""
 echo "test-proxmox-manager: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

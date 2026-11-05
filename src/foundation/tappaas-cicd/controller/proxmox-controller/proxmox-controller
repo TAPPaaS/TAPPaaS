@@ -788,8 +788,11 @@ reconcile_bridge_vids() {
                 ' /etc/network/interfaces.proxmox-manager.bak > /etc/network/interfaces
                 ifreload -a
             " 2>&1) || rc=$?
-        _bridge_vids_outcome "${node}" "${rc}" "${out}"
-        case $? in
+        # Not a bare call: this script runs under set -e, and 1 (applied with a
+        # warning) would end it here, before the next node.
+        local verdict=0
+        _bridge_vids_outcome "${node}" "${rc}" "${out}" || verdict=$?
+        case ${verdict} in
             0) info "  ${GN}✓${CL} ${node}: bridge-vids applied"
                CHANGED=$((CHANGED + 1)); DRIFT=$((DRIFT - 1)) ;;
             1) CHANGED=$((CHANGED + 1)); DRIFT=$((DRIFT - 1)) ;;
