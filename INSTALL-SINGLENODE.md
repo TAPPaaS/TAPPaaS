@@ -44,20 +44,29 @@ curl -fsSL "https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/main/src/foundation/
 ./make-install-media.sh
 ```
 
-The script asks for your email and a root password for the machine; for the rest, press
-Enter to take the defaults (country, keyboard, time zone from this computer). It builds
-`proxmox-ve_9.2-1-tappaas-auto.iso`, an installer that sets up Proxmox without asking
-anything, and then asks how the machine boots it:
+The script asks everything first, then runs without questions:
 
-- **Write it to a USB stick** — it lists the sticks in this computer and erases the one
-  you choose.
-- **Network-boot the machine from this computer** — it serves the installer on your
-  network itself: it answers the machine's network boot alongside your router (which
-  keeps handing out addresses) and serves the installer over HTTP. No stick needed.
+- your **admin email** (for email alerting) and a **root password** for the machine;
+- how the machine boots the installer:
+  - **from a USB stick** — it lists the sticks in this computer and erases the one you
+    choose, or
+  - **over the network from this computer** — it answers the machine's network boot
+    alongside your router (which keeps handing out addresses) and serves the
+    installer itself; no stick needed;
+- whether to start the TAPPaaS install when the machine is up, and the **site's name**
+  (with no domain given, the site gets `<site>.home.arpa`, served inside the site);
+- your **login password on this computer** (`sudo`), once.
 
-Either way it asks for your login password on this computer (`sudo`), then for the
-site's name. With no domain given, the site gets `<site>.home.arpa`, served inside the
-site.
+Country, keyboard, time zone and the node's name are not asked: it shows the defaults
+it takes. Every answer can also be given as an option instead (`--help` lists them),
+for example:
+
+```bash
+./make-install-media.sh --email you@example.org --boot usb --site home --install
+```
+
+It then builds `proxmox-ve_9.2-1-tappaas-auto.iso`, an installer that sets up Proxmox
+without asking anything, and writes or serves it.
 
 Keep the script running and its window open: it waits for the machine.
 

@@ -67,18 +67,21 @@ curl -fsSL "https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/main/src/foundation/
 ./make-install-media.sh
 ```
 
-It asks for your email and a root password. Country, keyboard, timezone and hostname
-default to this machine's settings: press Enter to take them. It validates the answers,
-writes `proxmox-ve_9.2-1-tappaas-auto.iso`, and asks what next:
+It asks everything first and then runs without questions: your admin email (for email
+alerting), a root password, how the target boots the image, and your login password on
+this computer (`sudo`), once. Country, keyboard, timezone and hostname are not asked: it
+takes this machine's settings and shows them; `--country`, `--keyboard`, `--timezone` and
+`--fqdn` change them. Every question has an option (`./make-install-media.sh --help`), and
+only a mandatory value that no option gave is asked. It writes
+`proxmox-ve_9.2-1-tappaas-auto.iso`, and:
 
 - **Write it to a USB stick:** it lists the USB sticks in this machine and erases the one
-  you pick, after you confirm, then reads the stick back. It asks for your login
-  password on this computer (`sudo`) for the write, not the node's root password.
+  you picked, after you confirmed it, then reads the stick back.
 - **Network-boot the target from this machine:** see Option C.
 
-It then offers to start the TAPPaaS install on the node over ssh, and asks the branch, the
-Site name (Step 2's site code), the organisation controlling the Site and the domain of [Step 2](#step-2--bootstrap-minimal-tappaas-on-the-first-node)
-up front. Say yes and it waits for the node, finds it on your network and runs Step 2 for
+Up front it also asks whether to start the TAPPaaS install on the node over ssh, and the branch, the
+Site name (Step 2's site code), the organisation controlling the Site and the domain of [Step 2](#step-2--bootstrap-minimal-tappaas-on-the-first-node).
+Say yes and it waits for the node, finds it on your network and runs Step 2 for
 you, unattended, so skip that step's commands. The install keeps running on the node if
 this machine loses the connection, and the script picks it up again. It takes the network
 ports the node detects, makes no data pools and generates the firewall's root password,
