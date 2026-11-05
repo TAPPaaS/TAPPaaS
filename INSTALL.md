@@ -1,13 +1,50 @@
 # Installing TAPPaaS
 
-TAPPaaS installs as a set of interlinked foundation modules and platform services, built and
-configured to work together. The process is **seven stages**; each one tells you what it needs and
-what "done" looks like before you move on.
+The install turns one or more machines into a TAPPaaS site. Each machine gets Proxmox VE, and
+the first one gets the TAPPaaS foundation on top: an OPNsense firewall that becomes the site's
+gateway, the management VM that owns the platform (tappaas-cicd), and its web console. From the
+console's Day 1 page you finish the rest: the machines' network ports and disks, more machines,
+your admin VPN, then sign-in, logging and backup, and a check that it all works. Applications,
+going public, switches and Wi-Fi come after, as Day 2 operations. A first machine starts from a
+Mac or Linux PC with one script that builds the installer, boots the machine from it and follows
+the install to the end.
 
-**One machine, fastest path:** [INSTALL-SINGLENODE.md](INSTALL-SINGLENODE.md) — one machine with one disk
-and one network port, installed from a Mac or Linux PC on the same network, up and running on Day 1.
+## Choose how to install
 
-## The seven stages
+| Option | For | Status |
+|--------|-----|--------|
+| [A small test TAPPaaS on one node, locally](#a-small-test-tappaas-on-one-node-locally) | Trying TAPPaaS on one machine at home or in the office | Ready |
+| [A small test TAPPaaS on Hetzner](#a-small-test-tappaas-on-hetzner) | Trying TAPPaaS on one rented server | In development, not ready |
+| [A production cluster, locally](#a-production-cluster-locally) | Running your home, family or business on several machines you own | Ready |
+| [A production cluster in the Hetzner cloud](#a-production-cluster-in-the-hetzner-cloud) | Running it on rented servers | In development, not ready |
+
+Either test install can grow: more machines, disks and switches are added from the console
+later.
+
+---
+
+## A small test TAPPaaS on one node, locally
+
+One machine (32 GB of memory, one 0.5 TB disk, one network port) on your own network, installed
+from a Mac or Linux PC beside it, with a USB stick or over the network. No hardware planning and
+no preparation checklist: the install asks for your email, a root password and the site's name,
+and the console's Day 1 page takes you to a working system.
+
+**Start here:** [Install TAPPaaS on a single machine](INSTALL-SINGLENODE.md).
+
+## A small test TAPPaaS on Hetzner
+
+*In development, not ready.* One rented dedicated server with a public address: no USB stick and
+no local network beside it. The installer will reach the server through its rescue system or
+remote console, the firewall will take the public address, and you will reach the console through an ssh tunnel
+until your admin VPN is set up. Until it is ready, use a local machine.
+
+## A production cluster, locally
+
+Several machines you own, sized for what you will run, with managed switches, separate data
+disks and backup. It follows seven stages; each says what it needs and what "done" looks like
+before you move on.
+
 
 | # | Stage | You'll need | Done when |
 |---|-------|-------------|-----------|
@@ -21,7 +58,7 @@ and one network port, installed from a Mac or Linux PC on the same network, up a
 
 ---
 
-## Stage 1 — Hardware Selection
+### Stage 1 — Hardware Selection
 
 Pick a **size tier** (Evaluation / Home / SMB / Scale-out), then toggle three **capability
 options** — local AI, local backup, local public IP — independently. The
@@ -30,14 +67,14 @@ per-tier sizing tables.
 
 **Done when:** you know your tier, your options, and the machine(s) are in hand.
 
-## Stage 2 — Preparation
+### Stage 2 — Preparation
 
 One concise checklist: network facts, domain + DNS API token, credentials, admin email — and the
 **branch** your system will track (`stable` vs `main`). See [Preparation](preparation.md).
 
 **Done when:** every box in [Preparation](preparation.md) is ticked.
 
-## Stage 3 — Install Foundation
+### Stage 3 — Install Foundation
 
 The automated foundation install: the first Proxmox node plus one command chain that brings up the
 OPNsense firewall, the **network cut-over** (additive — the firewall becomes your gateway without
@@ -51,7 +88,7 @@ follow its steps top to bottom.
 **Done when:** the install prints its "🎉 your TAPPaaS foundation is installed" summary, and you can
 reach the Proxmox UI, the firewall UI and the CICD mothership.
 
-### Compare the release signer
+#### Compare the release signer
 
 TAPPaaS releases on the `stable` and `staging` branches are tags signed by the TAPPaaS owners. The
 install checks that the release it clones is signed by one of the keys below, and records those
@@ -74,7 +111,7 @@ read it: [Verified updates](src/foundation/tappaas-cicd/VERIFIED-UPDATES.md). Un
 unsigned and the install says so (`TAPPaaS signs no releases yet`). The `main` branch is never
 signed.
 
-## Stage 4 — Configure Environments *(optional)*
+### Stage 4 — Configure Environments *(optional)*
 
 Run more than one world on the same platform: production next to family, tenants next to
 experiments — separated environments with network boundaries between them. See
@@ -82,7 +119,7 @@ experiments — separated environments with network boundaries between them. See
 
 **Done when:** each environment exists with its own zones and domain.
 
-## Stage 5 — Add a Satellite *(optional)*
+### Stage 5 — Add a Satellite *(optional)*
 
 If you planned a **satellite** in stage 1 (public ingress without a public IP, off-site backup,
 admin VPN — see the [hardware guide](hardware-selection.md#the-satellite--the-gap-filler)), enrol the
@@ -90,7 +127,7 @@ VPS now via [the satellite install](src/foundation/satellite/INSTALL.md).
 
 **Done when:** the satellite carries its roles.
 
-## Stage 6 — Add Workloads
+### Stage 6 — Add Workloads
 
 Install the workloads you chose in stage 1. First-party modules install with
 `module-manager module add <module>`; community module stores register once with
@@ -113,7 +150,15 @@ module's INSTALL.md says what to do by hand. What a stack is: its README.md.
 **Done when:** each installed app answers on its URL and is known to the
 [Module Manager](src/foundation/tappaas-cicd/manager/module-manager/README.md).
 
-## Stage 7 — Operate
+### Stage 7 — Operate
 
 Hand over to day-to-day operation: the managers keep updating, backing up and health-checking the
 platform. That is [Operate](https://tappaas.org/operate/) — bookmark it.
+
+## A production cluster in the Hetzner cloud
+
+*In development, not ready.* Several rented servers joined into one cluster. Hetzner's private
+network between servers (the vSwitch) carries no tagged VLANs the way a switch you own does, so
+the site's internal networks will run over an overlay across it. Until it is ready, a local
+cluster can reach the internet through a [satellite](src/foundation/satellite/INSTALL.md) on a
+rented server.
