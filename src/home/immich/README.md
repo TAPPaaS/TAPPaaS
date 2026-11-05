@@ -16,15 +16,15 @@ ML-powered smart search and face recognition, all on your own hardware.
 | App | Immich 3 (`services.immich`, module + package from nixos-unstable until NixOS 26.11), HTTP on port 2283 |
 | Database | PostgreSQL + VectorChord — auto-provisioned by the NixOS module, unix-socket peer auth (no DB password exists) |
 | Cache | Redis (named instance `immich`), unix socket |
-| ML | `immich-machine-learning` on `localhost:3003` — smart search + face recognition; always on, the 8 GB VM is sized for it |
+| ML | `immich-machine-learning` on `localhost:3003` — smart search + face recognition; always on, its memory capped at a share of the VM |
 | TLS | Terminated by Caddy on the OPNsense firewall (`network:proxy`); the VM serves plain HTTP |
-| Photos | On the VM's own disk (`diskSize`, 500G on `tanka1`), in `/var/lib/immich` (Immich's `mediaLocation`) |
+| Photos | On the VM's own disk (`diskSize`, 250G at the medium size, on `tanka1`), in `/var/lib/immich` (Immich's `mediaLocation`) |
 | HA | `cluster:ha` — the disk is replicated to the HA node every 15 min; Proxmox HA restarts the VM there if its node fails |
 
 ## Storage
 
 One disk. The photo library lives on the VM's own disk (`diskSize` in
-`immich.json`, default 500G on `tanka1`), in Immich's `mediaLocation`,
+`immich.json`, default 250G on `tanka1`, 64G small, 1000G large), in Immich's `mediaLocation`,
 `/var/lib/immich`, where Immich keeps `upload/`, `library/`, `thumbs/`,
 `encoded-video/`, `profile/` and `backups/`.
 
@@ -39,14 +39,14 @@ grows the filesystem.
 Photos are the one thing here that cannot be re-created, so the disk is on
 `tanka`, the replicated tier. It is thin-provisioned (`thinDisk: true`, #773):
 an empty library takes almost nothing on either node and the disk grows into
-its 500G as photos arrive, instead of reserving 500G on each node from day one.
+its disk as photos arrive, instead of reserving the full size on each node from day one.
 
 ## Services
 
 - `immich-server` — API + web UI on `0.0.0.0:2283` (firewall: 22, 2283 only)
 - `immich-machine-learning` — CLIP smart search, face recognition
   (`localhost:3003`; models ~1–2 GB download to `/var/cache/immich` on first
-  job). Always on; its memory is capped (MemoryHigh 4G, MemoryMax 5G) so a bulk
+  job). Always on; its memory is capped (MemoryHigh 50 %, MemoryMax 60 % of the VM) so a bulk
   import cannot starve PostgreSQL and the server.
 - `postgresql` / `redis-immich` — module-managed, no TCP listeners
 - `postgresqlBackup-immich` — daily SQL dump at 02:30 (staggered after
@@ -220,7 +220,7 @@ directly in-zone. `immich:identity` traffic is the OIDC login/discovery
 flow against Authentik, described above.
 
 Immich deliberately uses **no NFS share**: its photo library is high-value data
-on its own 500G VM disk, replicated for HA — not on the re-creatable media tier
+on its own VM disk, replicated for HA — not on the re-creatable media tier
 that `storage:nfs` serves (see Storage).
 
 ## Future enhancements

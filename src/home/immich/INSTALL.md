@@ -7,7 +7,7 @@
 - NixOS template `8080` available for cloning
 - Free VMID `361` and room for the VM disk on `tanka1` on **both** the
   primary node and the HA node (it is replicated, `cluster:ha`). The disk is
-  thin (`thinDisk`), so it takes what the library uses, up to 500G
+  thin (`thinDisk`), so it takes what the library uses, up to its size (250G at medium)
 - Run everything from the `tappaas-cicd` mothership as the `tappaas` user
 
 ## Configure
@@ -16,9 +16,9 @@ Edit `immich.json` before installing if the defaults don't fit:
 
 | Key | Default | Notes |
 |---|---|---|
-| `cores` / `memory` | 4 / 8192 | Sized for machine learning, which is always on |
-| `diskSize` | 500G | The whole VM: OS, database, ML models **and the photos** — see Photo Storage |
-| `thinDisk` | `true` | Thin-provisioned: takes pool space as photos arrive, on both nodes, instead of reserving 500G each up front (#773). Watch the pool — a thin disk can overcommit it |
+| `cores` / `memory` | 2 / 6144 | The medium size. A small site installs it at 2 / 3072, a large one at 4 / 12288 (the site's or environment's size). Machine learning, always on, gets at most 60 % of it |
+| `diskSize` | 250G (small 64G, large 1000G) | The whole VM: OS, database, ML models **and the photos** — see Photo Storage |
+| `thinDisk` | `true` | Thin-provisioned: takes pool space as photos arrive, on both nodes, instead of reserving the full size on each up front (#773). Watch the pool — a thin disk can overcommit it |
 | `storage` | `tanka1` | Keep it on `tanka`: only that tier is replicated for HA |
 | `HANode` / `replicationSchedule` | next node / `*/15` | `cluster:ha` — failover node, and how much can be lost (minutes) |
 | `proxyAllowedZones` | `home, netbird, internet` | Drop `internet` for a private-only deployment (mobile then needs Netbird) |

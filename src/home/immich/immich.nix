@@ -294,13 +294,15 @@ in
   # -- PostgreSQL tuning -------------------------------------------------------
   # The immich module provisions the database but leaves memory settings at
   # stock (128MB shared_buffers). Immich is DB-heavy (metadata + vector
-  # search) and VectorChord index builds want maintenance_work_mem. Sized for
-  # an 8GB VM shared with the ML service; merges with the module's own
-  # settings (shared_preload_libraries, search_path).
+  # search) and VectorChord index builds want maintenance_work_mem. Sized to
+  # hold from the small size (3 GB VM) up: a family library's database stays
+  # well inside 768MB of buffers, and a bigger VM caches the rest in the page
+  # cache. Merges with the module's own settings (shared_preload_libraries,
+  # search_path).
   services.postgresql.settings = {
-    shared_buffers           = "1GB";
-    effective_cache_size     = "3GB";
-    maintenance_work_mem     = "512MB";
+    shared_buffers           = "768MB";
+    effective_cache_size     = "2GB";
+    maintenance_work_mem     = "256MB";
     work_mem                 = "32MB";
     wal_buffers              = "16MB";
     random_page_cost         = 1.1;
@@ -313,11 +315,14 @@ in
 
   # Throttle ML memory during bulk imports (first phone sync = thousands of
   # jobs) so it cannot starve postgres and immich-server. MemoryHigh throttles
-  # before oomd would have to kill.
+  # before oomd would have to kill. A share of the VM, not a fixed size, so the
+  # cap follows the site's size (small 3 GB, medium 6 GB, large 12 GB): half of
+  # it, at most 60 %. Models unload after 5 idle minutes (Immich's default), so this is the
+  # import-time peak, not what ML holds all day.
   systemd.services.immich-machine-learning = {
     serviceConfig = {
-      MemoryHigh = "4G";
-      MemoryMax  = "5G";
+      MemoryHigh = "50%";
+      MemoryMax  = "60%";
     };
   };
 
