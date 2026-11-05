@@ -15,18 +15,33 @@ operations. For the full picture, see [INSTALL.md](../INSTALL.md).
 - one Ethernet port, cabled to your router (or to a switch behind it)
 - able to boot from a USB stick, or from the network (PXE, UEFI)
 
-**Beside it**
+**In addition**
 
-- a Mac or Linux PC on the **same wired network** as the machine (a Windows PC is not
-  supported yet: the script is a bash script)
-- Docker on it (Docker Desktop, or Colima on a Mac — the script starts it when it is
-  installed but stopped) and `curl`
-- one of:
-  - a USB stick of 4 GB or more — it is **erased**, or
-  - `dnsmasq`, to boot the machine over the network from the Mac or PC instead
-    (`brew install dnsmasq` on a Mac, `apt install dnsmasq` on Debian or Ubuntu)
-- internet through your router, which hands out addresses by DHCP
-- your email address
+- a Mac or Linux PC (with a Windows PC, follow
+  [Install from a Windows PC](SINGLE-NODE-WINDOWS.md) instead of steps 0 to 2 below)
+- a wired network that both the Mac or PC and the machine are on, with DHCP and internet
+  access
+- a USB stick of 4 GB or more, which is **erased** (not needed if you boot the machine
+  over the network instead, below)
+
+## 0. Prepare the Mac or PC
+
+The script needs `curl`, Docker on a Mac, and `dnsmasq` for the network boot.
+
+On a Mac `curl` is already there; install the rest with [Homebrew](https://brew.sh):
+
+```bash
+brew install colima docker dnsmasq && colima start
+```
+
+(Docker Desktop instead of Colima works too; the script starts either when it is installed
+but stopped. Leave out `dnsmasq` if you use the USB stick.)
+
+On Debian or Ubuntu, no Docker is needed:
+
+```bash
+sudo apt install curl dnsmasq
+```
 
 ## 1. Build the installer and start the install
 
