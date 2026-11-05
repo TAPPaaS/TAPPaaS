@@ -137,6 +137,8 @@ export interface EnvironmentRow {
   displayName?: string;
   zone?: string | null; // the zone naming it (#865)
   domains?: { primary?: string };
+  // small | medium | large; absent: the site's size (ADR-044).
+  size?: string;
 }
 
 export interface ZoneRow {

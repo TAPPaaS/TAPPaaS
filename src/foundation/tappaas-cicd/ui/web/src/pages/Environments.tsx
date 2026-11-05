@@ -57,6 +57,7 @@ export function Environments() {
   const mods = useRead<ModuleSummary[]>("modules");
   const site = useRead<SiteRead>("site");
   const def = ((site.env?.data?.site ?? {}) as { defaultEnvironment?: string }).defaultEnvironment ?? null;
+  const siteSize = ((site.env?.data?.site ?? {}) as { size?: string }).size ?? "medium";
   const cards = useMemo(() => envCards(envs.env?.data ?? [], (zones.env?.data ?? []) as ZoneLike[], mods.env?.data ?? [], def), [envs.env, zones.env, mods.env, def]);
   // ?env=<name>: that environment's panel, open.
   const [sel, setSel] = useState<string | null>(() => new URLSearchParams(window.location.search).get("env"));
@@ -80,10 +81,10 @@ export function Environments() {
       </div>
       <ReadState env={envs.env} failure={envs.failure} what="environments" />
       <div className="env-page">
-        {picked ? <EnvPanel c={picked} close={() => pick(null)} /> : null}
+        {picked ? <EnvPanel c={picked} close={() => pick(null)} siteSize={siteSize} /> : null}
         <div className="env-cards">
           {cards.map((c) => (
-            <EnvCardView key={c.env.name} c={c} on={c.env.name === sel} pick={() => pick(c.env.name === sel ? null : c.env.name)} />
+            <EnvCardView key={c.env.name} c={c} on={c.env.name === sel} pick={() => pick(c.env.name === sel ? null : c.env.name)} siteSize={siteSize} />
           ))}
         </div>
       </div>
@@ -101,7 +102,10 @@ const modState = (m: ModuleSummary): CardState => (m.badges.health === "fail" ? 
 
 // A card: a click on its head opens the panel, on a zone's head the zone on
 // the Network page, on a module its page.
-function EnvCardView({ c, on, pick }: { c: Card; on: boolean; pick: () => void }) {
+// An environment's size (small, medium, large): its own, else the site's.
+export const envSize = (e: EnvironmentRow, siteSize: string): string => e.size ?? `${siteSize} (the site's)`;
+
+function EnvCardView({ c, on, pick, siteSize }: { c: Card; on: boolean; pick: () => void; siteSize: string }) {
   const e = c.env;
   const state = stateOf(c.boxes.flatMap((b) => b.modules.map(modState)));
   return (
@@ -112,7 +116,7 @@ function EnvCardView({ c, on, pick }: { c: Card; on: boolean; pick: () => void }
             {e.displayName ?? e.name} <span className="muted mono small">{e.name}</span>
           </h2>
           <div className="muted small">
-            {[c.type, c.isDefault ? "the default environment" : null, e.domains?.primary ?? "no public domain"].filter(Boolean).join(" · ")}
+            {[c.type, c.isDefault ? "the default environment" : null, e.domains?.primary ?? "no public domain", `size ${envSize(e, siteSize)}`].filter(Boolean).join(" · ")}
           </div>
           <div className="small">
             {c.boxes.filter((b) => b.own).length} zone{c.boxes.filter((b) => b.own).length === 1 ? "" : "s"} · {c.modules} module{c.modules === 1 ? "" : "s"}
@@ -159,7 +163,7 @@ function rowsOf(o: Record<string, unknown>, prefix = ""): [string, ReactNode][] 
 // The environment's panel, left of the cards (the Site pages' panel shell):
 // its whole record, its zones and modules, and environment-manager's verbs on
 // it.
-function EnvPanel({ c, close }: { c: Card; close: () => void }) {
+function EnvPanel({ c, close, siteSize }: { c: Card; close: () => void; siteSize: string }) {
   const e = c.env;
   const operator = canOperate(useMe());
   return (
@@ -174,7 +178,7 @@ function EnvPanel({ c, close }: { c: Card; close: () => void }) {
         {[c.type, c.isDefault ? "the default environment" : null].filter(Boolean).join(" · ")}
       </p>
       <h3>Record</h3>
-      <KV rows={rowsOf(e as unknown as Record<string, unknown>)} />
+      <KV rows={[...rowsOf(e as unknown as Record<string, unknown>).filter(([k]) => k !== "size"), ["size", envSize(e, siteSize)]]} />
       <h3>Zones</h3>
       <ul className="plain small">
         {c.boxes.filter((b) => b.zone).map((b) => (
