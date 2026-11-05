@@ -775,7 +775,7 @@ after_build() {
     wait_for_node
     pxe_stop
     start_install
-    info "${INSTALL_KEY} logs in to the node as root: keep it safe, or delete it and the node's line for it in /root/.ssh/authorized_keys."
+    warn "${INSTALL_KEY} logs in to the node as root: keep it safe, or delete it and the node's line for it in /root/.ssh/authorized_keys."
   elif [[ -n "$PXE_RUN" ]]; then
     read -r -p "${IN} Press Enter when the target has rebooted into Proxmox, to end the network boot: " c; logged "$c"
   fi

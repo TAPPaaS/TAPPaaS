@@ -253,8 +253,15 @@ dom_arg=(); [ -n "$DOMAIN" ] && dom_arg=(--domain "$DOMAIN")
   || { msg_error "install-platform.sh did not complete — re-run ~/tappaas/install-platform.sh --branch ${BRANCH} --name ${SITE_CODE} --organization ${ORG} --domain <yourdomain>."; exit 1; }
 
 # ── Done ───────────────────────────────────────────────────────────────
-echo -e "${GN}[Info]${CL} ${BOLD}Congratulations! The TAPPaaS foundation's first node is installed.${CL}"
-echo -e "${GN}[Info]${CL}   Site: ${BL}${SITE_CODE}${CL}, organisation and default environment: ${BL}${ORG}${CL}"
+# Two lines in a frame, every line still tagged; the padding counts the plain text.
+_l1="Congratulations! The TAPPaaS foundation's first node is installed."
+_l2="Site: ${SITE_CODE}, organisation and default environment: ${ORG}"
+_w=$(( ${#_l1} > ${#_l2} ? ${#_l1} : ${#_l2} ))
+_bar="$(printf '%*s' $(( _w + 2 )) '' | sed 's/ /─/g')"
+echo -e "${GN}[Info]${CL} ┌${_bar}┐"
+echo -e "${GN}[Info]${CL} │ ${BOLD}${_l1}${CL}$(printf '%*s' $(( _w - ${#_l1} )) '') │"
+echo -e "${GN}[Info]${CL} │ Site: ${BL}${SITE_CODE}${CL}, organisation and default environment: ${BL}${ORG}${CL}$(printf '%*s' $(( _w - ${#_l2} )) '') │"
+echo -e "${GN}[Info]${CL} └${_bar}┘"
 if [[ -s ~/tappaas/console-next-steps.txt ]]; then
   # Each line of the next steps as an [Info] line; the note's own blank lines dropped.
   while IFS= read -r _l; do [[ -n "${_l// /}" ]] && echo -e "${GN}[Info]${CL} ${_l}"; done < ~/tappaas/console-next-steps.txt

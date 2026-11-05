@@ -411,14 +411,13 @@ build_cicd() {
   {
     echo -e "  ${BOLD}Continue in the console${CL}: it takes you through the rest of the install."
     if [[ -n "${url}" ]]; then
-      echo -e "    Open ${BL}${url}${CL} in a browser on this network (${lan})."
+      echo -e "Open ${BL}${url}${CL} in a browser on this network (${lan})."
     else
       echo -e "    This site's WAN is public, so open a tunnel through the node from the machine you ran the install from:"
       echo -e "      ${BL}ssh -N -L 9097:${CICD_IP}:9097 root@${node}${CL}"
       echo -e "    and open ${BL}http://localhost:9097/setup/day1${CL} while it runs."
     fi
-    echo -e "    It asks for the setup token. From the machine you ran the install from:"
-    echo -e "      ${BL}ssh root@${node} \"ssh -i /root/tappaas/tappaas-cicd.key -o StrictHostKeyChecking=accept-new tappaas@tappaas-cicd.mgmt.internal cat config/console-setup-token\"${CL}"
+    echo -e "  It asks for the setup token."
   } > "${CONSOLE_NOTE}"
   [[ "${CHAINED}" == 1 ]] || cat "${CONSOLE_NOTE}"
 }
