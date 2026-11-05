@@ -34,23 +34,23 @@ machine's address, such as `https://192.168.1.41:8006`.
 ## 3. Start the TAPPaaS install on the machine
 
 Open that address in a browser on the Windows PC (accept the certificate warning), log in as
-`root` with the password you chose, and open **Datacenter → tappaas1 → Shell**. Run, with your
-site's name in place of `home`:
+`root` with the password you chose, and open **Datacenter → tappaas1 → Shell**. Download the install script:
 
 ```bash
-apt-get update; apt-get install -y tmux
 curl -fsSL https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/stable/src/foundation/install.sh -o install.sh && chmod +x install.sh
+```
+
+Then start the install, with your site's name in place of `home`:
+
+```bash
 ./install.sh https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/ stable --name home --size small --non-interactive
 ```
 
-`apt-get update` reports an error for Proxmox's enterprise repository (it needs a
-subscription); tmux comes from Debian's and installs anyway. `main` in place of `stable`, in
-both `install.sh` lines, takes the newest work. The site gets the domain `<name>.home.arpa`,
-served inside the site.
+`main` in place of `stable`, in both commands, takes the newest work. The site gets the
+domain `<name>.home.arpa`, served inside the site.
 
-The install takes a while. It runs in tmux, so it keeps going if the browser is closed: open
-the Shell again and run `tmux attach -t tappaas-install` to follow it. It ends with the
-console's address, such as `http://192.168.1.42:9097/setup/day1`.
+The install takes a while: keep the Shell open until it ends. It ends with the console's
+address, such as `http://192.168.1.42:9097/setup/day1`.
 
 The console asks for the setup token the first time. In the same Shell:
 
