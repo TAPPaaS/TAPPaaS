@@ -13,18 +13,22 @@ operations. For the full picture, see [INSTALL.md](INSTALL.md).
 - 32 GB of memory
 - one SSD or NVMe disk of 0.5 TB or more — it is **wiped**
 - one Ethernet port, cabled to your router (or to a switch behind it)
-- able to boot from a USB stick
+- able to boot from a USB stick, or from the network (PXE, UEFI)
 
 **Beside it**
 
-- a Mac or Linux PC on the **same wired network** as the machine
+- a Mac or Linux PC on the **same wired network** as the machine (a Windows PC is not
+  supported yet: the script is a bash script)
 - Docker on it (Docker Desktop, or Colima on a Mac — the script starts it when it is
   installed but stopped) and `curl`
-- a USB stick of 4 GB or more — it is **erased**
+- one of:
+  - a USB stick of 4 GB or more — it is **erased**, or
+  - `dnsmasq`, to boot the machine over the network from the Mac or PC instead
+    (`brew install dnsmasq` on a Mac, `apt install dnsmasq` on Debian or Ubuntu)
 - internet through your router, which hands out addresses by DHCP
 - your email address
 
-## 1. Make the install stick and start the install
+## 1. Build the installer and start the install
 
 On the Mac or PC, in an empty directory:
 
@@ -36,24 +40,37 @@ curl -fSLO "https://enterprise.proxmox.com/iso/proxmox-ve_9.2-1.iso"
 curl -fsSL "https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/main/src/foundation/cluster/make-install-media.sh" \
      -o make-install-media.sh && chmod +x make-install-media.sh
 
-# Build the stick, then follow the install
+# Build the installer, then follow the install
 ./make-install-media.sh
 ```
 
 The script asks for your email and a root password for the machine; for the rest, press
 Enter to take the defaults (country, keyboard, time zone from this computer). It builds
-`proxmox-ve_9.2-1-tappaas-auto.iso`, writes it to the USB stick you choose (it asks for
-your login password on this computer to do so), and asks for the site's name. With no
-domain given, the site gets `<site>.home.arpa`, served inside the site.
+`proxmox-ve_9.2-1-tappaas-auto.iso`, an installer that sets up Proxmox without asking
+anything, and then asks how the machine boots it:
+
+- **Write it to a USB stick** — it lists the sticks in this computer and erases the one
+  you choose.
+- **Network-boot the machine from this computer** — it serves the installer on your
+  network itself: it answers the machine's network boot alongside your router (which
+  keeps handing out addresses) and serves the installer over HTTP. No stick needed.
+
+Either way it asks for your login password on this computer (`sudo`), then for the
+site's name. With no domain given, the site gets `<site>.home.arpa`, served inside the
+site.
 
 Keep the script running and its window open: it waits for the machine.
 
-## 2. Boot the machine from the stick
+## 2. Boot the machine
 
-1. Plug the stick into the machine, with its Ethernet cable to the router connected.
-2. Switch it on and choose the USB stick in its boot menu (often F11, F12 or Esc).
-3. Proxmox installs by itself, wipes the disk and reboots. Take the stick out when it
-   reboots.
+With its Ethernet cable to the router connected:
+
+- **From the stick:** plug it in, switch the machine on and choose the stick in its boot
+  menu (often F11, F12 or Esc). Take the stick out when it reboots.
+- **Over the network:** switch it on and choose network boot (PXE, UEFI) in its boot
+  menu.
+
+Proxmox installs by itself, wipes the disk and reboots.
 
 The script on your Mac finds the machine on the network and starts the TAPPaaS install
 on it: the firewall, the management VM, the platform services. Its log scrolls in the
