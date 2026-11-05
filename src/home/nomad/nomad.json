@@ -29,7 +29,7 @@
       "cores": 2,
       "coresMinMax": [1, 4],
       "memory": 4096,
-      "memoryMinMax": [1024, 8192],
+      "memoryMinMax": [1536, 8192],
       "diskSize": "128G",
       "diskMinMax": ["32G", "512G"],
       "storage": "tanka1",

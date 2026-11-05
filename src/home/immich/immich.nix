@@ -316,7 +316,7 @@ in
   # Throttle ML memory during bulk imports (first phone sync = thousands of
   # jobs) so it cannot starve postgres and immich-server. MemoryHigh throttles
   # before oomd would have to kill. A share of the VM, not a fixed size, so the
-  # cap follows the site's size (small 3 GB, medium 6 GB, large 12 GB): half of
+  # cap follows the site's size (small 3 GB, medium 4 GB, large 8 GB): half of
   # it, at most 60 %. Models unload after 5 idle minutes (Immich's default), so this is the
   # import-time peak, not what ML holds all day.
   systemd.services.immich-machine-learning = {

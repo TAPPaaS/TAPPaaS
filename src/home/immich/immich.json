@@ -34,8 +34,8 @@
     "cluster:vm": {
       "cores": 2,
       "coresMinMax": [2, 4],
-      "memory": 6144,
-      "memoryMinMax": [3072, 12288],
+      "memory": 4096,
+      "memoryMinMax": [3072, 8192],
       "diskSize": "250G",
       "diskMinMax": ["64G", "1000G"],
       "thinDisk": true,

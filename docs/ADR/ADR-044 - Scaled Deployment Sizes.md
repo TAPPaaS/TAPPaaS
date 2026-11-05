@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** — built on `feat/917-sizing`, not yet live-tested |
-| **Version** | 0.2 |
+| **Version** | 0.3 |
 | **Date** | 2026-11-05 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | #917. Amends ADR-007c (environments gain `size`), ADR-020 (three policy fields on `cluster:vm` and `cluster:lxc`) and the #207 3-way merge (the release side is sized before it is compared). |
-| **Changelog** | v0.1 (2026-11-05): first draft, from the operator's direction of 2026-11-05. v0.2 (2026-11-05): the operator's review. tappaas-cicd tops out at medium (4 cores, 8 GiB). network's medium memory drops to 4 GiB. Immich comes down at every size, with its ML cap a share of the VM. The console lists and edits both sizes (D7), and `make-install-media.sh` asks for the size (D8). |
+| **Changelog** | v0.1 (2026-11-05): first draft, from the operator's direction of 2026-11-05. v0.2 (2026-11-05): the operator's review. tappaas-cicd tops out at medium (4 cores, 8 GiB). network's medium memory drops to 4 GiB. Immich comes down at every size, with its ML cap a share of the VM. The console lists and edits both sizes (D7), and `make-install-media.sh` asks for the size (D8). v0.3 (2026-11-05): measured on hrossen (D6a). Logging goes up to 2/4/8 GiB, Immich comes down to 3/4/8 GiB, and the minimums for coturn, nomad and litellm move above what those guests use. |
 
 A site, and each environment in it, says how big it is: `small`, `medium` or `large`. A module
 states its VM or container size once for `medium` and, optionally, a minimum and a maximum. The
@@ -119,7 +119,7 @@ source and nothing changes for it.
 ### D6. Values for this repository's modules
 
 Medium is today's value, except the three in bold (v0.2). The minimums are set so that foundation
-plus home plus office fits **24 GiB of guest memory** at `small`, leaving a 32 GB node about 6 GB for Proxmox, the ZFS
+plus home plus office fits **about 25 GiB of guest memory** at `small`, leaving a 32 GB node about 6 GB for Proxmox, the ZFS
 ARC (10 % of RAM by the installer's default) and the gate's 5 % margin.
 
 | Module | cores (min / med / max) | memory MiB (min / med / max) | disk (min / med / max) |
@@ -127,18 +127,18 @@ ARC (10 % of RAM by the installer's default) and the gate's 5 % margin.
 | network | 2 / 4 / 8 | 2048 / **4096** / 8192 | — |
 | tappaas-cicd | 2 / 4 / 4 | 3072 / 8192 / 8192 | 32G / 64G / 128G |
 | identity | 2 / 2 / 4 | 2048 / 4096 / 8192 | 16G / 32G / 64G |
-| logging | 1 / 2 / 4 | 1536 / 2048 / 8192 | 16G / 32G / 128G |
+| logging | 1 / 2 / 4 | 2048 / **4096** / 8192 | 16G / 32G / 128G |
 | deconz | 1 / 2 / 2 | 1024 / 4096 / 4096 | — |
 | hass | 2 / 2 / 4 | 2048 / 4096 / 8192 | 16G / 32G / 64G |
-| immich | 2 / **2** / 4 | 3072 / **6144** / 12288 | 64G / **250G** / 1000G |
+| immich | 2 / **2** / 4 | 3072 / **4096** / 8192 | 64G / **250G** / 1000G |
 | jellyfin | 2 / 4 / 8 | 1536 / 2048 / 8192 | 16G / 32G / 64G |
 | karakeep | 1 / 2 / 4 | 1536 / 3072 / 6144 | 16G / 64G / 128G |
-| nomad | 1 / 2 / 4 | 1024 / 4096 / 8192 | 32G / 128G / 512G |
+| nomad | 1 / 2 / 4 | 1536 / 4096 / 8192 | 32G / 128G / 512G |
 | nextcloud | 2 / 4 / 8 | 2048 / 8192 / 16384 | 32G / 80G / 500G |
 | euro-office | 2 / 4 / 8 | 2048 / 8192 / 16384 | — |
-| coturn | 1 / 2 / 4 | 512 / 2048 / 4096 | — |
+| coturn | 1 / 2 / 4 | 768 / 2048 / 4096 | — |
 | nextcloud-hpb | 2 / 4 / 8 | 1024 / 4096 / 8192 | — |
-| litellm | 2 / 4 / 8 | 2048 / 8192 / 16384 | 16G / 32G / 64G |
+| litellm | 2 / 4 / 8 | 4096 / 8192 / 16384 | 16G / 32G / 64G |
 | openwebui | 1 / 2 / 4 | 2048 / 4096 / 8192 | 16G / 32G / 64G |
 | forgejo | 1 / 2 / 4 | 1024 / 4096 / 8192 | — |
 | woodpecker | 2 / 4 / 8 | 2048 / 4096 / 8192 | 32G / 64G / 256G |
@@ -151,8 +151,8 @@ ARC (10 % of RAM by the installer's default) and the gate's 5 % margin.
   (a template's disk is the floor every clone starts from).
 - `network`'s disk stays at its image size, and `euro-office`, `coturn` and `nextcloud-hpb`
   keep theirs.
-- Small budget, guest memory: foundation 8.5 GiB, home 10 GiB, office 5.5 GiB, together
-  24 GiB. `test-module-sizing.sh` asserts at most 26 GiB.
+- Small budget, guest memory: foundation 9 GiB, home 10.5 GiB, office 5.75 GiB, together
+  25.25 GiB. `test-module-sizing.sh` asserts at most 26 GiB.
 - **tappaas-cicd** does not grow past medium. Its load is the site's builds and sweeps, not the
   number of users.
 - **network** at 4 GiB medium. OPNsense with Caddy, Unbound and the rule set stays well inside
@@ -191,6 +191,44 @@ ARC (10 % of RAM by the installer's default) and the gate's 5 % margin.
   site-manager and environment-manager READMEs (`--size`).
 - The module template (how an author states the pairs), and the generated `cluster:vm` /
   `cluster:lxc` field references.
+
+### D6a. What hrossen showed (2026-11-05)
+
+Read inside each guest about 9 hours after the night's update rebooted them all: memory used
+(total minus MemAvailable), swap, memory pressure (PSI), OOM kills, and each service's anonymous
+memory. The host's own figure counts page cache and says nothing about need. The 14-day Loki
+report (`guest-memory-report.sh`) could not run: Loki timed out.
+
+- **Logging is the one guest short of memory.** It runs in 2 GiB, with memory pressure at 33 %
+  over five minutes and swap 65 % used. Since boot Loki peaked at 1.5 GiB, and its range queries
+  time out. Medium goes to 4 GiB, and small cannot be below 2 GiB.
+- **Immich** uses 0.8 GiB with machine learning idle: the server 574 MiB, ML 110 MiB with no
+  model loaded, Postgres under 150 MiB. hrossen's library has 999 items and ran no ML since boot.
+  The peak is therefore estimated from the default models (CLIP ViT-B-32 and buffalo_l, about
+  1.5 GiB loaded): about 2.7 GiB in all during an import. So small is 3 GiB with ML capped at
+  1.5 GiB, medium 4 GiB, and large 8 GiB for several people importing at once. To measure on a
+  site with a real library before this is accepted.
+- **No pressure, no OOM kill** anywhere else. Used memory against the small minimum:
+
+| Guest | Used | Small min |
+|---|---|---|
+| identity | 1.4 GiB | 2 GiB |
+| tappaas-cicd | 0.9 GiB | 3 GiB (builds) |
+| network | 1.2 GiB (FreeBSD: active plus wired) | 2 GiB |
+| nextcloud | 0.8 GiB | 2 GiB |
+| euro-office | 1.3 GiB | 2 GiB |
+| coturn | 0.33 GiB | 0.75 GiB (was 0.5) |
+| nextcloud-hpb | 0.45 GiB | 1 GiB |
+| jellyfin | 0.47 GiB, no transcode | 1.5 GiB |
+| karakeep | 0.82 GiB, some swap | 1.5 GiB |
+| nomad | 1.2 GiB | 1.5 GiB (was 1) |
+| deconz | 0.5 GiB | 1 GiB |
+| litellm | 3.6 GiB | 4 GiB (was 2) |
+| openwebui | 1.1 GiB | 2 GiB |
+| forgejo, woodpecker | 0.4, 0.5 GiB | 1, 2 GiB |
+| vaultwarden, lazysite | 0.3, 0.33 GiB | 1, 0.5 GiB |
+
+- Nine hours is not a week. Before Accepted, the 14-day report runs once logging has its 4 GiB.
 
 ## Consequences
 

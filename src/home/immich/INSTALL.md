@@ -16,7 +16,7 @@ Edit `immich.json` before installing if the defaults don't fit:
 
 | Key | Default | Notes |
 |---|---|---|
-| `cores` / `memory` | 2 / 6144 | The medium size. A small site installs it at 2 / 3072, a large one at 4 / 12288 (the site's or environment's size). Machine learning, always on, gets at most 60 % of it |
+| `cores` / `memory` | 2 / 4096 | The medium size. A small site installs it at 2 / 3072, a large one at 4 / 8192 (the site's or environment's size). Machine learning, always on, gets at most 60 % of it |
 | `diskSize` | 250G (small 64G, large 1000G) | The whole VM: OS, database, ML models **and the photos** — see Photo Storage |
 | `thinDisk` | `true` | Thin-provisioned: takes pool space as photos arrive, on both nodes, instead of reserving the full size on each up front (#773). Watch the pool — a thin disk can overcommit it |
 | `storage` | `tanka1` | Keep it on `tanka`: only that tier is replicated for HA |
