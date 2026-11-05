@@ -45,6 +45,10 @@
 #   --organization <org>     the organisation controlling the Site (default: the
 #                            Site name)
 #   --domain <d>             the Site's domain (default: <site>.home.arpa)
+#   --size <s>               how big the Site is: small (a few users, one node or a
+#                            test system), medium (default, up to ~50 users) or
+#                            large (100+ users, 3+ large nodes); it sizes every
+#                            module's cores, memory and disk
 #   --show-token | --no-show-token
 #                            show the console's access token on this screen at the
 #                            end (never in the log)
@@ -106,7 +110,7 @@ ISO="" OUT="" EMAIL="" COUNTRY="" KEYBOARD="" TIMEZONE="" PASSWORD="" \
   PASSWORD_FILE="" DISK="" FQDN="" FILESYSTEM="zfs" ISO_SHA256=""
 SSH_KEYS=()
 DISKS=()
-LOG="" USE="" PXE_IFACE="" NODE_IP="" BRANCH="" SITE_CODE="" ORG="" DOMAIN=""
+LOG="" USE="" PXE_IFACE="" NODE_IP="" BRANCH="" SITE_CODE="" ORG="" DOMAIN="" SIZE=""
 # How the target boots the image, the stick, and whether to install: asked up front
 # when not given, so nothing is asked once the build has started.
 BOOT="" STICK="" YES=0 INSTALL_ANSWER="" SHOW_TOKEN="" SUDO_KEEP="" WANT_INSTALL=0
@@ -133,6 +137,7 @@ while [[ $# -gt 0 ]]; do
     --site)          SITE_CODE="${2:?}"; shift 2 ;;
     --organization)  ORG="${2:?}"; shift 2 ;;
     --domain)        DOMAIN="${2:?}"; shift 2 ;;
+    --size)          SIZE="${2:?}"; shift 2 ;;
     --boot)          BOOT="${2:?}"; shift 2 ;;
     --stick)         STICK="${2:?}"; shift 2 ;;
     --yes)           YES=1; shift ;;
@@ -605,7 +610,7 @@ wait_for_node() {
 # log is followed here: it scrolls on in this terminal, and a lost ssh session only
 # stops the following.
 start_install() {
-  local cmd seen state run="./install.sh '${INSTALL_REPO}' '${BRANCH}' --name '${SITE_CODE}'${ORG:+ --organization '${ORG}'}${DOMAIN:+ --domain '${DOMAIN}'} --non-interactive --no-tmux"
+  local cmd seen state run="./install.sh '${INSTALL_REPO}' '${BRANCH}' --name '${SITE_CODE}'${ORG:+ --organization '${ORG}'}${DOMAIN:+ --domain '${DOMAIN}'}${SIZE:+ --size '${SIZE}'} --non-interactive --no-tmux"
   # apt update fails on the enterprise repository the install has not replaced yet;
   # Debian's own still serves tmux.
   cmd="export LC_ALL=C.UTF-8; command -v tmux >/dev/null || { apt-get update -qq >/dev/null 2>&1; apt-get install -y -qq tmux >/dev/null 2>&1; }; tmux has-session -t tappaas-install 2>/dev/null && exit 0; curl -fsSL '${INSTALL_REPO}${BRANCH}/src/foundation/install.sh' -o install.sh && chmod +x install.sh || exit 1; rm -f tappaas-install.rc; : > tappaas-install.log; tmux new-session -d -s tappaas-install \"{ ${run} 2>&1; echo \\\$? > tappaas-install.rc.tmp; } | tee -a tappaas-install.log; mv tappaas-install.rc.tmp tappaas-install.rc\""
@@ -706,17 +711,20 @@ ask_up_front() {
       # Blank: <site>.home.arpa, the site's own names with no public DNS; going
       # public later is Day 1's "Make it public".
       [[ -n "$DOMAIN"    ]] || DOMAIN="$(prompt 'Domain for the Site (blank: <site>.home.arpa, nothing public needed)')"
+      [[ -n "$SIZE"      ]] || SIZE="$(prompt 'Size of the Site: small (a few users, one node or a test system), medium (up to ~50 users), large (100+ users, 3+ large nodes)' medium)"
       [[ -n "$SHOW_TOKEN" ]] || { read -r -p "${IN} At the end, show the console's access token on this screen (not in the log)? [Y/n]: " yn; logged "$yn"; [[ "$yn" == [nN]* ]] && SHOW_TOKEN=0 || SHOW_TOKEN=1; }
     else
       [[ -n "$SITE_CODE" ]] || die "--install without a terminal needs --site <name>"
       [[ -n "$BRANCH" ]] || BRANCH=stable
       [[ -n "$ORG" ]] || ORG="$SITE_CODE"
+      [[ -n "$SIZE" ]] || SIZE=medium
       [[ -n "$SHOW_TOKEN" ]] || SHOW_TOKEN=0
     fi
     [[ "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]] || die "not a branch: ${BRANCH}"
     [[ "$SITE_CODE" =~ ^[a-z0-9-]{1,15}$ ]] || die "the Site name is lowercase, at most 15 characters: ${SITE_CODE}"
     [[ "$ORG" =~ ^[a-z0-9-]+$ ]] || die "the Organisation name is lowercase: ${ORG}"
     [[ -z "$DOMAIN" || "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] || die "not a domain: ${DOMAIN}"
+    [[ "$SIZE" =~ ^(small|medium|large)$ ]] || die "the Size is small, medium or large: ${SIZE}"
   fi
 
   # This computer's password, once, for the stick or the network boot: kept alive
