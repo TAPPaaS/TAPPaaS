@@ -284,6 +284,22 @@ in `config/alerts.log` on the mothership.
   <node> is back` answers it, naming any guest that is not running again. Such a guest
   keeps its own HostSilent, which then mails as usual. If the cluster cannot be asked,
   every HostSilent is mailed on its own.
+- **Many hosts silent at once is one mail.** When the nodes are up, a shared cause (the
+  firewall restarting, its rules, the logging VM) still silences every guest that ships
+  logs through it. So a HostSilent waits 2½ minutes before it is mailed. When three hosts
+  have gone silent within ten minutes, one `ALERT: N hosts stopped logging at once` goes
+  out naming them, and the held ones and the ones after fold into it
+  (`/var/lib/tappaas/silent-burst.json`). When they all log again, one `RESOLVED: N hosts
+  log again` answers it. A host mailed on its own before that keeps its own ALERT and
+  RESOLVED.
+- **A planned restart is quiet.** An update that is allowed to restart a guest opens a
+  maintenance window first (`tappaas-maintenance.sh`): an hour, for the guest's own host,
+  or for the whole site when it restarts the firewall. A HostSilent from inside a window
+  is recorded, not mailed, and so is its RESOLVED.
+- **The VMs' log shippers reconnect.** Alloy pushes over HTTP/1.1, so a push that times
+  out closes its connection and the retry opens a new one. Over HTTP/2 the shippers kept
+  waiting on connections a restarted firewall had dropped, and their logs stalled for
+  half an hour.
 - A rule declared with `bundle = true` — QuorumLost, HaFencing, HostSilent, BackupFailed,
   OomKill, ReplicationFailed, HaStuck, LanLegDown — carries a support bundle: the
   cluster's state and the site's anonymized configuration from half an hour before it

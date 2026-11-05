@@ -308,6 +308,11 @@ EOF
     loki.write "default" {
       endpoint {
         url = "$(log_shipping_push_url)"
+        // HTTP/1.1: a push that times out closes its connection, so the retry
+        // opens a new one. Over HTTP/2 the client kept waiting on a connection
+        // the firewall had dropped when it restarted, and the VM's logs stalled
+        // for half an hour.
+        enable_http2 = false
         basic_auth {
           username      = "${host}"
           password_file = sys.env("CREDENTIALS_DIRECTORY") + "/loki-push"
