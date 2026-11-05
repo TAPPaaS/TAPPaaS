@@ -144,6 +144,20 @@ _merge_converter_path="$(_merge_locate_converter)" || {
 # shellcheck source=convert-json-to-config.sh disable=SC1090
 . "${_merge_converter_path}"
 
+# module_size_for / apply_module_size (ADR-044): the release is sized for the
+# instance's site or environment before it is compared, so a sized value is a
+# release value, not an operator edit. Missing library: the release as shipped.
+if ! declare -F module_size_for >/dev/null 2>&1; then
+    for _msl in /home/tappaas/bin/module-sizing.sh "$(dirname "${BASH_SOURCE[0]}")/module-sizing.sh"; do
+        [[ -r "${_msl}" ]] || continue
+        unset _MODULE_SIZING_LOADED
+        # shellcheck source=/dev/null
+        . "${_msl}"
+        declare -F module_size_for >/dev/null 2>&1 && break
+    done
+    unset _msl
+fi
+
 # normalize_module_config may already be defined via common-install-routines;
 # if not, define a local version (avoids hard dependency when called via cron).
 if ! declare -F normalize_module_config >/dev/null 2>&1; then
@@ -222,6 +236,25 @@ apply_three_way_merge() {
     if ! jq empty "${source}" 2>/dev/null; then
         error "apply_three_way_merge: source is not valid JSON: ${source}"
         return 1
+    fi
+
+    # Size the release for this instance (ADR-044 D5). `source` from here on is
+    # the sized copy: the compare, the backfill and the advanced .orig all see
+    # what an install at this size would have written.
+    local sized_source=""
+    if declare -F module_size_for >/dev/null 2>&1; then
+        local _size
+        _size="$(module_size_for "${current}" "" "${_MERGE_CONFIG_DIR}")"
+        if [[ "${_size}" != "medium" ]]; then
+            sized_source="$(mktemp)"
+            if apply_module_size "${_size}" < "${source}" > "${sized_source}" && jq empty "${sized_source}" 2>/dev/null; then
+                debug "  ${eff}: release sized for ${_size}"
+                source="${sized_source}"
+            else
+                warn "  ${eff}: could not size the release for ${_size}; merging it as shipped"
+                rm -f "${sized_source}"; sized_source=""
+            fi
+        fi
     fi
 
     # Backfill missing .orig: use source as baseline so existing operator
@@ -473,6 +506,7 @@ apply_three_way_merge() {
 
     # Advance the baseline.
     cp "${source}" "${orig}"
+    [[ -n "${sized_source}" ]] && rm -f "${sized_source}"
 
     if [[ "${backfilled}" -eq 1 ]]; then
         debug "  ${eff}: 3-way merge complete (backfilled .orig from source)"

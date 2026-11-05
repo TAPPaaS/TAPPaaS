@@ -72,6 +72,21 @@ if ! declare -F module_scope_of &>/dev/null; then
     unset _mcl
 fi
 
+# module_size_for / apply_module_size (ADR-044): the guest's cores, memory and
+# disk follow the site's or environment's size. Side-effect-free, like the
+# catalog library; without it every module installs at its medium values.
+if ! declare -F module_size_for &>/dev/null; then
+    for _msl in /home/tappaas/bin/module-sizing.sh \
+                "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/module-sizing.sh"; do
+        [[ -r "${_msl}" ]] || continue
+        unset _MODULE_SIZING_LOADED
+        # shellcheck source=/dev/null
+        . "${_msl}"
+        declare -F module_size_for >/dev/null 2>&1 && break
+    done
+    unset _msl
+fi
+
 # Composed, not the raw schema: definitions live per-service since #567.
 #
 # Unconditional, and AFTER the block above. It used to sit inside that block's
@@ -463,6 +478,22 @@ main() {
         fi
     fi
 
+    # Size the guest for where it goes (ADR-044): small takes each
+    # <field>MinMax's min, large its max, medium the plain value. Before the
+    # explicit --<field> overrides below, so an operator's value wins.
+    local module_size="medium"
+    if declare -F module_size_for >/dev/null 2>&1; then
+        module_size="$(module_size_for "${dest_json}" "${environment}" "${CONFIG_DIR}")"
+        if [[ "${module_size}" != "medium" ]]; then
+            if size_module_json_file "${dest_json}" "${module_size}"; then
+                info "  Sized for a ${module_size} $( [[ "$(module_scope_of "${dest_json}")" == "site" ]] && echo site || echo environment ): cores $(jq -r '.cores // "default"' "${dest_json}"), memory $(jq -r '.memory // "default"' "${dest_json}") MiB, disk $(jq -r '.diskSize // "default"' "${dest_json}")"
+            else
+                warn "  Could not size ${effective_module} for ${module_size} — installing at its medium values"
+                module_size="medium"
+            fi
+        fi
+    fi
+
     # Parse and apply field modifications
     local has_modifications=true
 
@@ -555,7 +586,14 @@ main() {
     if [[ "${has_modifications}" == "true" ]]; then
         if [[ ! -f "${orig_json}" ]]; then
             debug "Creating backup: ${orig_json}"
-            cp "${source_json}" "${orig_json}"
+            # The baseline is the SIZED release (ADR-044 D4): against the raw
+            # one every sized value would read as an operator edit and pin.
+            if [[ "${module_size}" != "medium" ]] && declare -F apply_module_size >/dev/null 2>&1; then
+                apply_module_size "${module_size}" < "${source_json}" > "${orig_json}" \
+                    || cp "${source_json}" "${orig_json}"
+            else
+                cp "${source_json}" "${orig_json}"
+            fi
         fi
     fi
 
