@@ -8,9 +8,10 @@
 # signs in through the Authentik gate at console.<domain>.
 # The operator who ran the bootstrap sits on neither, so `open` gives two ways in:
 #
-#   1. The first admin-VPN peer: a key pair made here and a ready wg-quick config
-#      in config/admin-vpn/install-peer.conf (0600) — works at home and on a
-#      hosted server alike. The private key is made on the mothership, unlike a
+#   1. On a PUBLIC (or unknown) WAN only: the first admin-VPN peer, a key pair
+#      made here and a ready wg-quick config in config/admin-vpn/install-peer.conf
+#      (0600) — the way in on a hosted server. At home the install LAN (2) is, and
+#      the operator enrols their own device in Day 1's admin VPN step. The private key is made on the mothership, unlike a
 #      peer enrolled later with its own key: the trade for a config that works as
 #      handed over. Remove it with `network-manager wgvpn remove-peer install`.
 #   2. On a PRIVATE WAN subnet only (the install LAN at home, never the internet):
@@ -128,8 +129,16 @@ cmd_open() {
     wan="$(wan_of_firewall)"
     [[ -n "${wan}" ]] && read -r wan_ip bits <<<"${wan}"
     [[ -n "${wan_ip}" ]] || warn "  could not read the firewall's WAN address — the VPN config's Endpoint is a placeholder, and no install-LAN access"
-    open_vpn_peer "${wan_ip}"
-    [[ -n "${wan_ip}" ]] && open_lan "${wan_ip}" "${bits}"
+    # A private WAN (the install LAN at home) is the way in: the operator enrols
+    # a device on Day 1, so no peer is made for them — one made here would read
+    # as Day 1's VPN step done. A public WAN, or one not read, has no install LAN:
+    # the install peer is the way in.
+    if [[ -n "${wan_ip}" ]] && is_private "$(network_of "${wan_ip}" "${bits}")"; then
+        open_lan "${wan_ip}" "${bits}"
+    else
+        open_vpn_peer "${wan_ip}"
+        [[ -n "${wan_ip}" ]] && open_lan "${wan_ip}" "${bits}"
+    fi
     return 0
 }
 
