@@ -68,6 +68,9 @@
 #   --organization ORG   Default organization/environment/zone name -> site.json
 #                        .defaultEnvironment + .owner (default: --name).
 #   --domain DOMAIN      Public domain (NOT written to site.json; per-environment).
+#   --size SIZE          small|medium|large -> site.json .size: how big guests are
+#                        installed (ADR-044). Default: kept from an existing
+#                        site.json, else absent (= medium).
 #   --branch NAME        Git branch to track (default: stable).
 #   --upstream-git URL   Module-catalog git repo (default: codeberg.org/TAPPaaS/TAPPaaS).
 #   --email EMAIL        Installer/admin email (default: Proxmox root@pam / existing).
@@ -126,6 +129,7 @@ CONFIG_DIR="${TAPPAAS_CONFIG:-/home/tappaas/config}"
 NAME=""
 ORG=""               # default organization/environment/zone name (default: NAME)
 DOMAIN=""            # accepted, NOT written to site.json (per-environment)
+SIZE=""              # small|medium|large; empty keeps the existing value (ADR-044)
 BRANCH="stable"
 UPSTREAM_GIT="codeberg.org/TAPPaaS/TAPPaaS"
 EMAIL=""
@@ -140,7 +144,7 @@ _set_branch=false _set_upstream=false _set_email=false
 _set_schedule=false _set_weekday=false _set_hour=false _set_org=false
 
 usage() {
-    sed -n '2,78p' "$_SELF" | sed 's/^# \{0,1\}//'
+    sed -n '2,81p' "$_SELF" | sed 's/^# \{0,1\}//'
 }
 
 # ---------------------------------------------------------------------------
@@ -169,6 +173,9 @@ parse_args() {
             --domain)
                 [[ -n "${2:-}" ]] || die "--domain requires a value"
                 DOMAIN="$2"; shift 2 ;;
+            --size)
+                case "${2:-}" in small|medium|large) ;; *) die "--size must be small, medium or large" ;; esac
+                SIZE="$2"; shift 2 ;;
             --branch)
                 [[ -n "${2:-}" ]] || die "--branch requires a value"
                 BRANCH="$2"; _set_branch=true; shift 2 ;;
@@ -595,6 +602,10 @@ build_and_write_site() {
     # dropping it would silently move an unstable/staging site to production.
     # Absent stays absent (the schema default is production).
     channel="$(jq -c '.channel // null' <<<"$existing")"
+    # ADR-044: the site's size — the flag, else what the site already says, else
+    # absent (medium). Kept on a re-run like the channel.
+    local size_v
+    if [[ -n "${SIZE}" ]]; then size_v="\"${SIZE}\""; else size_v="$(jq -c '.size // null' <<<"$existing")"; fi
     snapshotRetention="$(jq -r 'if .snapshotRetention != null then (.snapshotRetention|tostring) else "5" end' <<<"$existing")"
     # defaultEnvironment / owner both key on the ORG (the default
     # organization/environment/zone), decoupled from the site code (#426). An
@@ -660,6 +671,7 @@ build_and_write_site() {
         --argjson automaticReboot "$automaticReboot" \
         --argjson ipv6 "$ipv6" \
         --argjson channel "$channel" \
+        --argjson size "$size_v" \
         --argjson snapshotRetention "$snapshotRetention" \
         --argjson repositories "$repos_json" \
         '{
@@ -681,6 +693,7 @@ build_and_write_site() {
             repositories: $repositories
          } + (if $keyboard == "" then {} else {keyboard: $keyboard} end)
            + (if $channel == null then {} else {channel: $channel} end)
+           + (if $size == null then {} else {size: $size} end)
            + (if $hardware == null then {} else {hardware: $hardware} end)' > "$TMP_SITE"
 
     jq empty "$TMP_SITE" >/dev/null 2>&1 || die "Generated site.json is invalid JSON."

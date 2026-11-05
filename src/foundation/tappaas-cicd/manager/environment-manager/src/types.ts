@@ -31,12 +31,16 @@ export interface LegalMeta {
   processor?: string | null;
 }
 
+export type EnvironmentSize = "small" | "medium" | "large";
+
 export interface Environment {
   name: string;
   displayName: string;
   ownerOrg: string;
   domains?: Domains;
   dataResidency?: DataResidency;
+  // ADR-044: how big the environment is; absent: the site's size.
+  size?: EnvironmentSize;
   backup?: BackupPolicy | null;
   legal?: LegalMeta | null;
 }

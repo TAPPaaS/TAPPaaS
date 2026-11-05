@@ -77,7 +77,7 @@ export const HELP: HelpSpec = {
     },
     {
       usage: "add [<env>] [--name N] [--domain D] [--owner ORG]\n" +
-        "                          [--zone Z] [--create-zone] [--display D]\n" +
+        "                          [--zone Z] [--create-zone] [--display D] [--size S]\n" +
         "                          [--dns-mode M] [--force]", effect: { noPreview: "writes config/environments/<env>.json (with --create-zone also a zone); environment-manager reconcile <env> --apply makes it live" },
       name: "add",
       hidden: ["--dnsMode M"],
@@ -91,6 +91,7 @@ export const HELP: HelpSpec = {
           "                   command yields the environment and its zone. Off unless asked, so a\n" +
           "                   mistyped --zone cannot create a stray zone."],
         ["--display D", "The name people see (default: the environment's name, capitalised)."],
+        ["--size S", "small, medium or large: the cores, memory and disk its modules get (default: the site's size)."],
         [
           "--dns-mode M",
           "How its certificates are issued: per-service (default: Caddy gets one per host)\n" +
@@ -101,7 +102,7 @@ export const HELP: HelpSpec = {
     },
     {
       usage: "modify <env> [--set <field>=<value>]... [--domain D] [--owner ORG] [--zone Z]\n" +
-        "                          [--display D] [--dns-mode M]", effect: { noPreview: "writes config/environments/<env>.json; environment-manager reconcile <env> --apply makes it live" },
+        "                          [--display D] [--size S] [--dns-mode M]", effect: { noPreview: "writes config/environments/<env>.json; environment-manager reconcile <env> --apply makes it live" },
       name: "modify",
       hidden: ["--dnsMode M"],
       options: [
@@ -113,6 +114,8 @@ export const HELP: HelpSpec = {
         ["--zone Z", "Move the environment to this Service zone: it is linked to the environment\n" +
           "                   and the old zone's link is cleared (network-manager bind)."],
         ["--display D", "The name people see."],
+        ["--size S", "small, medium or large: the cores, memory and disk its modules get. Installed\n" +
+          "                   modules follow at their next update; disks only grow."],
         [
           "--dns-mode M",
           "How its certificates are issued: per-service (Caddy gets one per host)\n" +
@@ -176,6 +179,7 @@ interface Opts {
   // ADR-014 D1: author the environment's Service zone in the same command.
   createZone: boolean;
   display?: string;
+  size?: "small" | "medium" | "large";
   dnsMode?: "per-service" | "wildcard" | "local";
   schemaDir?: string;
   zones?: string;
@@ -232,6 +236,12 @@ export function parseOpts(args: string[]): Opts {
       case "--display":
         o.display = need("--display");
         break;
+      case "--size": {
+        const v = need("--size");
+        if (v !== "small" && v !== "medium" && v !== "large") die(`--size must be small, medium or large (got '${v}')`);
+        o.size = v;
+        break;
+      }
       case "--dns-mode":
       case "--dnsMode": {
         const v = need("--dns-mode");
@@ -326,6 +336,7 @@ export function formatEnvironmentHuman(env: Environment, zone?: string, shared: 
     }
   }
   if (env.dataResidency) row("residency", env.dataResidency);
+  row("size", env.size ?? "(the site's)");
   if (env.backup) {
     const b = env.backup;
     const parts: string[] = [];
@@ -462,6 +473,7 @@ function cmdAdd(opts: Opts, net: NetworkClient): void {
     name,
     displayName: display,
     ownerOrg: owner,
+    ...(opts.size ? { size: opts.size } : {}),
   };
   const zone = opts.zone ?? name;
   if (opts.domain || opts.dnsMode) {
@@ -524,6 +536,7 @@ function cmdModify(opts: Opts, net: NetworkClient): void {
   const raw = JSON.parse(readFileSync(path, "utf8"));
   const env = parseEnvironment(raw, name);
   if (opts.display) env.displayName = opts.display;
+  if (opts.size) env.size = opts.size;
   if (opts.owner) env.ownerOrg = opts.owner;
   if (opts.domain || opts.dnsMode) {
     env.domains = {

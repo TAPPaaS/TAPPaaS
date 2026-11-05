@@ -76,7 +76,7 @@ function NodeActions() {
 // section with the location forms. The nodes' cores and memory are health-manager's
 // (the site read carries it), their pools' use the storage inventory's; the
 // IPv6 prefix and Caddy's IPv6 address are the ipv6 read's.
-const SITE_FIELDS = ["name", "displayName", "branding", "version", "defaultEnvironment", "owner", "email", "primaryLocation", "locale", "keyboard", "network", "ipv6", "dnssec"];
+const SITE_FIELDS = ["name", "displayName", "branding", "version", "defaultEnvironment", "size", "owner", "email", "primaryLocation", "locale", "keyboard", "network", "ipv6", "dnssec"];
 const SETTINGS_FIELDS = ["dnsBlocklists", "diskAutoGrow", "requireSigned"];
 const UPDATE_FIELDS = ["updateSchedule", "channel", "automaticReboot", "snapshotRetention"];
 

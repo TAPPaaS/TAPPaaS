@@ -158,7 +158,7 @@ check(placeholderOf(field(user, "displayName")!) === "no default", "an empty inp
 
 // ── the form's order: name, the fields as the schema orders them, Options, disruptions ──
 const eopen = eadd.fields.filter((f) => f.editable);
-check(JSON.stringify(fieldGroups(eopen)) === JSON.stringify([{ parent: "", fields: ["displayName", "ownerOrg", "zone"] }, { parent: "domains", fields: ["domains.primary", "domains.dnsMode"] }]), "environment add: the fields in the schema's order (its zone after its owner), a nested object's under its parent");
+check(JSON.stringify(fieldGroups(eopen)) === JSON.stringify([{ parent: "", fields: ["displayName", "ownerOrg", "zone"] }, { parent: "domains", fields: ["domains.primary", "domains.dnsMode"] }, { parent: "", fields: ["size"] }]), "environment add: the fields in the schema's order (its zone after its owner, its size last), a nested object's under its parent");
 check(JSON.stringify(fieldGroups([{ name: "a.x" }, { name: "b" }, { name: "a.y" }, { name: "c" }])) === JSON.stringify([{ parent: "a", fields: ["a.x", "a.y"] }, { parent: "", fields: ["b", "c"] }]), "…a parent's fields stay together where the schema interleaves them");
 const envAddVerb = {
   verb: "add", keys: [["add"]], positionals: [{ name: "env", optional: true, repeatable: false }],

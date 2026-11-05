@@ -28,6 +28,8 @@
 #             is forwarded to the cicd install.sh. If omitted it is derived from
 #             --domain. Recommended: pass it explicitly (e.g. --name warmelo1).
 #   --organization  Default org/environment/zone name (site.json .defaultEnvironment).
+#   --size    small|medium|large (site.json .size): sizes the mothership here and
+#             every module after it. Default: medium.
 #             Forwarded to the cicd install.sh; defaults to the site code there.
 #   --domain  REQUIRED (the platform's Caddy reverse proxy is configured for
 #             <service>.<domain>, so it cannot be set up without a real domain).
@@ -75,6 +77,7 @@ while [[ $# -gt 0 ]]; do
     --domain)          DOMAIN="${2:-}"; shift 2 ;;
     --name)            ORGNAME="${2:-}"; shift 2 ;;
     --organization|--org) ORG="${2:-}"; shift 2 ;;
+    --size)            case "${2:-}" in small|medium|large) export TAPPAAS_SIZE="$2" ;; *) die "--size must be small, medium or large" ;; esac; shift 2 ;;
     --skip-template)   SKIP_TEMPLATE=1; shift ;;
     --skip-cicd)       SKIP_CICD=1; shift ;;
     --manual-cicd)     MANUAL_CICD=1; shift ;;
@@ -294,6 +297,22 @@ build_template() {
   fi
 }
 
+# ADR-044: size a module JSON in place for TAPPAAS_SIZE (small: each
+# <field>MinMax's min, large its max). The same jq as tappaas-cicd's
+# lib/module-sizing.sh, inline because that library is not on the node yet.
+size_json_for_site() {
+  local f="$1" s="${TAPPAAS_SIZE:-}" tmp
+  [[ "$s" == "small" || "$s" == "large" ]] || return 0
+  tmp="$(mktemp)"
+  if jq --arg size "$s" 'def sized($o): reduce (["cores","coresMinMax"],["memory","memoryMinMax"],["diskSize","diskMinMax"]) as $p ($o;
+        if ((.[$p[1]]|type) == "array" and (.[$p[1]]|length) == 2) then .[$p[0]] = (if $size == "small" then .[$p[1]][0] else .[$p[1]][1] end) else . end);
+      sized(.) | if (.config|type) == "object" then .config |= with_entries(if (.value|type) == "object" then .value |= sized(.) else . end) else . end' "$f" >"$tmp"; then
+    mv "$tmp" "$f"
+  else
+    rm -f "$tmp"; warn "Could not size $(basename "$f") for ${s}; it is created at its medium values"
+  fi
+}
+
 # ── Phase B: tappaas-cicd mothership (vmid 130) ─────────────────────
 build_cicd() {
   local cicdid; cicdid="$(jq -r '.vmid' "${TAPPAAS_DIR}/tappaas-cicd.json" 2>/dev/null || echo 130)"
@@ -303,6 +322,7 @@ build_cicd() {
     warn "VM ${cicdid} already exists — skipping creation (finish its in-VM install if needed)."
   else
     [[ -f "${TAPPAAS_DIR}/tappaas-cicd.json" ]] || { info "Fetching tappaas-cicd.json"; fetch "${REPO}${BRANCH}/src/foundation/tappaas-cicd/tappaas-cicd.json" "${TAPPAAS_DIR}/tappaas-cicd.json"; }
+    size_json_for_site "${TAPPAAS_DIR}/tappaas-cicd.json"
     info "Cloning the NixOS template into the tappaas-cicd VM (${cicdid})..."
     "$CREATE_VM" tappaas-cicd
   fi
@@ -367,7 +387,8 @@ build_cicd() {
   #        the orchestrator. If omitted, cicd install.sh derives it from the domain).
   local name_arg=""; [[ -n "$ORGNAME" ]] && name_arg="--name '${ORGNAME}' "
   local org_arg="";  [[ -n "$ORG" ]]     && org_arg="--organization '${ORG}' "
-  local install2_cmd="cd TAPPaaS/src/foundation/tappaas-cicd && ./install.sh ${name_arg}${org_arg}--branch '${BRANCH}' --domain '${DOMAIN}'"
+  local size_arg=""; [[ -n "${TAPPAAS_SIZE:-}" ]] && size_arg="--size '${TAPPAAS_SIZE}' "
+  local install2_cmd="cd TAPPaaS/src/foundation/tappaas-cicd && ./install.sh ${name_arg}${org_arg}${size_arg}--branch '${BRANCH}' --domain '${DOMAIN}'"
   step 2 "The site, set up on the mothership"
   info "Running install.sh on cicd (site ${ORGNAME:-<from-domain>}, org ${ORG:-<=site>}, domain ${DOMAIN})..."
   if ! cicd_ssh "$install2_cmd"; then

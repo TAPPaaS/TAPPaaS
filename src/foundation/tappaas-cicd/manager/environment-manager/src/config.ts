@@ -46,6 +46,7 @@ export function parseEnvironment(raw: unknown, fallbackName?: string): Environme
   if (o.dataResidency === "global" || o.dataResidency === "eu-only") {
     env.dataResidency = o.dataResidency;
   }
+  if (o.size === "small" || o.size === "medium" || o.size === "large") env.size = o.size;
   if (o.backup === null) env.backup = null;
   else if (o.backup && typeof o.backup === "object") {
     const b = o.backup as Record<string, unknown>;
@@ -95,6 +96,7 @@ export function serializeEnvironment(env: Environment): string {
   };
   if (env.domains) out.domains = env.domains;
   if (env.dataResidency) out.dataResidency = env.dataResidency;
+  if (env.size) out.size = env.size;
   if (env.backup !== undefined) out.backup = env.backup;
   if (env.legal !== undefined) out.legal = env.legal;
   return JSON.stringify(out, null, 2) + "\n";

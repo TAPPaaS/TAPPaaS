@@ -111,6 +111,7 @@ export function loadSite(siteFile: string): Site {
       ? raw.channel
       : undefined,
     automaticReboot: typeof raw.automaticReboot === "boolean" ? raw.automaticReboot : undefined,
+    size: raw.size === "small" || raw.size === "medium" || raw.size === "large" ? raw.size : undefined,
     ipv6: typeof raw.ipv6 === "boolean" ? raw.ipv6 : undefined,
     requireSigned: typeof raw.requireSigned === "boolean" ? raw.requireSigned : undefined,
     snapshotRetention:

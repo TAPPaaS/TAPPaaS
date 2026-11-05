@@ -57,6 +57,10 @@ import { SOURCE, membershipObservation, nodeObject, recordingClient, siteObjects
 
 const VERSION = "0.1.0";
 
+// ADR-044: how big the site is; foundation modules and environments without a
+// size of their own are sized from it.
+const SIZES = ["small", "medium", "large"];
+
 export const HELP: HelpSpec = {
   name: "site-manager",
   version: VERSION,
@@ -82,6 +86,7 @@ export const HELP: HelpSpec = {
         ["--email <addr>", "admin email"],
         ["--supportEmail <addr>", "where an alert's support bundle is to be forwarded: one e-mail address; empty by default, \"\" clears it"],
         ["--automaticReboot true|false", "allow update reboots"],
+        ["--size small|medium|large", "how big the site is: the cores, memory and disk foundation modules and every environment without a size of its own get — small the module's minimum, medium its plain value, large its maximum. Installed modules follow at their next update"],
         ["--ipv6 true|false", "the site supports IPv6: OPNsense's 'Allow IPv6', applied by the next network update (default false)"],
         ["--requireSigned true|false", "refuse to update a staging/production repository that signs no releases (default false). A repository that lists signing keys is verified either way; one that declares no channels (no channels.json) is unstable, and moves unverified with a warning."],
         ["--snapshotRetention <n>", "VM snapshots kept per module"],
@@ -515,6 +520,7 @@ function cmdSite(o: Opts): void {
     const others = Object.values(site.locations).filter((l) => l.name !== site.primaryLocation);
     if (others.length) info(`${lbl("Locations")}${others.map((l) => `${l.name}${l.kind === "remote" ? " (remote)" : ""}`).join("  ")}`);
     info(`${lbl("Network")}publicIp=${net.publicIp ?? "(unset)"}  isp=${net.isp ?? "(none)"}  ipv6=${site.ipv6 ? "yes" : "no"}`);
+    info(`${lbl("Size")}${site.size ?? "medium"}`);
     info(`${lbl("Update")}${schedStr}  (auto-reboot: ${site.automaticReboot ? "yes" : "no"}, keep ${site.snapshotRetention ?? "?"})`);
     info(`${lbl("Nodes")}${nodes.length ? nodes.map((n) => `${n.name} [${n.storagePools.join(", ")}]`).join("  ") : "(none)"}`);
     // ADR-033 D10: what each repository runs, from the last signature check.
@@ -705,6 +711,9 @@ function cmdSite(o: Opts): void {
       changed++;
     } else setStr("--supportEmail", ["supportEmail"]);
     setBool("--automaticReboot", ["automaticReboot"]);
+    const size = o.flags.get("--size");
+    if (size !== undefined && !SIZES.includes(size)) no("--size must be small|medium|large");
+    setStr("--size", ["size"]);
     setBool("--ipv6", ["ipv6"]);
     setBool("--requireSigned", ["requireSigned"]);
     setInt("--snapshotRetention", ["snapshotRetention"]);

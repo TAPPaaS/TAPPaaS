@@ -20,12 +20,13 @@ const LOCATION: ShortcutTable = {
 };
 const ENVIRONMENT: ShortcutTable = {
   displayName: "--display", ownerOrg: "--owner", zone: "--zone", "domains.primary": "--domain", "domains.dnsMode": "--dns-mode",
+  size: "--size",
 };
 
 export const MODIFY_SHORTCUTS = {
   site: {
     displayName: "--displayName", owner: "--owner", email: "--email", supportEmail: "--supportEmail", channel: "--channel",
-    automaticReboot: "--automaticReboot", ipv6: "--ipv6", requireSigned: "--requireSigned", snapshotRetention: "--snapshotRetention",
+    automaticReboot: "--automaticReboot", size: "--size", ipv6: "--ipv6", requireSigned: "--requireSigned", snapshotRetention: "--snapshotRetention",
     "backup.target": "--backupTarget", "backup.offsite": "--backupOffsite", "backup.defaultSchedule": "--backupDefaultSchedule",
     "backup.defaultRetention": "--backupDefaultRetention", primaryLocation: "--primaryLocation", locale: "--locale", keyboard: "--keyboard",
     "branding.logo": "--brandingLogo", "branding.logoDark": "--brandingLogoDark", "network.isp": "--networkIsp", "network.publicIp": "--networkPublicIp",

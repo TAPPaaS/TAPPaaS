@@ -137,6 +137,22 @@ fetch() { # fetch <url> <dest>  (fatal on failure, never leaves a partial)
   mv "$tmp" "$2"
 }
 [[ -f "$FW_JSON" ]]   || { info "Fetching network.json";    fetch "${REPO}${BRANCH}/src/foundation/network/network.json" "$FW_JSON"; }
+# ADR-044: size a module JSON in place for TAPPAAS_SIZE (small: each
+# <field>MinMax's min, large its max). The same jq as tappaas-cicd's
+# lib/module-sizing.sh, inline because that library is not on the node yet.
+size_json_for_site() {
+  local f="$1" s="${TAPPAAS_SIZE:-}" tmp
+  [[ "$s" == "small" || "$s" == "large" ]] || return 0
+  tmp="$(mktemp)"
+  if jq --arg size "$s" 'def sized($o): reduce (["cores","coresMinMax"],["memory","memoryMinMax"],["diskSize","diskMinMax"]) as $p ($o;
+        if ((.[$p[1]]|type) == "array" and (.[$p[1]]|length) == 2) then .[$p[0]] = (if $size == "small" then .[$p[1]][0] else .[$p[1]][1] end) else . end);
+      sized(.) | if (.config|type) == "object" then .config |= with_entries(if (.value|type) == "object" then .value |= sized(.) else . end) else . end' "$f" >"$tmp"; then
+    mv "$tmp" "$f"
+  else
+    rm -f "$tmp"; warn "Could not size $(basename "$f") for ${s}; it is created at its medium values"
+  fi
+}
+size_json_for_site "$FW_JSON"
 [[ -f "$TEMPLATE" ]]  || { info "Fetching config template"; fetch "${REPO}${BRANCH}/src/foundation/network/firewall-config.xml.template" "$TEMPLATE"; }
 [[ -x "$CREATE_VM" ]] || die "Create-TAPPaaS-VM.sh not found at ${CREATE_VM} (run the PVE node bootstrap first)."
 

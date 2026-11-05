@@ -48,11 +48,13 @@ DOMAIN=""
 BRANCH=""
 SITE_CODE=""
 ORG=""
+SIZE=""   # small|medium|large -> site.json .size (ADR-044)
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --name)               SITE_CODE="${2:-}"; shift 2 ;;
     --organization|--org) ORG="${2:-}"; shift 2 ;;
+    --size)               SIZE="${2:-}"; shift 2 ;;
     --domain)             DOMAIN="${2:-}"; shift 2 ;;
     --branch)             BRANCH="${2:-}"; shift 2 ;;
     *)                    shift ;;  # Ignore unknown args
@@ -147,6 +149,7 @@ done
 CREATE_SITE_ARGS=(--name "$SITE_CODE" --organization "$ORG")
 [[ -n "$DOMAIN" ]] && CREATE_SITE_ARGS+=(--domain "$DOMAIN")
 [[ -n "$BRANCH" ]] && CREATE_SITE_ARGS+=(--branch "$BRANCH")
+[[ -n "$SIZE" ]] && CREATE_SITE_ARGS+=(--size "$SIZE")
 # Idempotent resume: create-site.sh refuses to overwrite an existing site.json
 # without --force. A --force re-run PRESERVES operator-set fields (owner,
 # repositories, email, reboot/snapshot policy — see create-site.sh),

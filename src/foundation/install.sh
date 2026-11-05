@@ -34,7 +34,7 @@
 # gateway and platform already exist — and the chain stops after the join.
 #
 # Usage:
-#   install.sh [REPO] [BRANCH] --name <site-code> [--organization <org>] [--domain <d>]
+#   install.sh [REPO] [BRANCH] --name <site-code> [--organization <org>] [--domain <d>] [--size <s>]
 #              [--cluster|--join|--no-cluster] [--skip-network] [--skip-storage]
 #              [--lan-port <if>[,<if>...]] [--lan-mode active-backup|lacp] [--lan-primary <if>]
 #              [--wan-port <if> | --no-wan] [--pool <name=topo:disks>]...
@@ -103,6 +103,7 @@ REPO="https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/"
 BRANCH="stable"
 SITE_CODE=""
 ORG=""
+SIZE=""
 DOMAIN=""
 NONINTERACTIVE=0
 SKIP_FIREWALL=0
@@ -113,6 +114,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --name)            SITE_CODE="${2:-}"; shift ;;
     --organization|--org) ORG="${2:-}"; shift ;;
+    --size)            SIZE="${2:-}"; shift ;;
     --domain)          DOMAIN="${2:-}"; shift ;;
     --skip-firewall)   SKIP_FIREWALL=1 ;;
     --skip-platform)   SKIP_PLATFORM=1 ;;
@@ -127,7 +129,7 @@ while [ $# -gt 0 ]; do
     --no-wan) NODE_ARGS+=("$1") ;;
     --pool)                NODE_ARGS+=("$1" "${2:-}"); shift ;;
     -h|--help)
-      echo "Usage: install.sh [REPO] [BRANCH] --name <site-code> [--organization <org>] [--domain <d>]"
+      echo "Usage: install.sh [REPO] [BRANCH] --name <site-code> [--organization <org>] [--domain <d>] [--size small|medium|large]"
       echo "                  [--cluster|--join|--no-cluster] [--skip-network] [--skip-storage]"
       echo "                  [--lan-port <if>[,<if>...]] [--lan-mode active-backup|lacp] [--lan-primary <if>]"
       echo "                  [--wan-port <if> | --no-wan] [--pool <name=topo:disks>]..."
@@ -137,6 +139,9 @@ while [ $# -gt 0 ]; do
       echo "gateway cutover → sanity → NixOS template → mothership → site. --name is the SITE CODE (= the Proxmox"
       echo "cluster name + site.json .name, ≤15 chars). --organization names the default"
       echo "environment/zone/org (site.json .defaultEnvironment); defaults to the site code."
+      echo "--size says how big the site is: small (a few users, one node or a test system),"
+      echo "medium (the default, up to ~50 users) or large (100+ users, 3+ large nodes). It sets"
+      echo "the cores, memory and disk every module is installed with."
       echo ""
       echo "Unattended example (no prompts):"
       echo "  install.sh \"\$REPO\" ADR007 --name warmelo1 --organization warmelo --domain warmelo.org \\"
@@ -215,6 +220,14 @@ if [ "$SKIP_FIREWALL" = 1 ]; then
   msg_ok "Skipping firewall (--skip-firewall). Run later: ~/tappaas/config-firewall.sh"; exit 0
 fi
 step 3 "The OPNsense firewall"
+# The site's size (ADR-044) reaches the firewall and the mothership as
+# TAPPAAS_SIZE, and site.json through install-platform.sh --size.
+size_arg=()
+if [[ -n "$SIZE" ]]; then
+  case "$SIZE" in small|medium|large) ;; *) msg_error "--size must be small, medium or large"; exit 2 ;; esac
+  export TAPPAAS_SIZE="$SIZE"; size_arg=(--size "$SIZE")
+  msg_ok "Size: ${SIZE}"
+fi
 fetch "${REPO}${BRANCH}/src/foundation/network/config-firewall.sh" ~/tappaas/config-firewall.sh 755
 ~/tappaas/config-firewall.sh --repo "$REPO" --branch "$BRANCH" --chained ${NONINT_ARG} \
   || { msg_error "config-firewall.sh did not complete — fix it, then re-run ~/tappaas/config-firewall.sh and continue."; exit 1; }
@@ -236,7 +249,7 @@ fi
 # Steps 6-8 are install-platform.sh's: the NixOS template, the mothership, the site.
 fetch "${REPO}${BRANCH}/src/foundation/cluster/install-platform.sh" ~/tappaas/install-platform.sh 755
 dom_arg=(); [ -n "$DOMAIN" ] && dom_arg=(--domain "$DOMAIN")
-~/tappaas/install-platform.sh --repo "$REPO" --branch "$BRANCH" --name "$SITE_CODE" --organization "$ORG" "${dom_arg[@]}" --chained ${NONINT_ARG} \
+~/tappaas/install-platform.sh --repo "$REPO" --branch "$BRANCH" --name "$SITE_CODE" --organization "$ORG" "${dom_arg[@]}" "${size_arg[@]}" --chained ${NONINT_ARG} \
   || { msg_error "install-platform.sh did not complete — re-run ~/tappaas/install-platform.sh --branch ${BRANCH} --name ${SITE_CODE} --organization ${ORG} --domain <yourdomain>."; exit 1; }
 
 # ── Done ───────────────────────────────────────────────────────────────
