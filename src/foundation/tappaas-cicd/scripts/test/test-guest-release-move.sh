@@ -49,7 +49,8 @@ ck "the rebuild block extracts" "yes" "$(grep -q 'guest_build_on_cicd' "${TMP}/b
 # Prints: <exit>|staged=<0|1>|boots=<n>|switches=<n>; the log is in ${TMP}/out,
 # every build/activation in ${TMP}/calls.
 # BUILD selects the build path: cicd (default, the mothership builds), cicdfail
-# (the mothership build fails), nosrc (the pinned nixpkgs cannot be resolved),
+# (preparing the mothership build fails), buildfail (the build itself fails),
+# nosrc (the pinned nixpkgs cannot be resolved),
 # guest (the TAPPAAS_GUEST_BUILD=guest opt-out).
 run() {
     CUR="$1" NEW="$2" BOOT_RC="$3" SWITCH="${*:4}" T="${TMP}" BUILD="${BUILD:-cicd}" bash -c '
@@ -64,6 +65,7 @@ run() {
         pinned_nixpkgs_source(){ [[ "${BUILD}" == nosrc ]] && return 1; echo /nix/store/fake-nixpkgs-src; }
         guest_build_on_cicd(){
             echo cicd-build >> "${T}/calls"
+            [[ "${BUILD}" == buildfail ]] && return 3
             [[ "${BUILD}" == cicdfail || "${NEW}" == FAIL ]] && return 1
             mkdir -p "${T}/sys"; printf "%s\n" "${NEW}" > "${T}/sys/nixos-version"
             echo "${T}/sys"
@@ -145,10 +147,13 @@ ck "same release, ssh drops once (255) then works: retried" "0|staged=0|boots=0|
 ck "same release, switch fails (1): no retry, it stops" "1|staged=|boots=0|switches=1" "$(run 26.05 26.05 0 1 0)"
 
 echo "── the guest builds only when the mothership cannot, and says why ──"
-ck "mothership build fails, same release: guest builds, one switch" "0|staged=0|boots=0|switches=1" "$(BUILD=cicdfail run 25.11 25.11 0 0)"
+ck "preparing the mothership build fails, same release: guest builds, one switch" "0|staged=0|boots=0|switches=1" "$(BUILD=cicdfail run 25.11 25.11 0 0)"
 ck "  …tried the mothership first, then the guest" "cicd=1 guest=1 promote=0" "$(built)"
-ckin "  …and names why" "building it on the mothership failed" "$(cat "${TMP}/out")"
-ck "mothership build fails, a release move: still staged (guest-built)" "0|staged=1|boots=1|switches=0" "$(BUILD=cicdfail run 25.11 26.05 0 4)"
+ckin "  …and names why" "preparing the build on the mothership failed" "$(cat "${TMP}/out")"
+ck "the build itself fails on the mothership: it stops, no guest build, no switch" "1|staged=|boots=0|switches=0" "$(BUILD=buildfail run 25.11 25.11 0 0)"
+ck "  …tried the mothership only" "cicd=1 guest=0 promote=0" "$(built)"
+ckin "  …and says nothing was changed" "nothing on guest was changed" "$(cat "${TMP}/out")"
+ck "preparing the mothership build fails, a release move: still staged (guest-built)" "0|staged=1|boots=1|switches=0" "$(BUILD=cicdfail run 25.11 26.05 0 4)"
 ck "pinned nixpkgs unresolvable: guest builds, no mothership attempt" "0|staged=0|boots=0|switches=1" "$(BUILD=nosrc run 25.11 25.11 0 0)"
 ck "  …built on the guest only" "cicd=0 guest=1 promote=" "$(built)"
 ckin "  …and names why" "the site's NixOS packages could not be read" "$(cat "${TMP}/out")"

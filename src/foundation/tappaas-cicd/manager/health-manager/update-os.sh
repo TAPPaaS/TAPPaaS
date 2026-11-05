@@ -615,6 +615,9 @@ binary_cache_reachable() {
 # closure to the guest. Prints the system's store path — and nothing else on
 # stdout: every message goes to stderr. The build is rooted as
 # <vmname>.new until the switch succeeds (guest_build_promote).
+# Returns 3 when the build itself failed: the guest would fail it as well (the
+# same configuration, on less memory), so the caller stops there. Any other
+# failure (staging, signing, copying) is the mothership's, and returns 1.
 guest_build_on_cicd() {
     local vmname="$1" vm_ip="$2" cfg="$3" src="$4"
     local stage="${GUEST_BUILD_STAGE}/${vmname}" link="${GUEST_BUILD_GCROOTS}/${vmname}.new" out
@@ -633,6 +636,7 @@ guest_build_on_cicd() {
         # To stderr: this function's stdout is the store path it returns.
         warn "No binary cache answers — building ${vmname} from what the mothership already has; anything missing is built from source (slower)" >&2
     fi
+    local _built_from; _built_from="$(date +%s)"
     run_quiet_rc "building ${vmname}'s system on the mothership" \
         sudo -n unshare --mount --propagation private -- /bin/sh -c '
             PATH=/run/current-system/sw/bin:$PATH
@@ -641,7 +645,13 @@ guest_build_on_cicd() {
                 -I "nixos-config=/etc/nixos/$3" -o "$4" \
                 --option substitute "$5" --option fallback true' \
             sh "${stage}" "${src}" "${cfg}" "${link}" "${substitute}" \
-        >&2 || return 1
+        >&2 || {
+            # The kernel's word on it: a build step killed for memory since the
+            # build began. A compiler reports that only as some deadly signal.
+            sudo -n journalctl -k -q --since "@${_built_from}" -o cat 2>/dev/null | grep -q "Out of memory: Killed" \
+                && warn "the mothership ran out of memory during the build: a build step was killed — give the mothership more memory (its size), or keep the module from compiling" >&2
+            return 3
+        }
     out="$(readlink -f "${link}")"
     [[ "${out}" == /nix/store/*-nixos-system-* ]] || return 1
 
@@ -934,20 +944,29 @@ update_nixos() {
     # makes the new release the next generation, and the reboot below takes it.
     #
     # The system is built on the mothership (#774) unless that is impossible —
-    # then on the guest, as before, with a warning that names why. Opt out for one
+    # then on the guest, as before, with a warning that names why. A build that
+    # fails on the mothership stops: the guest would fail it too. Opt out for one
     # run with TAPPAAS_GUEST_BUILD=guest. The mothership itself is never built
     # this way: tappaas-self-rebuild.sh builds it.
     local _built="" _src="" _stage_cmd
     if [[ "${TAPPAAS_GUEST_BUILD:-cicd}" != "guest" && "${vmname}" != "$(hostname)" ]]; then
         if ! _src="$(pinned_nixpkgs_source "${flake_lock}")" || [[ -z "${_src}" ]]; then
             warn "Building ${vmname} on the guest (slower): the site's NixOS packages could not be read from ${flake_lock}"
-        elif _built="$(guest_build_on_cicd "${vmname}" "${vm_ip}" "${nix_basename}" "${_src}")"; then
-            info "  ${GN}✓${CL} built on the mothership and copied: ${_built##*/}"
-            _rebuild_cmd="$(guest_activate_cmd "${_built}" switch)"
         else
-            _built=""
-            guest_build_promote "${vmname}" 0
-            warn "Building ${vmname} on the guest (slower): building it on the mothership failed — see the lines above"
+            local _brc=0
+            _built="$(guest_build_on_cicd "${vmname}" "${vm_ip}" "${nix_basename}" "${_src}")" || _brc=$?
+            if [[ "${_brc}" -eq 0 ]]; then
+                info "  ${GN}✓${CL} built on the mothership and copied: ${_built##*/}"
+                _rebuild_cmd="$(guest_activate_cmd "${_built}" switch)"
+            else
+                _built=""
+                guest_build_promote "${vmname}" 0
+                # The build failed for its own reasons: the guest would only fail
+                # it again, slower. Nothing on the guest was changed.
+                [[ "${_brc}" -ne 3 ]] \
+                    || die "building ${vmname}'s system failed — see the lines above; nothing on ${vmname} was changed"
+                warn "Building ${vmname} on the guest (slower): preparing the build on the mothership failed — see the lines above"
+            fi
         fi
     fi
 
