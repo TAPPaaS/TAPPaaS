@@ -1,9 +1,9 @@
-# Install TAPPaaS on a single machine
+# Install a single node local TAPPaaS system
 
 The shortest way to a running TAPPaaS: one machine, one disk, one network port, and a
 Mac or Linux PC beside it on the same wired network. Everything else — more machines,
 data disks, managed switches, Wi-Fi, going public — can be added later as Day 2
-operations. For the full picture, see [INSTALL.md](INSTALL.md).
+operations. For the full picture, see [INSTALL.md](../INSTALL.md).
 
 ## What you need
 

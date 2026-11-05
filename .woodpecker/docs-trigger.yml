@@ -19,7 +19,7 @@ when:
       include:
         - INSTALL.md
         - INSTALL-ENVIRONMENT.md
-        - INSTALL-SINGLENODE.md
+        - INSTALL/*.md
         - hardware-selection.md
         - preparation.md
         - GLOSSARY.md

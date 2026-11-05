@@ -9,7 +9,7 @@ update is refused. How releases are signed, and how to sign a repository of your
 | What | When | What is checked |
 |---|---|---|
 | **Each repository the site tracks** (`site-manager repository list`) on a `staging` or `stable` branch | every update, after the fetch and before the checkout moves | the new tip is a release tag signed by a key the **last release this site verified** lists — or a key a later release enrolled, signed in turn by a trusted key — the files match the hash in the tag, and it is not older than what the site runs |
-| **The TAPPaaS install** | when the mothership is installed | the release cloned is signed by one of the published release keys ([INSTALL.md](../../../INSTALL.md#compare-the-release-signer)) |
+| **The TAPPaaS install** | when the mothership is installed | the release cloned is signed by one of the published release keys ([INSTALL/CLUSTER-LOCAL.md](../../../INSTALL/CLUSTER-LOCAL.md#compare-the-release-signer)) |
 | **VM images** (NixOS template, OPNsense) | before a downloaded image is imported | its SHA-256 matches the one in the release, which the release signers signed |
 | **Proxmox install media** | when the install USB is made | the ISO against Proxmox's published SHA-256 list |
 | **NixOS guest systems** | every guest update | the system is signed by the mothership's own Nix key, or comes from cache.nixos.org |
@@ -126,4 +126,4 @@ ssh-keygen -Y verify -f .tappaas/allowed_signers -I lars@tappaas.org -n tappaas-
 ```
 
 `.tappaas/allowed_signers` comes from a TAPPaaS checkout; compare its fingerprints with
-[INSTALL.md](../../../INSTALL.md#compare-the-release-signer) and tappaas.org.
+[INSTALL/CLUSTER-LOCAL.md](../../../INSTALL/CLUSTER-LOCAL.md#compare-the-release-signer) and tappaas.org.

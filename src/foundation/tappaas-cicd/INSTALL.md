@@ -26,7 +26,7 @@ drives the in-VM install end-to-end over SSH:
 
 1. `bootstrap.sh <repo> <branch> [<signer fingerprints>]` — clones the TAPPaaS repo and,
    on `stable`/`staging`, refuses a tip that is not a release signed by one of the release
-   keys published in the root [INSTALL.md](../../../INSTALL.md#compare-the-release-signer)
+   keys published in [INSTALL/CLUSTER-LOCAL.md](../../../INSTALL/CLUSTER-LOCAL.md#compare-the-release-signer)
    (the third argument replaces them); generates `hardware-configuration.nix`,
    `nixos-rebuild switch --flake .#tappaas-cicd`, then checks the release in full and
    writes the signer fingerprints (`~/config/.trust/TAPPaaS.signers.json`, which
