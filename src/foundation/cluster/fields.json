@@ -74,6 +74,26 @@
       "maximum": 128,
       "example": 4
     },
+    "coresMinMax": {
+      "description": "The cores this guest gets at size small (first) and large (second), exactly two values; cores is the medium value (ADR-044). Absent: cores at every size.",
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 128
+      },
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": null,
+      "example": [
+        1,
+        4
+      ],
+      "note": "min ≤ cores ≤ max. An explicit cores at install (--cores, --set) wins over the size."
+    },
     "memory": {
       "description": "RAM allocation in megabytes",
       "type": "integer",
@@ -87,6 +107,25 @@
       "example": 8192,
       "note": "Value in MB (e.g., 4096 = 4GB)"
     },
+    "memoryMinMax": {
+      "description": "The memory (MiB) this guest gets at size small (first) and large (second), exactly two values; memory is the medium value (ADR-044). Absent: memory at every size.",
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 512
+      },
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": null,
+      "example": [
+        1024,
+        8192
+      ],
+      "note": "min ≤ memory ≤ max. Small minimums are set so foundation, home and office fit one 32 GB node."
+    },
     "diskSize": {
       "description": "Disk size with unit suffix",
       "type": "string",
@@ -99,6 +138,25 @@
       "pattern": "^[0-9]+[GMK]$",
       "example": "32G",
       "note": "G=gigabytes, M=megabytes, K=kilobytes"
+    },
+    "diskMinMax": {
+      "description": "The disk size this guest gets at size small (first) and large (second), exactly two values; diskSize is the medium value (ADR-044). Absent: diskSize at every size.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9]+[GMKT]$"
+      },
+      "requiredBy": [],
+      "usedBy": [
+        "cluster:vm",
+        "cluster:lxc"
+      ],
+      "default": null,
+      "example": [
+        "16G",
+        "128G"
+      ],
+      "note": "min ≤ diskSize ≤ max, and the min is never below the image the guest is cloned from (16G for the NixOS template): a disk cannot shrink. Not the same as diskSizeMax, which caps automatic growth."
     },
     "storage": {
       "description": "Name of the storage pool for the module. Left undeclared, the pool is resolved against the target node at create time: 'tanka1' when that node has it, otherwise the node's first ZFS pool that can hold VM disks.",

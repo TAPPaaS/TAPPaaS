@@ -390,6 +390,14 @@
         "allow": {"description": "Domains never blocked.", "type": "array", "items": {"type": "string"}}
       }
     },
+    "size": {
+      "description": "How big this site is expected to be (ADR-044): small (a few users; one node, or up to three small ones; or a test system), medium (up to about 50 concurrent users, many modules in one or two environments) or large (100+ users, three or more large nodes, possibly many environments). Foundation modules take their cores, memory and disk from it, and so does every environment that does not set a size of its own: small the module's minimum, medium its plain value, large its maximum.",
+      "type": "string",
+      "enum": ["small", "medium", "large"],
+      "default": "medium",
+      "changeClass": "in-place",
+      "changeNote": "Applies to modules installed from now on, and to installed ones at their next update, for every sizing field the operator has not set by hand. Disks only grow."
+    },
     "diskAutoGrow": {
       "description": "Automatic disk growth: on every module update, a VM whose / is at or over threshold % full has its disk grown by growPercent % (at least minGrowGB), if the disk's pool — on the guest's node and on its HA replica node — stays at or under poolCeiling % used. Absent: on, with the defaults shown. A module opts out with diskAutoGrow: false and caps growth with diskSizeMax.",
       "type": "object",
