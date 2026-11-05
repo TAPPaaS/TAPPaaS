@@ -77,5 +77,11 @@
   "provides": [
     "repo",
     "oauth"
-  ]
+  ],
+  "config": {
+    "cluster:vm": {
+      "coresMinMax": [1, 4],
+      "memoryMinMax": [1024, 8192]
+    }
+  }
 }

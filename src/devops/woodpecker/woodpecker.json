@@ -29,8 +29,11 @@
   "config": {
     "cluster:vm": {
       "cores": 4,
+      "coresMinMax": [2, 8],
       "memory": 4096,
+      "memoryMinMax": [2048, 8192],
       "diskSize": "64G",
+      "diskMinMax": ["32G", "256G"],
       "thinDisk": true,
       "storage": "tanka1",
       "imageType": "clone",
