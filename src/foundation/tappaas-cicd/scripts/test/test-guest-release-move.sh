@@ -124,7 +124,7 @@ ck "  …built on the mothership, never on the guest; its gcroot promoted" "cicd
 
 echo "── a release move: staged as a boot (switch-to-configuration boot) ──"
 ck "25.11 -> 26.05: boot, no switch" "0|staged=1|boots=1|switches=0" "$(run 25.11 26.05 0 4 4 4)"
-ckin "  …and it says what it is doing" "Release move on guest: 25.11 -> 26.05" "$(cat "${TMP}/out")"
+ckin "  …and it says what it is doing" "New NixOS release on guest: 25.11 → 26.05, staged for its next boot" "$(cat "${TMP}/out")"
 ck "  …the mothership-built system is staged, not a guest build" "cicd=1 guest=0 promote=1" "$(built)"
 ck "a failed staging dies, naming where the guest still is" "1|staged=|boots=1|switches=0" "$(run 25.11 26.05 1)"
 ckin "  …'still on 25.11'" "it is still on 25.11" "$(cat "${TMP}/out")"
@@ -147,16 +147,16 @@ ck "same release, switch fails (1): no retry, it stops" "1|staged=|boots=0|switc
 echo "── the guest builds only when the mothership cannot, and says why ──"
 ck "mothership build fails, same release: guest builds, one switch" "0|staged=0|boots=0|switches=1" "$(BUILD=cicdfail run 25.11 25.11 0 0)"
 ck "  …tried the mothership first, then the guest" "cicd=1 guest=1 promote=0" "$(built)"
-ckin "  …and names why" "building it on the mothership failed (#774)" "$(cat "${TMP}/out")"
+ckin "  …and names why" "building it on the mothership failed" "$(cat "${TMP}/out")"
 ck "mothership build fails, a release move: still staged (guest-built)" "0|staged=1|boots=1|switches=0" "$(BUILD=cicdfail run 25.11 26.05 0 4)"
 ck "pinned nixpkgs unresolvable: guest builds, no mothership attempt" "0|staged=0|boots=0|switches=1" "$(BUILD=nosrc run 25.11 25.11 0 0)"
 ck "  …built on the guest only" "cicd=0 guest=1 promote=" "$(built)"
-ckin "  …and names why" "the pinned nixpkgs could not be resolved" "$(cat "${TMP}/out")"
+ckin "  …and names why" "the site's NixOS packages could not be read" "$(cat "${TMP}/out")"
 ck "TAPPAAS_GUEST_BUILD=guest: the guest builds, as asked" "0|staged=1|boots=1|switches=0" "$(BUILD=guest run 25.11 26.05 0)"
 ck "  …no mothership build" "cicd=0 guest=1 promote=" "$(built)"
 ckin "  …against the pin the guest fetched by narHash (ADR-033 D8)" "boot sudo nixos-rebuild boot -I nixpkgs=/nix/store/fake-guest-nixpkgs " "$(cat "${TMP}/calls")"
 ck "a guest that cannot fetch the pin by its narHash builds nothing" "1|staged=|boots=0|switches=0" "$(BUILD=guest PIN=fail run 25.11 26.05 0)"
-ckin "  …and says why" "not building against an unchecked one" "$(cat "${TMP}/out")"
+ckin "  …and says why" "not building against packages that fail their checksum" "$(cat "${TMP}/out")"
 run 25.11 25.11 0 0 >/dev/null
 ck "built on the mothership: the guest fetches no nixpkgs" "0" "$(grep -c '^guest-pin' "${TMP}/calls")"
 
