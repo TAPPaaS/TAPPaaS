@@ -157,6 +157,11 @@ EOF
       ALLOW_PRIVATE_IP_ADDRESS = "true";
       EXAMPLE_ENABLED          = "false";
       ADMINPANEL_ENABLED       = "true";
+      # The document server (Node.js) fetches documents from Nextcloud over
+      # https. On a site with its own CA (local names, *.home.arpa) only this VM
+      # trusts that CA (security.pki): the image's own list does not. The VM's
+      # bundle is mounted below and added to Node's.
+      NODE_EXTRA_CA_CERTS      = "/etc/ssl/certs/tappaas-host-ca.crt";
     };
 
     # Secrets (JWT_SECRET) loaded from the auto-generated env file
@@ -180,6 +185,8 @@ EOF
       # file + `nginx -s reload` takes effect without restarting the container
       # and interrupting live editing sessions.
       "/etc/euro-office/ds-example.conf:/etc/nginx/includes/ds-example.conf:ro"
+      # The VM's CA bundle: the public CAs and, on a site with its own CA, that one.
+      "/etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/tappaas-host-ca.crt:ro"
     ];
   };
 
