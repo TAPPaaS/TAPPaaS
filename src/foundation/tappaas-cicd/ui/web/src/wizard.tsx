@@ -9,6 +9,7 @@
 // ResumeOffer, the job found again on open (useJobSession).
 
 import { ReactNode, createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRead } from "./api";
 import { JobSummary } from "./types";
 import { Dot } from "./ui";
@@ -136,7 +137,9 @@ export function Wizard({ title, wide = true, onClose, running = [], progress = n
   useEffect(() => {
     if (!question) setAsking(false);
   }, [question]);
-  return (
+  // Drawn at the top of the page, not inside what opened it: a Day 1 step that
+  // folds as it turns done (Stacks, once a module is in) hid its running dialog.
+  return createPortal(
     <div className="modal-back">
       <div className={`modal${wide ? " modal-wide" : ""}`} role="dialog" aria-label={title}>
         <header className="modal-head">
@@ -152,6 +155,8 @@ export function Wizard({ title, wide = true, onClose, running = [], progress = n
         ) : null}
         <WizardContext.Provider value={ctx}>{children}</WizardContext.Provider>
       </div>
-    </div>
+    </div>,
+    // The shell, so its side panel still moves the dialog aside (.with-drawer).
+    document.querySelector(".shell") ?? document.body,
   );
 }
