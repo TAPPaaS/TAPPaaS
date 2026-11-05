@@ -184,7 +184,7 @@ options below are **shortcuts**, one field each (ADR-020 D11): `--email a@b.org`
 `--set email=a@b.org`, and both run the same checks. `supportEmail` — where an alert's support
 bundle is to be forwarded — is one e-mail address (the schema refuses anything else), empty
 by default and set as a day-two step. The shortcuts (scalar, site-wide): `--channel`,
-`--displayName`, `--owner`, `--email`, `--supportEmail` (`''` clears it), `--automaticReboot`, `--snapshotRetention`, `--backupTarget`,
+`--displayName`, `--owner`, `--email`, `--supportEmail` (`''` clears it), `--automaticReboot`, `--size`, `--snapshotRetention`, `--backupTarget`,
 `--backupOffsite`, `--primaryLocation`, `--locale`, `--keyboard`, `--networkIsp`, `--networkPublicIp`, `--ipv6`, `--requireSigned`, `--dnssec`, `--alertsIncludeLines`,
 `--brandingLogo`, `--brandingLogoDark`, `--dnsBlocklistsLists|Zones|Allow` (comma lists, `''`
 empties one), `--diskAutoGrowEnabled|Threshold|GrowPercent|MinGrowGB|PoolCeiling`, and the
@@ -196,6 +196,13 @@ nodes are not a site field: they are their `pvehost` instances (use `node …`).
 `--locationTimezone`, `--locationCity`, `--locationBuilding`, `--locationLatitude` and
 `--locationLongitude` are still accepted for one release and change the primary location;
 `--locationLocale` and `--locationKeyboard` change `--locale` and `--keyboard`.
+
+`--size small|medium|large` says how big the site is (absent: medium). Foundation modules, and the
+modules of every environment that has no size of its own, take their cores, memory and disk from it:
+a module's minimum at small, its plain value at medium, its maximum at large. Modules installed from
+then on get the new size at once; installed ones at their next update, for every sizing field not
+set by hand (disks only grow). `install.sh --size` and `create-site.sh --size` set it at install;
+`site show` prints it.
 
 ### `channel` — which release the site takes (ADR-028 D9, D11)
 

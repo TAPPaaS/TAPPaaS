@@ -79,6 +79,22 @@ honoured in the scheduled sweep and in `site-manager update --allow-disruption`)
 | **TLS cert refids** | `cert-refids.json` | **runtime state** (no schema) — written by `acme-setup.sh`, keyed by environment name. An environment's `domains.dnsMode` (`environment-manager --dns-mode`) selects whether a wildcard cert refid is stored here. |
 | **Backup policy** | not a file — the `.backup` block on `site.json` / `environments/<env>.json` / `<module>.json` (cascade: module > env > site) | **backup-manager** — `modify <module>` writes the module `.backup` layer; site/env layers via `site`/`environment modify`. `list`/`show`/`validate`/`reconcile` (resolve cascade → PBS via pbs-controller); `restore`. |
 
+## Sizes: small, medium, large
+
+`site.json` and each `environments/<env>.json` say how big they are expected to be, in `size`:
+
+| Size | Meant for |
+|---|---|
+| `small` | A few users. One node, or up to three small ones. A test or lab system. |
+| `medium` | The default. Up to about 50 concurrent users, many modules in one or two environments. |
+| `large` | 100+ users. Three or more large nodes, possibly many environments. |
+
+An environment without a size takes the site's; a site without one is medium. A module's
+`cluster:vm` / `cluster:lxc` block states `cores`, `memory` and `diskSize` for medium and may add
+`coresMinMax`, `memoryMinMax` and `diskMinMax`, each `[min, max]`: at install a small site or
+environment takes the min, a large one the max (module-manager, "How big a guest is"). A disk's
+minimum is never below the template the guest is cloned from, because a disk cannot shrink.
+
 ## Conventions
 
 - **`validate`** — every config manager exposes a `validate` verb (the schema +

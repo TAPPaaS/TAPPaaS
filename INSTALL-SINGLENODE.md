@@ -53,8 +53,10 @@ The script asks everything first, then runs without questions:
   - **over the network from this computer** — it answers the machine's network boot
     alongside your router (which keeps handing out addresses) and serves the
     installer itself; no stick needed;
-- whether to start the TAPPaaS install when the machine is up, and the **site's name**
-  (with no domain given, the site gets `<site>.home.arpa`, served inside the site);
+- whether to start the TAPPaaS install when the machine is up, the **site's name**
+  (with no domain given, the site gets `<site>.home.arpa`, served inside the site) and
+  its **size**: answer **small** for one machine with 32 GB (the default, medium, is
+  for a site of up to about 50 users and needs more memory);
 - your **login password on this computer** (`sudo`), once.
 
 Country, keyboard, time zone and the node's name are not asked: it shows the defaults
@@ -62,7 +64,7 @@ it takes. Every answer can also be given as an option instead (`--help` lists th
 for example:
 
 ```bash
-./make-install-media.sh --email you@example.org --boot usb --site home --install
+./make-install-media.sh --email you@example.org --boot usb --site home --size small --install
 ```
 
 It then builds `proxmox-ve_9.2-1-tappaas-auto.iso`, an installer that sets up Proxmox
@@ -118,6 +120,12 @@ public, more repositories, application stacks, Wi-Fi and the physical site. A go
 step is an application stack, to make the system useful.
 
 ## What one machine means
+
+- **Small sizes.** At size small every module is installed with less memory, fewer cores
+  and a smaller disk than the default. The foundation, the home modules and the
+  collaboration (office) modules then take about 25 GB, leaving the rest for Proxmox
+  itself. A module can still be given more by hand, and the whole site moves up with
+  `site-manager site modify --size medium` when the machine gets more memory.
 
 - **No failover.** If the machine stops, so does everything on it.
 - **Backups need more.** Rest of foundation installs the backup service as a

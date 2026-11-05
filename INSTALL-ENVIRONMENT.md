@@ -96,6 +96,20 @@ reverse proxy). VLAN is auto-allocated in the type band unless you pass `--vlan`
 > `ownerOrg` must reference an existing People Organization. Use
 > `environment-manager list` / `environment-manager show client1` to inspect.
 
+**How big the environment is.** An environment takes the site's size unless you give it
+one: `--size small|medium|large` on `add`, or later
+`environment-manager modify client1 --size large` (also on the console's Environments
+page). The modules installed into it get the cores, memory and disk of that size: the
+module's smaller values at small, its default at medium, its bigger values at large. A
+test environment on a medium site can be small; a client with a hundred users can be
+large. Installed modules follow a change at their next update; disks only grow.
+
+| Size | Meant for |
+|---|---|
+| `small` | A few users. One machine, or up to three small ones. A test or lab system. |
+| `medium` | The default. Up to about 50 people using it at once, many modules in one or two environments. |
+| `large` | 100+ users. Three or more large machines, possibly many environments. |
+
 ---
 
 ## Step 2 — Public DNS

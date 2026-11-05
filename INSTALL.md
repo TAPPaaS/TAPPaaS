@@ -85,6 +85,11 @@ modules (backup, identity, logging) with your organisation bootstrapped in the i
 The authoritative, always-current procedure is **[Install Foundation](src/foundation/INSTALL.md)** —
 follow its steps top to bottom.
 
+At install you say how big the site is: **small** (a few users, one machine or a test system),
+**medium** (the default, up to about 50 users) or **large** (100+ users on three or more large
+machines). Every module is then installed with cores, memory and disk to match; environments can
+have a size of their own (stage 4).
+
 **Done when:** the install prints its "🎉 your TAPPaaS foundation is installed" summary, and you can
 reach the Proxmox UI, the firewall UI and the CICD mothership.
 

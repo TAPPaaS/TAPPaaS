@@ -288,6 +288,20 @@ nothing recorded it, the release value is taken and the update warns with the va
 replaced and the `--set` that brings it back, which also records it. A value set before the
 ledger existed has no record, so such a release replaces it once, with that warning.
 
+### How big a guest is: the site's or environment's size
+
+A module states its guest's `cores`, `memory` and `diskSize` for a **medium** site, and may state
+`coresMinMax`, `memoryMinMax` and `diskMinMax` beside them: `[min, max]`. Install takes the size of
+the place the module goes into: a foundation module the site's, any other its environment's (else
+the site's), medium when none is set. Small writes the min, large the max, medium the plain value;
+a field without a pair is the same at every size. An explicit `--memory` (or any `--<field>`) at
+install wins. The installed config keeps the pairs, and its `.orig` baseline is the sized release.
+
+On update the release is sized the same way before the 3-way merge, so a sized value is never
+taken for an operator's edit: release changes keep arriving at the instance's size, and when the
+size changes the next update moves every field not set by hand (memory and cores in place, a disk
+only grows). Memory growth that does not fit its node is held, as for any release.
+
 ### Removing a stale field: `modify --unset` (#648)
 
 ```

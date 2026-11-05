@@ -29,7 +29,7 @@
     "coresMinMax": {
       "class": "in-place",
       "apply": "reconcile",
-      "changeNote": "A sizing policy (ADR-044), read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare."
+      "changeNote": "A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare."
     },
     "memory": {
       "class": "in-place",
@@ -41,7 +41,7 @@
     "memoryMinMax": {
       "class": "in-place",
       "apply": "reconcile",
-      "changeNote": "A sizing policy (ADR-044), read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare."
+      "changeNote": "A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare."
     },
     "cputype": {
       "description": "CPU type emulation for the VM",
@@ -156,7 +156,7 @@
     "diskMinMax": {
       "class": "in-place",
       "apply": "reconcile",
-      "changeNote": "A sizing policy (ADR-044), read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare."
+      "changeNote": "A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare."
     },
     "diskAutoGrow": {
       "description": "Grow this guest's disk automatically when its / fills up (site.json diskAutoGrow sets when and by how much). false: never — the disk is only grown by hand.",

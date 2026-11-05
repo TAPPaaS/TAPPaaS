@@ -71,7 +71,8 @@ It asks everything first and then runs without questions: your admin email (for 
 alerting), a root password, how the target boots the image, and your login password on
 this computer (`sudo`), once. Country, keyboard, timezone and hostname are not asked: it
 takes this machine's settings and shows them; `--country`, `--keyboard`, `--timezone` and
-`--fqdn` change them. Every question has an option (`./make-install-media.sh --help`), and
+`--fqdn` change them. When it starts the TAPPaaS install it also asks the site's **size**
+(small, medium or large; medium when you just press Enter, see Step 2). Every question has an option (`./make-install-media.sh --help`), and
 only a mandatory value that no option gave is asked. It writes
 `proxmox-ve_9.2-1-tappaas-auto.iso`, and:
 
@@ -286,6 +287,22 @@ Pass three things up front:
 - **`--domain`** — your **public domain**; the reverse proxy is configured for
      `<service>.yourdomain.com`. If omitted you'll be prompted. You don't need the
      domain's DNS-01 API token yet — that comes in Step 4.
+- **`--size small|medium|large`** — how big the site is. It sets the cores, memory and
+     disk every module is installed with, the firewall and the mothership included.
+     Optional: medium when omitted.
+
+| Size | Meant for |
+|---|---|
+| `small` | A few users. One machine, or up to three small ones. A test or lab system. |
+| `medium` | The default. Up to about 50 people using it at once, many modules in one or two environments. |
+| `large` | 100+ users. Three or more large machines, possibly many environments. |
+
+A module states its medium size and, where it scales, a smaller and a bigger one: a
+small site gets the smaller, a large site the bigger. Each environment can have a size
+of its own (Configure Environments). Change the site's later with
+`site-manager site modify --size <size>` or on the console's Site page: installed modules
+follow at their next update, and their disks only ever grow. On one machine with 32 GB of
+memory, choose **small**: the foundation plus the home and office modules then fit.
 
 On the **first node** this runs the whole foundation bring-up **end-to-end** as
 a five-phase chain — you run it once and watch:

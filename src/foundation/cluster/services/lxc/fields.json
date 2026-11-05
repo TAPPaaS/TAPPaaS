@@ -30,7 +30,7 @@
     "coresMinMax": {
       "class": "in-place",
       "apply": "reconcile",
-      "changeNote": "A sizing policy (ADR-044), read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare."
+      "changeNote": "A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare."
     },
     "memory": {
       "class": "in-place",
@@ -43,7 +43,7 @@
     "memoryMinMax": {
       "class": "in-place",
       "apply": "reconcile",
-      "changeNote": "A sizing policy (ADR-044), read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare."
+      "changeNote": "A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare."
     },
     "swap": {
       "description": "Swap in MB for an LXC container. A container has no BIOS and no virtual disk controller, so its memory pressure is handled differently from a VM's — 0 means the container may not swap at all, which is the TAPPaaS default.",
@@ -110,7 +110,7 @@
     "diskMinMax": {
       "class": "in-place",
       "apply": "reconcile",
-      "changeNote": "A sizing policy (ADR-044), read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare."
+      "changeNote": "A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare."
     },
     "storage": {
       "class": "manual",

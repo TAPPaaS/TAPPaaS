@@ -19,7 +19,7 @@ it is safe to relocate or resize under a bind-mount. Compare
 
 ## Fields
 
-`cluster:lxc` owns **15** declared field(s). Each table below carries the field's full definition and, where the service applies it, what a change to it does (in place, a restart, a rebuild).
+`cluster:lxc` owns **18** declared field(s). Each table below carries the field's full definition and, where the service applies it, what a change to it does (in place, a restart, a rebuild).
 
 ### `vmname`
 
@@ -83,6 +83,24 @@ Number of CPU cores allocated to the VM
 
 **Why this change class.** Applied live — a container's cgroup limit changes without a restart.
 
+### `coresMinMax`
+
+The cores this guest gets at size small (first) and large (second), exactly two values; cores is the medium value. Absent: cores at every size.
+
+| Attribute | Value |
+|---|---|
+| Type | `array` |
+| Default | *(none)* |
+| Example | `1`, `4` |
+| Required by | *(none)* |
+| Used by | `cluster:vm`, `cluster:lxc` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**About the field.** min ≤ cores ≤ max. An explicit cores at install (--cores, --set) wins over the size.
+
+**Why this change class.** A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare.
+
 ### `memory`
 
 RAM allocation in megabytes
@@ -104,6 +122,24 @@ RAM allocation in megabytes
 **About the field.** Value in MB (e.g., 4096 = 4GB)
 
 **Why this change class.** Also live, for the same reason.
+
+### `memoryMinMax`
+
+The memory (MiB) this guest gets at size small (first) and large (second), exactly two values; memory is the medium value. Absent: memory at every size.
+
+| Attribute | Value |
+|---|---|
+| Type | `array` |
+| Default | *(none)* |
+| Example | `1024`, `8192` |
+| Required by | *(none)* |
+| Used by | `cluster:vm`, `cluster:lxc` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**About the field.** min ≤ memory ≤ max. Small minimums are set so foundation, home and office fit one 32 GB node.
+
+**Why this change class.** A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare.
 
 ### `swap`
 
@@ -246,6 +282,24 @@ Disk size with unit suffix
 **About the field.** G=gigabytes, M=megabytes, K=kilobytes
 
 **Why this change class.** The rootfs grows live with pct resize (update-disk.sh), and auto-grow.sh grows it before it fills, as for a VM: on every update, under the same threshold, diskSizeMax and pool limits. A SHRINK is refused at apply time (hook exit 20). Only the rootfs is the field; bind mounts and other mount points are never resized. The schema default 8G is what Create-TAPPaaS-LXC.sh builds with, so an undeclared container is in sync from install; a rootfs grown by hand reads as config behind actual and is adopted into config, as for cluster:vm.
+
+### `diskMinMax`
+
+The disk size this guest gets at size small (first) and large (second), exactly two values; diskSize is the medium value. Absent: diskSize at every size.
+
+| Attribute | Value |
+|---|---|
+| Type | `array` |
+| Default | *(none)* |
+| Example | `16G`, `128G` |
+| Required by | *(none)* |
+| Used by | `cluster:vm`, `cluster:lxc` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**About the field.** min ≤ diskSize ≤ max, and the min is never below the image the guest is cloned from (16G for the NixOS template): a disk cannot shrink. Not the same as diskSizeMax, which caps automatic growth.
+
+**Why this change class.** A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare.
 
 ### `storage`
 

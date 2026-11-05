@@ -28,7 +28,7 @@ entirely, which is why it normalizes as `optional`.
 
 ## Fields
 
-`cluster:vm` owns **30** declared field(s). Each table below carries the field's full definition and, where the service applies it, what a change to it does (in place, a restart, a rebuild).
+`cluster:vm` owns **33** declared field(s). Each table below carries the field's full definition and, where the service applies it, what a change to it does (in place, a restart, a rebuild).
 
 ### `vmname`
 
@@ -90,6 +90,24 @@ Number of CPU cores allocated to the VM
 | Reported as | `cores` |
 | Provider flag | `--cores` |
 
+### `coresMinMax`
+
+The cores this guest gets at size small (first) and large (second), exactly two values; cores is the medium value. Absent: cores at every size.
+
+| Attribute | Value |
+|---|---|
+| Type | `array` |
+| Default | *(none)* |
+| Example | `1`, `4` |
+| Required by | *(none)* |
+| Used by | `cluster:vm`, `cluster:lxc` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**About the field.** min ≤ cores ≤ max. An explicit cores at install (--cores, --set) wins over the size.
+
+**Why this change class.** A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare.
+
 ### `memory`
 
 RAM allocation in megabytes
@@ -109,6 +127,24 @@ RAM allocation in megabytes
 | Provider flag | `--memory` |
 
 **About the field.** Value in MB (e.g., 4096 = 4GB)
+
+### `memoryMinMax`
+
+The memory (MiB) this guest gets at size small (first) and large (second), exactly two values; memory is the medium value. Absent: memory at every size.
+
+| Attribute | Value |
+|---|---|
+| Type | `array` |
+| Default | *(none)* |
+| Example | `1024`, `8192` |
+| Required by | *(none)* |
+| Used by | `cluster:vm`, `cluster:lxc` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**About the field.** min ≤ memory ≤ max. Small minimums are set so foundation, home and office fit one 32 GB node.
+
+**Why this change class.** A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare.
 
 ### `cputype`
 
@@ -310,6 +346,24 @@ Disk size with unit suffix
 **About the field.** G=gigabytes, M=megabytes, K=kilobytes
 
 **Why this change class.** A grow goes through resize-disk.sh. The direction is only knowable against the live size, so a SHRINK is refused at apply time (hook exit 20), not by the static pre-gate. The schema default 8G is DESIRED state (ADR-020 D9): it is also what both create paths build with, so an undeclared guest is in sync from install. When the guest is later grown outside the config path — check-disk-threshold.sh, resize-disk.sh by hand, qm resize — config falls BEHIND actual, which reads as a shrink and would be refused on every converge forever. That case is now ADOPTED instead: the converge writes the observed size into config, touching nothing on the cluster. A deliberately smaller value lands in the same place: the disk is kept, config is set back to the real size, and the converge warns that the field only grows. Excluding undeclared modules from the comparison, as v0.5 did, never helped here: a DECLARED module — which is all of them — got the permanent refusal anyway.
+
+### `diskMinMax`
+
+The disk size this guest gets at size small (first) and large (second), exactly two values; diskSize is the medium value. Absent: diskSize at every size.
+
+| Attribute | Value |
+|---|---|
+| Type | `array` |
+| Default | *(none)* |
+| Example | `16G`, `128G` |
+| Required by | *(none)* |
+| Used by | `cluster:vm`, `cluster:lxc` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**About the field.** min ≤ diskSize ≤ max, and the min is never below the image the guest is cloned from (16G for the NixOS template): a disk cannot shrink. Not the same as diskSizeMax, which caps automatic growth.
+
+**Why this change class.** A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare.
 
 ### `diskAutoGrow`
 
