@@ -1,6 +1,6 @@
 # Install simplification: from bare metal to a finished Day 1
 
-Status: agreed direction from Lars, 2026-11-01. Decisions marked **Open** are his to make; everything else can be picked up by another session. Scope: the install path from `make-install-media.sh` through the console's Day 1 wizard, and `src/foundation/INSTALL.md`.
+Status: agreed direction from Lars, 2026-11-01. Decisions marked **Open** are his to make; everything else can be picked up by another session. Scope: the install path from `bootstrap-tappaas.sh` through the console's Day 1 wizard, and `src/foundation/INSTALL.md`.
 
 The goal: one path for the common case. Answer a few questions, boot the machine, follow one endnote into the console, and let Day 1 finish the site in order, with few forms.
 
@@ -32,7 +32,7 @@ Log in from `~/lab2-install` on the Mac with `proxmox-ve_9.2-1-tappaas-auto.key`
 
 ## 1. Boot disk override
 
-**Answer to Lars's question: the override exists, but only as a flag.** `make-install-media.sh --disk <size|model|serial>` picks another disk, a second `--disk` mirrors, and `--disk ask` asks on the target's console. It uses the same matching as `node add --boot-disk`. The automatic choice (smallest SSD/NVMe, or both of an identical smallest pair) is the default, and the script's questions never mention it.
+**Answer to Lars's question: the override exists, but only as a flag.** `bootstrap-tappaas.sh --disk <size|model|serial>` picks another disk, a second `--disk` mirrors, and `--disk ask` asks on the target's console. It uses the same matching as `node add --boot-disk`. The automatic choice (smallest SSD/NVMe, or both of an identical smallest pair) is the default, and the script's questions never mention it.
 
 Work:
 

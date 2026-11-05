@@ -9,7 +9,7 @@ the foundation bootstrap. The full first-node story is in
 ## Prerequisites
 
 1. **Proxmox VE 9.2** installed on the node. Either build a
-   preconfigured USB stick with `make-install-media.sh` (the boot disk is picked on the
+   preconfigured USB stick with `bootstrap-tappaas.sh` (the boot disk is picked on the
    target), or use the stock ISO. With the stock ISO, set:
    - Hostname (FQDN): `tappaas1.mgmt.internal` — subsequent nodes `tappaas2`, `tappaas3`, …
      The first node **must** be `tappaas1` (it creates the cluster).

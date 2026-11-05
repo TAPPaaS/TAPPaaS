@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# make-install-media.sh — install TAPPaaS on a first node from this computer.
+# bootstrap-tappaas.sh — install TAPPaaS on a first node from this computer.
 #
 # It builds a Proxmox VE install image that installs unattended (a stock ISO with
 # a TAPPaaS answer file), writes it to a USB stick or serves it over the network,
@@ -22,14 +22,22 @@
 # which is how the node is found and logged in to.
 #
 # Usage:
-#   make-install-media.sh [options]
+#   bootstrap-tappaas.sh [options]
 #
 # Mandatory (asked when not given; without a terminal, the script stops):
 #   --email <e>              the admin's email, for email alerting
 #   --password-file <f>      the node's root password, in a file (asked hidden)
 #   --site <name>            the TAPPaaS Site name, when the install is started
 #
-# How the target boots the image (asked when not given):
+# What to do, the first question when --boot is not given:
+#   1) make the image and write it to a USB stick
+#   2) the same, then install TAPPaaS on the machine booted from it (default)
+#   3) the stick is made already: install TAPPaaS on the machine booted from it
+#      (the image made earlier in this directory, or --use)
+#   4) make the image, boot the machine over the network, and install TAPPaaS
+#   5) only make the image file
+#
+# How the target boots the image (instead of the question):
 #   --boot usb|network|booted|none
 #                            usb: write it to a stick; network: serve it from this
 #                            machine (needs dnsmasq); booted: the target already
@@ -39,7 +47,8 @@
 #   --yes                    the stick may be erased without asking
 #   --iface <if>             this machine's interface on the target's network
 #
-# The TAPPaaS install on the node (asked when not given):
+# The TAPPaaS install on the node (asked when not given; --install follows from
+# the first question's answer):
 #   --install | --no-install start it over ssh when the node is up, or not
 #   --branch <b>             stable (default), or main for the newest work
 #   --organization <org>     the organisation controlling the Site (default: the
@@ -67,7 +76,7 @@
 #   --iso-sha256 <hex>           its checksum, when Proxmox does not list it
 #   --out <out.iso>              the built image (default: <iso>-tappaas-auto.iso)
 #   --use <built.iso>            skip the build: an image this script built
-#   --log <f>                    the log (default: make-install-media-<time>.log)
+#   --log <f>                    the log (default: bootstrap-tappaas-<time>.log)
 #   -h, --help                   this text
 #
 # Everything shown, the TAPPaaS install on the node included, also goes to a log in
@@ -658,19 +667,7 @@ show_token() {
 ask_up_front() {
   local c yn tty=0
   [[ -t 0 ]] && tty=1
-  if [[ -z "$BOOT" ]]; then
-    if [[ "$tty" == 1 ]]; then
-      info "How does the target boot the image?"
-      info "  1) From a USB stick, written by this script"
-      info "  2) Over the network, served from this machine"
-      info "  3) It is already booted from this image: go on to the install"
-      info "  4) Neither: only build the image"
-      read -r -p "${IN} Choice [1]: " c; logged "$c"
-      case "${c:-1}" in 1) BOOT=usb ;; 2) BOOT=network ;; 3) BOOT=booted ;; *) BOOT=none ;; esac
-    else
-      BOOT=none
-    fi
-  fi
+  [[ -n "$BOOT" ]] || BOOT=none
   case "$BOOT" in usb|network|booted|none) ;; *) die "--boot is usb, network, booted or none" ;; esac
   [[ "$BOOT" != none ]] || return 0
 
@@ -762,7 +759,7 @@ after_build() {
 # <<< after-the-build
 
 if [[ -z "${TAPPAAS_MEDIA_CONTAINER:-}" ]]; then
-  [[ -n "$LOG" ]] || LOG="make-install-media-$(date +%Y%m%d-%H%M%S).log"
+  [[ -n "$LOG" ]] || LOG="bootstrap-tappaas-$(date +%Y%m%d-%H%M%S).log"
   ( umask 077; : >>"$LOG" )
   chmod 600 "$LOG"
   # tee -i: Ctrl-C ends the script, and the log takes its last lines first.
@@ -774,18 +771,47 @@ EXIT_WORK="" EXIT_SEEN=""
 trap '[[ -z "$SCAN_PID" ]] || kill "$SCAN_PID" 2>/dev/null || true; [[ -z "$SUDO_KEEP" ]] || kill "$SUDO_KEEP" 2>/dev/null || true; pxe_stop; [[ -z "$EXIT_WORK" ]] || rm -rf "$EXIT_WORK"; rm -f "$EXIT_SEEN"' EXIT
 trap 'exit 130' INT TERM
 
+# choose_mode — the first question: what to do. It sets how the target boots the
+# image and whether to install, so neither is asked again. Skipped when --boot is
+# given.
+choose_mode() {
+  local c
+  [[ -z "$BOOT" && -t 0 ]] || return 0
+  info "This installs TAPPaaS on a first node. All questions come first; then it runs without any."
+  info "What do you want to do?"
+  info "  1) Make the install image and write it to a USB stick (install later, with 3)"
+  info "  2) Make the install image, write it to a USB stick, and install TAPPaaS on the machine booted from it"
+  info "  3) The stick is made already: install TAPPaaS on the machine booted from it"
+  info "  4) Make the install image, boot the machine over the network from this computer, and install TAPPaaS"
+  info "  5) Only make the install image file"
+  read -r -p "${IN} Choice [2]: " c; logged "$c"
+  case "${c:-2}" in
+    1) BOOT=usb;     INSTALL_ANSWER=no ;;
+    2) BOOT=usb;     INSTALL_ANSWER=yes ;;
+    3) BOOT=booted;  INSTALL_ANSWER=yes ;;
+    4) BOOT=network; INSTALL_ANSWER=yes ;;
+    5) BOOT=none;    INSTALL_ANSWER=no ;;
+    *) die "choose 1 to 5" ;;
+  esac
+}
+
+# The image this script built earlier, in this directory: for "the stick is made
+# already", whose image carries the key the node is logged in to with.
+built_image() {
+  local f found=()
+  for f in *-tappaas-auto.iso; do [[ -f "$f" && -f "${f%.iso}.key" ]] && found+=("$f"); done
+  [[ ${#found[@]} -gt 0 ]] || die "no image made by this script here (an *-tappaas-auto.iso with its .key): run this in the directory it was made in, or give --use <image>"
+  [[ ${#found[@]} -eq 1 ]] || die "more than one image here (${found[*]}): give --use <image>"
+  echo "${found[0]}"
+}
+
 # ── This machine: the ISO, the questions, the key ─────────────────────
-if [[ -z "${TAPPAAS_MEDIA_CONTAINER:-}" && -t 0 ]]; then
-  info "This installs TAPPaaS on a first node, in these steps:"
-  info "  1. All the questions first: what is not given as an option (see --help)."
-  if [[ -z "$USE" ]]; then
-    info "  2. The Proxmox install image is built (some minutes)."
-  else
-    info "  2. The install image is built already: ${USE}"
+if [[ -z "${TAPPAAS_MEDIA_CONTAINER:-}" ]]; then
+  choose_mode
+  if [[ "$BOOT" == booted && -z "$USE" ]]; then
+    USE="$(built_image)"
+    info "the image made earlier: ${USE}"
   fi
-  info "  3. It is written to the USB stick, or served over the network, as you chose."
-  info "  4. You boot the target. It installs Proxmox unattended and WIPES its boot disk."
-  info "  5. This script finds the node on your network and runs the TAPPaaS install on it."
 fi
 if [[ -n "$USE" ]]; then
   [[ -f "$USE" ]] || die "--use: no such image: ${USE}"
@@ -1039,7 +1065,7 @@ if [[ "$ASK_DISK" -eq 1 ]]; then
   # matcher's grep reads as any character.
   _fb="${FIELD_BOOT// /.}" _fm="${FIELD_MIRROR// /.}"
   {
-    echo "    # TAPPaaS make-install-media: the boot disk(s), chosen in the installer's"
+    echo "    # TAPPaaS bootstrap-tappaas: the boot disk(s), chosen in the installer's"
     echo "    # own boot (ADR-037 D4) — the answer's ASKDISK placeholder is rewritten."
     echo "    _tap_bd='${_fb}'; _tap_bm='${_fm}'"
     echo "# >>> boot-disk matcher: node-provisioner assets.RESOLVE_SH, kept identical (test_boot_disk_resolve.py)"

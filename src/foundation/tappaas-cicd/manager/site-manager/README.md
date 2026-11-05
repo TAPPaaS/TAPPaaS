@@ -296,7 +296,7 @@ stays derived from the timezone. Country and timezone go to the primary location
 part of any location.
 
 What is recorded here is what the rest of the estate is set from: the PXE answer file
-(`node add`), the USB installer's defaults (`make-install-media.sh`), and the
+(`node add`), the USB installer's defaults (`bootstrap-tappaas.sh`), and the
 per-OS convergence of guests and hosts. A value already in `site.json` is the operator's
 and is never overwritten — a `site add --force` re-run fills in what is *missing* and
 warns when the recorded value and the master disagree, naming the command that would

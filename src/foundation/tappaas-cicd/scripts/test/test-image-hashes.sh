@@ -9,7 +9,7 @@
 # against the hash before it is imported — Create-TAPPaaS-VM.sh on the node, and
 # templates/update.sh before it replaces the template — and refused on a
 # mismatch; a pointer without a hash is warned about and used (transition).
-# cluster/make-install-media.sh checks the Proxmox ISO against Proxmox's
+# cluster/bootstrap-tappaas.sh checks the Proxmox ISO against Proxmox's
 # SHA256SUMS and the install assistant through the signed repository index.
 #
 # Tabletop: fixture files under a temp dir, file:// URLs, a throwaway SSH key,
@@ -19,7 +19,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${HERE}/../../../../.." && pwd)"
 CREATE="${ROOT}/src/foundation/cluster/Create-TAPPaaS-VM.sh"
-MEDIA="${ROOT}/src/foundation/cluster/make-install-media.sh"
+MEDIA="${ROOT}/src/foundation/cluster/bootstrap-tappaas.sh"
 TUPDATE="${ROOT}/src/foundation/templates/update.sh"
 [[ -f "${CREATE}" && -f "${MEDIA}" && -f "${TUPDATE}" && -f "${ROOT}/release/bump-version.sh" ]] || {
     echo "scripts not found beside this suite — cannot run here."; exit 77; }
@@ -248,9 +248,9 @@ out="$(signrel nixos-template-v9.11 --key "${T}/stranger")"; rc=$?
 ck "a key not in allowed_signers is refused" "1" "${rc}"
 [[ ! -e "${GHD}/uploaded-nixos-template-v9.11-SHA256SUMS.sig" ]] && ok "… before anything is uploaded" || bad "a stranger's signature was uploaded"
 
-echo "── make-install-media.sh: ISO and assistant .deb ──"
+echo "── bootstrap-tappaas.sh: ISO and assistant .deb ──"
 MB="$(block "${MEDIA}" 'media-checks')"
-[[ -n "${MB}" ]] && ok "the checks block is marked in make-install-media.sh" || bad "no media-checks block"
+[[ -n "${MB}" ]] && ok "the checks block is marked in bootstrap-tappaas.sh" || bad "no media-checks block"
 M="${T}/media"; mkdir -p "${M}/iso" "${M}/keys" "${M}/repo/dists/trixie/pve-no-subscription/binary-amd64" "${M}/repo/pool" "${M}/bin"
 printf 'pve iso\n' >"${M}/proxmox-ve_9.2-1.iso"
 printf '%s  proxmox-ve_9.2-1.iso\n%s  proxmox-ve_9.1-1.iso\n' "$(sha "${M}/proxmox-ve_9.2-1.iso")" "${OTHER}" >"${M}/iso/SHA256SUMS"

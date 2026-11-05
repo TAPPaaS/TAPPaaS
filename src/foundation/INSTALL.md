@@ -60,42 +60,57 @@ the directory holding the ISO:
 curl -fSLO "https://enterprise.proxmox.com/iso/proxmox-ve_9.2-1.iso"
 
 # 2. Fetch the TAPPaaS script
-curl -fsSL "https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/main/src/foundation/cluster/make-install-media.sh" \
-     -o make-install-media.sh && chmod +x make-install-media.sh
+curl -fsSL "https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/main/src/foundation/cluster/bootstrap-tappaas.sh" \
+     -o bootstrap-tappaas.sh && chmod +x bootstrap-tappaas.sh
 
 # 3. Build, write and install
-./make-install-media.sh
+./bootstrap-tappaas.sh
 ```
 
-It asks everything first and then runs without questions: your admin email (for email
-alerting), a root password, how the target boots the image, and your login password on
-this computer (`sudo`), once. Country, keyboard, timezone and hostname are not asked: it
-takes this machine's settings and shows them; `--country`, `--keyboard`, `--timezone` and
-`--fqdn` change them. When it starts the TAPPaaS install it also asks the site's **size**
-(small, medium or large; medium when you just press Enter, see Step 2). Every question has an option (`./make-install-media.sh --help`), and
-only a mandatory value that no option gave is asked. It writes
-`proxmox-ve_9.2-1-tappaas-auto.iso`, and:
+It asks everything first and then runs without questions. The first question is what to do:
 
-- **Write it to a USB stick:** it lists the USB sticks in this machine and erases the one
-  you picked, after you confirmed it, then reads the stick back.
-- **Network-boot the target from this machine:** see Option C.
+1. Make the install image and write it to a USB stick (install later, with 3).
+2. Make the install image, write it to a USB stick, and install TAPPaaS on the machine
+   booted from it (the default).
+3. The stick is made already: install TAPPaaS on the machine booted from it. It takes the
+   image made earlier in this directory (or `--use <image>`) and asks nothing about the image.
+4. Make the install image, boot the machine over the network from this computer
+   (see Option C), and install TAPPaaS.
+5. Only make the install image file.
 
-Up front it also asks whether to start the TAPPaaS install on the node over ssh, and the branch, the
-Site name (Step 2's site code), the organisation controlling the Site and the domain of [Step 2](#step-2--bootstrap-minimal-tappaas-on-the-first-node).
-Say yes and it waits for the node, finds it on your network and runs Step 2 for
+Then only what that choice needs:
+
+- **for the image:** your admin email (for email alerting) and a root password for the
+  node. Country, keyboard, timezone and hostname are not asked: it takes this machine's
+  settings and shows them; `--country`, `--keyboard`, `--timezone` and `--fqdn` change them.
+- **for the stick:** it lists the USB sticks in this machine and erases the one you pick,
+  after you confirm it, then reads the stick back. For the network boot: the interface
+  on this machine wired to the target's network.
+- **for the install:** the branch, the Site name (Step 2's site code), the organisation
+  controlling the Site, the domain, and the site's **size**: small (a few users, one node
+  or a test system), medium (up to ~50 users; the default) or large (100+ users, 3+ large
+  nodes). The size sets every module's cores, memory and disk (see Step 2).
+- **your login password on this computer** (`sudo`), once, for the stick or the network
+  boot.
+
+Every question has an option (`./bootstrap-tappaas.sh --help`; `--boot` instead of the
+first question), and only a mandatory value that no option gave is asked. The image is
+`proxmox-ve_9.2-1-tappaas-auto.iso`.
+
+When it installs TAPPaaS, it waits for the node, finds it on your network and runs Step 2 for
 you, unattended, so skip that step's commands. The install keeps running on the node if
 this machine loses the connection, and the script picks it up again. It takes the network
 ports the node detects, makes no data pools and generates the firewall's root password,
 which stays on the node in `/root/.opnsense-root-password`. To find it the node must be on the same network as
-this machine; otherwise give its address with `--node <address>`. Run it again later with
-`--use proxmox-ve_9.2-1-tappaas-auto.iso` to skip the build. Everything it shows, the
-install on the node included, also goes to `make-install-media-<date>.log` in this
+this machine; otherwise give its address with `--node <address>`. To follow an install
+again, run it again and choose 3. Everything it shows, the
+install on the node included, also goes to `bootstrap-tappaas-<date>.log` in this
 directory. Only you can read it; keep it safe, as the install's output can carry
 credentials. The passwords you type are not in it.
 
 (If you already have — or prefer — a full checkout:
 `git clone https://codeberg.org/TAPPaaS/TAPPaaS.git` and run
-`src/foundation/cluster/make-install-media.sh` from it instead.)
+`src/foundation/cluster/bootstrap-tappaas.sh` from it instead.)
 
 Boot the target from the stick with the NIC to your **upstream router**
 connected — network comes from **DHCP**, exactly like the PXE flow (the
@@ -138,7 +153,7 @@ On the installer screens:
 ### Option C — PXE / network-boot the first node (advanced; no USB stick)
 
 When the target can't boot from USB, or you want to reinstall it repeatedly,
-netboot it from your laptop. **`make-install-media.sh` does all of this for you:** pick
+netboot it from your laptop. **`bootstrap-tappaas.sh` does all of this for you:** pick
 *Network-boot the target from this machine* after the build, then pick **Network / PXE
 (IPv4)** in the target's one-time UEFI boot menu. It needs `dnsmasq`
 (`brew install dnsmasq`, or `apt install dnsmasq`), and the laptop wired to the target's
@@ -159,7 +174,7 @@ target set to **UEFI network boot**.
 disk on the target, so the netboot install is hands-off:
 
 ```bash
-./make-install-media.sh --iso proxmox-ve_9.2-1.iso --fqdn tappaas1.mgmt.internal
+./bootstrap-tappaas.sh --iso proxmox-ve_9.2-1.iso --fqdn tappaas1.mgmt.internal
 # → proxmox-ve_9.2-1-tappaas-auto.iso  (answer embedded)
 # --disk 500GB / --disk "Samsung 990" / --disk <serial> picks another disk; NOT a
 # kernel name like nvme0n1 — NVMe names are not stable across boots.

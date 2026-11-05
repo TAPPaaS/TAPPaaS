@@ -26,7 +26,7 @@ A guest is **either** a VM **or** a container, never both.
 | `config-storage.sh` | Phase 3 — build the `tankXY` ZFS pools from the disks. |
 | `sanity-check.sh` | Post-firewall health checks (gateway, DNS, internet) once the node is on the management network. |
 | `install-platform.sh` | Run once on the first node after all nodes + firewall are up — imports the prebuilt NixOS template (vmid 8080) and builds the `tappaas-cicd` mothership (vmid 130). |
-| `make-install-media.sh` | Build a preconfigured Proxmox install USB stick on your laptop (answers baked in; only the boot disk is asked on the target). |
+| `bootstrap-tappaas.sh` | Build a preconfigured Proxmox install USB stick on your laptop (answers baked in; only the boot disk is asked on the target). |
 | `Create-TAPPaaS-VM.sh` / `Create-TAPPaaS-LXC.sh` | Guest provisioners, distributed to every node and invoked by the `cluster:vm` / `cluster:lxc` services. |
 | `reconcile-storage-nodes.sh` | Reconcile PVE storage node lists with the nodes' records: a node whose `pvehost` instance names a pool is added to that pool's storage list; an extra node is reported, never removed. |
 | `setup-ssd-lifecycle.sh` | Autotrim + TRIM/SMART cron jobs. |

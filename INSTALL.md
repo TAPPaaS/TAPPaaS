@@ -27,8 +27,8 @@ later.
 
 One machine (32 GB of memory, one 0.5 TB disk, one network port) on your own network, installed
 from a Mac or Linux PC beside it, with a USB stick or over the network. No hardware planning and
-no preparation checklist: the install asks for your email, a root password and the site's name,
-and the console's Day 1 page takes you to a working system.
+no preparation checklist: the install asks for your email, a root password, the site's name and
+its size (small), and the console's Day 1 page takes you to a working system.
 
 **Start here:** [Install TAPPaaS on a single machine](INSTALL-SINGLENODE.md).
 

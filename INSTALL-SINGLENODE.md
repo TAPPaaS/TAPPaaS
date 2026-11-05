@@ -37,26 +37,29 @@ On the Mac or PC, in an empty directory:
 curl -fSLO "https://enterprise.proxmox.com/iso/proxmox-ve_9.2-1.iso"
 
 # The TAPPaaS install script
-curl -fsSL "https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/main/src/foundation/cluster/make-install-media.sh" \
-     -o make-install-media.sh && chmod +x make-install-media.sh
+curl -fsSL "https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/main/src/foundation/cluster/bootstrap-tappaas.sh" \
+     -o bootstrap-tappaas.sh && chmod +x bootstrap-tappaas.sh
 
 # Build the installer, then follow the install
-./make-install-media.sh
+./bootstrap-tappaas.sh
 ```
 
-The script asks everything first, then runs without questions:
+The script asks everything first, then runs without questions. The first question is
+what to do; for this guide choose:
+
+- **2** to make the installer, write it to a USB stick (it lists the sticks in this
+  computer and erases the one you choose) and install TAPPaaS on the machine booted from
+  it, or
+- **4** to make the installer and boot the machine over the network from this computer
+  instead (it answers the machine's network boot alongside your router, which keeps
+  handing out addresses); no stick needed.
+
+Then it asks:
 
 - your **admin email** (for email alerting) and a **root password** for the machine;
-- how the machine boots the installer:
-  - **from a USB stick** — it lists the sticks in this computer and erases the one you
-    choose, or
-  - **over the network from this computer** — it answers the machine's network boot
-    alongside your router (which keeps handing out addresses) and serves the
-    installer itself; no stick needed;
-- whether to start the TAPPaaS install when the machine is up, the **site's name**
-  (with no domain given, the site gets `<site>.home.arpa`, served inside the site) and
-  its **size**: answer **small** for one machine with 32 GB (the default, medium, is
-  for a site of up to about 50 users and needs more memory);
+- the **site's name** (with no domain given, the site gets `<site>.home.arpa`, served
+  inside the site) and its **size**: answer **small**, for one machine or a test system;
+- the branch, the organisation and the domain: press Enter for the defaults;
 - your **login password on this computer** (`sudo`), once.
 
 Country, keyboard, time zone and the node's name are not asked: it shows the defaults
@@ -64,7 +67,7 @@ it takes. Every answer can also be given as an option instead (`--help` lists th
 for example:
 
 ```bash
-./make-install-media.sh --email you@example.org --boot usb --site home --size small --install
+./bootstrap-tappaas.sh --email you@example.org --boot usb --site home --size small --install
 ```
 
 It then builds `proxmox-ve_9.2-1-tappaas-auto.iso`, an installer that sets up Proxmox
@@ -85,9 +88,9 @@ Proxmox installs by itself, wipes the disk and reboots.
 
 The script on your Mac finds the machine on the network and starts the TAPPaaS install
 on it: the firewall, the management VM, the platform services. Its log scrolls in the
-script's window and is kept in `make-install-media-<date>.log`. The install keeps
-running on the machine if your Mac loses the connection; run the script again with
-`--use proxmox-ve_9.2-1-tappaas-auto.iso` to follow it again.
+script's window and is kept in `bootstrap-tappaas-<date>.log`. The install keeps
+running on the machine if your Mac loses the connection; run the script again and choose
+**3** to follow it again.
 
 It ends with the console's address, such as `http://192.168.1.41:9097/setup/day1`, and
 how to show the access token the console asks for the first time.

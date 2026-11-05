@@ -281,7 +281,7 @@ if [[ ${#CAND_NAME[@]} -eq 0 ]]; then
   # to build a guest at all.
   if [[ "$(root_fstype)" != "zfs" ]]; then
     error "Only the boot disk is present, and it is not ZFS ($(root_fstype || true)): there is no pool for the guests."
-    die "Reinstall the node with ZFS on the boot disk — make-install-media.sh's default (--filesystem zfs) — or add a data disk."
+    die "Reinstall the node with ZFS on the boot disk — bootstrap-tappaas.sh's default (--filesystem zfs) — or add a data disk."
   fi
   bp="$(boot_pool_storage)"
   if [[ -z "$bp" ]]; then

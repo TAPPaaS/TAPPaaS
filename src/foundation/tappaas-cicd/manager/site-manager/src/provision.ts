@@ -27,7 +27,7 @@
 //                                       read back for the storage entries)
 //
 // All remote work is plain ssh with the cicd keys (installed by the answer
-// file on PXE installs; installed by make-install-media.sh --ssh-key or by
+// file on PXE installs; installed by bootstrap-tappaas.sh --ssh-key or by
 // the operator on manual installs). Every wait has a timeout; the PXE trap
 // TTL keeps the boot phase fail-safe.
 

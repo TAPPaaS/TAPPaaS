@@ -27,7 +27,7 @@ flowchart LR
   subgraph Docs["Codeberg — Documentation repo"]
     SITE[MkDocs site → tappaas.org]
   end
-  OP([Operator]) -->|make-install-media.sh| USB[Proxmox install USB]
+  OP([Operator]) -->|bootstrap-tappaas.sh| USB[Proxmox install USB]
   SRC -->|push tag| NIX
   SRC -->|push tag| OPN
   SRC -->|WS0 source-sync| SITE
@@ -44,7 +44,7 @@ There is **no custom Proxmox host image**. TAPPaaS installs *stock* Proxmox VE a
 layers configuration on top via the `cluster` foundation module. The only build
 step is turning the stock ISO into an unattended installer stick.
 
-- **Script:** [src/foundation/cluster/make-install-media.sh](src/foundation/cluster/make-install-media.sh)
+- **Script:** [src/foundation/cluster/bootstrap-tappaas.sh](src/foundation/cluster/bootstrap-tappaas.sh)
 - **Tech:** Proxmox's own `proxmox-auto-install-assistant` (`validate-answer` +
   `prepare-iso --fetch-from iso`), driven by a generated `answer.toml` (four
   operator answers: email, locale, root password, boot disk). On macOS the

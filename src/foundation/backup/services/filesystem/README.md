@@ -174,7 +174,7 @@ to make this work.
 `exclude` is a list of `proxmox-backup-client --exclude` patterns applied to the
 declared paths. It exists because a capture set is sometimes *nearly* right: a
 node's `/root` is worth keeping, but the netboot ISOs in it are 1.6 GB each,
-rebuildable by `make-install-media.sh` and still served upstream. Excluding them
+rebuildable by `bootstrap-tappaas.sh` and still served upstream. Excluding them
 takes the node's capture from gigabytes to megabytes without narrowing what a
 restore actually needs.
 
