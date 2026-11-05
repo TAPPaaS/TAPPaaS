@@ -24,7 +24,7 @@ ML-powered smart search and face recognition, all on your own hardware.
 ## Storage
 
 One disk. The photo library lives on the VM's own disk (`diskSize` in
-`immich.json`, default 250G on `tanka1` (64G on a small site), growing as the library fills), in Immich's `mediaLocation`,
+`immich.json`, default 250G on `tanka1`, 64G small, 2000G large), in Immich's `mediaLocation`,
 `/var/lib/immich`, where Immich keeps `upload/`, `library/`, `thumbs/`,
 `encoded-video/`, `profile/` and `backups/`.
 

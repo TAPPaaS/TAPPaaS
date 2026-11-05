@@ -100,8 +100,7 @@ reverse proxy). VLAN is auto-allocated in the type band unless you pass `--vlan`
 one: `--size small|medium|large` on `add`, or later
 `environment-manager modify client1 --size large` (also on the console's Environments
 page). The modules installed into it get the cores, memory and disk of that size: the
-module's smaller values at small, its default at medium, its bigger values at large (the disk
-stays at its default and grows as it fills). A
+module's smaller values at small, its default at medium, its bigger values at large. A
 test environment on a medium site can be small; a client with a hundred users can be
 large. Installed modules follow a change at their next update; disks only grow.
 

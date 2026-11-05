@@ -6,8 +6,7 @@
 # cores / memory / diskSize for medium, and optionally a pair beside each:
 # coresMinMax, memoryMinMax, diskMinMax = [min, max]. Small takes the min, large
 # the max, medium the plain value; a field without a pair is the same at every
-# size. The disk is the exception at large: it starts at medium and auto-grow
-# takes it further as it fills, so a large site reserves nothing up front.
+# size.
 #
 # Provides (sourceable; no side effects on source):
 #   module_size_for <module-json> [environment] [config-dir]
@@ -26,9 +25,9 @@ _MODULE_SIZING_LOADED=1
 # The jq program that sizes one object (flat fields). $size is bound by caller.
 _module_sizing_jq='
   def sized($o):
-    reduce (["cores","coresMinMax",true], ["memory","memoryMinMax",true], ["diskSize","diskMinMax",false]) as $p
+    reduce (["cores","coresMinMax"], ["memory","memoryMinMax"], ["diskSize","diskMinMax"]) as $p
       ($o;
-       if ($size == "small" or ($size == "large" and $p[2]))
+       if ($size == "small" or $size == "large")
           and (.[$p[1]] | type) == "array" and (.[$p[1]] | length) == 2
        then .[$p[0]] = (if $size == "small" then .[$p[1]][0] else .[$p[1]][1] end)
        else . end);

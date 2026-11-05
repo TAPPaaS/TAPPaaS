@@ -308,8 +308,7 @@ Pass three things up front:
 | `large` | 100+ users. Three or more large machines, possibly many environments. |
 
 A module states its medium size and, where it scales, a smaller and a bigger one: a
-small site gets the smaller, a large site the bigger cores and memory; its disks start at the
-medium size and grow as they fill. Each environment can have a size
+small site gets the smaller, a large site the bigger. Each environment can have a size
 of its own (Configure Environments). Change the site's later with
 `site-manager site modify --size <size>` or on the console's Site page: installed modules
 follow at their next update, and their disks only ever grow. On one machine with 32 GB of

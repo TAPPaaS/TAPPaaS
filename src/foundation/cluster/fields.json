@@ -140,7 +140,7 @@
       "note": "G=gigabytes, M=megabytes, K=kilobytes"
     },
     "diskMinMax": {
-      "description": "The disk size this guest gets at size small (first); diskSize is the medium value, and a large site starts at it too, because the disk grows as it fills. The second value is the largest the module expects to need. Absent: diskSize at every size.",
+      "description": "The disk size this guest gets at size small (first) and large (second), exactly two values; diskSize is the medium value. Absent: diskSize at every size.",
       "type": "array",
       "items": {
         "type": "string",
@@ -156,7 +156,7 @@
         "16G",
         "128G"
       ],
-      "note": "min ≤ diskSize ≤ max, and the min is never below the image the guest is cloned from (16G for the NixOS template): a disk cannot shrink. Not a growth limit: auto-grow is capped by diskSizeMax, and otherwise by the pool's room."
+      "note": "min ≤ diskSize ≤ max, and the min is never below the image the guest is cloned from (16G for the NixOS template): a disk cannot shrink. Not the same as diskSizeMax, which caps automatic growth."
     },
     "storage": {
       "description": "Name of the storage pool for the module. Left undeclared, the pool is resolved against the target node at create time: 'tanka1' when that node has it, otherwise the node's first ZFS pool that can hold VM disks.",

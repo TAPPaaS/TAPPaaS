@@ -81,7 +81,9 @@
   "config": {
     "cluster:vm": {
       "coresMinMax": [1, 4],
-      "memoryMinMax": [1024, 8192]
+      "memoryMinMax": [1024, 8192],
+      "diskSize": "32G",
+      "diskMinMax": ["16G", "256G"]
     }
   }
 }

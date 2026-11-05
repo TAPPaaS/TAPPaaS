@@ -56,7 +56,7 @@ schema enum; this closes the last field that previously required a hand-edit.
 
 `--size <small\|medium\|large>` (on `add`/`modify`) sets how big the environment is. Absent, it
 is the site's size. Modules installed into the environment take their cores, memory and disk from
-it: the module's minimum at small, its plain value at medium, its maximum at large (the disk stays at medium and grows as it fills). Installed
+it: the module's minimum at small, its plain value at medium, its maximum at large. Installed
 modules follow a change at their next update, for every sizing field not set by hand; disks only
 grow. `show` prints it, "(the site's)" when the environment has none of its own.
 

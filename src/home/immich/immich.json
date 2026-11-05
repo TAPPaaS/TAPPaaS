@@ -37,7 +37,7 @@
       "memory": 4096,
       "memoryMinMax": [3072, 8192],
       "diskSize": "250G",
-      "diskMinMax": ["64G", "1000G"],
+      "diskMinMax": ["64G", "2000G"],
       "thinDisk": true,
       "storage": "tanka1",
       "imageType": "clone",
