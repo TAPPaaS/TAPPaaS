@@ -50,20 +50,15 @@ on **your laptop, Mac or Linux** — no Proxmox and **no repo checkout needed**:
 fetches the Proxmox assistant itself, **on macOS the build runs in a Debian container, so
 Docker Desktop must be installed and running**.
 
-**First, download the stock Proxmox VE ISO** from the official site —
-<https://www.proxmox.com/en/downloads/proxmox-virtual-environment> (or fetch it
-directly from the mirror as shown). Then fetch the script and run it from
-the directory holding the ISO:
+Fetch the script and run it in an empty directory. It downloads the stock Proxmox VE ISO
+itself, after the questions: the newest one Proxmox lists, checked against Proxmox's
+published checksum. To use another version, put that ISO from
+<https://www.proxmox.com/en/downloads/proxmox-virtual-environment> in the directory first,
+or give `--iso <iso>`.
 
 ```bash
-# 1. Download the stock Proxmox VE 9.2 ISO (~1.5 GB)
-curl -fSLO "https://enterprise.proxmox.com/iso/proxmox-ve_9.2-1.iso"
-
-# 2. Fetch the TAPPaaS script
 curl -fsSL "https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/main/src/foundation/cluster/bootstrap-tappaas.sh" \
      -o bootstrap-tappaas.sh && chmod +x bootstrap-tappaas.sh
-
-# 3. Build, write and install
 ./bootstrap-tappaas.sh
 ```
 

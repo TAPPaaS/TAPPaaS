@@ -72,7 +72,8 @@
 #   --ssh-key <pubkey-file>  another key for root on the node
 #
 # The image:
-#   --iso <proxmox-ve_9.x.iso>   the stock ISO (default: the one in this directory)
+#   --iso <proxmox-ve_9.x.iso>   the stock ISO (default: the one in this directory;
+#                                with none, the newest Proxmox lists is downloaded)
 #   --iso-sha256 <hex>           its checksum, when Proxmox does not list it
 #   --out <out.iso>              the built image (default: <iso>-tappaas-auto.iso)
 #   --use <built.iso>            skip the build: an image this script built
@@ -115,7 +116,7 @@ debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; exit 0; }
 
-ISO="" OUT="" EMAIL="" COUNTRY="" KEYBOARD="" TIMEZONE="" PASSWORD="" \
+ISO="" ISO_FETCH=0 OUT="" EMAIL="" COUNTRY="" KEYBOARD="" TIMEZONE="" PASSWORD="" \
   PASSWORD_FILE="" DISK="" FQDN="" FILESYSTEM="zfs" ISO_SHA256=""
 SSH_KEYS=()
 DISKS=()
@@ -182,6 +183,30 @@ media_fetch() {
 media_sha256() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{print $1}'
   else shasum -a 256 "$1" | awk '{print $1}'; fi
+}
+
+# iso_latest — the newest Proxmox VE ISO in Proxmox's checksum list, by name.
+iso_latest() {
+  local sums name
+  sums="$(mktemp)"
+  media_fetch "$PVE_ISO_SUMS_URL" "$sums" || { rm -f "$sums"; return 1; }
+  name="$(awk '{n=$2; sub(/^\*/, "", n)} n ~ /^proxmox-ve_[0-9.]+-[0-9]+\.iso$/ {print n}' "$sums" | sort -V | tail -1)"
+  rm -f "$sums"
+  [[ -n "$name" ]] && echo "$name"
+}
+
+# iso_download <name> — from beside Proxmox's checksum list, a dot every 5 s on
+# the [Info] line; the .part is renamed only when complete.
+iso_download() {
+  local name="$1" url pid rc=0
+  url="${PVE_ISO_SUMS_URL%/*}/${name}"
+  printf '%b' "${GN}[Info]${CL} downloading ${name} (about 1.5 GB) "
+  media_fetch "$url" "${name}.part" & pid=$!
+  while kill -0 "$pid" 2>/dev/null; do sleep 5; kill -0 "$pid" 2>/dev/null && printf '.'; done
+  wait "$pid" || rc=$?
+  echo ""
+  [[ "$rc" == 0 ]] || { rm -f "${name}.part"; die "the download of ${url} failed"; }
+  mv "${name}.part" "$name"
 }
 
 # iso_check <iso> [<expected hex>] — dies unless the ISO matches.
@@ -824,13 +849,22 @@ fi
 if [[ -z "$ISO" ]]; then
   _isos=()
   for _f in proxmox-ve_*.iso; do [[ -f "$_f" && "$_f" != *-tappaas-auto.iso ]] && _isos+=("$_f"); done
-  [[ ${#_isos[@]} -ne 1 ]] || ISO="${_isos[0]}"
+  [[ ${#_isos[@]} -le 1 ]] || die "more than one Proxmox VE ISO here (${_isos[*]}): give --iso <iso>"
+  if [[ ${#_isos[@]} -eq 1 ]]; then
+    ISO="${_isos[0]}"
+  elif [[ -z "${TAPPAAS_MEDIA_CONTAINER:-}" ]]; then
+    # None here: the newest Proxmox lists, downloaded after the questions.
+    ISO="$(iso_latest)" || die "no Proxmox VE ISO here, and Proxmox's list (${PVE_ISO_SUMS_URL}) could not be read: download one, or give --iso <iso>"
+    ISO_FETCH=1
+    info "no Proxmox VE ISO here: ${ISO} is downloaded after the questions"
+  fi
 fi
-[[ -n "$ISO" && -f "$ISO" ]] || die "--iso <proxmox-ve.iso> is required (download from proxmox.com)."
+[[ -n "$ISO" ]] || die "--iso <proxmox-ve.iso> is required (download from proxmox.com)."
+[[ "$ISO_FETCH" == 1 || -f "$ISO" ]] || die "--iso: no such file: ${ISO}"
 [[ -n "$OUT" ]] || OUT="${ISO%.iso}-tappaas-auto.iso"
 # Checked here on the operator's machine, and again by the build in its container
 # when there is one: only then is the file known to be the one this build reads.
-iso_check "$ISO" "$ISO_SHA256"
+[[ "$ISO_FETCH" == 1 ]] || iso_check "$ISO" "$ISO_SHA256"
 
 # ── The four #404 operator answers (prompt for whatever is missing) ────
 #
@@ -931,6 +965,7 @@ if [[ -z "${TAPPAAS_MEDIA_CONTAINER:-}" ]]; then
   SSH_KEYS+=("${INSTALL_KEY}.pub")
   # Everything after the build, asked now, before it.
   ask_up_front
+  [[ "$ISO_FETCH" != 1 ]] || { iso_download "$ISO"; iso_check "$ISO" "$ISO_SHA256"; }
 fi
 
 # ── Assistant bootstrap (first-node chicken-and-egg) ───────────────────

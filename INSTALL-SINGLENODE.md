@@ -33,9 +33,6 @@ operations. For the full picture, see [INSTALL.md](INSTALL.md).
 On the Mac or PC, in an empty directory:
 
 ```bash
-# The stock Proxmox VE ISO (about 1.5 GB)
-curl -fSLO "https://enterprise.proxmox.com/iso/proxmox-ve_9.2-1.iso"
-
 # The TAPPaaS install script
 curl -fsSL "https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/main/src/foundation/cluster/bootstrap-tappaas.sh" \
      -o bootstrap-tappaas.sh && chmod +x bootstrap-tappaas.sh
@@ -43,6 +40,9 @@ curl -fsSL "https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/main/src/foundation/
 # Build the installer, then follow the install
 ./bootstrap-tappaas.sh
 ```
+
+It downloads the stock Proxmox VE ISO itself (about 1.5 GB, the newest Proxmox lists),
+after the questions; an ISO already in the directory is used instead.
 
 The script asks everything first, then runs without questions. The first question is
 what to do; for this guide choose:
