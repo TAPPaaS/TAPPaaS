@@ -53,9 +53,15 @@
       "bios": "ovmf",
       "ostype": "other",
       "cores": 4,
-      "coresMinMax": [2, 8],
+      "coresMinMax": [
+        2,
+        8
+      ],
       "memory": 4096,
-      "memoryMinMax": [2048, 8192],
+      "memoryMinMax": [
+        2048,
+        8192
+      ],
       "diskSize": "32G",
       "storage": "tanka1",
       "imageType": "img",
