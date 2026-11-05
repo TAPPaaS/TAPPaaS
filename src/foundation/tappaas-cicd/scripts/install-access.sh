@@ -6,18 +6,17 @@
 # The console runs on the mothership from the moment install.sh ends, unlocked by
 # its setup token from mgmt and the admin VPN only, until the first installer
 # signs in through the Authentik gate at console.<domain>.
-# The operator who ran the bootstrap sits on neither, so `open` gives two ways in:
+# The operator who ran the bootstrap sits on neither. No VPN peer is made for
+# them: they enrol their own device in Day 1's admin VPN step, at home as on a
+# hosted server. Until then `open` gives one way in:
 #
-#   1. On a PUBLIC (or unknown) WAN only: the first admin-VPN peer, a key pair
-#      made here and a ready wg-quick config in config/admin-vpn/install-peer.conf
-#      (0600) — the way in on a hosted server. At home the install LAN (2) is, and
-#      the operator enrols their own device in Day 1's admin VPN step. The private key is made on the mothership, unlike a
-#      peer enrolled later with its own key: the trade for a config that works as
-#      handed over. Remove it with `network-manager wgvpn remove-peer install`.
-#   2. On a PRIVATE WAN subnet only (the install LAN at home, never the internet):
-#      a port-forward of the firewall's WAN address, port 9097, to the console,
-#      from that subnet alone, and the subnet added to what the console accepts
-#      with the setup token (config/console-setup-allow).
+#   - On a PRIVATE WAN subnet (the install LAN at home, never the internet): a
+#     port-forward of the firewall's WAN address, port 9097, to the console, from
+#     that subnet alone, and the subnet added to what the console accepts with the
+#     setup token (config/console-setup-allow).
+#   - On a PUBLIC WAN nothing is opened: the operator reaches the console through
+#     an ssh tunnel to the node (`ssh -L 9097:<mothership>:9097 root@<node>`),
+#     arriving from mgmt. The install's end note gives the command.
 #
 # `close` removes the forward and the extra allow: the console runs it at that
 # first sign-in, when it also deletes the setup token.
@@ -40,8 +39,6 @@ NAT_DESC="TAPPaaS: console (install LAN, until identity)"
 TOKEN_FILE="${CONFIG_DIR}/console-setup-token"
 ALLOW_FILE="${CONFIG_DIR}/console-setup-allow"
 URL_FILE="${CONFIG_DIR}/console-setup-url"
-PEER_NAME="install"
-PEER_CONF="${CONFIG_DIR}/admin-vpn/install-peer.conf"
 
 # The firewall's WAN address and prefix length: the interface of its default
 # route ("192.168.14.94 20"). Empty when the firewall does not answer.
@@ -81,32 +78,11 @@ cicd_mgmt_ip() {
     ip -4 -o addr show scope global 2>/dev/null | awk '{split($4, a, "/"); print a[1]; exit}'
 }
 
-open_vpn_peer() {
-    local wan_ip="$1"
-    if [[ -s "${PEER_CONF}" ]]; then
-        info "  ${GN}✓${CL} admin VPN: the install peer's config is ${PEER_CONF}"
-        return 0
-    fi
-    if network-manager wgvpn list 2>/dev/null | grep -qE "^  - ${PEER_NAME} "; then
-        warn "  admin VPN: a peer '${PEER_NAME}' exists but its config is gone — re-issue it with: network-manager wgvpn remove-peer ${PEER_NAME}, then rerun this"
-        return 0
-    fi
-    local keys priv pub conf
-    keys="$(nix-shell -p wireguard-tools --run 'p=$(wg genkey); printf "%s %s" "$p" "$(printf %s "$p" | wg pubkey)"' 2>/dev/null)" \
-        || { warn "  admin VPN: could not make a key pair (nix-shell wireguard-tools) — enrol a device by hand: network-manager wgvpn add-peer"; return 0; }
-    read -r priv pub <<<"${keys}"
-    conf="$(network-manager wgvpn add-peer --name "${PEER_NAME}" --pubkey "${pub}" ${wan_ip:+--endpoint "${wan_ip}:51821"} 2>/dev/null)" \
-        || { warn "  admin VPN: could not add the install peer — network-manager wgvpn add-peer --name ${PEER_NAME} --pubkey <key>"; return 0; }
-    mkdir -p "$(dirname "${PEER_CONF}")"
-    ( umask 077; sed "s|<PASTE-YOUR-PRIVATE-KEY>|${priv}|" <<<"${conf}" > "${PEER_CONF}" )
-    info "  ${GN}✓${CL} admin VPN: an install peer, its config in ${PEER_CONF} (it holds a private key)"
-}
-
 open_lan() {
     local wan_ip="$1" bits="$2" net cicd
     net="$(network_of "${wan_ip}" "${bits}")"
     if ! is_private "${net}"; then
-        info "  the WAN (${net}) is public: no install-LAN access — use the admin VPN"
+        info "  the WAN (${net}) is public: no install-LAN access — reach the console through an ssh tunnel to the node"
         return 0
     fi
     cicd="$(cicd_mgmt_ip)"
@@ -114,7 +90,7 @@ open_lan() {
     if ! nat-manager add-rule --no-ssl-verify --description "${NAT_DESC}" --external-port "${CONSOLE_PORT}" \
             --target "${cicd}" --internal-port "${CONSOLE_PORT}" --protocol TCP --interface wan \
             --source "${net}" >/dev/null 2>&1; then
-        warn "  install LAN: the port-forward could not be added — use the admin VPN"
+        warn "  install LAN: the port-forward could not be added — reach the console through an ssh tunnel to the node"
         return 0
     fi
     printf '%s\n' "${net}" > "${ALLOW_FILE}"
@@ -128,17 +104,11 @@ cmd_open() {
     local wan wan_ip="" bits=""
     wan="$(wan_of_firewall)"
     [[ -n "${wan}" ]] && read -r wan_ip bits <<<"${wan}"
-    [[ -n "${wan_ip}" ]] || warn "  could not read the firewall's WAN address — the VPN config's Endpoint is a placeholder, and no install-LAN access"
-    # A private WAN (the install LAN at home) is the way in: the operator enrols
-    # a device on Day 1, so no peer is made for them — one made here would read
-    # as Day 1's VPN step done. A public WAN, or one not read, has no install LAN:
-    # the install peer is the way in.
-    if [[ -n "${wan_ip}" ]] && is_private "$(network_of "${wan_ip}" "${bits}")"; then
-        open_lan "${wan_ip}" "${bits}"
-    else
-        open_vpn_peer "${wan_ip}"
-        [[ -n "${wan_ip}" ]] && open_lan "${wan_ip}" "${bits}"
+    if [[ -z "${wan_ip}" ]]; then
+        warn "  could not read the firewall's WAN address — no install-LAN access; reach the console through an ssh tunnel to the node"
+        return 0
     fi
+    open_lan "${wan_ip}" "${bits}"
     return 0
 }
 
@@ -169,7 +139,6 @@ cmd_close() {
 }
 
 cmd_status() {
-    [[ -s "${PEER_CONF}" ]] && echo "admin VPN peer config: ${PEER_CONF}" || echo "admin VPN peer config: none"
     [[ -s "${ALLOW_FILE}" ]] && echo "install LAN: $(cat "${ALLOW_FILE}")" || echo "install LAN: closed"
 }
 

@@ -327,17 +327,17 @@ see [Appendix: install options](#appendix-install-options).
 When it finishes, `tappaas1` is at `10.0.0.10` behind the firewall and
 `tappaas-cicd` owns the platform. **The rest of the install can continue in the
 console** (`http://<tappaas-cicd>:9097/`, unlocked with the setup token in
-`~/config/console-setup-token` on the mothership), and the bootstrap gives you two ways
-to reach it from where you are:
+`~/config/console-setup-token` on the mothership). The bootstrap's end note says how to
+reach it from where you are:
 
-- **the admin VPN:** the bootstrap makes a first WireGuard peer and leaves its config on
-  the node as `/root/tappaas-admin-vpn.conf` — copy it to your laptop
-  (`scp root@<node>:/root/tappaas-admin-vpn.conf .`), import it, and delete the copy on
-  the node (it holds the peer's private key);
 - **the install LAN**, when the firewall's WAN is a private network (an install at home):
   `http://<the firewall's WAN address>:9097/` from that network only. It closes when the
-  console module is installed behind the identity gate; on a public WAN (a hosted server)
-  there is no such way in, only the VPN.
+  console module is installed behind the identity gate;
+- **an ssh tunnel through the node**, when the WAN is public (a hosted server):
+  `ssh -N -L 9097:<tappaas-cicd>:9097 root@<node>`, then `http://localhost:9097/`.
+
+No VPN peer is made for you: you enrol your own device in Day 1's admin VPN step, or
+move your computer onto the site's LAN. The VPN stays the way in from outside.
 
 Optionally move your admin laptop onto the **downstream switch** (you'll get a
 `10.0.0.x` lease; Proxmox at `https://10.0.0.10:8006`, firewall GUI at

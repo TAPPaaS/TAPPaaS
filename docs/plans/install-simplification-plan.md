@@ -223,7 +223,7 @@ Check what each vendor supports today before promising it (`src/foundation/netwo
 
 Wi-Fi and physical stay as they are, optional, in steps 7 and 8. Physical site is now the one place a machine gets its room and rack, so it must list nodes added in step 2 as still to be placed.
 
-Step 9, the admin VPN, is required: the gate is reachable only from `mgmt` and the VPN, so this step tests the VPN and ends with the sign-in that does the cut-over. The install's first peer already exists (`/root/tappaas-admin-vpn.conf`), so existing is not enough to read as done.
+Step 9, the admin VPN, is required: the gate is reachable only from `mgmt` and the VPN, so this step tests the VPN and ends with the sign-in that does the cut-over. The install makes no peer: the step is done when the operator has enrolled a device, or has answered that their computer is on the site's LAN (enrolling stays open for the way in from outside).
 
 Stacks are last.
 

@@ -8,7 +8,7 @@
 //   firstnode  the first node has a data pool, or "boot pool only" was answered
 //   nodes      optional: every node site.json declares is a cluster member, and
 //              there is more than one or "no more machines" was answered
-//   vpn        the admin VPN has at least one peer (network-manager wgvpn list)
+//   vpn        the admin VPN has at least one peer (network-manager wgvpn list), or the answer "on-lan"
 //   backup, identity, logging   config/<module>.json exists and its module
 //              test passed the last time it ran. The tests run only as jobs
 //              (POST /setup/check, the page's Check button; the step's Test
@@ -57,7 +57,7 @@ export const TESTS_FILE = "setup-tests.json"; // in the state directory
 export const ANSWERS_FILE = "setup-answers.json"; // in the state directory
 
 // What each step that can be answered takes as its answer.
-export const ANSWERS = { firstnode: "boot-only", firstlan: ["port", "alone"], nodes: "no-more", repos: "tappaas-only", switch: "no-more", wifi: "no-more", public: "stay-local" } as const;
+export const ANSWERS = { firstnode: "boot-only", firstlan: ["port", "alone"], nodes: "no-more", vpn: "on-lan", repos: "tappaas-only", switch: "no-more", wifi: "no-more", public: "stay-local" } as const;
 // The answers a step takes: one, or (firstlan) a choice.
 const choices = (step: AnswerStep): readonly string[] => {
   const v: string | readonly string[] = ANSWERS[step];
@@ -179,8 +179,11 @@ export function setupSteps(i: SetupInputs): SetupStep[] {
   }
 
   // 3 · the admin VPN: the gate is reachable from mgmt and the VPN only.
-  if (i.vpnPeers === null) steps.push({ id: "vpn", title: "The admin VPN", required: true, done: null, detail: "network-manager wgvpn list could not be read" });
-  else steps.push({ id: "vpn", title: "The admin VPN", required: true, done: i.vpnPeers.length > 0, detail: i.vpnPeers.length ? `peer(s): ${i.vpnPeers.join(", ")}` : "no peer yet: enrol a device" });
+  //     A computer on the site's LAN is on mgmt and needs no VPN: the answer
+  //     "on-lan" says so, and enrolling stays open for the way in from outside.
+  const onLan = answer.vpn === ANSWERS.vpn;
+  if (i.vpnPeers === null) steps.push({ id: "vpn", title: "The admin VPN", required: true, done: onLan ? true : null, detail: "network-manager wgvpn list could not be read" });
+  else steps.push({ id: "vpn", title: "The admin VPN", required: true, done: i.vpnPeers.length > 0 || onLan, detail: i.vpnPeers.length ? `peer(s): ${i.vpnPeers.join(", ")}` : onLan ? "this computer is on the site's LAN, as answered: enrol a device to reach the site from outside" : "no peer yet: enrol this computer, or move it onto the site's LAN" });
 
   // 4 · the rest of the foundation, and you in it: one step, one job (Rest of
   // foundation). Backup, identity and logging are its parts: each installed and

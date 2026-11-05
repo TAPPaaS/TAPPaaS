@@ -377,30 +377,28 @@ build_cicd() {
 
   info "${GN}✓${CL} tappaas-cicd is installed and owns the platform (reachable at ${BL}${CICD_IP}${CL})."
 
-  # B.5 — the way to the console for whoever ran this (ADR-037 D3): the install
-  #        peer's VPN config, copied here — where the operator already is. The
-  #        orchestrator shows the note at its very end.
-  local peer="/root/tappaas-admin-vpn.conf" lan url node
+  # B.5 — the way to the console for whoever ran this (ADR-037 D3). The
+  #        orchestrator shows the note at its very end. No VPN peer is made: the
+  #        operator enrols their own device in Day 1.
+  local lan url node
   node="$(ip -4 -o addr show wan 2>/dev/null | awk '{split($4, a, "/"); print a[1]; exit}')"
   [[ -n "${node}" ]] || node="$(hostname -I 2>/dev/null | awk '{print $1}')"
   lan="$(cicd_ssh 'cat /home/tappaas/config/console-setup-allow 2>/dev/null' 2>/dev/null || true)"
   url="$(cicd_ssh 'cat /home/tappaas/config/console-setup-url 2>/dev/null' 2>/dev/null || true)"
-  # One way in, the straight one: the console from the network the install ran
-  # on. The admin VPN comes later, in Day 1. Only a site whose WAN is public has
-  # no install LAN, and is pointed at the VPN instead.
+  # The straight way in: the console from the network the install ran on. A site
+  # whose WAN is public has none, and is reached through an ssh tunnel to the node.
   {
     echo -e "  ${BOLD}Continue in the console${CL}: it takes you through the rest of the install."
     if [[ -n "${url}" ]]; then
       echo -e "    Open ${BL}${url}${CL} in a browser on this network (${lan})."
-    elif cicd_ssh 'cat /home/tappaas/config/admin-vpn/install-peer.conf' 2>/dev/null > "${peer}.tmp" && [[ -s "${peer}.tmp" ]]; then
-      install -m 0600 "${peer}.tmp" "${peer}"
-      echo -e "    This site's WAN is public, so the console is reached over the admin VPN: import ${peer}"
-      echo -e "    (scp root@${node}:${peer} .) in WireGuard, connect, and open ${BL}http://${CICD_IP}:9097/setup/day1${CL}."
+    else
+      echo -e "    This site's WAN is public, so open a tunnel through the node from the machine you ran the install from:"
+      echo -e "      ${BL}ssh -N -L 9097:${CICD_IP}:9097 root@${node}${CL}"
+      echo -e "    and open ${BL}http://localhost:9097/setup/day1${CL} while it runs."
     fi
     echo -e "    It asks for the setup token. From the machine you ran the install from:"
     echo -e "      ${BL}ssh root@${node} \"ssh -i /root/tappaas/tappaas-cicd.key -o StrictHostKeyChecking=accept-new tappaas@tappaas-cicd.mgmt.internal cat config/console-setup-token\"${CL}"
   } > "${CONSOLE_NOTE}"
-  rm -f "${peer}.tmp"
   [[ "${CHAINED}" == 1 ]] || cat "${CONSOLE_NOTE}"
 }
 

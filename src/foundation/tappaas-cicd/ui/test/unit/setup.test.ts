@@ -133,6 +133,8 @@ async function main(): Promise<void> {
   check(!one({ switches: [] }, "switch").required, "the switch fabric is optional");
   check(one({ switches: [] }, "switch").done === false && one({ switches: [{ name: "s", ports: 0, discovered: 0, controller: null }] }, "switch").done === false, "no switch, or one not interrogated: not done");
   check(one({ vpnPeers: [] }, "vpn").done === false, "no admin VPN peer: not done");
+  const onlan = one({ vpnPeers: [], answers: { vpn: "on-lan" } }, "vpn");
+  check(onlan.done === true && onlan.required && onlan.detail.includes("outside"), "…\"on the LAN\" answers it, and enrolling stays open");
   check(!one({ stacks: [] }, "stacks").required && setupComplete(setupSteps({ ...hrossen, stacks: [] })), "stacks are optional");
 
   // The physical site (Day 2): rooms, then every node and switch placed.

@@ -330,7 +330,15 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
         </p>
       </>
     ),
-    vpn: <EnrolButton />,
+    vpn: (
+      <>
+        <p className="small">After Rest of foundation you sign in from the site's LAN or over the admin VPN. Enrol this computer, or move it onto the site's LAN (a port of the first node's LAN, or a switch on it). Enrolling also gives you the way in from outside.</p>
+        <p className="small toolbar">
+          <EnrolButton />
+          <AnswerButton step="vpn" answer="on-lan" label="This computer is on the LAN" given={ans("vpn")} onChanged={r.reload} />
+        </p>
+      </>
+    ),
     health: <HealthChecks doc={d ?? null} done={d ? (r.env?.data?.steps ?? []).find((x) => x.id === "health")?.done ?? null : null} />,
     stacks: <AddStackButton opens={false} />,
     wifi: (
