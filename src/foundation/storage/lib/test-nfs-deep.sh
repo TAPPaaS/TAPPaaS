@@ -365,6 +365,6 @@ cmdb_end "nfs deep test" "share/${SHARE}"
 storage-manager nfs converge --server "${HOLDER}" > "${WORK}/node11.log" 2>&1
 NFS_NO_REVERSE=1 "${SVC}/update-service.sh" "${FIX}" > "${WORK}/svc11.log" 2>&1 \
     && fail "the service errors for a share that vanished under a mount" \
-    || { grep -q "never a silent fallback" "${WORK}/svc11.log" && pass "the service errors; no fallback to a local directory" || fail "the service errors; no fallback to a local directory"; }
+    || { grep -q "never quietly replaced by a local directory" "${WORK}/svc11.log" && pass "the service errors; no fallback to a local directory" || fail "the service errors; no fallback to a local directory"; }
 
 exit 0
