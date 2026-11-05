@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** — built on `feat/917-sizing`, not yet live-tested |
-| **Version** | 0.3 |
+| **Version** | 0.4 |
 | **Date** | 2026-11-05 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | #917. Amends ADR-007c (environments gain `size`), ADR-020 (three policy fields on `cluster:vm` and `cluster:lxc`) and the #207 3-way merge (the release side is sized before it is compared). |
-| **Changelog** | v0.1 (2026-11-05): first draft, from the operator's direction of 2026-11-05. v0.2 (2026-11-05): the operator's review. tappaas-cicd tops out at medium (4 cores, 8 GiB). network's medium memory drops to 4 GiB. Immich comes down at every size, with its ML cap a share of the VM. The console lists and edits both sizes (D7), and `make-install-media.sh` asks for the size (D8). v0.3 (2026-11-05): measured on hrossen (D6a). Logging goes up to 2/4/8 GiB, Immich comes down to 3/4/8 GiB, and the minimums for coturn, nomad and litellm move above what those guests use. |
+| **Changelog** | v0.1 (2026-11-05): first draft, from the operator's direction of 2026-11-05. v0.2 (2026-11-05): the operator's review. tappaas-cicd tops out at medium (4 cores, 8 GiB). network's medium memory drops to 4 GiB. Immich comes down at every size, with its ML cap a share of the VM. The console lists and edits both sizes (D7), and `make-install-media.sh` asks for the size (D8). v0.3 (2026-11-05): measured on hrossen (D6a). Logging goes up to 2/4/8 GiB, Immich comes down to 3/4/8 GiB, and the minimums for coturn, nomad and litellm move above what those guests use. v0.4 (2026-11-05): the operator's review. tappaas-cicd has 4 cores at every size. The disk max is reviewed for the modules whose data grows with the site (D6b). |
 
 A site, and each environment in it, says how big it is: `small`, `medium` or `large`. A module
 states its VM or container size once for `medium` and, optionally, a minimum and a maximum. The
@@ -125,22 +125,22 @@ ARC (10 % of RAM by the installer's default) and the gate's 5 % margin.
 | Module | cores (min / med / max) | memory MiB (min / med / max) | disk (min / med / max) |
 |---|---|---|---|
 | network | 2 / 4 / 8 | 2048 / **4096** / 8192 | — |
-| tappaas-cicd | 2 / 4 / 4 | 3072 / 8192 / 8192 | 32G / 64G / 128G |
-| identity | 2 / 2 / 4 | 2048 / 4096 / 8192 | 16G / 32G / 64G |
-| logging | 1 / 2 / 4 | 2048 / **4096** / 8192 | 16G / 32G / 128G |
+| tappaas-cicd | **4 / 4 / 4** | 3072 / 8192 / 8192 | 32G / 64G / **256G** |
+| identity | 2 / 2 / 4 | 2048 / 4096 / 8192 | **32G** / 32G / 64G |
+| logging | 1 / 2 / 4 | 2048 / **4096** / 8192 | 16G / 32G / **256G** |
 | deconz | 1 / 2 / 2 | 1024 / 4096 / 4096 | — |
 | hass | 2 / 2 / 4 | 2048 / 4096 / 8192 | 16G / 32G / 64G |
-| immich | 2 / **2** / 4 | 3072 / **4096** / 8192 | 64G / **250G** / 1000G |
+| immich | 2 / **2** / 4 | 3072 / **4096** / 8192 | 64G / **250G** / **2000G** |
 | jellyfin | 2 / 4 / 8 | 1536 / 2048 / 8192 | 16G / 32G / 64G |
-| karakeep | 1 / 2 / 4 | 1536 / 3072 / 6144 | 16G / 64G / 128G |
+| karakeep | 1 / 2 / 4 | 1536 / 3072 / 6144 | 16G / 64G / **256G** |
 | nomad | 1 / 2 / 4 | 1536 / 4096 / 8192 | 32G / 128G / 512G |
-| nextcloud | 2 / 4 / 8 | 2048 / 8192 / 16384 | 32G / 80G / 500G |
+| nextcloud | 2 / 4 / 8 | 2048 / 8192 / 16384 | 32G / 80G / **2000G** |
 | euro-office | 2 / 4 / 8 | 2048 / 8192 / 16384 | — |
 | coturn | 1 / 2 / 4 | 768 / 2048 / 4096 | — |
 | nextcloud-hpb | 2 / 4 / 8 | 1024 / 4096 / 8192 | — |
 | litellm | 2 / 4 / 8 | 4096 / 8192 / 16384 | 16G / 32G / 64G |
 | openwebui | 1 / 2 / 4 | 2048 / 4096 / 8192 | 16G / 32G / 64G |
-| forgejo | 1 / 2 / 4 | 1024 / 4096 / 8192 | — |
+| forgejo | 1 / 2 / 4 | 1024 / 4096 / 8192 | **16G / 32G / 256G** |
 | woodpecker | 2 / 4 / 8 | 2048 / 4096 / 8192 | 32G / 64G / 256G |
 | vaultwarden | 1 / 1 / 2 | 1024 / 1536 / 3072 | — |
 | netbird-client | 1 / 1 / 2 | 512 / 1024 / 2048 | — |
@@ -191,6 +191,30 @@ ARC (10 % of RAM by the installer's default) and the gate's 5 % margin.
   site-manager and environment-manager READMEs (`--size`).
 - The module template (how an author states the pairs), and the generated `cluster:vm` /
   `cluster:lxc` field references.
+
+### D6b. The disk at large, and what limits growth (v0.4)
+
+- A disk's max is the size a large site **starts** at, like cores and memory. It is not a growth
+  limit. Auto-grow takes a disk past it, capped by `diskSizeMax` when the module or operator sets
+  one, and otherwise by the pool's room.
+- **Cores are a ceiling, not a reservation.** Proxmox does not hold a VM's cores for it.
+  tappaas-cicd builds and sweeps while the apps are quiet, so it has 4 cores at every size.
+- Reviewed the modules whose data grows with the site, against what hrossen uses:
+
+| Module | What fills the disk | Used on hrossen (medium) | Max |
+|---|---|---|---|
+| nextcloud | users' files, on the VM's own disk | 10G of 80G | 2000G: 100+ users at ~20G each |
+| immich | photo and video libraries (thin) | 19G of 492G | 2000G |
+| tappaas-cicd | the Nix store: every guest's build | 38G of 64G | 256G: more environments, more builds |
+| logging | 30 days of logs from every host | 13G of 32G | 256G |
+| karakeep | archived pages and screenshots (thin) | 17G of 64G | 256G |
+| forgejo | repositories and LFS | 8G of 20G (grown) | 256G; it had no disk and took the 8G default |
+| identity | Authentik and its database | 22G of 32G | min raised to 32G: 16G would not hold it |
+
+- nomad's disk is filled by the libraries loaded into it, not by users: unchanged at 512G.
+  woodpecker (CI caches, thin) unchanged at 256G.
+- nextcloud's disk is thick, so a large site reserves its 2000G on the pool at install. A thin
+  disk (`thinDisk`, as immich has) would reserve nothing up front. To decide separately.
 
 ### D6a. What hrossen showed (2026-11-05)
 
