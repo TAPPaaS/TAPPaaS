@@ -71,7 +71,8 @@ Modify it to set good defaults for your module. Installers can further customize
 `cores`, `memory` and `diskSize` are what the module needs on a **medium** site (up to about 50
 users). If it scales, add the pairs beside them: `coresMinMax`, `memoryMinMax` and `diskMinMax`,
 `[min, max]`. A small site or environment (a few users, one machine, a test system) installs it at
-the min, a large one (100+ users) at the max. Leave a pair out where the value does not change with
+the min, a large one (100+ users) at the max for cores and memory; the disk starts at its plain
+value on a large site too and grows as it fills, so `diskMinMax` sets only the small size. Leave a pair out where the value does not change with
 the number of users. Keep `min ≤ value ≤ max`, and the disk's min at or above the template's disk
 (16G for the NixOS template); `test-module-sizing.sh` checks both.
 

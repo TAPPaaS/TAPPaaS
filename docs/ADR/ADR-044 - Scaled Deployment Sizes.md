@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** — built on `feat/917-sizing`, not yet live-tested |
-| **Version** | 0.3 |
+| **Version** | 0.4 |
 | **Date** | 2026-11-05 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | #917. Amends ADR-007c (environments gain `size`), ADR-020 (three policy fields on `cluster:vm` and `cluster:lxc`) and the #207 3-way merge (the release side is sized before it is compared). |
-| **Changelog** | v0.1 (2026-11-05): first draft, from the operator's direction of 2026-11-05. v0.2 (2026-11-05): the operator's review. tappaas-cicd tops out at medium (4 cores, 8 GiB). network's medium memory drops to 4 GiB. Immich comes down at every size, with its ML cap a share of the VM. The console lists and edits both sizes (D7), and `make-install-media.sh` asks for the size (D8). v0.3 (2026-11-05): measured on hrossen (D6a). Logging goes up to 2/4/8 GiB, Immich comes down to 3/4/8 GiB, and the minimums for coturn, nomad and litellm move above what those guests use. |
+| **Changelog** | v0.1 (2026-11-05): first draft, from the operator's direction of 2026-11-05. v0.2 (2026-11-05): the operator's review. tappaas-cicd tops out at medium (4 cores, 8 GiB). network's medium memory drops to 4 GiB. Immich comes down at every size, with its ML cap a share of the VM. The console lists and edits both sizes (D7), and `make-install-media.sh` asks for the size (D8). v0.3 (2026-11-05): measured on hrossen (D6a). Logging goes up to 2/4/8 GiB, Immich comes down to 3/4/8 GiB, and the minimums for coturn, nomad and litellm move above what those guests use. v0.4 (2026-11-05): the operator's direction. A large site's disk starts at medium and grows as it fills (D2). tappaas-cicd has 4 cores at every size. |
 
 A site, and each environment in it, says how big it is: `small`, `medium` or `large`. A module
 states its VM or container size once for `medium` and, optionally, a minimum and a maximum. The
@@ -68,6 +68,13 @@ A size is a sizing hint, not a limit: nothing refuses an install because of it. 
 
 - The plain `cores` / `memory` / `diskSize` stay the **medium** value, so existing modules,
   docs and tooling read as before.
+- **The disk does not take its max at large** (v0.4). A large site's disk starts at the medium
+  value and auto-grow takes it further as it fills, so nothing is reserved that may never be
+  used. `diskMinMax`'s max is the largest the module expects to need. It is not a growth limit:
+  that is `diskSizeMax` when set, and otherwise the pool's room.
+- **Cores are a ceiling, not a reservation.** Proxmox does not hold a VM's cores for it, so a
+  module whose work comes when the others are idle keeps its cores at every size.
+  tappaas-cicd builds and sweeps while the apps are quiet, so it has 4 at every size.
 - A field without a pair is the same at every size.
 - The pair is validated as `min ≤ medium ≤ max` (medium being the plain value, or the schema
   default when the module does not state one).
@@ -92,7 +99,7 @@ size right after it copies the release JSON:
 
 - `small` sets each sized field to its min;
 - `medium` leaves the plain value;
-- `large` sets it to its max.
+- `large` sets cores and memory to their max, and leaves the disk at medium.
 
 Explicit `--cores`, `--memory` and `--diskSize` (or `--set`) are applied after that, so they
 win. The pairs stay in the deployed config, so a later update can size again.
@@ -122,10 +129,10 @@ Medium is today's value, except the three in bold (v0.2). The minimums are set s
 plus home plus office fits **about 25 GiB of guest memory** at `small`, leaving a 32 GB node about 6 GB for Proxmox, the ZFS
 ARC (10 % of RAM by the installer's default) and the gate's 5 % margin.
 
-| Module | cores (min / med / max) | memory MiB (min / med / max) | disk (min / med / max) |
+| Module | cores (min / med / max) | memory MiB (min / med / max) | disk (min / med / max; large starts at med) |
 |---|---|---|---|
 | network | 2 / 4 / 8 | 2048 / **4096** / 8192 | — |
-| tappaas-cicd | 2 / 4 / 4 | 3072 / 8192 / 8192 | 32G / 64G / 128G |
+| tappaas-cicd | **4 / 4 / 4** | 3072 / 8192 / 8192 | 32G / 64G / 128G |
 | identity | 2 / 2 / 4 | 2048 / 4096 / 8192 | 16G / 32G / 64G |
 | logging | 1 / 2 / 4 | 2048 / **4096** / 8192 | 16G / 32G / 128G |
 | deconz | 1 / 2 / 2 | 1024 / 4096 / 4096 | — |

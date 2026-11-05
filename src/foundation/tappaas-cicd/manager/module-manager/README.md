@@ -293,7 +293,8 @@ ledger existed has no record, so such a release replaces it once, with that warn
 A module states its guest's `cores`, `memory` and `diskSize` for a **medium** site, and may state
 `coresMinMax`, `memoryMinMax` and `diskMinMax` beside them: `[min, max]`. Install takes the size of
 the place the module goes into: a foundation module the site's, any other its environment's (else
-the site's), medium when none is set. Small writes the min, large the max, medium the plain value;
+the site's), medium when none is set. Small writes the min, large the max, medium the plain value, except that a large
+site's disk starts at the plain value too: auto-grow takes it further as it fills;
 a field without a pair is the same at every size. An explicit `--memory` (or any `--<field>`) at
 install wins. The installed config keeps the pairs, and its `.orig` baseline is the sized release.
 

@@ -349,7 +349,7 @@ Disk size with unit suffix
 
 ### `diskMinMax`
 
-The disk size this guest gets at size small (first) and large (second), exactly two values; diskSize is the medium value. Absent: diskSize at every size.
+The disk size this guest gets at size small (first); diskSize is the medium value, and a large site starts at it too, because the disk grows as it fills. The second value is the largest the module expects to need. Absent: diskSize at every size.
 
 | Attribute | Value |
 |---|---|
@@ -361,7 +361,7 @@ The disk size this guest gets at size small (first) and large (second), exactly 
 | Change class | `in-place` |
 | Apply mode | `reconcile` |
 
-**About the field.** min ≤ diskSize ≤ max, and the min is never below the image the guest is cloned from (16G for the NixOS template): a disk cannot shrink. Not the same as diskSizeMax, which caps automatic growth.
+**About the field.** min ≤ diskSize ≤ max, and the min is never below the image the guest is cloned from (16G for the NixOS template): a disk cannot shrink. Not a growth limit: auto-grow is capped by diskSizeMax, and otherwise by the pool's room.
 
 **Why this change class.** A sizing policy, read when the config is written: at install and before the 3-way merge on update, where it picks the value of the field it sizes for the site's or environment's size. Nothing on the cluster to compare.
 

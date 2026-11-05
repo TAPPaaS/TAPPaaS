@@ -199,7 +199,7 @@ nodes are not a site field: they are their `pvehost` instances (use `node …`).
 
 `--size small|medium|large` says how big the site is (absent: medium). Foundation modules, and the
 modules of every environment that has no size of its own, take their cores, memory and disk from it:
-a module's minimum at small, its plain value at medium, its maximum at large. Modules installed from
+a module's minimum at small, its plain value at medium, its maximum at large (the disk stays at medium and grows as it fills). Modules installed from
 then on get the new size at once; installed ones at their next update, for every sizing field not
 set by hand (disks only grow). `install.sh --size` and `create-site.sh --size` set it at install;
 `site show` prints it.

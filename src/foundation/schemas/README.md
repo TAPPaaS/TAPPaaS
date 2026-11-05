@@ -92,7 +92,8 @@ honoured in the scheduled sweep and in `site-manager update --allow-disruption`)
 An environment without a size takes the site's; a site without one is medium. A module's
 `cluster:vm` / `cluster:lxc` block states `cores`, `memory` and `diskSize` for medium and may add
 `coresMinMax`, `memoryMinMax` and `diskMinMax`, each `[min, max]`: at install a small site or
-environment takes the min, a large one the max (module-manager, "How big a guest is"). A disk's
+environment takes the min, a large one the max for cores and memory; its disk starts at the medium
+value and grows as it fills (module-manager, "How big a guest is"). A disk's
 minimum is never below the template the guest is cloned from, because a disk cannot shrink.
 
 ## Conventions
