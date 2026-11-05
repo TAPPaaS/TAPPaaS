@@ -35,8 +35,8 @@ CHECK=0
 
 # The update sweep's log levels (common-install-routines.sh), inlined: a
 # migration is self-contained.
-say()  { echo -e "\033[32m[Info]\033[m   0024: $*"; }
-warn() { echo -e "\033[33m[Warning]\033[m 0024: $*"; }
+say()  { echo -e "\033[1;92m[Info]\033[m   0024: $*"; }
+warn() { echo -e "\033[1;33m[Warning]\033[m 0024: $*"; }
 stop() { echo -e "\033[01;31m[Error]\033[m 0024: $*" >&2; exit 1; }
 
 [[ -f "${SITE}" ]] || { say "no ${SITE} — nothing to migrate"; exit 0; }

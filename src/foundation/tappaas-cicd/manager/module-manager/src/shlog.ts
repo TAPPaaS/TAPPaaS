@@ -10,11 +10,11 @@
 //     not the lib palette (YW=\e[01;33m, CL=\e[0m).
 // warn/error keep the bash [Warning]/[Error] prefixes; error goes to stderr.
 
-export const YW = "\x1b[33m"; // Yellow
+export const YW = "\x1b[1;33m"; // Yellow
 export const BL = "\x1b[36m"; // Cyan
 export const RD = "\x1b[01;31m"; // Red
 export const GN = "\x1b[1;92m"; // Green with bold
-export const DGN = "\x1b[32m"; // Green
+export const DGN = "\x1b[1;92m"; // Green
 export const CL = "\x1b[m"; // Clear
 export const BOLD = "\x1b[1m"; // Bold
 

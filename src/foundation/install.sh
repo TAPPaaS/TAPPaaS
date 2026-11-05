@@ -48,8 +48,8 @@
 set -euo pipefail
 shopt -s inherit_errexit nullglob
 
-RD=$(echo "\033[01;31m"); YW=$(echo "\033[33m"); GN=$(echo "\033[1;92m")
-CL=$(echo "\033[m"); BL=$(echo "\033[36m"); BOLD=$(echo "\033[1m"); DGN=$(echo "\033[32m")
+RD=$(echo "\033[01;31m"); YW=$(echo "\033[1;33m"); GN=$(echo "\033[1;92m")
+CL=$(echo "\033[m"); BL=$(echo "\033[36m"); BOLD=$(echo "\033[1m"); DGN=$(echo "\033[1;92m")
 CM="${GN}✓${CL}"; CROSS="${RD}✗${CL}"
 
 # Same output as cluster/install.sh: [Info] ✓ per outcome, the step on the way
@@ -133,8 +133,8 @@ while [ $# -gt 0 ]; do
       echo "                  [--wan-port <if> | --no-wan] [--pool <name=topo:disks>]..."
       echo "                  [--skip-firewall] [--skip-platform] [--non-interactive]"
       echo ""
-      echo "The first-node entry point. Runs the 5-step chain: node → firewall →"
-      echo "gateway cutover → sanity → platform. --name is the SITE CODE (= the Proxmox"
+      echo "The first-node entry point. Runs the 8-step chain: node → cluster → firewall →"
+      echo "gateway cutover → sanity → NixOS template → mothership → site. --name is the SITE CODE (= the Proxmox"
       echo "cluster name + site.json .name, ≤15 chars). --organization names the default"
       echo "environment/zone/org (site.json .defaultEnvironment); defaults to the site code."
       echo ""
@@ -184,8 +184,15 @@ fi
 
 mkdir -p ~/tappaas
 
+# The chain's steps, numbered once for all of them: the node and cluster steps
+# run in cluster/install.sh, the template, the mothership and the site in
+# install-platform.sh, which take their numbers from here.
+readonly STEPS=8
+export TAPPAAS_STEPS="$STEPS" TAPPAAS_STEP_CLUSTER=2 TAPPAAS_STEP_PLATFORM=6
+step() { echo -e "${GN}[Info]${CL} ${BOLD}── Step $1/${STEPS}: $2 ──${CL}"; }
+
 # ── [1/5] node ──────────────────────────────────────────────────────────
-echo -e "\n${GN}=== [1/5] Node (post-install, bridges, cluster '${SITE_CODE}', storage) ===${CL}"
+step 1 "The node: packages, network ports and bridges"
 fetch "${REPO}${BRANCH}/src/foundation/cluster/install.sh" ~/tappaas/cluster-install.sh 755
 ~/tappaas/cluster-install.sh "$REPO" "$BRANCH" --name "$SITE_CODE" ${NODE_ARGS[@]+"${NODE_ARGS[@]}"} \
   || { msg_error "node step (cluster/install.sh) failed — fix it, then re-run."; exit 1; }
@@ -194,7 +201,6 @@ fetch "${REPO}${BRANCH}/src/foundation/cluster/install.sh" ~/tappaas/cluster-ins
 # writes the role to ~/tappaas/.cluster-role. Only the first node runs [2/5]–[5/5].
 ROLE="$(cat ~/tappaas/.cluster-role 2>/dev/null || echo '')"
 if [ "$ROLE" != "created" ]; then
-  echo ""
   msg_ok "Node step complete (cluster role: ${ROLE:-unknown})."
   echo -e "  This node ${BOLD}joined${CL} an existing TAPPaaS cluster — the firewall, gateway"
   echo -e "  and platform already exist, so the chain stops here."
@@ -208,18 +214,18 @@ fi
 if [ "$SKIP_FIREWALL" = 1 ]; then
   msg_ok "Skipping firewall (--skip-firewall). Run later: ~/tappaas/config-firewall.sh"; exit 0
 fi
-echo -e "\n${GN}=== [2/5] OPNsense firewall ===${CL}"
+step 3 "The OPNsense firewall"
 fetch "${REPO}${BRANCH}/src/foundation/network/config-firewall.sh" ~/tappaas/config-firewall.sh 755
 ~/tappaas/config-firewall.sh --repo "$REPO" --branch "$BRANCH" --chained ${NONINT_ARG} \
   || { msg_error "config-firewall.sh did not complete — fix it, then re-run ~/tappaas/config-firewall.sh and continue."; exit 1; }
 
 # ── [3/5] gateway cutover (additive — no connectivity break) ──────────
-echo -e "\n${GN}=== [3/5] Gateway cutover (route via the firewall) ===${CL}"
+step 4 "Gateway cutover: the node routes through the firewall"
 ~/tappaas/config-network.sh --swap-gateway ${NONINT_ARG} \
   || { msg_error "Gateway cutover failed — re-run ~/tappaas/config-network.sh --swap-gateway, then continue."; exit 1; }
 
 # ── [4/5] sanity check ─────────────────────────────────────────────────
-echo -e "${GN}=== [4/5] Sanity check ===${CL}"
+step 5 "Sanity check"
 fetch "${REPO}${BRANCH}/src/foundation/cluster/sanity-check.sh" ~/tappaas/sanity-check.sh 755
 ~/tappaas/sanity-check.sh || msg_error "sanity-check reported problems — review above (continuing)."
 
@@ -227,22 +233,18 @@ fetch "${REPO}${BRANCH}/src/foundation/cluster/sanity-check.sh" ~/tappaas/sanity
 if [ "$SKIP_PLATFORM" = 1 ]; then
   msg_ok "Skipping platform (--skip-platform). Run later: ~/tappaas/install-platform.sh --name ${SITE_CODE} --organization ${ORG} --domain <d>"; exit 0
 fi
-echo -e "\n${GN}=== [5/5] Platform (NixOS template + tappaas-cicd) ===${CL}"
+# Steps 6-8 are install-platform.sh's: the NixOS template, the mothership, the site.
 fetch "${REPO}${BRANCH}/src/foundation/cluster/install-platform.sh" ~/tappaas/install-platform.sh 755
 dom_arg=(); [ -n "$DOMAIN" ] && dom_arg=(--domain "$DOMAIN")
 ~/tappaas/install-platform.sh --repo "$REPO" --branch "$BRANCH" --name "$SITE_CODE" --organization "$ORG" "${dom_arg[@]}" --chained ${NONINT_ARG} \
   || { msg_error "install-platform.sh did not complete — re-run ~/tappaas/install-platform.sh --branch ${BRANCH} --name ${SITE_CODE} --organization ${ORG} --domain <yourdomain>."; exit 1; }
 
 # ── Done ───────────────────────────────────────────────────────────────
-echo ""
-echo -e "${GN}${BOLD}"
-echo "  ╔═══════════════════════════════════════════════════════════════════════╗"
-echo "  ║   Congratulations! TAPPaaS foundation (first node) is installed.       ║"
-echo "  ╚═══════════════════════════════════════════════════════════════════════╝"
-echo -e "${CL}"
-echo -e "  Site code: ${BL}${SITE_CODE}${CL}  (Proxmox cluster = site.json .name)"
-echo -e "  Organization / default environment: ${BL}${ORG}${CL}  (site.json .defaultEnvironment)"
-echo ""
-cat ~/tappaas/console-next-steps.txt 2>/dev/null \
-  || echo -e "  Continue on the mothership: ${BL}ssh tappaas@tappaas-cicd${CL}, then ${BL}rest-of-foundation.sh${CL}"
-echo ""
+echo -e "${GN}[Info]${CL} ${BOLD}Congratulations! The TAPPaaS foundation's first node is installed.${CL}"
+echo -e "${GN}[Info]${CL}   Site: ${BL}${SITE_CODE}${CL}, organisation and default environment: ${BL}${ORG}${CL}"
+if [[ -s ~/tappaas/console-next-steps.txt ]]; then
+  # Each line of the next steps as an [Info] line; the note's own blank lines dropped.
+  while IFS= read -r _l; do [[ -n "${_l// /}" ]] && echo -e "${GN}[Info]${CL} ${_l}"; done < ~/tappaas/console-next-steps.txt
+else
+  echo -e "${GN}[Info]${CL}   Continue on the mothership: ${BL}ssh tappaas@tappaas-cicd${CL}, then ${BL}rest-of-foundation.sh${CL}"
+fi

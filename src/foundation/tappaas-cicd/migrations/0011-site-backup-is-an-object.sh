@@ -31,9 +31,9 @@ CHECK=0
 
 # The update sweep's log levels (common-install-routines.sh), inlined: a
 # migration is self-contained. `note` is detail, shown under TAPPAAS_DEBUG=1.
-say()  { echo -e "\033[32m[Info]\033[m   0011: $*"; }
+say()  { echo -e "\033[1;92m[Info]\033[m   0011: $*"; }
 note() { [[ "${TAPPAAS_DEBUG:-0}" == "1" ]] || return 0; echo -e "\033[36m[Debug]\033[m   0011: $*"; }
-warn() { echo -e "\033[33m[Warning]\033[m 0011: $*"; }
+warn() { echo -e "\033[1;33m[Warning]\033[m 0011: $*"; }
 stop() { echo -e "\033[01;31m[Error]\033[m 0011: $*" >&2; exit 1; }
 
 [[ -f "${SITE}" ]] || { say "no ${SITE} — nothing to migrate"; exit 0; }

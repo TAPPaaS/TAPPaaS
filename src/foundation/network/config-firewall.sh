@@ -38,7 +38,7 @@
 
 set -euo pipefail
 
-readonly RD=$'\033[01;31m' YW=$'\033[33m' GN=$'\033[1;92m' BL=$'\033[36m' CL=$'\033[m' BOLD=$'\033[1m'
+readonly RD=$'\033[01;31m' YW=$'\033[1;33m' GN=$'\033[1;92m' BL=$'\033[36m' CL=$'\033[m' BOLD=$'\033[1m'
 info()  { echo -e "${GN}[firewall]${CL} $*"; }
 warn()  { echo -e "${YW}[firewall][warn]${CL} $*"; }
 error() { echo -e "${RD}[firewall][error]${CL} $*" >&2; }

@@ -36,7 +36,7 @@ while [[ $# -gt 0 ]]; do
 done
 [[ -n "${TARGET}" ]] || { echo "usage: ${SCRIPT_NAME} <repo-path|catalog-file> [--strict] [--quiet]" >&2; exit 2; }
 
-YW=$'\033[33m'; RD=$'\033[01;31m'; GN=$'\033[1;92m'; CL=$'\033[m'
+YW=$'\033[1;33m'; RD=$'\033[01;31m'; GN=$'\033[1;92m'; CL=$'\033[m'
 FINDINGS=0
 say()  { [[ "${QUIET}" -eq 1 ]] || echo "$*"; }
 flag() { FINDINGS=$((FINDINGS + 1)); echo "${YW}[Warning]${CL} catalog: $*" >&2; }

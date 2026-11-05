@@ -41,8 +41,19 @@
 
 set -euo pipefail
 
-readonly RD=$'\033[01;31m' YW=$'\033[33m' GN=$'\033[1;92m' BL=$'\033[36m' CL=$'\033[m' BOLD=$'\033[1m'
+readonly RD=$'\033[01;31m' YW=$'\033[1;33m' GN=$'\033[1;92m' BL=$'\033[36m' CL=$'\033[m' BOLD=$'\033[1m'
 info()  { echo -e "${GN}[platform]${CL} $*"; }
+# A [platform] line that progress dots continue; the dots' owner ends it.
+info_n() { printf '%b' "${GN}[platform]${CL} $* "; }
+# A step heading: numbered from the first-node chain (foundation/install.sh), plain on its own.
+step() {
+  local n="$1"; shift
+  if [[ -n "${TAPPAAS_STEP_PLATFORM:-}" ]]; then
+    echo -e "${GN}[Info]${CL} ${BOLD}── Step $(( TAPPAAS_STEP_PLATFORM + n ))/${TAPPAAS_STEPS}: $* ──${CL}"
+  else
+    echo -e "${GN}[Info]${CL} ${BOLD}── $* ──${CL}"
+  fi
+}
 warn()  { echo -e "${YW}[platform][warn]${CL} $*"; }
 error() { echo -e "${RD}[platform][error]${CL} $*" >&2; }
 die()   { error "$*"; exit 1; }
@@ -250,7 +261,7 @@ EOF
 # TAPPaaS baseline (tappaas-common.nix) is already baked into the image.
 build_template() {
   local nixid; nixid="$(jq -r '.vmid' "${TAPPAAS_DIR}/tappaas-nixos.json" 2>/dev/null || echo 8080)"
-  echo -e "\n${GN}${BOLD}=== A. NixOS VM template (vmid ${nixid}) ===${CL}"
+  step 0 "The NixOS VM template (vmid ${nixid})"
 
   if is_template "$nixid"; then
     info "Template ${nixid} already exists — skipping build."
@@ -286,7 +297,7 @@ build_template() {
 # ── Phase B: tappaas-cicd mothership (vmid 130) ─────────────────────
 build_cicd() {
   local cicdid; cicdid="$(jq -r '.vmid' "${TAPPAAS_DIR}/tappaas-cicd.json" 2>/dev/null || echo 130)"
-  echo -e "\n${GN}${BOLD}=== B. tappaas-cicd mothership (vmid ${cicdid}) ===${CL}"
+  step 1 "The tappaas-cicd mothership (vmid ${cicdid})"
 
   if vm_exists "$cicdid"; then
     warn "VM ${cicdid} already exists — skipping creation (finish its in-VM install if needed)."
@@ -322,7 +333,7 @@ build_cicd() {
   fi
 
   # B.1 — clone the repo + rebuild the NixOS system (bootstrap.sh).
-  info "Running bootstrap.sh on cicd (git clone + nixos-rebuild switch): 5-15 minutes..."
+  info_n "Running bootstrap.sh on cicd (git clone + nixos-rebuild switch), 5-15 minutes"
   if ! cicd_ssh "curl -fsSL '${REPO}${BRANCH}/src/foundation/tappaas-cicd/bootstrap.sh' -o /tmp/bootstrap.sh && bash /tmp/bootstrap.sh 'https://codeberg.org/TAPPaaS/TAPPaaS.git' '${BRANCH}'"; then
     warn "bootstrap.sh failed on cicd. Finish manually:"
     print_manual_cicd "$cicdid" "$dom"
@@ -357,6 +368,7 @@ build_cicd() {
   local name_arg=""; [[ -n "$ORGNAME" ]] && name_arg="--name '${ORGNAME}' "
   local org_arg="";  [[ -n "$ORG" ]]     && org_arg="--organization '${ORG}' "
   local install2_cmd="cd TAPPaaS/src/foundation/tappaas-cicd && ./install.sh ${name_arg}${org_arg}--branch '${BRANCH}' --domain '${DOMAIN}'"
+  step 2 "The site, set up on the mothership"
   info "Running install.sh on cicd (site ${ORGNAME:-<from-domain>}, org ${ORG:-<=site>}, domain ${DOMAIN})..."
   if ! cicd_ssh "$install2_cmd"; then
     warn "install.sh reported errors — review on cicd (ssh tappaas@${CICD_IP})."

@@ -32,8 +32,8 @@ if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
     export PATH=/run/wrappers/bin:/run/current-system/sw/bin
 fi
 
-info()  { echo -e "\033[32m[Info]\033[m $*"; }
-warn()  { echo -e "\033[33m[Warning]\033[m $*"; }
+info()  { echo -e "\033[1;92m[Info]\033[m $*"; }
+warn()  { echo -e "\033[1;33m[Warning]\033[m $*"; }
 error() { echo -e "\033[01;31m[Error]\033[m $*" >&2; }
 # Defined because this script calls it: a self-contained script that provides
 # info/warn/error and omits debug turns every debug call into "command not

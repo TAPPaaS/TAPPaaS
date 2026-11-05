@@ -41,8 +41,8 @@ _unit="tappaas-rebuild@${VMNAME}.service"
 # Bound the failure dump to THIS invocation so an earlier run's errors can
 # never be reported as this one's.
 _since="$(date '+%Y-%m-%d %H:%M:%S')"
-info "  Rebuilding NixOS configuration..."
 if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
+    info "  Rebuilding NixOS configuration..."
     journalctl -u "${_unit}" --since "${_since}" -f --no-pager -o cat &
     _follow=$!
     set +e
@@ -55,6 +55,8 @@ else
     # Dots while the unit runs. `systemctl start --wait` exits with the unit's
     # own result, so the real status is preserved directly — issue #201's
     # PIPESTATUS problem cannot arise here because there is no pipe.
+    # The dots continue the [Info] line; the echo after them ends it.
+    [[ "${OPT_SILENT:-0}" -eq 1 ]] || printf '%b' "${DGN}[Info]${CL}   Rebuilding NixOS configuration "
     set +e
     systemctl start --wait "${_unit}" &
     _pid=$!

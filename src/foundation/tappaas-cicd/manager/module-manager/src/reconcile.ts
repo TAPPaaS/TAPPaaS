@@ -209,7 +209,6 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
   info(`${BOLD}╚══════════════════════════════════════════════╝${CL}`);
 
   // ── Step 1: Validate module config ───────────────────────────────
-  console.log("");
   info(`${BOLD}Reconcile Step 1: Validate module configuration${CL}`);
   if (!existsSync(moduleJson)) {
     fail(
@@ -238,7 +237,6 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
   const moduleDir = moduleDirResult.kind === "found" ? moduleDirResult.dir : null;
 
   // ── Step 2: Re-apply dependency services (idempotent ensure/apply) ──
-  console.log("");
   info(`${BOLD}Reconcile Step 2: Re-apply dependency services${CL}`);
 
   const cfg = normalizeModuleConfig(raw);
@@ -360,7 +358,6 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
   }
 
   // ── Step 3: Re-apply the module itself (in-VM converge) ───────────
-  console.log("");
   info(`${BOLD}Reconcile Step 3: Re-apply the module${CL}`);
 
   if (moduleDir) {
@@ -417,7 +414,6 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
   let verifyDrift = 0;
   let verifyUnknown = 0;
   if (applied.length > 0) {
-    console.log("");
     info(`${BOLD}Reconcile Step 4: Verify the re-applied services${CL}`);
     const svc = checkDependencyServices(configDir, module, applied, moduleEnvironment);
     // All clean: the per-service ticks are detail. Drift or an unknown prints in
@@ -442,7 +438,6 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
     verifyUnknown = svc.unknown;
   }
 
-  console.log("");
   if (verifyDrift > 0 || verifyUnknown > 0) {
     // The apply ran and returned 0; the plane still does not match. Reporting
     // this as success is the whole of #583, so it is a failure — and it names

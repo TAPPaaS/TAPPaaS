@@ -43,7 +43,7 @@ SITE="${CONFIG_DIR}/site.json"
 CHECK=0
 [[ "${1:-}" == "--check" ]] && CHECK=1
 
-say()  { echo -e "\033[32m[Info]\033[m   0021: $*"; }
+say()  { echo -e "\033[1;92m[Info]\033[m   0021: $*"; }
 note() { [[ "${TAPPAAS_DEBUG:-0}" == "1" ]] || return 0; echo -e "\033[36m[Debug]\033[m   0021: $*"; }
 stop() { echo -e "\033[01;31m[Error]\033[m 0021: $*" >&2; exit 1; }
 

@@ -17,11 +17,12 @@
 
 
 RD=$(echo "\033[01;31m")
-YW=$(echo "\033[33m")
+YW=$(echo "\033[1;33m")
 GN=$(echo "\033[1;92m")
-DGN=$(echo "\033[32m")
+DGN=$(echo "\033[1;92m")
 BL=$(echo "\033[36m")
 CL=$(echo "\033[m")
+BOLD=$(echo "\033[1m")
 CM="${GN}✓${CL}"
 CROSS="${RD}✗${CL}"
 
@@ -140,7 +141,7 @@ while [ $# -gt 0 ]; do
       echo "                  [--wan-port <if> | --no-wan] [--pool <name=topo:disks>]... [--non-interactive]"
       echo ""
       echo "The NODE step: Proxmox post-install, lan/wan bridges, cluster create"
-      echo "(named <site-code>) / join, ZFS pools. This is step [1/5] driven by the"
+      echo "(named <site-code>) / join, ZFS pools. These are steps 1 and 2 driven by the"
       echo "orchestrator foundation/install.sh (which then runs the firewall, gateway"
       echo "cutover and platform). Writes ~/tappaas/.cluster-role for the orchestrator."
       echo "(--skip-firewall/--skip-platform/--domain are accepted for back-compat but"
@@ -186,7 +187,9 @@ node_mgmt_ip() {
 
 configure_cluster() {
   local host mode peer mgmt; host="$(hostname -s)"; mgmt="$(node_mgmt_ip)"
-  echo -e "\n${GN}=== Cluster configuration ===${CL}"
+  # Numbered when the first-node chain runs this (foundation/install.sh), plain on its own.
+  if [[ -n "${TAPPAAS_STEP_CLUSTER:-}" ]]; then info "${BOLD:-}── Step ${TAPPAAS_STEP_CLUSTER}/${TAPPAAS_STEPS}: The cluster ──${CL}"
+  else info "${BOLD:-}── The cluster ──${CL}"; fi
   if pvecm status >/dev/null 2>&1; then
     msg_ok "Node is already a cluster member"
     debug "$(pvecm status 2>/dev/null | grep -E 'Name:|Nodes:|Quorate:' || true)"

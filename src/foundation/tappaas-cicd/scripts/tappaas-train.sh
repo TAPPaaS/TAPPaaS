@@ -99,7 +99,7 @@ STATE_FILE="${CONFIG_DIR}/release-train.json"
 # The boundary interval (ADR-028 D2). Policy, so it is named once.
 BOUNDARY_DAYS="${TAPPAAS_BOUNDARY_DAYS:-14}"
 
-YW=$'\033[33m'; RD=$'\033[01;31m'; GN=$'\033[1;92m'; BL=$'\033[36m'; CL=$'\033[m'; BOLD=$'\033[1m'
+YW=$'\033[1;33m'; RD=$'\033[01;31m'; GN=$'\033[1;92m'; BL=$'\033[36m'; CL=$'\033[m'; BOLD=$'\033[1m'
 info()  { echo -e "${GN}[Info]${CL} $*"; }
 warn()  { echo -e "${YW}[Warning]${CL} $*"; }
 error() { echo -e "${RD}[Error]${CL} $*" >&2; }

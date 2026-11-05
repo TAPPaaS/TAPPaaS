@@ -32,7 +32,7 @@ RECORD="${CONFIG_DIR}/certificates.json"
 CHECK=0
 [[ "${1:-}" == "--check" ]] && CHECK=1
 
-say()  { echo -e "\033[32m[Info]\033[m   0029: $*"; }
+say()  { echo -e "\033[1;92m[Info]\033[m   0029: $*"; }
 stop() { echo -e "\033[01;31m[Error]\033[m 0029: $*" >&2; exit 1; }
 
 [[ -f "${CREDS}" ]] || { say "no ${CREDS} — nothing to migrate"; exit 0; }

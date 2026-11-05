@@ -15,7 +15,7 @@
 
 set -uo pipefail   # not -e: we want to run every check and summarise
 
-readonly RD=$'\033[01;31m' YW=$'\033[33m' GN=$'\033[1;92m' BL=$'\033[36m' CL=$'\033[m' BOLD=$'\033[1m'
+readonly RD=$'\033[01;31m' YW=$'\033[1;33m' GN=$'\033[1;92m' BL=$'\033[36m' CL=$'\033[m' BOLD=$'\033[1m'
 info()  { echo -e "${GN}[sanity]${CL} $*"; }
 pass()  { echo -e "${GN}[sanity]${CL}   ${GN}✓${CL} $*"; PASS=$((PASS+1)); }
 fail()  { echo -e "${RD}[sanity][error]${CL} ${RD}✗${CL} $*"; FAIL=$((FAIL+1)); }
@@ -114,7 +114,6 @@ if command -v dkms >/dev/null 2>&1; then
   fi
 fi
 
-echo ""
 info "Results: ${GN}${PASS} passed${CL}, ${RD}${FAIL} failed${CL}, ${YW}${WARN} warnings${CL}"
 [[ "$FAIL" -eq 0 ]] && { info "${GN}Sanity checks passed.${CL}"; exit 0; }
 info "${RD}Some checks failed — resolve before continuing the foundation install.${CL}"

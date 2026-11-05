@@ -24,7 +24,7 @@ set -uo pipefail
 export PATH=/run/wrappers/bin:/run/current-system/sw/bin
 
 debug() { [[ "${TAPPAAS_DEBUG:-0}" == "1" ]] || return 0; echo -e "\033[36m[Debug]\033[m $*"; }
-warn()  { echo -e "\033[33m[Warning]\033[m $*"; }
+warn()  { echo -e "\033[1;33m[Warning]\033[m $*"; }
 
 _here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 CICD_DIR="$(dirname "${_here}")"

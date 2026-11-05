@@ -14,8 +14,8 @@ if [[ -f /home/tappaas/bin/common-install-routines.sh ]]; then
 fi
 # Fallbacks: the source above is conditional, so never assume the house logger
 # is present. Same levels, same gate (TAPPAAS_DEBUG) either way.
-type info  >/dev/null 2>&1 || info()  { echo -e "\033[32m[Info]\033[m $*"; }
-type warn  >/dev/null 2>&1 || warn()  { echo -e "\033[33m[Warning]\033[m $*"; }
+type info  >/dev/null 2>&1 || info()  { echo -e "\033[1;92m[Info]\033[m $*"; }
+type warn  >/dev/null 2>&1 || warn()  { echo -e "\033[1;33m[Warning]\033[m $*"; }
 type debug >/dev/null 2>&1 || debug() { [[ "${TAPPAAS_DEBUG:-0}" == "1" ]] || return 0; echo -e "\033[34m[Debug]\033[m $*"; }
 
 # A converge step runs INSIDE the LXC, so its echoes cannot call the host's

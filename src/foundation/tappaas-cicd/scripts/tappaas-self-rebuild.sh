@@ -18,9 +18,9 @@ export PATH=/run/wrappers/bin:/run/current-system/sw/bin
 
 # The sweep's log levels, inlined rather than sourced: common-install-routines.sh
 # sources from ~tappaas/bin, which root must never read code from.
-info()  { echo -e "\033[32m[Info]\033[m $*"; }
+info()  { echo -e "\033[1;92m[Info]\033[m $*"; }
 debug() { [[ "${TAPPAAS_DEBUG:-0}" == "1" ]] || return 0; echo -e "\033[36m[Debug]\033[m $*"; }
-warn()  { echo -e "\033[33m[Warning]\033[m $*"; }
+warn()  { echo -e "\033[1;33m[Warning]\033[m $*"; }
 error() { echo -e "\033[01;31m[Error]\033[m $*" >&2; }
 
 _here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"

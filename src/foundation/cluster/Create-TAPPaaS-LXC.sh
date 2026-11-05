@@ -26,8 +26,8 @@ _sp_lib="$(dirname "$(readlink -f "$0")")/storage-placement.sh"
 # shellcheck source=lib/storage-placement.sh
 . "${_sp_lib}" || { echo "storage-placement.sh not found beside $0 — run the cluster update" >&2; exit 1; }
 
-YW=$'\033[33m'; BL=$'\033[36m'; RD=$'\033[01;31m'
-BGN=$'\033[4;92m'; GN=$'\033[1;92m'; DGN=$'\033[32m'; CL=$'\033[m'; BOLD=$'\033[1m'
+YW=$'\033[1;33m'; BL=$'\033[36m'; RD=$'\033[01;31m'
+BGN=$'\033[4;92m'; GN=$'\033[1;92m'; DGN=$'\033[1;92m'; CL=$'\033[m'; BOLD=$'\033[1m'
 
 info()  { echo -e "${DGN}[Info]${CL} $*"; }
 warn()  { echo -e "${YW}[Warning]${CL} $*"; }

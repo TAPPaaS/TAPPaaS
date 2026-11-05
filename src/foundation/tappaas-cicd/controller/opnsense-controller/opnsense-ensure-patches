@@ -45,7 +45,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-YW="\033[33m"; GN="\033[1;92m"; DGN="\033[32m"; BL="\033[34m"; CL="\033[m"
+YW="\033[1;33m"; GN="\033[1;92m"; DGN="\033[32m"; BL="\033[34m"; CL="\033[m"
 # House style: every line carries its level. This script is a CONVERGE — on a
 # healthy system every step is an idempotent no-op, so "ensured" chatter is
 # detail (debug) and only an actual mutation (a plugin being installed) is news.

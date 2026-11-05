@@ -1323,8 +1323,7 @@ main() {
         fi
     fi
 
-    echo ""
-    info "${GN}=== OS update completed successfully ===${CL}"
+    info "${GN}✓${CL} OS update completed"
     info "VM: ${vmname} (${vm_ip})"
 }
 

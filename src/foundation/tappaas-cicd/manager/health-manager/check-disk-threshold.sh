@@ -21,10 +21,10 @@
 set -e
 
 # Color definitions
-YW=$(echo "\033[33m")    # Yellow
+YW=$(echo "\033[1;33m")    # Yellow
 RD=$(echo "\033[01;31m") # Red
 BGN=$(echo "\033[4;92m") # Bright Green with underline
-DGN=$(echo "\033[32m")   # Green
+DGN=$(echo "\033[1;92m")   # Green
 CL=$(echo "\033[m")      # Clear
 BOLD=$(echo "\033[1m")   # Bold
 

@@ -49,10 +49,10 @@ readonly CLONE_DIR="/home/tappaas"
 # ── Logging ──────────────────────────────────────────────────────────
 
 # Color definitions
-readonly YW=$'\033[33m'
+readonly YW=$'\033[1;33m'
 readonly RD=$'\033[01;31m'
 readonly GN=$'\033[1;92m'
-readonly DGN=$'\033[32m'
+readonly DGN=$'\033[1;92m'
 readonly BL=$'\033[36m'
 readonly CL=$'\033[m'
 readonly BOLD=$'\033[1m'

@@ -42,7 +42,7 @@
 set -euo pipefail
 
 # ── Logging ──────────────────────────────────────────────────────────
-readonly RD=$'\033[01;31m' YW=$'\033[33m' GN=$'\033[1;92m' BL=$'\033[36m' CL=$'\033[m' BOLD=$'\033[1m'
+readonly RD=$'\033[01;31m' YW=$'\033[1;33m' GN=$'\033[1;92m' BL=$'\033[36m' CL=$'\033[m' BOLD=$'\033[1m'
 info()  { echo -e "${GN}[storage]${CL} $*"; }
 warn()  { echo -e "${YW}[storage][warn]${CL} $*"; }
 error() { echo -e "${RD}[storage][error]${CL} $*" >&2; }
@@ -658,7 +658,6 @@ for POOL in tanka1 tankb1 tankc1; do
       "Configure pool '${POOL}'?\n\n${POOL_DESC}" 14 78 \
       || { info "Skipping ${POOL}."; continue; }
   else
-    echo ""
     echo "${POOL}: ${POOL_DESC}"
     read -r -p "Configure pool '${POOL}'? [y/N]: " yn
     [[ "${yn,,}" == "y" ]] || { info "Skipping ${POOL}."; continue; }

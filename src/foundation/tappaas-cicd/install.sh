@@ -17,8 +17,8 @@
 set -euo pipefail
 
 # Minimal logging before common-install-routines.sh is available
-_info()  { echo -e "\033[32m[Info]\033[m $*"; }
-_warn()  { echo -e "\033[33m[Warning]\033[m $*"; }
+_info()  { echo -e "\033[1;92m[Info]\033[m $*"; }
+_warn()  { echo -e "\033[1;33m[Warning]\033[m $*"; }
 _error() { echo -e "\033[01;31m[Error]\033[m $*" >&2; }
 _debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo -e "\033[36m[Debug]\033[m $*"; }
 
@@ -29,7 +29,7 @@ _debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo -e "\033[36m[Debug
 _tagged() {
   "$@" | awk '{ p = $0; gsub(/\033\[[0-9;]*m/, "", p)
     if (p ~ /^[[:space:]]*$/) next
-    if (p ~ /^\[/) print; else print "\033[32m[Info]\033[m " $0
+    if (p ~ /^\[/) print; else print "\033[1;92m[Info]\033[m " $0
     fflush() }'
   return "${PIPESTATUS[0]}"
 }
@@ -290,7 +290,6 @@ cd ../network || { _error "Network directory not found!"; exit 1; }
 FIREWALL_AVAILABLE=true
 if ! ping -c 1 -W 2 "$FIREWALL_FQDN" >/dev/null 2>&1; then
     FIREWALL_AVAILABLE=false
-    echo ""
     _warn "OPNsense firewall ($FIREWALL_FQDN) is not reachable."
     _warn "Deploying network module with firewallType=NONE."
     _warn "You will need to configure reverse proxy and firewall rules manually."
@@ -389,7 +388,6 @@ if [[ "$FIREWALL_AVAILABLE" == "true" ]]; then
         warn "admin-vpn setup encountered issues. Run 'network-manager wgvpn setup' manually (see manager/network-manager/ADMIN-VPN.md)."
     }
 else
-    echo ""
     warn "Skipping firewall update (no OPNsense firewall)."
     warn "Skipping Caddy reverse proxy setup (no OPNsense firewall)."
     warn "When modules with network:proxy dependency are installed,"
@@ -418,7 +416,6 @@ touch /home/tappaas/config/.tappaas-cicd-installed
 systemctl start update-tappaas-schedule.service 2>/dev/null \
     || _warn "could not render the update timer — it is rendered at the next boot (systemctl start update-tappaas-schedule.service)"
 
-echo ""
 info "${GN}✓${CL} TAPPaaS-CICD installation completed successfully."
 
 # The console (ADR-034 D10): reachable now, from mgmt or the admin VPN, with the

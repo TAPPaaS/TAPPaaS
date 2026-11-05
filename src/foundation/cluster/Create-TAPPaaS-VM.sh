@@ -20,8 +20,8 @@ function error_handler() {
   local exit_code="$?"
   local line_number="$1"
   local command="$2"
-  local error_message="${RD}[ERROR]${CL} in line ${RD}$line_number${CL}: exit code ${RD}$exit_code${CL}: while executing command ${YW}$command${CL}"
-  echo -e "\n$error_message\n"
+  local error_message="${RD}[Error]${CL} in line ${RD}$line_number${CL}: exit code ${RD}$exit_code${CL}: while executing command ${YW}$command${CL}"
+  echo -e "$error_message"
   if qm status $VMID &>/dev/null; then
      qm stop $VMID &>/dev/null
      qm destroy $VMID &>/dev/null
@@ -51,6 +51,21 @@ function warn() {
 }
 
 function error() { echo -e "${RD}[Error]${CL} $*" >&2; }
+
+# info_n: an [Info] line that progress dots continue; the dots' owner ends it.
+function info_n() { printf '%b' "${DGN}[Info]${CL} $* "; }
+
+# fetch_dots <out> <url> — download quietly, a dot every 5 seconds on the line
+# the caller started with info_n; curl's own meter is not shown.
+function fetch_dots() {
+  local out="$1" url="$2" pid rc=0
+  curl -fsSL -o "$out" "$url" &
+  pid=$!
+  while kill -0 "$pid" 2>/dev/null; do printf '.'; sleep 5; done
+  wait "$pid" || rc=$?
+  printf '\n'
+  return "$rc"
+}
 
 # [Debug] lines are silent unless TAPPAAS_DEBUG=1 (matches the platform convention).
 function debug() { [[ "${TAPPAAS_DEBUG:-0}" -eq 1 ]] || return 0; echo -e "${BL}[Debug]${CL} $*"; }
@@ -149,12 +164,12 @@ EOF
 }
 
 
-YW=$(echo "\033[33m")    # Yellow
+YW=$(echo "\033[1;33m")    # Yellow
 BL=$(echo "\033[36m")    # Cyan
 RD=$(echo "\033[01;31m") # Red
 BGN=$(echo "\033[4;92m") # Bright Green with underline
 GN=$(echo "\033[1;92m")  # Green with bold
-DGN=$(echo "\033[32m")   # Green
+DGN=$(echo "\033[1;92m")   # Green
 CL=$(echo "\033[m")      # Clear
 BOLD=$(echo "\033[1m")   # Bold
 #
@@ -175,14 +190,14 @@ pushd $TEMP_DIR >/dev/null
 
 # test to see if the json config file exist
 if [ -z "$1" ]; then
-  echo -e "\n${RD}[ERROR]${CL} Missing required argument VMNAME."
-  echo -e "Usage: bash TAPPaaS-NixOS-Cloning.sh <VMNAME>\n"
+  echo -e "${RD}[Error]${CL} Missing required argument VMNAME."
+  echo -e "Usage: bash TAPPaaS-NixOS-Cloning.sh <VMNAME>"
   echo -e "A JSON configuration file is expected to be located at: /root/tappaas/<VMNAME>.json"
   exit 1
 fi
 JSON_CONFIG="/root/tappaas/$1.json"
 if [ ! -f "$JSON_CONFIG" ]; then
-  echo -e "\n${RD}[ERROR]${CL} JSON configuration file not found: ${YW}$JSON_CONFIG${CL}"
+  echo -e "${RD}[Error]${CL} JSON configuration file not found: ${YW}$JSON_CONFIG${CL}"
   exit 1
 fi
 JSON=$(cat "$JSON_CONFIG")
@@ -204,7 +219,7 @@ function get_config_value() {
   else
     # Key not found anywhere
     if [ -z "$default" ]; then
-      echo -e "\n${RD}[ERROR]${CL} Missing required key '${YW}$key${CL}' in JSON configuration." >&2
+      echo -e "${RD}[Error]${CL} Missing required key '${YW}$key${CL}' in JSON configuration." >&2
       exit 1
     else
       value="$default"
@@ -219,13 +234,13 @@ function get_vlan_value() {
   local key="$1"
   if ! echo "$ZONES" | jq -e --arg K "$key" 'has($K)' >/dev/null ; then
   # VLAN lacks the key
-    echo -e "\n${RD}[ERROR]${CL} Missing required zone '${YW}$key${CL}' in \"zones.json\" configuration." >&2
+    echo -e "${RD}[Error]${CL} Missing required zone '${YW}$key${CL}' in \"zones.json\" configuration." >&2
     exit 1
   fi
   state=$(echo $ZONES | jq -r --arg KEY "$key" '.[$KEY].state')
   value=$(echo $ZONES | jq -r --arg KEY "$key" '.[$KEY].vlantag')
   if [ "$state" == "Inactive" ]; then
-    echo -e "\n${RD}[ERROR]${CL} Zone '${YW}$key${CL}' in \"zones.json\" is not active. Current state: '${YW}$state${CL}'." >&2
+    echo -e "${RD}[Error]${CL} Zone '${YW}$key${CL}' in \"zones.json\" is not active. Current state: '${YW}$state${CL}'." >&2
     exit 1
   fi
   debug "     - $key has vlan value: ${BGN}${value}" >&2
@@ -254,7 +269,7 @@ function resolve_trunks() {
   IFS=';' read -ra zone_names <<< "$zone_list"
   for zone_name in "${zone_names[@]}"; do
     if ! echo "$ZONES" | jq -e --arg K "$zone_name" 'has($K)' >/dev/null ; then
-      echo -e "\n${RD}[ERROR]${CL} Trunk zone '${YW}$zone_name${CL}' is not defined in \"zones.json\"." >&2
+      echo -e "${RD}[Error]${CL} Trunk zone '${YW}$zone_name${CL}' is not defined in \"zones.json\"." >&2
       exit 1
     fi
     local state
@@ -353,7 +368,7 @@ function zfs_recv_preflight() {
       echo "--- dmesg (last 500 lines) ---"
       dmesg -T 2>/dev/null | tail -500
     } > "$LOG" 2>&1
-    echo -e "\n${RD}[ERROR]${CL} Stale ZFS state detected on ${YW}${node}${CL} (pool ${YW}${pool}${CL})." >&2
+    echo -e "${RD}[Error]${CL} Stale ZFS state detected on ${YW}${node}${CL} (pool ${YW}${pool}${CL})." >&2
     echo -e "A previous migration/receive likely left a stuck 'zfs recv' (D-state) or an" >&2
     echo -e "orphan '@__migration__' snapshot. New writes to this pool will hang indefinitely." >&2
     echo -e "Diagnostics captured to: ${YW}${LOG}${CL}" >&2
@@ -459,8 +474,8 @@ VMID="$(get_config_value 'vmid')"
 
 # Check if VMID already exists - exit without destroying the existing VM
 if qm status $VMID &>/dev/null; then
-  echo -e "\n${RD}[ERROR]${CL} VM with VMID ${YW}$VMID${CL} already exists on this node."
-  echo -e "Please choose a different VMID or manually remove the existing VM if intended.\n"
+  echo -e "${RD}[Error]${CL} VM with VMID ${YW}$VMID${CL} already exists on this node."
+  echo -e "Please choose a different VMID or manually remove the existing VM if intended."
   trap - ERR  # Disable error handler to prevent cleanup of existing VM
   exit 1
 fi
@@ -476,7 +491,7 @@ BIOS="$(get_config_value 'bios' 'ovmf')"
 case "$BIOS" in
   ovmf|seabios) ;;
   *)
-    echo -e "\n${RD}[ERROR]${CL} unsupported bios '${YW}${BIOS}${CL}' — expected 'ovmf' or 'seabios'."
+    echo -e "${RD}[Error]${CL} unsupported bios '${YW}${BIOS}${CL}' — expected 'ovmf' or 'seabios'."
     exit 1 ;;
 esac
 CORE_COUNT="$(get_config_value 'cores' '2')"
@@ -566,32 +581,32 @@ if [ "${IMAGETYPE:-}" != "clone" ]; then
       info "ISO already present locally: /var/lib/vz/template/iso/${IMAGE} — skipping download"
     elif [ -n "${IMAGELOCATION:-}" ]; then
       URL="${IMAGELOCATION%/}/${IMAGE#/}"
-      info "Downloading ISO file: $URL"
+      info_n "Downloading ISO file: $URL"
       mkdir -p /var/lib/vz/template/iso
       # Support compressed installer ISOs (e.g. the OPNsense dvd .iso.bz2).
       # Decompress to a plain .iso under template/iso; ISO_NAME is what qm attaches.
       if [[ "$IMAGE" == *.bz2 ]]; then
         ISO_NAME="$(basename "${IMAGE%.bz2}")"
-        curl -fSLo "/tmp/${IMAGE##*/}" "$URL"
+        fetch_dots "/tmp/${IMAGE##*/}" "$URL"
         image_sha256_check "/tmp/${IMAGE##*/}" "${IMAGESHA256:-}"
         info "Decompressing ISO, have patience"
         bzip2 -dc "/tmp/${IMAGE##*/}" > "/var/lib/vz/template/iso/${ISO_NAME}"
         rm -f "/tmp/${IMAGE##*/}"
       elif [[ "$IMAGE" == *.xz ]]; then
         ISO_NAME="$(basename "${IMAGE%.xz}")"
-        curl -fSLo "/tmp/${IMAGE##*/}" "$URL"
+        fetch_dots "/tmp/${IMAGE##*/}" "$URL"
         image_sha256_check "/tmp/${IMAGE##*/}" "${IMAGESHA256:-}"
         info "Decompressing ISO, have patience"
         xz -dc "/tmp/${IMAGE##*/}" > "/var/lib/vz/template/iso/${ISO_NAME}"
         rm -f "/tmp/${IMAGE##*/}"
       else
         ISO_NAME="$(basename "$IMAGE")"
-        curl -fSLo "/var/lib/vz/template/iso/${ISO_NAME}" "$URL"
+        fetch_dots "/var/lib/vz/template/iso/${ISO_NAME}" "$URL"
         image_sha256_check "/var/lib/vz/template/iso/${ISO_NAME}" "${IMAGESHA256:-}"
       fi
       info "Downloaded ISO file to /var/lib/vz/template/iso/${ISO_NAME}"
     else
-      echo -e "\n${RD}[ERROR]${CL} ISO '${IMAGE}' not found at /var/lib/vz/template/iso/ and no imageLocation set to download from"
+      echo -e "${RD}[Error]${CL} ISO '${IMAGE}' not found at /var/lib/vz/template/iso/ and no imageLocation set to download from"
       exit 1
     fi
   elif [ "$IMAGETYPE" = "img" ]; then
@@ -605,8 +620,8 @@ if [ "${IMAGETYPE:-}" != "clone" ]; then
       mv "$PREFETCHED" "$IMAGE"
       info "Using the downloaded, hash-verified Disk Image: ${PREFETCHED}"
     else
-      info "Retrieving the Disk Image: $URL"
-      curl -fSLo "$IMAGE" "$URL"
+      info_n "Retrieving the Disk Image: $URL"
+      fetch_dots "$IMAGE" "$URL"
       image_sha256_check "$IMAGE" "${IMAGESHA256:-}"
     fi
     if [[ "$IMAGE" == *.bz2 ]]; then
@@ -823,6 +838,7 @@ if [ "$IMAGETYPE" == "clone" ]; then
     local _node="$1" _src="$2" _new="$3" _name="$4" _via_ssh="${5:-}" _storage="${6:-}"
     local _pvesh_cmd="pvesh create /nodes/${_node}/qemu/${_src}/clone --newid ${_new} --name '${_name}' --full 1${_storage:+ --storage ${_storage}} 2>&1"
     debug "  Cloning template ${_src} → VM ${_new} on ${_node}..."
+    info_n "Cloning the template's disk"
     # Progress: 'transferred X of Y (Z%)' lines → a single dot each (visible
     # progress without flooding); every other clone line → [Debug].
     if [[ -n "$_via_ssh" ]]; then

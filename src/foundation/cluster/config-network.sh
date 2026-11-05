@@ -80,7 +80,7 @@
 
 set -euo pipefail
 
-readonly RD=$'\033[01;31m' YW=$'\033[33m' GN=$'\033[1;92m' BL=$'\033[36m' CL=$'\033[m' BOLD=$'\033[1m'
+readonly RD=$'\033[01;31m' YW=$'\033[1;33m' GN=$'\033[1;92m' BL=$'\033[36m' CL=$'\033[m' BOLD=$'\033[1m'
 info()  { echo -e "${GN}[network]${CL} $*"; }
 warn()  { echo -e "${YW}[network][warn]${CL} $*"; }
 error() { echo -e "${RD}[network][error]${CL} $*" >&2; }
@@ -785,7 +785,6 @@ EOF
 
 NEW_CONFIG="$(render_interfaces)"
 
-echo ""
 info "${BOLD}Planned network configuration (${ROLE} node):${CL}"
 if [[ "$ROLE" == "first" ]]; then
   info "  wan  ← port ${BL}${WAN_PORT:-<none>}${CL}   ip ${BL}${INSTALL_CIDR:-?}${CL}  gw ${BL}${INSTALL_GW:-?}${CL}  (upstream uplink + node internet)"
@@ -816,7 +815,6 @@ fi
 mgmt_prefix="${LAN_MGMT_IP%/*}"; mgmt_prefix="${mgmt_prefix%.*}"   # e.g. 10.0.0
 ssh_src="${SSH_CLIENT:-}"; ssh_src="${ssh_src%% *}"               # empty when not over SSH (set -u safe)
 if [[ -n "$ssh_src" && "$ssh_src" == "${mgmt_prefix}".* ]]; then
-  echo ""
   warn "${BOLD}⚠  Your SSH client ${ssh_src} is inside the management subnet ${mgmt_prefix}.0/24.${CL}"
   warn "   When 'lan' comes up the node routes that subnet out 'lan', so THIS SSH"
   warn "   session will freeze (and the gateway self-check won't revert it)."
@@ -864,7 +862,6 @@ if [[ "$DO_ROLLBACK" == "1" ]]; then
   # reverts (e.g. genuinely mis-detected ports).
   selfcheck_gw="$INSTALL_GW"
   [[ "$ROLE" == "secondary" ]] && selfcheck_gw="$FW_IP"
-  echo ""
   if [[ -z "$selfcheck_gw" ]]; then
     touch "$ROLLBACK_OK"
     info "${GN}✓${CL} No gateway to self-check against — keeping the change."

@@ -91,7 +91,7 @@ set -euo pipefail
 
 ORIG_ARGS=("$@")
 
-RD="\033[01;31m"; GN="\033[1;92m"; YW="\033[33m"; CY="\033[1;96m"; MG="\033[1;95m"; CL="\033[m"
+RD="\033[01;31m"; GN="\033[1;92m"; YW="\033[1;33m"; CY="\033[1;96m"; MG="\033[1;95m"; CL="\033[m"
 # What the operator answers, and what the operator must go and do, stand out from the rest.
 IN="$(printf '%b' "${CY}[Input]${CL}")"
 info()  { echo -e "${GN}[Info]${CL} $*"; }

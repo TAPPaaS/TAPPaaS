@@ -41,7 +41,7 @@
 #
 set -uo pipefail   # NOT -e: this is a best-effort cleanup; steps must not abort it.
 
-readonly RD=$'\033[01;31m' YW=$'\033[33m' GN=$'\033[1;92m' BL=$'\033[36m' CL=$'\033[m' BOLD=$'\033[1m'
+readonly RD=$'\033[01;31m' YW=$'\033[1;33m' GN=$'\033[1;92m' BL=$'\033[36m' CL=$'\033[m' BOLD=$'\033[1m'
 info()  { echo -e "${GN}[uninstall]${CL} $*"; }
 warn()  { echo -e "${YW}[uninstall][warn]${CL} $*"; }
 error() { echo -e "${RD}[uninstall][error]${CL} $*" >&2; }

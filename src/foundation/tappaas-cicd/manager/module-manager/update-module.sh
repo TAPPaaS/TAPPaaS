@@ -255,7 +255,6 @@ attempt_rollback() {
         return
     fi
     if [[ "${snap_created}" == true ]]; then
-        echo ""
         warn "Attempting rollback to pre-update snapshot..."
         if /home/tappaas/bin/snapshot-vm.sh "${module}" --restore 1; then
             info "  ${GN}✓${CL} Rollback completed — VM restored to pre-update state"

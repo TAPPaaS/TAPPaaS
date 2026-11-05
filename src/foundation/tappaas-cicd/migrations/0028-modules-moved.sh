@@ -43,7 +43,7 @@ BACKUP_DIR="${TAPPAAS_MIGRATION_BACKUP_DIR:-${CONFIG_DIR}/.migrations/backup/002
 CHECK=0
 [[ "${1:-}" == "--check" ]] && CHECK=1
 
-say()  { echo -e "\033[32m[Info]\033[m   0028: $*"; }
+say()  { echo -e "\033[1;92m[Info]\033[m   0028: $*"; }
 note() { [[ "${TAPPAAS_DEBUG:-0}" == "1" ]] || return 0; echo -e "\033[36m[Debug]\033[m   0028: $*"; }
 stop() { echo -e "\033[01;31m[Error]\033[m 0028: $*" >&2; exit 1; }
 

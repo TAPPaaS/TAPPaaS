@@ -14,12 +14,12 @@
 
 # ── Color definitions (only set if not already defined) ──────────────
 
-[[ -z "${YW:-}" ]]   && YW=$'\033[33m'      # Yellow
+[[ -z "${YW:-}" ]]   && YW=$'\033[1;33m'      # Yellow
 [[ -z "${BL:-}" ]]   && BL=$'\033[36m'      # Cyan
 [[ -z "${RD:-}" ]]   && RD=$'\033[01;31m'   # Red
 [[ -z "${BGN:-}" ]]  && BGN=$'\033[4;92m'   # Bright Green with underline
 [[ -z "${GN:-}" ]]   && GN=$'\033[1;92m'    # Green with bold
-[[ -z "${DGN:-}" ]]  && DGN=$'\033[32m'     # Green
+[[ -z "${DGN:-}" ]]  && DGN=$'\033[1;92m'     # Green
 [[ -z "${CL:-}" ]]   && CL=$'\033[m'        # Clear
 [[ -z "${BOLD:-}" ]] && BOLD=$'\033[1m'     # Bold
 
