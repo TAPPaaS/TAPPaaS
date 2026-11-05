@@ -304,7 +304,7 @@ mkpkgs "${OTHER}"; rm -f "${M}/w/paia.deb"
 out="$(GPGV_OK=1 media paia_fetch "${M}/w")"; rc=$?
 ck "a .deb that does not match its Packages entry is refused" "1" "${rc}"
 [[ ! -e "${M}/w/paia.deb" ]] && ok "… and removed" || bad "the mismatching .deb was kept"
-_iso_line="$(grep -n '^iso_check "\$ISO"' "${MEDIA}" | cut -d: -f1)"
+_iso_line="$(grep -n 'iso_check "\$ISO"' "${MEDIA}" | head -1 | cut -d: -f1)"
 _prep_line="$(grep -n 'prepare-iso "\$ISO"' "${MEDIA}" | cut -d: -f1)"
 [[ -n "${_iso_line}" && -n "${_prep_line}" && "${_iso_line}" -lt "${_prep_line}" ]] \
     && ok "the ISO is checked before prepare-iso uses it" || bad "iso_check (${_iso_line:-none}) not before prepare-iso (${_prep_line:-none})"

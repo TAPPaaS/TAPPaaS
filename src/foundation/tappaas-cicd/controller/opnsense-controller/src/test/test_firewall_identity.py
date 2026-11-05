@@ -26,7 +26,7 @@ class FirewallKeyPresentTest(unittest.TestCase):
             self.assertFalse(fi.firewall_key_present())  # repeated calls...
             self.assertFalse(fi.firewall_key_present())  # ...must stay quiet
             mock_warn.assert_called_once()
-            self.assertIn("#226", mock_warn.call_args.args[0])
+            self.assertIn("grant_cicd_firewall_access", mock_warn.call_args.args[0])
 
     def test_present_returns_true_and_does_not_warn(self) -> None:
         with tempfile.NamedTemporaryFile() as f:

@@ -57,7 +57,7 @@ run "${T}/r" >/dev/null; ck "a field the schema dropped is a finding" "yes" "$(s
 
 mkrepo "${T}/r" '{"foundationModules":[{"moduleName":"backup","moduleJson":"src/foundation/backup/backup.json","tier":"foundation","source":"official","stack":"foundation"}],
                   "applicationModules":[{"moduleName":"hass","moduleJson":"src/home/hass/hass.json","vmid":210,"tier":"app","stack":"home","category":"automation","status":"beta"}]}'
-ck "the pre-#463 shape is read, and said to be old" "0 yes" "$(run "${T}/r") $(said 'pre-#463 lists')"
+ck "the pre-#463 shape is read, and said to be old" "0 yes" "$(run "${T}/r") $(said 'still uses the old separate lists')"
 ck "…its tier/source/category are not findings"     1 "$(finds)"
 
 echo "── summary: ${pass} pass, ${fail} fail ──"

@@ -57,7 +57,7 @@ console.log("checkModule — D2, D3, ADR-013");
   const nt = run(noTest);
   check(has(nt, "warning", /missing test\.sh/) && !nt.some((f) => f.severity === "error"), "missing test.sh (SHOULD) is only a warning");
   const noInstallMd = { ...ok }; delete noInstallMd["/r/app/INSTALL.md"];
-  check(has(run(noInstallMd), "error", /INSTALL\.md.*ADR-013/), "INSTALL.md is ADR-013's, reported by its rule");
+  check(has(run(noInstallMd), "error", /INSTALL\.md.*catalogue inclusion/), "INSTALL.md is the documentation rule's: needed in the catalogue");
 
   const noDir = { ...ok, "/r/app/app.json": JSON.stringify({ stack: "ai", provides: ["api", "extra"] }) };
   check(has(run(noDir), "error", /provides 'extra' but has no services\/extra\//), "a provided service without a directory is an error");
