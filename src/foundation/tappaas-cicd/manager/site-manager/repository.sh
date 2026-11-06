@@ -1224,6 +1224,14 @@ cmd_sync() {
     fi
 
     info "${BOLD}Sync ${name}${CL} (${branch}) ${path}"
+    # Before the fetch: a checkout left with empty objects by a hard stop fails
+    # every fetch until they are repaired (the shared reconciler does the same).
+    if [[ "${dry_run}" != 1 ]]; then
+        repo_sync_durable "${path}"
+        repo_sync_repair_objects "${path}" "${url}" "${name}" \
+            || die "sync: ${name} has git objects that origin does not have (see above)"
+        repo_sync_restore_truncated "${path}" "${name}"
+    fi
     git -C "${path}" fetch --quiet --prune origin \
         || die "sync: fetch from ${cur_url} failed"
     local tip

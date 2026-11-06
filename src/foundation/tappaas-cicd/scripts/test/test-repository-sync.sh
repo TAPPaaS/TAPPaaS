@@ -131,6 +131,22 @@ has "…naming the file" "${C}/tappaas-cicd.nix" "${out}"
 ck "…and nothing moved" "${before}" "$(head_of)"
 unset TAPPAAS_CICD_DIR
 
+echo "── a hard stop left an empty object and an empty file"
+git -C "${R}" remote set-url origin "file://${d}/up.git"
+git -C "${R}" checkout -q main 2>/dev/null; git -C "${R}" reset -q --hard origin/main 2>/dev/null
+upstream "README.md" "notes after a stop" "after a stop"
+git -C "${R}" fetch -q origin && git -C "${R}" merge -q --ff-only origin/main
+t="$(head_of)"; o="${R}/.git/objects/${t:0:2}/${t:2}"
+if [[ -f "${o}" ]]; then chmod u+w "${o}"; : > "${o}"; fi
+: > "${R}/README.md"
+upstream "README.md" "notes, later" "later"
+out="$(sync TAPPaaS)"; ck "the sync repairs and succeeds" 0 "$?"
+has "…saying what it repaired" "empty git object" "${out}"
+ck "…and reaches the tip" "$(tip_of)" "$(head_of)"
+ck "…the file has its content" "notes, later" "$(cat "${R}/README.md")"
+ck "…no empty object is left" 0 "$(find "${R}/.git/objects" -type f -size 0 | wc -l | tr -d ' ')"
+ck "…and the checkout is durable" all "$(git -C "${R}" config core.fsync)"
+
 echo "── an origin change is not a sync"
 git -C "${R}" remote set-url origin "https://example.invalid/other.git"
 out="$(sync TAPPaaS)"; ck "a mismatched origin refuses the sync" 1 "$?"
