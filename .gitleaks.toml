@@ -24,4 +24,8 @@ regexTarget = "line"
 regexes = [
   # a keyword argument passed through (authentik-controller authentik_cli.py)
   '''token=token, verify_tls=''',
+  # a made-up key ("KK") in the certificate delivery test (ca-manager ca.test.ts)
+  '''-----BEGIN PRIVATE KEY-----\\nKK\\n-----END PRIVATE KEY-----''',
+  # a made-up bearer token the support bundle must anonymize (test-support-bundle.sh)
+  '''curl -H 'Authorization: Bearer abcdef123'''',
 ]
