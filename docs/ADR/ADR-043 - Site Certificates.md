@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Draft** — for the operator's review, nothing built |
-| **Version** | 0.3 |
-| **Date** | 2026-11-02 |
+| **Status** | **Accepted — implemented** (operator, 2026-11-06) |
+| **Version** | 1.0 |
+| **Date** | 2026-11-06 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | Unblocks #787 (TLS for logging's syslog and Loki ports, "needs a TAPPaaS CA"). Gives #771 (NFS over TLS) the certificates it needs once its ZFS block is gone. Replaces the "Local DNS mode" build list in `docs/plans/install-simplification-plan.md`. Amends ADR-021 R2 and its unpublished-service table (D5 below), ADR-034 D2 and D10 (D10 below; A15 stays rejected), ADR-012 §2.5.1 (the CA key joins the escrow), ADR-007c (a third `dnsMode`), ADR-040 D3 (a `certificate-authority` class). |
-| **Changelog** | v0.1 (2026-11-02) — first draft, from the operator's direction of 2026-11-02: a site CA has two reasons to exist and one implementation; `ca-manager` also holds the DNS providers. v0.2 (2026-11-02) — the operator's direction: a domain's subdomains never need a new CA, and an unrelated domain gets a CA of its own. So one internal CA, plus one CA per `local` domain tree; rotation is no longer how a domain is added. v0.3 (2026-11-02) — the operator's direction: CAs are CIs (D11, closes O5 for CAs). |
+| **Changelog** | v0.1 (2026-11-02) — first draft, from the operator's direction of 2026-11-02: a site CA has two reasons to exist and one implementation; `ca-manager` also holds the DNS providers. v0.2 (2026-11-02) — the operator's direction: a domain's subdomains never need a new CA, and an unrelated domain gets a CA of its own. So one internal CA, plus one CA per `local` domain tree; rotation is no longer how a domain is added. v0.3 (2026-11-02) — the operator's direction: CAs are CIs (D11, closes O5 for CAs). v1.0 (2026-11-06) — accepted as implemented: delivery steps 1–6 built, proven on lab2, and the internal CA with logging's TLS live on hrossen; what is still to verify is listed under Progress. |
 
 Every TAPPaaS site gets its own certificate authority at install, for trusted encrypted traffic
 between modules on `<module>.<zone>.internal`, and one more for each domain tree that has no public
@@ -325,7 +325,7 @@ for the install and the update, which rebuild anyway); a changed refid moves eve
 `caddy-manager rebind-certificate`, reloads Caddy, and retires the old certificate with
 `trust-manager cert-retire`, which removes only what TAPPaaS made and nothing still served.
 
-## Progress, 2026-11-03
+## Progress, 2026-11-06
 
 | Step | State |
 |---|---|
@@ -337,6 +337,9 @@ for the install and the update, which rebuild anyway); a changed refid moves eve
 | 5 Day 1 order | built: the confirmed order, no TLS step, Make it public, first node disks, repositories, and a recorded answer for each optional step; the switch fabric's vendor choice and discovery are still the old UniFi form |
 | 6 #787 logging TLS | built and proven on lab2: every sender on TLS with the internal CA — guests' journals on 3111, the mothership's and the console's queries on 3110, OPNsense's syslog on 6514 (tls4, its own certificate), the node's rsyslog on 6515, a test line found in Loki; the plain ports go a release later |
 | 7 fresh lab2 | not started |
+| hrossen | live: the internal CA from the mothership's pre-update (O4), logging's certificate and the firewall's syslog certificate issued by it; both environments stay `per-service`, so no domain CA and no DNS provider |
+
+Still to verify after acceptance: a fresh lab2 through the whole path (step 7), a real DNS provider and `provider test`, the Debian and node trust path on a real host, the CA's `depends-on` relations and `escrowed` in the CMDB, and the open questions O1, O2 (Chrome, iOS, Android), O3 and O5.
 
 ## Testing
 
