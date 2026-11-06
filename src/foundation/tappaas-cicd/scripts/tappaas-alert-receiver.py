@@ -57,8 +57,10 @@ burst opened keeps its own ALERT and RESOLVED.
 A planned disruption is quiet. Before an update restarts a guest it is allowed
 to restart, it opens a maintenance window (tappaas-maintenance.sh: a file in
 --maintenance-dir naming the hosts, or the whole site for the firewall, and an
-end time). A HostSilent from inside one is recorded, not mailed, and so is its
-RESOLVED, which finds no ALERT to answer.
+end time); so does the cluster update before it upgrades a node's cluster
+packages, whose restart takes the node out of quorum for seconds. A HostSilent
+or QuorumLost from inside one is recorded, not mailed, and a RESOLVED then finds
+no ALERT to answer.
 
 A module's rule (ADR-039, tappaas-alert-rules.py) may carry its mail as
 templates (the mailSubject and mailBody annotations): `{placeholder}`
@@ -669,6 +671,7 @@ def fold_node_down(args, payload):
 
 # ── planned disruption and many hosts silent at once ─────────────────────
 BURST_STALE = 24 * 3600  # a burst nobody resolved is forgotten after a day
+MAINTENANCE_RULES = {"HostSilent", "QuorumLost"}  # what a maintenance window holds back
 _burst_lock = threading.Lock()
 
 
@@ -750,7 +753,7 @@ def fold_quiet(args, payload):
     Closes a burst whose hosts all log again. Returns what is left to mail as
     usual, or None when nothing is."""
     alerts = payload.get("alerts") or []
-    if not any((a.get("labels") or {}).get("alertname") == "HostSilent" for a in alerts):
+    if not any((a.get("labels") or {}).get("alertname") in MAINTENANCE_RULES for a in alerts):
         return payload
     now = time.time()
     keep = []
@@ -775,13 +778,15 @@ def fold_quiet(args, payload):
                         b = {}
                 keep.append(a)
                 continue
+            rule = (a.get("labels") or {}).get("alertname", "")
+            if rule in MAINTENANCE_RULES and host and a.get("status", "firing") == "firing":
+                why = maintenance_reason(args, host, now)
+                if why:
+                    print(f"folded: {rule} on {host} into maintenance ({why})", flush=True)
+                    breadcrumb(args, f"alert folded into maintenance ({why}): {rule} on {host}")
+                    continue
             if not _is_silent(a):
                 keep.append(a)
-                continue
-            why = maintenance_reason(args, host, now)
-            if why:
-                print(f"folded: HostSilent on {host} into maintenance ({why})", flush=True)
-                breadcrumb(args, f"alert folded into maintenance ({why}): HostSilent on {host}")
                 continue
             if b.get("open"):
                 if host not in b["members"]:

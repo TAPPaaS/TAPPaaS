@@ -532,7 +532,9 @@ A maintenance window names hosts, or the whole site, and an end time. While it i
 the log alerts record a host gone silent instead of mailing it, and its RESOLVED then
 has no ALERT to answer. An update that is allowed to restart a guest opens one before
 it restarts it: for an hour, for the guest's own host, or for the whole site when the
-guest is the firewall, since every zone's logs pass through it.
+guest is the firewall, since every zone's logs pass through it. The cluster update opens one
+for a node, for ten minutes, before it upgrades packages that restart the cluster service;
+`QuorumLost` from that node is then held too.
 
 ```bash
 tappaas-maintenance.sh open --name N --scope site|HOST[,HOST...] --minutes M [--reason TEXT]

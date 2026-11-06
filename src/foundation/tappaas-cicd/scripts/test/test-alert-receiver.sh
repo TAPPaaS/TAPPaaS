@@ -320,6 +320,18 @@ ck "a host window covers its host" "0" "$(grep -c 'HostSilent on forgejo' "${TMP
 TAPPAAS_MAINTENANCE_DIR="${TMP}/maint2" "${MW}" close --name restart-forgejo
 ck "a closed window is gone" "" "$(TAPPAAS_MAINTENANCE_DIR="${TMP}/maint2" "${MW}" list)"
 
+# A node's cluster packages upgraded: its QuorumLost is held, another node's is not.
+TAPPAAS_MAINTENANCE_DIR="${TMP}/maint2" "${MW}" open --name upgrade-tappaas1 --scope tappaas1 --minutes 10 --reason "tappaas1's cluster packages upgraded (corosync)"
+: > "${TMP}/subjects"
+post "${TOKEN}" "$(wh firing event QuorumLost tappaas1)" >/dev/null
+post "${TOKEN}" "$(wh firing event QuorumLost tappaas2)" >/dev/null
+for _ in $(seq 1 30); do grep -q 'QuorumLost on tappaas2' "${TMP}/subjects" && break; sleep 0.1; done
+ck "inside its node's window, QuorumLost is not mailed" "0" "$(grep -c 'QuorumLost on tappaas1' "${TMP}/subjects")"
+ck "…a node outside any window still alerts" "1" "$(grep -c 'QuorumLost on tappaas2' "${TMP}/subjects")"
+ck "…and the hold is on record" "yes" "$(grep -q 'folded into maintenance (tappaas1.s cluster packages upgraded (corosync)): QuorumLost on tappaas1' "${TMP}/crumbs2" && echo yes || echo no)"
+TAPPAAS_MAINTENANCE_DIR="${TMP}/maint2" "${MW}" close --name upgrade-tappaas1
+: > "${TMP}/subjects"
+
 # One host silent on its own: mailed, after the hold.
 post "${TOKEN}" "$(wh firing state HostSilent vaultwarden)" >/dev/null
 ck "a lone HostSilent waits for the hold" "0" "$(grep -c 'HostSilent on vaultwarden' "${TMP}/subjects")"

@@ -294,8 +294,11 @@ in `config/alerts.log` on the mothership.
   RESOLVED.
 - **A planned restart is quiet.** An update that is allowed to restart a guest opens a
   maintenance window first (`tappaas-maintenance.sh`): an hour, for the guest's own host,
-  or for the whole site when it restarts the firewall. A HostSilent from inside a window
-  is recorded, not mailed, and so is its RESOLVED.
+  or for the whole site when it restarts the firewall. The cluster update opens one for a
+  node, for ten minutes, before it upgrades packages that restart the cluster service
+  (corosync, knet, pve-cluster, the HA services): the restart takes the node out of quorum
+  for a few seconds while the others keep it. A HostSilent or QuorumLost from inside a
+  window is recorded, not mailed, and so is its RESOLVED.
 - **The VMs' log shippers reconnect.** Alloy pushes over HTTP/1.1, so a push that times
   out closes its connection and the retry opens a new one. Over HTTP/2 the shippers kept
   waiting on connections a restarted firewall had dropped, and their logs stalled for

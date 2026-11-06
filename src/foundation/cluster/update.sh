@@ -4,7 +4,8 @@
 #
 # Updates all Proxmox nodes in the cluster:
 #   1. Runs apt update && apt dist-upgrade on each node, then prunes superseded
-#      kernels (keeping running, latest and latest-1)
+#      kernels (keeping running, latest and latest-1). When the upgrade restarts
+#      the cluster service, alerts for that node are held for ten minutes first
 #   2. Distributes Create-TAPPaaS-VM.sh, Create-TAPPaaS-LXC.sh and zones.json to each node
 #   3-4. Refreshes SSD lifecycle and the Realtek NIC fix on each node
 #   5. Makes each node's sshd key-only (#19) — only over a key connection
@@ -53,6 +54,27 @@ if [[ -n "${CLUSTER_UPDATE_NODES:-}" ]]; then
     debug "Limited to: $(echo "$NODES" | tr '\n' ' ')"
 fi
 
+# hold_cluster_alerts <node> <fqdn> — when the node's pending upgrades restart
+# the cluster stack (corosync, knet, pmxcfs, the HA services), open a
+# maintenance window for that node first: the restart takes it out of the
+# cluster for a few seconds, which logs "node lost quorum" and would mail a
+# QuorumLost while the other nodes keep quorum. Ten minutes covers the upgrade
+# and the alert rule's evaluation; a loss outside it still alerts. Best effort.
+hold_cluster_alerts() {
+    local node="$1" fqdn="$2" mw pkgs
+    mw="$(command -v tappaas-maintenance.sh 2>/dev/null || true)"
+    [[ -n "${mw}" ]] || mw=/home/tappaas/bin/tappaas-maintenance.sh
+    [[ -x "${mw}" ]] || return 0
+    pkgs="$(ssh -n -o StrictHostKeyChecking=no root@"${fqdn}" "apt list --upgradable 2>/dev/null" 2>/dev/null \
+        | grep -o -E '^(corosync|libcorosync[^/]*|libknet[^/]*|pve-cluster|libpve-cluster[^/]*|pve-ha-manager)/' \
+        | tr -d / | sort -u | paste -sd, - || true)"
+    [[ -n "${pkgs}" ]] || return 0
+    "${mw}" open --name "upgrade-${node}" --scope "${node}" --minutes 10 \
+        --reason "${node}'s cluster packages upgraded (${pkgs//,/, })" >/dev/null 2>&1 \
+        && info "  ${node}: upgrading ${pkgs//,/, } restarts the cluster service — alerts for ${node} held for ten minutes" \
+        || true
+}
+
 # Step 1: Run apt update && apt dist-upgrade on all Proxmox nodes
 debug "Step 1: Updating Proxmox node packages"
 _apt_ok=()
@@ -69,6 +91,7 @@ while read -r node; do
             warn "apt update failed on $node"
             continue
         fi
+        hold_cluster_alerts "$node" "$NODE_FQDN"
         if ! ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "apt dist-upgrade --assume-yes"; then
             warn "apt dist-upgrade failed on $node"
             continue
@@ -78,6 +101,7 @@ while read -r node; do
             warn "apt update failed on $node"
             continue
         fi
+        hold_cluster_alerts "$node" "$NODE_FQDN"
         if ! ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "apt dist-upgrade --assume-yes" 2>&1 | while IFS= read -r _; do :; done; then
             warn "apt dist-upgrade failed on $node"
             continue
