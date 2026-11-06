@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** — built on `feat/917-sizing`, not yet live-tested |
-| **Version** | 0.5 |
-| **Date** | 2026-11-05 |
+| **Status** | **Accepted** — built, live on hrossen; the 32 GB install at small passed 2026-11-06 |
+| **Version** | 1.0 |
+| **Date** | 2026-11-06 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | #917. Amends ADR-007c (environments gain `size`), ADR-020 (three policy fields on `cluster:vm` and `cluster:lxc`) and the #207 3-way merge (the release side is sized before it is compared). |
-| **Changelog** | v0.1 (2026-11-05): first draft, from the operator's direction of 2026-11-05. v0.2 (2026-11-05): the operator's review. tappaas-cicd tops out at medium (4 cores, 8 GiB). network's medium memory drops to 4 GiB. Immich comes down at every size, with its ML cap a share of the VM. The console lists and edits both sizes (D7), and `make-install-media.sh` asks for the size (D8). v0.3 (2026-11-05): measured on hrossen (D6a). Logging goes up to 2/4/8 GiB, Immich comes down to 3/4/8 GiB, and the minimums for coturn, nomad and litellm move above what those guests use. v0.4 (2026-11-05): the operator's review. tappaas-cicd has 4 cores at every size. The disk max is reviewed for the modules whose data grows with the site (D6b). v0.5 (2026-11-05): the operator's review. The pairs are renamed `coresSmallLarge`, `memorySmallLarge` and `diskSmallLarge`, since "max" read as a limit. tappaas-cicd's small memory goes to 4 GiB. nextcloud's disk is thin. nextcloud and immich start a large site at twice medium, and auto-grow takes them further. |
+| **Changelog** | v0.1 (2026-11-05): first draft, from the operator's direction of 2026-11-05. v0.2 (2026-11-05): the operator's review. tappaas-cicd tops out at medium (4 cores, 8 GiB). network's medium memory drops to 4 GiB. Immich comes down at every size, with its ML cap a share of the VM. The console lists and edits both sizes (D7), and `make-install-media.sh` asks for the size (D8). v0.3 (2026-11-05): measured on hrossen (D6a). Logging goes up to 2/4/8 GiB, Immich comes down to 3/4/8 GiB, and the minimums for coturn, nomad and litellm move above what those guests use. v0.4 (2026-11-05): the operator's review. tappaas-cicd has 4 cores at every size. The disk max is reviewed for the modules whose data grows with the site (D6b). v0.5 (2026-11-05): the operator's review. The pairs are renamed `coresSmallLarge`, `memorySmallLarge` and `diskSmallLarge`, since "max" read as a limit. tappaas-cicd's small memory goes to 4 GiB. nextcloud's disk is thin. nextcloud and immich start a large site at twice medium, and auto-grow takes them further. v1.0 (2026-11-06): **Accepted** by the operator. Built, live on hrossen since 2026-11-05, and a fresh install at size small on a 32 GB node with foundation, home and office works (#917 closed). Follow-up: Immich's machine-learning peak on a real photo library. |
 
 A site, and each environment in it, says how big it is: `small`, `medium` or `large`. A module
 states its VM or container size once for `medium` and, optionally, a minimum and a maximum. The
@@ -308,5 +308,7 @@ report (`guest-memory-report.sh`) could not run: Loki timed out.
 - **Console:** `Site.tsx` and `Environments.tsx` show the size. The forms take `size` from the
   schemas and the `setfields.ts` shortcut tables.
 - **Install media:** `make-install-media.sh --size`, asked when not given.
-- **Live test (open):** a fresh `--size small` install on a 32 GB node with foundation, home
-  and office, run under load. Then a size change from small to medium and an update.
+- **Live test:** a fresh `--size small` install on a 32 GB node with foundation, home and
+  office works (2026-11-06). A size change on a running site (small to medium, then an
+  update) is covered by `test-module-sizing.sh`'s merge cases; it has not yet been done on a
+  live site.
