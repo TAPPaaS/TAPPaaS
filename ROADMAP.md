@@ -106,7 +106,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 |------|-------|:-:|:-:|---:|---:|---:|
 | 7 | G7.1 DevOps stack | H | M | 1 | – | 2 |
 | 7 | G7.2 New and reworked app modules | H | M | 4 | – | 1 |
-| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | 11 | 1 | 11 |
+| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | 11 | 4 | 12 |
 | 6 | G6.2 User interface & physical view | H | L | 6 | – | 4 |
 | 6 | G6.3 Data model | M | M | 9 | – | 2 |
 | 5 | G5.1 Satellite & off-site | H | M | 1 | – | 6 |
@@ -114,7 +114,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 3 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 6 | 1 | 2 |
 | 4 | ✅ G4.6 Community module extension points | H | M | – | 7 | – |
-| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 29 | 2 | 5 |
+| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 29 | 3 | 5 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
 | 3 | G3.4 AI stack maturity | M | M | 4 | – | 8 |
@@ -251,7 +251,7 @@ New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129),
 The physical site and how an operator sees and runs it. Not ordered by upgrade risk like Waves 0–4:
 these two groups are designed together — the fabric is what the physical view shows and changes.
 
-### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · released: 11 · done for 2.4: 1 · open: 11
+### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · released: 11 · done for 2.4: 4 · open: 12
 
 The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports and trunks kept in line with the zones (#668, #697, #706, #731), the WAN and the ISP (public DNS that follows the WAN, #383, #830; mail when the ISP blocks port 25, #125). Switch setup needs a systematic model, at install and on day 2. Operating the site belongs here too: a service desk (#63) and a SIEM (#843, Wazuh the best candidate). Linked to G6.2: the physical view shows and later changes it.
 
@@ -269,6 +269,10 @@ The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports
 | #843 | Create a SIEM for TAPPaaS | H | M | **Opened 2026-10-16.** Wazuh the best candidate (agents, syslog from OPNsense/Proxmox, FIM, vulnerability detection); placement, sizing and its overlap with logging to decide |
 | #883 | A debug bundle for support: the log and an anonymized `~/config`, attached to the failure mail | M | L | **Opened 2026-10-26.** PII removed from the configs; the mail suggests forwarding it to a support address. First trigger: a failed update |
 | ✅ #905 | Log alerting: a rule whose query cannot run mails under its own name; a Loki that is down slips past the watchdog | L | L | **Closed 2026-10-29** (`8e1db270`, `a37702fa`): rules keep their state when a query cannot run, the Heartbeat stops instead, and only a firing Heartbeat refreshes the receiver's file; the watchdog asks the logging VM and names Loki or Grafana; heartbeat every 10 min, watchdog every 5, stale after 35. Live on hrossen: Loki stopped 10:36 → one mail "log alerting is down: Loki does not answer" at 11:14, no rule mails; RESOLVED 4 min after Loki returned. From a false LanLegDown: the logging VM's backup stalled Grafana's database |
+| #918 | A repository that fails to sync stops the nightly update with no alert that names it | M | L | **Waiting on @ErikDaniel007 (2026-11-06).** The failure mail already goes out every failed night, so it is open why none arrived on the reported site; the likeliest cause is that the notifier scripts were among the files a hard stop emptied (#920). Asked to check `~/config/update-tappaas.failures`. Still to do either way: the mail names the repository and the last git error |
+| ✅ #919 | A checkout with empty git objects cannot be synced or repaired | M | M | **Closed 2026-11-06** (`4cb47468`, `9d80e6f4`): the sync deletes empty loose objects and copies in every object origin has from a fresh clone; empty tracked files are restored from `HEAD`, not stashed; `repository sync` repairs before its own fetch. An object only this checkout had is reported. Hard-stop drill on hrossen passed |
+| ✅ #920 | A hard stop of the mothership leaves zero-byte git objects and files | L | L | **Closed 2026-11-06** (`4cb47468`): each managed checkout gets `core.fsync=all` and `core.fsyncMethod=fsync`, and the working tree is flushed after a sync. Live on hrossen's checkouts |
+| ✅ #921 | `network:proxy` retries ACME forever for a name no wildcard covers and with no public DNS | M | L | **Closed 2026-11-06** (`a7afff95`, `8f1e6908`): under `dnsMode` wildcard the certificate must cover the name; with none and no public A record the name is not published. Live-tested on hrossen. Not done: a 421 answer for unknown hostnames |
 
 ### G6.2 User interface & physical view — Ease H · Risk L · released: 6 · open: 4
 
@@ -492,6 +496,8 @@ The site's actual state is kept in a CMDB: assets and CIs, disks included, fed b
 A module can ship its own alert rules as line patterns, and the foundation's alerts are written that way too; `health-manager alerts` lists what is open and what fired. Containers are watched like VMs: health gates, journal shipping, backup listing and purge, and the update's boot wait reach them through their node.
 
 In the console, Day 1 follows the confirmed order and ends with the rest of the foundation placed on the machines; Day 2 gains Add a repository and Add a switch. A memory-tight node holds back only the module that grows, and modules can be paused to make room.
+
+A hard stop of the mothership no longer leaves a repository it cannot sync: git writes in the managed checkouts reach the disk, and a sync repairs empty objects and empty files from origin. A proxied name that no wildcard certificate covers and that has no public DNS record is no longer published, so the proxy stops retrying a certificate it cannot get.
 <!-- /next-release summary -->
 
 ## Release 2.3.3 — staging 2026-10-26 · production at the next boundary
