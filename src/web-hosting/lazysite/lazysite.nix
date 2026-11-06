@@ -29,7 +29,7 @@
 { config, lib, pkgs, modulesPath, ... }:
 
 let
-  version = "0.16.0";
+  version = "0.16.4";
   lazysite = pkgs.stdenvNoCC.mkDerivation {
     pname = "lazysite";
     inherit version;
@@ -37,7 +37,7 @@ let
       owner = "OpenDigitalCC";
       repo = "lazysite";
       rev = "v${version}";
-      hash = "sha256-C23aso4kZEnEBksIRctK5D1vB2FlDfdCHYCby88i+28=";
+      hash = "sha256-iu/54VTkM6pvhX85rLu62FtFXRqfIlwmwVg2V5iUTrg=";
     };
     dontBuild = true;
     installPhase = ''

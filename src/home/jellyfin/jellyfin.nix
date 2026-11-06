@@ -42,19 +42,19 @@ let
   };
   unstable = import unstableSrc { inherit (pkgs.stdenv.hostPlatform) system; };
 
-  # jellyfin-ffmpeg 8.1.3-1 (#807): FFmpeg 8.1.3 fixes the decoder and demuxer
+  # jellyfin-ffmpeg 8.1.3-2 (#807): FFmpeg 8.1.3 fixes the decoder and demuxer
   # flaws open in 8.1.2-5 (VobSub, ADX, TDSC, TY, MACE, DVB subtitles, CFHD,
   # RTP/ASF, the HLS playlist loop). nixpkgs has it (#573402, via staging-next),
   # the nixos-unstable channel not yet: until it does, the pinned package with
   # the new source. jellyfin's own patch series comes from that source
   # (postPatch). Drop this when unstableSrc carries 8.1.3 or later.
   jellyfinFfmpeg = unstable.jellyfin-ffmpeg.overrideAttrs (old: rec {
-    version = "8.1.3-1";
+    version = "8.1.3-2";
     src = unstable.fetchFromGitHub {
       owner = "jellyfin";
       repo  = "jellyfin-ffmpeg";
       tag   = "v${version}";
-      hash  = "sha256-sxJyUaB0rqpVzd6OVRC6kPVWyBdgFUzvyqwLCkMKRgM=";
+      hash  = "sha256-m6A/d7WszBzAqRAVkzN0PL0do9vZlceucDBgwT5VILE=";
     };
     # The pinned ffmpeg adds an 8.1.2 fix that 8.1.3 already contains (the
     # swscale loongarch underflow); applied again it fails.

@@ -6,7 +6,7 @@
     "component": {
       "type": "application",
       "name": "jellyfin",
-      "description": "TAPPaaS module jellyfin: triage of its own critical/high CVEs (#788). Jellyfin 12.2 (from a pinned nixos-unstable, #850) runs on its NixOS VM (port 8096, plain HTTP), published through the firewall's Caddy to home, netbird and internet zones without the Authentik gate (ADR-032 D3): Jellyfin's own login decides who gets in, and its admin and diagnostic paths answer only inside the site; the library is an NFS share mounted at /media. Live check: the server launches jellyfin-ffmpeg 8.1.3-1 (--ffmpeg flag; FFmpeg 8.1.3, ahead of the nixos-unstable channel, #807), which links libssh 0.12.2, openssl 3.5.8 and, through chromaprint, only libavutil.so.61 of ffmpeg-headless 9.0.1; the Jellyfin process itself runs on the glibc 2.44 and openssl 3.5.8 its .NET runtime brings from nixos-unstable, beside the system's glibc 2.42. jellyfin-ffmpeg 8.1.3-1's own patches are feature and hardware fixes; FFmpeg 8.1.3 itself fixes most decoder/demuxer CVEs of 8.1.2, the rest are triaged against Jellyfin's own use: library files are attacker-relevant input, so decoder/demuxer CVEs it contains are kept exploitable. Hardware acceleration is none and the VM has no render node. No Live TV tuner and no .strm file are configured. Filter names floodfill/swaprect/hqdn3d/quirc and the spdif format do not occur in Jellyfin 12.2's assemblies."
+      "description": "TAPPaaS module jellyfin: triage of its own critical/high CVEs (#788). Jellyfin 12.2 (from a pinned nixos-unstable, #850) runs on its NixOS VM (port 8096, plain HTTP), published through the firewall's Caddy to home, netbird and internet zones without the Authentik gate (ADR-032 D3): Jellyfin's own login decides who gets in, and its admin and diagnostic paths answer only inside the site; the library is an NFS share mounted at /media. Live check: the server launches jellyfin-ffmpeg 8.1.3-2 (--ffmpeg flag; FFmpeg 8.1.3, ahead of the nixos-unstable channel, #807), which links libssh 0.12.2, openssl 3.5.8 and, through chromaprint, only libavutil.so.61 of ffmpeg-headless 9.0.1; the Jellyfin process itself runs on the glibc 2.44 and openssl 3.5.8 its .NET runtime brings from nixos-unstable, beside the system's glibc 2.42. jellyfin-ffmpeg 8.1.3-2's own patches are feature and hardware fixes; FFmpeg 8.1.3 itself fixes most decoder/demuxer CVEs of 8.1.2, the rest are triaged against Jellyfin's own use: library files are attacker-relevant input, so decoder/demuxer CVEs it contains are kept exploitable. Hardware acceleration is none and the VM has no render node. No Live TV tuner and no .strm file are configured. Filter names floodfill/swaprect/hqdn3d/quirc and the spdif format do not occur in Jellyfin 12.2's assemblies."
     }
   },
   "vulnerabilities": [
@@ -38,7 +38,7 @@
       "id": "CVE-2026-59850",
       "analysis": {
         "state": "exploitable",
-        "detail": "Use-after-free on channel data after close; libssh is linked by jellyfin-ffmpeg 8.1.3-1 as its SFTP client and is reachable only via an sftp:// stream URL. Risk here: low: needs a library .strm with an sftp:// URL to an attacker SSH server; outcome is a crash or UAF in one ffmpeg process. Action: Fixed in a newer libssh; next nixpkgs pin that carries it."
+        "detail": "Use-after-free on channel data after close; libssh is linked by jellyfin-ffmpeg 8.1.3-2 as its SFTP client and is reachable only via an sftp:// stream URL. Risk here: low: needs a library .strm with an sftp:// URL to an attacker SSH server; outcome is a crash or UAF in one ffmpeg process. Action: Fixed in a newer libssh; next nixpkgs pin that carries it."
       },
       "affects": [
         {
@@ -202,11 +202,11 @@
       "id": "CVE-2026-96611",
       "analysis": {
         "state": "exploitable",
-        "detail": "Signed integer overflow in the MOV/MP4 demuxer's HEIF ispe box (libavformat/mov.c), present in jellyfin-ffmpeg 8.1.3-1: FFmpeg 8.1.3 does not carry the fix; the box is parsed in any MP4/MOV/HEIF that ffprobe opens. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in 059eb2e (FFmpeg 9.0), not in 8.1.3; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
+        "detail": "Signed integer overflow in the MOV/MP4 demuxer's HEIF ispe box (libavformat/mov.c), present in jellyfin-ffmpeg 8.1.3-2: FFmpeg 8.1.3 does not carry the fix; the box is parsed in any MP4/MOV/HEIF that ffprobe opens. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in 059eb2e (FFmpeg 9.0), not in 8.1.3; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
       },
       "affects": [
         {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-1"
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
         }
       ],
       "ratings": [
@@ -224,11 +224,11 @@
       "id": "CVE-2026-52297",
       "analysis": {
         "state": "exploitable",
-        "detail": "Out-of-bounds read from unpadded IAMF extradata in the MOV demuxer (mov_read_iacb), present in jellyfin-ffmpeg 8.1.3-1 (not in FFmpeg 8.1.3); any MP4/MOV in the library is probed. Risk here: low: a read past a buffer, not a write; needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in 8439e02 (FFmpeg 9.0); needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
+        "detail": "Out-of-bounds read from unpadded IAMF extradata in the MOV demuxer (mov_read_iacb), present in jellyfin-ffmpeg 8.1.3-2 (not in FFmpeg 8.1.3); any MP4/MOV in the library is probed. Risk here: low: a read past a buffer, not a write; needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in 8439e02 (FFmpeg 9.0); needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
       },
       "affects": [
         {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-1"
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
         }
       ],
       "ratings": [
@@ -246,11 +246,11 @@
       "id": "CVE-2026-52296",
       "analysis": {
         "state": "exploitable",
-        "detail": "Out-of-bounds read from unpadded extradata in the WMA encoder (libavcodec/wmaenc.c), present in jellyfin-ffmpeg 8.1.3-1 (not in FFmpeg 8.1.3); Jellyfin 12.2 lists wmav1/wmav2 among its audio codecs, so a client that asks for WMA audio gets ffmpeg's WMA encoder. Risk here: low: needs a signed-in user whose client requests WMA transcoding (no current Jellyfin client does by default); a read past a buffer in one ffmpeg process. Action: fixed upstream in 23227a4 (FFmpeg 9.0); needs a jellyfin-ffmpeg release carrying it."
+        "detail": "Out-of-bounds read from unpadded extradata in the WMA encoder (libavcodec/wmaenc.c), present in jellyfin-ffmpeg 8.1.3-2 (not in FFmpeg 8.1.3); Jellyfin 12.2 lists wmav1/wmav2 among its audio codecs, so a client that asks for WMA audio gets ffmpeg's WMA encoder. Risk here: low: needs a signed-in user whose client requests WMA transcoding (no current Jellyfin client does by default); a read past a buffer in one ffmpeg process. Action: fixed upstream in 23227a4 (FFmpeg 9.0); needs a jellyfin-ffmpeg release carrying it."
       },
       "affects": [
         {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-1"
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
         }
       ],
       "ratings": [
@@ -268,11 +268,11 @@
       "id": "CVE-2026-107696",
       "analysis": {
         "state": "exploitable",
-        "detail": "RTSP client follows 3xx redirects without a limit (libavformat/rtsp.c), present in jellyfin-ffmpeg 8.1.3-1; Jellyfin opens rtsp:// only for a .strm or a Live TV source. Risk here: low: no Live TV tuner and no .strm file are configured, so it needs one added that points at an attacker's server, and the outcome is one ffmpeg process spinning. Action: not fixed upstream yet (FFmpeg through 9.0.2)."
+        "detail": "RTSP client follows 3xx redirects without a limit (libavformat/rtsp.c), present in jellyfin-ffmpeg 8.1.3-2; Jellyfin opens rtsp:// only for a .strm or a Live TV source. Risk here: low: no Live TV tuner and no .strm file are configured, so it needs one added that points at an attacker's server, and the outcome is one ffmpeg process spinning. Action: not fixed upstream yet (FFmpeg through 9.0.2)."
       },
       "affects": [
         {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-1"
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
         }
       ],
       "ratings": [
@@ -290,11 +290,11 @@
       "id": "CVE-2026-70628",
       "analysis": {
         "state": "resolved",
-        "detail": "DVB subtitle parser signed overflow (libavcodec/dvbsub_parser.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-1 is built on — 46ef25c9c, cherry-picked from 93f2a525e. NVD's range (before 9.0) misses the 8.1 backport."
+        "detail": "DVB subtitle parser signed overflow (libavcodec/dvbsub_parser.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-2 is built on — 46ef25c9c, cherry-picked from 93f2a525e. NVD's range (before 9.0) misses the 8.1 backport."
       },
       "affects": [
         {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-1"
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
         }
       ]
     },
@@ -302,11 +302,11 @@
       "id": "CVE-2026-70632",
       "analysis": {
         "state": "resolved",
-        "detail": "CineForm HD transform-2 out-of-bounds write (libavcodec/cfhd.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-1 is built on — ea7210860, cherry-picked from db05df9d1. NVD's range (before 9.0) misses the 8.1 backport."
+        "detail": "CineForm HD transform-2 out-of-bounds write (libavcodec/cfhd.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-2 is built on — ea7210860, cherry-picked from db05df9d1. NVD's range (before 9.0) misses the 8.1 backport."
       },
       "affects": [
         {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-1"
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
         }
       ]
     }
