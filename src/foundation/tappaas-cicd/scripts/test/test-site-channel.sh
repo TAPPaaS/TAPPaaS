@@ -76,6 +76,9 @@ grep -q 'name}" == "TAPPaaS"' "${REPO}" \
 grep -q 'git ls-tree -r --name-only "origin/\${new_branch}"' "${REPO}" \
     && ok "the target branch's migrations are read from the forge, without checking it out" \
     || bad "no migration check against the target branch"
+grep -qF '$((10#${_target_max})) -lt $((10#${_applied}))' "${REPO}" \
+    && ok "migration numbers compare in base 10 (0029 is not read as octal)" \
+    || bad "migration numbers are compared as octal: 0008, 0009 and 0029 break the check"
 grep -q 'Refusing to move a site behind its own migrations' "${REPO}" \
     && ok "a branch behind this site's migrations is refused without --force" \
     || bad "the migration floor is not enforced"

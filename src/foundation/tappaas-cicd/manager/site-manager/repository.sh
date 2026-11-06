@@ -880,7 +880,8 @@ cmd_modify() {
         _target_max="$(cd "${current_path}" && git ls-tree -r --name-only "origin/${new_branch}" \
                         -- src/foundation/tappaas-cicd/migrations/ 2>/dev/null \
                         | sed -n 's#.*/\([0-9][0-9][0-9][0-9]\)-.*#\1#p' | sort -n | tail -1 || true)"
-        if [[ -n "${_applied}" && -n "${_target_max}" && "${_target_max}" -lt "${_applied}" ]]; then
+        # Base 10: a migration number has leading zeros, and 0029 is not octal.
+        if [[ -n "${_applied}" && -n "${_target_max}" && $((10#${_target_max})) -lt $((10#${_applied})) ]]; then
             warn "  '${new_branch}' carries migrations up to ${_target_max}, but this site has applied ${_applied}."
             warn "    That code predates this site's config: migrations do not run backwards,"
             warn "    so the older code cannot undo what ${_applied} did — it will read a shape it does not know."
