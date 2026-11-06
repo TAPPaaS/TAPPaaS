@@ -244,6 +244,9 @@ export function ModulePage({ name }: { name: string }) {
         <OpenIn kind="module" id={name} />
       </div>
       <ReadState env={r.env} failure={r.failure} what={`module ${name}`} />
+      {d && tab === "Overview" && !sections.failure && (!sections.env || (sections.env.data === null && sections.env.refreshing)) ? (
+        <div className="readstate readstate-pending" role="status">Getting details… the generic sections show until this {m?.kind ?? "module"}'s own arrive.</div>
+      ) : null}
       {m ? (
         <div className="module-head">
           <Dot level={m.badges.run === "running" ? "pass" : m.badges.run === "stopped" ? "fail" : "skip"} />

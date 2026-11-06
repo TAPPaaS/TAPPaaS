@@ -227,6 +227,10 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 .readstate { padding: var(--sp-8) var(--sp-12); border-radius: var(--radius-control); background: var(--info-bg); margin: var(--sp-8) 0; font-size: 13px; }
 .readstate-warn { background: var(--warn-bg); }
 .readstate-fail { background: var(--fail-bg); }
+/* A read still on its way: the panel blinks until it arrives. */
+.readstate-pending { animation: readstate-pending 1s ease-in-out infinite alternate; }
+@keyframes readstate-pending { from { opacity: 1; } to { opacity: 0.4; } }
+@media (prefers-reduced-motion: reduce) { .readstate-pending { animation: none; } }
 
 /* status */
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--skip); vertical-align: middle; flex: none; }
