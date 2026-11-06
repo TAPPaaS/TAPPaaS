@@ -775,6 +775,19 @@ module_public_domain() {
     return 0
 }
 
+# domain_is_public <fqdn> — true unless the name is in a private-use domain
+# (home.arpa, internal, local, lan, test, localhost), which no public DNS serves:
+# a site installed without a domain of its own has nothing to publish.
+domain_is_public() {
+    local d="${1,,}"
+    d="${d%.}"
+    [[ -n "${d}" ]] || return 1
+    case "${d}" in
+        *.home.arpa|home.arpa|*.internal|*.local|*.lan|*.test|*.localhost) return 1 ;;
+    esac
+    return 0
+}
+
 # with_public_domain <vmname> <flat-json-file>
 # Writes the module's public name into its companion JSON as .proxyDomain, and
 # whether it is actually served as .proxyPublished (#715). The nix side reads that file and nothing

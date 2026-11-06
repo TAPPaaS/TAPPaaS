@@ -120,7 +120,9 @@ echo ""
 info "  Signaling URL : wss://${PROXY_DOMAIN:-<proxyDomain>}/spreed"
 info "  Backend       : ${_nc_url:-<not stamped>}"
 info "  TURN          : ${_turn_host:-<not stamped>}"
-info ""
-info "  ${BOLD}ACTION REQUIRED — public DNS record only:${CL}"
-info "    ${PROXY_DOMAIN:-<proxyDomain>} → <WAN IP>  (external clients, e.g. 5G)"
-info "    (The internal split-horizon record is registered by network:proxy.)"
+if [[ -z "${PROXY_DOMAIN:-}" ]] || domain_is_public "${PROXY_DOMAIN}"; then
+    info ""
+    info "  ${BOLD}ACTION REQUIRED — public DNS record only:${CL}"
+    info "    ${PROXY_DOMAIN:-<proxyDomain>} → <WAN IP>  (external clients, e.g. 5G)"
+    info "    (The internal split-horizon record is registered by network:proxy.)"
+fi

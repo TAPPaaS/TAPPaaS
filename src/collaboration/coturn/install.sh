@@ -111,7 +111,7 @@ coturn_converge_public_name "${1:-coturn}" "${COTURN_HOST}"
 # DECLARED in coturn.json (network:nat natRules) and applied by that service —
 # no longer a reminder the operator must act on. Only the public DNS record is.
 echo ""
-if [[ -n "${COTURN_PUBLIC:-}" ]]; then
+if [[ -n "${COTURN_PUBLIC:-}" ]] && domain_is_public "${COTURN_PUBLIC}"; then
     warn "ACTION REQUIRED — public DNS record: ${COTURN_PUBLIC} -> ${WAN_IP:-<public WAN IP>}"
     warn "  Talk's admin 'green checkmark' only tests port 3478; verify a REAL call from off-network."
 fi

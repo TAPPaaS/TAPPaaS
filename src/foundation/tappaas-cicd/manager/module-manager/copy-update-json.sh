@@ -603,8 +603,17 @@ main() {
     if [[ -n "${node}" ]]; then
         local default_node
         default_node="$(get_node_hostname 0)"
-        if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "root@${node}.mgmt.internal" "true" >/dev/null 2>&1; then
+        local reassign="" members=""
+        members="$(tappaas_cluster_nodes "${CONFIG_DIR}" 2>/dev/null)" || members=""
+        if [[ -n "${members}" ]] && ! grep -qxF "${node}" <<<"${members}"; then
+            # The release names a node this site does not have (a single node site).
+            info "Placed on '${default_node}': this site has no node '${node}'"
+            reassign=1
+        elif ! ssh -o ConnectTimeout=5 -o BatchMode=yes "root@${node}.mgmt.internal" "true" >/dev/null 2>&1; then
             warn "Node '${node}' is not reachable - reassigning to '${default_node}'"
+            reassign=1
+        fi
+        if [[ -n "${reassign}" ]]; then
             local tmp_file
             tmp_file=$(mktemp)
             if jq --arg n "${default_node}" '.node = $n' "${dest_json}" > "${tmp_file}"; then
