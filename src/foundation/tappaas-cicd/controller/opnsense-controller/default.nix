@@ -6,14 +6,14 @@ let
   # OPNsense API client library (not in nixpkgs)
   opnsense-api-client = pkgs.python3Packages.buildPythonPackage rec {
     pname = "oxl-opnsense-client";
-    version = "25.7.8";
+    version = "26.1.11";
     pyproject = true;
 
     src = pkgs.fetchFromGitHub {
       owner = "O-X-L";
       repo = "opnsense-api-client";
       rev = version;
-      hash = "sha256-CucAOsFt83c+SuJUXzSElJpzxqPpgYxR5EJhAuICGGE=";
+      hash = "sha256-K6XZh//lnU5YyUbwDU8IXywjWYVE4EmRiDPtzblaoR4=";
     };
 
     postPatch = ''
