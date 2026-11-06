@@ -63,9 +63,9 @@ proxy_wildcard_covers() {
     [[ "${domain}" == "${env_domain}" || "${domain#*.}" == "${env_domain}" ]]
 }
 
-# proxy_wildcard_tls <domain> <env-domain> <refid> <dns-rc>
+# proxy_wildcard_tls <domain> <env-domain> <refid> <dns-rc> [<env>]
 # Wildcard mode's decision, shared by install and update. Prints the refid to
-# bind, or nothing. Returns 0 to publish, 3 when the name must not be published:
+# bind, or nothing, on stdout (callers capture it); every message goes to stderr. Returns 0 to publish, 3 when the name must not be published:
 # no certificate covers it and it has no public A record (<dns-rc> 1 from
 # public_a_record), so Caddy would fall back to HTTP-01 and retry an order the CA
 # can never complete. With a public record and no wildcard, Caddy's own HTTP-01
@@ -73,7 +73,7 @@ proxy_wildcard_covers() {
 proxy_wildcard_tls() {
     local domain="$1" env_domain="$2" refid="$3" dns_rc="$4" env="${5:-}"
     if [[ -n "${refid}" ]] && ! proxy_wildcard_covers "${domain}" "${env_domain}"; then
-        warn "  TLS: the wildcard *.${env_domain} does not cover ${domain}"
+        warn "  TLS: the wildcard *.${env_domain} does not cover ${domain}" >&2
         refid=""
     fi
     if [[ -n "${refid}" ]]; then
@@ -81,12 +81,12 @@ proxy_wildcard_tls() {
         return 0
     fi
     if [[ "${dns_rc}" == "1" ]]; then
-        warn "${domain} has no certificate (no wildcard covers it) and no public DNS A record — not published"
-        [[ -n "${env}" ]] && warn "  issue the environment's wildcard: environment-manager reconcile '${env}' --apply"
+        warn "${domain} has no certificate (no wildcard covers it) and no public DNS A record — not published" >&2
+        [[ -n "${env}" ]] && warn "  issue the environment's wildcard: environment-manager reconcile '${env}' --apply" >&2
         return 3
     fi
-    debug "  TLS: no wildcard covers ${domain} — Caddy requests its own certificate (HTTP-01)"
-    [[ -n "${env}" ]] && debug "       issue the environment's wildcard: environment-manager reconcile '${env}' --apply"
+    debug "  TLS: no wildcard covers ${domain} — Caddy requests its own certificate (HTTP-01)" >&2
+    [[ -n "${env}" ]] && debug "       issue the environment's wildcard: environment-manager reconcile '${env}' --apply" >&2
     return 0
 }
 

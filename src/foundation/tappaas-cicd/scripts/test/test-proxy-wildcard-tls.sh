@@ -10,13 +10,15 @@ ACL="${HERE}/../../../network/services/proxy/access-list.sh"
 pass=0; fail=0
 ck() { if [[ "$2" == "$3" ]]; then pass=$((pass+1)); else fail=$((fail+1)); echo "  FAIL: $1 (got '$2', want '$3')"; fi; }
 
-info() { :; }; debug() { :; }; warn() { :; }; error() { :; }
+# Like the real ones, the messages go to stdout: a helper whose stdout is
+# captured must send them elsewhere.
+info() { echo "I: $*"; }; debug() { echo "D: $*"; }; warn() { echo "W: $*"; }; error() { echo "E: $*"; }
 BL=""; CL=""; YW=""; GN=""; : "${BL}${CL}${YW}${GN}"
 normalize_module_config() { cat; }
 # shellcheck source=../../../network/services/proxy/access-list.sh disable=SC1091
 . "${ACL}"
 
-covers() { proxy_wildcard_covers "$1" "$2" && echo yes || echo no; }
+covers() { proxy_wildcard_covers "$1" "$2" >/dev/null && echo yes || echo no; }
 ck "one label under the domain"      "$(covers app.example.com example.com)"        yes
 ck "the bare apex"                   "$(covers example.com example.com)"            yes
 ck "case does not matter"            "$(covers App.Example.COM example.com)"        yes
@@ -27,7 +29,7 @@ ck "no environment domain"           "$(covers app.example.com '')"             
 
 tls() {  # tls <domain> <env-domain> <refid> <dns-rc> → "rc|refid"
     local out rc=0
-    out="$(proxy_wildcard_tls "$1" "$2" "$3" "$4" test)" || rc=$?
+    out="$(proxy_wildcard_tls "$1" "$2" "$3" "$4" test 2>/dev/null)" || rc=$?
     echo "${rc}|${out}"
 }
 ck "covered: the wildcard is bound"                 "$(tls app.example.com example.com wc1 1)"      "0|wc1"
