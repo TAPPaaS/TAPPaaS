@@ -207,7 +207,7 @@ if [[ "${NO_PUBLIC_A}" == "1" ]]; then
     case "${DNS_MODE}" in
         per-service) warn "${PROXY_DOMAIN} has no public DNS A record — not published: no certificate under dnsMode=per-service; reachable only at ${MODULE}.${ZONE}.internal" ;;
         local)       debug "  dnsMode local: ${PROXY_DOMAIN} is served inside the site, by the site's CA" ;;
-        *)           warn "${PROXY_DOMAIN} has no public DNS A record — not reachable from the internet (the wildcard certificate is unaffected)" ;;
+        *)           warn "${PROXY_DOMAIN} has no public DNS A record — not reachable from the internet" ;;
     esac
 fi
 
@@ -275,9 +275,19 @@ else
     if [[ -z "${TLS_CERT_REFID}" && -f "${SYSTEM_CONFIG}" ]]; then
         TLS_CERT_REFID=$(jq -r '.tappaas.tlsCertRefid // ""' "${SYSTEM_CONFIG}" 2>/dev/null) || TLS_CERT_REFID=""
     fi
+    # wildcard: a certificate that covers the name, or none — then a name with
+    # no public record is not published (Caddy's HTTP-01 fallback could never
+    # complete). local has no public record by design and keeps its CA's refid.
+    _WC_RC=0
+    if [[ "${DNS_MODE}" == "wildcard" ]]; then
+        TLS_CERT_REFID="$(proxy_wildcard_tls "${PROXY_DOMAIN}" "${TAPPAAS_DOMAIN}" "${TLS_CERT_REFID}" \
+            "${_dns_rc}" "${ENVIRONMENT:-$(default_environment_name)}")" || _WC_RC=$?
+    fi
     if [[ -n "${TLS_CERT_REFID}" ]]; then
-        debug "  TLS: DNS-01 wildcard (dnsMode=wildcard) — refid ${TLS_CERT_REFID}"
+        debug "  TLS: ${DNS_MODE} certificate — refid ${TLS_CERT_REFID}"
         CADDY_DOMAIN_ARGS=(--custom-certificate "${TLS_CERT_REFID}")
+    elif [[ "${_WC_RC}" -eq 3 ]]; then
+        UNPUBLISHED=1
     else
         debug "  TLS: ${DNS_MODE} but no tlsCertRefid for environment '${ENVIRONMENT:-default}' yet."
         debug "       Run: environment-manager reconcile '${ENVIRONMENT:-$(default_environment_name)}' --apply (internal LAN access still works meanwhile)."
@@ -285,8 +295,8 @@ else
 fi
 
 # ── Not published: no route at all (#778) ──────────────────────────
-# Per-service and authoritatively no public A record for the name: Caddy could
-# never get it a certificate (ACME cannot reach a name that does not resolve),
+# Authoritatively no public A record for the name, under per-service or under
+# a wildcard that does not cover it: Caddy could never get it a certificate (ACME cannot reach a name that does not resolve),
 # and no client resolves it either. A route would only make Caddy retry ACME on
 # every reload — spending Let's Encrypt's 5-failures-per-name-per-hour allowance
 # — while serving no one. Withdraw whatever was published before and stop; the

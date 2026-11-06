@@ -164,6 +164,12 @@ case "${PROXY_TLS}" in
     http01) DNS_MODE="per-service" ;;
 esac
 
+# The public A record, checked once here against the authoritative nameservers:
+# the wildcard decision below needs it, the report at the end says it.
+# `x="$(f)"` inherits f's exit status, which under `set -e` would abort here.
+_dns_rc=0
+DNS_RESULT="$(public_a_record "${PROXY_DOMAIN}")" || _dns_rc=$?
+
 UNPUBLISHED=0
 CADDY_DOMAIN_ARGS=()
 if [[ "${DNS_MODE}" == "per-service" ]]; then
@@ -237,8 +243,18 @@ else
     if [[ -z "${TLS_CERT_REFID}" && -f "${CONFIG_DIR}/configuration.json" ]]; then
         TLS_CERT_REFID=$(jq -r '.tappaas.tlsCertRefid // ""' "${CONFIG_DIR}/configuration.json" 2>/dev/null) || TLS_CERT_REFID=""
     fi
-    if [[ -n "${TLS_CERT_REFID}" ]]; then
-        debug "  TLS: DNS-01 wildcard (dnsMode=wildcard) — refid ${TLS_CERT_REFID}"
+    # wildcard: a certificate that covers the name, or none — then a name with
+    # no public record is not published (Caddy's HTTP-01 fallback could never
+    # complete). local has no public record by design and keeps its CA's refid.
+    _WC_RC=0
+    if [[ "${DNS_MODE}" == "wildcard" ]]; then
+        TLS_CERT_REFID="$(proxy_wildcard_tls "${PROXY_DOMAIN}" "${TAPPAAS_DOMAIN}" "${TLS_CERT_REFID}" \
+            "${_dns_rc}" "${ENVIRONMENT:-$(default_environment_name)}")" || _WC_RC=$?
+    fi
+    if [[ "${_WC_RC}" -eq 3 ]]; then
+        UNPUBLISHED=1
+    elif [[ -n "${TLS_CERT_REFID}" ]]; then
+        debug "  TLS: ${DNS_MODE} certificate — refid ${TLS_CERT_REFID}"
         CADDY_DOMAIN_ARGS=(--custom-certificate "${TLS_CERT_REFID}")
         # An expired wildcard breaks every OIDC client behind it, and the
         # failures surface far from here: name the cause where it is bound.
@@ -254,8 +270,8 @@ else
 fi
 
 # ── Not published: no route at all (#778) ──────────────────────────
-# Per-service and authoritatively no public A record for the name: Caddy could
-# never get it a certificate (ACME cannot reach a name that does not resolve),
+# Authoritatively no public A record for the name, under per-service or under
+# a wildcard that does not cover it: Caddy could never get it a certificate (ACME cannot reach a name that does not resolve),
 # and no client resolves it either. A route would only make Caddy retry ACME on
 # every reload — spending Let's Encrypt's 5-failures-per-name-per-hour allowance
 # — while serving no one. Withdraw whatever was published before and stop; the
@@ -343,11 +359,7 @@ fi
 # under per-service we register a split-horizon override for this very name a
 # few lines above, so a local lookup would answer with our own record and this
 # check could never fail (see public_a_record).
-# `x="$(f)"` inherits f's exit status, which under `set -e` aborts the script
-# the moment a domain has no public record — the very case this check exists to
-# report (same hazard the jq guards above call out). Capture the code instead.
-_dns_rc=0
-DNS_RESULT="$(public_a_record "${PROXY_DOMAIN}")" || _dns_rc=$?
+# (computed before the TLS decision, above)
 case "${_dns_rc}" in
     0) debug "  public DNS A: ${BL}${DNS_RESULT}${CL}" ;;
     1) if [[ "${DNS_MODE}" == "per-service" ]]; then

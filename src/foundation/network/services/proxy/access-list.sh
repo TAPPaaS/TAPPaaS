@@ -53,6 +53,43 @@ run_caddy() {
 # Only an override carrying the same description is removed: the old name may
 # since have been taken by something else (coturn's "turn" is one), and its
 # record must survive this module letting the name go.
+# proxy_wildcard_covers <domain> <env-domain>
+# True when the environment's wildcard certificate (*.<env-domain> plus the bare
+# apex, as acme-setup.sh issues it) is valid for <domain>. A wildcard matches one
+# label only: *.example.com does not cover a.test.example.com.
+proxy_wildcard_covers() {
+    local domain="${1,,}" env_domain="${2,,}"
+    [[ -n "${env_domain}" ]] || return 1
+    [[ "${domain}" == "${env_domain}" || "${domain#*.}" == "${env_domain}" ]]
+}
+
+# proxy_wildcard_tls <domain> <env-domain> <refid> <dns-rc>
+# Wildcard mode's decision, shared by install and update. Prints the refid to
+# bind, or nothing. Returns 0 to publish, 3 when the name must not be published:
+# no certificate covers it and it has no public A record (<dns-rc> 1 from
+# public_a_record), so Caddy would fall back to HTTP-01 and retry an order the CA
+# can never complete. With a public record and no wildcard, Caddy's own HTTP-01
+# certificate works, and the route stays.
+proxy_wildcard_tls() {
+    local domain="$1" env_domain="$2" refid="$3" dns_rc="$4" env="${5:-}"
+    if [[ -n "${refid}" ]] && ! proxy_wildcard_covers "${domain}" "${env_domain}"; then
+        warn "  TLS: the wildcard *.${env_domain} does not cover ${domain}"
+        refid=""
+    fi
+    if [[ -n "${refid}" ]]; then
+        printf '%s' "${refid}"
+        return 0
+    fi
+    if [[ "${dns_rc}" == "1" ]]; then
+        warn "${domain} has no certificate (no wildcard covers it) and no public DNS A record — not published"
+        [[ -n "${env}" ]] && warn "  issue the environment's wildcard: environment-manager reconcile '${env}' --apply"
+        return 3
+    fi
+    debug "  TLS: no wildcard covers ${domain} — Caddy requests its own certificate (HTTP-01)"
+    [[ -n "${env}" ]] && debug "       issue the environment's wildcard: environment-manager reconcile '${env}' --apply"
+    return 0
+}
+
 proxy_prune_domains() {
     local _out _rc _fqdn _desc="" _prefix=0 _i
     local -a _args=("$@")
