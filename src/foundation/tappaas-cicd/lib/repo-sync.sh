@@ -243,6 +243,87 @@ repo_sync_introduce() {
     return 0
 }
 
+# ── durability and crash repair ──────────────────────────────────────
+# git's default fsync leaves loose objects and refs out, and nothing fsyncs the
+# working tree. A hard stop of the VM shortly after a sync then leaves
+# zero-byte objects (every later fetch fails on them) and zero-byte tracked
+# files (which the auto-stash used to keep, night after night).
+
+# repo_sync_durable <path>
+# Make git fsync everything it writes in this checkout. An explicit operator
+# setting is left alone.
+repo_sync_durable() {
+    local path="$1"
+    git -C "${path}" config --get core.fsync >/dev/null 2>&1 \
+        || git -C "${path}" config core.fsync all 2>/dev/null || true
+    git -C "${path}" config --get core.fsyncMethod >/dev/null 2>&1 \
+        || git -C "${path}" config core.fsyncMethod fsync 2>/dev/null || true
+}
+
+# repo_sync_flush <path>
+# Flush what a sync wrote to the working tree to disk (GNU sync -f syncs the
+# filesystem holding <path>; elsewhere a plain sync).
+repo_sync_flush() {
+    sync -f "$1" 2>/dev/null || sync 2>/dev/null || true
+}
+
+# repo_sync_repair_objects <path> <url> <name>
+# A zero-byte loose object is never valid: it is what a hard stop leaves of an
+# object written just before. Delete them, then take every object origin has
+# from a fresh bare clone (its pack goes into this checkout's object store), so
+# the checkout, its local branches and worktrees stay as they are. Whatever is
+# still missing afterwards existed only here and is reported, not guessed at.
+# Returns 0 when nothing was wrong or the repair holds, 1 otherwise.
+repo_sync_repair_objects() {
+    local path="$1" url="$2" name="$3" objdir empty n tmp p missing
+    objdir="$(git -C "${path}" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)/objects" || return 0
+    [ -d "${objdir}" ] || return 0
+    empty="$(find "${objdir}" -path "${objdir}/pack" -prune -o -path "${objdir}/info" -prune \
+             -o -type f -size 0 -print 2>/dev/null || true)"
+    [ -n "${empty}" ] || return 0
+    n="$(printf '%s\n' "${empty}" | grep -c . || true)"
+    warn "  repo-sync: ${name}: ${n} empty git object(s) in ${path} (left by an unclean stop) — repairing from ${url}"
+    printf '%s\n' "${empty}" | while IFS= read -r p; do rm -f "${p}"; done
+
+    tmp="$(mktemp -d "${TMPDIR:-/tmp}/repo-sync-repair.XXXXXX")" || return 1
+    if ! git clone --bare --no-local --quiet "$(repo_sync_clone_url "${url}")" "${tmp}/r.git" >/dev/null 2>&1; then
+        error "  repo-sync: ${name}: could not clone ${url} to restore the objects"
+        rm -rf "${tmp}"; return 1
+    fi
+    for p in "${tmp}"/r.git/objects/pack/pack-*; do
+        [ -e "${p}" ] && cp -f "${p}" "${objdir}/pack/"
+    done
+    rm -rf "${tmp}"
+
+    missing="$(git -C "${path}" fsck --connectivity-only --no-dangling 2>&1 | grep -E '^(missing|broken|error|fatal)' || true)"
+    if [ -n "${missing}" ]; then
+        error "  repo-sync: ${name}: objects still missing after the repair — they existed only in ${path} (unpushed work):"
+        printf '%s\n' "${missing}" | head -5 | while IFS= read -r p; do error "      ${p}"; done
+        error "    git -C ${path} fsck names them; the refs that point at them need a person"
+        return 1
+    fi
+    info "  repo-sync: ${name}: ${n} empty object(s) restored from ${url}"
+    return 0
+}
+
+# repo_sync_restore_truncated <path> <name>
+# Tracked files that are empty in the tree but not at HEAD are crash damage,
+# not the operator's work: put HEAD's content back instead of stashing them.
+repo_sync_restore_truncated() {
+    local path="$1" name="$2" f size files=()
+    while IFS= read -r -d '' f; do
+        [ -f "${path}/${f}" ] && [ ! -s "${path}/${f}" ] || continue
+        size="$(git -C "${path}" cat-file -s "HEAD:${f}" 2>/dev/null || echo 0)"
+        [ "${size}" -gt 0 ] 2>/dev/null && files+=("${f}")
+    done < <(git -C "${path}" ls-files -m -z 2>/dev/null)
+    [ "${#files[@]}" -gt 0 ] || return 0
+    if git -C "${path}" checkout -q HEAD -- "${files[@]}" 2>/dev/null; then
+        warn "  repo-sync: ${name}: ${#files[@]} tracked file(s) were empty (left by an unclean stop) — restored: ${files[*]:0:5}$([ "${#files[@]}" -gt 5 ] && echo ' …')"
+    else
+        warn "  repo-sync: ${name}: ${#files[@]} tracked file(s) are empty but could not be restored (git -C ${path} checkout HEAD -- <file>)"
+    fi
+}
+
 # reconcile_repo_checkout <path> <url> <branch> [allow_discard] [name]
 # Ensure the checkout at <path> has origin == <url> and is on <branch> at the
 # remote's tip. Re-points origin if <url> differs (provider/repo switch),
@@ -260,11 +341,24 @@ repo_sync_introduce() {
 # On a staging or production branch the move is verified first (ADR-033 D6,
 # repo_sync_verify_gate); <name> keys the trust record (default: the directory).
 #
+# Before anything else the checkout is made durable and repaired from a hard
+# stop (empty objects, empty tracked files); after it, what it wrote is flushed.
+#
 # Returns 0 on success, 2 when BLOCKED on that decision, 3 when the target is
 # not a verified release, non-zero on a hard failure.
 reconcile_repo_checkout() {
+    local rc=0
+    _reconcile_repo_checkout "$@" || rc=$?
+    [ -e "$1/.git" ] && repo_sync_flush "$1"
+    return "${rc}"
+}
+
+_reconcile_repo_checkout() {
     local path="$1" url="$2" branch="$3" allow_discard="${4:-0}" name="${5:-}"
     [ -d "${path}/.git" ] || { warn "  repo-sync: not a git checkout: ${path}"; return 1; }
+    repo_sync_durable "${path}"
+    repo_sync_repair_objects "${path}" "${url}" "${name:-$(basename "${path}")}" || return 1
+    repo_sync_restore_truncated "${path}" "${name:-$(basename "${path}")}"
 
     local desired cur remote_changed=0 on_branch
     desired="$(repo_sync_clone_url "${url}")"

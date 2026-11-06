@@ -37,6 +37,21 @@ flowchart RL
     local -->|pull| stable
 ```
 
+### Durability of the managed checkouts
+
+Every sync sets `core.fsync=all` and `core.fsyncMethod=fsync` on the checkout (unless the
+operator has set them) and flushes the working tree afterwards. Git's default leaves loose
+objects and the working tree unsynced, so a hard stop of the mothership just after a sync can
+leave zero-byte files.
+
+The sync repairs what such a stop leaves behind:
+
+- **Empty git objects** are deleted, and every object origin has is copied in from a fresh bare
+  clone. The checkout, its local branches and worktrees stay as they are. An object that existed
+  only here (unpushed work) cannot be restored; the sync fails for that repository and names it.
+- **Empty tracked files** whose content at `HEAD` is not empty are restored from `HEAD` instead
+  of being stashed.
+
 ---
 
 ## Community repositories

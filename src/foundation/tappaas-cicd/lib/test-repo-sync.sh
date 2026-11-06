@@ -108,5 +108,52 @@ rc8=0
 check "set -e safe, still rc 2"    "${rc8}" "2"
 check "set -e safe, origin intact" "$(git remote get-url origin)" "${origin_before}"
 
+# 9–12. A hard stop right after a sync: zero-byte objects and tracked files.
+git init -q --bare -b main "${W}/up.git"
+git clone -q "${W}/up.git" "${W}/up-w" 2>/dev/null
+( cd "${W}/up-w" && printf 'one\n' > f && git add f && git commit -qm c1 && git push -q origin main )
+git clone -q "file://${W}/up.git" "${W}/hs"
+( cd "${W}/up-w" && printf 'two\n' > f && git commit -qam c2 && git push -q origin main )
+reconcile_repo_checkout "${W}/hs" "file://${W}/up.git" main >/dev/null 2>&1
+check "durable: core.fsync"       "$(git -C "${W}/hs" config core.fsync)" "all"
+check "durable: core.fsyncMethod" "$(git -C "${W}/hs" config core.fsyncMethod)" "fsync"
+git -C "${W}/hs" config core.fsync committed
+reconcile_repo_checkout "${W}/hs" "file://${W}/up.git" main >/dev/null 2>&1
+check "durable: operator value kept" "$(git -C "${W}/hs" config core.fsync)" "committed"
+
+# 9. The branch tip's loose object is empty: every fetch fails on it until repaired.
+tip="$(git -C "${W}/hs" rev-parse HEAD)"
+obj="${W}/hs/.git/objects/${tip:0:2}/${tip:2}"
+if [ -f "${obj}" ]; then ok; else no "tip is a loose object (test setup)"; fi
+chmod u+w "${obj}" 2>/dev/null; : > "${obj}"
+( cd "${W}/up-w" && printf 'three\n' > f && git commit -qam c3 && git push -q origin main )
+rc9=0; reconcile_repo_checkout "${W}/hs" "file://${W}/up.git" main >/dev/null 2>&1 || rc9=$?
+check "empty object: sync succeeds"    "${rc9}" "0"
+check "empty object: at the new tip"   "$(git -C "${W}/hs" rev-parse HEAD)" "$(git -C "${W}/up-w" rev-parse HEAD)"
+check "empty object: fsck clean"       "$(git -C "${W}/hs" fsck --connectivity-only --no-dangling >/dev/null 2>&1; echo $?)" "0"
+check "empty object: none left"        "$(find "${W}/hs/.git/objects" -type f -size 0 | wc -l | tr -d ' ')" "0"
+
+# 10. Tracked files truncated to 0 bytes are restored from HEAD, not stashed.
+: > "${W}/hs/f"
+printf 'mine\n' > "${W}/hs/g"; git -C "${W}/hs" add g; git -C "${W}/hs" commit -qm local-g
+: > "${W}/hs/g"; git -C "${W}/hs" reset -q --soft HEAD~1; git -C "${W}/hs" restore --staged g
+reconcile_repo_checkout "${W}/hs" "file://${W}/up.git" main >/dev/null 2>&1
+check "truncated: content back"  "$(cat "${W}/hs/f")" "three"
+check "truncated: no stash"      "$(git -C "${W}/hs" stash list | wc -l | tr -d ' ')" "0"
+check "untracked empty file kept" "$(test -f "${W}/hs/g" && wc -c < "${W}/hs/g" | tr -d ' ')" "0"
+
+# 11. An operator's own edit is not touched by the restore (only empty files are).
+printf 'edited\n' > "${W}/hs/f"
+reconcile_repo_checkout "${W}/hs" "file://${W}/up.git" main >/dev/null 2>&1
+check "operator edit kept" "$(cat "${W}/hs/f")" "edited"
+git -C "${W}/hs" checkout -q -- f
+
+# 12. An empty object that origin never had (unpushed work) cannot be repaired: rc 1, said.
+git -C "${W}/hs" commit -q --allow-empty -m local-only
+lo="$(git -C "${W}/hs" rev-parse HEAD)"
+chmod u+w "${W}/hs/.git/objects/${lo:0:2}/${lo:2}" 2>/dev/null; : > "${W}/hs/.git/objects/${lo:0:2}/${lo:2}"
+rc12=0; reconcile_repo_checkout "${W}/hs" "file://${W}/up.git" main >/dev/null 2>&1 || rc12=$?
+check "local-only empty object: rc 1" "${rc12}" "1"
+
 echo "Results: ${pass} passed, ${fail} failed"
 [ "${fail}" -eq 0 ]
