@@ -511,189 +511,7 @@
       },
       "affects": [
         {
-          "ref": "pkg:deb/debian/bsdutils@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-76642",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libmount post-mount hooks after failed helper for fstab user entries; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libblkid1@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-76642",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libmount post-mount hooks after failed helper for fstab user entries; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libmount1@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-76642",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libmount post-mount hooks after failed helper for fstab user entries; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libsmartcols1@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-76642",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libmount post-mount hooks after failed helper for fstab user entries; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libuuid1@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-76642",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libmount post-mount hooks after failed helper for fstab user entries; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/mount@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-76642",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libmount post-mount hooks after failed helper for fstab user entries; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/util-linux@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-76642",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libmount post-mount hooks after failed helper for fstab user entries; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
           "ref": "pkg:deb/debian/util-linux-extra@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78408",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "nsenter --join-cgroup run as root; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/bsdutils@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78408",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "nsenter --join-cgroup run as root; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libblkid1@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78408",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "nsenter --join-cgroup run as root; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libmount1@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78408",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "nsenter --join-cgroup run as root; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libsmartcols1@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78408",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "nsenter --join-cgroup run as root; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libuuid1@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78408",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "nsenter --join-cgroup run as root; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/mount@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78408",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "nsenter --join-cgroup run as root; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/util-linux@2.38.1-5%2Bdeb12u3"
         }
       ]
     },
@@ -719,189 +537,7 @@
       },
       "affects": [
         {
-          "ref": "pkg:deb/debian/bsdutils@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78409",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "X-mount.subdir symlink traversal for fstab-authorised mounts; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libblkid1@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78409",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "X-mount.subdir symlink traversal for fstab-authorised mounts; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libmount1@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78409",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "X-mount.subdir symlink traversal for fstab-authorised mounts; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libsmartcols1@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78409",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "X-mount.subdir symlink traversal for fstab-authorised mounts; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libuuid1@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78409",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "X-mount.subdir symlink traversal for fstab-authorised mounts; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/mount@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78409",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "X-mount.subdir symlink traversal for fstab-authorised mounts; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/util-linux@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78409",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "X-mount.subdir symlink traversal for fstab-authorised mounts; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
           "ref": "pkg:deb/debian/util-linux-extra@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78410",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "restricted bind mount source swap for fstab user entries; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/bsdutils@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78410",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "restricted bind mount source swap for fstab user entries; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libblkid1@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78410",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "restricted bind mount source swap for fstab user entries; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libmount1@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78410",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "restricted bind mount source swap for fstab user entries; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libsmartcols1@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78410",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "restricted bind mount source swap for fstab user entries; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libuuid1@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78410",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "restricted bind mount source swap for fstab user entries; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/mount@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-78410",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "restricted bind mount source swap for fstab user entries; the container runs only uvicorn (python3 as root) and pydub's ffmpeg/ffprobe; nothing calls mount or nsenter and /etc/fstab has no user entries.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/util-linux@2.38.1-5%2Bdeb12u3"
         }
       ]
     },
@@ -945,45 +581,6 @@
       ]
     },
     {
-      "id": "CVE-2026-69247",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Bleichenbacher oracle in pkcs7_decrypt_*; Open WebUI and its libraries never decrypt PKCS#7 EnvelopedData.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/cryptography@48.0.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-69249",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Exponential chain building in cryptography's X.509 verifier; nothing in the container uses cryptography.x509.verification (TLS verification is done by Python's ssl).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/cryptography@48.0.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-12064",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "curl tool with --proto-default sftp/scp; curl/libcurl are in the image (curl tool, git's libcurl-gnutls) but Open WebUI never runs curl or git on user input; podman runs no healthcheck.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/curl@7.88.1-10%2Bdeb12u15"
-        }
-      ]
-    },
-    {
       "id": "CVE-2026-12064",
       "analysis": {
         "state": "not_affected",
@@ -1096,19 +693,6 @@
       },
       "affects": [
         {
-          "ref": "pkg:deb/debian/curl@7.88.1-10%2Bdeb12u15"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-8458",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Negotiate-auth connection reuse; curl/libcurl are in the image (curl tool, git's libcurl-gnutls) but Open WebUI never runs curl or git on user input; podman runs no healthcheck.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
           "ref": "pkg:deb/debian/libcurl3-gnutls@7.88.1-10%2Bdeb12u15"
         }
       ]
@@ -1174,19 +758,6 @@
       },
       "affects": [
         {
-          "ref": "pkg:deb/debian/ffmpeg@5.1.9-0%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-64830",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "VobSub demuxer overflow; the demuxer first opens the .sub file next to the .idx, and every upload is stored alone under a random-UUID name, so no matching .sub exists.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
           "ref": "pkg:deb/debian/libavcodec59@5.1.9-0%2Bdeb12u1"
         }
       ]
@@ -1291,19 +862,6 @@
       },
       "affects": [
         {
-          "ref": "pkg:deb/debian/ffmpeg@5.1.9-0%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-64832",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "NVDEC hardware decoder double free; the VM has no NVIDIA GPU and Open WebUI never requests hwaccel.",
-        "justification": "requires_environment"
-      },
-      "affects": [
-        {
           "ref": "pkg:deb/debian/libavcodec59@5.1.9-0%2Bdeb12u1"
         }
       ]
@@ -1396,19 +954,6 @@
       "affects": [
         {
           "ref": "pkg:deb/debian/libswscale6@5.1.9-0%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-64833",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "S/PDIF muxer; Open WebUI's ffmpeg only writes WAV and MP3.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/ffmpeg@5.1.9-0%2Bdeb12u1"
         }
       ]
     },
@@ -1525,19 +1070,6 @@
       },
       "affects": [
         {
-          "ref": "pkg:deb/debian/ffmpeg@5.1.9-0%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-64834",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "RTP/ASF depacketizer, reachable only from RTSP/RTP network input; Open WebUI passes local files, and nested protocols from file input are limited to file,crypto,data.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
           "ref": "pkg:deb/debian/libavcodec59@5.1.9-0%2Bdeb12u1"
         }
       ]
@@ -1630,19 +1162,6 @@
       "affects": [
         {
           "ref": "pkg:deb/debian/libswscale6@5.1.9-0%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-66036",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "vf_hqdn3d with -reinit_filter 0; pydub's ffmpeg command uses no video filters.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/ffmpeg@5.1.9-0%2Bdeb12u1"
         }
       ]
     },
@@ -1759,19 +1278,6 @@
       },
       "affects": [
         {
-          "ref": "pkg:deb/debian/ffmpeg@5.1.9-0%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-66040",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "PNG/APNG encoder eXIf handling; Open WebUI's ffmpeg encodes only WAV and MP3 with -vn, and the eXIf writer is not in ffmpeg 5.1.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
           "ref": "pkg:deb/debian/libavcodec59@5.1.9-0%2Bdeb12u1"
         }
       ]
@@ -1864,19 +1370,6 @@
       "affects": [
         {
           "ref": "pkg:deb/debian/libswscale6@5.1.9-0%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-75142",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "MPEG-PS muxer; Open WebUI's ffmpeg only writes WAV and MP3.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/ffmpeg@5.1.9-0%2Bdeb12u1"
         }
       ]
     },
@@ -1993,19 +1486,6 @@
       },
       "affects": [
         {
-          "ref": "pkg:deb/debian/ffmpeg@5.1.9-0%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-75143",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "RIST protocol reader; ffmpeg only gets local files and nested protocols from file input are limited to file,crypto,data.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
           "ref": "pkg:deb/debian/libavcodec59@5.1.9-0%2Bdeb12u1"
         }
       ]
@@ -2110,19 +1590,6 @@
       },
       "affects": [
         {
-          "ref": "pkg:deb/debian/ffmpeg@5.1.9-0%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-75144",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "VC-2 RTP packetizer (muxer side); Open WebUI's ffmpeg never writes RTP.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
           "ref": "pkg:deb/debian/libavcodec59@5.1.9-0%2Bdeb12u1"
         }
       ]
@@ -2215,19 +1682,6 @@
       "affects": [
         {
           "ref": "pkg:deb/debian/libswscale6@5.1.9-0%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-75146",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "DASH live-manifest refresh from a server; a local .mpd cannot pull remote manifests (nested protocols limited to file,crypto,data) and the local file does not change between refreshes.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/ffmpeg@5.1.9-0%2Bdeb12u1"
         }
       ]
     },
@@ -2375,19 +1829,6 @@
       ]
     },
     {
-      "id": "CVE-2026-54369",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libacl symlink traversal needs a privileged caller on attacker paths; only coreutils/sed/tar link libacl and none runs on uploads.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libacl1@2.3.1-3"
-        }
-      ]
-    },
-    {
       "id": "CVE-2023-39616",
       "analysis": {
         "state": "not_affected",
@@ -2397,71 +1838,6 @@
       "affects": [
         {
           "ref": "pkg:deb/debian/libaom3@3.6.0-1%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-16554",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "print_string_ptr overflow on 32-bit builds; libcjson1 is in the image only for librist4: the only user in the image is librist4, ffmpeg's rist:// network protocol; Open WebUI hands ffmpeg local files, and nested protocols from a file input are limited to file,crypto,data, so RIST is never opened.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libcjson1@1.7.15-1%2Bdeb12u4"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-29036",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "JSON Pointer decoding in cJSON_Utils; libcjson1 is in the image only for librist4: the only user in the image is librist4, ffmpeg's rist:// network protocol; Open WebUI hands ffmpeg local files, and nested protocols from a file input are limited to file,crypto,data, so RIST is never opened.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libcjson1@1.7.15-1%2Bdeb12u4"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-67215",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "JSON Patch recursion in cJSON_Utils; libcjson1 is in the image only for librist4: the only user in the image is librist4, ffmpeg's rist:// network protocol; Open WebUI hands ffmpeg local files, and nested protocols from a file input are limited to file,crypto,data, so RIST is never opened.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libcjson1@1.7.15-1%2Bdeb12u4"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-67216",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "cJSON_Compare complexity; libcjson1 is in the image only for librist4: the only user in the image is librist4, ffmpeg's rist:// network protocol; Open WebUI hands ffmpeg local files, and nested protocols from a file input are limited to file,crypto,data, so RIST is never opened.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libcjson1@1.7.15-1%2Bdeb12u4"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-87933",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "cJSONUtils_MergePatch use-after-free; libcjson1 is in the image only for librist4: the only user in the image is librist4, ffmpeg's rist:// network protocol; Open WebUI hands ffmpeg local files, and nested protocols from a file input are limited to file,crypto,data, so RIST is never opened.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libcjson1@1.7.15-1%2Bdeb12u4"
         }
       ]
     },
@@ -2726,58 +2102,6 @@
       ]
     },
     {
-      "id": "CVE-2025-69720",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ncurses terminfo analyze_string(); nothing processes attacker terminfo.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libncursesw6@6.4-4"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2025-69720",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ncurses terminfo analyze_string(); nothing processes attacker terminfo.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libtinfo6@6.4-4"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2025-69720",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ncurses terminfo analyze_string(); nothing processes attacker terminfo.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/ncurses-base@6.4-4"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2025-69720",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ncurses terminfo analyze_string(); nothing processes attacker terminfo.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/ncurses-bin@6.4-4"
-        }
-      ]
-    },
-    {
       "id": "CVE-2026-103111",
       "analysis": {
         "state": "not_affected",
@@ -3020,46 +2344,7 @@
       },
       "affects": [
         {
-          "ref": "pkg:deb/debian/perl@5.36.0-7%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-9538",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Archive::Tar memory exhaustion; perl is in the image only as Debian/git/pandoc tooling; neither Open WebUI nor anything it starts runs perl.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/perl-base@5.36.0-7%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-9538",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Archive::Tar memory exhaustion; perl is in the image only as Debian/git/pandoc tooling; neither Open WebUI nor anything it starts runs perl.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
           "ref": "pkg:deb/debian/perl-modules-5.36@5.36.0-7%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-37555",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libsndfile IMA ADPCM WAV overflow; Debian libsndfile1 is pulled in only by libpulse (ffmpeg's PulseAudio device, never selected); Python's soundfile bundles its own libsndfile.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libsndfile1@1.2.0-1%2Bdeb12u1"
         }
       ]
     },
@@ -3190,162 +2475,6 @@
       "affects": [
         {
           "ref": "pkg:deb/debian/openssl@3.0.20-1~deb12u2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-16742",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Flaw is in systemd-homed, not in libsystemd0/libudev1; homed is not in the image.",
-        "justification": "code_not_present"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libsystemd0@252.39-1~deb12u2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-16742",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Flaw is in systemd-homed, not in libsystemd0/libudev1; homed is not in the image.",
-        "justification": "code_not_present"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libudev1@252.39-1~deb12u2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-52490",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Flaw is in the tiffcrop tool; libtiff-tools is not installed, only the library.",
-        "justification": "code_not_present"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libtiff6@4.5.0-6%2Bdeb12u4"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-88806",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libX11 XkbGetMap reply overflow from a malicious X server; no X server or DISPLAY exists in the container.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libx11-6@1.8.4-2%2Bdeb12u2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-88806",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libX11 XkbGetMap reply overflow from a malicious X server; no X server or DISPLAY exists in the container.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libx11-data@1.8.4-2%2Bdeb12u2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-88806",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libX11 XkbGetMap reply overflow from a malicious X server; no X server or DISPLAY exists in the container.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libx11-xcb1@1.8.4-2%2Bdeb12u2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-74860",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Double free in libxml2's Python SAX bindings; python3-libxml2 is not installed (import libxml2 fails), Open WebUI uses lxml.",
-        "justification": "code_not_present"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libxml2@2.9.14%2Bdfsg-1.3~deb12u6"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-86140",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Stack overflow in xmlSnprintfElements, used only for DTD validation errors; neither ffmpeg's DASH demuxer nor librsvg validates against a DTD.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libxml2@2.9.14%2Bdfsg-1.3~deb12u6"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-86142",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "XPointer evaluation; neither ffmpeg nor librsvg evaluates xpointer() expressions.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libxml2@2.9.14%2Bdfsg-1.3~deb12u6"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-86143",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Negative length in xmlIO output write callbacks; ffmpeg and librsvg only parse XML through libxml2 and never serialise output with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libxml2@2.9.14%2Bdfsg-1.3~deb12u6"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-86144",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "xmlXIncludeProcess drops parse flags; ffmpeg never runs XInclude and librsvg handles xi:include itself without xmlXIncludeProcess.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libxml2@2.9.14%2Bdfsg-1.3~deb12u6"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-88807",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libXrender overflow from a malicious X server; no X server or DISPLAY exists in the container.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libxrender1@0.9.10-1.1"
         }
       ]
     },
@@ -3571,19 +2700,6 @@
       ]
     },
     {
-      "id": "CVE-2026-6653",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Not reachable since #810: the server transcribes nothing. Speech-to-text runs in the browser, and audio.stt.supported_content_types names a type no upload carries, which closes both callers of the decoders (the transcription endpoint and chat-file processing; nothing else in Open WebUI runs ffmpeg, pydub or PyAV on user data); openwebui-apply-stt keeps both settings. The container's root is also an unprivileged host uid now. Before #810: Use-after-free in DTD internal-subset parsing. Debian libxml2 is not loaded by the Open WebUI process (lxml and PyAV bundle their own); it is reached through ffprobe/ffmpeg (DASH manifest demuxer, librsvg). Any approved user can POST arbitrary bytes as audio/* to /api/v1/audio/transcriptions (chat.stt is on, STT engine is local Whisper) or upload them as a chat file, so a crafted .mpd or SVG with an internal subset reaches xmlParseInternalSubset. Risk here: any approved user, internet-reachable; crash of a short-lived ffprobe process (DoS per the advisory). Action: no fixed Debian 12 package yet; goes away only with an upstream image rebuilt on a fixed base",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libxml2@2.9.14%2Bdfsg-1.3~deb12u6"
-        }
-      ]
-    },
-    {
       "id": "CVE-2026-68770",
       "analysis": {
         "state": "exploitable",
@@ -3658,19 +2774,6 @@
       },
       "affects": [
         {
-          "ref": "pkg:deb/debian/ffmpeg@5.1.9-0%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-58049",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Not reachable since #810: the server transcribes nothing. Speech-to-text runs in the browser, and audio.stt.supported_content_types names a type no upload carries, which closes both callers of the decoders (the transcription endpoint and chat-file processing; nothing else in Open WebUI runs ffmpeg, pydub or PyAV on user data); openwebui-apply-stt keeps both settings. The container's root is also an unprivileged host uid now. Before #810: RASC video decoder heap write; ffprobe's stream-info probing decodes video frames. Any approved user can POST arbitrary bytes as audio/* to /api/v1/audio/transcriptions (chat.stt is on, STT engine is local Whisper) or upload them as a chat file; pydub then runs the image's Debian ffprobe/ffmpeg 5.1.9 on them, and ffprobe probes by content and decodes streams of any type. Risk here: any approved user from the internet; memory corruption in a short-lived ffprobe/ffmpeg process that runs as root in a rootful, host-network container. The container runs as root on the VM's host network, so a decoder exploit lands as root there. Action: no fixed Debian 12 package yet; goes away only with an upstream image rebuilt on a fixed base",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
           "ref": "pkg:deb/debian/libavcodec59@5.1.9-0%2Bdeb12u1"
         }
       ]
@@ -3763,19 +2866,6 @@
       "affects": [
         {
           "ref": "pkg:deb/debian/libswscale6@5.1.9-0%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-64835",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Not reachable since #810: the server transcribes nothing. Speech-to-text runs in the browser, and audio.stt.supported_content_types names a type no upload carries, which closes both callers of the decoders (the transcription endpoint and chat-file processing; nothing else in Open WebUI runs ffmpeg, pydub or PyAV on user data); openwebui-apply-stt keeps both settings. The container's root is also an unprivileged host uid now. Before #810: ADX decoder out-of-bounds access on mid-stream extradata change; an ADX/AAX file is decoded to WAV. Any approved user can POST arbitrary bytes as audio/* to /api/v1/audio/transcriptions (chat.stt is on, STT engine is local Whisper) or upload them as a chat file; pydub then runs the image's Debian ffprobe/ffmpeg 5.1.9 on them, and ffprobe probes by content and decodes streams of any type. Risk here: any approved user from the internet; memory corruption in a short-lived ffprobe/ffmpeg process that runs as root in a rootful, host-network container. The container runs as root on the VM's host network, so a decoder exploit lands as root there. Action: no fixed Debian 12 package yet; goes away only with an upstream image rebuilt on a fixed base",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/ffmpeg@5.1.9-0%2Bdeb12u1"
         }
       ]
     },
@@ -3892,19 +2982,6 @@
       },
       "affects": [
         {
-          "ref": "pkg:deb/debian/ffmpeg@5.1.9-0%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-66039",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Not reachable since #810: the server transcribes nothing. Speech-to-text runs in the browser, and audio.stt.supported_content_types names a type no upload carries, which closes both callers of the decoders (the transcription endpoint and chat-file processing; nothing else in Open WebUI runs ffmpeg, pydub or PyAV on user data); openwebui-apply-stt keeps both settings. The container's root is also an unprivileged host uid now. Before #810: MACE6 decoder heap write from a crafted CAF; decoded when converting to WAV. Any approved user can POST arbitrary bytes as audio/* to /api/v1/audio/transcriptions (chat.stt is on, STT engine is local Whisper) or upload them as a chat file; pydub then runs the image's Debian ffprobe/ffmpeg 5.1.9 on them, and ffprobe probes by content and decodes streams of any type. Risk here: any approved user from the internet; memory corruption in a short-lived ffprobe/ffmpeg process that runs as root in a rootful, host-network container. The container runs as root on the VM's host network, so a decoder exploit lands as root there. Action: no fixed Debian 12 package yet; goes away only with an upstream image rebuilt on a fixed base",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
           "ref": "pkg:deb/debian/libavcodec59@5.1.9-0%2Bdeb12u1"
         }
       ]
@@ -4009,19 +3086,6 @@
       },
       "affects": [
         {
-          "ref": "pkg:deb/debian/ffmpeg@5.1.9-0%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-70628",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Not reachable since #810: the server transcribes nothing. Speech-to-text runs in the browser, and audio.stt.supported_content_types names a type no upload carries, which closes both callers of the decoders (the transcription endpoint and chat-file processing; nothing else in Open WebUI runs ffmpeg, pydub or PyAV on user data); openwebui-apply-stt keeps both settings. The container's root is also an unprivileged host uid now. Before #810: DVB subtitle parser heap overflow via a crafted WTV; ffprobe runs parsers on all streams while probing. Any approved user can POST arbitrary bytes as audio/* to /api/v1/audio/transcriptions (chat.stt is on, STT engine is local Whisper) or upload them as a chat file; pydub then runs the image's Debian ffprobe/ffmpeg 5.1.9 on them, and ffprobe probes by content and decodes streams of any type. Risk here: any approved user from the internet; memory corruption in a short-lived ffprobe/ffmpeg process that runs as root in a rootful, host-network container. The container runs as root on the VM's host network, so a decoder exploit lands as root there. Action: no fixed Debian 12 package yet; goes away only with an upstream image rebuilt on a fixed base",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
           "ref": "pkg:deb/debian/libavcodec59@5.1.9-0%2Bdeb12u1"
         }
       ]
@@ -4114,19 +3178,6 @@
       "affects": [
         {
           "ref": "pkg:deb/debian/libswscale6@5.1.9-0%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-70632",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Not reachable since #810: the server transcribes nothing. Speech-to-text runs in the browser, and audio.stt.supported_content_types names a type no upload carries, which closes both callers of the decoders (the transcription endpoint and chat-file processing; nothing else in Open WebUI runs ffmpeg, pydub or PyAV on user data); openwebui-apply-stt keeps both settings. The container's root is also an unprivileged host uid now. Before #810: CineForm HD decoder heap write during stream probing of a crafted AVI. Any approved user can POST arbitrary bytes as audio/* to /api/v1/audio/transcriptions (chat.stt is on, STT engine is local Whisper) or upload them as a chat file; pydub then runs the image's Debian ffprobe/ffmpeg 5.1.9 on them, and ffprobe probes by content and decodes streams of any type. Risk here: any approved user from the internet; memory corruption in a short-lived ffprobe/ffmpeg process that runs as root in a rootful, host-network container. The container runs as root on the VM's host network, so a decoder exploit lands as root there. Action: no fixed Debian 12 package yet; goes away only with an upstream image rebuilt on a fixed base",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/ffmpeg@5.1.9-0%2Bdeb12u1"
         }
       ]
     },
@@ -4444,19 +3495,6 @@
       ]
     },
     {
-      "id": "CVE-2026-86138",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Not reachable since #810: the server transcribes nothing. Speech-to-text runs in the browser, and audio.stt.supported_content_types names a type no upload carries, which closes both callers of the decoders (the transcription endpoint and chat-file processing; nothing else in Open WebUI runs ffmpeg, pydub or PyAV on user data); openwebui-apply-stt keeps both settings. The container's root is also an unprivileged host uid now. Before #810: Integer overflow in xmlDictAddQString. Debian libxml2 is not loaded by the Open WebUI process (lxml and PyAV bundle their own); it is reached through ffprobe/ffmpeg (DASH manifest demuxer, librsvg). An uploaded MPD/SVG reaches it, but the overflow needs names far larger than the upload size limits allow. Risk here: any approved user, but practically unreachable sizes; short-lived ffprobe process. Action: no fixed Debian 12 package yet; goes away only with an upstream image rebuilt on a fixed base",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libxml2@2.9.14%2Bdfsg-1.3~deb12u6"
-        }
-      ]
-    },
-    {
       "id": "CVE-2026-102993",
       "analysis": {
         "state": "exploitable",
@@ -4636,7 +3674,7 @@
       "id": "CVE-2026-77214",
       "analysis": {
         "state": "not_affected",
-        "detail": "A heap over-read when the calling program passes XML_ParseBuffer a length beyond its buffer — a caller bug, not crafted XML; the programs that load expat here pass correct lengths.",
+        "detail": "A heap over-read when the calling program passes XML_ParseBuffer a length beyond its buffer \u2014 a caller bug, not crafted XML; the programs that load expat here pass correct lengths.",
         "justification": "code_not_reachable"
       },
       "affects": [
@@ -5429,7 +4467,7 @@
       "id": "CVE-2026-4775",
       "analysis": {
         "state": "not_affected",
-        "detail": "libtiff bundled in the Pillow wheel (bundled-library scan, #811). The overflow is in tile decoding; uploads are checked with Image.verify(), which does not decode TIFF tiles, and images inside uploaded PDFs are decoded only with rag.pdf_extract_images on — off here. Turning it on makes this reachable by approved users.",
+        "detail": "libtiff bundled in the Pillow wheel (bundled-library scan, #811). The overflow is in tile decoding; uploads are checked with Image.verify(), which does not decode TIFF tiles, and images inside uploaded PDFs are decoded only with rag.pdf_extract_images on \u2014 off here. Turning it on makes this reachable by approved users.",
         "justification": "requires_configuration"
       },
       "affects": [
@@ -5709,6 +4747,1291 @@
           "severity": "low",
           "method": "other",
           "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-58049",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "RASC video decoder out-of-bounds read/write (decode_dlta); ffprobe's stream-info probing decodes video frames of any stream it finds. Reachable despite #810: Open WebUI 0.13.0 matches audio.stt.supported_content_types against the Content-Type the client sets on the multipart part, so an approved user who labels an upload application/x-tappaas-no-server-stt (public in the TAPPaaS repo) still reaches transcribe() through /api/v1/audio/transcriptions (chat.stt) or a chat file upload (chat.file_upload); transcribe() runs pydub's mediainfo (Debian ffprobe) and ffmpeg -i on the bytes before the engine (web) is consulted. Checked in the 0.13.0 code and config on hrossen 2026-11-07. Risk here: medium: any approved user (signup off, new accounts pending), Open WebUI is published to the internet; memory corruption in a short-lived ffprobe/ffmpeg in the container, whose root is host uid 200000, but on the host network and with the app environment (DATABASE_URL, WEBUI_SECRET_KEY, OAUTH_CLIENT_SECRET, OPENAI_API_KEY). Action: set BYPASS_PYDUB_PREPROCESSING=true in the container env (skips every pydub call), no fixed Debian 13 ffmpeg in the scan yet."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ffmpeg@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavcodec61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavdevice61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavfilter10@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavformat61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavutil59@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libpostproc58@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswresample5@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64835",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "ADX decoder out-of-bounds read/write on a mid-stream channel-layout change carried as new-extradata side data, which container demuxers (e.g. Matroska, NUT) emit; ffmpeg -i decodes every audio stream. Reachable despite #810: Open WebUI 0.13.0 matches audio.stt.supported_content_types against the Content-Type the client sets on the multipart part, so an approved user who labels an upload application/x-tappaas-no-server-stt (public in the TAPPaaS repo) still reaches transcribe() through /api/v1/audio/transcriptions (chat.stt) or a chat file upload (chat.file_upload); transcribe() runs pydub's mediainfo (Debian ffprobe) and ffmpeg -i on the bytes before the engine (web) is consulted. Checked in the 0.13.0 code and config on hrossen 2026-11-07. Risk here: medium: any approved user (signup off, new accounts pending), Open WebUI is published to the internet; memory corruption in a short-lived ffprobe/ffmpeg in the container, whose root is host uid 200000, but on the host network and with the app environment (DATABASE_URL, WEBUI_SECRET_KEY, OAUTH_CLIENT_SECRET, OPENAI_API_KEY). Action: set BYPASS_PYDUB_PREPROCESSING=true in the container env (skips every pydub call), no fixed Debian 13 ffmpeg in the scan yet."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ffmpeg@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavcodec61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavdevice61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavfilter10@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavformat61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavutil59@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libpostproc58@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswresample5@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66039",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "MACE6 decoder signed overflow from a crafted CAF desc chunk, a heap corruption; CAF is probed by content and its audio decoded by ffmpeg -i. Reachable despite #810: Open WebUI 0.13.0 matches audio.stt.supported_content_types against the Content-Type the client sets on the multipart part, so an approved user who labels an upload application/x-tappaas-no-server-stt (public in the TAPPaaS repo) still reaches transcribe() through /api/v1/audio/transcriptions (chat.stt) or a chat file upload (chat.file_upload); transcribe() runs pydub's mediainfo (Debian ffprobe) and ffmpeg -i on the bytes before the engine (web) is consulted. Checked in the 0.13.0 code and config on hrossen 2026-11-07. Risk here: medium: any approved user (signup off, new accounts pending), Open WebUI is published to the internet; memory corruption in a short-lived ffprobe/ffmpeg in the container, whose root is host uid 200000, but on the host network and with the app environment (DATABASE_URL, WEBUI_SECRET_KEY, OAUTH_CLIENT_SECRET, OPENAI_API_KEY). Action: set BYPASS_PYDUB_PREPROCESSING=true in the container env (skips every pydub call), no fixed Debian 13 ffmpeg in the scan yet."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ffmpeg@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavcodec61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavdevice61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavfilter10@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavformat61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavutil59@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libpostproc58@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswresample5@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-70628",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "DVB subtitle parser signed overflow from a crafted WTV file; parsers run during ffprobe's stream-info probing. Debian 7.1.5 does not carry the 8.1.3 backport as far as the scan shows. Reachable despite #810: Open WebUI 0.13.0 matches audio.stt.supported_content_types against the Content-Type the client sets on the multipart part, so an approved user who labels an upload application/x-tappaas-no-server-stt (public in the TAPPaaS repo) still reaches transcribe() through /api/v1/audio/transcriptions (chat.stt) or a chat file upload (chat.file_upload); transcribe() runs pydub's mediainfo (Debian ffprobe) and ffmpeg -i on the bytes before the engine (web) is consulted. Checked in the 0.13.0 code and config on hrossen 2026-11-07. Risk here: medium: any approved user (signup off, new accounts pending), Open WebUI is published to the internet; memory corruption in a short-lived ffprobe/ffmpeg in the container, whose root is host uid 200000, but on the host network and with the app environment (DATABASE_URL, WEBUI_SECRET_KEY, OAUTH_CLIENT_SECRET, OPENAI_API_KEY). Action: set BYPASS_PYDUB_PREPROCESSING=true in the container env (skips every pydub call), no fixed Debian 13 ffmpeg in the scan yet."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ffmpeg@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavcodec61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavdevice61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavfilter10@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavformat61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavutil59@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libpostproc58@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswresample5@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-70632",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "CineForm HD decoder heap write during stream probing (crafted AVI). Reachable despite #810: Open WebUI 0.13.0 matches audio.stt.supported_content_types against the Content-Type the client sets on the multipart part, so an approved user who labels an upload application/x-tappaas-no-server-stt (public in the TAPPaaS repo) still reaches transcribe() through /api/v1/audio/transcriptions (chat.stt) or a chat file upload (chat.file_upload); transcribe() runs pydub's mediainfo (Debian ffprobe) and ffmpeg -i on the bytes before the engine (web) is consulted. Checked in the 0.13.0 code and config on hrossen 2026-11-07. Risk here: medium: any approved user (signup off, new accounts pending), Open WebUI is published to the internet; memory corruption in a short-lived ffprobe/ffmpeg in the container, whose root is host uid 200000, but on the host network and with the app environment (DATABASE_URL, WEBUI_SECRET_KEY, OAUTH_CLIENT_SECRET, OPENAI_API_KEY). Action: set BYPASS_PYDUB_PREPROCESSING=true in the container env (skips every pydub call), no fixed Debian 13 ffmpeg in the scan yet."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ffmpeg@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavcodec61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavdevice61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavfilter10@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavformat61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavutil59@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libpostproc58@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswresample5@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64830",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "VobSub demuxer overflow; the demuxer first opens the .sub file next to the .idx, and every upload is stored alone under a random-UUID name, so no matching .sub exists (holds whatever the STT settings are).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ffmpeg@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavcodec61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavdevice61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavfilter10@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavformat61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavutil59@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libpostproc58@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswresample5@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64832",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "NVDEC hardware decoder double free; the VM has no NVIDIA GPU and pydub never requests hwaccel.",
+        "justification": "requires_environment"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ffmpeg@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavcodec61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavdevice61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavfilter10@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavformat61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavutil59@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libpostproc58@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswresample5@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64833",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "S/PDIF muxer; pydub's ffmpeg writes only WAV (pcm_s16le, -vn) and MP3 and uses no filters, so muxers, encoders and filters other than those never run.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ffmpeg@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavcodec61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavdevice61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavfilter10@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavformat61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavutil59@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libpostproc58@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswresample5@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66036",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vf_hqdn3d video filter; pydub's ffmpeg writes only WAV (pcm_s16le, -vn) and MP3 and uses no filters, so muxers, encoders and filters other than those never run.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ffmpeg@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavcodec61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavdevice61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavfilter10@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavformat61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavutil59@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libpostproc58@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswresample5@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66040",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PNG/APNG encoder eXIf handling; pydub's ffmpeg writes only WAV (pcm_s16le, -vn) and MP3 and uses no filters, so muxers, encoders and filters other than those never run.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ffmpeg@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavcodec61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavdevice61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavfilter10@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavformat61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavutil59@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libpostproc58@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswresample5@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66041",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vf_quirc filter; pydub's ffmpeg writes only WAV (pcm_s16le, -vn) and MP3 and uses no filters, so muxers, encoders and filters other than those never run.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ffmpeg@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavcodec61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavdevice61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavfilter10@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavformat61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavutil59@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libpostproc58@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswresample5@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-75142",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "MPEG-PS muxer stack overflow; pydub's ffmpeg writes only WAV (pcm_s16le, -vn) and MP3 and uses no filters, so muxers, encoders and filters other than those never run.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ffmpeg@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavcodec61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavdevice61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavfilter10@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavformat61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavutil59@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libpostproc58@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswresample5@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-75144",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "VC-2/Dirac RTP packetizer (rtpenc); pydub's ffmpeg writes only WAV (pcm_s16le, -vn) and MP3 and uses no filters, so muxers, encoders and filters other than those never run.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ffmpeg@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavcodec61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavdevice61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavfilter10@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavformat61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavutil59@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libpostproc58@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswresample5@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64834",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "RTP/ASF depacketizer infinite loop (rtpdec_asf), used only in RTP/RTSP sessions; pydub hands ffmpeg a local file, and nested protocols opened from a file input are limited to file,crypto,data, so rtp/udp/rist are never opened.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ffmpeg@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavcodec61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavdevice61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavfilter10@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavformat61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavutil59@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libpostproc58@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswresample5@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-75143",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "librist protocol reader overflow (async:rist://); pydub hands ffmpeg a local file, and nested protocols opened from a file input are limited to file,crypto,data, so rtp/udp/rist are never opened.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ffmpeg@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavcodec61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavdevice61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavfilter10@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavformat61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavutil59@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libpostproc58@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswresample5@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-75146",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "DASH demuxer negative index after a live manifest refresh lowers startNumber; the manifest is a stored upload that cannot change between reads, and pydub hands ffmpeg a local file, and nested protocols opened from a file input are limited to file,crypto,data, so rtp/udp/rist are never opened.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ffmpeg@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavcodec61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavdevice61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavfilter10@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavformat61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavutil59@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libpostproc58@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswresample5@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-6653",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Use-after-free in xmlParseInternalSubset, a DoS per the advisory; a crafted .mpd or SVG with an internal subset reaches it. Debian libxml2 is not mapped by the Open WebUI process (only PyAV's bundled copy, checked in /proc/1/maps); it is reached only through Debian ffprobe/ffmpeg (DASH .mpd demuxer, librsvg for SVG), i.e. through the #810 gap: an approved user who labels an upload application/x-tappaas-no-server-stt reaches pydub's ffprobe. Checked on hrossen 2026-11-07. Risk here: low: crash of one short-lived ffprobe, any approved user. Action: set BYPASS_PYDUB_PREPROCESSING=true; no fixed Debian 13 libxml2 in the scan yet."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86138",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Integer overflow in xmlDictAddQString; needs a prefix plus name near 2 GiB. Debian libxml2 is not mapped by the Open WebUI process (only PyAV's bundled copy, checked in /proc/1/maps); it is reached only through Debian ffprobe/ffmpeg (DASH .mpd demuxer, librsvg for SVG), i.e. through the #810 gap: an approved user who labels an upload application/x-tappaas-no-server-stt reaches pydub's ffprobe. Checked on hrossen 2026-11-07. Risk here: low: needs a multi-gigabyte XML upload into a short-lived ffprobe, any approved user. Action: set BYPASS_PYDUB_PREPROCESSING=true; no fixed Debian 13 libxml2 in the scan yet."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86139",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Integer overflow in xmlURIEscapeStr; needs a URI string near 2 GiB. Debian libxml2 is not mapped by the Open WebUI process (only PyAV's bundled copy, checked in /proc/1/maps); it is reached only through Debian ffprobe/ffmpeg (DASH .mpd demuxer, librsvg for SVG), i.e. through the #810 gap: an approved user who labels an upload application/x-tappaas-no-server-stt reaches pydub's ffprobe. Checked on hrossen 2026-11-07. Risk here: low: needs a multi-gigabyte XML upload into a short-lived ffprobe, any approved user. Action: set BYPASS_PYDUB_PREPROCESSING=true; no fixed Debian 13 libxml2 in the scan yet."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-74860",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Double free in libxml2's Python SAX bindings; python3-libxml2 is not installed in the 0.13.0 image (dpkg), Open WebUI uses lxml.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86140",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Stack overflow in xmlSnprintfElements, used only for DTD validation errors; neither ffmpeg's DASH demuxer nor librsvg validates against a DTD.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86142",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "XPointer evaluation; neither ffmpeg nor librsvg evaluates xpointer() expressions.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86143",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Negative length in xmlIO output write callbacks; ffmpeg and librsvg only parse XML through libxml2 and never serialise output with it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86144",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "xmlXIncludeProcess drops parse flags; ffmpeg never runs XInclude and librsvg handles xi:include itself without xmlXIncludeProcess.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-16554",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "print_string_ptr overflow; libcjson1 is in the image only for librist4 (dpkg reverse dependencies), ffmpeg's rist:// protocol; pydub hands ffmpeg local files and nested protocols from a file input are limited to file,crypto,data, so RIST is never opened.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libcjson1@1.7.18-3.1%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-29036",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "JSON Pointer decoding in cJSON_Utils; libcjson1 is in the image only for librist4 (dpkg reverse dependencies), ffmpeg's rist:// protocol; pydub hands ffmpeg local files and nested protocols from a file input are limited to file,crypto,data, so RIST is never opened.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libcjson1@1.7.18-3.1%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-67215",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "JSON Patch recursion in cJSON_Utils; libcjson1 is in the image only for librist4 (dpkg reverse dependencies), ffmpeg's rist:// protocol; pydub hands ffmpeg local files and nested protocols from a file input are limited to file,crypto,data, so RIST is never opened.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libcjson1@1.7.18-3.1%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-67216",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Exponential cJSON_Compare; libcjson1 is in the image only for librist4 (dpkg reverse dependencies), ffmpeg's rist:// protocol; pydub hands ffmpeg local files and nested protocols from a file input are limited to file,crypto,data, so RIST is never opened.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libcjson1@1.7.18-3.1%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-87933",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "cJSONUtils_MergePatch use-after-free; libcjson1 is in the image only for librist4 (dpkg reverse dependencies), ffmpeg's rist:// protocol; pydub hands ffmpeg local files and nested protocols from a file input are limited to file,crypto,data, so RIST is never opened.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libcjson1@1.7.18-3.1%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-44172",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Connector/C mysql_real_escape_string with big5 SQL injection; libmariadb3/mariadb-common are in the image only as a dependency of libmariadb-dev (build headers); no binary or Python extension links libmariadb (ldd over /usr and site-packages), the only MySQL client is pure-Python PyMySQL, and Open WebUI uses PostgreSQL.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libmariadb3@11.8.6-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mariadb-common@11.8.6-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-49261",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "wsrep_notify_cmd shell injection. This is in the MariaDB server/Galera tooling (mariadbd, wsrep SST scripts, mbstream), none of which is installed; the image carries only the client library.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libmariadb3@11.8.6-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mariadb-common@11.8.6-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-44168",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "SST donor command-line injection. This is in the MariaDB server/Galera tooling (mariadbd, wsrep SST scripts, mbstream), none of which is installed; the image carries only the client library.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libmariadb3@11.8.6-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mariadb-common@11.8.6-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-44171",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "mbstream path traversal. This is in the MariaDB server/Galera tooling (mariadbd, wsrep SST scripts, mbstream), none of which is installed; the image carries only the client library.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libmariadb3@11.8.6-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mariadb-common@11.8.6-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-48163",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "SST donor command-line injection. This is in the MariaDB server/Galera tooling (mariadbd, wsrep SST scripts, mbstream), none of which is installed; the image carries only the client library.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libmariadb3@11.8.6-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mariadb-common@11.8.6-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-48165",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "wsrep_sst_receive_address/donor shell injection. This is in the MariaDB server/Galera tooling (mariadbd, wsrep SST scripts, mbstream), none of which is installed; the image carries only the client library.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libmariadb3@11.8.6-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mariadb-common@11.8.6-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-76642",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "util-linux mount flaw for fstab user entries (user/X-mount options, SUID mount); the container runs only uvicorn (python3, host uid 200000) and, when reached, pydub's ffprobe/ffmpeg (checked in /proc on hrossen 2026-11-07); nothing calls mount and the image has no /etc/fstab entries.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78409",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "util-linux mount flaw for fstab user entries (user/X-mount options, SUID mount); the container runs only uvicorn (python3, host uid 200000) and, when reached, pydub's ffprobe/ffmpeg (checked in /proc on hrossen 2026-11-07); nothing calls mount and the image has no /etc/fstab entries.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78410",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "util-linux mount flaw for fstab user entries (user/X-mount options, SUID mount); the container runs only uvicorn (python3, host uid 200000) and, when reached, pydub's ffprobe/ffmpeg (checked in /proc on hrossen 2026-11-07); nothing calls mount and the image has no /etc/fstab entries.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78408",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "nsenter --join-cgroup run as root; the container runs only uvicorn (python3, host uid 200000) and, when reached, pydub's ffprobe/ffmpeg (checked in /proc on hrossen 2026-11-07); nothing runs nsenter.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-12064",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "curl tool with --proto-default sftp/scp; libcurl4 is used only by the curl binary and libcurl3-gnutls only by git (dpkg), and Open WebUI never runs curl or git on user input; podman runs no healthcheck.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/curl@8.14.1-2%2Bdeb13u7"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl3t64-gnutls@8.14.1-2%2Bdeb13u7"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl4t64@8.14.1-2%2Bdeb13u7"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-8458",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Negotiate-auth connection reuse; libcurl4 is used only by the curl binary and libcurl3-gnutls only by git (dpkg), and Open WebUI never runs curl or git.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/curl@8.14.1-2%2Bdeb13u7"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl3t64-gnutls@8.14.1-2%2Bdeb13u7"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl4t64@8.14.1-2%2Bdeb13u7"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-9538",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Archive::Tar memory exhaustion; perl is in the image only as Debian tooling; neither Open WebUI nor anything it starts runs perl.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libperl5.40@5.40.1-6%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/perl-base@5.40.1-6%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/perl-modules-5.40@5.40.1-6%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/perl@5.40.1-6%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-37555",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libsndfile IMA ADPCM WAV overflow; Debian libsndfile1 is pulled in only by libpulse/SDL2/sphinxad (ffmpeg's PulseAudio/SDL devices, never selected for a file input); Python's soundfile bundles its own libsndfile.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libsndfile1@1.2.2-2%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-16742",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Flaw is in systemd-homed, not in libsystemd0/libudev1; neither systemd nor homed is installed in the image (dpkg).",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libsystemd0@257.13-1~deb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libudev1@257.13-1~deb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-52490",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Flaw is in the tiffcrop tool; libtiff-tools is not installed (dpkg), only the library.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libtiff6@4.7.0-3%2Bdeb13u3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-54369",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libacl symlink traversal needs a privileged caller on attacker paths; only cp/mv/install/sed/tar/useradd link libacl (ldd) and none runs on uploads.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libacl1@2.3.2-2%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-69720",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ncurses terminfo analyze_string(); nothing in the container processes attacker-supplied terminfo.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libncursesw6@6.5%2B20250216-2"
+        },
+        {
+          "ref": "pkg:deb/debian/libtinfo6@6.5%2B20250216-2"
+        },
+        {
+          "ref": "pkg:deb/debian/ncurses-base@6.5%2B20250216-2"
+        },
+        {
+          "ref": "pkg:deb/debian/ncurses-bin@6.5%2B20250216-2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-88806",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libX11 XkbGetMap reply overflow from a malicious X server; no X server or DISPLAY exists in the container.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libx11-6@1.8.12-1"
+        },
+        {
+          "ref": "pkg:deb/debian/libx11-data@1.8.12-1"
+        },
+        {
+          "ref": "pkg:deb/debian/libx11-xcb1@1.8.12-1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-88807",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libXrender overflow from a malicious X server; no X server or DISPLAY exists in the container.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxrender1@0.9.12-1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-69247",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Bleichenbacher oracle in pkcs7_decrypt_*; Open WebUI and its libraries never decrypt PKCS#7 EnvelopedData (cryptography 48.0.1).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/cryptography@48.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-69249",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Exponential chain building in cryptography's X.509 verifier; nothing in the container uses cryptography.x509.verification (TLS verification is done by Python's ssl).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/cryptography@48.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-47273",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Path traversal in setuptools' PackageIndex download (easy_install); nothing runs setuptools.package_index: Open WebUI installs Function requirements with pip (admin only), which does not use it.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/setuptools@78.1.0"
         }
       ]
     }
