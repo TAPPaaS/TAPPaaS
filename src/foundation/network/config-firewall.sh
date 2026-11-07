@@ -186,6 +186,18 @@ LAN_BRIDGE="$(jq -r '.bridge0 // "lan"' "$FW_JSON")"
 # ── Preconditions ────────────────────────────────────────────────────
 ip link show "$LAN_BRIDGE" >/dev/null 2>&1 || die "Bridge '${LAN_BRIDGE}' not found — run config-network.sh first (it builds lan/wan)."
 if qm status "$VMID" >/dev/null 2>&1; then
+  # A re-run of the install: the firewall this script built answers with its own key.
+  # It may still be booting: wait as long as a fresh build does.
+  if [[ -f "$CREDS_FILE" ]]; then
+    for _ in $(seq 1 36); do
+      if curl -ksS --max-time 6 -u "$(sed -n 's/^key=//p' "$CREDS_FILE"):$(sed -n 's/^secret=//p' "$CREDS_FILE")" \
+           "https://${FW_IP}/api/core/firmware/status" 2>/dev/null | grep -q '"product'; then
+        info "${GN}✓${CL} The firewall (VM ${VMID}) is built and answers at ${FW_IP} — nothing to do."
+        exit 0
+      fi
+      sleep 5
+    done
+  fi
   die "VM ${VMID} already exists. Delete it first if you intend to rebuild the firewall."
 fi
 

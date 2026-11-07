@@ -128,7 +128,7 @@ is_template() { qm config "$1" 2>/dev/null | grep -q '^template:\s*1'; }
 # (Create-TAPPaaS-VM.sh --sshkey), so root@node can ssh tappaas@cicd with no
 # password. We reach cicd by its DHCP IP (discovered via the guest agent), since
 # DNS for tappaas-cicd does not exist this early in the install.
-readonly CICD_SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes)
+readonly CICD_SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
 CICD_IP=""
 
 # Resolve the cicd VM's LAN IPv4 from the guest agent (matches net0's MAC).

@@ -185,7 +185,9 @@ _sp_lib="$(dirname "$(readlink -f "$0")")/storage-placement.sh"
 set -e
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 trap cleanup EXIT
-TEMP_DIR=$(mktemp -d)
+# On disk, not in /tmp: Proxmox 9 keeps /tmp in memory (half of it), and an image
+# unpacked there takes memory from the guests, or does not fit on a small node.
+TEMP_DIR=$(mktemp -d -p /var/tmp tappaas-vm.XXXXXX)
 pushd $TEMP_DIR >/dev/null
 
 # test to see if the json config file exist
@@ -587,18 +589,18 @@ if [ "${IMAGETYPE:-}" != "clone" ]; then
       # Decompress to a plain .iso under template/iso; ISO_NAME is what qm attaches.
       if [[ "$IMAGE" == *.bz2 ]]; then
         ISO_NAME="$(basename "${IMAGE%.bz2}")"
-        fetch_dots "/tmp/${IMAGE##*/}" "$URL"
-        image_sha256_check "/tmp/${IMAGE##*/}" "${IMAGESHA256:-}"
+        fetch_dots "${TEMP_DIR}/${IMAGE##*/}" "$URL"
+        image_sha256_check "${TEMP_DIR}/${IMAGE##*/}" "${IMAGESHA256:-}"
         info "Decompressing ISO, have patience"
-        bzip2 -dc "/tmp/${IMAGE##*/}" > "/var/lib/vz/template/iso/${ISO_NAME}"
-        rm -f "/tmp/${IMAGE##*/}"
+        bzip2 -dc "${TEMP_DIR}/${IMAGE##*/}" > "/var/lib/vz/template/iso/${ISO_NAME}"
+        rm -f "${TEMP_DIR}/${IMAGE##*/}"
       elif [[ "$IMAGE" == *.xz ]]; then
         ISO_NAME="$(basename "${IMAGE%.xz}")"
-        fetch_dots "/tmp/${IMAGE##*/}" "$URL"
-        image_sha256_check "/tmp/${IMAGE##*/}" "${IMAGESHA256:-}"
+        fetch_dots "${TEMP_DIR}/${IMAGE##*/}" "$URL"
+        image_sha256_check "${TEMP_DIR}/${IMAGE##*/}" "${IMAGESHA256:-}"
         info "Decompressing ISO, have patience"
-        xz -dc "/tmp/${IMAGE##*/}" > "/var/lib/vz/template/iso/${ISO_NAME}"
-        rm -f "/tmp/${IMAGE##*/}"
+        xz -dc "${TEMP_DIR}/${IMAGE##*/}" > "/var/lib/vz/template/iso/${ISO_NAME}"
+        rm -f "${TEMP_DIR}/${IMAGE##*/}"
       else
         ISO_NAME="$(basename "$IMAGE")"
         fetch_dots "/var/lib/vz/template/iso/${ISO_NAME}" "$URL"

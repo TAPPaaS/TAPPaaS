@@ -225,6 +225,11 @@ swap_gateway() {
   # Capture the CURRENT upstream gateway BEFORE we move the default route to the
   # firewall — used to keep a route to the operator's management network reachable.
   old_gw="$(ip -o -4 route show default 2>/dev/null | awk '{print $3; exit}')"
+  # A re-run after the cutover: the default is the firewall now; a rented
+  # server's provider gateway is still in its source route.
+  if [[ "$old_gw" == "$FW_IP" ]]; then
+    old_gw="$(ip -o -4 route show default table 200 2>/dev/null | awk '{print $3; exit}')"
+  fi
 
   info "${BOLD}Gateway cutover${CL}: default route + DNS → firewall (${BL}${FW_IP}${CL}); node mgmt IP ${BL}${mgmt_ip}${CL}."
   info "  Additive — the upstream IP${old_ip:+ (${old_ip})} is kept, so your current session stays up."
@@ -341,11 +346,17 @@ table inet tappaas_hosted {
 	}
 }
 EOF
+  # The address's own subnet goes in the table too: a reply to a neighbour sent
+  # through the gateway is dropped by a stateful router as having no connection.
+  local net
+  net="$(ip -o -4 route show dev wan scope link proto kernel 2>/dev/null | awk -v ip="$ip" '$0 ~ "src " ip {print $1; exit}')"
   ip rule add from "$ip" table 200 priority 1000 2>/dev/null || true
+  [[ -n "$net" ]] && ip route replace "$net" dev wan src "$ip" table 200 2>/dev/null
   ip route replace default via "$gw" dev wan table 200 2>/dev/null || warn "  the source route for ${ip} could not be added"
   command -v nft >/dev/null 2>&1 && { nft -f "$nft" || warn "  the guard for ${ip} could not be loaded"; }
-  local line
-  for line in "post-up ip rule add from ${ip} table 200 priority 1000 || true" \
+  local line lines=("post-up ip rule add from ${ip} table 200 priority 1000 || true")
+  [[ -n "$net" ]] && lines+=("post-up ip route replace ${net} dev wan src ${ip} table 200 || true")
+  for line in "${lines[@]}" \
               "post-up ip route replace default via ${gw} dev wan table 200 || true" \
               "post-up nft -f ${nft} || true"; do
     grep -qF "$line" "$INTERFACES" \

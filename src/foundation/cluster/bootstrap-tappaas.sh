@@ -137,7 +137,7 @@ LOG="" USE="" PXE_IFACE="" NODE_IP="" BRANCH="" SITE_CODE="" ORG="" DOMAIN="" SI
 # when not given, so nothing is asked once the build has started.
 BOOT="" STICK="" YES=0 INSTALL_ANSWER="" SHOW_TOKEN="" SUDO_KEEP="" WANT_INSTALL=0
 # A rented server (choice 6), and what the build on its rescue system is given.
-RESCUE_IP="" WAN_ADDR="" WAN_MAC="" WAN_GW="" HOSTED_ARGS=""
+RESCUE_IP="" WAN_ADDR="" WAN_MAC="" WAN_GW="" HOSTED_ARGS="" HOSTED_RESUME=0
 NET_CIDR="" NET_GW="" NET_DNS="" NET_MAC="" SERIAL_CONSOLE=0
 
 while [[ $# -gt 0 ]]; do
@@ -749,6 +749,13 @@ rescue_ask() {
   [[ -z "$WAN_GW" ]] || is_ipv4 "$WAN_GW" || die "--wan-gateway is an IPv4 address: ${WAN_GW}"
   WAN_MAC="$(printf '%s' "$WAN_MAC" | tr 'A-F-' 'a-f:')"
   [[ "$WAN_MAC" =~ ^([0-9a-f]{2}:){5}[0-9a-f]{2}$ ]] || die "not a MAC address (--wan-mac): ${WAN_MAC:-none}"
+  # Proxmox installed already by this script (its key logs in): the install goes
+  # on from there, as after a stop half-way (an outage of the repository's host).
+  if [[ -f "$INSTALL_KEY" ]] && node_ssh -n "root@${RESCUE_IP}" 'command -v pveversion' >/dev/null 2>&1; then
+    HOSTED_RESUME=1
+    info "${RESCUE_IP} runs the Proxmox this script installed: the TAPPaaS install goes on from there"
+    return 0
+  fi
   info "checking the rescue system on ${RESCUE_IP}"
   h="$(rescue_ssh -n 'hostname; test -e /root/.oldroot -o -e /etc/hetzner-build && echo rescue' 2>/dev/null || true)"
   [[ -n "$h" ]] || die "no ssh to root@${RESCUE_IP} with your key: activate the rescue system in Robot with your key, reset the server, and run this again"
@@ -780,6 +787,8 @@ args=(); i=0
 for d in $(lsblk -dn -o NAME,TYPE | awk '\''$2=="disk"{print $1}'\''); do
   case "$d" in loop*|ram*|zram*|sr*|fd*) continue ;; esac
   [ "$(lsblk -dn -o TRAN "/dev/$d" | tr -d " ")" = usb ] && continue
+  # A disk the rescue system itself uses (mounted, or swap) is never handed over.
+  lsblk -nro MOUNTPOINT "/dev/$d" | grep -q . && { echo "skipped $d (in use here)"; continue; }
   ser="$(lsblk -dn -o SERIAL "/dev/$d" | tr -cd "A-Za-z0-9._-" | cut -c1-20)"
   [ -n "$ser" ] || ser="disk$i"
   args+=(-drive "file=/dev/$d,if=none,id=d$i,format=raw,cache=none,aio=native")
@@ -857,10 +866,17 @@ chroot "$root" /bin/bash -c "cd /work && TAPPAAS_MEDIA_CONTAINER=1 TAPPAAS_RESCU
 mv "$root/work/tappaas-auto.iso" tappaas-auto.iso'
 
 hosted_install() {
-  local net dev cidr gw dns mac uefi opkey cmd lines=0 state rc t t0 conf peer cicd_ip out l
+  local net dev cidr gw dns mac uefi opkey cmd lines=0 state rc t t0 out l
   WG_PRIV="$(wg genkey)"
   WG_PUB="$(printf '%s' "$WG_PRIV" | wg pubkey)"
   info "your WireGuard key is made on this computer; its private half stays here"
+  if [[ "$HOSTED_RESUME" == 1 ]]; then
+    # The provider's gateway, as the node's network has it (before or after the cutover).
+    [[ -n "$WAN_GW" ]] || WAN_GW="$(node_ssh -n "root@${RESCUE_IP}" 'ip -4 route show table 200 default 2>/dev/null | awk "{print \$3; exit}"; awk "/^iface (wan|vmbr0)/{f=1} f&&/gateway/{print \$2; exit}" /etc/network/interfaces' 2>/dev/null | head -1)"
+    [[ -n "$WAN_GW" ]] || die "the provider's gateway could not be read from ${RESCUE_IP}: give --wan-gateway"
+    hosted_tappaas
+    return
+  fi
 
   # The server's network, as its rescue system runs on it.
   net="$(rescue_ssh -n 'dev="$(ip -4 route show default | awk "{print \$5; exit}")"; echo "$dev"; ip -4 -o addr show dev "$dev" scope global | awk "{print \$4; exit}"; ip -4 route show default | awk "{print \$3; exit}"; cat "/sys/class/net/$dev/address"; awk "/^nameserver/ && \$2 !~ /:/ {print \$2; exit}" /etc/resolv.conf; [ -d /sys/firmware/efi ] && echo uefi || echo bios')" \
@@ -873,7 +889,7 @@ hosted_install() {
   info "the server: ${cidr} via ${gw} on ${dev} (${mac}), DNS ${dns}, ${uefi}; the firewall: ${WAN_ADDR} via ${WAN_GW} (${WAN_MAC})"
 
   remote_dots "preparing the rescue system (QEMU, the build tools)" rescue_ssh -n \
-    'mkdir -p /root/tappaas && export DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get install -y qemu-system-x86 ovmf xorriso cpio zstd wget gpgv curl ca-certificates debootstrap' \
+    'mkdir -p /root/tappaas && export DEBIAN_FRONTEND=noninteractive && find /var/lib/apt/lists -maxdepth 1 -type f ! -name lock -delete && apt-get update && apt-get install -y qemu-system-x86 ovmf xorriso cpio zstd wget gpgv curl ca-certificates debootstrap' \
     || die "the rescue system could not install QEMU and the build tools"
   rescue_ssh 'cat > /root/tappaas/bootstrap-tappaas.sh && chmod 755 /root/tappaas/bootstrap-tappaas.sh' <"$0" \
     && rescue_ssh 'cat > /root/tappaas/rescue-build.sh' <<<"$RESCUE_BUILD" \
@@ -922,6 +938,12 @@ hosted_install() {
   rescue_ssh -n 'nohup sh -c "sleep 2; reboot" >/dev/null 2>&1 &' || true
   sleep 30
 
+  hosted_tappaas
+}
+
+# The TAPPaaS install on the rented server, then the operator's VPN peer.
+hosted_tappaas() {
+  local peer conf cicd_ip
   # From here as for any first node, with the firewall's own WAN.
   NODE_IP="$RESCUE_IP"
   HOSTED_ARGS=" --wan-address ${WAN_ADDR} --wan-gateway ${WAN_GW} --wan-mac ${WAN_MAC}"
