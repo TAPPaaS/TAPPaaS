@@ -85,6 +85,20 @@ let
     patches = builtins.filter (p: !(unstable.lib.hasInfix "swscale-loongarch-fix-buffer-underflow" (toString p)))
       (old.patches or [ ]);
   });
+
+  # brotli 1.2.1 (CVE-2026-111497, decoder overflow in 1.2.0): the base
+  # channel has it, nixos-unstable not yet (staging-next). The pinned package
+  # with the new source, swapped into the built system below. Drop this and
+  # the replacement when unstableSrc carries brotli 1.2.1 or later.
+  brotliFixed = unstable.brotli.overrideAttrs {
+    version = "1.2.1";
+    src = unstable.fetchFromGitHub {
+      owner = "google";
+      repo  = "brotli";
+      tag   = "v1.2.1";
+      hash  = "sha256-llY72cYffDv0ugsH0p89xIPEbElV4L8u7U/Fe8hT3gI=";
+    };
+  };
 in
 {
   disabledModules = [ "services/web-apps/immich.nix" ];
@@ -366,6 +380,18 @@ in
   # every dump fail (found in the hrossen live test).
   systemd.tmpfiles.rules = [
     "d /var/backup/immich             0755 root     root     -"
+  ];
+
+  # -- brotli 1.2.1 (CVE-2026-111497) ---------------------------------------
+  # Rewrites every reference to the pinned brotli 1.2.0 in the system closure
+  # to brotliFixed (same name length, no rebuild of its users). node (immich,
+  # immich-api) links the shared libbrotlidec, and body-parser inflates
+  # Content-Encoding: br request bodies before login. node also keeps a
+  # reference to the headers, hence .dev.
+  system.replaceDependencies.replacements = [
+    { oldDependency = unstable.brotli;     newDependency = brotliFixed;     }
+    { oldDependency = unstable.brotli.lib; newDependency = brotliFixed.lib; }
+    { oldDependency = unstable.brotli.dev; newDependency = brotliFixed.dev; }
   ];
 
   system.stateVersion = "25.05";
