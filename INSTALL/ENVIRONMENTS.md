@@ -1,8 +1,28 @@
-# Installing Modules into an Environment
+# Appendix F — Environments
 
-Whenever you install a module you have the option to specify an environment that the modules should be installed into. a TAPPaaS system can have any numbers of environments and they are isolated from each other. Consider it a Tenant concept of TAPPaaS. It can be used to have say an environment for test and one for production or an environment for guests separate from the environment for employees. If TAPPaaS is installed at a home that run business it can separate TAPPaaS modules for home use (private nextcloud and home assistant) from the business modules (say a business nextcloud, euro office and an AI stack)
+An environment is a separate world on the same platform: its own network zone, its own domain,
+its own copy of each module installed into it, and a firewall between it and the others. Use one
+for test next to production, for guests next to employees, for a client, or to keep a home
+business apart from the household. Decide which environments you need before installing the
+application stacks: a module is installed into one environment.
 
-Before installing application stacks consider if you need to create new environments for the modules.
+## From the console
+
+On the Day 2 page, **Add an environment**:
+
+1. **The environment's record:** its name, display name, owning organisation, domain (e.g.
+   `client1.example.org`), its size (the site's when empty), how its names get certificates
+   (per service, or one wildcard), and **create its zone**, a new VLAN that inherits the service
+   zone's reachability.
+2. **Make it live:** the preview lists what the reconcile does (the zone on the firewall, the
+   nodes and the switches, DNS, the certificate); apply does it.
+
+Then install stacks into it: **Add a stack** asks which environment.
+The environment's page on the console (*Environments*) shows its zone and modules, and modifies,
+reconciles or deletes it. Public DNS records for its names are added at your DNS provider
+(step 2 below).
+
+The rest of this appendix walks the same through on the command line, with one worked example.
 
 ### The always-present environments
 
@@ -40,7 +60,7 @@ environments):
 
 - A working TAPPaaS install (foundation up; the `mgmt` + default environments
   exist; if you publish the default environment, its cert is issued — see
-  `INSTALL.md`).
+  [Appendix E](FOUNDATION.md#make-it-public)).
 - Run everything below on the **tappaas-cicd** mothership.
 - DNS: you control public DNS for `tappaas.org` (and can add records under
   `client1.tappaas.org`).

@@ -1,117 +1,78 @@
-# Install a multi node TAPPaaS cluster, locally
+# Install a multi node local TAPPaaS cluster
 
-Several machines you own, sized for what you will run, with managed switches, separate data
-disks and backup. It follows seven stages; each says what it needs and what "done" looks like
-before you move on.
+Three or more machines you own, a switch between them, separate data disks and backup. The same
+install as a single node, with more done on Day 1. Each stage links to its appendix for the
+detail.
 
-| # | Stage | You'll need | Done when |
-|---|-------|-------------|-----------|
-| 1 | [Hardware Selection](../hardware-selection.md) | An honest look at your needs | Hardware sized by tier + options, on the bench |
-| 2 | [Preparation](../preparation.md) | Network, domain, credentials, branch | The preparation checklist is all ticked |
-| 3 | [Install Foundation](../src/foundation/INSTALL.md) | Stages 1 + 2 complete | Foundation installed on all nodes; network cut over; you can log in everywhere |
-| 4 | [Configure Environments](../INSTALL-ENVIRONMENT.md) *(optional)* | A running foundation | Each tenant/purpose has its own separated environment |
-| 5 | [Add a Satellite](../src/foundation/satellite/INSTALL.md) *(optional)* | A VPS, if you planned one | The satellite carries its roles (ingress / backup / VPN) |
-| 6 | [Add Workloads](#stage-6--add-workloads) | A running foundation | The apps you chose are installed and reachable |
-| 7 | [Operate](https://tappaas.org/operate/) | — | Updates, backup and health checks running on schedule |
+## 1. Choose the hardware
 
-## Stage 1 — Hardware Selection
+Pick a size (small, medium, large), the number of machines, and whether you want local AI, local
+backup and a public address. → [Appendix B — Hardware selection](HARDWARE.md)
 
-Pick a **size tier** (Evaluation / Home / SMB / Scale-out), then toggle three **capability
-options** — local AI, local backup, local public IP — independently. The
-[hardware selection guide](../hardware-selection.md) walks the decision in four steps and gives
-per-tier sizing tables.
+**Done when:** the machines are on the bench, each with a boot disk and data disks.
 
-**Done when:** you know your tier, your options, and the machine(s) are in hand.
+## 2. Prepare
 
-## Stage 2 — Preparation
+The network (the first machine needs two ports: one to your router, one to the switch), a
+domain if you want to go public, your admin email and root password, the branch and the site's
+name. → [Appendix D — Preparation](PREPARATION.md)
 
-One concise checklist: network facts, domain + DNS API token, credentials, admin email — and the
-**branch** your system will track (`stable` vs `main`). See [Preparation](../preparation.md).
+**Done when:** every box in Appendix D is ticked.
 
-**Done when:** every box in [Preparation](../preparation.md) is ticked.
+## 3. Install the first machine
 
-## Stage 3 — Install Foundation
+From a Mac or Linux PC beside it (Windows: [Appendix A](WINDOWS.md)):
 
-The automated foundation install: the first Proxmox node plus one command chain that brings up the
-OPNsense firewall, the **network cut-over** (additive — the firewall becomes your gateway without
-dropping your session or moving cables) and the CICD mothership; additional nodes joining unattended;
-**DNS/TLS** setup (wildcard certificates via your DNS provider's API); and the remaining foundation
-modules (backup, identity, logging) with your organisation bootstrapped in the identity provider.
-
-The authoritative, always-current procedure is **[Install Foundation](../src/foundation/INSTALL.md)** —
-follow its steps top to bottom.
-
-At install you say how big the site is: **small** (a few users, one machine or a test system),
-**medium** (the default, up to about 50 users) or **large** (100+ users on three or more large
-machines). Every module is then installed with cores, memory and disk to match; environments can
-have a size of their own (stage 4).
-
-**Done when:** the install prints its "🎉 your TAPPaaS foundation is installed" summary, and you can
-reach the Proxmox UI, the firewall UI and the CICD mothership.
-
-### Compare the release signer
-
-TAPPaaS releases on the `stable` and `staging` branches are tags signed by the TAPPaaS owners. The
-install checks that the release it clones is signed by one of the keys below, and records those
-fingerprints in `site.json`; from then on every update must be signed by a key the release the site
-last verified lists. The fingerprints below are the one thing you take on trust, so compare them with what the
-install prints:
-
-```
-TAPPaaS v2.4: signed by SHA256:… — compare it with the fingerprint in INSTALL.md
+```bash
+curl -fsSL "https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/stable/src/foundation/cluster/bootstrap-tappaas.sh" -o bootstrap-tappaas.sh && chmod +x bootstrap-tappaas.sh
 ```
 
-| Owner | Release key fingerprint |
-|-------|-------------------------|
-| Lars Rossen | *not published yet — the release keys are being enrolled* |
-| Erik Daniel | *not published yet — the release keys are being enrolled* |
+```bash
+./bootstrap-tappaas.sh
+```
 
-Check the same fingerprints on [tappaas.org](https://tappaas.org) and in the release notes; if they
-differ anywhere, stop and ask before installing. What the site checks from then on, and how to
-read it: [Verified updates](../src/foundation/tappaas-cicd/VERIFIED-UPDATES.md). Until the keys are published TAPPaaS releases are
-unsigned and the install says so (`TAPPaaS signs no releases yet`). The `main` branch is never
-signed.
+Choose **2** (USB stick) or **4** (network boot), answer the questions (size **medium** or
+**large**; your domain, or none), and boot the machine. The install runs to the end on its own and
+prints the console's address. Compare the release signer it prints with
+[the published fingerprints](FOUNDATION.md#compare-the-release-signer).
+→ [Appendix E — The foundation install in detail](FOUNDATION.md)
 
-## Stage 4 — Configure Environments *(optional)*
+**Done when:** the console opens at the printed address.
 
-Run more than one world on the same platform: production next to family, tenants next to
-experiments — separated environments with network boundaries between them. See
-[Configure Environments](../INSTALL-ENVIRONMENT.md).
+## 4. Day 1 in the console
 
-**Done when:** each environment exists with its own zones and domain.
+1. **Finish the first node's setup:** the LAN port cabled to the switch, and a data pool on the
+   free disks (the firewall and the management VM move onto it, live).
+2. **Add more nodes:** one at a time, with the **Add node** wizard: it writes an installer stick
+   or opens a network boot, the machine installs and joins the cluster, then its data pool.
+   A managed switch needs its trunk ports first (step 6 below).
+3. **The admin VPN:** enrol your computer.
+4. **Rest of foundation:** sign-in, logging and backup, your organisation and you.
+5. **Status and health checks:** including the VLANs across the machines.
 
-## Stage 5 — Add a Satellite *(optional)*
+**Done when:** the Day 1 page says **you have a working system**.
 
-If you planned a **satellite** in stage 1 (public ingress without a public IP, off-site backup,
-admin VPN — see the [hardware guide](../hardware-selection.md#the-satellite--the-gap-filler)), enrol the
-VPS now via [the satellite install](../src/foundation/satellite/INSTALL.md).
+## 5. Take the backup keys off the site
 
-**Done when:** the satellite carries its roles.
+With a USB stick in the first machine, on the Day 2 page: **Write the backup keys to a USB
+stick**. Make two sticks and keep them at
+two places, away from the site. Without them, a lost site cannot be restored.
 
-## Stage 6 — Add Workloads
+## 6. Day 2
 
-Install the workloads you chose in stage 1. First-party modules install with
-`module-manager module add <module>`; community module stores register once with
-`site-manager repository add <repo> --branch <branch>`, after which their modules install the same way.
-On a `stable` or `staging` branch, a repository that signs its releases is added with the
-fingerprints of its owners' signing keys, from them — `--signer SHA256:<fingerprint>`, once per key —
-and one that signs nothing with `--unsigned`.
+Optional, in any order, from the console's Day 2 page:
 
-| Stack | What you get |
-|-------|--------------|
-| [AI stack](../src/ai/INSTALL.md) | Local AI: vLLM serving, LiteLLM gateway, OpenWebUI |
-| [Collaboration stack](../src/collaboration/INSTALL.md) | Nextcloud with EURO Office editing and Talk calls (coturn, HPB) |
-| [Home stack](../src/home/INSTALL.md) | Home Assistant and the deCONZ Zigbee gateway |
-| [Security stack](../src/security/INSTALL.md) | Vaultwarden password vault, NetBird client |
-| [Miscellaneous](../src/misc/INSTALL.md) | Modules without a stack yet: Windows Server |
+- **Switch fabric:** register managed switches; TAPPaaS sets their VLANs, or lists what to set.
+- **Make it public:** certificates for your domain (wildcard, or one per service).
+  → [Appendix E](FOUNDATION.md#make-it-public)
+- **Environments:** separate worlds on one platform (production, family, a client).
+  → [Appendix F — Environments](ENVIRONMENTS.md)
+- **A satellite:** a public address, off-site backup or admin VPN, for a site without its own.
+  → [Appendix C — Adding a satellite](SATELLITE.md)
+- **Stacks:** the applications (AI, collaboration, home, security).
+- **Wi-Fi and the physical site:** access points, rooms and racks.
 
-Each stack's INSTALL.md lists its modules in install order, with the notes for that stack; each
-module's INSTALL.md says what to do by hand. What a stack is: its README.md.
+## 7. Operate
 
-**Done when:** each installed app answers on its URL and is known to the
-[Module Manager](../src/foundation/tappaas-cicd/manager/module-manager/README.md).
-
-## Stage 7 — Operate
-
-Hand over to day-to-day operation: the managers keep updating, backing up and health-checking the
-platform. That is [Operate](https://tappaas.org/operate/) — bookmark it.
+From here the managers keep the site updated, backed up and checked. See
+[Operate](https://tappaas.org/operate/).

@@ -18,10 +18,7 @@ when:
     path:
       include:
         - INSTALL.md
-        - INSTALL-ENVIRONMENT.md
         - INSTALL/*.md
-        - hardware-selection.md
-        - preparation.md
         - GLOSSARY.md
         - BUILD.md
         - docs/ADR/README.md

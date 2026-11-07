@@ -1,9 +1,11 @@
-# Install a single node local TAPPaaS system from a Windows PC
+# Appendix A — Install from a Windows PC
 
-The install script for the [single node guide](SINGLE-NODE-LOCAL.md) runs on a Mac or Linux
-PC. From a Windows PC you install Proxmox from the stock ISO by hand, answering its questions
-the way the script would, then start the TAPPaaS install on the machine itself. This replaces
-steps 0 to 2 of that guide; step 3, Day 1 in the console, is the same.
+The install script `bootstrap-tappaas.sh` runs on a Mac or Linux PC. From a Windows PC you
+install Proxmox on the first machine from the stock ISO by hand, answering its questions the way
+the script would, then start the TAPPaaS install on the machine itself. This replaces steps 0 to 2
+of the [single node guide](SINGLE-NODE-LOCAL.md), or stage 3 of the
+[local cluster guide](CLUSTER-LOCAL.md); Day 1 in the console is the same. More machines are
+added later from the console, which writes their installer sticks.
 
 You need the machine and the network that guide lists, and a USB stick of 4 GB or more,
 which is **erased**.
@@ -40,7 +42,8 @@ Open that address in a browser on the Windows PC (accept the certificate warning
 curl -fsSL https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/stable/src/foundation/install.sh -o install.sh && chmod +x install.sh
 ```
 
-Then start the install, with your site's name in place of `home`:
+Then start the install, with your site's name in place of `home` (and, for a cluster, size
+`medium` or `large` in place of `small`, and `--domain <your domain>` if you have one):
 
 ```bash
 ./install.sh https://codeberg.org/TAPPaaS/TAPPaaS/raw/branch/ stable --name home --size small --non-interactive

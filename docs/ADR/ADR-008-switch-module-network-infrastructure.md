@@ -2039,5 +2039,5 @@ Summary: 3 switches, 2 APs, 5 warnings, 0 errors
 
 - [ADR-001: Trunk Mode for TAPPaaS VM VLAN Connectivity](ADR-001%20-%20Use%20Trunk%20Mode%20for%20TAPPaaS%20VM%20VLAN%20Connectivity.md)
 - [zones.json](../../src/foundation/firewall/zones.json) — Canonical VLAN definitions
-- [INSTALL-ENVIRONMENT.md](../../INSTALL-ENVIRONMENT.md) — Environment zone L2 troubleshooting
+- [INSTALL/ENVIRONMENTS.md](../../INSTALL/ENVIRONMENTS.md) — Environment zone L2 troubleshooting
 - [UniFi Network Controller API](https://ubntwiki.com/products/software/unifi-controller/api)
