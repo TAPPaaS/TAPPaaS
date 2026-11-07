@@ -204,6 +204,7 @@ in
         --log-driver=journald \
         --env-file=/etc/secrets/openwebui.env \
         --env-file=/etc/secrets/openwebui-integrations.env \
+        --env BYPASS_PYDUB_PREPROCESSING=true \
         -v /var/lib/openwebui/data:/app/backend/data \
         -v /var/lib/openwebui/models:/app/backend/data/models \
         docker.io/openwebui/open-webui:${versions.openwebui}
@@ -530,11 +531,15 @@ EOF
   #
   # Server-side STT hands any approved user's upload to ffmpeg/ffprobe (Debian's,
   # in the image) and to PyAV's bundled FFmpeg inside the app process — before
-  # the engine is even consulted: transcribe() converts first. Six decoder CVEs
-  # are rated high in openwebui-vex.json for exactly that path. So:
-  #   * engine "web": the microphone button transcribes in the browser;
-  #   * supported_content_types names a type no upload carries, so neither the
-  #     transcription endpoint nor an uploaded audio file reaches transcribe().
+  # the engine is even consulted: transcribe() converts first. So:
+  #   * BYPASS_PYDUB_PREPROCESSING=true (podman run, above): transcribe() makes
+  #     no pydub call, so no upload reaches ffprobe/ffmpeg. This is the barrier;
+  #     the content-type list below is not, because Open WebUI checks it against
+  #     the Content-Type the CLIENT puts on the multipart part.
+  #   * engine "web": the microphone button transcribes in the browser, and the
+  #     server has no handler for it, so PyAV/faster-whisper never runs;
+  #   * supported_content_types names a type no browser sends, which keeps
+  #     uploaded audio files out of transcribe() in normal use.
   #     (An EMPTY list means "audio/*" to Open WebUI, which is why it is not [].)
   # Both live in the config table, where the database wins over the environment,
   # so they are reconciled there, like the OpenAI connection below.
