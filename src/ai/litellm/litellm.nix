@@ -49,11 +49,12 @@
 let
   # Version pinning - change versions here only
   versions = {
-    # v1.106.5 (2026-10-28: clears certifi, aiohttp and nodejs CVEs). From 1.104
+    # v1.106.7 (2026-11-07: clears pypdf, pyasn1, ddtrace and python CVEs; 22
+    # critical/high down to 4). From 1.104
     # it refuses to start on an unset or default master key — this module
     # generates one; 1.103.3 was the first to stop the boot on a failed migration
     # instead of serving on a stale schema (#765).
-    litellm     = "v1.106.5";
+    litellm     = "v1.106.7";
     postgresPkg = pkgs.postgresql_17;
     redisPkg    = pkgs.redis;
   };

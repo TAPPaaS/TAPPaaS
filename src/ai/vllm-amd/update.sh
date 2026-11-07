@@ -92,7 +92,7 @@ if [ ! -f /opt/vllm/docker-compose.yml ]; then
     cat > /opt/vllm/docker-compose.yml <<EOF
 services:
   vllm:
-    image: kyuz0/vllm-therock-gfx1151@sha256:6aa3f7a806c8c1b4af6854815b729b3ef36112b5bfdc20c265f95e374357748c
+    image: kyuz0/vllm-therock-gfx1151@sha256:f8a7433d662b37b200ca19996d4013288071341ad514e66de69ea4871cfa3966
     container_name: vllm
     env_file:
       - /opt/vllm/vllm.env
@@ -129,14 +129,14 @@ fi
 # Uses SSH heredoc to the Proxmox node to avoid pct-wrapper word-split issues
 # when passing complex sed replacement strings through the SSH→pct chain.
 debug "  pinning image digest..."
-# rocm10.0.0-torch2.11.0-vllm0.32.0, built 2026-10-19 (2026-10-28: clears the
-# pillow, certifi and aiohttp CVEs of 0.29.0). 0.29.0 was the vLLM version AMD
-# listed for ROCm 10 on this GPU (#765); 0.32.0 is live-tested on hrossen.
+# rocm10.0.0-torch2.11.0-vllm0.33.0, built 2026-11-02 (2026-11-07: clears the
+# pyasn1 and libbrotli CVEs of 0.32.0). 0.29.0 was the vLLM version AMD listed
+# for ROCm 10 on this GPU (#765); 0.33.0 is live-tested on hrossen.
 # A GPTQ build of a mixture-of-experts model does not load on it ("zp shape
 # mismatch", the container restarts in a loop): move the served model to an
 # AWQ build first, see UPGRADE.md. The way back is the digest before this one
-# (0.29.0): sha256:c2a4adb2aeac1ec90ffeca8bddda17f66d16ced3742eb16956779a198967afaa
-PINNED_IMAGE="kyuz0/vllm-therock-gfx1151@sha256:6aa3f7a806c8c1b4af6854815b729b3ef36112b5bfdc20c265f95e374357748c"
+# (0.32.0): sha256:6aa3f7a806c8c1b4af6854815b729b3ef36112b5bfdc20c265f95e374357748c
+PINNED_IMAGE="kyuz0/vllm-therock-gfx1151@sha256:f8a7433d662b37b200ca19996d4013288071341ad514e66de69ea4871cfa3966"
 # `bash -s` (not a bare heredoc): without a command ssh starts a LOGIN shell,
 # which prints the node's MOTD — the Debian licence banner that used to appear
 # mid-update under this heading. Passing a command makes the session
