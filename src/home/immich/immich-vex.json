@@ -1069,6 +1069,28 @@
           "ref": "pkg:nix/curl@8.22.0"
         }
       ]
+    },
+    {
+      "id": "CVE-2026-111497",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Brotli decoder buffer overflow (c/dec/decode.c, 1.0.3 to 1.2.0). The immich and immich-api node processes map libbrotlidec 1.2.0 (nixpkgs node uses the shared library), and immich 3.2.4's Express 5 / body-parser 2.3.0, registered globally by NestFactory, inflates request bodies sent with Content-Encoding: br before any guard runs: a POST of br-labelled garbage to /api/auth/validateToken returns 500 where the plain request returns 401 (probed on hrossen 2026-11-07, locally on port 2283). Risk here: critical: one unauthenticated HTTP request from the internet (network:proxy allows home, netbird, internet; not tested end-to-end through the proxy) reaches the decoder in immich-api, which runs as the immich user with the database and every photo. Action: get brotli 1.2.1 (already in the base channel) into immich's closure before the release, or have the proxy refuse request Content-Encoding for immich."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/brotli@1.2.0"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "critical",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
     }
   ]
 }
