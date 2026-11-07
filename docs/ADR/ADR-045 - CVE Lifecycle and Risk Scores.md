@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Draft** — for the operator's review |
-| **Version** | 0.1 |
+| **Version** | 0.2 |
 | **Date** | 2026-11-07 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | Follows #788 (release CVE preview and ack). Amends ADR-011 §8 (VEX lifecycle), ADR-028 (the boundary gains a CVE phase and a release score), ADR-041 (security conditions take their status from the risk level) and ADR-039 (an alert for new critical/high CVEs). |
-| **Changelog** | v0.1 (2026-11-07): first draft, from the operator's direction of 2026-11-07, after the 2.4 preview walk-through of immich. |
+| **Changelog** | v0.1 (2026-11-07): first draft, from the operator's direction of 2026-11-07, after the 2.4 preview walk-through of immich. v0.2 (2026-11-07): the operator's review. Only the highest category counts, each further item at half the one before; open items 20/8; no fix multiplier; zones (×0.25 DMZ, ×2 management) between modules and environments; zones outside every environment roll up to the site; analysed low/medium pass without an ack; woodpecker is a module like any other. |
 
 A site keeps three CVE records today: the nightly scan, the VEX statements in the repo, and the
 acks for the next boundary. None of them cleans itself, and none of them adds up to a number an
@@ -17,7 +17,7 @@ operator can watch. This ADR gives them a lifecycle and one score:
 1. **Cleanup is automatic.** The boundary removes VEX statements that no longer match anything
    any channel ships, lists the ones a version change has made inapplicable, and archives the
    acks it used.
-2. **One risk score**, computed the same way for a running module, an environment, the site and
+2. **One risk score**, computed the same way for a running module, a zone, an environment, the site and
    a release candidate. The health view, the console and the alerts use it.
 3. **A documented release process**: triage into VEX, fix what can be fixed, ack the rest, and
    record each module's release score.
@@ -106,54 +106,83 @@ the pin branch, so the change is in the release and in its history. It does thre
 Between boundaries the preview reports the same classification (LIVE/CARRIED/GONE counts per
 module) without changing anything, so the operator sees the cleanup before it happens.
 
-### D3. One risk score: module, environment, site, release
+### D3. One risk score: module, zone, environment, site, release
 
-**Per CVE**, the points it adds:
+**Points per counted CVE.** A CVE falls into one category: an analysed item by its TAPPaaS
+rating, an open or carried item by its CVE severity.
 
 | State | Critical | High | Medium | Low |
 |---|---|---|---|---|
 | risk (by its TAPPaaS rating) | 25 | 10 | 3 | 1 |
-| open / carried (by its CVE severity) | 10 | 4 | — | — |
+| open / carried (by its CVE severity) | 20 | 8 | — | — |
 | decided | 0 | 0 | 0 | 0 |
 
-An open item weighs less than a confirmed critical or high, and more than a confirmed medium:
-"not analysed" is not the same as "dangerous". Medium and low CVE severities without an
-analysis are not counted; the scan still lists them.
+Medium and low CVE severities without an analysis are not counted; the scan still lists them.
+Whether a fix is available plays no part: the risk is the same until the fix is installed, and
+the score does not show it.
 
-A **fix multiplier** applies on a running site: ×2 for any counted CVE whose fix is available
-in the module's channel and not applied (the scan's `act` verdict, an image tag that clears it,
-or an OPNsense package update). Leaving a known fix uninstalled is worse than having no fix.
+**Module score.**
+1. Only the **highest category that has any item** counts. If a module has a critical item, its
+   highs, mediums and lows add nothing. If it has no critical but some highs, its mediums and
+   lows add nothing, and so on.
+2. Within that category the items are sorted by points, highest first, and **each additional
+   item counts half the one before**: three risk-rated criticals score
+   25 + 25×50 % + 25×50 %×50 % = 43.75. A risk critical and an open critical score
+   25 + 20×50 % = 35.
+3. So one category never reaches twice its top value, and the bands do not overlap:
 
-**Module score** is the sum of points. Its **level** is the higher of:
-
-| Score | 0 | 1–9 | 10–24 | 25–49 | ≥ 50 |
+| Score | 0 | above 0, below 3 | 3 to below 8 | 8 to below 20 | 20 and above |
 |---|---|---|---|---|---|
 | Level | ok | low | medium | high | critical |
 
-and the worst single `risk` rating. One confirmed critical makes the module critical, however
-low its sum.
+The score alone gives the level. One open critical (20) makes a module critical; any number of
+risk-rated lows stays below 2. (In floating point, some fifty highs round up to exactly 20; the
+implementation keeps each category's sum just below the next band, so the category and the band
+always agree.)
+
+**Zone.** A zone's score is the highest module score among the modules deployed in it, times the
+zone's multiplier, by zone `type` in `zones.json`:
+
+| Zone type | Multiplier |
+|---|---|
+| DMZ | ×0.25 |
+| Management | ×2 |
+| every other type | ×1 |
+
+The multiplier is the blast radius of a compromise: the DMZ is built to contain one, and the
+management zone holds the keys to everything else. The level follows from the multiplied score by
+the same bands, so a module at high (8) in the management zone makes that zone high (16), and a
+high of 10 or more makes it critical.
 
 **Environment and site.**
-- An environment's **level** is the worst level of its modules. Its **score** is the sum, shown
-  with the module that contributes most.
-- The site adds the foundation modules and the platform targets (pvehost nodes, the firewall,
-  unifi-os, Debian LXC) as their own rows. Its level is the worst of all of them.
-- The "worst level" rule keeps one bad module visible. The sum shows trend.
+- An environment's score is the **highest score of its zones** (the zones whose `environment`
+  names it, as `zones.json` and the CMDB already record).
+- The site's score is the highest of its environments **and of every zone that belongs to no
+  environment** (dmz, work, guest, the overlays…).
+- The platform targets count as modules of the zone they sit in: the pvehost nodes, the firewall
+  and the backup server in the management zone, unifi-os in its own zone. Woodpecker is a module
+  like any other (D2 and D5 apply to it: a VEX file, compared in the preview, scored).
+- Each score is shown with the module that sets it, so the number always points at its cause.
 
-**Release score.** The same function over the candidate's closures and images, with no fix
-multiplier (a release ships what it pins). It is recorded per module in `releases.json` at
-`record` and printed in the release notes. Example, immich in the 2.4 candidate: open
-brotli critical (10), 9 open high (36), 4 risk low (4), 1 risk low on ffmpeg (1), 1 risk medium
-on ffmpeg (3) → **54, critical** by sum, medium by worst rating; the release notes show both
-the number and the items that make it.
+**Release score.** The module score over the candidate's closures and images. A release knows no
+site's zones, so it has no zone multiplier. The release's own level is its highest module score.
+Both are recorded per module in `releases.json` at `record` and printed in the release notes.
+
+Example, immich in the 2.4 candidate: the highest category with an item is critical, holding one
+open item (brotli, 20), so immich scores **20, critical**. Its nine open highs and six risk-rated
+items add nothing while that one is there. Triage brotli to not affected and the high category
+counts instead: nine open highs give 8 × (1 + ½ + … + ½⁸) ≈ 16.0, high. On hrossen immich sits in
+the `rossen` service zone (×1), so the `rossen` environment is at least 20 too.
 
 The computation lives in one place: a `score` function in `lib/ts` used by health-manager. The
 preview calls `health-manager score --details <file>` instead of duplicating it in Python.
 
 ### D4. Health, alerts and the console
 
-- **Health (ADR-041).** The `security` condition on a module, node or environment takes its
-  status from the level: ok/low → ok, medium → warning, high → warning, critical → **critical**.
+- **Health (ADR-041).** The `security` condition on a module, node, zone or environment takes
+  its status from the level: ok/low → ok, medium → warning, high → warning, critical →
+  **critical**. Zones and environments take their own score (D3), not the ADR-041 worst-of
+  roll-up, so the zone multiplier shows in health too.
   A level change is a status change, so it emits an event even if the condition was already
   warning. `cve-scan-failed` stays warning; `cve-scan-stale` stays on the site.
 - **Alerts (ADR-039)**, in `tappaas-cicd-alerts.json`:
@@ -168,11 +197,12 @@ preview calls `health-manager score --details <file>` instead of duplicating it 
   and rescans the last inventory (no new SBOM, no sweep). New CVEs then show within a day even on
   a site that skips sweeps. It talks only to the scanners' database mirrors, never to Codeberg.
 - **Console.** The `/security` page goes live on `/api/security`:
-  - The site level and score, then one row per environment, then per module and platform
-    target: level, score, open / risk / carried / decided counts, the top contributors, and a
-    7-day sparkline.
-  - A module row expands to its counted CVEs with state, package and version, rating, fix, and
-    the VEX analysis text.
+  - The site level and score, then one row per environment, then per zone (with its
+    multiplier), then per module and platform target: level, score, the module that sets it,
+    open / risk / carried / decided counts, and a 7-day sparkline. The zones that belong to no
+    environment sit directly under the site.
+  - A module row expands to its counted CVEs with state, category, package and version, rating
+    and the VEX analysis text. Whether a fix exists is not shown.
   - The Overview "Security" tile and the Modules badge show the level instead of "CVE act".
   - `health-manager report security` prints the same table.
 
@@ -203,8 +233,8 @@ The steps, from T-3 days to the boundary:
 6. **Boundary**: `pin_gate` re-checks, the `cve` phase cleans up (D2), and `record` stores each
    module's release score, its counts and the ack notes in `releases.json`.
 
-The release notes get a security section generated from the record: the site's release level
-and score, each module's score and level against the previous release, what was fixed (FIXED
+The release notes get a security section generated from the record: the release's level and
+score, each module's score and level against the previous release, what was fixed (FIXED
 counts), what was decided, and what was accepted with its note.
 
 ## Consequences
@@ -213,14 +243,15 @@ counts), what was decided, and what was accepted with its note.
   - VEX stays true to what ships. Dead statements leave by themselves, and a version change
     becomes a confirmation, not a lost analysis.
   - An ack is a recorded decision, kept with the release instead of deleted.
-  - One number and one level answer "how exposed is this module, environment, site or release",
+  - One number and one level answer "how exposed is this module, zone, environment, site or
+    release",
     in the console, in health, and in the release notes.
   - A new open critical reaches the operator the same day, by mail.
 - **Cost.**
   - A boundary phase that commits to the pin branch.
   - A `score` function and its tests, health and alert changes, a console page, a rescan timer.
-  - The weights are a judgement call. They are in one table, so changing them is one edit, and
-    the release record stores the weights it used.
+  - The weights, the halving and the zone multipliers are judgement calls. They live in one
+    table, so changing them is one edit, and the release record stores the values it used.
 - **Risk.**
   - A wrong "gone" removes a statement production still needs. Judging against all three
     channels guards against it, and a removed statement is in git history and can be restored
@@ -233,18 +264,21 @@ counts), what was decided, and what was accepted with its note.
 | Phase | Content | Done when |
 |---|---|---|
 | P1 | D2: preview classification (LIVE/CARRIED/GONE, stale acks), `cve-triage carry`, ack pinned to digest and pin, the boundary `cve` phase, ack archive in `releases.json` | A rehearsal boundary removes the 3 stale immich statements and lists the baseline's glibc items as carried |
-| P2 | D3: `score` in `lib/ts`, `health-manager score`, preview and release record use it | The 2.4-style preview prints a score per module and the record stores it |
-| P3 | D4: health status from level, the two alerts, the rescan timer, the console page and badges | On hrossen a new open critical mails within a day, and `/security` shows site → environment → module |
+| P2 | D3: `score` in `lib/ts` (module, zone with multiplier, environment, site), `health-manager score`, preview and release record use it; woodpecker gets a VEX file and a preview row | The 2.4-style preview prints a score per module (immich 20, critical) and the record stores it |
+| P3 | D4: health status from level, the two alerts, the rescan timer, the console page and badges | On hrossen a new open critical mails within a day, and `/security` shows site → environment → zone → module |
 | P4 | D5: gate policy (analysed low/medium pass), the runbook in RELEASE-TRAIN.md, the release-notes section, ADR-028 cross-reference | The next boundary is run from the runbook alone |
 
 ## Open questions
 
-1. **Weights.** Are 25/10/3/1 for risk and 10/4 for open right? Should an open critical count
-   as much as a confirmed high?
-2. **Fix multiplier.** ×2 for an uninstalled fix on a running site: keep it, or show
-   "fix available" as a separate flag instead?
-3. **Analysed low/medium skip the ack.** Agree, or keep every new item behind an ack?
-4. **Platform targets.** Count the firewall, nodes and unifi-os in the site level (D3), or show
-   them beside it? Their fixes come from their own channels, not from a TAPPaaS release.
-5. **Woodpecker** has no VEX and is not compared today. Bring it under the same rules in P1, or
-   leave it out of the score until it has a VEX file?
+1. **Zone types without a multiplier.** IoT, Guest and Client zones hold devices TAPPaaS does not
+   scan, and the overlays hold no modules. They count ×1 when a module is deployed there; is
+   that right, or should IoT be ×0.25 like the DMZ?
+2. **The firewall.** It sits in every zone. Counting it in the management zone (×2) means one
+   unbound high on the firewall makes the site critical. Intended?
+
+Settled in v0.2 (operator, 2026-11-07): the base weights 25/10/3/1; open items at 20/8; only the
+highest category counts, each further item at half the one before; no fix multiplier and no "fix
+available" in the score or the console; analysed low and medium pass the gate without an ack;
+environments are the highest of their zones, zones the highest of their modules times ×0.25 (DMZ)
+or ×2 (management), and zones outside every environment roll up to the site; woodpecker is a
+module like any other.
