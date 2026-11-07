@@ -191,6 +191,32 @@
           "ref": "pkg:nix/imagemagick@7.1.2-34"
         }
       ]
+    },
+    {
+      "id": "CVE-2014-9826",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "SUN coder error handling fixed in ImageMagick 6.8.9 (2014); 7.1.2-32 contains the fix, the match comes from a version-less CVE record.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/imagemagick@7.1.2-31"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2017-5506",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Double free in profile.c fixed in 6.9.7-4 / 7.0.4-4; 7.1.2-32 contains the fix.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/imagemagick@7.1.2-31"
+        }
+      ]
     }
   ]
 }
