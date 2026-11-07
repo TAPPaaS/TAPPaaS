@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Draft** — for the operator's review |
-| **Version** | 0.2 |
+| **Version** | 0.3 |
 | **Date** | 2026-11-07 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | Follows #788 (release CVE preview and ack). Amends ADR-011 §8 (VEX lifecycle), ADR-028 (the boundary gains a CVE phase and a release score), ADR-041 (security conditions take their status from the risk level) and ADR-039 (an alert for new critical/high CVEs). |
-| **Changelog** | v0.1 (2026-11-07): first draft, from the operator's direction of 2026-11-07, after the 2.4 preview walk-through of immich. v0.2 (2026-11-07): the operator's review. Only the highest category counts, each further item at half the one before; open items 20/8; no fix multiplier; zones (×0.25 DMZ, ×2 management) between modules and environments; zones outside every environment roll up to the site; analysed low/medium pass without an ack; woodpecker is a module like any other. |
+| **Changelog** | v0.1 (2026-11-07): first draft, from the operator's direction of 2026-11-07, after the 2.4 preview walk-through of immich. v0.2 (2026-11-07): the operator's review. Only the highest category counts, each further item at half the one before; open items 20/8; no fix multiplier; zones (×0.25 DMZ, ×2 management) between modules and environments; zones outside every environment roll up to the site; analysed low/medium pass without an ack; woodpecker is a module like any other. v0.3 (2026-11-07): the operator's review. Level bands 0/7/16/30, so one new critical is high and not critical outside the management zone; zone multipliers by tier (0 ×2, 1 ×1, 2 ×0.75, 3 ×0.5, 4 ×0.25, 5–6 ×0.1). |
 
 A site keeps three CVE records today: the nightly scan, the VEX statements in the repo, and the
 acks for the next boundary. None of them cleans itself, and none of them adds up to a number an
@@ -129,30 +129,35 @@ the score does not show it.
    item counts half the one before**: three risk-rated criticals score
    25 + 25×50 % + 25×50 %×50 % = 43.75. A risk critical and an open critical score
    25 + 20×50 % = 35.
-3. So one category never reaches twice its top value, and the bands do not overlap:
+3. So one category never reaches twice its top value: critical below 50, high below 20, medium
+   below 6, low below 2.
 
-| Score | 0 | above 0, below 3 | 3 to below 8 | 8 to below 20 | 20 and above |
+The level comes from the score (after the zone multiplier, for a zone):
+
+| Score | 0 | above 0, below 7 | 7 to below 16 | 16 to below 30 | 30 and above |
 |---|---|---|---|---|---|
 | Level | ok | low | medium | high | critical |
 
-The score alone gives the level. One open critical (20) makes a module critical; any number of
-risk-rated lows stays below 2. (In floating point, some fifty highs round up to exactly 20; the
-implementation keeps each category's sum just below the next band, so the category and the band
-always agree.)
+The bands are wider than the categories on purpose. A single new critical does not make a module
+critical: one open critical (20) or one analysed critical (25) is **high**; it takes two
+criticals (25 + 12.5) or a critical in the management zone (20 × 2) to reach critical. One open
+or analysed high (8 or 10) is medium. Analysed highs reach high from three (10 + 5 + 2.5 = 17.5);
+open highs alone approach 16 but never reach it, so unanalysed highs keep a module at medium in a
+service zone. Mediums and lows never pass low.
 
 **Zone.** A zone's score is the highest module score among the modules deployed in it, times the
-zone's multiplier, by zone `type` in `zones.json`:
+multiplier of the zone's `tier` in `zones.json`:
 
-| Zone type | Multiplier |
-|---|---|
-| DMZ | ×0.25 |
-| Management | ×2 |
-| every other type | ×1 |
+| Tier | 0 (management) | 1 (services) | 2 | 3 | 4 (DMZ) | 5 and 6 |
+|---|---|---|---|---|---|---|
+| Multiplier | ×2 | ×1 | ×0.75 | ×0.5 | ×0.25 | ×0.1 |
 
-The multiplier is the blast radius of a compromise: the DMZ is built to contain one, and the
-management zone holds the keys to everything else. The level follows from the multiplied score by
-the same bands, so a module at high (8) in the management zone makes that zone high (16), and a
-high of 10 or more makes it critical.
+The multiplier follows the tier structure the firewall already enforces: the lower the tier, the
+more a compromise there reaches. On hrossen that puts mgmt at ×2; rossen and test at ×1; home at
+×0.75; iotCloud, iotUntrust and guest at ×0.5; dmz at ×0.25; and iotLocal and iotCams at ×0.1.
+A zone without a tier (the overlays, work, wan) holds no TAPPaaS module today; if one is
+deployed there it counts ×1. So one open critical in a service zone is high (20), and in the
+management zone critical (40); one open high in the management zone is high (16).
 
 **Environment and site.**
 - An environment's score is the **highest score of its zones** (the zones whose `environment`
@@ -169,10 +174,10 @@ site's zones, so it has no zone multiplier. The release's own level is its highe
 Both are recorded per module in `releases.json` at `record` and printed in the release notes.
 
 Example, immich in the 2.4 candidate: the highest category with an item is critical, holding one
-open item (brotli, 20), so immich scores **20, critical**. Its nine open highs and six risk-rated
+open item (brotli, 20), so immich scores **20, high**. Its nine open highs and six risk-rated
 items add nothing while that one is there. Triage brotli to not affected and the high category
-counts instead: nine open highs give 8 × (1 + ½ + … + ½⁸) ≈ 16.0, high. On hrossen immich sits in
-the `rossen` service zone (×1), so the `rossen` environment is at least 20 too.
+counts instead: nine open highs give 8 × (1 + ½ + … + ½⁸) ≈ 15.97, medium. On hrossen immich
+sits in the `rossen` service zone (tier 1, ×1), so the `rossen` environment is at least 20 too.
 
 The computation lives in one place: a `score` function in `lib/ts` used by health-manager. The
 preview calls `health-manager score --details <file>` instead of duplicating it in Python.
@@ -264,17 +269,17 @@ counts), what was decided, and what was accepted with its note.
 | Phase | Content | Done when |
 |---|---|---|
 | P1 | D2: preview classification (LIVE/CARRIED/GONE, stale acks), `cve-triage carry`, ack pinned to digest and pin, the boundary `cve` phase, ack archive in `releases.json` | A rehearsal boundary removes the 3 stale immich statements and lists the baseline's glibc items as carried |
-| P2 | D3: `score` in `lib/ts` (module, zone with multiplier, environment, site), `health-manager score`, preview and release record use it; woodpecker gets a VEX file and a preview row | The 2.4-style preview prints a score per module (immich 20, critical) and the record stores it |
+| P2 | D3: `score` in `lib/ts` (module, zone with its tier multiplier, environment, site), `health-manager score`, preview and release record use it; woodpecker gets a VEX file and a preview row | The 2.4-style preview prints a score per module (immich 20, high) and the record stores it |
 | P3 | D4: health status from level, the two alerts, the rescan timer, the console page and badges | On hrossen a new open critical mails within a day, and `/security` shows site → environment → zone → module |
 | P4 | D5: gate policy (analysed low/medium pass), the runbook in RELEASE-TRAIN.md, the release-notes section, ADR-028 cross-reference | The next boundary is run from the runbook alone |
 
 ## Open questions
 
-1. **Zone types without a multiplier.** IoT, Guest and Client zones hold devices TAPPaaS does not
-   scan, and the overlays hold no modules. They count ×1 when a module is deployed there; is
-   that right, or should IoT be ×0.25 like the DMZ?
-2. **The firewall.** It sits in every zone. Counting it in the management zone (×2) means one
-   unbound high on the firewall makes the site critical. Intended?
+1. **Zones without a tier** (the overlays, work, wan) count ×1 if a module is ever deployed
+   there. Should `zones.json` give every zone a tier instead?
+2. **The firewall** sits in every zone. Counting it in the management zone (tier 0, ×2) means one
+   open high in unbound (8 × 2 = 16) makes the site high, and one open critical makes it
+   critical. Intended?
 
 Settled in v0.2 (operator, 2026-11-07): the base weights 25/10/3/1; open items at 20/8; only the
 highest category counts, each further item at half the one before; no fix multiplier and no "fix
@@ -282,3 +287,8 @@ available" in the score or the console; analysed low and medium pass the gate wi
 environments are the highest of their zones, zones the highest of their modules times ×0.25 (DMZ)
 or ×2 (management), and zones outside every environment roll up to the site; woodpecker is a
 module like any other.
+
+Settled in v0.3 (operator, 2026-11-07): the level bands are 0 / 7 / 16 / 30, so a single new
+critical is high and only the management zone or a second critical makes it critical; the zone
+multiplier follows the zone tier (tier 0 ×2, 1 ×1, 2 ×0.75, 3 ×0.5, 4 ×0.25, 5 and 6 ×0.1),
+replacing the DMZ/management types of v0.2.
