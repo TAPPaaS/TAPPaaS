@@ -26,12 +26,10 @@ dist-test/
 # The console's fixture mode: a local build, and the journal of what a run asked.
 src/foundation/tappaas-cicd/ui/dist/
 src/foundation/tappaas-cicd/ui/test/fixtures/journal.jsonl
-# The console's visual loop (ui/web/e2e/run.sh): this run, the local PNG
-# baselines and their stamp (the .txt baselines are in git), Playwright results.
+# The console's visual loop (ui/web/e2e/run.sh): this run and Playwright's
+# results (its baseline lives outside the repository, in ~/.cache).
 src/foundation/tappaas-cicd/ui/web/e2e/out/
 src/foundation/tappaas-cicd/ui/web/e2e/test-results/
-src/foundation/tappaas-cicd/ui/web/e2e/baseline/*/*.png
-src/foundation/tappaas-cicd/ui/web/e2e/baseline/STAMP
 
 # npm installs are reproduced from package-lock.json (nix via npmDepsHash)
 src/foundation/tappaas-cicd/ui/web/node_modules/

@@ -49,7 +49,7 @@ Pieces, all under `ui/`:
 4. **Flows** `web/e2e/flows/*.spec.ts` (done): the wizards and operate buttons as scripted clicks against fixture mode: Remove node (pick, Continue, check, radio, typed name, Remove, output visible, step 3 wording), Add node step 1, Ack dialog (type fixed, note blank, date picker, quoted `--until`), the Output panel's stick-to-last-line. Each asserts on text and on the recorded argv, which is exactly the class of bug found this week.
 5. **One command** (done): `ui/web/e2e/run.sh [--update-baseline] [--routes …] [--viewports …]` does build, serve, capture, compare, and prints the report path. The coding session's loop is: edit, `run.sh`, read `report.md`, open a diff, fix.
 
-Baselines are regenerated on purpose (`--update-baseline`) after the operator has accepted a look, and committed (see §7 for size).
+Baselines are not committed: each run compares with the merge base, captured on the machine (O1).
 
 ## 3. Which browser
 
@@ -127,10 +127,10 @@ The deep test (`site-manager test --deep`) stays the proof of layer C across the
 
 ## 7. GUI regression test
 
-- `ui/web/e2e/` holds `routes.json`, `capture.ts`, `compare.ts`, `flows/*.spec.ts`, `baseline/<viewport>/<route>.png` and the `.txt` siblings.
+- `ui/web/e2e/` holds `routes.json`, `capture.ts`, `compare.ts`, `flows/*.spec.ts`, and `run.sh`; the baselines (`<viewport>/<route>.png` and `.txt`) live outside the repository.
 - **What a regression is:** a console error or a non-2xx on any route; a flow assertion failing; a text diff on a route not named in the change; a pixel diff above threshold on a route not named in the change. A diff on a route the change names is shown, not failed.
-- **Where it runs:** `ui/test.sh` gains a `--visual` step (skipped without Chromium, like the `--deep` curl today), and `scripts/test/test-console-visual.sh` runs it from the tree tests when `web/node_modules` exists. It is **not** in the 5-minute update path: it is a developer and pre-push check, and part of every GUI coding session's done-criterion ("`run.sh` clean, or the diff is the intended one and the baseline updated").
-- **Size:** 40 routes × 4 viewports × ~80 KB is ~13 MB of PNG in git and churns on every intended change. Keep `baseline/` to `phone` and `laptop` in git (~6 MB, refreshed only on accepted changes), and keep the other two viewports' baselines out of git, rebuilt on the Mac on demand. The `.txt` siblings are tiny and always in git; they catch most regressions on their own.
+- **Where it runs:** `ui/test.sh` gains a `--visual` step (skipped without Chromium, like the `--deep` curl today), and `scripts/test/test-console-visual.sh` runs it from the tree tests when `web/node_modules` exists. It is **not** in the 5-minute update path: it is a developer and pre-push check, and part of every GUI coding session's done-criterion ("`run.sh` clean, or the diff is the intended one").
+- **Size:** nothing of the baselines is in git (O1), so they never churn the repository.
 - **Flake control:** fixture mode is deterministic (fixed data, fixed time via `CONSOLE_NOW`), animations off through a `prefers-reduced-motion` emulation, fonts from the dist, one Chromium version pinned by the package lock.
 
 ## 8. Skills that help a session understand the GUI
@@ -156,6 +156,6 @@ Steps 1 and 2 are the loop; 3 to 6 can follow in any order. Each is a session of
 
 ## Open questions for the operator
 
-- **O1** *(decided)* No PNG baselines in git. `run.sh` reuses the baseline stored locally (`ui/web/e2e/baseline/`, git-ignored, stamped with the commit it was made from) and regenerates it from the base commit when there is none or the stamp is stale. The `.txt` siblings are in git.
+- **O1** *(decided)* No baselines in git, PNG or `.txt`. `run.sh` reuses the baseline stored outside the repository (`~/.cache/tappaas-console-e2e/<checkout>/`, stamped with the commit it was made from) and regenerates it from the merge base when there is none or the stamp is stale.
 - **O2** *(decided)* `TAPPAAS_SIMULATE` is an environment variable of the console service, switched by the operator; a per-job toggle may come later.
 - **O3** *(decided)* No dependency on the community plugin (no side-loaded code): the console copies the essence — the `.interface-design/system.md` format with Direction, Tokens and Patterns, an `extract` done once by a session, and an `audit` written as our own check (`scripts/test/test-console-design.sh`: tokens used, no raw colours or spacings in `web/src`).

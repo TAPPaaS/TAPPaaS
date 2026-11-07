@@ -8,16 +8,15 @@
 #                     [--allow id,…] [--port 9097] [--base <ref>] [--no-flows]
 #
 # out/ holds this run: shots/<viewport>/<id>.{png,txt}, diff/, report.md.
-# baseline/ holds the look to compare with: the PNGs are local (git-ignored)
-# and baseline/STAMP names the commit they came from; the .txt siblings are in
-# git. A baseline is reused while its stamp lies between the merge base with
-# <ref> (default $E2E_BASE, else main) and HEAD. Otherwise it is made again
-# from the last commit since the merge base that changed baseline/ (an accepted
-# look), else the merge base: in a temporary `git worktree` of that commit,
-# built and captured there, then removed; when the working tree's console
-# equals that commit's, from the working tree. --update-baseline captures the
-# working tree as the baseline (stamp HEAD) and rewrites the .txt files: commit
-# them. The flows (flows/*.spec.ts: wizards clicked through, asserted on text
+# The baseline, the look to compare with, lives outside the repository, in
+# ${E2E_BASELINE_DIR:-~/.cache/tappaas-console-e2e}/<checkout>/, and nothing of
+# it is committed; its STAMP names the commit it came from. It is reused while
+# the stamp lies between the merge base with <ref> (default $E2E_BASE, else
+# main) and HEAD. Otherwise it is made again from the merge base: in a temporary
+# `git worktree` of that commit, built and captured there, then removed; when
+# the working tree's console equals that commit's, from the working tree.
+# --update-baseline captures the working tree as the baseline (stamp HEAD), to
+# compare the next steps of a change with. The flows (flows/*.spec.ts: wizards clicked through, asserted on text
 # and the server's journal) run after the capture on the same server, at phone
 # and laptop (out/flows.log; --no-flows skips them, --update-baseline too).
 # Exit 1 when a capture or a flow fails, or a route differs that --allow does
@@ -28,7 +27,8 @@ E2E="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WEB="$(dirname "${E2E}")"
 UI="$(dirname "${WEB}")"
 OUT="${E2E}/out"
-BASELINE="${E2E}/baseline"
+REPO="$(git -C "${UI}" rev-parse --show-toplevel)"
+BASELINE="${E2E_BASELINE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/tappaas-console-e2e}/$(printf '%s' "${REPO}" | shasum | cut -c1-12)"
 PORT=9097
 ROUTES=""
 VIEWPORTS="phone,tablet,laptop,desktop"
@@ -57,7 +57,6 @@ done
 PATH="${WEB}/node_modules/.bin:${PATH}"
 export PATH
 T0=$(date +%s)
-REPO="$(git -C "${UI}" rev-parse --show-toplevel)"
 UI_REL="${UI#"${REPO}"/}"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/console-e2e.XXXXXX")"
 SERVER=""
@@ -130,8 +129,7 @@ if [[ "${UPDATE}" == 0 ]]; then
     MB="$(git -C "${REPO}" merge-base HEAD "${BASE_REF}")"
     STAMP="$(cat "${BASELINE}/STAMP" 2>/dev/null || true)"
     if [[ -z "${STAMP}" ]] || ! git -C "${REPO}" merge-base --is-ancestor "${MB}" "${STAMP}" 2>/dev/null || ! git -C "${REPO}" merge-base --is-ancestor "${STAMP}" HEAD 2>/dev/null; then
-        REF="$(git -C "${REPO}" log -1 --format=%H "${MB}..HEAD" -- "${UI_REL}/web/e2e/baseline")"
-        REF="${REF:-${MB}}"
+        REF="${MB}"
         if ! git -C "${REPO}" cat-file -e "${REF}:${UI_REL}/fixture-server.sh" 2>/dev/null; then
             # Before fixture mode: the first commit since that has it.
             REF="$(git -C "${REPO}" rev-list --reverse --ancestry-path "${REF}..HEAD" | while read -r c; do git -C "${REPO}" cat-file -e "${c}:${UI_REL}/fixture-server.sh" 2>/dev/null && { echo "${c}"; break; }; done || true)"
@@ -181,7 +179,7 @@ stop
 if [[ "${UPDATE}" == 1 ]]; then
     [[ "${CAPTURED}" == 0 ]] || { echo "run.sh: a capture failed; the baseline is unchanged" >&2; exit 1; }
     store_baseline "${OUT}/shots" "${HEAD}" "$([[ -z "${ROUTES}" ]] && echo 1 || echo 0)"
-    echo "baseline: ${BASELINE} (stamp ${HEAD:0:12}); commit the .txt files ($(( $(date +%s) - T0 )) s)"
+    echo "baseline: ${BASELINE} (stamp ${HEAD:0:12}); local, nothing to commit ($(( $(date +%s) - T0 )) s)"
     exit 0
 fi
 
