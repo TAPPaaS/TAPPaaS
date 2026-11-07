@@ -4753,8 +4753,9 @@
     {
       "id": "CVE-2026-58049",
       "analysis": {
-        "state": "exploitable",
-        "detail": "RASC video decoder out-of-bounds read/write (decode_dlta); ffprobe's stream-info probing decodes video frames of any stream it finds. Reachable despite #810: Open WebUI 0.13.0 matches audio.stt.supported_content_types against the Content-Type the client sets on the multipart part, so an approved user who labels an upload application/x-tappaas-no-server-stt (public in the TAPPaaS repo) still reaches transcribe() through /api/v1/audio/transcriptions (chat.stt) or a chat file upload (chat.file_upload); transcribe() runs pydub's mediainfo (Debian ffprobe) and ffmpeg -i on the bytes before the engine (web) is consulted. Checked in the 0.13.0 code and config on hrossen 2026-11-07. Risk here: medium: any approved user (signup off, new accounts pending), Open WebUI is published to the internet; memory corruption in a short-lived ffprobe/ffmpeg in the container, whose root is host uid 200000, but on the host network and with the app environment (DATABASE_URL, WEBUI_SECRET_KEY, OAUTH_CLIENT_SECRET, OPENAI_API_KEY). Action: set BYPASS_PYDUB_PREPROCESSING=true in the container env (skips every pydub call), no fixed Debian 13 ffmpeg in the scan yet."
+        "state": "not_affected",
+        "detail": "RASC video decoder out-of-bounds read/write (decode_dlta); ffprobe's stream-info probing decodes video frames of any stream it finds. Not reachable: BYPASS_PYDUB_PREPROCESSING=true in the container env makes transcribe() skip every pydub call, so an upload labelled with the STT sentinel type (which Open WebUI matches against the client-set Content-Type) no longer reaches Debian ffprobe/ffmpeg; the STT engine is \"web\" and nothing else in Open WebUI runs ffmpeg or pydub on user data. Checked on hrossen 2026-11-07: a sentinel-labelled POST to /api/v1/audio/transcriptions and a chat file upload start no process in the container.",
+        "justification": "code_not_reachable"
       },
       "affects": [
         {
@@ -4783,24 +4784,15 @@
         },
         {
           "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "medium",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
         }
       ]
     },
     {
       "id": "CVE-2026-64835",
       "analysis": {
-        "state": "exploitable",
-        "detail": "ADX decoder out-of-bounds read/write on a mid-stream channel-layout change carried as new-extradata side data, which container demuxers (e.g. Matroska, NUT) emit; ffmpeg -i decodes every audio stream. Reachable despite #810: Open WebUI 0.13.0 matches audio.stt.supported_content_types against the Content-Type the client sets on the multipart part, so an approved user who labels an upload application/x-tappaas-no-server-stt (public in the TAPPaaS repo) still reaches transcribe() through /api/v1/audio/transcriptions (chat.stt) or a chat file upload (chat.file_upload); transcribe() runs pydub's mediainfo (Debian ffprobe) and ffmpeg -i on the bytes before the engine (web) is consulted. Checked in the 0.13.0 code and config on hrossen 2026-11-07. Risk here: medium: any approved user (signup off, new accounts pending), Open WebUI is published to the internet; memory corruption in a short-lived ffprobe/ffmpeg in the container, whose root is host uid 200000, but on the host network and with the app environment (DATABASE_URL, WEBUI_SECRET_KEY, OAUTH_CLIENT_SECRET, OPENAI_API_KEY). Action: set BYPASS_PYDUB_PREPROCESSING=true in the container env (skips every pydub call), no fixed Debian 13 ffmpeg in the scan yet."
+        "state": "not_affected",
+        "detail": "ADX decoder out-of-bounds read/write on a mid-stream channel-layout change carried as new-extradata side data, which container demuxers (e.g. Matroska, NUT) emit; ffmpeg -i decodes every audio stream. Not reachable: BYPASS_PYDUB_PREPROCESSING=true in the container env makes transcribe() skip every pydub call, so an upload labelled with the STT sentinel type (which Open WebUI matches against the client-set Content-Type) no longer reaches Debian ffprobe/ffmpeg; the STT engine is \"web\" and nothing else in Open WebUI runs ffmpeg or pydub on user data. Checked on hrossen 2026-11-07: a sentinel-labelled POST to /api/v1/audio/transcriptions and a chat file upload start no process in the container.",
+        "justification": "code_not_reachable"
       },
       "affects": [
         {
@@ -4829,24 +4821,15 @@
         },
         {
           "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "medium",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
         }
       ]
     },
     {
       "id": "CVE-2026-66039",
       "analysis": {
-        "state": "exploitable",
-        "detail": "MACE6 decoder signed overflow from a crafted CAF desc chunk, a heap corruption; CAF is probed by content and its audio decoded by ffmpeg -i. Reachable despite #810: Open WebUI 0.13.0 matches audio.stt.supported_content_types against the Content-Type the client sets on the multipart part, so an approved user who labels an upload application/x-tappaas-no-server-stt (public in the TAPPaaS repo) still reaches transcribe() through /api/v1/audio/transcriptions (chat.stt) or a chat file upload (chat.file_upload); transcribe() runs pydub's mediainfo (Debian ffprobe) and ffmpeg -i on the bytes before the engine (web) is consulted. Checked in the 0.13.0 code and config on hrossen 2026-11-07. Risk here: medium: any approved user (signup off, new accounts pending), Open WebUI is published to the internet; memory corruption in a short-lived ffprobe/ffmpeg in the container, whose root is host uid 200000, but on the host network and with the app environment (DATABASE_URL, WEBUI_SECRET_KEY, OAUTH_CLIENT_SECRET, OPENAI_API_KEY). Action: set BYPASS_PYDUB_PREPROCESSING=true in the container env (skips every pydub call), no fixed Debian 13 ffmpeg in the scan yet."
+        "state": "not_affected",
+        "detail": "MACE6 decoder signed overflow from a crafted CAF desc chunk, a heap corruption; CAF is probed by content and its audio decoded by ffmpeg -i. Not reachable: BYPASS_PYDUB_PREPROCESSING=true in the container env makes transcribe() skip every pydub call, so an upload labelled with the STT sentinel type (which Open WebUI matches against the client-set Content-Type) no longer reaches Debian ffprobe/ffmpeg; the STT engine is \"web\" and nothing else in Open WebUI runs ffmpeg or pydub on user data. Checked on hrossen 2026-11-07: a sentinel-labelled POST to /api/v1/audio/transcriptions and a chat file upload start no process in the container.",
+        "justification": "code_not_reachable"
       },
       "affects": [
         {
@@ -4875,24 +4858,15 @@
         },
         {
           "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "medium",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
         }
       ]
     },
     {
       "id": "CVE-2026-70628",
       "analysis": {
-        "state": "exploitable",
-        "detail": "DVB subtitle parser signed overflow from a crafted WTV file; parsers run during ffprobe's stream-info probing. Debian 7.1.5 does not carry the 8.1.3 backport as far as the scan shows. Reachable despite #810: Open WebUI 0.13.0 matches audio.stt.supported_content_types against the Content-Type the client sets on the multipart part, so an approved user who labels an upload application/x-tappaas-no-server-stt (public in the TAPPaaS repo) still reaches transcribe() through /api/v1/audio/transcriptions (chat.stt) or a chat file upload (chat.file_upload); transcribe() runs pydub's mediainfo (Debian ffprobe) and ffmpeg -i on the bytes before the engine (web) is consulted. Checked in the 0.13.0 code and config on hrossen 2026-11-07. Risk here: medium: any approved user (signup off, new accounts pending), Open WebUI is published to the internet; memory corruption in a short-lived ffprobe/ffmpeg in the container, whose root is host uid 200000, but on the host network and with the app environment (DATABASE_URL, WEBUI_SECRET_KEY, OAUTH_CLIENT_SECRET, OPENAI_API_KEY). Action: set BYPASS_PYDUB_PREPROCESSING=true in the container env (skips every pydub call), no fixed Debian 13 ffmpeg in the scan yet."
+        "state": "not_affected",
+        "detail": "DVB subtitle parser signed overflow from a crafted WTV file; parsers run during ffprobe's stream-info probing. Debian 7.1.5 does not carry the 8.1.3 backport as far as the scan shows. Not reachable: BYPASS_PYDUB_PREPROCESSING=true in the container env makes transcribe() skip every pydub call, so an upload labelled with the STT sentinel type (which Open WebUI matches against the client-set Content-Type) no longer reaches Debian ffprobe/ffmpeg; the STT engine is \"web\" and nothing else in Open WebUI runs ffmpeg or pydub on user data. Checked on hrossen 2026-11-07: a sentinel-labelled POST to /api/v1/audio/transcriptions and a chat file upload start no process in the container.",
+        "justification": "code_not_reachable"
       },
       "affects": [
         {
@@ -4921,24 +4895,15 @@
         },
         {
           "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "medium",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
         }
       ]
     },
     {
       "id": "CVE-2026-70632",
       "analysis": {
-        "state": "exploitable",
-        "detail": "CineForm HD decoder heap write during stream probing (crafted AVI). Reachable despite #810: Open WebUI 0.13.0 matches audio.stt.supported_content_types against the Content-Type the client sets on the multipart part, so an approved user who labels an upload application/x-tappaas-no-server-stt (public in the TAPPaaS repo) still reaches transcribe() through /api/v1/audio/transcriptions (chat.stt) or a chat file upload (chat.file_upload); transcribe() runs pydub's mediainfo (Debian ffprobe) and ffmpeg -i on the bytes before the engine (web) is consulted. Checked in the 0.13.0 code and config on hrossen 2026-11-07. Risk here: medium: any approved user (signup off, new accounts pending), Open WebUI is published to the internet; memory corruption in a short-lived ffprobe/ffmpeg in the container, whose root is host uid 200000, but on the host network and with the app environment (DATABASE_URL, WEBUI_SECRET_KEY, OAUTH_CLIENT_SECRET, OPENAI_API_KEY). Action: set BYPASS_PYDUB_PREPROCESSING=true in the container env (skips every pydub call), no fixed Debian 13 ffmpeg in the scan yet."
+        "state": "not_affected",
+        "detail": "CineForm HD decoder heap write during stream probing (crafted AVI). Not reachable: BYPASS_PYDUB_PREPROCESSING=true in the container env makes transcribe() skip every pydub call, so an upload labelled with the STT sentinel type (which Open WebUI matches against the client-set Content-Type) no longer reaches Debian ffprobe/ffmpeg; the STT engine is \"web\" and nothing else in Open WebUI runs ffmpeg or pydub on user data. Checked on hrossen 2026-11-07: a sentinel-labelled POST to /api/v1/audio/transcriptions and a chat file upload start no process in the container.",
+        "justification": "code_not_reachable"
       },
       "affects": [
         {
@@ -4967,16 +4932,6 @@
         },
         {
           "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "medium",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
         }
       ]
     },
@@ -5390,66 +5345,39 @@
     {
       "id": "CVE-2026-6653",
       "analysis": {
-        "state": "exploitable",
-        "detail": "Use-after-free in xmlParseInternalSubset, a DoS per the advisory; a crafted .mpd or SVG with an internal subset reaches it. Debian libxml2 is not mapped by the Open WebUI process (only PyAV's bundled copy, checked in /proc/1/maps); it is reached only through Debian ffprobe/ffmpeg (DASH .mpd demuxer, librsvg for SVG), i.e. through the #810 gap: an approved user who labels an upload application/x-tappaas-no-server-stt reaches pydub's ffprobe. Checked on hrossen 2026-11-07. Risk here: low: crash of one short-lived ffprobe, any approved user. Action: set BYPASS_PYDUB_PREPROCESSING=true; no fixed Debian 13 libxml2 in the scan yet."
+        "state": "not_affected",
+        "detail": "Use-after-free in xmlParseInternalSubset, a DoS per the advisory; a crafted .mpd or SVG with an internal subset reaches it. Debian libxml2 is not mapped by the Open WebUI process (only PyAV's bundled copy, checked in /proc/1/maps); it is reached only through Debian ffprobe/ffmpeg (DASH .mpd demuxer, librsvg for SVG). Not reachable: BYPASS_PYDUB_PREPROCESSING=true in the container env makes transcribe() skip every pydub call, so an upload labelled with the STT sentinel type (which Open WebUI matches against the client-set Content-Type) no longer reaches Debian ffprobe/ffmpeg; the STT engine is \"web\" and nothing else in Open WebUI runs ffmpeg or pydub on user data. Checked on hrossen 2026-11-07: a sentinel-labelled POST to /api/v1/audio/transcriptions and a chat file upload start no process in the container.",
+        "justification": "code_not_reachable"
       },
       "affects": [
         {
           "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
         }
       ]
     },
     {
       "id": "CVE-2026-86138",
       "analysis": {
-        "state": "exploitable",
-        "detail": "Integer overflow in xmlDictAddQString; needs a prefix plus name near 2 GiB. Debian libxml2 is not mapped by the Open WebUI process (only PyAV's bundled copy, checked in /proc/1/maps); it is reached only through Debian ffprobe/ffmpeg (DASH .mpd demuxer, librsvg for SVG), i.e. through the #810 gap: an approved user who labels an upload application/x-tappaas-no-server-stt reaches pydub's ffprobe. Checked on hrossen 2026-11-07. Risk here: low: needs a multi-gigabyte XML upload into a short-lived ffprobe, any approved user. Action: set BYPASS_PYDUB_PREPROCESSING=true; no fixed Debian 13 libxml2 in the scan yet."
+        "state": "not_affected",
+        "detail": "Integer overflow in xmlDictAddQString; needs a prefix plus name near 2 GiB. Debian libxml2 is not mapped by the Open WebUI process (only PyAV's bundled copy, checked in /proc/1/maps); it is reached only through Debian ffprobe/ffmpeg (DASH .mpd demuxer, librsvg for SVG). Not reachable: BYPASS_PYDUB_PREPROCESSING=true in the container env makes transcribe() skip every pydub call, so an upload labelled with the STT sentinel type (which Open WebUI matches against the client-set Content-Type) no longer reaches Debian ffprobe/ffmpeg; the STT engine is \"web\" and nothing else in Open WebUI runs ffmpeg or pydub on user data. Checked on hrossen 2026-11-07: a sentinel-labelled POST to /api/v1/audio/transcriptions and a chat file upload start no process in the container.",
+        "justification": "code_not_reachable"
       },
       "affects": [
         {
           "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
         }
       ]
     },
     {
       "id": "CVE-2026-86139",
       "analysis": {
-        "state": "exploitable",
-        "detail": "Integer overflow in xmlURIEscapeStr; needs a URI string near 2 GiB. Debian libxml2 is not mapped by the Open WebUI process (only PyAV's bundled copy, checked in /proc/1/maps); it is reached only through Debian ffprobe/ffmpeg (DASH .mpd demuxer, librsvg for SVG), i.e. through the #810 gap: an approved user who labels an upload application/x-tappaas-no-server-stt reaches pydub's ffprobe. Checked on hrossen 2026-11-07. Risk here: low: needs a multi-gigabyte XML upload into a short-lived ffprobe, any approved user. Action: set BYPASS_PYDUB_PREPROCESSING=true; no fixed Debian 13 libxml2 in the scan yet."
+        "state": "not_affected",
+        "detail": "Integer overflow in xmlURIEscapeStr; needs a URI string near 2 GiB. Debian libxml2 is not mapped by the Open WebUI process (only PyAV's bundled copy, checked in /proc/1/maps); it is reached only through Debian ffprobe/ffmpeg (DASH .mpd demuxer, librsvg for SVG). Not reachable: BYPASS_PYDUB_PREPROCESSING=true in the container env makes transcribe() skip every pydub call, so an upload labelled with the STT sentinel type (which Open WebUI matches against the client-set Content-Type) no longer reaches Debian ffprobe/ffmpeg; the STT engine is \"web\" and nothing else in Open WebUI runs ffmpeg or pydub on user data. Checked on hrossen 2026-11-07: a sentinel-labelled POST to /api/v1/audio/transcriptions and a chat file upload start no process in the container.",
+        "justification": "code_not_reachable"
       },
       "affects": [
         {
           "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
         }
       ]
     },
