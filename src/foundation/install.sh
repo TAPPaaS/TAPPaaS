@@ -39,6 +39,11 @@
 #              [--lan-port <if>[,<if>...]] [--lan-mode active-backup|lacp] [--lan-primary <if>]
 #              [--wan-port <if> | --no-wan] [--pool <name=topo:disks>]...
 #              [--skip-firewall] [--skip-platform] [--non-interactive]
+#              [--wan-address <ip> --wan-gateway <ip> --wan-mac <mac>]
+#
+# A rented server (Hetzner, bootstrap-tappaas.sh choice 6): the firewall's WAN has
+# an address and a MAC of its own (an additional IP and its virtual MAC), static,
+# and the server's own address stays the node's, closed to all but ssh with a key.
 #
 # For a fully UNATTENDED first-node install pass --non-interactive together with
 # --lan-port/--wan-port (NIC roles) and one or more --pool specs (ZFS pools);
@@ -109,6 +114,8 @@ NONINTERACTIVE=0
 SKIP_FIREWALL=0
 SKIP_PLATFORM=0
 NODE_ARGS=()              # pass-through to the node step (cluster/install.sh)
+FW_ARGS=()                # the firewall's own WAN (a rented server)
+HOSTED_ARG=""
 _pos=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -128,6 +135,7 @@ while [ $# -gt 0 ]; do
     --lan-port|--wan-port|--lan-mode|--lan-primary) NODE_ARGS+=("$1" "${2:-}"); shift ;;
     --no-wan) NODE_ARGS+=("$1") ;;
     --pool)                NODE_ARGS+=("$1" "${2:-}"); shift ;;
+    --wan-address|--wan-gateway|--wan-mac) FW_ARGS+=("$1" "${2:-}"); HOSTED_ARG="--hosted"; shift ;;
     -h|--help)
       echo "Usage: install.sh [REPO] [BRANCH] --name <site-code> [--organization <org>] [--domain <d>] [--size small|medium|large]"
       echo "                  [--cluster|--join|--no-cluster] [--skip-network] [--skip-storage]"
@@ -229,12 +237,12 @@ if [[ -n "$SIZE" ]]; then
   msg_ok "Size: ${SIZE}"
 fi
 fetch "${REPO}${BRANCH}/src/foundation/network/config-firewall.sh" ~/tappaas/config-firewall.sh 755
-~/tappaas/config-firewall.sh --repo "$REPO" --branch "$BRANCH" --chained ${NONINT_ARG} \
+~/tappaas/config-firewall.sh --repo "$REPO" --branch "$BRANCH" --chained ${NONINT_ARG} ${FW_ARGS[@]+"${FW_ARGS[@]}"} \
   || { msg_error "config-firewall.sh did not complete — fix it, then re-run ~/tappaas/config-firewall.sh and continue."; exit 1; }
 
 # ── [3/5] gateway cutover (additive — no connectivity break) ──────────
 step 4 "Gateway cutover: the node routes through the firewall"
-~/tappaas/config-network.sh --swap-gateway ${NONINT_ARG} \
+~/tappaas/config-network.sh --swap-gateway ${HOSTED_ARG} ${NONINT_ARG} \
   || { msg_error "Gateway cutover failed — re-run ~/tappaas/config-network.sh --swap-gateway, then continue."; exit 1; }
 
 # ── [4/5] sanity check ─────────────────────────────────────────────────

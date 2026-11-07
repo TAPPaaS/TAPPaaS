@@ -15,7 +15,7 @@ internet ── Hetzner's switch: accepts the server's own MAC, and the virtual 
                   the site's networks, inside the server (and, in a cluster, across the vSwitch)
 ```
 
-- **The node keeps the server's main address.** It accepts nothing on it from outside; Hetzner's
+- **The node keeps the server's main address.** It accepts only ssh on it, with a key; Hetzner's
   rescue system stays the way in when all else fails.
 - **The firewall has its own public address:** an additional IP on one server, or an address
   from a public subnet on the vSwitch in a cluster. You, your VPN and the internet reach the site
@@ -48,7 +48,7 @@ internet ── Hetzner's switch: accepts the server's own MAC, and the virtual 
 2. When it is assigned, click the **MAC** symbol beside it to generate its **virtual MAC**.
 3. Note the address and the MAC: the install asks for both.
 
-The server's IPv6 /64 is routed to its main address; the install routes it on to the firewall.
+The server's IPv6 /64 is routed to its main address; the site starts with IPv4 only.
 
 ## 4. The rescue system, before every install
 

@@ -36,6 +36,7 @@
 #      (the image made earlier in this directory, or --use)
 #   4) make the image, boot the machine over the network, and install TAPPaaS
 #   5) only make the image file
+#   6) install TAPPaaS on a rented server (Hetzner), through its rescue system
 #
 # How the target boots the image (instead of the question):
 #   --boot usb|network|booted|none
@@ -70,6 +71,17 @@
 #   --disk <d> [--disk <d>]  the boot disk, chosen on the target (below)
 #   --filesystem zfs|ext4    zfs (default)
 #   --ssh-key <pubkey-file>  another key for root on the node
+#
+# A rented server (Hetzner), choice 6 (asked when not given):
+#   --rescue <ip>            the server's main IPv4, booted into Hetzner's rescue
+#                            system with your SSH key: Proxmox is installed from
+#                            there (the build and the installer run on the server,
+#                            in QEMU), then TAPPaaS
+#   --wan-address <ip>       the firewall's own public IPv4 (an additional IP)
+#   --wan-mac <mac>          its virtual MAC, generated in Robot
+#   --wan-gateway <ip>       its gateway (default: the server's)
+#   Needs wg (wireguard-tools) here: your WireGuard key is made on this computer,
+#   enrolled at the install, and its config written to <site>.conf at the end.
 #
 # The image:
 #   --iso <proxmox-ve_9.x.iso>   the stock ISO (default: the one in this directory;
@@ -124,6 +136,9 @@ LOG="" USE="" PXE_IFACE="" NODE_IP="" BRANCH="" SITE_CODE="" ORG="" DOMAIN="" SI
 # How the target boots the image, the stick, and whether to install: asked up front
 # when not given, so nothing is asked once the build has started.
 BOOT="" STICK="" YES=0 INSTALL_ANSWER="" SHOW_TOKEN="" SUDO_KEEP="" WANT_INSTALL=0
+# A rented server (choice 6), and what the build on its rescue system is given.
+RESCUE_IP="" WAN_ADDR="" WAN_MAC="" WAN_GW="" HOSTED_ARGS=""
+NET_CIDR="" NET_GW="" NET_DNS="" NET_MAC="" SERIAL_CONSOLE=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -154,6 +169,17 @@ while [[ $# -gt 0 ]]; do
     --install)       INSTALL_ANSWER=yes; shift ;;
     --no-install)    INSTALL_ANSWER=no; shift ;;
     --show-token)    SHOW_TOKEN=1; shift ;;
+    --rescue)        RESCUE_IP="${2:?}"; BOOT=rescue; shift 2 ;;
+    --wan-address)   WAN_ADDR="${2:?}"; shift 2 ;;
+    --wan-mac)       WAN_MAC="${2:?}"; shift 2 ;;
+    --wan-gateway)   WAN_GW="${2:?}"; shift 2 ;;
+    # The build on a rescue system: a static network, the NIC it is pinned to,
+    # and the installer's console on the serial port, which the build follows.
+    --net-cidr)      NET_CIDR="${2:?}"; shift 2 ;;
+    --net-gateway)   NET_GW="${2:?}"; shift 2 ;;
+    --net-dns)       NET_DNS="${2:?}"; shift 2 ;;
+    --net-mac)       NET_MAC="${2:?}"; shift 2 ;;
+    --serial-console) SERIAL_CONSOLE=1; shift ;;
     --no-show-token) SHOW_TOKEN=0; shift ;;
     -h|--help)       usage ;;
     *) die "Unknown argument: $1 (see --help)" ;;
@@ -644,7 +670,7 @@ wait_for_node() {
 # log is followed here: it scrolls on in this terminal, and a lost ssh session only
 # stops the following.
 start_install() {
-  local cmd seen state run="./install.sh '${INSTALL_REPO}' '${BRANCH}' --name '${SITE_CODE}'${ORG:+ --organization '${ORG}'}${DOMAIN:+ --domain '${DOMAIN}'}${SIZE:+ --size '${SIZE}'} --non-interactive --no-tmux"
+  local cmd seen state run="./install.sh '${INSTALL_REPO}' '${BRANCH}' --name '${SITE_CODE}'${ORG:+ --organization '${ORG}'}${DOMAIN:+ --domain '${DOMAIN}'}${SIZE:+ --size '${SIZE}'}${HOSTED_ARGS} --non-interactive --no-tmux"
   # apt update fails on the enterprise repository the install has not replaced yet;
   # Debian's own still serves tmux.
   cmd="export LC_ALL=C.UTF-8; command -v tmux >/dev/null || { apt-get update -qq >/dev/null 2>&1; apt-get install -y -qq tmux >/dev/null 2>&1; }; tmux has-session -t tappaas-install 2>/dev/null && exit 0; curl -fsSL '${INSTALL_REPO}${BRANCH}/src/foundation/install.sh' -o install.sh && chmod +x install.sh || exit 1; rm -f tappaas-install.rc; : > tappaas-install.log; tmux new-session -d -s tappaas-install \"{ ${run} 2>&1; echo \\\$? > tappaas-install.rc.tmp; } | tee -a tappaas-install.log; mv tappaas-install.rc.tmp tappaas-install.rc\""
@@ -684,6 +710,243 @@ show_token() {
   info "  ssh -i ${key} root@${NODE_IP} 'ssh -i /root/tappaas/tappaas-cicd.key tappaas@tappaas-cicd.mgmt.internal cat config/console-setup-token'"
 }
 
+# ── A rented server (choice 6): through its rescue system ─────────────
+# The server boots Hetzner's rescue system (a RAM Linux, reached with the
+# operator's own SSH key). The install image is built there, the Proxmox installer
+# runs there in QEMU on the server's own disks with the server's MAC, then the
+# server reboots into Proxmox and the TAPPaaS install runs as on any first node,
+# with the firewall's WAN on its own address and MAC.
+
+rescue_ssh() {
+  ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ServerAliveInterval=15 "root@${RESCUE_IP}" "$@"
+}
+
+is_ipv4() { [[ "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; }
+
+# The key that let this computer into the rescue system: also the operator's way
+# into the installed node.
+operator_pubkey() {
+  local k
+  k="$(ssh-add -L 2>/dev/null | grep -E '^(ssh-|ecdsa-)' | head -1 || true)"
+  [[ -n "$k" ]] || for f in ~/.ssh/id_ed25519.pub ~/.ssh/id_ecdsa.pub ~/.ssh/id_rsa.pub; do [[ -f "$f" ]] && { k="$(<"$f")"; break; }; done
+  printf '%s' "$k"
+}
+
+rescue_ask() {
+  local tty=0 h
+  [[ -t 0 ]] && tty=1
+  command -v wg >/dev/null 2>&1 \
+    || die "wg is needed to make your WireGuard key on this computer: brew install wireguard-tools (or apt install wireguard-tools)"
+  if [[ "$tty" == 1 ]]; then
+    [[ -n "$RESCUE_IP" ]] || RESCUE_IP="$(prompt "The server's main IPv4 address")"
+    [[ -n "$WAN_ADDR" ]] || WAN_ADDR="$(prompt "The firewall's additional IPv4 address")"
+    [[ -n "$WAN_MAC" ]] || WAN_MAC="$(prompt "Its virtual MAC, as Robot shows it")"
+  fi
+  is_ipv4 "$RESCUE_IP" || die "the server's address is an IPv4 address (--rescue): ${RESCUE_IP:-none}"
+  is_ipv4 "$WAN_ADDR" || die "the firewall's address is an IPv4 address (--wan-address): ${WAN_ADDR:-none}"
+  [[ "$WAN_ADDR" != "$RESCUE_IP" ]] || die "the firewall needs an address of its own, not the server's"
+  [[ -z "$WAN_GW" ]] || is_ipv4 "$WAN_GW" || die "--wan-gateway is an IPv4 address: ${WAN_GW}"
+  WAN_MAC="$(printf '%s' "$WAN_MAC" | tr 'A-F-' 'a-f:')"
+  [[ "$WAN_MAC" =~ ^([0-9a-f]{2}:){5}[0-9a-f]{2}$ ]] || die "not a MAC address (--wan-mac): ${WAN_MAC:-none}"
+  info "checking the rescue system on ${RESCUE_IP}"
+  h="$(rescue_ssh -n 'hostname; test -e /root/.oldroot -o -e /etc/hetzner-build && echo rescue' 2>/dev/null || true)"
+  [[ -n "$h" ]] || die "no ssh to root@${RESCUE_IP} with your key: activate the rescue system in Robot with your key, reset the server, and run this again"
+  [[ "$h" == *rescue* ]] || die "${RESCUE_IP} answers, but not as Hetzner's rescue system (${h%%$'\n'*}): activate rescue in Robot and reset the server; its disks are wiped by this install"
+}
+
+# remote_dots <what> <command…> — a remote step on one [Info] line, a dot for each
+# line it prints; its last lines are shown when it fails.
+remote_dots() {
+  local what="$1" out rc=0
+  shift
+  out="$(mktemp)"
+  printf '%b' "${GN}[Info]${CL} ${what} "
+  "$@" 2>&1 | while IFS= read -r l; do printf '%s\n' "$l" >>"$out"; printf '.'; done
+  rc=${PIPESTATUS[0]}
+  echo ""
+  if [[ "$rc" != 0 ]]; then tail -20 "$out" >&2; rm -f "$out"; return "$rc"; fi
+  rm -f "$out"
+}
+
+# The QEMU run on the rescue system: the server's disks (with their serials, so the
+# boot disk is chosen as on the machine itself), the server's MAC, UEFI when the
+# server boots UEFI. Detached, so a lost session does not stop it.
+RESCUE_QEMU='set -eu
+mac="$1"; cd /root/tappaas
+mdadm --stop --scan >/dev/null 2>&1 || true
+swapoff -a 2>/dev/null || true
+args=(); i=0
+for d in $(lsblk -dn -o NAME,TYPE | awk '\''$2=="disk"{print $1}'\''); do
+  case "$d" in loop*|ram*|zram*|sr*|fd*) continue ;; esac
+  [ "$(lsblk -dn -o TRAN "/dev/$d" | tr -d " ")" = usb ] && continue
+  ser="$(lsblk -dn -o SERIAL "/dev/$d" | tr -cd "A-Za-z0-9._-" | cut -c1-20)"
+  [ -n "$ser" ] || ser="disk$i"
+  args+=(-drive "file=/dev/$d,if=none,id=d$i,format=raw,cache=none,aio=native")
+  case "$d" in
+    nvme*) args+=(-device "nvme,drive=d$i,serial=$ser") ;;
+    *) rr=1; [ "$(cat /sys/block/$d/queue/rotational)" = 1 ] && rr=7200
+       args+=(-device "scsi-hd,bus=scsi0.0,drive=d$i,serial=$ser,rotation_rate=$rr") ;;
+  esac
+  echo "disk $d ($ser)"
+  i=$((i+1))
+done
+[ "$i" -gt 0 ] || { echo "no disks found" >&2; exit 1; }
+fw=()
+if [ -d /sys/firmware/efi ]; then
+  code=/usr/share/OVMF/OVMF_CODE_4M.fd; vars=/usr/share/OVMF/OVMF_VARS_4M.fd
+  [ -f "$code" ] || { code=/usr/share/OVMF/OVMF_CODE.fd; vars=/usr/share/OVMF/OVMF_VARS.fd; }
+  cp "$vars" ovmf-vars.fd
+  fw=(-drive "if=pflash,format=raw,readonly=on,file=$code" -drive "if=pflash,format=raw,file=ovmf-vars.fd")
+  echo "firmware UEFI"
+else
+  echo "firmware legacy BIOS"
+fi
+rm -f install-serial.log qemu.rc
+nohup bash -c "qemu-system-x86_64 -enable-kvm -machine q35 -cpu host -smp 4 -m 4096 $(printf "%q " "${fw[@]}") \
+  -device virtio-scsi-pci,id=scsi0 $(printf "%q " "${args[@]}") \
+  -drive file=tappaas-auto.iso,media=cdrom,if=none,id=cd -device ide-cd,drive=cd,bootindex=0 \
+  -netdev user,id=n0 -device virtio-net-pci,netdev=n0,mac=$mac \
+  -no-reboot -display none -serial file:install-serial.log; echo \$? > qemu.rc" >qemu.out 2>&1 &
+echo started'
+
+# After the installer: the boot disks carry their system, and on UEFI each EFI
+# system partition gets the fallback loader, since the installer wrote its boot
+# entry into QEMU's firmware, not the server's.
+RESCUE_CHECK='set -u
+lsblk -ln -o FSTYPE,LABEL | awk '\''($1=="zfs_member" && $2=="rpool") || $1=="LVM2_member" {f=1} END {exit !f}'\'' \
+  || { echo "no installed system on the disks"; exit 1; }
+if [ -d /sys/firmware/efi ]; then
+  mkdir -p /mnt/esp
+  for p in $(lsblk -ln -o NAME,PARTTYPE | awk '\''tolower($2)=="c12a7328-f81f-11d2-ba4b-00a0c93ec93b"{print $1}'\''); do
+    mount "/dev/$p" /mnt/esp 2>/dev/null || continue
+    if [ ! -f /mnt/esp/EFI/BOOT/BOOTX64.EFI ]; then
+      mkdir -p /mnt/esp/EFI/BOOT
+      if [ -f /mnt/esp/EFI/systemd/systemd-bootx64.efi ]; then cp /mnt/esp/EFI/systemd/systemd-bootx64.efi /mnt/esp/EFI/BOOT/BOOTX64.EFI
+      elif [ -f /mnt/esp/EFI/proxmox/shimx64.efi ]; then cp /mnt/esp/EFI/proxmox/shimx64.efi /mnt/esp/EFI/BOOT/BOOTX64.EFI; cp /mnt/esp/EFI/proxmox/grubx64.efi /mnt/esp/EFI/BOOT/ 2>/dev/null || true
+      elif [ -f /mnt/esp/EFI/proxmox/grubx64.efi ]; then cp /mnt/esp/EFI/proxmox/grubx64.efi /mnt/esp/EFI/BOOT/BOOTX64.EFI
+      fi
+      echo "fallback loader on $p"
+    fi
+    umount /mnt/esp
+  done
+fi
+echo installed'
+
+# The build on the rescue system: the install assistant needs Debian 13's libc, so
+# an older rescue system builds in a Debian 13 chroot made with debootstrap.
+RESCUE_BUILD='set -e
+cd /root/tappaas
+major="$(cut -d. -f1 /etc/debian_version 2>/dev/null || true)"
+case "$major" in ""|*[!0-9]*) major=0 ;; esac
+rm -f tappaas-auto.iso
+if [ "$major" -ge 13 ]; then
+  TAPPAAS_MEDIA_CONTAINER=1 TAPPAAS_RESCUE_BUILD=1 ./bootstrap-tappaas.sh "$@"
+  exit
+fi
+root=/root/tappaas/trixie
+if [ ! -x "$root/usr/bin/xorriso" ]; then
+  echo "[Info] Debian ${major} here: the build runs in a Debian 13 chroot"
+  debootstrap --variant=minbase --include=wget,ca-certificates,zstd,cpio,xorriso,gpgv,curl,openssl     trixie "$root" http://deb.debian.org/debian >debootstrap.log 2>&1 || { tail -20 debootstrap.log; exit 1; }
+fi
+cp /etc/resolv.conf "$root/etc/resolv.conf"
+for m in proc sys dev; do mountpoint -q "$root/$m" || mount --bind "/$m" "$root/$m"; done
+mkdir -p "$root/work" && cp bootstrap-tappaas.sh "$root/work/"
+rm -f "$root/work/tappaas-auto.iso"
+chroot "$root" /bin/bash -c "cd /work && TAPPAAS_MEDIA_CONTAINER=1 TAPPAAS_RESCUE_BUILD=1 ./bootstrap-tappaas.sh \"\$@\"" _ "$@"
+mv "$root/work/tappaas-auto.iso" tappaas-auto.iso'
+
+hosted_install() {
+  local net dev cidr gw dns mac uefi opkey cmd lines=0 state rc t t0 conf peer cicd_ip out l
+  WG_PRIV="$(wg genkey)"
+  WG_PUB="$(printf '%s' "$WG_PRIV" | wg pubkey)"
+  info "your WireGuard key is made on this computer; its private half stays here"
+
+  # The server's network, as its rescue system runs on it.
+  net="$(rescue_ssh -n 'dev="$(ip -4 route show default | awk "{print \$5; exit}")"; echo "$dev"; ip -4 -o addr show dev "$dev" scope global | awk "{print \$4; exit}"; ip -4 route show default | awk "{print \$3; exit}"; cat "/sys/class/net/$dev/address"; awk "/^nameserver/ && \$2 !~ /:/ {print \$2; exit}" /etc/resolv.conf; [ -d /sys/firmware/efi ] && echo uefi || echo bios')" \
+    || die "could not read the server's network from its rescue system"
+  { read -r dev; read -r cidr; read -r gw; read -r mac; read -r dns; read -r uefi; } <<<"$net"
+  [[ -n "$cidr" && -n "$gw" && -n "$mac" ]] || die "the rescue system's network is incomplete: ${net//$'\n'/ }"
+  [[ "${cidr%/*}" == "$RESCUE_IP" ]] || warn "the rescue system's address is ${cidr%/*}, not ${RESCUE_IP}: the node gets ${cidr}"
+  [[ -n "$dns" ]] || dns=185.12.64.1
+  [[ -n "$WAN_GW" ]] || WAN_GW="$gw"
+  info "the server: ${cidr} via ${gw} on ${dev} (${mac}), DNS ${dns}, ${uefi}; the firewall: ${WAN_ADDR} via ${WAN_GW} (${WAN_MAC})"
+
+  remote_dots "preparing the rescue system (QEMU, the build tools)" rescue_ssh -n \
+    'mkdir -p /root/tappaas && export DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get install -y qemu-system-x86 ovmf xorriso cpio zstd wget gpgv curl ca-certificates debootstrap' \
+    || die "the rescue system could not install QEMU and the build tools"
+  rescue_ssh 'cat > /root/tappaas/bootstrap-tappaas.sh && chmod 755 /root/tappaas/bootstrap-tappaas.sh' <"$0" \
+    && rescue_ssh 'cat > /root/tappaas/rescue-build.sh' <<<"$RESCUE_BUILD" \
+    || die "could not copy this script to the rescue system"
+
+  # The build: the stock ISO fetched there, the answer with the server's static
+  # network, the install key and the operator's own key for root.
+  opkey="$(operator_pubkey)"
+  cmd="bash /root/tappaas/rescue-build.sh --out tappaas-auto.iso"
+  cmd+=" --email $(printf %q "$EMAIL") --country $(printf %q "$COUNTRY") --keyboard $(printf %q "$KEYBOARD") --timezone $(printf %q "$TIMEZONE") --fqdn $(printf %q "$FQDN")"
+  cmd+=" --password-file /dev/stdin --ssh-key $(printf %q "$(<"${INSTALL_KEY}.pub")")"
+  [[ -z "$opkey" ]] || cmd+=" --ssh-key $(printf %q "$opkey")"
+  if [[ ${#DISKS[@]} -gt 0 ]]; then for _d in "${DISKS[@]}"; do cmd+=" --disk $(printf %q "$_d")"; done; fi
+  cmd+=" --net-cidr ${cidr} --net-gateway ${gw} --net-dns ${dns} --net-mac ${mac} --serial-console"
+  info "building the install image on the rescue system"
+  printf '%s' "$PASSWORD" | rescue_ssh "$cmd" || die "the build on the rescue system failed: see above"
+
+  # The installer, in QEMU on the server's own disks.
+  out="$(rescue_ssh "bash -s -- ${mac}" <<<"$RESCUE_QEMU" 2>&1)" || { echo "$out" >&2; die "QEMU could not be started on the rescue system"; }
+  while IFS= read -r l; do [[ "$l" == started ]] || info "  ${l}"; done <<<"$out"
+  printf '%b' "${GN}[Info]${CL} installing Proxmox on the server's disks (the installer in QEMU, about 10 minutes) "
+  t0=$SECONDS
+  while :; do
+    state="$(rescue_ssh -n "cd /root/tappaas; wc -l < install-serial.log 2>/dev/null || echo 0; cat qemu.rc 2>/dev/null || echo running")" || state=""
+    if [[ -n "$state" ]]; then
+      { read -r t; read -r rc; } <<<"$state"
+      while (( lines < ${t:-0} )); do printf '.'; lines=$(( lines + 1 )); done
+      [[ "$rc" == running ]] || break
+    fi
+    if (( SECONDS - t0 > 3600 )); then
+      echo ""
+      rescue_ssh -n 'pkill -f qemu-system-x86_64' || true
+      die "the installer did not finish within an hour: its console is in /root/tappaas/install-serial.log on the rescue system"
+    fi
+    sleep 10
+  done
+  echo ""
+  out=""
+  [[ "$rc" != 0 ]] || out="$(rescue_ssh -n "$RESCUE_CHECK" 2>&1)" || rc=check
+  [[ -z "$out" ]] || while IFS= read -r l; do info "  ${l}"; done <<<"$out"
+  if [[ "$rc" != 0 ]]; then
+    rescue_ssh -n 'tail -25 /root/tappaas/install-serial.log; cat /root/tappaas/qemu.out' 2>/dev/null >&2 || true
+    die "the Proxmox install in QEMU did not complete: see above, and /root/tappaas/install-serial.log on the rescue system"
+  fi
+  info "${GN}✓${CL} Proxmox is installed; the server reboots into it"
+  rescue_ssh -n 'nohup sh -c "sleep 2; reboot" >/dev/null 2>&1 &' || true
+  sleep 30
+
+  # From here as for any first node, with the firewall's own WAN.
+  NODE_IP="$RESCUE_IP"
+  HOSTED_ARGS=" --wan-address ${WAN_ADDR} --wan-gateway ${WAN_GW} --wan-mac ${WAN_MAC}"
+  wait_for_node
+  start_install
+
+  # The operator's VPN peer, enrolled with the key made here.
+  peer="$(hostname -s 2>/dev/null | tr 'A-Z' 'a-z' | tr -c 'a-z0-9-\n' '-' | cut -c1-24)"
+  peer="${peer:-operator}-admin"
+  conf="${SITE_CODE}.conf"
+  if ! node_ssh -n "root@${NODE_IP}" "ssh -i /root/tappaas/tappaas-cicd.key -o StrictHostKeyChecking=accept-new -o BatchMode=yes tappaas@tappaas-cicd.mgmt.internal /home/tappaas/bin/network-manager wgvpn add-peer --name $(printf %q "$peer") --pubkey $(printf %q "$WG_PUB") --endpoint ${WAN_ADDR}:51821" >"${conf}.tmp" 2>/dev/null \
+     || ! grep -q '^\[Interface\]' "${conf}.tmp"; then
+    rm -f "${conf}.tmp"
+    warn "your WireGuard key could not be enrolled: enrol this computer on the console's Day 1 page (The admin VPN), through the ssh tunnel above"
+    return 0
+  fi
+  ( umask 077; WG_PRIV="$WG_PRIV" awk '/^PrivateKey[[:space:]]*=/ {print "PrivateKey = " ENVIRON["WG_PRIV"]; next} {print}' "${conf}.tmp" >"$conf" )
+  rm -f "${conf}.tmp"
+  cicd_ip="$(node_ssh -n "root@${NODE_IP}" 'getent hosts tappaas-cicd.mgmt.internal' 2>/dev/null | awk '{print $1; exit}')"
+  info "${GN}✓${CL} this computer is enrolled in the site's admin VPN as ${peer}"
+  action "Import ${conf} into the WireGuard app and turn it on, then open http://${cicd_ip:-<tappaas-cicd>}:9097/setup/day1"
+  warn "${conf} holds your WireGuard private key: keep it on this computer only"
+  warn "${INSTALL_KEY} logs in to the node as root: keep it safe, or delete it and the node's line for it in /root/.ssh/authorized_keys."
+}
+
 # ask_up_front — everything after the build, asked before it: how the target
 # boots the image (and the stick, or the interface), whether to start the TAPPaaS
 # install and its names, whether to show the setup token at the end, and this
@@ -693,10 +956,11 @@ ask_up_front() {
   local c yn tty=0
   [[ -t 0 ]] && tty=1
   [[ -n "$BOOT" ]] || BOOT=none
-  case "$BOOT" in usb|network|booted|none) ;; *) die "--boot is usb, network, booted or none" ;; esac
+  case "$BOOT" in usb|network|booted|none|rescue) ;; *) die "--boot is usb, network, booted or none" ;; esac
   [[ "$BOOT" != none ]] || return 0
 
   case "$BOOT" in
+    rescue) rescue_ask; INSTALL_ANSWER=yes ;;
     usb) choose_stick || { BOOT=none; return 0; } ;;
     network)
       pxe_tools_ready
@@ -809,6 +1073,7 @@ choose_mode() {
   info "  3) The stick is made already: install TAPPaaS on the machine booted from it"
   info "  4) Make the install image, boot the machine over the network from this computer, and install TAPPaaS"
   info "  5) Only make the install image file"
+  info "  6) Install TAPPaaS on a rented server (Hetzner), through its rescue system"
   read -r -p "${IN} Choice [2]: " c; logged "$c"
   case "${c:-2}" in
     1) BOOT=usb;     INSTALL_ANSWER=no ;;
@@ -816,7 +1081,8 @@ choose_mode() {
     3) BOOT=booted;  INSTALL_ANSWER=yes ;;
     4) BOOT=network; INSTALL_ANSWER=yes ;;
     5) BOOT=none;    INSTALL_ANSWER=no ;;
-    *) die "choose 1 to 5" ;;
+    6) BOOT=rescue;  INSTALL_ANSWER=yes ;;
+    *) die "choose 1 to 6" ;;
   esac
 }
 
@@ -846,13 +1112,17 @@ if [[ -n "$USE" ]]; then
   after_build
   exit 0
 fi
+if [[ "$BOOT" == rescue ]]; then
+  # The ISO is fetched and built on the server's rescue system (hosted_install).
+  OUT="tappaas-hetzner.iso"
+else
 if [[ -z "$ISO" ]]; then
   _isos=()
   for _f in proxmox-ve_*.iso; do [[ -f "$_f" && "$_f" != *-tappaas-auto.iso ]] && _isos+=("$_f"); done
   [[ ${#_isos[@]} -le 1 ]] || die "more than one Proxmox VE ISO here (${_isos[*]}): give --iso <iso>"
   if [[ ${#_isos[@]} -eq 1 ]]; then
     ISO="${_isos[0]}"
-  elif [[ -z "${TAPPAAS_MEDIA_CONTAINER:-}" ]]; then
+  elif [[ -z "${TAPPAAS_MEDIA_CONTAINER:-}" || -n "${TAPPAAS_RESCUE_BUILD:-}" ]]; then
     # None here: the newest Proxmox lists, downloaded after the questions.
     ISO="$(iso_latest)" || die "no Proxmox VE ISO here, and Proxmox's list (${PVE_ISO_SUMS_URL}) could not be read: download one, or give --iso <iso>"
     ISO_FETCH=1
@@ -865,6 +1135,7 @@ fi
 # Checked here on the operator's machine, and again by the build in its container
 # when there is one: only then is the file known to be the one this build reads.
 [[ "$ISO_FETCH" == 1 ]] || iso_check "$ISO" "$ISO_SHA256"
+fi
 
 # ── The four #404 operator answers (prompt for whatever is missing) ────
 #
@@ -965,7 +1236,11 @@ if [[ -z "${TAPPAAS_MEDIA_CONTAINER:-}" ]]; then
   SSH_KEYS+=("${INSTALL_KEY}.pub")
   # Everything after the build, asked now, before it.
   ask_up_front
+  if [[ "$BOOT" == rescue ]]; then hosted_install; exit 0; fi
   [[ "$ISO_FETCH" != 1 ]] || { iso_download "$ISO"; iso_check "$ISO" "$ISO_SHA256"; }
+fi
+if [[ -n "${TAPPAAS_RESCUE_BUILD:-}" && "$ISO_FETCH" == 1 ]]; then
+  iso_download "$ISO"; iso_check "$ISO" "$ISO_SHA256"
 fi
 
 # ── Assistant bootstrap (first-node chicken-and-egg) ───────────────────
@@ -1044,7 +1319,17 @@ ANSWER="${WORK}/answer.toml"
   fi
   echo ''
   echo '[network]'
-  echo 'source = "from-dhcp"'
+  if [[ -n "$NET_CIDR" ]]; then
+    # A rented server: no DHCP, the address read from its rescue system, on the
+    # NIC with the server's MAC (the installer runs in QEMU with that MAC).
+    echo 'source = "from-answer"'
+    echo "cidr = \"${NET_CIDR}\""
+    echo "gateway = \"${NET_GW}\""
+    echo "dns = \"${NET_DNS}\""
+    echo "filter.ID_NET_NAME_MAC = \"*$(printf '%s' "${NET_MAC//:/}" | tr 'A-F' 'a-f')\""
+  else
+    echo 'source = "from-dhcp"'
+  fi
   echo ''
   echo '[disk-setup]'
   echo "filesystem = \"${FILESYSTEM}\""
@@ -1058,7 +1343,33 @@ ANSWER="${WORK}/answer.toml"
   else
     echo "disk-list = [\"${DISK}\"]"
   fi
+  if [[ -n "$NET_MAC" ]]; then
+    echo ''
+    echo '[first-boot]'
+    echo 'source = "from-iso"'
+    echo 'ordering = "before-network"'
+  fi
 } > "$ANSWER"
+
+# The first boot of a server installed in QEMU: QEMU's NIC had another name than
+# the real one, so the bridge is moved to the port with the server's MAC before
+# the network comes up.
+FIRST_BOOT=()
+if [[ -n "$NET_MAC" ]]; then
+  { printf '#!/bin/sh\nmac="%s"\n' "$(printf %s "$NET_MAC" | tr A-F a-f)"; cat <<'FIRSTBOOT'; } > "${WORK}/first-boot.sh"
+real=""
+for d in /sys/class/net/*; do
+  [ -e "$d/device" ] || continue
+  [ "$(cat "$d/address")" = "$mac" ] && real="${d##*/}"
+done
+old="$(awk '/bridge-ports/ {print $2; exit}' /etc/network/interfaces)"
+if [ -n "$real" ] && [ -n "$old" ] && [ "$real" != "$old" ]; then
+  sed -i "s/\b${old}\b/${real}/g" /etc/network/interfaces
+  echo "TAPPaaS: the bridge moved from ${old} to ${real}"
+fi
+FIRSTBOOT
+  FIRST_BOOT=(--on-first-boot "${WORK}/first-boot.sh")
+fi
 
 # The assistant's own progress lines are shown only when it fails.
 if ! _out="$(proxmox-auto-install-assistant validate-answer "$ANSWER" 2>&1)"; then
@@ -1068,7 +1379,7 @@ fi
 info "  ${GN}✓${CL} answer file valid"
 
 # ── Prepare the ISO (answer embedded — no network needed at install) ──
-if ! _out="$(proxmox-auto-install-assistant prepare-iso "$ISO" --fetch-from iso --answer-file "$ANSWER" --output "$OUT" 2>&1)"; then
+if ! _out="$(proxmox-auto-install-assistant prepare-iso "$ISO" --fetch-from iso --answer-file "$ANSWER" ${FIRST_BOOT[@]+"${FIRST_BOOT[@]}"} --output "$OUT" 2>&1)"; then
   echo "$_out" >&2
   die "prepare-iso failed — see above."
 fi
@@ -1281,6 +1592,12 @@ ASKBLOCK
   xorriso -osirrox on -indev "$OUT" -extract / "$_tree" >/dev/null 2>&1 \
     || die "could not extract the ISO tree for reseal."
   cp "${AW}/initrd.img" "${_tree}/boot/initrd.img"
+  if [[ "$SERIAL_CONSOLE" == 1 ]]; then
+    # The installer's console also on the serial port, which QEMU on a rescue
+    # system writes to a file the build follows.
+    chmod -R u+w "${_tree}/boot/grub"
+    sed -i -E '/proxmox-start-auto-installer/ s/$/ console=tty0 console=ttyS0,115200/' "${_tree}/boot/grub/grub.cfg"
+  fi
   xorriso -as mkisofs "${_bootopts[@]}" -o "${OUT}.tmp.iso" "$_tree" >/dev/null 2>&1 \
     || die "ISO reseal (rebuild) failed."
   mv "${OUT}.tmp.iso" "$OUT"

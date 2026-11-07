@@ -15,9 +15,9 @@ site. What to order and where in Hetzner's Robot: [Appendix G](HETZNER.md).
 - An **additional IPv4 address** for the server, with a **virtual MAC** generated for it in
   Robot.
 - **Rescue mode activated** on the server with your SSH key, and the server reset into it.
-- A Mac or Linux PC with `curl` (and Docker on a Mac:
-  `brew install colima docker && colima start`), and the
-  [WireGuard app](https://www.wireguard.com/install/).
+- A Mac or Linux PC with `curl` and `wg` (on a Mac: `brew install wireguard-tools`; on Debian or
+  Ubuntu: `sudo apt install curl wireguard-tools`), the SSH key you gave the rescue system, and
+  the [WireGuard app](https://www.wireguard.com/install/).
 
 ## 1. Run the install
 
@@ -37,14 +37,22 @@ Choose **6**, *install TAPPaaS on a rented server (Hetzner)*, and answer:
 - your **admin email** and a **root password**;
 - the **site's name** and size **small**.
 
-The script then works on its own: it installs Proxmox from the rescue system, reboots the server
-into it, and runs the TAPPaaS install. It makes your computer's WireGuard key on the way. It ends
-with the console's address and writes your WireGuard file (`<site>.conf`) next to the script.
+The script then works on its own, in about an hour:
+
+1. It makes your computer's WireGuard key (the private half stays on your computer).
+2. On the rescue system it builds the Proxmox installer and runs it on the server's disks, with
+   the server's own address, then reboots the server into Proxmox.
+3. It runs the TAPPaaS install, with the firewall on its own address and MAC. The server's own
+   address then takes ssh with a key only (yours, and the script's).
+4. It enrols your WireGuard key in the site's admin VPN and writes your WireGuard file,
+   `<site>.conf`, next to the script.
+
+It ends with the console's address and how to show its access token.
 
 ## 2. Connect
 
-Import `<site>.conf` into the WireGuard app and turn the tunnel on. The console and the server are
-reached only through it.
+Import `<site>.conf` into the WireGuard app and turn the tunnel on. The console, the firewall and
+the server's management are reached through it; the server's own address answers ssh only.
 
 ## 3. Day 1 in the console
 

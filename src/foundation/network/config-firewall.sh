@@ -33,6 +33,12 @@
 #
 # Usage: config-firewall.sh [--repo URL] [--branch NAME] [--root-pw PASS]
 #                           [--bootstrap-pw PASS] [--non-interactive] [-h|--help]
+#                           [--wan-address IP --wan-gateway IP --wan-mac MAC]
+#
+# --wan-address/--wan-gateway/--wan-mac: a rented server (Hetzner). The WAN is
+# static, IP/32 with its gateway reached on the link (OPNsense's far gateway), on
+# the MAC the provider generated for that address: it is set before the VM first
+# boots, since the provider's switch accepts no other.
 #
 # Exit codes: 0 ok, 1 error, 2 usage.
 
@@ -70,6 +76,7 @@ ROOT_PW=""
 BOOTSTRAP_PW="opnsense"
 INTERACTIVE=1
 CHAINED=0  # Set to 1 when called from install.sh (suppresses end-of-script instructions)
+WAN_ADDR="" WAN_GW="" WAN_MAC=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo)            REPO="${2:-}"; shift 2 ;;
@@ -78,6 +85,9 @@ while [[ $# -gt 0 ]]; do
     --bootstrap-pw)    BOOTSTRAP_PW="${2:-}"; shift 2 ;;
     --non-interactive) INTERACTIVE=0; shift ;;
     --chained)         CHAINED=1; shift ;;
+    --wan-address)     WAN_ADDR="${2:-}"; shift 2 ;;
+    --wan-gateway)     WAN_GW="${2:-}"; shift 2 ;;
+    --wan-mac)         WAN_MAC="${2:-}"; shift 2 ;;
     -h|--help)         usage; exit 0 ;;
     *) error "Unknown argument: $1"; usage; exit 2 ;;
   esac
@@ -153,6 +163,18 @@ size_json_for_site() {
   fi
 }
 size_json_for_site "$FW_JSON"
+
+# A rented server: the WAN's own address, gateway and MAC (all three or none).
+if [[ -n "$WAN_ADDR$WAN_GW$WAN_MAC" ]]; then
+  [[ "$WAN_ADDR" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || die "--wan-address is an IPv4 address: ${WAN_ADDR:-none}"
+  [[ "$WAN_GW" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || die "--wan-gateway is an IPv4 address: ${WAN_GW:-none}"
+  WAN_MAC="$(printf '%s' "$WAN_MAC" | tr 'A-F' 'a-f')"
+  [[ "$WAN_MAC" =~ ^([0-9a-f]{2}:){5}[0-9a-f]{2}$ ]] || die "--wan-mac is a MAC address: ${WAN_MAC:-none}"
+  _tmp="$(mktemp)"
+  jq --arg m "$WAN_MAC" '.config["cluster:vm"].mac1 = $m' "$FW_JSON" >"$_tmp" && mv "$_tmp" "$FW_JSON" \
+    || die "could not record the WAN's MAC in ${FW_JSON}"
+  info "WAN: ${WAN_ADDR}/32 via ${WAN_GW}, MAC ${WAN_MAC}"
+fi
 [[ -f "$TEMPLATE" ]]  || { info "Fetching config template"; fetch "${REPO}${BRANCH}/src/foundation/network/firewall-config.xml.template" "$TEMPLATE"; }
 [[ -x "$CREATE_VM" ]] || die "Create-TAPPaaS-VM.sh not found at ${CREATE_VM} (run the PVE node bootstrap first)."
 
@@ -225,6 +247,24 @@ awk '
 # base64 uses only [A-Za-z0-9+/=], none of which clash with the '#' sed delimiter.
 sed -i 's#<ssh>#<ssh><enabled>enabled</enabled><permitrootlogin>1</permitrootlogin>#' "$CONFIG_XML"
 sed -i "s#<authorizedkeys/>#<authorizedkeys>${ROOT_AUTHKEYS_B64}</authorizedkeys>#" "$CONFIG_XML"
+
+# A static WAN: the address on the wan interface, and the gateway as the default,
+# reached on the link (far gateway), since a /32 has no subnet to hold it.
+if [[ -n "$WAN_ADDR" ]]; then
+  _gwid="$(cat /proc/sys/kernel/random/uuid)"
+  awk -v ip="$WAN_ADDR" '
+    /<wan>/ { inwan = 1 }
+    inwan && /<ipaddr>dhcp<\/ipaddr>/ { sub(/<ipaddr>dhcp<\/ipaddr>/, "<ipaddr>" ip "</ipaddr>") }
+    inwan && /<ipaddrv6>dhcp6<\/ipaddrv6>/ { sub(/<ipaddrv6>dhcp6<\/ipaddrv6>/, "<ipaddrv6/>") }
+    inwan && /<subnet\/>/ { sub(/<subnet\/>/, "<subnet>32</subnet>") }
+    inwan && /<gateway\/>/ { sub(/<gateway\/>/, "<gateway>WAN_GW</gateway>") }
+    /<\/wan>/ { inwan = 0 }
+    { print }' "$CONFIG_XML" >"${CONFIG_XML}.wan" && mv "${CONFIG_XML}.wan" "$CONFIG_XML"
+  _gwxml="<Gateways version=\"1.0.0\" description=\"Gateways configuration\"><gateway_item uuid=\"${_gwid}\"><disabled>0</disabled><name>WAN_GW</name><descr>The provider's gateway</descr><interface>wan</interface><ipprotocol>inet</ipprotocol><gateway>${WAN_GW}</gateway><defaultgw>1</defaultgw><fargw>1</fargw><monitor_disable>1</monitor_disable><monitor_noroute>0</monitor_noroute><priority>255</priority><weight>1</weight></gateway_item></Gateways>"
+  sed -i -E "s#<Gateways version=\"1.0.0\"[^>]*/>#${_gwxml}#" "$CONFIG_XML"
+  grep -q "<ipaddr>${WAN_ADDR}</ipaddr>" "$CONFIG_XML" && grep -q "<fargw>1</fargw>" "$CONFIG_XML" \
+    || die "the static WAN could not be written into config.xml — check the <wan> and <Gateways> blocks of the template"
+fi
 
 grep -qE '@[A-Z_]+@' "$CONFIG_XML" && warn "Unsubstituted @PLACEHOLDER@ remains in config.xml — check the template."
 grep -q '<enabled>enabled</enabled>' "$CONFIG_XML" || warn "SSH enable not applied to config.xml — check the <ssh> block."

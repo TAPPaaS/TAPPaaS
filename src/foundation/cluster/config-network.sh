@@ -32,6 +32,11 @@
 #                    reached that way (e.g. a jump LAN) stays connected after the
 #                    default route moves to the firewall. Default: the SSH client,
 #                    when it is reached that way.
+#   --hosted         With --swap-gateway, on a rented server whose firewall has a
+#                    WAN address of its own: the node's own (wan) address keeps
+#                    answering through the provider's gateway (replies from it are
+#                    routed by source), and takes nothing but ssh, with a key: a
+#                    way in beside the admin VPN, closed to all else.
 #   --drop-upstream  Hardening (run later): remove the node's upstream (wan-side)
 #                    host IP so Proxmox is reachable only on the mgmt net / via the
 #                    firewall (or netbird).
@@ -66,7 +71,7 @@
 #   config-network.sh [--lan-port <ifname>[,<ifname>...]] [--wan-port <ifname>]
 #                     [--lan-mode active-backup|lacp] [--lan-primary <ifname>] [--mtu <n>]
 #                     [--mgmt-ip <CIDR>] [--gateway <ip>] [--fw-ip <ip>]
-#                     [--swap-gateway [--admin-route <CIDR>] | --drop-upstream
+#                     [--swap-gateway [--admin-route <CIDR>] [--hosted] | --drop-upstream
 #                      | --set-lan [--rollback-secs <s>] [--confirm-external]]
 #                     [--no-rollback] [--apply|--dry-run] [--non-interactive]
 #                     [-h|--help]
@@ -110,7 +115,7 @@ declare -F lb_set_lan >/dev/null || { echo "config-network.sh: lan-bond-lib.sh n
 # ── Arguments ────────────────────────────────────────────────────────
 LAN_PORT="" WAN_PORT="" MGMT_IP="" GATEWAY="" ADMIN_ROUTE=""
 DO_ROLLBACK=1 INTERACTIVE=1 DRY_RUN=0 ROLLBACK_SECS=""
-SWAP_GATEWAY=0 DROP_UPSTREAM=0 FW_IP="${MGMT_SUBNET}.1"
+SWAP_GATEWAY=0 DROP_UPSTREAM=0 FW_IP="${MGMT_SUBNET}.1" HOSTED=0
 LAN_MODE="" LAN_PRIMARY="" LAN_MTU="" SET_LAN=0 CONFIRM_EXTERNAL=0 NO_WAN=0
 LAN_PORTS="" LAN_BRIDGE_PORT="" LAN_STANZA=""
 # A first node with one port: that port is the WAN, and lan has no port of its own —
@@ -125,6 +130,7 @@ while [[ $# -gt 0 ]]; do
     --gateway)         GATEWAY="${2:-}"; shift 2 ;;
     --swap-gateway)    SWAP_GATEWAY=1; shift ;;
     --admin-route)     ADMIN_ROUTE="${2:-}"; shift 2 ;;
+    --hosted)          HOSTED=1; shift ;;
     --drop-upstream)   DROP_UPSTREAM=1; shift ;;
     --fw-ip)           FW_IP="${2:-}"; shift 2 ;;
     --lan-mode)        LAN_MODE="${2:-}"; shift 2 ;;
@@ -273,9 +279,15 @@ swap_gateway() {
       ip route replace "$ADMIN_ROUTE" via "$old_gw" 2>/dev/null || warn "  runtime 'ip route' add failed (will still persist)"
       # Persist as a post-up on the wan stanza (the upstream-side bridge).
       if ! grep -qF "ip route add ${ADMIN_ROUTE} via ${old_gw}" "$INTERFACES"; then
-        sed -i -E "/^iface wan inet/,/^[[:space:]]*\$/ s|^([[:space:]]*bridge-ports[[:space:]].*)|\1\n\tpost-up ip route add ${ADMIN_ROUTE} via ${old_gw} || true|" "$INTERFACES"
+        sed -i -E "/^iface wan inet/,/^[[:space:]]*\$/ s#^([[:space:]]*bridge-ports[[:space:]].*)#\1\n\tpost-up ip route add ${ADMIN_ROUTE} via ${old_gw} || true#" "$INTERFACES"
       fi
     fi
+  fi
+
+  # 4.6 A rented server: the node's own address stays its way in from outside —
+  #     replies from it leave through the provider's gateway, and it takes ssh only.
+  if [[ "$HOSTED" == 1 && -n "$old_ip" && -n "$old_gw" ]]; then
+    hosted_wan_guard "$old_ip" "$old_gw"
   fi
 
   # 5. corosync — ensure this node's ring0_addr is the mgmt IP, then RESTART the
@@ -305,6 +317,42 @@ swap_gateway() {
 
   info "${GN}Gateway cutover complete.${CL} Node mgmt ${BL}${mgmt_ip}${CL}, routing via the firewall."
   debug "  Verify: ping ${FW_IP}; ping 8.8.8.8; pvecm status"
+}
+
+# hosted_wan_guard <node address> <provider gateway> — source routing for the
+# node's own address, an nftables table that lets only ssh (and ping) reach it on
+# wan, and ssh with keys only. Persisted as post-up lines of the wan stanza.
+hosted_wan_guard() {
+  local ip="$1" gw="$2" nft=/etc/tappaas/hosted-wan-guard.nft
+  info "  this node's own address ${ip}: answers through ${gw}, ssh with a key only"
+  command -v nft >/dev/null 2>&1 || apt-get install -y -qq nftables >/dev/null 2>&1 || warn "  nftables could not be installed: ${ip} stays open"
+  mkdir -p /etc/tappaas
+  cat > "$nft" <<EOF
+# TAPPaaS: this node's own address on a rented server takes ssh only (config-network.sh --hosted)
+table inet tappaas_hosted
+delete table inet tappaas_hosted
+table inet tappaas_hosted {
+	chain input {
+		type filter hook input priority -5; policy accept;
+		iifname "wan" ip daddr ${ip} ct state established,related accept
+		iifname "wan" ip daddr ${ip} icmp type { echo-request, destination-unreachable, time-exceeded } accept
+		iifname "wan" ip daddr ${ip} tcp dport 22 accept
+		iifname "wan" ip daddr ${ip} drop
+	}
+}
+EOF
+  ip rule add from "$ip" table 200 priority 1000 2>/dev/null || true
+  ip route replace default via "$gw" dev wan table 200 2>/dev/null || warn "  the source route for ${ip} could not be added"
+  command -v nft >/dev/null 2>&1 && { nft -f "$nft" || warn "  the guard for ${ip} could not be loaded"; }
+  local line
+  for line in "post-up ip rule add from ${ip} table 200 priority 1000 || true" \
+              "post-up ip route replace default via ${gw} dev wan table 200 || true" \
+              "post-up nft -f ${nft} || true"; do
+    grep -qF "$line" "$INTERFACES" \
+      || sed -i -E "/^iface wan inet/,/^[[:space:]]*\$/ s#^([[:space:]]*bridge-ports[[:space:]].*)#\1\n\t${line}#" "$INTERFACES"
+  done
+  printf 'PasswordAuthentication no\nKbdInteractiveAuthentication no\n' > /etc/ssh/sshd_config.d/tappaas-hosted.conf
+  systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
 }
 
 # ── Mode: drop the upstream IP (later hardening) ─────────────────────

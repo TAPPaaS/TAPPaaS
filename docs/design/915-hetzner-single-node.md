@@ -1,6 +1,7 @@
 # TAPPaaS on Hetzner: one server, then a cluster
 
-**Status:** DRAFT 0.2 (2026-11-06), for the operator's review. Two alternatives for where the
+**Status:** DRAFT 0.3 (2026-11-07). **B chosen** by the operator; B for one server is built
+(steps 1 and 3 below, untested on a rented server). Two alternatives for where the
 firewall runs: **A** on a Hetzner Cloud server beside the dedicated servers, **B** on the
 dedicated servers themselves with an IP of its own. Each is described from a single server to a
 true cluster. Refines [ADR-037](<../ADR/ADR-037 - Install.md>) D2 and O5. Part of #915.
@@ -328,6 +329,26 @@ the dedicated server, or if a Floating-IP firewall pair is wanted regardless of 
    with tagged zones, before any code depends on it.
 3. B, one server: the static WAN and virtual MAC, the closed node address, the VPN key enrolled
    by the install. A full install to Day 1.
+
+**Built for one server (2026-11-07), to be tested on a rented server:**
+
+- `bootstrap-tappaas.sh` choice 6 (`--rescue`, `--wan-address`, `--wan-mac`, `--wan-gateway`):
+  reads the network from the rescue system, installs QEMU and the build tools there, builds
+  the image there (static network pinned by the server's MAC, a first-boot hook that moves the
+  bridge to the real NIC's name, the installer's console on the serial port), runs the
+  installer in QEMU on the server's disks with their serials and the server's MAC (OVMF on a
+  UEFI server, then the fallback loader on each EFI partition), reboots, and runs the install.
+- `install.sh` → `config-firewall.sh`: the firewall VM's WAN MAC (`mac1`) before its first
+  boot, a static WAN `/32` with a far gateway in config.xml.
+- `config-network.sh --swap-gateway --hosted`: the node's own address answers through the
+  provider's gateway (source routing, table 200), takes only ssh and ping (nftables
+  `inet tappaas_hosted`), ssh with keys only.
+- The operator's WireGuard key made with `wg` on their computer, enrolled with
+  `network-manager wgvpn add-peer --endpoint <firewall address>:51821`, and `<site>.conf`
+  written beside the script.
+
+What the first rented server answers: H2 (the gateway as read), H4 (UEFI boot through the
+fallback loader), the first-boot NIC move, OPNsense taking the far gateway as written.
 4. B, cluster: the vSwitch, `lan` over VXLAN, corosync on the vSwitch, the QDevice, the WAN move
    to a vSwitch subnet; B2 measured.
 5. A, only if chosen for a site: the host-kind firewall and its skipped VM paths, then its HA.
