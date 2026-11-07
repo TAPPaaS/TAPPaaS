@@ -59,19 +59,6 @@
       ]
     },
     {
-      "id": "CVE-2023-51767",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Rowhammer against password authentication (disputed upstream); guests allow key authentication only, PasswordAuthentication no.",
-        "justification": "requires_environment"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/openssh@10.5p1"
-        }
-      ]
-    },
-    {
       "id": "CVE-2025-32990",
       "analysis": {
         "state": "not_affected",
@@ -402,50 +389,6 @@
       "affects": [
         {
           "ref": "pkg:nix/p11-kit@0.26.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2019-1010022",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Disputed upstream: a stack-guard bypass that needs an overflow already exploited; the record names no affected versions. Kept counted, as glibc is."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/glibc@2.42-100"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2019-1010023",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Disputed upstream: ldd run on a malicious ELF, which glibc treats as a non-security bug; the record names no affected versions. Kept counted, as glibc is."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/glibc@2.42-100"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
         }
       ]
     },
@@ -810,19 +753,6 @@
       ]
     },
     {
-      "id": "CVE-2026-53613",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Non-root mount(8) TOCTOU, reachable only through an /etc/fstab entry with the user or users option. No guest's fstab has one (/ and /boot everywhere, plus jellyfin's NFS /media without user), and no module declares one; 2.42.3 already pins targets on the new mount API (2.42.2), only the legacy path without /proc is left.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/util-linux@2.42.3"
-        }
-      ]
-    },
-    {
       "id": "CVE-2026-92392",
       "analysis": {
         "state": "exploitable",
@@ -841,6 +771,140 @@
           "severity": "low",
           "method": "other",
           "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2023-51767",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Rowhammer flip of the authenticated flag in mm_answer_authpassword (disputed upstream), the PasswordAuthentication path; every NixOS guest runs sshd with PasswordAuthentication no, and no account has a usable password hash, so keyboard-interactive/PAM cannot authenticate by password either (sshd -T and /etc/shadow checked on all 19 NixOS guests on hrossen 2026-11-07).",
+        "justification": "requires_environment"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/openssh@10.5p1"
+        },
+        {
+          "ref": "pkg:nix/openssh@10.6p1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-53613",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Non-root mount(8) TOCTOU, reachable only through an /etc/fstab entry with the user or users option; no guest's fstab has one (checked on all 19 NixOS guests on hrossen 2026-11-07) and no module declares one. 2.42.4 also closes it except for the legacy mount(2) path without /proc, which no guest uses.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/util-linux@2.42.3"
+        },
+        {
+          "ref": "pkg:nix/util-linux@2.42.4"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2019-1010022",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Disputed upstream: a stack-guard bypass that needs an overflow already exploited; the record names no affected versions. Unchanged in glibc 2.42-103. Kept counted, as glibc is."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/glibc@2.42-100"
+        },
+        {
+          "ref": "pkg:nix/glibc@2.42-103"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2019-1010023",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Disputed upstream: ldd run on a malicious ELF, which glibc treats as a non-security bug; the record names no affected versions. Unchanged in glibc 2.42-103. Kept counted, as glibc is."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/glibc@2.42-100"
+        },
+        {
+          "ref": "pkg:nix/glibc@2.42-103"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84243",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "gettext loads a catalog from a LANGUAGE value containing / or ..; it needs an attacker who sets LANGUAGE for a program running with other rights and without AT_SECURE. On the guests nobody outside can: sshd accepts no client environment (AcceptEnv unset, forgejo only GIT_PROTOCOL; PermitUserEnvironment no; checked on all NixOS guests on hrossen 2026-11-07), services get fixed systemd environments, and sudo is setuid (AT_SECURE). Admins who log in already run code as themselves.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/glibc@2.42-103"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-118374",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Memory exhaustion in LibreSSL's ocspcheck tool from a malicious OCSP responder; ocspcheck is not on any guest's PATH, nothing runs it, and no running process maps libressl (checked on all NixOS guests on hrossen 2026-11-07).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libressl@4.2.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-119741",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Sender-side hash_search DoS by a malicious receiver pulling from a public rsync daemon module; no guest runs an rsync daemon (nothing listens on 873, checked on all NixOS guests on hrossen 2026-11-07), and rsync over ssh only runs between TAPPaaS hosts.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/rsync@3.5.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-119586",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "The sqlite3 command-line shell's .recover output carries shell instructions from a crafted schema; only an admin running .recover by hand on such a file and feeding the output back into the shell reaches it, and no unit or script on the guests runs .recover.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/sqlite@3.53.3"
         }
       ]
     }
