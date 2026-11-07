@@ -248,7 +248,7 @@
       "id": "CVE-2026-19499",
       "analysis": {
         "state": "exploitable",
-        "detail": "strfmon width padding overflow, real in glibc 2.44; only reachable if a program calls strfmon with right-justified padding — immich's Node and Python services do not. Kept counted as glibc is."
+        "detail": "strfmon width padding overflow, real in glibc 2.44; only reachable if a program calls strfmon with right-justified padding \u2014 immich's Node and Python services do not. Kept counted as glibc is."
       },
       "affects": [
         {
@@ -579,7 +579,7 @@
       "id": "CVE-2026-96611",
       "analysis": {
         "state": "exploitable",
-        "detail": "Signed integer overflow in the MOV/MP4 demuxer's HEIF ispe box: immich probes (ffprobe) and transcodes every uploaded video, and immich is published to the internet — reachable by any user with a login, as the immich user. Not in FFmpeg 8.1.3 (fixed upstream in 059eb2e, FFmpeg 9.0); jellyfin-ffmpeg 8.1.3-2 runs here (#807)."
+        "detail": "Signed integer overflow in the MOV/MP4 demuxer's HEIF ispe box: immich probes (ffprobe) and transcodes every uploaded video, and immich is published to the internet \u2014 reachable by any user with a login, as the immich user. Not in FFmpeg 8.1.3 (fixed upstream in 059eb2e, FFmpeg 9.0); jellyfin-ffmpeg 8.1.3-2 runs here (#807)."
       },
       "affects": [
         {
@@ -601,7 +601,7 @@
       "id": "CVE-2026-52297",
       "analysis": {
         "state": "exploitable",
-        "detail": "Out-of-bounds read from unpadded IAMF extradata in the MOV demuxer (mov_read_iacb): immich probes (ffprobe) and transcodes every uploaded video, and immich is published to the internet — reachable by any user with a login, as the immich user. A read past a buffer, not a write. Not in FFmpeg 8.1.3 (fixed upstream in 8439e02, FFmpeg 9.0)."
+        "detail": "Out-of-bounds read from unpadded IAMF extradata in the MOV demuxer (mov_read_iacb): immich probes (ffprobe) and transcodes every uploaded video, and immich is published to the internet \u2014 reachable by any user with a login, as the immich user. A read past a buffer, not a write. Not in FFmpeg 8.1.3 (fixed upstream in 8439e02, FFmpeg 9.0)."
       },
       "affects": [
         {
@@ -649,7 +649,7 @@
       "id": "CVE-2026-70628",
       "analysis": {
         "state": "resolved",
-        "detail": "DVB subtitle parser signed overflow (libavcodec/dvbsub_parser.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-2 is built on — 46ef25c9c, cherry-picked from 93f2a525e. NVD's range (before 9.0) misses the 8.1 backport."
+        "detail": "DVB subtitle parser signed overflow (libavcodec/dvbsub_parser.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-2 is built on \u2014 46ef25c9c, cherry-picked from 93f2a525e. NVD's range (before 9.0) misses the 8.1 backport."
       },
       "affects": [
         {
@@ -661,7 +661,7 @@
       "id": "CVE-2026-70632",
       "analysis": {
         "state": "resolved",
-        "detail": "CineForm HD transform-2 out-of-bounds write (libavcodec/cfhd.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-2 is built on — ea7210860, cherry-picked from db05df9d1. NVD's range (before 9.0) misses the 8.1 backport."
+        "detail": "CineForm HD transform-2 out-of-bounds write (libavcodec/cfhd.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-2 is built on \u2014 ea7210860, cherry-picked from db05df9d1. NVD's range (before 9.0) misses the 8.1 backport."
       },
       "affects": [
         {
@@ -794,6 +794,279 @@
       "affects": [
         {
           "ref": "pkg:nix/imagemagick@7.1.2-31"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86413",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86414",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-87861",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-87866",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-92388",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-94265",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-107928",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-107929",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86410",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86412",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86415",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-87862",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-87863",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-87865",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-92386",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-92387",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-92389",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-92390",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-92391",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-92392",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-94266",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
         }
       ]
     }

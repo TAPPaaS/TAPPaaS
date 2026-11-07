@@ -290,7 +290,7 @@
       "id": "CVE-2026-70628",
       "analysis": {
         "state": "resolved",
-        "detail": "DVB subtitle parser signed overflow (libavcodec/dvbsub_parser.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-2 is built on — 46ef25c9c, cherry-picked from 93f2a525e. NVD's range (before 9.0) misses the 8.1 backport."
+        "detail": "DVB subtitle parser signed overflow (libavcodec/dvbsub_parser.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-2 is built on \u2014 46ef25c9c, cherry-picked from 93f2a525e. NVD's range (before 9.0) misses the 8.1 backport."
       },
       "affects": [
         {
@@ -302,11 +302,284 @@
       "id": "CVE-2026-70632",
       "analysis": {
         "state": "resolved",
-        "detail": "CineForm HD transform-2 out-of-bounds write (libavcodec/cfhd.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-2 is built on — ea7210860, cherry-picked from db05df9d1. NVD's range (before 9.0) misses the 8.1 backport."
+        "detail": "CineForm HD transform-2 out-of-bounds write (libavcodec/cfhd.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-2 is built on \u2014 ea7210860, cherry-picked from db05df9d1. NVD's range (before 9.0) misses the 8.1 backport."
       },
       "affects": [
         {
           "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86413",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86414",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-87861",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-87866",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-92388",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-94265",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-107928",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-107929",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86410",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86412",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86415",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-87862",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-87863",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-87865",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-92386",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-92387",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-92389",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-92390",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-92391",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-92392",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-94266",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
         }
       ]
     }
