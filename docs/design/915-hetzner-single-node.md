@@ -352,5 +352,5 @@ fallback loader), the first-boot NIC move, OPNsense taking the far gateway as wr
 4. B, cluster: the vSwitch, `lan` over VXLAN, corosync on the vSwitch, the QDevice, the WAN move
    to a vSwitch subnet; B2 measured.
 5. A, only if chosen for a site: the host-kind firewall and its skipped VM paths, then its HA.
-6. `INSTALL/SINGLE-NODE-HETZNER.md` and `INSTALL/CLUSTER-HETZNER.md` written from what was
+6. `docs/install/SINGLE-NODE-HETZNER.md` and `docs/install/CLUSTER-HETZNER.md` written from what was
    built, and their "in development" notes removed.

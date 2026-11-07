@@ -18,7 +18,7 @@ when:
     path:
       include:
         - INSTALL.md
-        - INSTALL/*.md
+        - docs/install/*.md
         - GLOSSARY.md
         - BUILD.md
         - docs/ADR/README.md

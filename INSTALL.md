@@ -16,8 +16,8 @@ Details on how to do this can be found in the 4 guides in the table
 
 | | Local | Cloud (Hetzner) |
 |---|---|---|
-| **Single node test system** | [Single node local TAPPaaS system](INSTALL/SINGLE-NODE-LOCAL.md) | [Single node TAPPaaS system in Hetzner](INSTALL/SINGLE-NODE-HETZNER.md) *(in development)* |
-| **Multi node production cluster** | [Multi node local TAPPaaS cluster](INSTALL/CLUSTER-LOCAL.md) | [Multi node TAPPaaS cluster in Hetzner](INSTALL/CLUSTER-HETZNER.md) *(in development)* |
+| **Single node test system** | [Single node local TAPPaaS system](docs/install/SINGLE-NODE-LOCAL.md) | [Single node TAPPaaS system in Hetzner](docs/install/SINGLE-NODE-HETZNER.md) *(in development)* |
+| **Multi node production cluster** | [Multi node local TAPPaaS cluster](docs/install/CLUSTER-LOCAL.md) | [Multi node TAPPaaS cluster in Hetzner](docs/install/CLUSTER-HETZNER.md) *(in development)* |
 
 A single node system can grow into a cluster: more machines, disks and switches are added from
 the console later.
@@ -26,11 +26,11 @@ the console later.
 
 The guides above are kept short. The appendices hold the detail behind them:
 
-- [Appendix A — Install from a Windows PC](INSTALL/WINDOWS.md)
-- [Appendix B — Hardware selection](INSTALL/HARDWARE.md)
-- [Appendix C — Adding a satellite](INSTALL/SATELLITE.md)
-- [Appendix D — Preparation](INSTALL/PREPARATION.md)
-- [Appendix E — The foundation install in detail](INSTALL/FOUNDATION.md)
-- [Appendix F — Environments](INSTALL/ENVIRONMENTS.md)
-- [Appendix G — Servers in Hetzner](INSTALL/HETZNER.md)
+- [Appendix A — Install from a Windows PC](docs/install/WINDOWS.md)
+- [Appendix B — Hardware selection](docs/install/HARDWARE.md)
+- [Appendix C — Adding a satellite](docs/install/SATELLITE.md)
+- [Appendix D — Preparation](docs/install/PREPARATION.md)
+- [Appendix E — The foundation install in detail](docs/install/FOUNDATION.md)
+- [Appendix F — Environments](docs/install/ENVIRONMENTS.md)
+- [Appendix G — Servers in Hetzner](docs/install/HETZNER.md)
 - [Appendix H — The install from the command line](src/foundation/INSTALL.md)

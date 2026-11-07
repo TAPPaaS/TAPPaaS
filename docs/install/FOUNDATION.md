@@ -2,7 +2,7 @@
 
 What the install guides' steps do, and the choices behind them. The guides are enough to install;
 read this when you want to know what happens, choose differently, or something does not go as
-expected. The commands under it all: [Appendix H](../src/foundation/INSTALL.md).
+expected. The commands under it all: [Appendix H](../../src/foundation/INSTALL.md).
 
 ## 1. What the install builds
 
@@ -112,7 +112,7 @@ TAPPaaS v2.4: signed by SHA256:… — compare it with the fingerprint in INSTAL
 Check the same fingerprints on [tappaas.org](https://tappaas.org) and in the release notes; if
 they differ anywhere, stop and ask before installing. Until the keys are published, releases are
 unsigned and the install says so (`TAPPaaS signs no releases yet`). `main` is never signed. More:
-[Verified updates](../src/foundation/tappaas-cicd/VERIFIED-UPDATES.md).
+[Verified updates](../../src/foundation/tappaas-cicd/VERIFIED-UPDATES.md).
 
 ## 4. Day 1
 

@@ -73,9 +73,9 @@ With admin-vpn, a device enrolled in the admin VPN now gets the satellite as its
 
 - **Off-site backup:** locking the satellite down as the off-site vault, and making it the
   site's backup copy, is described in the satellite's
-  [install reference](../src/foundation/satellite/INSTALL.md#locking-it-down-as-the-off-site-vault).
+  [install reference](../../src/foundation/satellite/INSTALL.md#locking-it-down-as-the-off-site-vault).
 - **SSH to the management VM through the satellite**, from allow-listed addresses: same
-  reference, [SSH through the satellite](../src/foundation/satellite/INSTALL.md#ssh-to-the-mothership-through-the-satellite).
+  reference, [SSH through the satellite](../../src/foundation/satellite/INSTALL.md#ssh-to-the-mothership-through-the-satellite).
 - **Removing it:** `module-manager module delete <name>` forgets it;
   `--decommission` also takes the tunnel and its rules down at the site. The server itself is
   deleted in the provider's console.

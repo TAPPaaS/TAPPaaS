@@ -2,7 +2,7 @@
 
 The commands behind the install script and the console, for an operator who wants to run them
 by hand, script them, or repair a step. The install guides and
-[Appendix E](../../INSTALL/FOUNDATION.md) describe the same install as most people run it: the
+[Appendix E](../../docs/install/FOUNDATION.md) describe the same install as most people run it: the
 script `bootstrap-tappaas.sh` on a Mac or PC, then the console's Day 1 page. Everything here can
 be done from those too.
 
@@ -11,7 +11,7 @@ be done from those too.
 > [Appendix: install options](#appendix-install-options).
 
 **Before you start:** hardware, network, domain, credentials and branch are in
-[Appendix D — Preparation](../../INSTALL/PREPARATION.md).
+[Appendix D — Preparation](../../docs/install/PREPARATION.md).
 
 ---
 
