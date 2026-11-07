@@ -688,6 +688,97 @@ NOTE_OUT="$(PATH="${TMP}/bin:${PATH}" TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG
 [[ "${NOTE_OUT}" == *"nothing to acknowledge for coturn"* ]] && ok "…a module with nothing to accept says so" || bad "ack coturn: ${NOTE_OUT}"
 unset TAPPAAS_PIN_FINDINGS
 
+echo "── ADR-045: acks pinned to what they covered, the cve phase, the record keeps the ack and the scores ──"
+# A richer preview stub: the pin it read from the lock it was handed (so the
+# boundary's gate preview is of the pin it took), fingerprints, VEX classes, scores.
+cat > "${TMP}/pf.py" <<'PYEOF'
+import json, os, sys
+d, out = sys.argv[1], sys.argv[2]
+to = os.environ.get("FAKE_TO") or json.load(open(os.path.join(d, "flake.lock")))["nodes"]["nixpkgs"]["locked"]["rev"]
+e = lambda k, v: json.loads(os.environ.get(k) or v)
+json.dump({"gate": e("FAKE_GATE", "[]"), "gateModules": e("FAKE_GM", "{}"), "gateItems": e("FAKE_ITEMS", "{}"),
+           "digest": os.environ.get("FAKE_DIGEST", "d1"), "to": to, "majors": [], "errors": e("FAKE_ERRORS", "[]"),
+           "vexStatements": e("FAKE_VEX", "[]"),
+           "modules": [{"module": "immich", "score": 20, "level": "high", "open": 1, "risk": 0, "carried": 1, "ack": 0, "now": 2, "fixed": 0, "new": 1},
+                       {"module": "coturn", "score": 0, "level": "ok", "open": 0, "risk": 0, "carried": 0, "ack": 0, "now": 0, "fixed": 0, "new": 0}],
+           "release": {"score": 20, "level": "high", "setBy": {"module": "immich"}}, "scoreModel": {"weights": {"risk": {"critical": 25}}}},
+          open(out, "w"))
+PYEOF
+export TAPPAAS_PIN_FINDINGS="python3 '${TMP}/pf.py' \"\$1\" \"\$3\""
+ackit() { NOTE_OUT="$(PATH="${TMP}/bin:${PATH}" TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" TAPPAAS_TRAIN_NOW=$(( 1790000000 + 20*86400 )) "${TRAIN}" ack "$@" --no-fetch 2>&1)"; }
+G='["cve immich CVE-B","major grafana 13->14"]'
+IT='{"cve immich CVE-B":"Critical brotli@1.2.0","major grafana 13->14":"13.0.9->14.0.1"}'
+setup_to
+FAKE_GATE="${G}" FAKE_ITEMS="${IT}" FAKE_DIGEST=dPREV run_to preview
+ackit --note "brotli: no fix upstream yet, tracked"
+[[ "$(jq -r '.ack | "\(.digest) \(.to[0:12]) \(.items["cve immich CVE-B"])"' "${TMP}/cfg/release-train.json")" == "dPREV b77b3de87756 Critical brotli@1.2.0" ]] \
+    && ok "an ack stores the preview's digest, its pin and each item's fingerprint" || bad "ack: $(jq -c .ack "${TMP}/cfg/release-train.json")"
+[[ "$(jq -r '.ack.notes[0] | "\(.keys | length) \(.pin[0:12]) \(.digest)"' "${TMP}/cfg/release-train.json")" == "2 b77b3de87756 dPREV" ]] \
+    && ok "…and each note what it accepted, against which pin and preview" || bad "note: $(jq -c .ack.notes "${TMP}/cfg/release-train.json")"
+FAKE_GATE="${G}" FAKE_ITEMS='{"cve immich CVE-B":"Critical brotli@1.2.1","major grafana 13->14":"13.0.9->14.0.1"}' \
+    FAKE_NOW=$(( 1790000000 + 20*86400 )) run_to boundary --resume --to nixos-26.05
+[[ "${RC}" -ne 0 && "${OUT}" == *"cve immich CVE-B"* && "${OUT}" == *"changed since"*"acked Critical brotli@1.2.0, now Critical brotli@1.2.1"* ]] \
+    && ok "an ack given against another pin does not cover an item that changed: the boundary stops, saying how" || bad "a changed item passed: ${OUT}"
+[[ "${OUT}" != *"    major grafana 13->14"* ]] && ok "…while the unchanged item stays covered" || bad "the unchanged major was refused: ${OUT}"
+# Stale acks: an acknowledged item no longer in the gate is dropped by the next ack.
+FAKE_GATE='["cve immich CVE-B","cve immich CVE-C"]' FAKE_ITEMS='{"cve immich CVE-B":"Critical brotli@1.2.0","cve immich CVE-C":"High x@1"}' \
+    FAKE_GM='{"cve immich CVE-B":["immich"],"cve immich CVE-C":["immich"]}' run_to preview
+ackit --module immich --note "CVE-C: low here"
+[[ "${NOTE_OUT}" == *"dropped 1 stale ack(s)"*"major grafana 13->14"* ]] && ok "ack drops a stale ack — acknowledged, no longer in the gate — and says so" || bad "stale: ${NOTE_OUT}"
+[[ "$(jq -c '[.ack.gate, (.ack.items | keys)]' "${TMP}/cfg/release-train.json")" == '[["cve immich CVE-B","cve immich CVE-C"],["cve immich CVE-B","cve immich CVE-C"]]' ]] \
+    && ok "…from the items and their fingerprints both" || bad "ack after drop: $(jq -c .ack "${TMP}/cfg/release-train.json")"
+
+# The cve phase: a boundary whose gate passes removes the GONE statements on the
+# pin branch and keeps the CARRIED; the record archives the ack and the scores.
+mkdir -p "${TMP}/w/src/home/immich"
+cat > "${TMP}/w/src/home/immich/immich-vex.json" <<'JEOF'
+{"bomFormat":"CycloneDX","specVersion":"1.5","vulnerabilities":[
+ {"id":"CVE-L1","analysis":{"state":"not_affected","detail":"libssh"},"affects":[{"ref":"pkg:nix/libssh@0.12.2"}]},
+ {"id":"CVE-T1","analysis":{"state":"not_affected","detail":"libtiff"},"affects":[{"ref":"pkg:nix/libtiff@4.7.2"}]},
+ {"id":"CVE-G1","analysis":{"state":"not_affected","detail":"glibc"},"affects":[{"ref":"pkg:nix/glibc@2.42-100"}]}]}
+JEOF
+git -C "${TMP}/w" add -A && git -C "${TMP}/w" commit -qm "immich vex" && git -C "${TMP}/w" push -q origin main && git -C "${TMP}/w" fetch -q origin
+VX='[{"file":"src/home/immich/immich-vex.json","module":"immich","id":"CVE-L1","refs":["pkg:nix/libssh@0.12.2"],"class":"gone","deadRefs":[]},
+     {"file":"src/home/immich/immich-vex.json","module":"immich","id":"CVE-T1","refs":["pkg:nix/libtiff@4.7.2"],"class":"gone","deadRefs":[]},
+     {"file":"src/home/immich/immich-vex.json","module":"immich","id":"CVE-G1","refs":["pkg:nix/glibc@2.42-100"],"class":"carried","deadRefs":[]}]'
+FAKE_GATE='["cve immich CVE-B","cve immich CVE-C"]' FAKE_VEX="${VX}" run_to boundary --dry-run --force-boundary
+[[ "${OUT}" == *"1b clean VEX on the pin branch"* ]] && ok "the plan names the VEX cleanup" || bad "no cleanup in the plan: ${OUT}"
+FAKE_GATE='["cve immich CVE-B","cve immich CVE-C"]' FAKE_ITEMS='{"cve immich CVE-B":"Critical brotli@1.2.0","cve immich CVE-C":"High x@1"}' FAKE_VEX="${VX}" \
+    FAKE_NOW=$(( 1790000000 + 20*86400 )) run_to boundary --resume --to nixos-26.05
+[[ "${RC}" -eq 0 && "${OUT}" == *"Phase 1b: VEX cleanup"*"removed  CVE-L1"*"removed  CVE-T1"*"carried  CVE-G1"* ]] \
+    && ok "the boundary's cve phase removes the gone statements and lists the carried" || bad "cve phase: ${OUT}"
+_pb="$(git -C "${TMP}/w" ls-remote --heads origin 'pin/*' | awk '{print $2}' | sed 's#refs/heads/##' | head -1)"
+[[ -n "${_pb}" && "$(git -C "${TMP}/w" log -1 --format=%s "origin/${_pb}")" == "chore(vex): remove 2 statement(s) no channel ships" ]] \
+    && ok "…committed to the pin branch, on the forge before the site tracks it" || bad "no cleanup commit on ${_pb:-a pin branch}"
+[[ "$(git -C "${TMP}/w" show "origin/${_pb}:src/home/immich/immich-vex.json" | jq -c '[.vulnerabilities[].id]')" == '["CVE-G1"]' ]] \
+    && ok "…the carried statement stays" || bad "vex after: $(git -C "${TMP}/w" show "origin/${_pb}:src/home/immich/immich-vex.json")"
+[[ "$(git -C "${TMP}/w" log -2 --format=%s "origin/${_pb}" | tail -1)" == "chore(pin):"* ]] \
+    && ok "…on top of the pin commit" || bad "order: $(git -C "${TMP}/w" log -3 --format=%s "origin/${_pb}")"
+_rel="$(git -C "${TMP}/w" show origin/main:release/releases.json 2>/dev/null)"
+_e="$(jq -c '.releases[0]' <<<"${_rel}")"
+[[ "$(jq -r '.ack | "\(.items | join(",")) \(.pin[0:12]) \(.digest) \(.notes | length) \(.fingerprints["cve immich CVE-C"])"' <<<"${_e}")" \
+   == "cve immich CVE-B,cve immich CVE-C b77b3de87756 d1 2 High x@1" ]] \
+    && ok "record archives the whole ack: items, fingerprints, notes, pin and digest" || bad "ack record: $(jq -c .ack <<<"${_e}")"
+[[ "$(jq -r '.ack.notes | map(.note) | join("; ")' <<<"${_e}")" == "brotli: no fix upstream yet, tracked; CVE-C: low here" ]] \
+    && ok "…the notes are kept, not lost at the boundary" || bad "notes: $(jq -c .ack.notes <<<"${_e}")"
+[[ "$(jq -r '.security | "\(.release.score) \(.release.level) \(.modules.immich.score) \(.modules.immich.level) \(.modules.immich.carried) \(.modules.coturn.level)"' <<<"${_e}")" == "20 high 20 high 1 ok" ]] \
+    && ok "record stores each module's release score and level, and the release's" || bad "security record: $(jq -c .security <<<"${_e}")"
+[[ "$(jq -r '.security | "\(.vex.removed) \(.vex.carried) \(.model.weights.risk.critical)"' <<<"${_e}")" == "2 1 25" ]] \
+    && ok "…with what the cleanup did and the values the score used" || bad "security vex/model: $(jq -c .security <<<"${_e}")"
+[[ "$(jq -r '.ack // "gone"' "${TMP}/cfg/release-train.json")" == "gone" ]] && ok "…and the ack is reset after it is archived" || bad "ack survived"
+# A gate preview that could not judge (a failed match) removes nothing.
+setup_to
+mkdir -p "${TMP}/w/src/home/immich"
+git -C "${TMP}/w" show "origin/${_pb}~1:src/home/immich/immich-vex.json" > "${TMP}/w/src/home/immich/immich-vex.json" 2>/dev/null
+git -C "${TMP}/w" add -A && git -C "${TMP}/w" commit -qm "immich vex" && git -C "${TMP}/w" push -q origin main && git -C "${TMP}/w" fetch -q origin
+FAKE_ERRORS='["images: trivy failed"]' FAKE_GATE='["cve-match-failed"]' FAKE_ITEMS='{"cve-match-failed":"images: trivy failed"}' run_to preview
+ackit --note "trivy down, deep test decides"
+FAKE_ERRORS='["images: trivy failed"]' FAKE_GATE='["cve-match-failed"]' FAKE_ITEMS='{"cve-match-failed":"images: trivy failed"}' FAKE_VEX="${VX}" \
+    FAKE_NOW=$(( 1790000000 + 20*86400 )) run_to boundary --resume --to nixos-26.05 --staging-branch rehearse-staging --production-branch rehearse-prod
+[[ "${RC}" -eq 0 && "${OUT}" == *"CVE match failed — no VEX statement is removed"* ]] \
+    && ok "after a failed match the cve phase removes nothing, and says so" || bad "failed-match cleanup: ${OUT}"
+unset TAPPAAS_PIN_FINDINGS
+
 echo "── a flake with no nixpkgs ref is refused, never rewritten blind ──"
 setup_to
 printf '{\n  inputs.nixpkgs.url = "git+https://example.invalid/np";\n}\n' \

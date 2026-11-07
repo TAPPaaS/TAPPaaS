@@ -1218,6 +1218,76 @@ do_phase_branch() {
     return 0
 }
 
+# ── phase 1b: the CVE cleanup (ADR-045 D2) ───────────────────────────
+# After the pin gate passed, before anything is proved: the VEX statements no
+# channel ships after this boundary — the new main and staging (the candidate)
+# and the new stable (the release staging holds now) — leave, committed to the pin
+# branch so the change is in the release and in its history. The ones a version
+# change made inapplicable (CARRIED) stay, for a person to confirm with
+# `cve-triage.sh carry`. Judged by the gate's own preview of this pin; a gate that
+# could not judge, or a CVE match that failed, removes nothing.
+VEX_CLEAN_FILE="${CONFIG_DIR}/train-vex-clean.json"
+do_phase_cve() {
+    local br f="${CONFIG_DIR}/train-preview-boundary.json" rc out files n
+    br="$(jq -r '.boundary.branch // empty' "${STATE_FILE}")"
+    info "${BOLD}Phase 1b: VEX cleanup — statements no channel ships leave the pin branch${CL}"
+    if [[ -z "${br}" || "${br}" == "main" ]]; then
+        info "  no pin branch (the pin did not move): nothing is cleaned — the next boundary that moves the pin cleans"
+        return 0
+    fi
+    if [[ ! -s "${f}" ]] || ! jq -e '.vexStatements | type == "array"' "${f}" >/dev/null 2>&1; then
+        warn "  the pin gate could not judge the VEX statements — none is removed"
+        return 0
+    fi
+    if [[ "$(jq -r '.to // empty' "${f}")" != "$(jq -r '.boundary.pinTo // empty' "${STATE_FILE}")" ]]; then
+        warn "  the gate's preview is not of the pin this boundary took — no VEX statement is removed"
+        return 0
+    fi
+    if ! jq -e '(.errors // []) | length == 0' "${f}" >/dev/null 2>&1; then
+        warn "  the pin gate's CVE match failed — no VEX statement is removed"
+        return 0
+    fi
+    [[ "$(g rev-parse --abbrev-ref HEAD)" == "${br}" ]] || g checkout -q "${br}" \
+        || { error "could not check out ${br}"; return 1; }
+    rm -f "${VEX_CLEAN_FILE}"
+    out="$(python3 "${TRAIN_SCRIPTS}/cve-triage.py" --repo "${REPO_DIR}" clean --preview "${f}" --report "${VEX_CLEAN_FILE}" 2>&1)"; rc=$?
+    [[ -n "${out}" ]] && sed 's/^/  /' <<<"${out}"
+    if (( rc != 0 )) || [[ ! -s "${VEX_CLEAN_FILE}" ]]; then
+        error "  the VEX cleanup failed — nothing was committed"
+        local x; for x in $(g diff --name-only -- '*-vex.json'); do g checkout -q -- "${x}"; done
+        return 1
+    fi
+    mapfile -t files < <(jq -r '.files[]' "${VEX_CLEAN_FILE}")
+    if (( ${#files[@]} > 0 )); then
+        local x; for x in "${files[@]}"; do g add -- "${x}"; done
+        n="$(jq '.removed | length' "${VEX_CLEAN_FILE}")"
+        if ! g diff --cached --quiet; then
+            g commit -q -m "chore(vex): remove ${n} statement(s) no channel ships" \
+                || { error "could not commit the VEX cleanup"; return 1; }
+        fi
+    else
+        info "  nothing to remove"
+    fi
+    # Published before the site tracks the branch: phase 2 proves what is on the forge.
+    if [[ "$(g rev-parse "${br}")" != "$(g rev-parse "origin/${br}" 2>/dev/null)" ]]; then
+        g push -q origin "${br}" || { error "could not publish the VEX cleanup on ${br}"; return 1; }
+        g fetch --quiet origin "${br}"
+    fi
+    local tmp="${STATE_FILE}.tmp.$$"
+    jq --slurpfile r "${VEX_CLEAN_FILE}" '.boundary.vex = {removed: $r[0].removed, pruned: ($r[0].pruned | length), carried: $r[0].carried}' \
+        "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || rm -f "${tmp}"
+    return 0
+}
+
+# The plan's line for the cleanup: what the last preview would remove.
+vex_plan() {
+    if [[ -s "${PREVIEW_FILE}" ]] && jq -e '.vexStatements | type == "array"' "${PREVIEW_FILE}" >/dev/null 2>&1; then
+        info "  1b clean VEX on the pin branch: the last preview has $(jq '[.vexStatements[] | select(.class == "gone")] | length' "${PREVIEW_FILE}") statement(s) gone (removed), $(jq '[.vexStatements[] | select(.class == "carried")] | length' "${PREVIEW_FILE}") carried (kept, to confirm)"
+    else
+        info "  1b clean VEX on the pin branch: what the pin gate finds no channel ships"
+    fi
+}
+
 # ── phase 2: prove it HERE, guest first ──────────────────────────────
 # The order is the point (ADR-028 D9): a guest that fails the new pin is
 # snapshot-rolled back by update-module.sh, and the control plane stays able to
@@ -1359,6 +1429,36 @@ do_phase_tag() {   # $1 = the version this boundary cuts, $2 = forced
     make_release_tag "${cut}" "${tip}" "$(tag_message "${cut}" "$2")"
 }
 
+# The ack this boundary used, whole (ADR-045 D2): the items, their fingerprints,
+# every note, and the pin and preview digest it was given against — kept with the
+# release instead of deleted with the state. null when nothing was acknowledged.
+ack_record() {
+    jq -c '(.ack // null) | if . == null or ((.gate // []) | length) == 0 then null else
+        {items: (.gate // []), fingerprints: (.items // {}), notes: (.notes // []), pin: (.to // null),
+         digest: (.digest // null), at: (.at // null)} end' "${STATE_FILE}" 2>/dev/null || echo null
+}
+
+# Each module's release score and level (ADR-045 D3), its counts, the release's
+# own and the values it was computed with — from the pin gate's preview of the pin
+# released (or, with no pin move, the last preview of it) — and what the VEX
+# cleanup did. null when no preview is of this pin.
+security_record() {
+    local pin f="" c
+    pin="$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${PIN_LOCK}" 2>/dev/null)"
+    for c in "${CONFIG_DIR}/train-preview-boundary.json" "${PREVIEW_FILE}"; do
+        [[ -s "${c}" && -n "${pin}" && "$(jq -r '.to // empty' "${c}" 2>/dev/null)" == "${pin}" ]] && { f="${c}"; break; }
+    done
+    [[ -n "${f}" ]] || { echo null; return 0; }
+    jq -c --argjson vex "$(jq -c '.boundary.vex // null' "${STATE_FILE}" 2>/dev/null || echo null)" '
+        if (.release // null) == null then null else
+        {release: .release,
+         modules: ([.modules[] | {key: .module, value: ({score, level, open, risk, carried, ack, now, fixed, new}
+                     | with_entries(select(.value != null)))}] | from_entries),
+         model: .scoreModel}
+        + (if $vex != null then {vex: {removed: ($vex.removed | length), pruned: $vex.pruned, carried: ($vex.carried | length)}} else {} end)
+        end' "${f}" 2>/dev/null || echo null
+}
+
 # Runs BEFORE main is promoted to staging (operator, 2026-10-07): the record and
 # the ROADMAP.md cut are committed to main first, so the revision cut into staging —
 # and its tag — already says what it is. The new version's commit is the record
@@ -1385,9 +1485,12 @@ do_phase_record() {   # $1 = the version this boundary cuts, $2 = forced, $3 = k
             --arg p "$(jq -r '.nodes.nixpkgs.locked.rev // ""' "${PIN_LOCK}" 2>/dev/null | cut -c1-12)" \
             --argjson s "${sup:-[]}" \
             --argjson acc "$(jq -c '.boundary.accepted // []' "${STATE_FILE}" 2>/dev/null || echo '[]')" \
+            --argjson ack "$(ack_record)" --argjson sec "$(security_record)" \
             '{version: $v, commit: $c, staging: $d, production: null, kind: $k, forced: $f, pin: $p}
              + (if ($s | length) > 0 then {supersedes: $s} else {} end)
-             + (if ($acc | length) > 0 then {accepted: $acc} else {} end)')"
+             + (if ($acc | length) > 0 then {accepted: $acc} else {} end)
+             + (if $ack != null then {ack: $ack} else {} end)
+             + (if $sec != null then {security: $sec} else {} end)')"
         subject+=("${cut} to staging")
     fi
     # Production holds a release only when the revision it took was one; the
@@ -1434,6 +1537,7 @@ cmd_boundary() {
         info "  1  branch pin/$(date -u +%Y-w%V), refresh the estate pin"
     fi
     preview_plan
+    vex_plan
     info "  2  prove it here: $(pick_guest 2>/dev/null || echo "a guest") first, then the sweep, then --deep"
     info "  3  land on main (hours: the sweep reboots nodes, the deep test builds guests)"
     # The version is decided once, here, and kept: a resumed run tags what the
@@ -1471,6 +1575,7 @@ cmd_boundary() {
     # run that fails half way is resumed rather than restarted — re-running a
     # push that already happened is how main and staging come to disagree.
     phase_pending "branch" && { do_phase_branch || return 1; phase_done "branch"; }
+    phase_pending "cve"    && { do_phase_cve    || return 1; phase_done "cve";    }
     phase_pending "prove"  && { do_phase_prove  || return 1; phase_done "prove";  }
     phase_pending "main"   && { do_phase_main   || return 1; phase_done "main";   }
 
@@ -1844,16 +1949,32 @@ pin_findings() {
         --image-scanner "${hm} scan images --refs {file} --no-db-update" \
         --from "${from}" --to "$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${dir}/flake.lock")" --out "${out}" \
         --ignore "${REPO_DIR}/release/pin-watch-ignore.json" ${4:+--details "$4"} --acked "${STATE_FILE}" \
+        --vex-root "${REPO_DIR}" --scorer "${hm} score --details {file} --json" \
         $([[ "${NO_PIN_MOVE}" == "1" ]] && echo --check-scan)
     local rc=$?
     rm -rf "${work}"
     return "${rc}"
 }
 
-# The gate items a preview found that no ack covers, one per line.
+# The gate items a preview found that no ack covers, one per line. An ack is
+# pinned to the preview it was given against (ADR-045 D2): it covers an item of a
+# later preview — the boundary's, on the pin it takes — only while that item is
+# unchanged, its packages at the same versions (the fingerprint in .ack.items).
+# An ack from before fingerprints (no .items) covers by key, as it always did.
+JQ_ACK_COVERS='def covers($a; $p; $k):
+    (($a.gate // []) | index($k)) != null
+    and ((($a.items // null) | type) != "object" or ($p.gateItems // null) == null
+         or ($a.items[$k] // null) == ($p.gateItems[$k] // null));'
+ack_state() { jq -c '.ack // {}' "${STATE_FILE}" 2>/dev/null || echo '{}'; }
 unacked() {   # $1 = a preview/findings json
-    local ack; ack="$(jq -c '.ack.gate // []' "${STATE_FILE}" 2>/dev/null || echo '[]')"
-    jq -r --argjson a "${ack:-[]}" '(.gate // []) - $a | .[]' "$1" 2>/dev/null
+    jq -r --argjson a "$(ack_state)" "${JQ_ACK_COVERS}"' . as $p | ($p.gate // [])[] as $k | select(covers($a; $p; $k) | not) | $k' "$1" 2>/dev/null
+}
+# Acked items whose packages changed since the ack: "<item>\t<acked as>\t<now>".
+ack_changed() {   # $1 = a preview/findings json
+    jq -r --argjson a "$(ack_state)" '. as $p | ($a.items // {}) as $i | ($p.gate // [])[] as $k
+        | select((($a.gate // []) | index($k)) != null and ($i | type) == "object" and ($p.gateItems // null) != null
+                 and ($i[$k] // null) != ($p.gateItems[$k] // null))
+        | "\($k)\t\($i[$k] // "?")\t\($p.gateItems[$k] // "?")"' "$1" 2>/dev/null
 }
 
 cmd_preview() {
@@ -1907,11 +2028,23 @@ cmd_ack() {
         info "the last preview found nothing to acknowledge"; return 0
     fi
     [[ -f "${STATE_FILE}" ]] || echo '{}' > "${STATE_FILE}"
-    local tmp="${STATE_FILE}.tmp.$$"
+    # What was acknowledged before and is no longer in the gate is stale: dropped
+    # here, so an ack never covers an item it was not given for (ADR-045 D2).
+    local stale tmp="${STATE_FILE}.tmp.$$"
+    stale="$(jq -r --slurpfile p "${PREVIEW_FILE}" '(.ack.gate // [])[] as $k | select(($p[0].gate | index($k)) == null) | $k' "${STATE_FILE}" 2>/dev/null)"
     jq --slurpfile p "${PREVIEW_FILE}" --argjson sel "${sel}" --arg at "$(iso_utc "$(now_epoch)")" --arg note "${NOTE}" --arg m "${MODULE_SHOW}" \
-        '.ack = ((.ack // {}) | .gate = (((.gate // []) + $sel) | unique) | .digest = $p[0].digest | .to = $p[0].to
-                 | .at = $at | .note = $note | .notes = ((.notes // []) + [{module: (if $m == "" then "all" else $m end), note: $note, at: $at, items: ($sel | length)}]))' \
+        '($p[0]) as $pv | .ack = ((.ack // {}) as $o | $o
+            | .gate = ((($o.gate // []) | map(select(. as $k | $pv.gate | index($k)))) + $sel | unique)
+            | .items = ((($o.items // {}) | with_entries(select(.key as $k | $pv.gate | index($k))))
+                        + (($pv.gateItems // {}) | with_entries(select(.key as $k | $sel | index($k)))))
+            | .digest = $pv.digest | .to = $pv.to | .at = $at | .note = $note
+            | .notes = (($o.notes // []) + [{module: (if $m == "" then "all" else $m end), note: $note, at: $at,
+                                              items: ($sel | length), keys: $sel, digest: $pv.digest, pin: $pv.to}]))' \
         "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" || { rm -f "${tmp}"; die "could not write ${STATE_FILE}"; }
+    if [[ -n "${stale}" ]]; then
+        info "  dropped $(grep -c . <<<"${stale}") stale ack(s) — no longer in the gate:"
+        sed 's/^/    /' <<<"${stale}"
+    fi
     info "${GN}✓${CL} acknowledged ${n} item(s)${MODULE_SHOW:+ of ${MODULE_SHOW}} of the preview to ${BL}$(jq -r '.to[0:12]' "${PREVIEW_FILE}")${CL}:"
     jq -r '.[]' <<<"${sel}" | sed 's/^/    /'
     local left; left="$(unacked "${PREVIEW_FILE}")"
@@ -1957,6 +2090,11 @@ pin_gate() {   # $1 = templates dir with the moved lock, $2 = from rev
     if [[ -n "${open}" ]]; then
         error "  this pin brings what nobody has accepted:"
         while IFS= read -r l; do error "    ${l}"; done <<<"${open}"
+        local changed; changed="$(ack_changed "${f}")"
+        if [[ -n "${changed}" ]]; then
+            error "  acknowledged against pin $(jq -r '.ack.to // "?" | .[0:12]' "${STATE_FILE}"), and changed since — the ack does not cover them:"
+            while IFS=$'\t' read -r k was now; do error "    ${k}: acked ${was}, now ${now}"; done <<<"${changed}"
+        fi
         error "  stopped before the deep test. Read the upstream notes, then:"
         error "    ${SCRIPT_NAME} preview${TO_BRANCH:+ --to ${TO_BRANCH}}   (see it all)"
         error "    ${SCRIPT_NAME} ack --note \"<why>\"   and run the boundary again"
