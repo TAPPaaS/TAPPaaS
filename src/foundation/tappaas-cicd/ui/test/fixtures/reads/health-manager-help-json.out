@@ -461,6 +461,62 @@
       "disruptions": []
     },
     {
+      "verb": "score",
+      "keys": [
+        [
+          "score"
+        ]
+      ],
+      "usage": "score [--details <file>] [--items <file>] [--json]",
+      "note": null,
+      "details": "The one CVE risk score (ADR-045 D3). Per counted CVE: risk 25/10/3/1 by its TAPPaaS rating,\nopen or carried 20/8 by its severity. Only a module's highest category counts, each further\nitem at half the one before. Levels: ok 0, low <7, medium <16, high <30, critical ≥30. A zone\nis its highest module times its tier's multiplier (0 ×2, 1 ×1, 2 ×0.75, 3 ×0.5, 4 ×0.25,\n5–6 ×0.1, none ×1); an environment the highest of its zones; the site the highest of its\nenvironments and of the zones in none. A release has no zones: its highest module. Writes nothing.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--details",
+          "takesValue": true,
+          "arg": "<file>",
+          "choices": null,
+          "repeatable": false,
+          "description": "A release preview's details (config/train-preview-details.json): each module's release score."
+        },
+        {
+          "flag": "--items",
+          "takesValue": true,
+          "arg": "<file>",
+          "choices": null,
+          "repeatable": false,
+          "description": "{modules: {<m>: [{id, state, severity, rating}]}, placement?, zones?}: a site's scores when placement and zones are given."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the scores as JSON, with the weights, bands and multipliers used."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
       "verb": "report",
       "keys": [
         [

@@ -25,6 +25,9 @@
 //                             writes ~/config/sbom/, run by tappaas-security-scan)
 //   health-manager report security [--all] [--json]      (prints the last scan)
 //   health-manager scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update] [--no-vex]
+//   health-manager score --details <file> | --items <file> [--json]
+//                            (ADR-045 D3: the one CVE risk score — a release
+//                             preview's per module, or a site's by zone)
 //   health-manager scan images --refs <file> [--no-db-update] [--no-vex]
 //                            (#788: container images by registry reference; JSON on stdout)
 //                            (#788: match a name/version list as if it ran — the
@@ -57,6 +60,7 @@ import { CmdbItem, CmdbRel, SiteIndex } from "./assess-model";
 import { assessmentOf, readValidate } from "./assess-validate";
 import { readLastSweep } from "./cmdbsweep";
 import { cmdRules, readRules } from "./rules";
+import { cmdScore } from "./score-verb";
 // ── ADR-041 emit half ──
 import { EMIT_HELP, liveEmitContext, runEmitVerb } from "./emit-verbs";
 // ── end ADR-041 emit half ──
@@ -158,6 +162,21 @@ export const HELP: HelpSpec = {
         "release preview compares a past release's images with the next one's. trivy fetches each\n" +
         "image (layers are cached). Same VEX as `scan security`. Writes nothing. Prints\n" +
         "{\"<ref>\": {\"findings\": [...], \"suppressed\": [...], \"error\": \"\"}}.",
+    },
+    {
+      usage: "score [--details <file>] [--items <file>] [--json]", effect: "read",
+      options: [
+        ["--details <file>", "A release preview's details (config/train-preview-details.json): each module's release score."],
+        ["--items <file>", "{modules: {<m>: [{id, state, severity, rating}]}, placement?, zones?}: a site's scores when placement and zones are given."],
+        ["--json", "Print the scores as JSON, with the weights, bands and multipliers used."],
+      ],
+      details:
+        "The one CVE risk score (ADR-045 D3). Per counted CVE: risk 25/10/3/1 by its TAPPaaS rating,\n" +
+        "open or carried 20/8 by its severity. Only a module's highest category counts, each further\n" +
+        "item at half the one before. Levels: ok 0, low <7, medium <16, high <30, critical ≥30. A zone\n" +
+        "is its highest module times its tier's multiplier (0 ×2, 1 ×1, 2 ×0.75, 3 ×0.5, 4 ×0.25,\n" +
+        "5–6 ×0.1, none ×1); an environment the highest of its zones; the site the highest of its\n" +
+        "environments and of the zones in none. A release has no zones: its highest module. Writes nothing.",
     },
     {
       usage: "report [--json] [--from <file>] [--discover]", effect: "read",
@@ -773,6 +792,13 @@ export function run(argv: string[], client: ClusterClient): number {
         if (opts.rest[0] === "images") return cmdScanImages({ ...opts, rest: opts.rest.slice(1) });
         if (opts.rest[0] !== "security") die("scan: expected 'security' or 'nix-list'");
         return cmdScanSecurity({ ...opts, rest: opts.rest.slice(1) }, client);
+      case "score":
+        try {
+          return cmdScore(opts.rest, (l) => process.stdout.write(l + "\n"));
+        } catch (e) {
+          die((e as Error).message);
+        }
+        return 1;
       case "report":
         if (opts.rest[0] === "security") return cmdReportSecurity({ ...opts, rest: opts.rest.slice(1) });
         return cmdReportHealth(opts, client);

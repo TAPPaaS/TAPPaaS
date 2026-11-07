@@ -38,6 +38,7 @@ health-manager scan security [--if-new-sweep] [--notify]
 health-manager report security [--all] [--json]
 health-manager scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update] [--no-vex]
 health-manager scan images --refs <file> [--no-db-update] [--no-vex]
+health-manager score [--details <file>] [--items <file>] [--json]
 ```
 
 `scan nix-list` matches a JSON list of `{name, version}` against the CVE database as if those
@@ -46,6 +47,13 @@ what a statement decides comes back as `suppressed` (`--no-vex` applies none). `
 does the same for container images by registry reference. The release train's
 `tappaas-train preview` uses it for the packages the next nixpkgs pin would bring (#788);
 `--nixpkgs` points the CPE vendors at that pin. Prints `{"findings": [...], "error": ""}`.
+
+`score` is the one CVE risk score (ADR-045 D3), computed in `lib/ts/src/score.ts` and nowhere
+else. `--details` scores a release preview's details per module (no zone multiplier) and
+gives the release's level (its highest module); the preview calls it. `--items` takes
+`{modules: {<m>: [{id, state, severity, rating}]}, placement, zones}` and scores modules,
+zones (× the tier multiplier), environments and the site. `--json` adds the weights, bands
+and multipliers used.
 
 > **MOVED (ADR-007):** the per-VM three-way drift inspect is no longer a
 > health-manager verb. It is now `module-manager reconcile <m>` (the read-only
