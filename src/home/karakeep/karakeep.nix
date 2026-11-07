@@ -48,7 +48,7 @@ let
   proxyCfg = (moduleCfg.config or {})."network:proxy" or {};
   proxyDomain = proxyCfg.proxyDomain or (moduleCfg.proxyDomain or "");
   published = proxyDomain != "" && (moduleCfg.proxyPublished or true);
-  zone0 = moduleCfg.zone0 or "";
+  zone0 = let z = moduleCfg.zone0 or null; in if z == null then "" else z;  # `or` misses an explicit null
   publicUrl = if published then "https://${proxyDomain}"
               else "http://${moduleCfg.vmname or "karakeep"}${lib.optionalString (zone0 != "") ".${zone0}"}.internal:3000";
 

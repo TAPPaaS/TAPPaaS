@@ -32,7 +32,9 @@ let
               then builtins.fromJSON (builtins.readFile ./woodpecker.json)
               else {};
   vmname = moduleCfg.vmname or "woodpecker";
-  zone0 = moduleCfg.zone0 or "";
+  # `or` covers a missing key, not an explicit null: the release woodpecker.json
+  # ships "zone0": null, and interpolating null fails the evaluation (ADR-045).
+  zone0 = let z = moduleCfg.zone0 or null; in if z == null then "" else z;
   internalHost = "${vmname}${lib.optionalString (zone0 != "") ".${zone0}"}.internal";
   proxyDomain = moduleCfg.proxyDomain or "";
   published = proxyDomain != "" && (moduleCfg.proxyPublished or true);

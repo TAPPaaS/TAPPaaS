@@ -105,8 +105,10 @@ for f in "${FILES[@]}"; do
     else
         echo "  FAIL: ${rel}"; FAIL=$((FAIL+1))
         # The verdict, not the trace: the error line and the definitions it names.
+        # Nix puts the message itself on an indented line after `error:` (woodpecker's
+        # "cannot coerce null to a string"), so those are kept too.
         sed -e "s#${d}/etc/#/etc/nixos/#g" -e "s#${d}/#./#g" <<<"${out}" \
-            | grep -E '^error:|^ *- In |^ *… while|conflicting|has no|does not exist|undefined' \
+            | grep -E '^error:|^ *- In |^ *… while|conflicting|has no|does not exist|undefined|cannot coerce|infinite recursion|assertion|is not of type|missing' \
             | grep -v '… while' | head -8 | sed 's/^/        /'
     fi
 done

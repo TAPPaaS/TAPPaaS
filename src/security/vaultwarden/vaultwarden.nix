@@ -45,7 +45,7 @@ let
   published   = proxyDomain != "" && (moduleCfg.proxyPublished or true);
   port        = 8222;
   domain      = if published then "https://${proxyDomain}"
-                else "http://${moduleCfg.vmname or "vaultwarden"}.${moduleCfg.zone0 or "dmz"}.internal:${toString port}";
+                else "http://${moduleCfg.vmname or "vaultwarden"}.${let z = moduleCfg.zone0 or null; in if z == null then "dmz" else z}.internal:${toString port}";
   siteEnv     = "/etc/secrets/vaultwarden-site.env";
 in
 {

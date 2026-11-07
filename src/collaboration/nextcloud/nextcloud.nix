@@ -96,7 +96,7 @@ let
               then builtins.fromJSON (builtins.readFile ./nextcloud.json)
               else {};
   ncVmName      = moduleCfg.vmname or "nextcloud";
-  ncZone0       = moduleCfg.zone0 or "";
+  ncZone0       = let z = moduleCfg.zone0 or null; in if z == null then "" else z;  # `or` misses an explicit null
   ncProxyCfg    = (moduleCfg.config or {})."network:proxy" or {};
   ncProxyDomain = ncProxyCfg.proxyDomain or (moduleCfg.proxyDomain or "");
   ncInternalFqdn = if ncZone0 != "" then "${ncVmName}.${ncZone0}.internal" else "";

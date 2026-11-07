@@ -28,7 +28,7 @@ let
   proxyCfg    = (moduleCfg.config or {})."network:proxy" or {};
   proxyDomain = proxyCfg.proxyDomain or (moduleCfg.proxyDomain or "");
   published   = proxyDomain != "" && (moduleCfg.proxyPublished or true);
-  internalHost = "${moduleCfg.vmname or "forgejo"}.${moduleCfg.zone0 or "srvWork"}.internal";
+  internalHost = "${moduleCfg.vmname or "forgejo"}.${let z = moduleCfg.zone0 or null; in if z == null then "srvWork" else z}.internal";
   rootUrl     = if published then "https://${proxyDomain}/" else "http://${internalHost}:3000/";
 
   fcfg = config.services.forgejo;
