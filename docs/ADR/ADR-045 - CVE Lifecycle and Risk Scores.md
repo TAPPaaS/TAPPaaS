@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Draft** — for the operator's review |
-| **Version** | 0.3 |
+| **Status** | **Accepted** — implementation started 2026-11-07 |
+| **Version** | 1.0 |
 | **Date** | 2026-11-07 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | Follows #788 (release CVE preview and ack). Amends ADR-011 §8 (VEX lifecycle), ADR-028 (the boundary gains a CVE phase and a release score), ADR-041 (security conditions take their status from the risk level) and ADR-039 (an alert for new critical/high CVEs). |
-| **Changelog** | v0.1 (2026-11-07): first draft, from the operator's direction of 2026-11-07, after the 2.4 preview walk-through of immich. v0.2 (2026-11-07): the operator's review. Only the highest category counts, each further item at half the one before; open items 20/8; no fix multiplier; zones (×0.25 DMZ, ×2 management) between modules and environments; zones outside every environment roll up to the site; analysed low/medium pass without an ack; woodpecker is a module like any other. v0.3 (2026-11-07): the operator's review. Level bands 0/7/16/30, so one new critical is high and not critical outside the management zone; zone multipliers by tier (0 ×2, 1 ×1, 2 ×0.75, 3 ×0.5, 4 ×0.25, 5–6 ×0.1). |
+| **Changelog** | v0.1 (2026-11-07): first draft, from the operator's direction of 2026-11-07, after the 2.4 preview walk-through of immich. v0.2 (2026-11-07): the operator's review. Only the highest category counts, each further item at half the one before; open items 20/8; no fix multiplier; zones (×0.25 DMZ, ×2 management) between modules and environments; zones outside every environment roll up to the site; analysed low/medium pass without an ack; woodpecker is a module like any other. v0.3 (2026-11-07): the operator's review. Level bands 0/7/16/30, so one new critical is high and not critical outside the management zone; zone multipliers by tier (0 ×2, 1 ×1, 2 ×0.75, 3 ×0.5, 4 ×0.25, 5–6 ×0.1). v1.0 (2026-11-07): **Accepted** by the operator. A zone without a tier counts ×1; the firewall counts in the management zone. |
 
 A site keeps three CVE records today: the nightly scan, the VEX statements in the repo, and the
 acks for the next boundary. None of them cleans itself, and none of them adds up to a number an
@@ -155,8 +155,7 @@ multiplier of the zone's `tier` in `zones.json`:
 The multiplier follows the tier structure the firewall already enforces: the lower the tier, the
 more a compromise there reaches. On hrossen that puts mgmt at ×2; rossen and test at ×1; home at
 ×0.75; iotCloud, iotUntrust and guest at ×0.5; dmz at ×0.25; and iotLocal and iotCams at ×0.1.
-A zone without a tier (the overlays, work, wan) holds no TAPPaaS module today; if one is
-deployed there it counts ×1. So one open critical in a service zone is high (20), and in the
+A zone without a tier (the overlays, work, wan) counts ×1. So one open critical in a service zone is high (20), and in the
 management zone critical (40); one open high in the management zone is high (16).
 
 **Environment and site.**
@@ -165,7 +164,8 @@ management zone critical (40); one open high in the management zone is high (16)
 - The site's score is the highest of its environments **and of every zone that belongs to no
   environment** (dmz, work, guest, the overlays…).
 - The platform targets count as modules of the zone they sit in: the pvehost nodes, the firewall
-  and the backup server in the management zone, unifi-os in its own zone. Woodpecker is a module
+  (it sits in every zone, and counts in the management zone) and the backup server in the
+  management zone, unifi-os in its own zone. Woodpecker is a module
   like any other (D2 and D5 apply to it: a VEX file, compared in the preview, scored).
 - Each score is shown with the module that sets it, so the number always points at its cause.
 
@@ -273,13 +273,7 @@ counts), what was decided, and what was accepted with its note.
 | P3 | D4: health status from level, the two alerts, the rescan timer, the console page and badges | On hrossen a new open critical mails within a day, and `/security` shows site → environment → zone → module |
 | P4 | D5: gate policy (analysed low/medium pass), the runbook in RELEASE-TRAIN.md, the release-notes section, ADR-028 cross-reference | The next boundary is run from the runbook alone |
 
-## Open questions
-
-1. **Zones without a tier** (the overlays, work, wan) count ×1 if a module is ever deployed
-   there. Should `zones.json` give every zone a tier instead?
-2. **The firewall** sits in every zone. Counting it in the management zone (tier 0, ×2) means one
-   open high in unbound (8 × 2 = 16) makes the site high, and one open critical makes it
-   critical. Intended?
+## Settled in review
 
 Settled in v0.2 (operator, 2026-11-07): the base weights 25/10/3/1; open items at 20/8; only the
 highest category counts, each further item at half the one before; no fix multiplier and no "fix
@@ -292,3 +286,6 @@ Settled in v0.3 (operator, 2026-11-07): the level bands are 0 / 7 / 16 / 30, so 
 critical is high and only the management zone or a second critical makes it critical; the zone
 multiplier follows the zone tier (tier 0 ×2, 1 ×1, 2 ×0.75, 3 ×0.5, 4 ×0.25, 5 and 6 ×0.1),
 replacing the DMZ/management types of v0.2.
+
+Settled in v1.0 (operator, 2026-11-07): a zone without a tier counts ×1, and the firewall counts in
+the management zone (tier 0, ×2), so one open critical in it makes the site critical.
