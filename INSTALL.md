@@ -1,15 +1,18 @@
 # Installing TAPPaaS
 
 The install turns one or more machines into a TAPPaaS site. Each machine gets Proxmox VE, and
-the first one gets the TAPPaaS foundation on top: an OPNsense firewall that becomes the site's
-gateway, the management VM that owns the platform (tappaas-cicd), and its web console. From the
-console's Day 1 page you finish the rest: the machines' network ports and disks, more machines,
-your admin VPN, then sign-in, logging and backup, and a check that it all works. Applications,
-going public, switches and Wi-Fi come after, as Day 2 operations. A first machine starts from a
-Mac or Linux PC with one script that builds the installer, boots the machine from it and follows
-the install to the end.
+the first one gets the TAPPaaS foundation. Foundation consist of a network (firewall) module, an Identity module, a backup module, a logging module, and very importantly a tappaas-cicd module that controls the entire TAPPaaS installation. The later has a command line interface and a web interface called "The Console"
 
-## Choose how to install
+The installation runs in 3 major phases:
+1) bootstrap: getting the first node of the TAPPaaS site installed up to the point of have "The Console"
+2) Finish foundation: get the rest of the foundations and the rest of the nodes and the VPN access setup using wizards in the in web Console
+3) add features and applications
+
+Step 3 is can be done at a later stage as "day 2" activities from the console
+
+Details on how to do this can be found in the 4 guides in the table
+
+## Choose what to install
 
 | | Local | Cloud (Hetzner) |
 |---|---|---|
