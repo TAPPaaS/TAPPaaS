@@ -220,7 +220,7 @@ TRIAGED="CVE-2:coturn:low" run2
 ck "…another module's analysis is not this one's" "1 0" "$(jq -r '.modules[] | select(.module=="logging") | "\(.open) \(.risk)"' "${T}/p2.json")"
 ck "a new CVE is gated per module" '["cve logging CVE-2","major grafana 13->14"]' "$(jq -c '.gate' "${T}/p2.json")"
 echo '{"ack":{"gate":["cve logging CVE-2"]}}' > "${T}/state.json"
-TRIAGED="CVE-2:logging:low" run2 --acked "${T}/state.json"
+TRIAGED="CVE-2:logging:high" run2 --acked "${T}/state.json"
 ck "an acknowledged CVE is in ACK, not RISK" "0 0 1 1" "$(jq -r '.modules[] | select(.module=="logging") | "\(.open) \(.risk) \(.ack) \(.now)"' "${T}/p2.json")"
 ck "…what is left to acknowledge is said per module" "yes" \
    "$([[ "${OUT}" == *"to acknowledge: 1 of 2 item(s)"*"1 acknowledged"*"by module: logging 1"* ]] && echo yes || echo no)"
@@ -270,6 +270,97 @@ jq '.targets += [{"name":"deconz-test","module":"deconz","layer":"nix","critical
 run
 ck "deconz-test (deconz in the test environment) is no separate 'not compared' row" "0" "$(jq '[.platform[] | select(.target == "deconz-test")] | length' "${T}/p.json")"
 mv "${T}/cs5.bak" "${T}/cve-status.json"
+
+# ── ADR-045: VEX statements live / carried / gone, carried items, the score ──
+V="${T}/vexroot"; mkdir -p "${V}/src/obs/logging" "${V}/src/foundation/templates" "${V}/src/foundation/pvehost" "${V}/src/home/deconz" "${V}/src/test-repository/x"
+vexf() { local f="$1"; shift; printf '{"bomFormat":"CycloneDX","specVersion":"1.5","vulnerabilities":[%s]}\n' "$(IFS=,; echo "$*")" > "${f}"; }
+st() { printf '{"id":"%s","analysis":{"state":"%s","detail":"%s"%s},"affects":[%s]%s}' "$1" "$2" "$3" "${4:+,\"justification\":\"$4\"}" "$5" "${6:-}"; }
+refs() { local o=""; for r in "$@"; do o+="${o:+,}{\"ref\":\"${r}\"}"; done; echo "${o}"; }
+vexf "${V}/src/obs/logging/logging-vex.json" \
+  "$(st CVE-2 not_affected 'grafana 14: the plugin is off' code_not_reachable "$(refs pkg:nix/grafana@14.0.1 pkg:nix/grafana@13.9.0)")" \
+  "$(st CVE-OLD not_affected 'the release still ships it' code_not_present "$(refs pkg:nix/grafana@13.0.9)")" \
+  "$(st CVE-1 not_affected 'openssl 3.5.0: no TLS server here' code_not_reachable "$(refs pkg:nix/openssl@3.5.0)")" \
+  "$(st CVE-GONE not_affected 'libfoo is gone' code_not_present "$(refs pkg:nix/libfoo@1.0)")" \
+  "$(st CVE-NOREF false_positive 'nothing has it' '' '')"
+vexf "${V}/src/foundation/templates/templates-vex.json" \
+  "$(st CVE-TG not_affected 'old glibc' requires_environment "$(refs pkg:nix/glibc@2.40)")" \
+  "$(st CVE-TD not_affected 'a node package' requires_environment "$(refs pkg:deb/debian/libc6@2.41)")"
+vexf "${V}/src/foundation/pvehost/pvehost-vex.json" "$(st CVE-P not_affected 'no ceph' code_not_reachable "$(refs pkg:deb/debian/librados2@19)")"
+vexf "${V}/src/home/deconz/deconz-vex.json" "$(st CVE-DZ not_affected 'x' code_not_reachable "$(refs pkg:nix/zz@1)")"
+vexf "${V}/src/test-repository/x/x-vex.json" "$(st CVE-T not_affected 'fixture' code_not_reachable "$(refs pkg:nix/a@1)")"
+cat > "${T}/scorer" <<'PYEOF'
+#!/usr/bin/env python3
+import json, sys
+d = json.load(open(sys.argv[sys.argv.index("--details") + 1]))
+json.dump({"release": {"score": 20, "level": "high", "setBy": {"module": "logging"}},
+           "modules": {m: {"score": 20 if m == "logging" else 0, "level": "high" if m == "logging" else "ok"}
+                       for m in d["modules"]},
+           "model": {"weights": {}}}, sys.stdout)
+PYEOF
+chmod +x "${T}/scorer"
+runv() {
+    OUT="$(python3 "${PP}" --inventory "${T}/site.cdx.json" --status "${T}/cve-status.json" \
+        --base-label v2.1 --base-closures "${T}/base" --base-images "${T}/base-images.json" --base-nix-scanner "${NIXSCAN:-${T}/nix} --components {file}" \
+        --now-closures "${T}/now" --now-images "${T}/now-images.json" --now-nix-scanner "${NIXSCAN:-${T}/nix} --components {file}" \
+        --image-scanner "${T}/img --refs {file}" --from aaaaaaaaaaaa --to bbbbbbbbbbbb --out "${T}/p.json" --ignore "${T}/ignore.json" \
+        --details "${T}/d.json" --vex-root "${V}" --scorer "${SCORER:-${T}/scorer} --details {file} --json" "$@" 2>&1)"; RC=$?
+}
+vcls() { jq -r --arg i "$1" '[.vexStatements[] | select(.id == $i) | .class] | join(",")' "${T}/p.json"; }
+VEXED="CVE-2@14.0.1:logging" runv
+ck "ADR-045 preview runs with --vex-root and --scorer" "0" "${RC}"
+ck "a statement matching the candidate is LIVE" "live" "$(vcls CVE-2)"
+ck "…and its ref no channel ships is listed for pruning" "pkg:nix/grafana@13.9.0" "$(jq -r '.vexStatements[] | select(.id=="CVE-2") | .deadRefs | join(",")' "${T}/p.json")"
+ck "a statement only the release (the new stable) still matches is LIVE: production needs it" "live" "$(vcls CVE-OLD)"
+ck "a statement whose CVE is on another version of the package now is CARRIED" "carried" "$(vcls CVE-1)"
+ck "a statement nothing ships is GONE" "gone" "$(vcls CVE-GONE)"
+ck "a statement with no refs whose CVE nothing has is GONE" "gone" "$(vcls CVE-NOREF)"
+ck "a baseline statement on a NixOS package nothing ships is GONE" "gone" "$(vcls CVE-TG)"
+ck "a baseline statement on a Debian package (a node's) is never judged" "unjudged" "$(vcls CVE-TD)"
+ck "the platform's statements are not judged (not in the preview)" "unjudged" "$(vcls CVE-P)"
+ck "an approximate module's statements are not judged" "unjudged" "$(vcls CVE-DZ)"
+ck "test trees are not read" "" "$(vcls CVE-T)"
+ck "the row counts them: logging LIVE 2, CARRIED 1, GONE 2, one dead ref" "2 1 2 1" \
+   "$(jq -r '.modules[] | select(.module=="logging") | "\(.vexLive) \(.vexCarried) \(.vexGone) \(.vexDeadRefs)"' "${T}/p.json")"
+ck "a carried CVE is CARRIED, not OPEN, in the row" "0 1" "$(jq -r '.modules[] | select(.module=="logging") | "\(.open) \(.carried)"' "${T}/p.json")"
+ck "…with the old analysis attached in the details" "carried 3.5.0 not_affected code_not_reachable openssl 3.5.0: no TLS server here" \
+   "$(jq -r '.modules.logging.cves.same[] | select(.id=="CVE-1") | "\(.status) \(.carried.from | join(",")) \(.carried.state) \(.carried.justification) \(.carried.detail)"' "${T}/d.json")"
+SHOW="$(python3 "${PP}" --show logging --details "${T}/d.json" 2>&1)"
+ck "--show prints a carried item with the analysis it had" "yes" \
+   "$([[ "${SHOW}" == *"CVE-1"*"CARRIED"*"analysed for 3.5.0: not_affected (code_not_reachable)"*"no TLS server here"* ]] && echo yes || echo no)"
+ck "the table has the score and the VEX columns" "yes" \
+   "$([[ "$(grep -m1 MODULE <<<"${OUT}")" == *"CARRIED"*"SCORE"*"LEVEL"*"│"*"VEX"*"LIVE"*"CARRIED"*"GONE"* ]] && echo yes || echo no)"
+ck "…each module's score from the scorer, never computed in Python" "20 high" "$(jq -r '.modules[] | select(.module=="logging") | "\(.score) \(.level)"' "${T}/p.json")"
+ck "…and the release's score" "20 high logging" "$(jq -r '"\(.release.score) \(.release.level) \(.release.setBy.module)"' "${T}/p.json")"
+ck "…said on the MODULES line" "yes" "$([[ "${OUT}" == *"MODULES"*"release score 20 high, set by logging"* ]] && echo yes || echo no)"
+ck "the GONE statements are named in the text" "yes" "$([[ "${OUT}" == *"GONE    CVE-GONE"*"logging-vex.json"* ]] && echo yes || echo no)"
+SCORER=false runv
+ck "a failed scorer is said, and the preview still runs" "0 yes" "${RC} $([[ "${OUT}" == *"no score: health-manager score failed"* ]] && echo yes || echo no)"
+NIXSCAN="${T}/bad" runv
+ck "after a failed match nothing is GONE: every statement unjudged" "0" "$(jq '[.vexStatements[] | select(.class != "unjudged")] | length' "${T}/p.json")"
+# The gate policy: a new item analysed at risk low/medium passes without an ack;
+# high or critical, open, and carried ones need one.
+TRIAGED="CVE-2:logging:medium" runv
+ck "a new item analysed at risk medium passes without an ack" "false true" \
+   "$(jq -r '[(.gate | index("cve logging CVE-2") != null), (.passedAnalysed | index("cve logging CVE-2") != null)] | join(" ")' "${T}/p.json")"
+TRIAGED="CVE-2:logging:high" runv
+ck "…one analysed at risk high is still gated" "true" "$(jq '.gate | index("cve logging CVE-2") != null' "${T}/p.json")"
+ck "each gate item has a fingerprint: severity and packages at their versions" "High grafana@14.0.1" \
+   "$(jq -r '.gateItems["cve logging CVE-2"]' "${T}/p.json")"
+ck "…and a major its versions" "13.0.9->14.0.1" "$(jq -r '.gateItems["major grafana 13->14"]' "${T}/p.json")"
+# Stale acks: acknowledged, no longer in the gate.
+echo '{"ack":{"gate":["cve logging CVE-2","cve logging CVE-GONE-NOW"]}}' > "${T}/state.json"
+TRIAGED="CVE-2:logging:high" runv --acked "${T}/state.json"
+ck "an ack no longer in the gate is listed as stale" '["cve logging CVE-GONE-NOW"]' "$(jq -c '.staleAcks' "${T}/p.json")"
+ck "…and said" "yes" "$([[ "${OUT}" == *"stale acks"*"CVE-GONE-NOW"* ]] && echo yes || echo no)"
+ck "an acked item keeps its state for the score" "ack risk" "$(jq -r '.modules.logging.cves.new[] | select(.id=="CVE-2") | "\(.status) \(.state)"' "${T}/d.json")"
+# The real scorer, when this machine has it (the mothership).
+if command -v health-manager >/dev/null 2>&1; then
+    SCORER="health-manager score" runv
+    ck "with health-manager: logging's carried critical counts as open — 20, high" "20 high" "$(jq -r '.modules[] | select(.module=="logging") | "\(.score) \(.level)"' "${T}/p.json")"
+    ck "…the release is its highest module (a tie: the first by name, deconz)" "20 high deconz" "$(jq -r '"\(.release.score) \(.release.level) \(.release.setBy.module)"' "${T}/p.json")"
+else
+    echo "  (health-manager not on PATH: the real scorer is covered by its unit tests and test-train-status)"
+fi
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"
 [[ "${FAIL}" -eq 0 ]]

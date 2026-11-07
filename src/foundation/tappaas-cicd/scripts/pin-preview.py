@@ -21,14 +21,27 @@ their row has only "now", from the last security scan.
 
 What needs an operator's acknowledgement (`tappaas-train ack`): a MAJOR version
 change against the release, a critical/high CVE that is new against it, and a
-match that failed. `gate` lists them, `digest` names the set.
+match that failed. `gate` lists them, `digest` names the set, `gateItems` holds
+each item's fingerprint (its packages at their versions) so an ack given against
+one pin can be checked against the next. A new CVE already analysed at risk low
+or medium passes without one (ADR-045 D5): `passedAnalysed`. An ack no longer in
+the gate is listed in `staleAcks`.
+
+ADR-045: each CVE is open, risk, carried (analysed for another version of the
+package: counted as open, the old analysis attached) or decided. With --vex-root,
+every <module>-vex.json statement is classified against what the channels ship
+after a boundary — the candidate ("now": the new main and staging) and the release
+(the new stable): live, carried, gone (the boundary removes these) or unjudged
+(the platform, an approximate module, a failed match): `vexStatements`. With
+--scorer (health-manager score --details {file} --json), each module gets its
+release score and level, and the release its own — the one score in lib/ts.
 
 Usage:
   pin-preview.py --inventory site.cdx.json --status cve-status.json
                  --base-label v2.1 --base-closures DIR --base-images FILE --base-nix-scanner CMD
                  --now-closures DIR --now-images FILE --now-nix-scanner CMD
                  --image-scanner CMD --from REV --to REV --out preview.json [--ignore FILE]
-                 [--details FILE]
+                 [--details FILE] [--acked release-train.json] [--vex-root DIR] [--scorer CMD]
   A scanner CMD carries {file}: the JSON list it is handed.
   --details writes, per module, each side's critical/high CVEs (id, package,
   version, severity, nixos|image), its image references and the package versions
@@ -170,6 +183,98 @@ def ids(findings):
     return {f["id"] for f in findings if f.get("severity") in CH}
 
 
+def split_purl(p):
+    """pkg:nix/glibc@2.42-100?x -> ("pkg:nix/glibc", "2.42-100"); no version -> ""."""
+    c = (p or "").split("?")[0].split("#")[0]
+    at = c.rfind("@")
+    return (c[:at], c[at + 1:]) if at > c.find("/") else (c, "")
+
+
+def finding_purl(f, src):
+    """A finding's purl; a NixOS package's is pkg:nix/<name>@<version> when the scanner
+    gave none (the purl health-manager's list scan builds)."""
+    if f.get("purl"):
+        return f["purl"]
+    return f"pkg:nix/{f.get('pkg')}@{f.get('installed', '')}" if src == "nixos" else f"pkg:generic/{f.get('pkg')}@{f.get('installed', '')}"
+
+
+SKIP_DIRS = {"node_modules", ".git", "fixtures", "docs", "dist", "dist-test"}
+
+
+def load_vex(root):
+    """Every <module>-vex.json under root (not in test trees): one entry per statement,
+    with the file it is in (relative to root), its module ("" = templates, every
+    module), its refs and its analysis. ADR-045 D2 classifies these."""
+    out, bad = [], []
+    if not root or not os.path.isdir(root):
+        return out, bad
+    for dp, dns, fns in os.walk(root):
+        dns[:] = sorted(d for d in dns if d not in SKIP_DIRS and not d.startswith("test"))
+        for fn in sorted(fns):
+            if not fn.endswith("-vex.json"):
+                continue
+            p = os.path.join(dp, fn)
+            mod = fn[:-len("-vex.json")]
+            try:
+                doc = json.load(open(p))
+            except (OSError, ValueError):
+                bad.append(os.path.relpath(p, root))
+                continue
+            for v in doc.get("vulnerabilities") or []:
+                an = v.get("analysis") or {}
+                if not v.get("id") or not an.get("state"):
+                    continue
+                rating = next((r.get("severity") for r in v.get("ratings") or []
+                               if (r.get("source") or {}).get("name") == "TAPPaaS" and r.get("severity")), "")
+                out.append({"file": os.path.relpath(p, root), "module": "" if mod == "templates" else mod, "id": v["id"],
+                            "state": an["state"], "detail": an.get("detail", ""), "justification": an.get("justification", ""),
+                            "risk": (rating or "").lower(),
+                            "refs": [a["ref"] for a in v.get("affects") or [] if a.get("ref")]})
+    return out, bad
+
+
+def classify_statement(s, now_hits, base_hits):
+    """live | carried | gone, and the refs no channel ships (ADR-045 D2), for one statement
+    against the (purl base, version) pairs its CVE is found at — in the candidate (the new
+    main and staging) and in the release (the new stable)."""
+    if not s["refs"]:
+        return ("live" if now_hits or base_hits else "gone"), []
+    refs = [split_purl(r) for r in s["refs"]]
+    def exact(hits, rb, rv):
+        return any(b == rb and (rv == "" or v == rv) for b, v in hits)
+    def same(hits):
+        return any(b == rb for rb, _ in refs for b, _ in hits)
+    if any(exact(now_hits, rb, rv) for rb, rv in refs):
+        cls = "live"
+    elif same(now_hits):
+        cls = "carried"
+    elif any(exact(base_hits, rb, rv) for rb, rv in refs):
+        cls = "live"
+    elif same(base_hits):
+        cls = "carried"
+    else:
+        return "gone", []
+    # A live statement's versioned refs that nothing ships any more: pruned with it.
+    dead = [r for r, (rb, rv) in zip(s["refs"], refs)
+            if cls == "live" and rv and not exact(now_hits, rb, rv) and not exact(base_hits, rb, rv)]
+    return cls, dead
+
+
+def fingerprint(cve):
+    """What a gate item IS, so an ack given against one pin can be checked against
+    another (ADR-045 D2): its severity and every package at its version."""
+    return cve["severity"] + " " + ",".join(sorted(f"{p['pkg']}@{p['version']}" for p in cve["packages"]))
+
+
+def run_scorer(cmd, details_path):
+    """health-manager score --details: the one score (lib/ts), per module and the release."""
+    r = subprocess.run([x.replace("{file}", details_path) for x in shlex.split(cmd)], capture_output=True, text=True)
+    try:
+        return json.loads(r.stdout or "null"), ("" if r.returncode == 0 else f"exit {r.returncode}: {(r.stderr or '').strip()[-200:]}")
+    except ValueError:
+        return None, f"output not parseable (exit {r.returncode}): {(r.stderr or '').strip()[-200:]}"
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     for a in ("--inventory", "--status", "--base-label", "--base-closures", "--base-images", "--base-nix-scanner",
@@ -180,6 +285,8 @@ def main():
     ap.add_argument("--acked", help="release-train.json: the gate items `ack` accepted (.ack.gate) — the ACK column")
     ap.add_argument("--check-scan", action="store_true",
                     help="'now' is the pin in the tree: compare each module with the nightly scan's count")
+    ap.add_argument("--vex-root", help="the checkout whose <module>-vex.json files are classified live/carried/gone (ADR-045 D2)")
+    ap.add_argument("--scorer", help="a command scoring the details ({file}): health-manager score --details {file} --json (ADR-045 D3)")
     a = ap.parse_args()
     try:
         inv = inventory(json.load(open(a.inventory)))
@@ -293,7 +400,7 @@ def main():
             if f["severity"] == "Critical":
                 e["severity"] = "Critical"
             pk = {"pkg": f.get("pkg"), "version": f.get("installed", ""), "fixed": f.get("fixed", ""), "from": f["from"],
-                  "purl": f.get("purl", "")}
+                  "purl": f.get("purl") or (finding_purl(f, "nixos") if f["from"] == "nixos" else "")}
             if f.get("unversioned"):
                 pk["unversioned"] = True
             if pk not in e["packages"]:
@@ -338,40 +445,76 @@ def main():
         ls = [x for x in levels if x in RANK]
         return min(ls, key=RANK.index) if ls else ("unrated" if levels else "")
 
-    def status_of(cve, key):
-        """ack: accepted for this release · risk: analysed (a VEX `exploitable` statement
-        of this module or the baseline), still counted · open: nobody has looked."""
-        if f"cve {key} {cve['id']}" in acked:
-            return "ack", ""
-        tri = [t for t in cve.get("triage", []) if t.get("module") in ("", key)]
-        return ("risk", worst([t.get("risk") or "unrated" for t in tri])) if tri else ("open", "")
+    vex_stmts, vex_bad = load_vex(a.vex_root) if a.vex_root else ([], [])
 
-    COLS = ("now", "open", "risk", "ack", "base", "fixed", "decided", "new", "same", "vex")
+    def carried_for(cve, key):
+        """The analysis this CVE had for another version of the same package (ADR-045
+        D1 `carried`): a statement of this module (or the baseline's) on the CVE, whose
+        versioned refs name the package but not the version now shipped. None if none."""
+        mods = ("",) if key == "baseline" else ("", key)
+        for s in vex_stmts:
+            if s["module"] not in mods or s["id"] != cve["id"] or not s["refs"]:
+                continue
+            refs = [split_purl(r) for r in s["refs"]]
+            old = set()
+            for p in cve["packages"]:
+                b, v = split_purl(p.get("purl") or "")
+                vs = [rv for rb, rv in refs if rb == b]
+                if b and vs and all(rv and rv != v for rv in vs):
+                    old |= set(vs)
+            if old:
+                c = {k: s[k] for k in ("file", "state", "detail", "justification", "risk", "refs")}
+                c["from"] = sorted(old, key=vkey)
+                return c
+        return None
+
+    def status_of(cve, key):
+        """(state, risk, acked): risk — analysed (a VEX `exploitable` statement of this
+        module or the baseline), still counted · carried — analysed for another version
+        of the package, counted as open until someone confirms it · open — nobody has
+        looked. An ack accepts it for this release; it does not change its state."""
+        tri = [t for t in cve.get("triage", []) if t.get("module") in ("", key)]
+        if tri:
+            state, r = "risk", worst([t.get("risk") or "unrated" for t in tri])
+        else:
+            c = carried_for(cve, key)
+            if c:
+                cve["carried"] = c
+            state, r = ("carried" if c else "open"), ""
+        return state, r, f"cve {key} {cve['id']}" in acked
+
+    COLS = ("now", "open", "risk", "carried", "ack", "base", "fixed", "decided", "new", "same", "vex",
+            "vexLive", "vexCarried", "vexGone")
     details = {}
     rows, introduced, total = [], {}, dict.fromkeys(COLS, 0)
-    gate_modules = {}
+    gate_modules, gate_items, passed = {}, {}, []
 
     def make_row(key, bf, nf, vx, in_base, in_now, note, approx_):
         bk, nk = set(bf), set(nf)
         gone = bk - nk - set(vx)  # gone because a VEX statement decided it: not fixed, VEX
         decided = (bk - nk) & set(vx)  # in the release, still shipped, now settled by triage
         st = {k: status_of(nf[k], key) for k in nk}
-        for k, (s_, r_) in st.items():
-            nf[k]["status"] = s_
+        for k, (s_, r_, a_) in st.items():
+            nf[k]["status"] = "ack" if a_ else s_
+            nf[k]["state"] = s_
             if r_:
                 nf[k]["risk"] = r_
+        count = lambda s: sum(1 for s_, _, a_ in st.values() if s_ == s and not a_)
         row = {"module": key, "now": len(nk) if in_now else None, "base": len(bk) if in_base else None,
-               "open": sum(1 for s_, _ in st.values() if s_ == "open"),
-               "risk": sum(1 for s_, _ in st.values() if s_ == "risk"),
-               "riskLevel": worst([r_ for s_, r_ in st.values() if s_ == "risk"]),
-               "ack": sum(1 for s_, _ in st.values() if s_ == "ack"),
+               "open": count("open"), "risk": count("risk"), "carried": count("carried"),
+               "riskLevel": worst([r_ for s_, r_, _ in st.values() if s_ == "risk"]),
+               "ack": sum(1 for _, _, a_ in st.values() if a_),
                "fixed": len(gone), "decided": len(decided), "new": len(nk - bk), "same": len(nk & bk), "vex": len(vx),
                "approximate": approx_, "note": note}
         for k in nk - bk:
+            # An item already analysed at risk low or medium passes without an ack
+            # (ADR-045 D5): analysing it was the decision. It still counts in the score.
+            if st[k][0] == "risk" and st[k][1] in ("low", "medium"):
+                passed.append(f"cve {key} {k}")
+                continue
             introduced.setdefault(f"{key} {k}", []).append(key)
             gate_modules[f"cve {key} {k}"] = [key]
-        for f in COLS:
-            total[f] += row[f] or 0
+            gate_items[f"cve {key} {k}"] = fingerprint(nf[k])
         return row, gone
 
     # The baseline, decided by templates-vex.json only (a module's own statement on a
@@ -499,13 +642,93 @@ def main():
                 scan_check.append({"module": r["module"], "preview": len(nowids), "scan": len(s),
                                    "previewOnly": sorted(nowids - s), "scanOnly": sorted(s - nowids)})
 
+    # ADR-045 D2: every VEX statement against what the channels ship after the
+    # boundary — the candidate (the new main and staging: "now") and the release it
+    # promotes (the new stable: the release side). live: it matches something;
+    # carried: its CVE is found on the same package at a version it does not name;
+    # gone: nothing any channel ships has it. Judged only where the preview sees all
+    # of a module: never after a failed match, never for an approximate module or
+    # a platform one, never for a baseline statement that could decide a node's.
+    plat = {k for k in groups if k != "Debian LXC"} | {u for g in groups.values() for u in g["users"]}
+    plat |= {p_["module"] for p_ in platform if p_.get("module")}
+
+    def hits(side, m):
+        out_ = {}
+        for p_, vs in pkgs[side].get(m, {}).items():
+            for v in vs:
+                for f in nix[side].get((p_, v), []) + nix_sup[side].get((p_, v), []):
+                    out_.setdefault(f["id"], set()).add(split_purl(finding_purl(f, "nixos")))
+        ref = (base_img if side == "base" else now_img).get(m)
+        if ref:
+            r = img.get(ref) or {}
+            for f in r.get("findings", []) + r.get("suppressed", []):
+                out_.setdefault(f["id"], set()).add(split_purl(finding_purl(f, "image")))
+        return out_
+    H = {sd: {m: hits(sd, m) for m in modules} for sd in ("base", "now")}
+    allh = {sd: {} for sd in H}
+    for sd in H:
+        for d in H[sd].values():
+            for i, ps in d.items():
+                allh[sd].setdefault(i, set()).update(ps)
+    vex_out = []
+    for st in vex_stmts:
+        m, why, cls, dead = st["module"], "", "unjudged", []
+        if errors:
+            why = "a CVE match failed"
+        elif m == "" and not (st["refs"] and all(r.startswith("pkg:nix/") for r in st["refs"])):
+            why = "a baseline statement that may decide a platform package"
+        elif m != "" and m not in modules:
+            why = "not in the release preview"
+        elif m != "" and m in plat:
+            why = "the platform's part of it is not in the release preview"
+        elif m != "" and approx.get(m):
+            why = "approximate: runs nowhere here"
+        else:
+            src = allh if m == "" else {sd: H[sd][m] for sd in H}
+            cls, dead = classify_statement(st, src["now"].get(st["id"], set()), src["base"].get(st["id"], set()))
+        vex_out.append({"file": st["file"], "module": m, "id": st["id"], "state": st["state"], "refs": st["refs"],
+                        "class": cls, "deadRefs": dead, **({"why": why} if why else {})})
+    by_row = {r["module"]: r for r in rows}
+    for r in rows:
+        r.update(vexLive=0, vexCarried=0, vexGone=0, vexUnjudged=0, vexDeadRefs=0)
+    for v in vex_out:
+        r = by_row.get("baseline" if v["module"] == "" else v["module"])
+        if r is not None:
+            r["vex" + v["class"].capitalize()] += 1
+            r["vexDeadRefs"] += len(v["deadRefs"])
+    for r in rows:
+        for f in COLS:
+            total[f] += r.get(f) or 0
+
     for (p, x, y), mj in majors.items():
         gate_modules[f"major {mj['pkg']} {x}->{y}"] = sorted(set(mj["modules"]))
+        gate_items[f"major {mj['pkg']} {x}->{y}"] = f"{mj['from']}->{mj['to']}"
     if errors:
         gate_modules["cve-match-failed"] = ["(a failed match)"]
+        gate_items["cve-match-failed"] = "; ".join(errors)
     gate = sorted([f"major {m['pkg']} {x}->{y}" for (p, x, y), m in majors.items()]
                   + [f"cve {k}" for k in introduced]
                   + (["cve-match-failed"] if errors else []))
+
+    # ADR-045 D3: each module's release score, from the one implementation (lib/ts,
+    # through health-manager score) — never computed here.
+    ddoc = {"baseLabel": a.base_label, "from": a.__dict__["from"], "to": a.to, "modules": details}
+    dpath = a.details
+    if not dpath:
+        fd, dpath = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
+    json.dump(ddoc, open(dpath, "w"), indent=1)
+    release, score_model, score_err = None, None, ""
+    if a.scorer:
+        sc, score_err = run_scorer(a.scorer, dpath)
+        if sc and not score_err:
+            for r in rows:
+                ms = (sc.get("modules") or {}).get(r["module"])
+                if ms:
+                    r["score"], r["level"] = ms.get("score"), ms.get("level")
+            release, score_model = sc.get("release"), sc.get("model")
+    if not a.details:
+        os.unlink(dpath)
     out = {
         "baseLabel": a.base_label, "from": a.__dict__["from"], "to": a.to,
         "modules": rows, "platform": platform, "total": total,
@@ -514,13 +737,13 @@ def main():
         "notGated": [{"pkg": p, "why": w} for p, w in sorted(quiet.items())],
         "introduced": [{"key": k, "modules": sorted(set(v))} for k, v in sorted(introduced.items())],
         "errors": errors, "gate": gate, "digest": hashlib.sha256("\n".join(gate).encode()).hexdigest()[:16],
-        "gateModules": gate_modules, "acked": sorted(acked & set(gate)),
+        "gateModules": gate_modules, "gateItems": gate_items, "acked": sorted(acked & set(gate)),
+        "staleAcks": sorted(acked - set(gate)), "passedAnalysed": sorted(passed),
         "scanCheck": scan_check,
+        "vexStatements": vex_out, "vexUnreadable": vex_bad,
+        "release": release, "scoreModel": score_model, "scoreError": score_err,
     }
     json.dump(out, open(a.out, "w"), indent=1)
-    if a.details:
-        json.dump({"baseLabel": a.base_label, "from": a.__dict__["from"], "to": a.to, "modules": details},
-                  open(a.details, "w"), indent=1)
     render(out)
     return 0
 
@@ -571,14 +794,23 @@ def show(module, path):
         print(f"\n  {title} ({len(rows)}):")
         for f in rows:
             st = f.get("status", "")
-            tag = {"open": "OPEN", "ack": "ACK", "baseline": "baseline"}.get(st, f"RISK {f.get('risk', '')}".strip() if st == "risk" else "")
+            tag = {"open": "OPEN", "ack": "ACK", "baseline": "baseline", "carried": "CARRIED"}.get(
+                st, f"RISK {f.get('risk', '')}".strip() if st == "risk" else "")
             if all(p.get("unversioned") for p in f["packages"]):
                 tag = (tag + " ?range").strip()
             for i, p in enumerate(f["packages"]):
                 head = f"{f['severity']:<8} {f['id']:<20} {tag:<10}" if i == 0 else " " * 40
                 fix = f"  fixed in {p['fixed']}" if p.get("fixed") else ""
                 print(f"    {head} {p['pkg'] or '':<28} {p['version'] or '':<24} {p['from']}{fix}")
+            c = f.get("carried")
+            if c:
+                print(f"{'':44}analysed for {', '.join(c['from'])}: {c['state']}"
+                      + (f" ({c['justification']})" if c.get("justification") else "")
+                      + (f", risk {c['risk']}" if c.get("risk") else "") + f" — {c['file']}")
+                for dl in (c.get("detail") or "").splitlines()[:6]:
+                    print(f"{'':46}{dl}")
     print("\n  OPEN nobody has analysed · RISK analysed, still counted, with its risk here · ACK accepted for this release"
+          " · CARRIED analysed for another version (the analysis below it): confirm with cve-triage.sh carry"
           " · baseline: in the package versions every NixOS module ships (its own row)"
           " · ?range: the CVE record names no affected versions — check it first, likely a false positive")
     return 0
@@ -595,16 +827,22 @@ def render(o):
     print(f"Release CVE preview — critical/high CVEs, today's CVE database on both sides")
     print(f"  if released now: this tree, pin {o['to'][:12]}, its image pins   ·   {b}: its tree, pin {o['from'][:12]}, its image pins")
     print()
-    head = f"  {'MODULE':<{W}} {'OPEN':>5} {'RISK':>5} {'ACK':>4} {'NOW':>5} │ {b.upper():>6} {'FIXED':>6} {'DECIDED':>8} {'NEW':>5} │ {'VEX':>4}  NOTE"
+    head = (f"  {'MODULE':<{W}} {'OPEN':>5} {'RISK':>5} {'CARRIED':>7} {'ACK':>4} {'NOW':>5} {'SCORE':>6} {'LEVEL':<8} │ "
+            f"{b.upper():>6} {'FIXED':>6} {'DECIDED':>8} {'NEW':>5} │ {'VEX':>4} {'LIVE':>5} {'CARRIED':>7} {'GONE':>5}  NOTE")
+    def sc(r):
+        return (f"{r['score']:>6g} {r.get('level') or '':<8}" if r.get("score") is not None else f"{'':>6} {'':<8}")
     def line(label, r, note=""):
-        return (f"  {label:<{W}} {r.get('open', 0):>5} {r.get('risk', 0):>5} {r.get('ack', 0):>4} {n(r['now']):>5} │ "
-                f"{n(r['base']):>6} {r['fixed']:>6} {r.get('decided', 0):>8} {r['new']:>5} │ {r.get('vex', 0):>4}  {note}")
+        return (f"  {label:<{W}} {r.get('open', 0):>5} {r.get('risk', 0):>5} {r.get('carried', 0):>7} {r.get('ack', 0):>4} {n(r['now']):>5} {sc(r)} │ "
+                f"{n(r['base']):>6} {r['fixed']:>6} {r.get('decided', 0):>8} {r['new']:>5} │ {r.get('vex', 0):>4} "
+                f"{r.get('vexLive', 0):>5} {r.get('vexCarried', 0):>7} {r.get('vexGone', 0):>5}  {note}")
     def note_of(r):
         parts = []
         if r.get("risk"):
             parts.append(f"risk {r.get('riskLevel') or '?'}")
         if r.get("approximate"):
             parts.append("≈ approximate (runs nowhere here)")
+        if r.get("vexDeadRefs"):
+            parts.append(f"{r['vexDeadRefs']} VEX ref(s) no channel ships")
         if r.get("note") and not r.get("baseline"):
             parts.append(r["note"])
         return "; ".join(parts)
@@ -612,23 +850,30 @@ def render(o):
     rows = o["modules"]
     for r in [r for r in rows if r.get("baseline")]:
         print(line("NixOS baseline", r, "; ".join(x for x in (note_of(r), "the package versions every NixOS module ships") if x)))
-    for r in sorted([r for r in rows if not r.get("baseline")], key=lambda r: (-(r["now"] or 0), r["module"])):
+    for r in sorted([r for r in rows if not r.get("baseline")], key=lambda r: (-(r.get("score") or 0), -(r["now"] or 0), r["module"])):
         print(line(r["module"], r, note_of(r)))
-    t = o["total"]
-    print(line("MODULES", t))
+    t = dict(o["total"])
+    rel = o.get("release") or {}
+    t["score"], t["level"] = rel.get("score"), rel.get("level")
+    print(line("MODULES", t, f"release score {rel['score']:g} {rel['level']}, set by {rel['setBy']['module']}"
+               if rel and rel.get("setBy", {}).get("module") else ("release score 0 ok" if rel else "")))
     if o["platform"]:
         print(f"  — the platform: patched by its own channel, not by a release — now, from the last scan —")
         for p in sorted(o["platform"], key=lambda p: (-(p["now"] if p["now"] is not None else -1), p["target"])):
             note = "; ".join(x for x in ((f"risk {p['riskLevel']}" if p.get("risk") else ""), p.get("note", "")) if x)
             if p["now"] is None:
-                print(f"  {p['target']:<{W}} {'':>5} {'':>5} {'':>4} {'—':>5} │ {'':>6} {'':>6} {'':>8} {'':>5} │ {'':>4}  {note}")
+                print(f"  {p['target']:<{W}} {'':>5} {'':>5} {'':>7} {'':>4} {'—':>5} {'':>6} {'':<8} │ {'':>6} {'':>6} {'':>8} {'':>5} │ {'':>4}  {note}")
             else:
-                print(f"  {p['target']:<{W}} {p.get('open', p['now']):>5} {p.get('risk', 0):>5} {'—':>4} {p['now']:>5} │ "
+                print(f"  {p['target']:<{W}} {p.get('open', p['now']):>5} {p.get('risk', 0):>5} {'':>7} {'—':>4} {p['now']:>5} {'':>6} {'':<8} │ "
                       f"{'':>6} {'':>6} {'':>8} {'':>5} │ {p.get('vex', 0):>4}  {note}")
-        print(f"  {'TOTAL':<{W}} {'':>5} {'':>5} {'':>4} {t['now'] + o['platformTotal']:>5} │")
+        print(f"  {'TOTAL':<{W}} {'':>5} {'':>5} {'':>7} {'':>4} {t['now'] + o['platformTotal']:>5} {'':>6} {'':<8} │")
     print("  OPEN nobody has analysed · RISK analysed, still counted (<module>-vex.json `exploitable`, with its risk here)")
+    print("  CARRIED analysed for another version of the package — counted as open until confirmed (cve-triage.sh carry)")
     print("  ACK accepted for this release (`ack`; the platform is not released: —) · VEX decided not affected — not in NOW")
     print(f"  NOW = {b.upper()} − FIXED − DECIDED + NEW · FIXED gone from what ships · DECIDED still shipped, now settled by VEX")
+    print("  SCORE the release score (ADR-045: only the highest category, each further item at half) · LEVEL ok/low/medium/high/critical")
+    print(f"  VEX statements: LIVE match what a channel ships · CARRIED their CVE is on another version now · GONE nothing ships it —")
+    print(f"    the boundary removes GONE statements (and refs no channel ships) on the pin branch")
     print()
     if o["majors"]:
         print(f"  MAJOR version changes since {b} ({len(o['majors'])}):")
@@ -646,6 +891,21 @@ def render(o):
               + ("" if not bad else " — differ: " + "; ".join(
                   f"{c['module']} {c['preview']} vs {c['scan']} (preview only {','.join(c['previewOnly'][:3]) or '—'}, scan only {','.join(c['scanOnly'][:3]) or '—'})"
                   for c in bad)))
+    if o.get("scoreError"):
+        print(f"  no score: health-manager score failed — {o['scoreError']}")
+    for f in o.get("vexUnreadable") or []:
+        print(f"  VEX file not parseable, classified nothing: {f}")
+    vs = o.get("vexStatements") or []
+    if vs:
+        k = {c: sum(1 for v in vs if v["class"] == c) for c in ("live", "carried", "gone", "unjudged")}
+        print(f"  VEX statements: {k['live']} live, {k['carried']} carried, {k['gone']} gone"
+              + (f", {k['unjudged']} not judged (platform, approximate, or a failed match)" if k["unjudged"] else ""))
+        for v in [v for v in vs if v["class"] == "gone"][:12]:
+            print(f"    GONE    {v['id']:<22} {v['file']}  ({', '.join(v['refs']) or 'every package'})")
+    if o.get("passedAnalysed"):
+        print(f"  new, already analysed at risk low/medium — pass without an ack: {len(o['passedAnalysed'])} ({tl(o['passedAnalysed'])})")
+    if o.get("staleAcks"):
+        print(f"  stale acks — acknowledged, no longer in the gate ({len(o['staleAcks'])}): {tl(o['staleAcks'])}; the next `ack` drops them")
     acked = set(o.get("acked", []))
     left = [g for g in o["gate"] if g not in acked]
     if not o["gate"]:
