@@ -582,6 +582,28 @@
           "ref": "pkg:nix/curl@8.22.0"
         }
       ]
+    },
+    {
+      "id": "CVE-2026-111497",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Brotli decoder buffer overflow (c/dec/decode.c, 1.0.3 to 1.2.0). The jellyfin process maps libbrotlidec 1.2.0 through .NET's System.IO.Compression.Native. Jellyfin does not decompress request bodies: a br-labelled garbage body to /Users/AuthenticateByName is parsed as raw JSON (probed on hrossen 2026-11-07), so the decoder is reached only by HttpClient's automatic decompression of outbound responses (metadata providers, plugin repository, all over HTTPS). Risk here: low: needs a malicious or impersonated metadata/plugin server; the parse runs in the hardened jellyfin process. Action: brotli 1.2.1 (already in the base channel) in jellyfin's closure."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/brotli@1.2.0"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
     }
   ]
 }
