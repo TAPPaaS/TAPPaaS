@@ -34,8 +34,8 @@ health-manager show <ci> [--json]
 health-manager list [--type <t>] [--status <s>] [--class <c>] [--root-causes] [--json]
 health-manager roots [--json]
 health-manager history <ci> [--since <time>] [--json]
-health-manager scan security [--if-new-sweep] [--notify]
-health-manager report security [--all] [--json]
+health-manager scan security [--if-new-sweep | --rescan] [--notify]
+health-manager report security [--cves] [--scan [--all]] [--json]
 health-manager scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update] [--no-vex]
 health-manager scan images --refs <file> [--no-db-update] [--no-vex]
 health-manager score [--details <file>] [--items <file>] [--json]
@@ -306,10 +306,75 @@ target is then SCAN FAILED and the scan's note says to grow the mothership's
 disk. With the databases present a scan of hrossen (21 targets)
 takes about 30 s.
 
-`report security` prints the last scan: ACT first, then failures, then the rest,
-and the first ten findings to act on per target (`--all` for every one). The
-`cve-status` gate in `validate` only ever WARNs — a CVE published upstream must
-not be able to fail a sweep or a test run.
+**The daily rescan.** `tappaas-security-rescan.timer` runs `scan security
+--rescan` once a day (04:30, up to 30 minutes later): it refreshes the grype and
+trivy databases and matches the last inventory (`site.cdx.json`) again — grype
+for a Nix closure and a bundled library, `trivy sbom --offline-scan` for an OS
+or image inventory. No guest is probed, no new SBOM is taken, no sweep runs, and
+nothing but the scanners' database mirrors is contacted. The firewall's findings
+come from its own audit, so they, and a target whose inventory failed, stay as
+the last full scan found them. `cve-status.json` then says `inventory`: when the
+inventory it matched was taken. The scan and the rescan share a lock
+(`config/.security-scan.lock`).
+
+`report security --scan` prints the last scan: ACT first, then failures, then the
+rest, and the first ten findings to act on per target (`--all` for every one).
+The `cve-status` gate in `validate` only ever WARNs — a CVE published upstream
+must not be able to fail a sweep or a test run.
+
+### The CVE risk score on the running site
+
+Each scanned CVE has one of four states: **decided** (a VEX statement says not
+affected, false positive or resolved, or a nixpkgs patch fixes it), **risk**
+(analysed, exploitable here, with a TAPPaaS rating), **open** (critical or high,
+not analysed) and **carried** (analysed for another version of the same
+package, which no longer runs here: the earlier analysis is shown, and counts as
+open until someone confirms it). The scan lists them per target (`items`), with
+the VEX analysis text, never whether a fix exists.
+
+The score is `score.ts` in `lib/ts` (the same function `health-manager score`
+and the release preview use): only a module's highest category counts, each
+further item at half the one before; risk items 25/10/3/1 by their rating, open
+and carried 20/8. Levels: ok 0, low below 7, medium below 16, high below 30,
+critical from 30. What is scored (`site-score.ts`):
+
+| Unit | Its CVEs | Its zone |
+|---|---|---|
+| a module | its VM or container and the images running in it, one CVE counted once | its `zone0` (none: `no zone`, ×1) |
+| a node | its Debian packages | the management zone |
+| the firewall | its `pkg audit` | the management zone (it sits in every zone) |
+
+A zone is its highest unit times its tier's multiplier (tier 0 ×2, 1 ×1, 2 ×0.75,
+3 ×0.5, 4 ×0.25, 5–6 ×0.1, none ×1); an environment the highest of its zones; the
+site the highest of its environments and of the zones in no environment. Every
+scan and rescan adds the day's scores to `config/sbom/score-history.json` (30
+days), which draws the console's 7-day sparklines.
+
+`report security` prints it: the site, each environment, its zones with their
+multiplier, and the units in them, each with level, score, what sets it,
+open/risk/carried/decided counts and the last 7 days; `--cves` lists each unit's
+counted CVEs under it. `--json` prints `cve-status.json` with the scores under
+`score` (the console's `/api/security` reads that).
+
+**Health.** The `security` condition of a module, a node, a zone and an
+environment takes its status from the level: ok and low → ok, medium and high →
+warning, critical → critical. The reason names the level (`cve-medium`,
+`cve-high`, `cve-critical`), so a level change is a transition and an event even
+while the status stays warning. A zone and an environment carry their own score,
+with the multiplier, not the worst of their members. A target whose scan failed
+is a `cve-scan-failed` warning; a scan older than 8 days is `cve-scan-stale` on
+the site.
+
+**Alerts** (`tappaas-cicd-alerts.json`). Each scan writes one line to the journal,
+identifier `tappaas-security`: `cve-new` lists the critical/high CVEs new since
+the last scan that nobody has analysed, and `cve-new-critical` mails it at once,
+one mail per scan; `cve-changes` (a new risk or carried item, a level going down)
+reaches the daily digest, whose mail gets a security section: the site's level
+and the analysed and carried items. A module's level rising to high or critical
+is emit's transition with `levelUp`, mailed by `cve-level-up`. A module whose
+security condition is acknowledged or in maintenance is left out of all of it:
+quieting is `health-manager ack <module> --type security` and maintenance
+windows.
 
 ### What `cpu-impact` measures
 
