@@ -4,6 +4,7 @@
 
 import { ModuleHealth } from "./health";
 import { BackupRow, Gate, GateFinding, HealthDoc, ModuleRow } from "./model";
+import { Level as CveLevel, moduleLevel } from "./security";
 
 export type Level = "fail" | "warn" | "pass" | "unknown";
 
@@ -18,7 +19,8 @@ export interface ModuleSummary extends ModuleRow {
     run: "running" | "stopped" | "none";
     health: Level;
     backup: "covered" | "disabled" | "not-in-job" | "not-opted" | "unknown";
-    cve: "act" | "ok" | "unknown";
+    cve: CveLevel | "unknown"; // the module's CVE risk level, from the last scan
+    cveScore: number | null;
     maturity: string | null;
   };
   findings: ModuleFinding[];
@@ -46,7 +48,7 @@ export function backupBadge(row: BackupRow | undefined): ModuleSummary["badges"]
   return "covered";
 }
 
-export function moduleSummaries(modules: ModuleRow[], health: HealthDoc | null, backup: BackupRow[] | null): ModuleSummary[] {
+export function moduleSummaries(modules: ModuleRow[], health: HealthDoc | null, backup: BackupRow[] | null, security: Record<string, unknown> | null = null): ModuleSummary[] {
   const byModule = new Map((backup ?? []).map((b) => [b.module, b]));
   return modules.map((m) => {
     const findings = findingsFor(health, m.name);
@@ -54,16 +56,15 @@ export function moduleSummaries(modules: ModuleRow[], health: HealthDoc | null, 
     let worst = -1;
     for (const f of gates) worst = Math.max(worst, rank[f.status] ?? -1);
     const health_: Level = health === null ? "unknown" : worst === 2 ? "fail" : worst === 1 ? "warn" : "pass";
-    const cve = health === null || !health.gates.some((g) => g.name === "cve-status" && g.status !== "skip")
-      ? "unknown"
-      : findings.some((f) => f.gate === "cve-status" && f.status !== "pass") ? "act" : "ok";
+    const cve = moduleLevel(security, m.name);
     return {
       ...m,
       badges: {
         run: m.running === "running" ? "running" : m.running === "-" || m.vmid === null ? "none" : "stopped",
         health: health_,
         backup: backup === null ? "unknown" : backupBadge(byModule.get(m.name)),
-        cve,
+        cve: cve?.level ?? "unknown",
+        cveScore: cve?.score ?? null,
         maturity: m.status,
       },
       findings,

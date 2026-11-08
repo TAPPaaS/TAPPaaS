@@ -1,6 +1,5 @@
 // App.tsx — the shell of the mockups: the left navigation, a header with the
-// site, the reader and a refresh, and the page. Security is a later phase; it
-// is shown in the navigation and marked as later. The Assistant drawer (P3)
+// site, the reader and a refresh, and the page. The Assistant drawer (P3)
 // opens on every page when the backend says the assistant is available.
 
 import { useEffect, useState } from "react";
@@ -19,6 +18,7 @@ import { Site } from "./pages/Site";
 import { ModulePage } from "./pages/ModulePage";
 import { Modules } from "./pages/Modules";
 import { Operations } from "./pages/Operations";
+import { Security } from "./pages/Security";
 import { Overview } from "./pages/Overview";
 import { MOVED_PATHS, viewOfPath } from "./physical/views";
 import { AssistantStatus, Me, SiteRead } from "./types";
@@ -38,7 +38,7 @@ const NAV: { to: string; label: string; live: boolean }[] = [
   { to: "/identity", label: "Identity", live: true },
   { to: "/assets", label: "Assets", live: true },
   { to: "/backup", label: "Backup", live: true },
-  { to: "/security", label: "Security", live: false },
+  { to: "/security", label: "Security", live: true },
   { to: "/activity", label: "Activity", live: true },
 ];
 
@@ -97,6 +97,7 @@ export function App() {
   else if (path === "/assets") page = <Assets />;
   else if (path.startsWith("/assets/")) page = <AssetPage name={decodeURIComponent(path.slice("/assets/".length))} />;
   else if (path === "/backup") page = <Backup />;
+  else if (path === "/security") page = <Security />;
   else {
     const n = NAV.find((x) => active(path, x.to));
     page = (

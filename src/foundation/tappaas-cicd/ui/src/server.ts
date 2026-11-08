@@ -10,6 +10,7 @@ import { join } from "path";
 import { AccessConfig, Decision, Me, SETUP_COOKIE, addrMatches, decide, mayWrite, normalizeAddr, peerAllowed, routeHost, setupState } from "./access";
 import { linesNaming } from "./activity";
 import { attention, findingsFor, moduleSummaries, withConditions } from "./badges";
+import { securityView } from "./security";
 import { Entry, envelope } from "./cache";
 import { SCHEMAS } from "./fields";
 import { HealthGraph, TREE_FACETS, healthEgo, healthPath, healthSummary, healthTree, moduleHealth, treeChildren, treePath, treeSearch } from "./health";
@@ -365,8 +366,11 @@ export class ConsoleServer {
       case "faceplates":
         // The faceplate catalog's keys and kinds (asset-manager faceplates list): a form's suggestions.
         return sendJson(res, 200, envelope(await r.faceplates.get()));
-      case "security":
-        return sendJson(res, 200, envelope(await r.security.get()));
+      case "security": {
+        // The risk scores as the Security page shows them; never whether a fix exists.
+        const sec = await r.security.get();
+        return sendJson(res, 200, env(sec, sec.value ? securityView(sec.value) : null));
+      }
       case "activity": {
         // The sweep's journal and the console's own jobs, side by side.
         const act = await r.activity.get();
@@ -543,8 +547,8 @@ export class ConsoleServer {
 
   private async modules(name: string | undefined, sub: string | undefined, url: URL, res: ServerResponse): Promise<void> {
     const r = this.reads;
-    const [m, h, bk, g] = await Promise.all([r.modules.get(), r.health.get(), r.backup.get(), this.graph()]);
-    const list = withConditions(moduleSummaries(m.value?.modules ?? [], h.value, bk.value), moduleHealth(g.value));
+    const [m, h, bk, g, sec] = await Promise.all([r.modules.get(), r.health.get(), r.backup.get(), this.graph(), r.security.get()]);
+    const list = withConditions(moduleSummaries(m.value?.modules ?? [], h.value, bk.value, sec.value), moduleHealth(g.value));
     if (!name) return sendJson(res, 200, { ...envelope(m), data: m.value ? list : null, orphans: m.value?.orphans ?? [], healthAt: envelope(h).at });
     // Only a module the list names reaches a manager's argv.
     if (!MODULE_NAME.test(name)) return sendJson(res, 400, { error: "not a module name" });

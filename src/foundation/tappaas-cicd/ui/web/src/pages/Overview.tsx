@@ -4,6 +4,7 @@
 // (the health line and the gates an operator checks in the morning), and the
 // Alerts, the ten open events that matter most. The shaping is overview.ts.
 
+import { SecurityView, securityTile } from "../security";
 import { ReactNode, useMemo } from "react";
 import { useHealthSummary, useRead } from "../api";
 import { ZoneLike } from "../envcards";
@@ -76,7 +77,8 @@ export function Overview({ setupIncomplete = false }: { setupIncomplete?: boolea
   const c = count(h);
   const gate = (n: string) => h?.gates.find((g) => g.name === n);
   const backup = gate("backup-status");
-  const cve = gate("cve-status");
+  const sec = useRead<SecurityView>("security", 300_000);
+  const secT = securityTile(sec.env?.data);
   const sd = site.env?.data;
   const s = sd?.site;
   const sweep = sd?.lastSweep;
@@ -263,10 +265,10 @@ export function Overview({ setupIncomplete = false }: { setupIncomplete?: boolea
           level="pass"
         />
         <Card
-          title="Security"
-          value={cve ? cve.detail.split(" — ")[0] : "…"}
-          sub={cve ? `${cve.findings.length} to act on · SIEM: not installed` : undefined}
-          level={cve?.status ?? "unknown"}
+          title={<Link to="/security">Security</Link>}
+          value={secT?.value ?? (sec.env ? "no scan yet" : "…")}
+          sub={secT ? `${secT.sub} · SIEM: not installed` : undefined}
+          level={secT?.level ?? "unknown"}
         />
       </div>
 

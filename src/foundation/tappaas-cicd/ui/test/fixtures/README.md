@@ -32,7 +32,7 @@ The repository is public, so `capture.sh` runs `redact.py` over a capture in a t
 | Public IPv4 | Every global address. Each /24, sorted, becomes `192.0.2`, `198.51.100`, `203.0.113`, then `198.18.<n>`; the last octet stays, so a network and its gateway still match. |
 | Public IPv6 | Every global address. Each /48, sorted, becomes `2001:db8:<n>`; the subnet and the host stay, so a zone's /64 is still its zone's. A prefix written without its tail goes the same way. |
 | Kept | Public resolvers (`KEEP` in `redact.py`: Cloudflare, Google, Quad9), which are the world's. A 4-part version number that looks like a global address is rewritten too: it costs nothing and nothing slips through by looking like a version. |
-| The vulnerability scan | Never leaves the site: `capture.sh` does not run it. `reads/health-manager-report-security-json.out` is a copy of `security-scan.synthetic.json`, the report's shape with made-up CVE ids (`CVE-0000-*`) and packages. |
+| The vulnerability scan | Never leaves the site: `capture.sh` does not run it. `reads/health-manager-report-security-json.out` is a copy of `security-scan.synthetic.json`, the report's shape with made-up CVE ids (`CVE-0000-*`) and packages, and its risk scores (`score`) computed by health-manager's own `site-score.ts` over this set's zones and module placement, with seven days of made-up history. |
 
 The numbering follows the sort, so a new /24 or user can shift a later one on a refresh. Within a refresh the mapping is one everywhere; joins between files hold.
 

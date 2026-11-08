@@ -8,6 +8,7 @@
 // into an environment it is chosen for (module-manager add --environment, a
 // job with no dry run).
 
+import { riskTone } from "../security";
 import { Fragment, ReactNode, useMemo, useState } from "react";
 import { useRead } from "../api";
 import { plainText } from "../forms";
@@ -75,7 +76,9 @@ export function ModuleBadges({ m }: { m: ModuleSummary }) {
       {b.backup !== "unknown" && m.vmid !== null ? (
         <Badge level={b.backup === "covered" ? "pass" : b.backup === "not-opted" ? "skip" : "warn"}>backup {b.backup}</Badge>
       ) : null}
-      {b.cve === "act" ? <Badge level="warn">CVE act</Badge> : null}
+      {b.cve !== "unknown" && b.cve !== "ok" ? (
+        <Badge level={riskTone(b.cve)} title="The module's CVE risk level and score: the Security page lists what counts">CVE {b.cve}{b.cveScore !== null ? `, ${b.cveScore}` : ""}</Badge>
+      ) : null}
       {b.maturity ? <Badge level="info">{b.maturity}</Badge> : null}
     </span>
   );
@@ -123,7 +126,7 @@ export function Modules() {
     const all = mods.env?.data ?? [];
     return all
       .filter((m) => !q || `${m.name} ${m.stack ?? ""} ${m.environment ?? ""} ${m.zone0 ?? ""} ${m.actualNode ?? m.node ?? ""}`.toLowerCase().includes(q.toLowerCase()))
-      .filter((m) => only === "all" || m.badges.health === "fail" || m.badges.health === "warn" || m.badges.cve === "act")
+      .filter((m) => only === "all" || m.badges.health === "fail" || m.badges.health === "warn" || riskTone(m.badges.cve) === "warn" || riskTone(m.badges.cve) === "fail")
       .sort((a, b) => (rank[a.badges.health] ?? 3) - (rank[b.badges.health] ?? 3) || a.name.localeCompare(b.name));
   }, [mods.env, q, only]);
   // One row per install, a module's together: the catalogues say which module an instance is.

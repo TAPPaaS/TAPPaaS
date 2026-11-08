@@ -116,13 +116,14 @@ async function main(): Promise<void> {
   // ── modules and their badges ─────────────────────────────────────────
   const m = await reads.modules.get();
   const b = await reads.backup.get();
-  const list = moduleSummaries(m.value!.modules, h.value, b.value);
+  const scan = await reads.security.get();
+  const list = moduleSummaries(m.value!.modules, h.value, b.value, scan.value);
   const immich = list.find((x) => x.name === "immich")!;
   check(list.length === 25, `every deployed module is listed (${list.length})`);
   check(immich.badges.health === "fail" && immich.badges.run === "running" && immich.badges.backup === "covered", "immich: running, health FAIL, backed up");
   check(immich.findings.some((f) => f.gate === "guest-memory"), "…with the finding that fails it");
   const nomad = list.find((x) => x.name === "nomad")!;
-  check(nomad.badges.cve === "act", "nomad's CVE badge says act");
+  check(nomad.badges.cve === "unknown" && nomad.badges.cveScore === null, "no security scan yet: the CVE badge is unknown");
   check(list.find((x) => x.name === "cluster")!.badges.run === "none", "a module with no guest has no run state");
 
   // ── module detail, drift on demand ──────────────────────────────────

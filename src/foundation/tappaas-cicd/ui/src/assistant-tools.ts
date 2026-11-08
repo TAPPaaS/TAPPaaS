@@ -80,7 +80,7 @@ const str = (description: string): Record<string, unknown> => ({ type: "string",
 export const TOOLS: Record<string, { line: string; description: string; parameters: Record<string, unknown> }> = {
   modules_list: {
     line: "modules_list(): every deployed module, its node, state and badges",
-    description: "Every deployed module: node, vmid, zone, environment, running state, badges (health, backup, cve) and how many health findings name it.",
+    description: "Every deployed module: node, vmid, zone, environment, running state, badges (health, backup, cve: the CVE risk level) and how many health findings name it.",
     parameters: obj({}),
   },
   module_show: {
@@ -361,9 +361,9 @@ async function call(ctx: ToolContext, name: string, args: Record<string, unknown
 
   switch (name) {
     case "modules_list": {
-      const [m, h, b] = await Promise.all([r.modules.get(), r.health.get(), r.backup.get()]);
+      const [m, h, b, sec] = await Promise.all([r.modules.get(), r.health.get(), r.backup.get(), r.security.get()]);
       if (!m.value) return failed("modules", `the module list could not be read: ${m.error ?? "not yet"}`);
-      const list = moduleSummaries(m.value.modules, h.value, b.value).map((x) => ({
+      const list = moduleSummaries(m.value.modules, h.value, b.value, sec.value).map((x) => ({
         name: x.name, kind: x.kind, node: x.node, vmid: x.vmid, zone: x.zone0, environment: x.environment, stack: x.stack, running: x.running,
         health: x.badges.health, backup: x.badges.backup, cve: x.badges.cve, findings: x.findings.length,
       }));

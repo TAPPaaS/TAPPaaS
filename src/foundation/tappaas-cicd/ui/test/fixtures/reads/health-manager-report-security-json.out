@@ -11,124 +11,352 @@
  },
  "notes": [
   "Synthetic: made-up CVE ids and packages, the shape of the scan and nothing of it (README.md)",
-  "VEX: 2 statement(s) from 1 file(s)"
+  "VEX: 6 statement(s) from 3 file(s)"
  ],
  "targets": [
   {
-   "id": "image:demo/web",
-   "name": "image:demo/web",
-   "layer": "image",
-   "host": "demo.mgmt.internal",
-   "coverage": "ok",
-   "note": null,
-   "seen": 46,
-   "findings": 6,
-   "critical": 1,
-   "high": 2,
-   "fixable": 3,
-   "critHighFixable": 1,
-   "suppressed": 3,
-   "verdict": "act",
-   "act": [
-    "CVE-0000-0001 examplelib: upgrade to 1.2.4"
-   ],
-   "critHighKeys": [
-    "CVE-0000-0001 examplelib",
-    "CVE-0000-0002 sampled",
-    "CVE-0000-0003 fakessl"
-   ],
-   "new": [
-    "CVE-0000-0001 examplelib"
-   ],
-   "critHighRisk": [
-    "CVE-0000-0001",
-    "CVE-0000-0002",
-    "CVE-0000-0003"
-   ],
-   "riskLevel": "high",
-   "critHighVex": [],
-   "module": "demo"
-  },
-  {
-   "id": "demo",
-   "name": "demo",
+   "id": "immich",
+   "name": "immich",
    "layer": "nix",
-   "host": "demo.mgmt.internal",
+   "host": "immich.mgmt.internal",
    "coverage": "ok",
-   "note": null,
-   "seen": 44,
-   "findings": 4,
+   "note": "",
+   "seen": 400,
+   "findings": 2,
    "critical": 0,
-   "high": 1,
+   "high": 2,
    "fixable": null,
    "critHighFixable": null,
-   "suppressed": 3,
+   "suppressed": 1,
    "verdict": "triage",
    "act": [],
    "critHighKeys": [
-    "CVE-0000-0004 mockc"
+    "CVE-0000-0001 examplelib"
    ],
    "new": [],
-   "critHighRisk": [
-    "CVE-0000-0004"
-   ],
-   "riskLevel": "low",
-   "critHighVex": [],
-   "module": "demo"
+   "items": [
+    {
+     "id": "CVE-0000-0001",
+     "state": "open",
+     "severity": "High",
+     "pkg": "examplelib",
+     "version": "2.4.1"
+    },
+    {
+     "id": "CVE-0000-0002",
+     "state": "decided",
+     "severity": "High",
+     "pkg": "sampled",
+     "version": "1.0.3",
+     "analysis": "vulnerable_code_not_in_execute_path: the decoder is not built"
+    }
+   ]
   },
   {
-   "id": "image:tools/worker",
-   "name": "image:tools/worker",
+   "id": "image:immich/immich-server",
+   "name": "image:immich/immich-server",
    "layer": "image",
-   "host": "tools.mgmt.internal",
+   "host": "immich.mgmt.internal",
    "coverage": "ok",
-   "note": null,
-   "seen": 43,
+   "note": "",
+   "seen": 400,
+   "findings": 3,
+   "critical": 1,
+   "high": 2,
+   "fixable": null,
+   "critHighFixable": null,
+   "suppressed": 0,
+   "verdict": "triage",
+   "act": [],
+   "critHighKeys": [
+    "CVE-0000-0003 fakebrotli",
+    "CVE-0000-0004 mockxml",
+    "CVE-0000-0005 faketiff"
+   ],
+   "new": [],
+   "items": [
+    {
+     "id": "CVE-0000-0003",
+     "state": "open",
+     "severity": "Critical",
+     "pkg": "fakebrotli",
+     "version": "1.1.0"
+    },
+    {
+     "id": "CVE-0000-0004",
+     "state": "risk",
+     "severity": "High",
+     "pkg": "mockxml",
+     "version": "2.13.4",
+     "rating": "medium",
+     "analysis": "Reachable only through an admin upload; uploads are limited to signed-in users."
+    },
+    {
+     "id": "CVE-0000-0005",
+     "state": "carried",
+     "severity": "High",
+     "pkg": "faketiff",
+     "version": "4.7.2",
+     "carriedFrom": "4.7.1",
+     "analysis": "code_not_reachable: the TIFF parser is never called by the thumbnailer"
+    }
+   ],
+   "module": "immich",
+   "newOpen": [
+    "CVE-0000-0003"
+   ]
+  },
+  {
+   "id": "forgejo",
+   "name": "forgejo",
+   "layer": "nix",
+   "host": "forgejo.mgmt.internal",
+   "coverage": "ok",
+   "note": "",
+   "seen": 400,
+   "findings": 1,
+   "critical": 0,
+   "high": 0,
+   "fixable": null,
+   "critHighFixable": null,
+   "suppressed": 0,
+   "verdict": "triage",
+   "act": [],
+   "critHighKeys": [
+    "CVE-0000-0006 mockgit"
+   ],
+   "new": [],
+   "items": [
+    {
+     "id": "CVE-0000-0006",
+     "state": "risk",
+     "severity": "Medium",
+     "pkg": "mockgit",
+     "version": "2.47.1",
+     "rating": "low",
+     "analysis": "Needs a crafted repository pushed by a member."
+    }
+   ]
+  },
+  {
+   "id": "nextcloud",
+   "name": "nextcloud",
+   "layer": "debian",
+   "host": "nextcloud.mgmt.internal",
+   "coverage": "ok",
+   "note": "",
+   "seen": 400,
    "findings": 3,
    "critical": 0,
-   "high": 1,
-   "fixable": 1,
-   "critHighFixable": 0,
-   "suppressed": 3,
-   "verdict": "act",
-   "act": [
-    "CVE-0000-0005 stubparse: upgrade to 0.9.1"
-   ],
+   "high": 3,
+   "fixable": null,
+   "critHighFixable": null,
+   "suppressed": 0,
+   "verdict": "triage",
+   "act": [],
    "critHighKeys": [
-    "CVE-0000-0005 stubparse"
+    "CVE-0000-0007 samplephp",
+    "CVE-0000-0008 samplecurl",
+    "CVE-0000-0009 mockimagick"
    ],
-   "new": [
-    "CVE-0000-0005 stubparse"
-   ],
-   "critHighRisk": [
-    "CVE-0000-0005"
-   ],
-   "riskLevel": "high",
-   "critHighVex": [],
-   "module": "tools"
+   "new": [],
+   "items": [
+    {
+     "id": "CVE-0000-0007",
+     "state": "open",
+     "severity": "High",
+     "pkg": "samplephp",
+     "version": "8.3.4"
+    },
+    {
+     "id": "CVE-0000-0008",
+     "state": "open",
+     "severity": "High",
+     "pkg": "samplecurl",
+     "version": "8.11.0"
+    },
+    {
+     "id": "CVE-0000-0009",
+     "state": "risk",
+     "severity": "High",
+     "pkg": "mockimagick",
+     "version": "7.1.1",
+     "rating": "high",
+     "analysis": "Previews of uploaded files run the coder; exposed to every user."
+    }
+   ]
   },
   {
-   "id": "tools",
-   "name": "tools",
+   "id": "vaultwarden",
+   "name": "vaultwarden",
    "layer": "nix",
-   "host": "tools.mgmt.internal",
+   "host": "vaultwarden.mgmt.internal",
    "coverage": "ok",
-   "note": null,
-   "seen": 40,
+   "note": "",
+   "seen": 400,
+   "findings": 2,
+   "critical": 2,
+   "high": 0,
+   "fixable": null,
+   "critHighFixable": null,
+   "suppressed": 0,
+   "verdict": "triage",
+   "act": [],
+   "critHighKeys": [
+    "CVE-0000-0010 fakessl",
+    "CVE-0000-0011 mockldap"
+   ],
+   "new": [],
+   "items": [
+    {
+     "id": "CVE-0000-0010",
+     "state": "open",
+     "severity": "Critical",
+     "pkg": "fakessl",
+     "version": "3.4.0"
+    },
+    {
+     "id": "CVE-0000-0011",
+     "state": "open",
+     "severity": "Critical",
+     "pkg": "mockldap",
+     "version": "2.6.8"
+    }
+   ]
+  },
+  {
+   "id": "coturn",
+   "name": "coturn",
+   "layer": "debian",
+   "host": "coturn.mgmt.internal",
+   "coverage": "ok",
+   "note": "",
+   "seen": 400,
    "findings": 0,
    "critical": 0,
    "high": 0,
    "fixable": null,
    "critHighFixable": null,
-   "suppressed": 3,
-   "verdict": "clean",
+   "suppressed": 0,
+   "verdict": "triage",
    "act": [],
    "critHighKeys": [],
    "new": [],
-   "critHighRisk": [],
-   "riskLevel": "none",
-   "critHighVex": [],
-   "module": "tools"
+   "items": []
+  },
+  {
+   "id": "identity",
+   "name": "identity",
+   "layer": "nix",
+   "host": "identity.mgmt.internal",
+   "coverage": "ok",
+   "note": "",
+   "seen": 400,
+   "findings": 1,
+   "critical": 0,
+   "high": 0,
+   "fixable": null,
+   "critHighFixable": null,
+   "suppressed": 0,
+   "verdict": "triage",
+   "act": [],
+   "critHighKeys": [
+    "CVE-0000-0012 examplepy"
+   ],
+   "new": [],
+   "items": [
+    {
+     "id": "CVE-0000-0012",
+     "state": "risk",
+     "severity": "Low",
+     "pkg": "examplepy",
+     "version": "3.12.7",
+     "rating": "low",
+     "analysis": "Local only."
+    }
+   ]
+  },
+  {
+   "id": "network",
+   "name": "network",
+   "layer": "opnsense",
+   "host": "network.mgmt.internal",
+   "coverage": "ok",
+   "note": "",
+   "seen": 400,
+   "findings": 1,
+   "critical": 0,
+   "high": 1,
+   "fixable": null,
+   "critHighFixable": null,
+   "suppressed": 0,
+   "verdict": "triage",
+   "act": [],
+   "critHighKeys": [
+    "CVE-0000-0013 sampleunbound"
+   ],
+   "new": [],
+   "items": [
+    {
+     "id": "CVE-0000-0013",
+     "state": "open",
+     "severity": "High",
+     "pkg": "sampleunbound",
+     "version": "1.22.0"
+    }
+   ],
+   "module": "network"
+  },
+  {
+   "id": "node:tappaas1",
+   "name": "node:tappaas1",
+   "layer": "debian",
+   "host": "tappaas1.mgmt.internal",
+   "coverage": "ok",
+   "note": "",
+   "seen": 400,
+   "findings": 1,
+   "critical": 1,
+   "high": 0,
+   "fixable": null,
+   "critHighFixable": null,
+   "suppressed": 1,
+   "verdict": "triage",
+   "act": [],
+   "critHighKeys": [],
+   "new": [],
+   "items": [
+    {
+     "id": "CVE-0000-0014",
+     "state": "decided",
+     "severity": "Critical",
+     "pkg": "mocklibc",
+     "version": "2.41-12",
+     "analysis": "resolved: fixed by the distribution's backport"
+    }
+   ],
+   "module": "pvehost"
+  },
+  {
+   "id": "node:tappaas2",
+   "name": "node:tappaas2",
+   "layer": "debian",
+   "host": "tappaas2.mgmt.internal",
+   "coverage": "ok",
+   "note": "",
+   "seen": 400,
+   "findings": 0,
+   "critical": 0,
+   "high": 0,
+   "fixable": null,
+   "critHighFixable": null,
+   "suppressed": 0,
+   "verdict": "triage",
+   "act": [],
+   "critHighKeys": [],
+   "new": [],
+   "items": [],
+   "module": "pvehost"
   },
   {
    "id": "tappaas-cicd",
@@ -136,26 +364,1022 @@
    "layer": "nix",
    "host": "tappaas-cicd.mgmt.internal",
    "coverage": "ok",
-   "note": null,
-   "seen": 42,
-   "findings": 2,
+   "note": "",
+   "seen": 400,
+   "findings": 1,
    "critical": 0,
    "high": 1,
    "fixable": null,
    "critHighFixable": null,
-   "suppressed": 3,
+   "suppressed": 0,
    "verdict": "triage",
    "act": [],
    "critHighKeys": [
-    "CVE-0000-0006 examplelib"
+    "CVE-0000-0015 examplego"
    ],
    "new": [],
-   "critHighRisk": [
-    "CVE-0000-0006"
-   ],
-   "riskLevel": "low",
-   "critHighVex": [],
-   "module": "tappaas-cicd"
+   "items": [
+    {
+     "id": "CVE-0000-0015",
+     "state": "open",
+     "severity": "High",
+     "pkg": "examplego",
+     "version": "1.23.4"
+    }
+   ]
+  },
+  {
+   "id": "lazysite",
+   "name": "lazysite",
+   "layer": "nix",
+   "host": "lazysite.mgmt.internal",
+   "coverage": "fail",
+   "note": "unreachable: ssh: connect to host lazysite port 22: No route to host",
+   "seen": 400,
+   "findings": 0,
+   "critical": 0,
+   "high": 0,
+   "fixable": null,
+   "critHighFixable": null,
+   "suppressed": 0,
+   "verdict": "failed",
+   "act": [],
+   "critHighKeys": [],
+   "new": [],
+   "items": []
   }
- ]
+ ],
+ "score": {
+  "generated": "2026-11-01T01:44:28.779Z",
+  "site": {
+   "score": 20,
+   "raw": 20,
+   "level": "high",
+   "setBy": {
+    "module": "immich",
+    "zone": "rossen"
+   }
+  },
+  "environments": {
+   "rossen": {
+    "score": 20,
+    "raw": 20,
+    "level": "high",
+    "setBy": {
+     "module": "immich",
+     "zone": "rossen"
+    },
+    "zones": [
+     "home",
+     "iotCams",
+     "iotCloud",
+     "iotLocal",
+     "rossen"
+    ]
+   },
+   "mgmt": {
+    "score": 16,
+    "raw": 16,
+    "level": "high",
+    "setBy": {
+     "module": "network",
+     "zone": "mgmt"
+    },
+    "zones": [
+     "mgmt"
+    ]
+   },
+   "test": {
+    "score": 0,
+    "raw": 0,
+    "level": "ok",
+    "setBy": {
+     "module": null,
+     "zone": null
+    },
+    "zones": [
+     "test"
+    ]
+   }
+  },
+  "zones": {
+   "admin": {
+    "score": 0,
+    "raw": 0,
+    "level": "ok",
+    "setBy": {
+     "module": null
+    },
+    "multiplier": 1,
+    "environments": [],
+    "tier": null
+   },
+   "buddy": {
+    "score": 0,
+    "raw": 0,
+    "level": "ok",
+    "setBy": {
+     "module": null
+    },
+    "multiplier": 1,
+    "environments": [],
+    "tier": null
+   },
+   "dmz": {
+    "score": 7.5,
+    "raw": 7.5,
+    "level": "medium",
+    "setBy": {
+     "module": "vaultwarden"
+    },
+    "multiplier": 0.25,
+    "environments": [],
+    "tier": 4
+   },
+   "edge": {
+    "score": 0,
+    "raw": 0,
+    "level": "ok",
+    "setBy": {
+     "module": null
+    },
+    "multiplier": 1,
+    "environments": [],
+    "tier": null
+   },
+   "guest": {
+    "score": 0,
+    "raw": 0,
+    "level": "ok",
+    "setBy": {
+     "module": null
+    },
+    "multiplier": 0.5,
+    "environments": [],
+    "tier": 3
+   },
+   "home": {
+    "score": 0,
+    "raw": 0,
+    "level": "ok",
+    "setBy": {
+     "module": null
+    },
+    "multiplier": 0.75,
+    "environments": [
+     "rossen"
+    ],
+    "tier": 2
+   },
+   "iotCams": {
+    "score": 0,
+    "raw": 0,
+    "level": "ok",
+    "setBy": {
+     "module": null
+    },
+    "multiplier": 0.1,
+    "environments": [
+     "rossen"
+    ],
+    "tier": 6
+   },
+   "iotCloud": {
+    "score": 0,
+    "raw": 0,
+    "level": "ok",
+    "setBy": {
+     "module": null
+    },
+    "multiplier": 0.5,
+    "environments": [
+     "rossen"
+    ],
+    "tier": 3
+   },
+   "iotLocal": {
+    "score": 0,
+    "raw": 0,
+    "level": "ok",
+    "setBy": {
+     "module": null
+    },
+    "multiplier": 0.1,
+    "environments": [
+     "rossen"
+    ],
+    "tier": 6
+   },
+   "iotUntrust": {
+    "score": 0,
+    "raw": 0,
+    "level": "ok",
+    "setBy": {
+     "module": null
+    },
+    "multiplier": 0.5,
+    "environments": [],
+    "tier": 3
+   },
+   "mgmt": {
+    "score": 16,
+    "raw": 16,
+    "level": "high",
+    "setBy": {
+     "module": "network"
+    },
+    "multiplier": 2,
+    "environments": [
+     "mgmt"
+    ],
+    "tier": 0
+   },
+   "netbird": {
+    "score": 0,
+    "raw": 0,
+    "level": "ok",
+    "setBy": {
+     "module": null
+    },
+    "multiplier": 1,
+    "environments": [],
+    "tier": null
+   },
+   "rossen": {
+    "score": 20,
+    "raw": 20,
+    "level": "high",
+    "setBy": {
+     "module": "immich"
+    },
+    "multiplier": 1,
+    "environments": [
+     "rossen"
+    ],
+    "tier": 1
+   },
+   "test": {
+    "score": 0,
+    "raw": 0,
+    "level": "ok",
+    "setBy": {
+     "module": null
+    },
+    "multiplier": 1,
+    "environments": [
+     "test"
+    ],
+    "tier": 1
+   },
+   "wan": {
+    "score": 0,
+    "raw": 0,
+    "level": "ok",
+    "setBy": {
+     "module": null
+    },
+    "multiplier": 1,
+    "environments": [],
+    "tier": null
+   },
+   "work": {
+    "score": 0,
+    "raw": 0,
+    "level": "ok",
+    "setBy": {
+     "module": null
+    },
+    "multiplier": 1,
+    "environments": [],
+    "tier": null
+   }
+  },
+  "outside": [
+   "admin",
+   "buddy",
+   "dmz",
+   "edge",
+   "guest",
+   "iotUntrust",
+   "netbird",
+   "wan",
+   "work"
+  ],
+  "units": {
+   "immich": {
+    "score": 20,
+    "raw": 20,
+    "level": "high",
+    "category": "critical",
+    "counted": 1,
+    "counts": {
+     "decided": 1,
+     "risk": 1,
+     "open": 2,
+     "carried": 1
+    },
+    "name": "immich",
+    "kind": "module",
+    "subject": {
+     "kind": "module",
+     "name": "immich"
+    },
+    "targets": [
+     "immich",
+     "image:immich/immich-server"
+    ],
+    "failed": [],
+    "items": [
+     {
+      "id": "CVE-0000-0001",
+      "state": "open",
+      "severity": "High",
+      "pkg": "examplelib",
+      "version": "2.4.1"
+     },
+     {
+      "id": "CVE-0000-0002",
+      "state": "decided",
+      "severity": "High",
+      "pkg": "sampled",
+      "version": "1.0.3",
+      "analysis": "vulnerable_code_not_in_execute_path: the decoder is not built"
+     },
+     {
+      "id": "CVE-0000-0003",
+      "state": "open",
+      "severity": "Critical",
+      "pkg": "fakebrotli",
+      "version": "1.1.0"
+     },
+     {
+      "id": "CVE-0000-0004",
+      "state": "risk",
+      "severity": "High",
+      "pkg": "mockxml",
+      "version": "2.13.4",
+      "rating": "medium",
+      "analysis": "Reachable only through an admin upload; uploads are limited to signed-in users."
+     },
+     {
+      "id": "CVE-0000-0005",
+      "state": "carried",
+      "severity": "High",
+      "pkg": "faketiff",
+      "version": "4.7.2",
+      "carriedFrom": "4.7.1",
+      "analysis": "code_not_reachable: the TIFF parser is never called by the thumbnailer"
+     }
+    ],
+    "zones": [
+     "rossen"
+    ]
+   },
+   "forgejo": {
+    "score": 1,
+    "raw": 1,
+    "level": "low",
+    "category": "low",
+    "counted": 1,
+    "counts": {
+     "decided": 0,
+     "risk": 1,
+     "open": 0,
+     "carried": 0
+    },
+    "name": "forgejo",
+    "kind": "module",
+    "subject": {
+     "kind": "module",
+     "name": "forgejo"
+    },
+    "targets": [
+     "forgejo"
+    ],
+    "failed": [],
+    "items": [
+     {
+      "id": "CVE-0000-0006",
+      "state": "risk",
+      "severity": "Medium",
+      "pkg": "mockgit",
+      "version": "2.47.1",
+      "rating": "low",
+      "analysis": "Needs a crafted repository pushed by a member."
+     }
+    ],
+    "zones": [
+     "rossen"
+    ]
+   },
+   "nextcloud": {
+    "score": 16,
+    "raw": 16,
+    "level": "high",
+    "category": "high",
+    "counted": 3,
+    "counts": {
+     "decided": 0,
+     "risk": 1,
+     "open": 2,
+     "carried": 0
+    },
+    "name": "nextcloud",
+    "kind": "module",
+    "subject": {
+     "kind": "module",
+     "name": "nextcloud"
+    },
+    "targets": [
+     "nextcloud"
+    ],
+    "failed": [],
+    "items": [
+     {
+      "id": "CVE-0000-0007",
+      "state": "open",
+      "severity": "High",
+      "pkg": "samplephp",
+      "version": "8.3.4"
+     },
+     {
+      "id": "CVE-0000-0008",
+      "state": "open",
+      "severity": "High",
+      "pkg": "samplecurl",
+      "version": "8.11.0"
+     },
+     {
+      "id": "CVE-0000-0009",
+      "state": "risk",
+      "severity": "High",
+      "pkg": "mockimagick",
+      "version": "7.1.1",
+      "rating": "high",
+      "analysis": "Previews of uploaded files run the coder; exposed to every user."
+     }
+    ],
+    "zones": [
+     "rossen"
+    ]
+   },
+   "vaultwarden": {
+    "score": 30,
+    "raw": 30,
+    "level": "critical",
+    "category": "critical",
+    "counted": 2,
+    "counts": {
+     "decided": 0,
+     "risk": 0,
+     "open": 2,
+     "carried": 0
+    },
+    "name": "vaultwarden",
+    "kind": "module",
+    "subject": {
+     "kind": "module",
+     "name": "vaultwarden"
+    },
+    "targets": [
+     "vaultwarden"
+    ],
+    "failed": [],
+    "items": [
+     {
+      "id": "CVE-0000-0010",
+      "state": "open",
+      "severity": "Critical",
+      "pkg": "fakessl",
+      "version": "3.4.0"
+     },
+     {
+      "id": "CVE-0000-0011",
+      "state": "open",
+      "severity": "Critical",
+      "pkg": "mockldap",
+      "version": "2.6.8"
+     }
+    ],
+    "zones": [
+     "dmz"
+    ]
+   },
+   "coturn": {
+    "score": 0,
+    "raw": 0,
+    "level": "ok",
+    "category": null,
+    "counted": 0,
+    "counts": {
+     "decided": 0,
+     "risk": 0,
+     "open": 0,
+     "carried": 0
+    },
+    "name": "coturn",
+    "kind": "module",
+    "subject": {
+     "kind": "module",
+     "name": "coturn"
+    },
+    "targets": [
+     "coturn"
+    ],
+    "failed": [],
+    "items": [],
+    "zones": [
+     "dmz"
+    ]
+   },
+   "identity": {
+    "score": 1,
+    "raw": 1,
+    "level": "low",
+    "category": "low",
+    "counted": 1,
+    "counts": {
+     "decided": 0,
+     "risk": 1,
+     "open": 0,
+     "carried": 0
+    },
+    "name": "identity",
+    "kind": "module",
+    "subject": {
+     "kind": "module",
+     "name": "identity"
+    },
+    "targets": [
+     "identity"
+    ],
+    "failed": [],
+    "items": [
+     {
+      "id": "CVE-0000-0012",
+      "state": "risk",
+      "severity": "Low",
+      "pkg": "examplepy",
+      "version": "3.12.7",
+      "rating": "low",
+      "analysis": "Local only."
+     }
+    ],
+    "zones": [
+     "mgmt"
+    ]
+   },
+   "network": {
+    "score": 8,
+    "raw": 8,
+    "level": "medium",
+    "category": "high",
+    "counted": 1,
+    "counts": {
+     "decided": 0,
+     "risk": 0,
+     "open": 1,
+     "carried": 0
+    },
+    "name": "network",
+    "kind": "firewall",
+    "subject": {
+     "kind": "module",
+     "name": "network"
+    },
+    "targets": [
+     "network"
+    ],
+    "failed": [],
+    "items": [
+     {
+      "id": "CVE-0000-0013",
+      "state": "open",
+      "severity": "High",
+      "pkg": "sampleunbound",
+      "version": "1.22.0"
+     }
+    ],
+    "zones": [
+     "mgmt"
+    ]
+   },
+   "node:tappaas1": {
+    "score": 0,
+    "raw": 0,
+    "level": "ok",
+    "category": null,
+    "counted": 0,
+    "counts": {
+     "decided": 1,
+     "risk": 0,
+     "open": 0,
+     "carried": 0
+    },
+    "name": "tappaas1",
+    "kind": "node",
+    "subject": {
+     "kind": "node",
+     "name": "tappaas1"
+    },
+    "targets": [
+     "node:tappaas1"
+    ],
+    "failed": [],
+    "items": [
+     {
+      "id": "CVE-0000-0014",
+      "state": "decided",
+      "severity": "Critical",
+      "pkg": "mocklibc",
+      "version": "2.41-12",
+      "analysis": "resolved: fixed by the distribution's backport"
+     }
+    ],
+    "zones": [
+     "mgmt"
+    ]
+   },
+   "node:tappaas2": {
+    "score": 0,
+    "raw": 0,
+    "level": "ok",
+    "category": null,
+    "counted": 0,
+    "counts": {
+     "decided": 0,
+     "risk": 0,
+     "open": 0,
+     "carried": 0
+    },
+    "name": "tappaas2",
+    "kind": "node",
+    "subject": {
+     "kind": "node",
+     "name": "tappaas2"
+    },
+    "targets": [
+     "node:tappaas2"
+    ],
+    "failed": [],
+    "items": [],
+    "zones": [
+     "mgmt"
+    ]
+   },
+   "tappaas-cicd": {
+    "score": 8,
+    "raw": 8,
+    "level": "medium",
+    "category": "high",
+    "counted": 1,
+    "counts": {
+     "decided": 0,
+     "risk": 0,
+     "open": 1,
+     "carried": 0
+    },
+    "name": "tappaas-cicd",
+    "kind": "module",
+    "subject": {
+     "kind": "module",
+     "name": "tappaas-cicd"
+    },
+    "targets": [
+     "tappaas-cicd"
+    ],
+    "failed": [],
+    "items": [
+     {
+      "id": "CVE-0000-0015",
+      "state": "open",
+      "severity": "High",
+      "pkg": "examplego",
+      "version": "1.23.4"
+     }
+    ],
+    "zones": [
+     "mgmt"
+    ]
+   },
+   "lazysite": {
+    "score": 0,
+    "raw": 0,
+    "level": "ok",
+    "category": null,
+    "counted": 0,
+    "counts": {
+     "decided": 0,
+     "risk": 0,
+     "open": 0,
+     "carried": 0
+    },
+    "name": "lazysite",
+    "kind": "module",
+    "subject": {
+     "kind": "module",
+     "name": "lazysite"
+    },
+    "targets": [
+     "lazysite"
+    ],
+    "failed": [
+     "lazysite"
+    ],
+    "items": [],
+    "zones": [
+     "dmz"
+    ]
+   }
+  },
+  "history": [
+   {
+    "date": "2026-10-26",
+    "at": "2026-10-26T03:00:00.000Z",
+    "site": 32,
+    "environments": {
+     "rossen": 32,
+     "mgmt": 25.6,
+     "test": 0
+    },
+    "zones": {
+     "admin": 0,
+     "buddy": 0,
+     "dmz": 12,
+     "edge": 0,
+     "guest": 0,
+     "home": 0,
+     "iotCams": 0,
+     "iotCloud": 0,
+     "iotLocal": 0,
+     "iotUntrust": 0,
+     "mgmt": 25.6,
+     "netbird": 0,
+     "rossen": 32,
+     "test": 0,
+     "wan": 0,
+     "work": 0
+    },
+    "units": {
+     "immich": 32,
+     "forgejo": 1.6,
+     "nextcloud": 25.6,
+     "vaultwarden": 48,
+     "coturn": 0,
+     "identity": 1.6,
+     "network": 12.8,
+     "node:tappaas1": 0,
+     "node:tappaas2": 0,
+     "tappaas-cicd": 12.8,
+     "lazysite": 0
+    }
+   },
+   {
+    "date": "2026-10-27",
+    "at": "2026-10-27T03:00:00.000Z",
+    "site": 32,
+    "environments": {
+     "rossen": 32,
+     "mgmt": 25.6,
+     "test": 0
+    },
+    "zones": {
+     "admin": 0,
+     "buddy": 0,
+     "dmz": 12,
+     "edge": 0,
+     "guest": 0,
+     "home": 0,
+     "iotCams": 0,
+     "iotCloud": 0,
+     "iotLocal": 0,
+     "iotUntrust": 0,
+     "mgmt": 25.6,
+     "netbird": 0,
+     "rossen": 32,
+     "test": 0,
+     "wan": 0,
+     "work": 0
+    },
+    "units": {
+     "immich": 32,
+     "forgejo": 1.6,
+     "nextcloud": 25.6,
+     "vaultwarden": 48,
+     "coturn": 0,
+     "identity": 1.6,
+     "network": 12.8,
+     "node:tappaas1": 0,
+     "node:tappaas2": 0,
+     "tappaas-cicd": 12.8,
+     "lazysite": 0
+    }
+   },
+   {
+    "date": "2026-10-28",
+    "at": "2026-10-28T03:00:00.000Z",
+    "site": 24,
+    "environments": {
+     "rossen": 24,
+     "mgmt": 19.2,
+     "test": 0
+    },
+    "zones": {
+     "admin": 0,
+     "buddy": 0,
+     "dmz": 9,
+     "edge": 0,
+     "guest": 0,
+     "home": 0,
+     "iotCams": 0,
+     "iotCloud": 0,
+     "iotLocal": 0,
+     "iotUntrust": 0,
+     "mgmt": 19.2,
+     "netbird": 0,
+     "rossen": 24,
+     "test": 0,
+     "wan": 0,
+     "work": 0
+    },
+    "units": {
+     "immich": 24,
+     "forgejo": 1.2,
+     "nextcloud": 19.2,
+     "vaultwarden": 36,
+     "coturn": 0,
+     "identity": 1.2,
+     "network": 9.6,
+     "node:tappaas1": 0,
+     "node:tappaas2": 0,
+     "tappaas-cicd": 9.6,
+     "lazysite": 0
+    }
+   },
+   {
+    "date": "2026-10-29",
+    "at": "2026-10-29T03:00:00.000Z",
+    "site": 20,
+    "environments": {
+     "rossen": 20,
+     "mgmt": 16,
+     "test": 0
+    },
+    "zones": {
+     "admin": 0,
+     "buddy": 0,
+     "dmz": 7.5,
+     "edge": 0,
+     "guest": 0,
+     "home": 0,
+     "iotCams": 0,
+     "iotCloud": 0,
+     "iotLocal": 0,
+     "iotUntrust": 0,
+     "mgmt": 16,
+     "netbird": 0,
+     "rossen": 20,
+     "test": 0,
+     "wan": 0,
+     "work": 0
+    },
+    "units": {
+     "immich": 20,
+     "forgejo": 1,
+     "nextcloud": 16,
+     "vaultwarden": 30,
+     "coturn": 0,
+     "identity": 1,
+     "network": 8,
+     "node:tappaas1": 0,
+     "node:tappaas2": 0,
+     "tappaas-cicd": 8,
+     "lazysite": 0
+    }
+   },
+   {
+    "date": "2026-10-30",
+    "at": "2026-10-30T03:00:00.000Z",
+    "site": 20,
+    "environments": {
+     "rossen": 20,
+     "mgmt": 16,
+     "test": 0
+    },
+    "zones": {
+     "admin": 0,
+     "buddy": 0,
+     "dmz": 7.5,
+     "edge": 0,
+     "guest": 0,
+     "home": 0,
+     "iotCams": 0,
+     "iotCloud": 0,
+     "iotLocal": 0,
+     "iotUntrust": 0,
+     "mgmt": 16,
+     "netbird": 0,
+     "rossen": 20,
+     "test": 0,
+     "wan": 0,
+     "work": 0
+    },
+    "units": {
+     "immich": 20,
+     "forgejo": 1,
+     "nextcloud": 16,
+     "vaultwarden": 30,
+     "coturn": 0,
+     "identity": 1,
+     "network": 8,
+     "node:tappaas1": 0,
+     "node:tappaas2": 0,
+     "tappaas-cicd": 8,
+     "lazysite": 0
+    }
+   },
+   {
+    "date": "2026-10-31",
+    "at": "2026-10-31T03:00:00.000Z",
+    "site": 10,
+    "environments": {
+     "rossen": 10,
+     "mgmt": 8,
+     "test": 0
+    },
+    "zones": {
+     "admin": 0,
+     "buddy": 0,
+     "dmz": 3.75,
+     "edge": 0,
+     "guest": 0,
+     "home": 0,
+     "iotCams": 0,
+     "iotCloud": 0,
+     "iotLocal": 0,
+     "iotUntrust": 0,
+     "mgmt": 8,
+     "netbird": 0,
+     "rossen": 10,
+     "test": 0,
+     "wan": 0,
+     "work": 0
+    },
+    "units": {
+     "immich": 10,
+     "forgejo": 0.5,
+     "nextcloud": 8,
+     "vaultwarden": 15,
+     "coturn": 0,
+     "identity": 0.5,
+     "network": 4,
+     "node:tappaas1": 0,
+     "node:tappaas2": 0,
+     "tappaas-cicd": 4,
+     "lazysite": 0
+    }
+   },
+   {
+    "date": "2026-11-01",
+    "at": "2026-11-01T01:44:28.779Z",
+    "site": 20,
+    "environments": {
+     "rossen": 20,
+     "mgmt": 16,
+     "test": 0
+    },
+    "zones": {
+     "admin": 0,
+     "buddy": 0,
+     "dmz": 7.5,
+     "edge": 0,
+     "guest": 0,
+     "home": 0,
+     "iotCams": 0,
+     "iotCloud": 0,
+     "iotLocal": 0,
+     "iotUntrust": 0,
+     "mgmt": 16,
+     "netbird": 0,
+     "rossen": 20,
+     "test": 0,
+     "wan": 0,
+     "work": 0
+    },
+    "units": {
+     "immich": 20,
+     "forgejo": 1,
+     "nextcloud": 16,
+     "vaultwarden": 30,
+     "coturn": 0,
+     "identity": 1,
+     "network": 8,
+     "node:tappaas1": 0,
+     "node:tappaas2": 0,
+     "tappaas-cicd": 8,
+     "lazysite": 0
+    }
+   }
+  ]
+ }
 }

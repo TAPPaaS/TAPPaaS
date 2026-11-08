@@ -64,7 +64,8 @@ export interface ModuleSummary {
     run: "running" | "stopped" | "none";
     health: "fail" | "warn" | "pass" | "unknown";
     backup: "covered" | "disabled" | "not-in-job" | "not-opted" | "unknown";
-    cve: "act" | "ok" | "unknown";
+    cve: "ok" | "low" | "medium" | "high" | "critical" | "unknown"; // the CVE risk level of the last scan
+    cveScore: number | null;
     maturity: string | null;
   };
   findings: { gate: string; status: string; text: string }[];

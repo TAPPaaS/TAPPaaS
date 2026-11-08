@@ -62,7 +62,8 @@ it holds), **Modules** (how many are running, stopped, updating — an update jo
 archived, the last updates of a module or the sweep, the modules whose health fails or warns) and
 **Identity** (users, groups and roles, and the identity provider, the `identity` module: its run
 state and health). **Health**: the health line (critical, warning and ok objects, the open root
-causes, what is silenced and unknown), the last sweep, backups, the release and security.
+causes, what is silenced and unknown), the last sweep, backups, the release and security (the
+site's CVE risk level and score, how many modules are high or critical, a link to Security).
 **Alerts**: the ten open events from `operations`, critical first and the newest first within each,
 one line each (status, class and name, what is wrong, since) opening it on the Operations page with
 its Health panel; a link to the Operations page for the rest. **Site** — the site as built, in four tabs, each at its own address: Overview
@@ -493,11 +494,20 @@ A page is served from the last answer with its age; a failed refresh keeps the l
 answer and says why. `POST /api/v1/refresh[?what=<read>]` refreshes the console's own cache
 now (it changes nothing on the site).
 
+**Security** (`/security`) — the site's CVE risk from the last security scan: the site's level and
+score and what sets it, then each environment, its zones with their tier multiplier and the modules
+and platform targets (nodes, the firewall) in them; the zones in no environment sit directly under
+the site. Each row has its level, score, what sets it (on a module: what counts, "1 critical"), its
+CVEs by state (open, risk, carried, decided) and a 7-day sparkline. A module opens to its counted
+CVEs: state, category (a risk CVE at the rating given here), package, version and the VEX analysis,
+or "Not analysed yet". Whether a fix exists is never shown. The Modules list's CVE badge is the
+module's level and score.
+
 ## API (`/api/v1`)
 
 `POST setup/check` starts the foundation modules' tests, a read job each, for whoever may read
 Setup; JSON only. Reads (GET): `me` · `status` · `health` · `gates` · `pulse` · `site` · `modules` · `modules/<m>` ·
-`modules/<m>/drift[?refresh=1]` · `modules/<m>/sections` (its page's sections with their data) · `zones` · `ipv6` · `environments` · `topology` · `storage` · `security` ·
+`modules/<m>/drift[?refresh=1]` · `modules/<m>/sections` (its page's sections with their data) · `zones` · `ipv6` · `environments` · `topology` · `storage` · `security` (`src/security.ts`: `{generated, inventory, days, site, environments[{zones[{multiplier, units[{kind, counts, cves[]}]}]}], outside[], failed[]}`, each row with `level, score, setBy, spark`; no fix field) ·
 `activity[?module=<m>]` (the sweep's runs, and `jobs`) · `manifests` ·
 `modules/<m>/icon` (SVG or PNG, 404 when it has none) · `jumps/<kind>/<id>[?switch=<s>]` (kind: node, module, switch, port, lag, ap, zone, peer, site;
 disk and pool, whose id is the node: its Disks and ZFS panels in Proxmox).
