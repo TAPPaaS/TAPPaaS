@@ -28,7 +28,7 @@ set -euo pipefail
 # Source for read_module_config (#207); local logging defs below override
 # common's so output style is unchanged.
 # shellcheck source=common-install-routines.sh disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 readonly YW=$'\033[1;33m'
 readonly RD=$'\033[01;31m'

@@ -15,7 +15,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Get imageType to determine post-install steps
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 echo ""
 info "${BOLD}Post-Install Configuration${CL}"

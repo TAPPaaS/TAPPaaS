@@ -101,8 +101,9 @@ if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
     # writes plaintext; without the escrowed copy, a rebuilt cluster cannot read
     # a single backup.
     echo "== backup (deep): VM and container backups are encrypted =="
+    # shellcheck source=/home/tappaas/bin/common-install-routines.sh
     declare -F get_node_hostname >/dev/null 2>&1 \
-        || . /home/tappaas/bin/common-install-routines.sh 2>/dev/null || true
+        || . "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" 2>/dev/null || true
     if command -v jq >/dev/null 2>&1 && declare -F get_node_hostname >/dev/null 2>&1; then
         _store="$(jq -r '.pbsStorageName // "tappaas_backup"' "${CONFIG_DIR:-/home/tappaas/config}/backup.json" 2>/dev/null)"
         _node="$(get_node_hostname 0 2>/dev/null)"

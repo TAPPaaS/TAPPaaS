@@ -52,7 +52,7 @@ readonly SCRIPT_NAME
 readonly CONFIG_DIR="/home/tappaas/config"
 
 # shellcheck source=common-install-routines.sh
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 # A module's own controllers and managers (ADR-035 D5): beside this script in
 # the checkout, else linked into ~/bin (lib/*.sh are). Absent — a mothership not
 # yet refreshed to it — a module that declares components cannot register them.

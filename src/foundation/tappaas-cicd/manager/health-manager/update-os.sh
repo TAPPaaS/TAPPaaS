@@ -25,7 +25,7 @@ readonly SCRIPT_NAME
 readonly MGMT="mgmt"
 
 # shellcheck source=common-install-routines.sh
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 # The site's time and locale, rendered per OS family (#472, #87). Optional: a
 # mothership that has not deployed it yet updates as before, without the facts.
 # shellcheck source=site-locale.sh

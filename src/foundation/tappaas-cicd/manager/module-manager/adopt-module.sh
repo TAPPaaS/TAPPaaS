@@ -134,7 +134,8 @@ _adopt_print_key_instructions() {
 }
 
 main() {
-    . /home/tappaas/bin/common-install-routines.sh
+    # shellcheck source=/home/tappaas/bin/common-install-routines.sh
+    . "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
     ADDRESS=""; local instance="" zone="" wait_s=300
     local -a sets=()

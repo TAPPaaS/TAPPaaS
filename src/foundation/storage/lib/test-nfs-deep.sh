@@ -39,7 +39,8 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NODE="${1:?usage: test-nfs-deep.sh <node-instance>}"
 set --
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 . "${HERE}/../../tappaas-cicd/lib/cmdb-report.sh"
 . "${HERE}/nfs-lib.sh"
 . "${HERE}/nfs-guest.sh"

@@ -33,7 +33,7 @@ SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly SCRIPT_NAME
 
 # Logging + resolve_default_environment come from the shared library.
-_lib="/home/tappaas/bin/common-install-routines.sh"
+_lib="${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 [[ -r "${_lib}" ]] || _lib="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib" && pwd)/common-install-routines.sh"
 # shellcheck disable=SC1090
 . "${_lib}"

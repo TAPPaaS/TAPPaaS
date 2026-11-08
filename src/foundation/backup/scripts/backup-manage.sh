@@ -89,7 +89,8 @@ trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
 # Source common routines and load backup module config
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 JSON_CONFIG="${CONFIG_DIR}/backup.json"
 JSON=$(cat "${JSON_CONFIG}")
 

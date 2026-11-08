@@ -21,7 +21,7 @@ set -euo pipefail
 # ── Logging ──────────────────────────────────────────────────────────
 
 # shellcheck source=common-install-routines.sh
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # ── Arguments ────────────────────────────────────────────────────────
 

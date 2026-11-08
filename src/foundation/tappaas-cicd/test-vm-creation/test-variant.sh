@@ -45,8 +45,8 @@ warn()  { :; }
 error() { echo "ERR: $*" >&2; }
 die()   { error "$@"; exit 1; }
 debug() { :; }
-# shellcheck disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh disable=SC1091
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # ── Colors ────────────────────────────────────────────────────────
 RED='\e[31m'

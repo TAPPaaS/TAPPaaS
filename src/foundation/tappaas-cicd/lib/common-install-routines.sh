@@ -163,7 +163,7 @@ tappaas_require_operator() {
 # self-heal ownership drift best-effort (never blocks the actual command).
 tappaas_preflight_guard() {
     tappaas_require_operator
-    local repair=/home/tappaas/bin/tappaas-repair-ownership.sh
+    local repair="${TAPPAAS_BIN:-/home/tappaas/bin}/tappaas-repair-ownership.sh"
     [[ -x "$repair" ]] && "$repair" || true
 }
 
@@ -265,7 +265,7 @@ validate_zone_environment() {
 # in their own side-effect-free lib, so scripts that do not load these routines
 # list them the same way. Re-exported here.
 for _cnl in "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/cluster-nodes.sh" \
-            /home/tappaas/bin/cluster-nodes.sh; do
+            "${TAPPAAS_BIN:-/home/tappaas/bin}/cluster-nodes.sh"; do
     [[ -r "${_cnl}" ]] || continue
     # shellcheck source=/dev/null
     . "${_cnl}"
@@ -414,7 +414,7 @@ get_default_ha_node() {
 # in their own side-effect-free lib so standalone scripts with their own
 # logging can source them without inheriting ours (#459). Re-exported here so
 # the ~160 scripts that already source this file keep getting them.
-for _mcl in /home/tappaas/bin/module-catalog-lib.sh \
+for _mcl in "${TAPPAAS_BIN:-/home/tappaas/bin}/module-catalog-lib.sh" \
             "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/module-catalog-lib.sh"; do
     # Stop at the first copy that provides module_scope_of (ADR-022e, #676): an
     # older copy — ~/bin while a test runs this tree — must not end the search,
@@ -524,7 +524,7 @@ module_source_dir() {
         printf '%s' "${dir}"
         return 0
     fi
-    local resolver="${TAPPAAS_RESOLVE_MODULE_BIN:-/home/tappaas/bin/resolve-module.sh}"
+    local resolver="${TAPPAAS_RESOLVE_MODULE_BIN:-${TAPPAAS_BIN:-/home/tappaas/bin}/resolve-module.sh}"
     [[ -x "${resolver}" ]] || return 1
     # The deployed name first, then the base module behind it: the catalog is
     # keyed by the module's own name, so an install in a non-default environment
@@ -2168,7 +2168,8 @@ function jq_module_write() {
   # was broken precisely in the case it exists for (#570).
   if ! declare -F regroup_to_pattern_a >/dev/null 2>&1; then
     local _cv
-    for _cv in /home/tappaas/bin/convert-json-to-config.sh \
+    for _cv in "${TAPPAAS_BIN:-/home/tappaas/bin}/convert-json-to-config.sh" \
+               "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../manager/site-manager/convert-json-to-config.sh" \
                /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/site-manager/convert-json-to-config.sh; do
       if [[ -f "$_cv" ]]; then
         # shellcheck disable=SC1090

@@ -16,7 +16,8 @@
 set -euo pipefail
 
 WHO="${1:?usage: revoke-sessions.sh <username>}"
-. /home/tappaas/bin/common-install-routines.sh jellyfin 2>/dev/null || true
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" jellyfin 2>/dev/null || true
 VMNAME="$(get_config_value 'vmname' 'jellyfin' 2>/dev/null || echo jellyfin)"
 ZONE0="$(get_config_value 'zone0' 'srvHome' 2>/dev/null || echo srvHome)"
 

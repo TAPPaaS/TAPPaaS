@@ -21,7 +21,7 @@ set -euo pipefail
 # ── Logging ──────────────────────────────────────────────────────────
 
 # shellcheck source=common-install-routines.sh disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # nat_quiet <command...> — run a nat-manager call whose stdout is its own
 # narration ("Port-forward set: …", "Port-forward changes applied"): [Debug]

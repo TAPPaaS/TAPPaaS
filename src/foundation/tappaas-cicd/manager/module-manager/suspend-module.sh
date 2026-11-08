@@ -24,7 +24,7 @@
 set -euo pipefail
 
 # shellcheck source=../../lib/common-install-routines.sh disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 if [[ -r /home/tappaas/bin/ha-vm-lib.sh ]]; then
     # shellcheck source=../../lib/ha-vm-lib.sh disable=SC1091
     . /home/tappaas/bin/ha-vm-lib.sh

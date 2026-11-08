@@ -9,7 +9,8 @@
 
 set -euo pipefail
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # Apply the NixOS config (also run on updates)
 . ./update.sh

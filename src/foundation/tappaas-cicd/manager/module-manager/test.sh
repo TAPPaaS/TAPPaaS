@@ -404,7 +404,7 @@ chmod +x "$SBIN/validate-module-tier-source.sh" 2>/dev/null || true
 # A throwaway install-module.sh copy that points at the stub bin dir. We patch
 # the two hard-coded /home/tappaas/bin source paths to the stub dir.
 SINSTALL="${WORK}/install-stub.sh"
-sed -e "s#/home/tappaas/bin/common-install-routines.sh#${SBIN}/common-install-routines.sh#g" \
+sed -e "s#\${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh#${SBIN}/common-install-routines.sh#g" \
     -e "s#/home/tappaas/bin/copy-update-json.sh#${SBIN}/copy-update-json.sh#g" \
     -e "s#/home/tappaas/bin/validate-module-tier-source.sh#${SBIN}/validate-module-tier-source.sh#g" \
     "$INSTALL" > "$SINSTALL"
@@ -493,7 +493,7 @@ printf '. "%s"\n' "${HERE}/../../lib/module-catalog-lib.sh" >> "${DWORK}/sbin/co
 sed -n '/^_legacy_module_alias() {/,/^}/p; /^resolve_provider_module() {/,/^}/p; /^find_service_consumers() {/,/^}/p; /^find_integrateswith_consumers() {/,/^}/p' \
     "${HERE}/../../lib/common-install-routines.sh" >> "${DWORK}/sbin/common-install-routines.sh"
 DSTUB="${WORK}/del-stub.sh"
-sed -e "s#/home/tappaas/bin/common-install-routines.sh#${DWORK}/sbin/common-install-routines.sh#g" \
+sed -e "s#\${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh#${DWORK}/sbin/common-install-routines.sh#g" \
     -e "s#readonly CONFIG_DIR=\"/home/tappaas/config\"#CONFIG_DIR=\"${DWORK}/cfg\"#g" \
     "$DELETE" > "$DSTUB"
 printf '%s\n' '{"stack":"foundation","source":"official","vmname":"fmod"}' > "${DWORK}/cfg/fmod.json"
@@ -920,7 +920,7 @@ TMSTUB
 sed -n '/^_legacy_module_alias() {/,/^}/p; /^resolve_provider_module() {/,/^}/p' \
     "${HERE}/../../lib/common-install-routines.sh" >> "${TMW}/sbin/common-install-routines.sh"
 TMSTUB_SH="${WORK}/tm-stub.sh"
-sed -e "s#/home/tappaas/bin/common-install-routines.sh#${TMW}/sbin/common-install-routines.sh#g" \
+sed -e "s#\${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh#${TMW}/sbin/common-install-routines.sh#g" \
     -e "s#readonly CONFIG_DIR=\"/home/tappaas/config\"#CONFIG_DIR=\"${TMW}/cfg\"#g" \
     "${HERE}/test-module.sh" > "${TMSTUB_SH}"
 

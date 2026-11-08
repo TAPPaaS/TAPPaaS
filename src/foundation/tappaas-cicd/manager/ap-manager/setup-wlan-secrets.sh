@@ -28,7 +28,7 @@
 set -euo pipefail
 
 # shellcheck source=../../tappaas-cicd/lib/common-install-routines.sh disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 # is_placeholder, wlan_zones and the secrets file rules — shared with ap-manager.
 # shellcheck source=../../lib/wlan-lib.sh
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/wlan-lib.sh"

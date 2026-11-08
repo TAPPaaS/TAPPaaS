@@ -20,7 +20,8 @@
 # shellcheck disable=SC2015,SC2329
 set -uo pipefail
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 # oidc_domain_unpublished — the published/unpublished verdict the services use (#778).
 # shellcheck source=lib/oidc-consumer.sh disable=SC1091
 . "$(cd "$(dirname "$0")" && pwd)/lib/oidc-consumer.sh"

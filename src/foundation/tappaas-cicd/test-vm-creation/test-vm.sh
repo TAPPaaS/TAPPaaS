@@ -6,7 +6,8 @@
 # Usage: ./test.sh <vmname>
 # Example: ./test.sh test-debian
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 if [ -z "$1" ]; then
     echo "Usage: ./test.sh <vmname>"

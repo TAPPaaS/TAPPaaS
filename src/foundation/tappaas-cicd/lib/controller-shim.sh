@@ -59,8 +59,8 @@ done
 
 # The manager's logging, so a plugin's messages read as they did when it ran
 # inside the manager (info/warn on the terminal, the colours).
-# shellcheck disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh 2>/dev/null || true
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh disable=SC1091
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" 2>/dev/null || true
 # shellcheck disable=SC1090
 . "${plugin}"
 has() { declare -F "$1" >/dev/null; }

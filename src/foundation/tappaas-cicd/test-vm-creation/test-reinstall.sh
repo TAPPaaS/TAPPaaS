@@ -20,7 +20,7 @@
 set -euo pipefail
 
 # shellcheck source=../lib/common-install-routines.sh disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR

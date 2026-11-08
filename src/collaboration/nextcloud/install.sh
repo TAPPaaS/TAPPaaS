@@ -9,7 +9,8 @@
 # Usage: ./install.sh <vmname>
 # Example: ./install.sh nextcloud
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # run the update script as all update actions is also needed at install time
 . ./update.sh

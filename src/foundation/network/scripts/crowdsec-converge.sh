@@ -24,7 +24,8 @@
 # Usage: crowdsec-converge.sh [--check]   (--check: report, change nothing)
 
 set -euo pipefail
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 FW="${FIREWALL_FQDN:-firewall.mgmt.internal}"
 CHECK=0; [[ "${1:-}" == "--check" ]] && CHECK=1
 

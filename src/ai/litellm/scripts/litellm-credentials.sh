@@ -32,7 +32,8 @@
 
 set -euo pipefail
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly SCRIPT_NAME

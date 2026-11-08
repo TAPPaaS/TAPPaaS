@@ -30,7 +30,7 @@ NEW_SIZE="$2"
 # Load common helpers (provides get_config_value, normalize_module_config,
 # read_module_config, jq_module_write — all Pattern A / flat agnostic). #207
 # shellcheck source=common-install-routines.sh disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # Validate size format
 if ! [[ "$NEW_SIZE" =~ ^[0-9]+[GMTK]$ ]]; then

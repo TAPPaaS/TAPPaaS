@@ -77,7 +77,7 @@ fi
 # and auto-loads $JSON normalized from $1.
 #
 # shellcheck source=common-install-routines.sh disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 JSON_CONFIG="/home/tappaas/config/${VMNAME}.json"
 if [ ! -f "$JSON_CONFIG" ]; then

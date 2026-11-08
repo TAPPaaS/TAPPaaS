@@ -27,7 +27,7 @@ fi
 MODULE_NAME="$1"
 
 # shellcheck source=/dev/null
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 VMNAME="$(get_config_value 'vmname' "$MODULE_NAME")"
 VMID="$(get_config_value 'vmid')"

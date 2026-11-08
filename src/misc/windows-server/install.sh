@@ -16,7 +16,7 @@
 set -euo pipefail
 
 # shellcheck source=/dev/null
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 MODULE_NAME="${1:-windows-server}"
 VMNAME="$(get_config_value 'vmname' "$MODULE_NAME")"

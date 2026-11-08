@@ -13,7 +13,8 @@
 #
 # Usage: test.sh [<instance>] [--deep]
 set -uo pipefail
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 PASS=0; FAIL=0
 pass() { info "  ${GN}✓${CL} $1"; PASS=$((PASS + 1)); }

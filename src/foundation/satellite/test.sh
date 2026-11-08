@@ -20,7 +20,8 @@ for _a in "$@"; do [[ "${_a}" != --* ]] && { INST="${_a}"; break; }; done
 
 # ── one satellite, live ──────────────────────────────────────────────────────
 if [[ -n "${INST}" ]]; then
-    . /home/tappaas/bin/common-install-routines.sh
+    # shellcheck source=/home/tappaas/bin/common-install-routines.sh
+    . "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
     . "${here}/lib/satellite-lib.sh"
     PASS=0; FAIL=0
     pass() { info "  ${GN}✓${CL} $1"; PASS=$((PASS + 1)); }

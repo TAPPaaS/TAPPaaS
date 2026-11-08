@@ -39,8 +39,9 @@ set -euo pipefail
 
 # Source common-install-routines.sh if not already loaded (provides info, warn, error, die)
 if ! declare -F info &>/dev/null; then
-    if [[ -f /home/tappaas/bin/common-install-routines.sh ]]; then
-        . /home/tappaas/bin/common-install-routines.sh
+    if [[ -f "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" ]]; then
+        # shellcheck source=/home/tappaas/bin/common-install-routines.sh
+        . "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
     else
         # Minimal fallback for bootstrap before common-install-routines.sh exists
         info()  { echo -e "${DGN}[Info]${CL} $*"; }

@@ -8,6 +8,7 @@
 # Usage: update.sh <instance>
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 [[ -f "${CONFIG_DIR}/shares.json" ]] || { debug "  storage: no config/shares.json — no shares declared"; exit 0; }
 "${HERE}/lib/nfs-converge.sh" all

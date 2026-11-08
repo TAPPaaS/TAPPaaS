@@ -11,7 +11,8 @@
 # Usage: test-service.sh <consumer-module-name>
 
 set -euo pipefail
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 warn "test-service.sh has not been implemented for this service — ${1:-the consumer}'s use of it is not tested. Please contact the module's developer."
 exit 0

@@ -71,7 +71,7 @@ OPT_ENVIRONMENT=""        # ADR-007 P5: target environment
 OPT_DECOMMISSION=false    # ADR-010 §8.4.5: a machine's delete.sh runs only when asked
 
 # shellcheck source=common-install-routines.sh disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 # A module's own controllers and managers (ADR-035 D5): beside this script in
 # the checkout, else linked into ~/bin (lib/*.sh are). Absent — a mothership not
 # yet refreshed to it — a module that declares components cannot register them.

@@ -24,8 +24,8 @@ readonly SCRIPTS="${SCRIPT_DIR}/../manager/module-manager"
 readonly DEEP="${TAPPAAS_TEST_DEEP:-0}"
 
 # For vm_exists_on_cluster in the deep section (harmless offline).
-# shellcheck disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh 2>/dev/null || true
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh disable=SC1091
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" 2>/dev/null || true
 
 PASS=0
 FAIL=0

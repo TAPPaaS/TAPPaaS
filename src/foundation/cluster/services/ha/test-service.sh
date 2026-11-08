@@ -22,7 +22,8 @@
 
 set -euo pipefail
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 # shellcheck source=../../lib/ha-bridge-lib.sh disable=SC1091
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/ha-bridge-lib.sh"
 

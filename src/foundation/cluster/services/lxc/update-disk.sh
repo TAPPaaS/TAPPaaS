@@ -21,7 +21,7 @@
 set -euo pipefail
 
 # shellcheck source=/home/tappaas/bin/common-install-routines.sh
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 readonly MGMT="mgmt"
 SSH_OPTS=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new

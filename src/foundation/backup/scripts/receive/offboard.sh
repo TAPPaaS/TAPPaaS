@@ -14,7 +14,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 # shellcheck source=../../lib/pbs-job.sh disable=SC1091
 . "${SCRIPT_DIR}/../../lib/pbs-job.sh"
 # shellcheck source=../../lib/pbs-namespace.sh disable=SC1091

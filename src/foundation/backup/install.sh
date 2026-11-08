@@ -47,7 +47,8 @@ MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # script just consumes the staged config.
 
 # Source common routines (just function definitions, no execution)
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # Run a command with its (noisy apt/ssh) output routed to [Debug] — shown only
 # with TAPPAAS_DEBUG=1; on failure the captured output is surfaced so errors stay

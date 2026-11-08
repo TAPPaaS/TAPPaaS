@@ -9,7 +9,8 @@
 # Results are displayed on screen and logged to ~/logs/litellm-test-<timestamp>.log
 
 # Configuration — derive hostname from module config if available
-. /home/tappaas/bin/common-install-routines.sh "${1:-litellm}" 2>/dev/null || true
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" "${1:-litellm}" 2>/dev/null || true
 _VMNAME="$(get_config_value 'vmname' 'litellm' 2>/dev/null || echo 'litellm')"
 # zone0 may be overridden to test a non-default instance (issue #196).
 _ZONE="${TAPPAAS_ZONE0_OVERRIDE:-$(get_config_value 'zone0' 'srv' 2>/dev/null || echo 'srv')}"

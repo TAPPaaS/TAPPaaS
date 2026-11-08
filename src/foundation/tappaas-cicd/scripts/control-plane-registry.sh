@@ -18,7 +18,8 @@
 
 set -uo pipefail
 
-. /home/tappaas/bin/common-install-routines.sh 2>/dev/null || {
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" 2>/dev/null || {
     info() { echo "[Info] $*"; }; error() { echo "[Error] $*" >&2; }
 }
 

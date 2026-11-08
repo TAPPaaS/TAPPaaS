@@ -29,8 +29,9 @@ set -euo pipefail
 
 # ── Shared library ────────────────────────────────────────────────────
 # shellcheck source=../lib/common-install-routines.sh disable=SC1091
-if [[ -r /home/tappaas/bin/common-install-routines.sh ]]; then
-    . /home/tappaas/bin/common-install-routines.sh
+if [[ -r "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" ]]; then
+    # shellcheck source=/home/tappaas/bin/common-install-routines.sh
+    . "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 else
     _SELF="$(readlink -f "${BASH_SOURCE[0]}")"
     # shellcheck source=../lib/common-install-routines.sh disable=SC1091

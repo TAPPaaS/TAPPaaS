@@ -18,7 +18,8 @@ VERB="${1:-}"; INSTANCE="${2:-}"
 [[ -n "${VERB}" && -n "${INSTANCE}" ]] || { echo "usage: $0 converge|test|subdir|purge <instance> [...]" >&2; exit 2; }
 shift 2
 REST=("$@"); set --          # common-install-routines.sh reads $1 as a module name
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 . "${HERE}/../lib/pvehost-lib.sh"
 # The share model lives in the storage module (ADR-029 D1); find it through its
 # registration, as any module's services are found.

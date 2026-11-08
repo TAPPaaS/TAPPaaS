@@ -29,7 +29,7 @@ JSON_CONFIG="/home/tappaas/config/openwebui.json"
 JSON=$(cat "${JSON_CONFIG}")
 
 # shellcheck source=../../foundation/tappaas-cicd/lib/common-install-routines.sh
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # ── Configuration ─────────────────────────────────────────────────────
 

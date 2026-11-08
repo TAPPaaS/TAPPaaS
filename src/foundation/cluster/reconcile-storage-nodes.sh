@@ -29,7 +29,8 @@
 #
 set -euo pipefail
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 NODES_JSON="$(tappaas_cluster_nodes_json "${TAPPAAS_CONFIG:-${CONFIG_DIR:-/home/tappaas/config}}")"
 NODE1_FQDN="$(get_primary_node_fqdn)"

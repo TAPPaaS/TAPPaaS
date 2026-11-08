@@ -13,7 +13,8 @@
 #
 set -euo pipefail
 
-. /home/tappaas/bin/common-install-routines.sh "${1:-forgejo}" 2>/dev/null || true
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" "${1:-forgejo}" 2>/dev/null || true
 
 VMNAME="$(get_config_value 'vmname' "${1:-forgejo}")"
 VMID="${TAPPAAS_VMID_OVERRIDE:-$(get_config_value 'vmid')}"

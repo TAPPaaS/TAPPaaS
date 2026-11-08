@@ -39,7 +39,7 @@ done
 # would either attempt installs that are guaranteed to abort, or skip cases that
 # would in fact have run.
 # shellcheck source=../lib/common-install-routines.sh disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # Is this case's target zone deployable on THIS site? A case pinned to a zone
 # the site has not activated is NOT a failure — the site simply cannot host it.

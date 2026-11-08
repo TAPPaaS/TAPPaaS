@@ -322,7 +322,7 @@ for _lib in "${SCRIPT_DIR}/../../lib/apply-json-merge.sh" \
             "${SCRIPT_DIR}/../../lib/common-install-routines.sh"; do
     while read -r _p; do
         [[ -n "${_p}" ]] || continue
-        case "${_p}" in /home/tappaas/bin/*) continue ;; esac
+        case "${_p}" in /home/tappaas/bin/*|/home/tappaas/bin\}/*) continue ;; esac
         [[ -f "${_p}" ]] || _bad+=" $(basename "${_lib}"):${_p}"
     done < <(grep -oE '/home/tappaas/[^"'"'"' ]*convert-json-to-config\.sh' "${_lib}" | sort -u)
 done

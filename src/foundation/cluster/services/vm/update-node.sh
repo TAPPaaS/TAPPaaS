@@ -42,7 +42,7 @@ set -euo pipefail
 readonly MGMT="mgmt"
 
 # shellcheck source=/home/tappaas/bin/common-install-routines.sh
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 # The confirmed stop/start an offline migrate of a running guest needs (#825).
 # shellcheck source=/home/tappaas/bin/ha-vm-lib.sh
 . /home/tappaas/bin/ha-vm-lib.sh

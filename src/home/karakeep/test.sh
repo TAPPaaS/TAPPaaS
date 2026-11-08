@@ -5,7 +5,8 @@
 
 set -uo pipefail
 
-. /home/tappaas/bin/common-install-routines.sh "${1:-karakeep}" 2>/dev/null || true
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" "${1:-karakeep}" 2>/dev/null || true
 
 VMNAME="$(get_config_value 'vmname' 'karakeep' 2>/dev/null || echo karakeep)"
 ZONE0NAME="$(get_config_value 'zone0' 'srv' 2>/dev/null || echo srv)"

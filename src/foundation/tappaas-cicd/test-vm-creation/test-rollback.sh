@@ -28,7 +28,7 @@ readonly SCRIPT_DIR
 readonly FIXTURE_DIR="${SCRIPT_DIR}/rollback-fixture"
 
 # shellcheck source=../lib/common-install-routines.sh disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 # shellcheck source=rollback-fixture/lib.sh
 . "${FIXTURE_DIR}/lib.sh"
 

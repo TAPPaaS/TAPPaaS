@@ -68,7 +68,7 @@ ck "…no file touched"                             "${before}" "$(snap)"
 
 # ap-manager derives the same per-AP SSIDs from the list (the derived view).
 AM="${CICD}/manager/ap-manager/ap-manager"
-if [[ -f /home/tappaas/bin/common-install-routines.sh ]]; then
+if [[ -f "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" ]]; then
     # shellcheck source=../../manager/ap-manager/test-lib.bash
     . "${CICD}/manager/ap-manager/test-lib.bash"
     CONFIG_DIR="${CFG}" AP_NETWORK_MANAGER="$(make_nm_stub "${TMP}")" "${AM}" update-desired >/dev/null 2>&1; rc=$?
@@ -77,7 +77,7 @@ if [[ -f /home/tappaas/bin/common-install-routines.sh ]]; then
     out="$(CONFIG_DIR="${CFG}" "${AM}" delta 2>&1)"
     ck "…and delta finds no zone/SSID mismatch"  no "$(has "${out}" 'names SSID\|template SSID <HOME\|template SSID <IOT')"
 else
-    echo "  - ap-manager derive check skipped (no /home/tappaas/bin/common-install-routines.sh here)"
+    echo "  - ap-manager derive check skipped (no ${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh here)"
 fi
 
 # ── refusals: each changes nothing and names the cause ──

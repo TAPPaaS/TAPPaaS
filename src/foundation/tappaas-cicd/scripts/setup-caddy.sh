@@ -14,7 +14,8 @@
 
 set -e
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 FIREWALL_FQDN="firewall.mgmt.internal"
 

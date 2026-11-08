@@ -44,9 +44,9 @@ cat > "${TMP}/update-os.sh" <<EOF
 echo "update-os from \$(pwd) for \$1" >> "${TMP}/out"
 EOF
 chmod +x "${TMP}/update-os.sh"
-sed -e "s#^\. /home/tappaas/bin/common-install-routines.sh#. ${TMP}/lib.sh#" \
+sed -e "s#^\. .*common-install-routines\.sh\"\?\$#. ${TMP}/lib.sh#" \
     -e "s#/home/tappaas/bin/update-os.sh#${TMP}/update-os.sh#" "${SRC}" > "${TMP}/update-service.sh"
-ck "the template's library and update-os.sh are stubbed" "no" "$(grep -q '/home/tappaas/bin' "${TMP}/update-service.sh" && echo yes || echo no)"
+ck "the template's library and update-os.sh are stubbed" "no" "$(grep -v '^[[:space:]]*#' "${TMP}/update-service.sh" | grep -c '/home/tappaas/bin' >/dev/null && echo yes || echo no)"
 
 # run <module> — from a directory that is NOT the module's; prints rc and what happened
 run() {

@@ -29,7 +29,7 @@ set -euo pipefail
 # ── Shared library ────────────────────────────────────────────────────
 
 # shellcheck source=common-install-routines.sh
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # #533: managers run as the tappaas operator, never root — under sudo, SSH
 # resolves identity from /root/.ssh and fails (ADR-018). Refuse root up front.

@@ -320,7 +320,8 @@ _info "Staging PVE netboot assets for node provisioning (prepare-netboot.sh)..."
   || _warn "netboot staging failed — 'node add' needs a later 'prepare-netboot.sh' run"
 
 # Source common-install-routines.sh to replace the minimal _info/_warn/_error with full versions
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # Run a command with its (noisy) output routed to [Debug] — shown only when
 # TAPPAAS_DEBUG=1; on failure the captured output is surfaced so errors stay

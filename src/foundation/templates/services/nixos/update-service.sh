@@ -18,7 +18,8 @@ fi
 
 MODULE_NAME="$1"
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # From the module's directory, whoever calls: update-os.sh reads the module's
 # build-facts.sh relative to its working directory (#797). reconcile and

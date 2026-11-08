@@ -14,7 +14,8 @@
 # Usage: update.sh <instance>
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 . "${HERE}/lib/pvehost-lib.sh"
 
 pn_load "$1"

@@ -47,9 +47,9 @@ set -euo pipefail
 # Logging — reuse common-install-routines.sh when present
 # ---------------------------------------------------------------------------
 if ! declare -F info >/dev/null 2>&1; then
-    if [[ -f /home/tappaas/bin/common-install-routines.sh ]]; then
+    if [[ -f "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" ]]; then
         # shellcheck source=/dev/null
-        . /home/tappaas/bin/common-install-routines.sh
+        . "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
     else
         : "${GN:=$'\033[1;92m'}"
         : "${RD:=$'\033[01;31m'}"

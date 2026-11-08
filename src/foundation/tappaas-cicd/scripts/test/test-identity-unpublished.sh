@@ -27,7 +27,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IDENTITY_SVC="$(cd "${HERE}/../../../identity/services" 2>/dev/null && pwd)"
 [[ -n "${IDENTITY_SVC}" && -f "${IDENTITY_SVC}/identity/install-service.sh" ]] || {
     echo "identity services not found beside this suite — cannot run here."; exit 77; }
-[[ -f /home/tappaas/bin/common-install-routines.sh ]] || {
+[[ -f "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" ]] || {
     echo "common-install-routines.sh is not installed — cannot run here."; exit 77; }
 command -v jq >/dev/null 2>&1 || { echo "jq not found — cannot run here."; exit 77; }
 

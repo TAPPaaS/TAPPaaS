@@ -20,7 +20,8 @@ set -euo pipefail
 MODULE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly MODULE_DIR
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 # shellcheck source=lib/pbs-dns.sh disable=SC1091
 . "${MODULE_DIR}/lib/pbs-dns.sh"
 

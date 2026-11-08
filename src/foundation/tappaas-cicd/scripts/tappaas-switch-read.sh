@@ -28,7 +28,8 @@
 
 set -uo pipefail
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 IF_NEW=0; NOTIFY=0
 for a in "$@"; do

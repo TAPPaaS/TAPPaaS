@@ -25,7 +25,8 @@ while [[ "$#" -gt 0 ]]; do
 done
 [[ "${TAPPAAS_TEST_DEEP:-}" == "1" ]] && DEEP=1
 set --
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 . "${HERE}/lib/nfs-lib.sh"
 . "${HERE}/lib/nfs-converge.sh"
 

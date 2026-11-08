@@ -5,5 +5,6 @@
 #
 # Usage: update.sh <instance>
 set -euo pipefail
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 debug "  console: the service is updated with the control plane; nothing to do here"

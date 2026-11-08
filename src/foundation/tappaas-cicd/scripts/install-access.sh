@@ -29,7 +29,8 @@
 #
 set -euo pipefail
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 CONFIG_DIR="${CONFIG_DIR:-/home/tappaas/config}"
 FW_HOST="${INSTALL_ACCESS_FIREWALL:-root@firewall.mgmt.internal}"

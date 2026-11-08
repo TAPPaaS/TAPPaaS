@@ -64,7 +64,7 @@ readonly SCRIPT_NAME
 readonly CONFIG_DIR="${TAPPAAS_CONFIG:-/home/tappaas/config}"
 
 # shellcheck source=/home/tappaas/bin/common-install-routines.sh
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # Composed, not the raw schema: definitions live per-service since #567.
 readonly SCHEMA_FILE="$(tappaas_schema_file)"

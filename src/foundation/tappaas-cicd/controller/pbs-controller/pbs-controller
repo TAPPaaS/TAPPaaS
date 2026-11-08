@@ -77,7 +77,7 @@ export CONFIG_DIR
 
 # Locate the foundation PBS libs (repo layout) and the shared routines.
 LIB_DIR="${PBS_LIB_DIR:-${HERE}/../../../backup/lib}"
-COMMON="${COMMON_ROUTINES:-/home/tappaas/bin/common-install-routines.sh}"
+COMMON="${COMMON_ROUTINES:-${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh}"
 [[ -f "$COMMON" ]] || COMMON="${HERE}/../../lib/common-install-routines.sh"
 
 # Source shared routines (colours/logging/get_node_hostname) then the PBS libs.

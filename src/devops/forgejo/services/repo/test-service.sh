@@ -11,7 +11,8 @@
 
 set -uo pipefail
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 CONSUMING_MODULE="${1:-}"
 [[ -n "${CONSUMING_MODULE}" ]] || die "Usage: $0 <consuming-module-name>"

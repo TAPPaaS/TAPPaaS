@@ -19,7 +19,8 @@ if [[ -z "${1:-}" ]]; then
     exit 1
 fi
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 MODULE_NAME="$1"
 MGMTVLAN="mgmt"

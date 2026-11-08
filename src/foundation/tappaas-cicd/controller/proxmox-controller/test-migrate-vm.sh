@@ -31,8 +31,8 @@ ok(){ pass=$((pass+1)); }
 no(){ fail=$((fail+1)); echo "FAIL: $1"; }
 check(){ if [ "$2" = "$3" ]; then ok; else no "$1 (got '$2', want '$3')"; fi; }
 
-if [[ ! -r /home/tappaas/bin/common-install-routines.sh ]]; then
-    echo "SKIP: /home/tappaas/bin/common-install-routines.sh not present"
+if [[ ! -r "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" ]]; then
+    echo "SKIP: ${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh not present"
     echo "Results: 0 passed, 0 failed"
     exit 0
 fi

@@ -36,12 +36,12 @@ set -euo pipefail
 
 # ── Logging / shared helpers ─────────────────────────────────────────
 # shellcheck source=../../tappaas-cicd/scripts/common-install-routines.sh disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # Network helpers (vmnet_resolve_trunks / vmnet_parse / vmnet_build_netopts /
 # vmnet_all_active_tags) — the same logic cluster:vm uses to build NICs.
 # shellcheck source=../../cluster/lib/vm-net.sh disable=SC1091
-. /home/tappaas/TAPPaaS/src/foundation/cluster/lib/vm-net.sh
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../../cluster/lib/vm-net.sh"
 
 # shellcheck source=../../lib/cli-gate.sh
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/cli-gate.sh"

@@ -70,7 +70,7 @@ ck "each radio connects to what it broadcasts"   '4' "$(deep '[.relations[] | se
 ck "firmware and uptime"                         '["6.6.77",3600]' "$(deep '.objects[] | select(.class == "device" and .name == "Nano HD") | .attributes | [.firmware, .uptime]')"
 
 # ── the CLI (where ap-manager runs) ──
-if [[ -r /home/tappaas/bin/common-install-routines.sh ]]; then
+if [[ -r "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" ]]; then
     export CONFIG_DIR="${TMP}"
     cp "${FX}/desired.json" "${TMP}/switch-configuration-desired.json"
     cp "${FX}/actual.json" "${TMP}/switch-configuration-actual.json"

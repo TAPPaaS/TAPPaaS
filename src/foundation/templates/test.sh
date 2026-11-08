@@ -23,7 +23,7 @@ for _a in "$@"; do [[ "${_a}" == "--deep" ]] && export TAPPAAS_TEST_DEEP=1; done
 
 
 # shellcheck source=/dev/null
-. /home/tappaas/bin/common-install-routines.sh 2>/dev/null || true
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" 2>/dev/null || true
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 rc=0

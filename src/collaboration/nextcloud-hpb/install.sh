@@ -29,7 +29,8 @@
 
 # Source the shared routines (logging + get_config_value) — NOT the deprecated
 # install-vm.sh, which re-runs VM creation and expects /root/tappaas/<vm>.json on the node.
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # Effective (environment) module name passed by the engine as $1 — drives all host
 # resolution. Read the EFFECTIVE config (e.g. nextcloud-hpb-test.json), never the

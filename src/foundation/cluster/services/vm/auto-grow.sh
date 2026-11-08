@@ -39,7 +39,7 @@ readonly MGMT="mgmt"
 readonly RESIZE_LOG="/home/tappaas/logs/disk-resize.log"
 
 # shellcheck source=/home/tappaas/bin/common-install-routines.sh disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 # shellcheck source=../../lib/disk-grow-lib.sh disable=SC1091
 . "${SCRIPT_DIR}/../../lib/disk-grow-lib.sh"
 

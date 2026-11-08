@@ -36,7 +36,7 @@ readonly SCRIPT_DIR
 # Source for read_module_config (#207); local logging defs below override
 # common's so output style is unchanged.
 # shellcheck source=common-install-routines.sh disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # HA-aware stop/start + the one `ha-manager status` parser (#434). Falls back to
 # the repo copy on a system that has not re-run pre-update.sh since it landed.

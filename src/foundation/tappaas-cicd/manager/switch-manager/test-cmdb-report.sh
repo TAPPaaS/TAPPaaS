@@ -127,7 +127,7 @@ ck "confirm (every port): each recorded port's VLANs" '6' \
 read -r PASS FAIL < "${TMP}/sub.counts"
 
 # ── the CLI (where switch-manager runs) ──
-if [[ -r /home/tappaas/bin/common-install-routines.sh ]]; then
+if [[ -r "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" ]]; then
     export CONFIG_DIR="${TMP}"
     cp "${FX}/actual.json" "${TMP}/switch-configuration-actual.json"
     cp "${FX}/positions.json" "${TMP}/positions.json"

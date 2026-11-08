@@ -13,7 +13,8 @@
 # does only module-specific post-install. Source the shared routines for logging
 # helpers + get_config_value (modern pattern — not the deprecated install-vm.sh,
 # which re-runs VM creation and expects /root/tappaas/<vm>.json on the node).
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # run the update script as all update actions is also needed at install time
 . ./update.sh

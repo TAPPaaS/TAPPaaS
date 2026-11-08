@@ -12,6 +12,7 @@
 
 set -euo pipefail
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 info "network is installed by the foundation bootstrap (foundation/install.sh step [2/5]) — nothing to do here. See INSTALL.md."

@@ -160,7 +160,8 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     set -euo pipefail
     VERB="${1:-}"; shift || true
     REST=("$@"); set --
-    . /home/tappaas/bin/common-install-routines.sh
+    # shellcheck source=/home/tappaas/bin/common-install-routines.sh
+    . "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
     . "${NFS_CONVERGE_DIR}/nfs-lib.sh"
     set -- "${REST[@]}"
     excludes=(); notify=0; notify_only=(); pos=()

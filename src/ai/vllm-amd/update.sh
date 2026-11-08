@@ -9,8 +9,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [[ -f /home/tappaas/bin/common-install-routines.sh ]]; then
-    . /home/tappaas/bin/common-install-routines.sh
+if [[ -f "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" ]]; then
+    # shellcheck source=/home/tappaas/bin/common-install-routines.sh
+    . "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 fi
 # Fallbacks: the source above is conditional, so never assume the house logger
 # is present. Same levels, same gate (TAPPAAS_DEBUG) either way.

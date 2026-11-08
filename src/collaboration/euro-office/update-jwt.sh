@@ -13,7 +13,8 @@
 
 set -euo pipefail
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # Environment-aware: derive hosts/URLs from the deployed configs, never hardcode
 # the zone (modules deploy to srv, srvWork, srvCust …). Pair Nextcloud by

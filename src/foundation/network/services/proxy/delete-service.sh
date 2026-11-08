@@ -18,7 +18,7 @@ set -euo pipefail
 # ── Logging ──────────────────────────────────────────────────────────
 
 # shellcheck source=common-install-routines.sh disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=access-list.sh disable=SC1091
 . "${SCRIPT_DIR}/access-list.sh"

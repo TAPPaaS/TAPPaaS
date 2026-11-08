@@ -15,7 +15,8 @@
 
 set -euo pipefail
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # Config-derived host — read from the loaded config ($JSON, keyed on $1), never a
 # relative/literal file. Never hardcode the zone (modules deploy to dmz, etc.).

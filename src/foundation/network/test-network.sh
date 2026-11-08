@@ -25,7 +25,7 @@
 set -euo pipefail
 
 # shellcheck source=/dev/null
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # ── Defaults ─────────────────────────────────────────────────────────
 # ADR-007 P8: deployed config is network.json (fresh) or firewall.json (legacy, not

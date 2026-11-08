@@ -23,7 +23,7 @@ readonly SCRIPT_DIR
 readonly FIX="${SCRIPT_DIR}/test-fixtures"
 
 # shellcheck source=../tappaas-cicd/lib/common-install-routines.sh disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 readonly MODULE="test-caddy-web"
 readonly MARKER="tappaas-caddy-public-ok"

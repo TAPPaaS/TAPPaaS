@@ -5,7 +5,7 @@
 # Called automatically by install-module.sh before Step 4.
 
 # shellcheck source=/dev/null
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 SECRETS_FILE="/home/tappaas/secrets/nextcloud.env"
 if [[ ! -f "${SECRETS_FILE}" ]]; then

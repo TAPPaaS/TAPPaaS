@@ -8,7 +8,8 @@
 
 set -euo pipefail
 
-. /home/tappaas/bin/common-install-routines.sh "${1:-jellyfin}" 2>/dev/null || true
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" "${1:-jellyfin}" 2>/dev/null || true
 
 _VMNAME="$(get_config_value 'vmname' 'jellyfin' 2>/dev/null || echo 'jellyfin')"
 _ZONE="$(get_config_value 'zone0' 'srvHome' 2>/dev/null || echo 'srvHome')"

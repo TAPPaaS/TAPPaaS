@@ -56,7 +56,7 @@ readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
 readonly MGMT="mgmt"
 
 # shellcheck source=/home/tappaas/bin/common-install-routines.sh
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 # shellcheck source=../../../tappaas-cicd/lib/converge-lib.sh disable=SC1091
 . "${SCRIPT_DIR}/../../../tappaas-cicd/lib/converge-lib.sh"
 

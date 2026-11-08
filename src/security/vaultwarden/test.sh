@@ -9,7 +9,8 @@
 
 set -euo pipefail
 
-. /home/tappaas/bin/common-install-routines.sh "${1:-vaultwarden}" 2>/dev/null || true
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" "${1:-vaultwarden}" 2>/dev/null || true
 
 _VMNAME="$(get_config_value 'vmname' 'vaultwarden' 2>/dev/null || echo 'vaultwarden')"
 _ZONE="$(get_config_value 'zone0' 'dmz' 2>/dev/null || echo 'dmz')"

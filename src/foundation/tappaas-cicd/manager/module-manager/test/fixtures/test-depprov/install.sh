@@ -13,6 +13,7 @@
 
 set -euo pipefail
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 info "${BOLD}test-depprov: no post-install steps (dependsOn-delta provider fixture)${CL}"

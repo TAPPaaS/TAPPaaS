@@ -25,7 +25,8 @@ if [[ -z "${1:-}" ]]; then
     exit 1
 fi
 
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 check_json "/home/tappaas/config/$1.json" || exit 1
 
 MODULE="$1"

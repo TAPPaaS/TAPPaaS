@@ -8,7 +8,8 @@
 #
 # Usage: install.sh <instance>
 set -euo pipefail
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 if systemctl is-active --quiet tappaas-console.service 2>/dev/null; then
     info "${BOLD}console: registered — tappaas-console is running on the mothership${CL}"
 else

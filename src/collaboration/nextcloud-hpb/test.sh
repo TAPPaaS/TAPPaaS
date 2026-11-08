@@ -33,7 +33,7 @@ public_domain_of() {  # <vmname> <environment> <module-json-file>
     local lib here
     here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     for lib in "${here}/../../foundation/tappaas-cicd/lib/common-install-routines.sh" \
-               /home/tappaas/bin/common-install-routines.sh; do
+               "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"; do
         [[ -r "${lib}" ]] || continue
         bash -c 'v="$1" e="$2" f="$3" lib="$4"; set --
                  . "${lib}" >/dev/null 2>&1 || exit 1

@@ -36,7 +36,7 @@ readonly SCRIPT_DIR
 readonly FIX="${SCRIPT_DIR}/fixtures"
 
 # shellcheck source=../lib/common-install-routines.sh disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh 2>/dev/null \
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" 2>/dev/null \
     || . "${SCRIPT_DIR}/../lib/common-install-routines.sh"
 . "${SCRIPT_DIR}/../lib/cmdb-report.sh"
 

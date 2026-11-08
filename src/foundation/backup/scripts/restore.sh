@@ -98,7 +98,8 @@ trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 trap cleanup EXIT
 
 # Source common routines and load backup module config
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 # ha-vm-lib (#434): stopping an HA resource safely. Installed copy first, repo
 # copy as the fallback so the script works from a checkout too.
 if [[ -r /home/tappaas/bin/ha-vm-lib.sh ]]; then

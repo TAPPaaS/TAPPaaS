@@ -32,7 +32,7 @@ readonly SCRIPT_NAME
 readonly HEADER_PINNED='["vmname","vmid","vmtag","node","zone0","zone1","mac0","mac1","dependsOn","provides","config"]'
 
 # shellcheck source=common-install-routines.sh disable=SC1091
-. /home/tappaas/bin/common-install-routines.sh 2>/dev/null || {
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" 2>/dev/null || {
     info()  { echo "[Info] $*"; }
     warn()  { echo "[Warning] $*" >&2; }
     error() { echo "[Error] $*" >&2; }

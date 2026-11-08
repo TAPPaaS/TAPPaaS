@@ -12,7 +12,8 @@
 # Usage: delete-service.sh <consumer-module-name>
 
 set -euo pipefail
-. /home/tappaas/bin/common-install-routines.sh
+# shellcheck source=/home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 warn "delete-service.sh has not been implemented for this service — it is a template stub, so nothing was done for ${1:-the consumer}. Please contact the module's developer."
 exit 0
