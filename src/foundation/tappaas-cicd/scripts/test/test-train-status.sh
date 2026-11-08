@@ -698,8 +698,9 @@ to = os.environ.get("FAKE_TO") or json.load(open(os.path.join(d, "flake.lock")))
 e = lambda k, v: json.loads(os.environ.get(k) or v)
 json.dump({"gate": e("FAKE_GATE", "[]"), "gateModules": e("FAKE_GM", "{}"), "gateItems": e("FAKE_ITEMS", "{}"),
            "digest": os.environ.get("FAKE_DIGEST", "d1"), "to": to, "majors": [], "errors": e("FAKE_ERRORS", "[]"),
-           "vexStatements": e("FAKE_VEX", "[]"),
-           "modules": [{"module": "immich", "score": 20, "level": "high", "open": 1, "risk": 0, "carried": 1, "ack": 0, "now": 2, "fixed": 0, "new": 1},
+           "vexStatements": e("FAKE_VEX", "[]"), "gateWhy": e("FAKE_WHY", "{}"), "passedAnalysed": e("FAKE_PASSED", "[]"),
+           "modules": [{"module": "immich", "score": 20, "level": "high", "open": 1, "risk": 0, "carried": 1, "ack": 0, "now": 2, "fixed": 2, "new": 1,
+                        "decided": 1, "vex": 3, "decidedIds": ["CVE-D1"]},
                        {"module": "coturn", "score": 0, "level": "ok", "open": 0, "risk": 0, "carried": 0, "ack": 0, "now": 0, "fixed": 0, "new": 0}],
            "release": {"score": 20, "level": "high", "setBy": {"module": "immich"}}, "scoreModel": {"weights": {"risk": {"critical": 25}}}},
           open(out, "w"))
@@ -720,6 +721,16 @@ FAKE_GATE="${G}" FAKE_ITEMS='{"cve immich CVE-B":"Critical brotli@1.2.1","major 
 [[ "${RC}" -ne 0 && "${OUT}" == *"cve immich CVE-B"* && "${OUT}" == *"changed since"*"acked Critical brotli@1.2.0, now Critical brotli@1.2.1"* ]] \
     && ok "an ack given against another pin does not cover an item that changed: the boundary stops, saying how" || bad "a changed item passed: ${OUT}"
 [[ "${OUT}" != *"    major grafana 13->14"* ]] && ok "…while the unchanged item stays covered" || bad "the unchanged major was refused: ${OUT}"
+FAKE_GATE='["cve immich CVE-O","cve immich CVE-R"]' FAKE_WHY='{"cve immich CVE-O":"open","cve immich CVE-R":"risk high"}' \
+    FAKE_PASSED='["cve immich CVE-P"]' FAKE_NOW=$(( 1790000000 + 20*86400 )) run_to boundary --resume --to nixos-26.05
+[[ "${RC}" -ne 0 && "${OUT}" == *"cve immich CVE-O   (open)"* && "${OUT}" == *"cve immich CVE-R   (risk high)"* ]] \
+    && ok "the gate names why each item needs an ack: open, risk high" || bad "gate reasons: ${OUT}"
+[[ "${OUT}" == *"1 new item(s) already analysed at risk low/medium pass without an ack"* ]] \
+    && ok "…and says what passed without one, analysed at risk low/medium" || bad "passed line: ${OUT}"
+FAKE_GATE='[]' FAKE_PASSED='["cve immich CVE-P"]' run_to preview
+FAKE_GATE='[]' FAKE_PASSED='["cve immich CVE-P"]' run_to boundary --dry-run --force-boundary
+[[ "${OUT}" == *"found nothing to acknowledge (1 new item(s) analysed at risk low/medium pass without one)"* ]] \
+    && ok "only analysed low/medium items: the plan says the gate would pass, and why" || bad "passed-only plan: ${OUT}"
 # Stale acks: an acknowledged item no longer in the gate is dropped by the next ack.
 FAKE_GATE='["cve immich CVE-B","cve immich CVE-C"]' FAKE_ITEMS='{"cve immich CVE-B":"Critical brotli@1.2.0","cve immich CVE-C":"High x@1"}' \
     FAKE_GM='{"cve immich CVE-B":["immich"],"cve immich CVE-C":["immich"]}' run_to preview
@@ -743,7 +754,7 @@ VX='[{"file":"src/home/immich/immich-vex.json","module":"immich","id":"CVE-L1","
      {"file":"src/home/immich/immich-vex.json","module":"immich","id":"CVE-G1","refs":["pkg:nix/glibc@2.42-100"],"class":"carried","deadRefs":[]}]'
 FAKE_GATE='["cve immich CVE-B","cve immich CVE-C"]' FAKE_VEX="${VX}" run_to boundary --dry-run --force-boundary
 [[ "${OUT}" == *"1b clean VEX on the pin branch"* ]] && ok "the plan names the VEX cleanup" || bad "no cleanup in the plan: ${OUT}"
-FAKE_GATE='["cve immich CVE-B","cve immich CVE-C"]' FAKE_ITEMS='{"cve immich CVE-B":"Critical brotli@1.2.0","cve immich CVE-C":"High x@1"}' FAKE_VEX="${VX}" \
+FAKE_GATE='["cve immich CVE-B","cve immich CVE-C"]' FAKE_ITEMS='{"cve immich CVE-B":"Critical brotli@1.2.0","cve immich CVE-C":"High x@1"}' FAKE_VEX="${VX}" FAKE_PASSED='["cve immich CVE-P"]' \
     FAKE_NOW=$(( 1790000000 + 20*86400 )) run_to boundary --resume --to nixos-26.05
 [[ "${RC}" -eq 0 && "${OUT}" == *"Phase 1b: VEX cleanup"*"removed  CVE-L1"*"removed  CVE-T1"*"carried  CVE-G1"* ]] \
     && ok "the boundary's cve phase removes the gone statements and lists the carried" || bad "cve phase: ${OUT}"
@@ -766,6 +777,22 @@ _e="$(jq -c '.releases[0]' <<<"${_rel}")"
 [[ "$(jq -r '.security | "\(.vex.removed) \(.vex.carried) \(.model.weights.risk.critical)"' <<<"${_e}")" == "2 1 25" ]] \
     && ok "…with what the cleanup did and the values the score used" || bad "security vex/model: $(jq -c .security <<<"${_e}")"
 [[ "$(jq -r '.ack // "gone"' "${TMP}/cfg/release-train.json")" == "gone" ]] && ok "…and the ack is reset after it is archived" || bad "ack survived"
+[[ "$(jq -r '.security | "\(.modules.immich.decided) \(.modules.immich.decidedIds | join(",")) \(.modules.immich.fixed) \(.passed | join(","))"' <<<"${_e}")" == "1 CVE-D1 2 cve immich CVE-P" ]] \
+    && ok "record keeps what was fixed, decided (by id) and passed analysed" || bad "security fixed/decided/passed: $(jq -c .security <<<"${_e}")"
+[[ "${OUT}" == *"1 new item(s) already analysed at risk low/medium pass without an ack"* ]] \
+    && ok "…the boundary said what passed analysed" || bad "boundary passed line: ${OUT}"
+_rn="$(git -C "${TMP}/w" show origin/main:RELEASES.md 2>/dev/null)"
+_v="$(jq -r '.version' <<<"${_e}")"
+[[ "${_rn}" == *"## Security"*"### ${_v} — high, score 20 (set by immich)"*"| immich | 20 | high | — | 1 | 0 | 1 | 0 | 2 | 1 |"* ]] \
+    && ok "RELEASES.md gets the release's security section: level, score, each module's row" || bad "release notes: ${_rn}"
+[[ "${_rn}" == *"**Fixed:** 2 critical/high CVE(s) no longer shipped — immich 2."* \
+   && "${_rn}" == *"**Decided** by a VEX statement"*"immich CVE-D1; cleanup: 2 statement(s) no channel ships removed"* \
+   && "${_rn}" == *"**Passed without an ack**, already analysed at risk low or medium: immich CVE-P."* ]] \
+    && ok "…what was fixed, decided and passed analysed" || bad "release notes fixed/decided: ${_rn}"
+[[ "${_rn}" == *"**Accepted** (2 item(s)):"*"  - all: brotli: no fix upstream yet, tracked — 2 item(s): CVE-B, major grafana 13->14"*"  - immich: CVE-C: low here — 2 item(s): CVE-B, CVE-C"* ]] \
+    && ok "…and what was accepted, each note with what it covered" || bad "release notes accepted: ${_rn}"
+[[ "${_rn}" == *"1 other module(s) at 0, ok"* && "${_rn}" != *"| coturn |"* ]] \
+    && ok "…a module at 0 with nothing fixed or decided is only counted" || bad "release notes quiet: ${_rn}"
 # A gate preview that could not judge (a failed match) removes nothing.
 setup_to
 mkdir -p "${TMP}/w/src/home/immich"
@@ -778,6 +805,42 @@ FAKE_ERRORS='["images: trivy failed"]' FAKE_GATE='["cve-match-failed"]' FAKE_ITE
 [[ "${RC}" -eq 0 && "${OUT}" == *"CVE match failed — no VEX statement is removed"* ]] \
     && ok "after a failed match the cve phase removes nothing, and says so" || bad "failed-match cleanup: ${OUT}"
 unset TAPPAAS_PIN_FINDINGS
+
+echo "── the release notes' security section, against the previous release ──"
+rm -rf "${TMP}/rn"; mkdir -p "${TMP}/rn/release"
+cat > "${TMP}/rn/release/releases.json" <<'JEOF'
+{"releases":[
+ {"version":"2.5","commit":"","staging":"2026-11-22","production":null,"kind":"minor","pin":"x",
+  "security":{"release":{"score":16.5,"level":"high","setBy":{"module":"jellyfin"}},
+   "modules":{"immich":{"score":8,"level":"medium","open":1,"risk":0,"carried":0,"ack":1,"fixed":3,"decided":1,"decidedIds":["CVE-B"]},
+              "jellyfin":{"score":16.5,"level":"high","risk":2},"coturn":{"score":0,"level":"ok"},"baseline":{"score":0,"level":"ok","fixed":2}},
+   "vex":{"removed":2,"pruned":1,"carried":1},"passed":["cve jellyfin CVE-J1"]},
+  "ack":{"items":["cve immich CVE-C"],"notes":[{"module":"immich","note":"no fix upstream; tracked in the roadmap","items":1}]}},
+ {"version":"2.4","commit":"abc","staging":"2026-11-09","production":"2026-11-22","kind":"minor",
+  "security":{"release":{"score":20,"level":"high","setBy":{"module":"immich"}},
+   "modules":{"immich":{"score":20,"level":"high","open":1},"coturn":{"score":0,"level":"ok"}}}},
+ {"version":"2.3","commit":"","staging":"2026-10-25","production":null,"kind":"minor","accepted":["major x 1->2"]}
+]}
+JEOF
+TAPPAAS_REPO_DIR="${TMP}/rn" TAPPAAS_CONFIG_DIR="${TMP}/rn" "${TRAIN}" releases --render >/dev/null 2>&1
+_rn="$(cat "${TMP}/rn/RELEASES.md" 2>/dev/null)"
+[[ "${_rn}" == *"| 2.3 | "*"## Security"*"### 2.5 — high, score 16.5 (set by jellyfin)"*"### 2.4 — high, score 20 (set by immich)"* ]] \
+    && ok "releases --render: the table, then one security section per scored release, newest first" || bad "render: ${_rn}"
+[[ "${_rn}" == *"Against 2.4: high, score 20."*"| Module | Score | Level | 2.4 |"*"| immich | 8 | medium | 20 high | 1 | 0 | 0 | 1 | 3 | 1 |"* ]] \
+    && ok "…each module's score and level against the previous release" || bad "render prev: ${_rn}"
+[[ "${_rn}" == *"| jellyfin | 16.5 | high | — |"* ]] && ok "…a module the previous release did not score shows —" || bad "render new module: ${_rn}"
+[[ "${_rn}" == *"| NixOS baseline | 0 | ok | — | 0 | 0 | 0 | 0 | 2 | 0 |"*"**Fixed:** 5 critical/high CVE(s) no longer shipped — immich 3, NixOS baseline 2."* ]] \
+    && ok "…the baseline is shown when it fixed something, and FIXED adds up" || bad "render baseline: ${_rn}"
+[[ "${_rn}" == *"cleanup: 2 statement(s) no channel ships removed, 1 ref(s) pruned, 1 carried to confirm."* ]] \
+    && ok "…the VEX cleanup is said with what was decided" || bad "render vex: ${_rn}"
+[[ "${_rn}" == *"### 2.4"*"**Fixed:** nothing."*"**Decided** by a VEX statement"*": nothing."*"**Accepted:** nothing."* ]] \
+    && ok "…a release with nothing fixed, decided or accepted says so" || bad "render empty: ${_rn}"
+_s23="${_rn##*## Security}"
+[[ "${_s23}" != *"### 2.3"* ]] && ok "…a release without a security record gets no section" || bad "2.3 got a section"
+printf '{"releases":[{"version":"2.3","commit":"","staging":"2026-10-25","production":null,"kind":"minor"}]}\n' > "${TMP}/rn/release/releases.json"
+TAPPAAS_REPO_DIR="${TMP}/rn" TAPPAAS_CONFIG_DIR="${TMP}/rn" "${TRAIN}" releases --render >/dev/null 2>&1
+[[ "$(cat "${TMP}/rn/RELEASES.md")" != *"## Security"* && "$(tail -1 "${TMP}/rn/RELEASES.md")" == "| 2.3 |"* ]] \
+    && ok "…and with no scored release the page is as before" || bad "render no security: $(cat "${TMP}/rn/RELEASES.md")"
 
 echo "── a flake with no nixpkgs ref is refused, never rewritten blind ──"
 setup_to

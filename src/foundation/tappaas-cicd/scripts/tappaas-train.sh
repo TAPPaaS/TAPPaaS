@@ -344,8 +344,67 @@ render_releases() {
       "| Version | Commit | Staging | Production | Notes |",
       "|---|---|---|---|---|",
       (.releases[] | "| \(.version) | \(if (.commit // "") == "" then "`v\(.version)`" else "`\(.commit)`" end) | \(.staging // "—") | \(.production // "—") | \(notes) |")
-    ' "$1"
+    ' "$1" && jq -r "${JQ_SECURITY}" "$1"
 }
+
+# The release notes' security section, from each release's record (`security`,
+# `ack`): the release's level and score; each module's against the previous
+# release that has one; what was fixed, decided, passed analysed and accepted.
+# A module at 0 in both releases, with nothing fixed or decided, is only counted.
+JQ_SECURITY='
+  def num: tostring | split(".") | map(tonumber? // 0);
+  def sl: if . == null then "—" else "\(.score) \(.level)" end;
+  def tl($n): if length > $n then (.[0:$n] | join(", ")) + " +\(length - $n)" else join(", ") end;
+  def worth($p): (.value.score // 0) > 0 or (($p[.key].score) // 0) > 0 or (.value.fixed // 0) > 0
+                 or (.value.decided // 0) > 0 or (.value.ack // 0) > 0;
+  ((.releases // []) | sort_by(.version | num) | reverse) as $r
+  | [range(0; $r | length) as $i | $r[$i] | select(.security != null)
+     | . + {prev: ([$r[$i + 1:][] | select(.security != null)][0] // null)}] as $sec
+  | if ($sec | length) == 0 then empty else
+    "",
+    "## Security",
+    "",
+    "Each release is scored over the critical/high CVEs it ships, analysed or not: only a module'"'"'s highest category",
+    "counts, each further item at half the one before. Levels: ok (0), low, medium (7), high (16), critical (30).",
+    "Open: nobody has analysed it · Risk: analysed and exploitable here, at its rating · Carried: analysed for another",
+    "version, counted as open until confirmed · Accepted: acknowledged for this release, with the note below.",
+    ($sec[] | . as $e | ($e.security.modules // {}) as $m | ($e.prev.security.modules // {}) as $pm
+     | ($m | to_entries | map(select(.key != "baseline" or (.value.score // 0) > 0 or (.value.fixed // 0) > 0))) as $all
+     | ($all | map(select(worth($pm))) | sort_by(-(.value.score // 0), .key)) as $rows
+     | "",
+       "### \($e.version) — \($e.security.release.level // "?"), score \($e.security.release.score // "?")"
+         + (if ($e.security.release.setBy.module // null) != null then " (set by \($e.security.release.setBy.module))" else "" end),
+       "",
+       (if $e.prev != null then "Against \($e.prev.version): \($e.prev.security.release.level // "?"), score \($e.prev.security.release.score // "?").\n" else empty end),
+       (if ($rows | length) > 0 then
+          "| Module | Score | Level | \(if $e.prev != null then $e.prev.version else "Previous" end) | Open | Risk | Carried | Accepted | Fixed | Decided |",
+          "|---|---|---|---|---|---|---|---|---|---|",
+          ($rows[] | "| \(if .key == "baseline" then "NixOS baseline" else .key end) | \(.value.score // 0) | \(.value.level // "ok") | \($pm[.key] | sl) | \(.value.open // 0) | \(.value.risk // 0) | \(.value.carried // 0) | \(.value.ack // 0) | \(.value.fixed // 0) | \(.value.decided // 0) |")
+        else empty end),
+       (($all | length) - ($rows | length)) as $quiet
+       | (if $quiet > 0 then "\n\($quiet) other module(s) at 0, ok, with nothing fixed or decided." else empty end),
+       "",
+       ([$all[] | select((.value.fixed // 0) > 0) | "\(if .key == "baseline" then "NixOS baseline" else .key end) \(.value.fixed)"]) as $fx
+       | "- **Fixed:** " + (if ($fx | length) == 0 then "nothing" else
+           "\([$all[] | .value.fixed // 0] | add) critical/high CVE(s) no longer shipped — \($fx | join(", "))" end) + ".",
+       ([$all[] | select((.value.decidedIds // []) | length > 0) | "\(.key) \(.value.decidedIds | tl(8))"]) as $dc
+       | "- **Decided** by a VEX statement (its analysis is in the module'"'"'s `<module>-vex.json`): "
+           + (if ($dc | length) == 0 then "nothing" else ($dc | join("; ")) end)
+           + (if ($e.security.vex // null) != null then
+                "; cleanup: \($e.security.vex.removed // 0) statement(s) no channel ships removed, \($e.security.vex.pruned // 0) ref(s) pruned, \($e.security.vex.carried // 0) carried to confirm"
+              else "" end) + ".",
+       (if (($e.security.passed // []) | length) > 0 then
+          "- **Passed without an ack**, already analysed at risk low or medium: \($e.security.passed | map(sub("^cve "; "")) | tl(12))."
+        else empty end),
+       (if ($e.ack // null) != null and (($e.ack.notes // []) | length) > 0 then
+          "- **Accepted** (\($e.ack.items | length) item(s)):",
+          ($e.ack.notes[] | "  - \(.module): \(.note // "" | if . == "" then "(no note)" else . end) — \(.items // (.keys // [] | length)) item(s)" + (if ((.keys // []) | length) > 0 then ": \(.keys | map(sub("^cve [^ ]+ "; "")) | tl(8))" else "" end))
+        elif (($e.accepted // []) | length) > 0 then
+          "- **Accepted:** \($e.accepted | join("; "))."
+        else "- **Accepted:** nothing." end)
+    )
+  end'
+
 
 # Cut ROADMAP.md for the version a boundary cuts (release/roadmap-cut.py, run from
 # the checkout being released, so the script always matches the file it edits): the
@@ -1475,9 +1534,10 @@ security_record() {
     jq -c --argjson vex "$(jq -c '.boundary.vex // null' "${STATE_FILE}" 2>/dev/null || echo null)" '
         if (.release // null) == null then null else
         {release: .release,
-         modules: ([.modules[] | {key: .module, value: ({score, level, open, risk, carried, ack, now, fixed, new}
-                     | with_entries(select(.value != null)))}] | from_entries),
+         modules: ([.modules[] | {key: .module, value: ({score, level, open, risk, carried, ack, now, fixed, decided, vex, new, decidedIds}
+                     | with_entries(select(.value != null and .value != [])))}] | from_entries),
          model: .scoreModel}
+        + (if ((.passedAnalysed // []) | length) > 0 then {passed: .passedAnalysed} else {} end)
         + (if $vex != null then {vex: {removed: ($vex.removed | length), pruned: $vex.pruned, carried: ($vex.carried | length)}} else {} end)
         end' "${f}" 2>/dev/null || echo null
 }
@@ -2087,7 +2147,8 @@ preview_plan() {
     fi
     local open n; open="$(unacked "${PREVIEW_FILE}")"; n="$(jq '.gate | length' "${PREVIEW_FILE}")"
     if [[ "${n}" == "0" ]]; then
-        info "       pin gate: the last preview ($(jq -r '.at // "?"' "${PREVIEW_FILE}")) found nothing to acknowledge"
+        local passed; passed="$(jq '(.passedAnalysed // []) | length' "${PREVIEW_FILE}" 2>/dev/null || echo 0)"
+        info "       pin gate: the last preview ($(jq -r '.at // "?"' "${PREVIEW_FILE}")) found nothing to acknowledge$([[ "${passed:-0}" != "0" ]] && echo " (${passed} new item(s) analysed at risk low/medium pass without one)")"
     elif [[ -z "${open}" ]]; then
         info "       pin gate: the last preview's ${n} item(s) are all acknowledged — the gate would pass"
     else
@@ -2105,14 +2166,21 @@ pin_gate() {   # $1 = templates dir with the moved lock, $2 = from rev
         warn "  pin preview unavailable — the deep test still proves the pin"
         return 0
     fi
+    local passed; passed="$(jq '(.passedAnalysed // []) | length' "${f}" 2>/dev/null || echo 0)"
+    [[ "${passed:-0}" != "0" ]] \
+        && info "  ${passed} new item(s) already analysed at risk low/medium pass without an ack (they count in the release score)"
     if [[ "$(jq '.gate | length' "${f}")" == "0" ]]; then
-        info "  ${GN}✓${CL} no major version change, no new critical/high CVE"
+        info "  ${GN}✓${CL} no major version change, no new critical/high CVE that needs an ack"
         return 0
     fi
     open="$(unacked "${f}")"
     if [[ -n "${open}" ]]; then
         error "  this pin brings what nobody has accepted:"
-        while IFS= read -r l; do error "    ${l}"; done <<<"${open}"
+        local why
+        while IFS= read -r l; do
+            why="$(jq -r --arg k "${l}" '(.gateWhy // {})[$k] // empty' "${f}" 2>/dev/null)"
+            error "    ${l}${why:+   (${why})}"
+        done <<<"${open}"
         local changed; changed="$(ack_changed "${f}")"
         if [[ -n "${changed}" ]]; then
             error "  acknowledged against pin $(jq -r '.ack.to // "?" | .[0:12]' "${STATE_FILE}"), and changed since — the ack does not cover them:"

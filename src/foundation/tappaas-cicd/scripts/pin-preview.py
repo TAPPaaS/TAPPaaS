@@ -23,9 +23,10 @@ What needs an operator's acknowledgement (`tappaas-train ack`): a MAJOR version
 change against the release, a critical/high CVE that is new against it, and a
 match that failed. `gate` lists them, `digest` names the set, `gateItems` holds
 each item's fingerprint (its packages at their versions) so an ack given against
-one pin can be checked against the next. A new CVE already analysed at risk low
-or medium passes without one (ADR-045 D5): `passedAnalysed`. An ack no longer in
-the gate is listed in `staleAcks`.
+one pin can be checked against the next, and `gateWhy` why each needs an ack:
+open, carried, risk high/critical/unrated, major or match failed. A new CVE
+already analysed at risk low or medium passes without one (ADR-045 D5):
+`passedAnalysed`. An ack no longer in the gate is listed in `staleAcks`.
 
 ADR-045: each CVE is open, risk, carried (analysed for another version of the
 package: counted as open, the old analysis attached) or decided. With --vex-root,
@@ -468,6 +469,16 @@ def main():
                 return c
         return None
 
+    def gate_why(state, risk):
+        """Why a NEW critical/high item needs an ack, or None when it passes (ADR-045
+        D5). Open and carried items need one; so does an analysed item rated high or
+        critical, or not rated at all (a rating outside low…critical counts as none).
+        An item already analysed at risk low or medium passes: analysing it was the
+        decision. It still counts in the score."""
+        if state == "risk":
+            return None if risk in ("low", "medium") else f"risk {risk or 'unrated'}"
+        return state
+
     def status_of(cve, key):
         """(state, risk, acked): risk — analysed (a VEX `exploitable` statement of this
         module or the baseline), still counted · carried — analysed for another version
@@ -487,7 +498,7 @@ def main():
             "vexLive", "vexCarried", "vexGone")
     details = {}
     rows, introduced, total = [], {}, dict.fromkeys(COLS, 0)
-    gate_modules, gate_items, passed = {}, {}, []
+    gate_modules, gate_items, gate_why_, passed = {}, {}, {}, []
 
     def make_row(key, bf, nf, vx, in_base, in_now, note, approx_):
         bk, nk = set(bf), set(nf)
@@ -506,15 +517,16 @@ def main():
                "ack": sum(1 for _, _, a_ in st.values() if a_),
                "fixed": len(gone), "decided": len(decided), "new": len(nk - bk), "same": len(nk & bk), "vex": len(vx),
                "approximate": approx_, "note": note}
+        row["decidedIds"] = sorted(decided)
         for k in nk - bk:
-            # An item already analysed at risk low or medium passes without an ack
-            # (ADR-045 D5): analysing it was the decision. It still counts in the score.
-            if st[k][0] == "risk" and st[k][1] in ("low", "medium"):
+            why = gate_why(st[k][0], st[k][1])
+            if why is None:
                 passed.append(f"cve {key} {k}")
                 continue
             introduced.setdefault(f"{key} {k}", []).append(key)
             gate_modules[f"cve {key} {k}"] = [key]
             gate_items[f"cve {key} {k}"] = fingerprint(nf[k])
+            gate_why_[f"cve {key} {k}"] = why
         return row, gone
 
     # The baseline, decided by templates-vex.json only (a module's own statement on a
@@ -703,9 +715,11 @@ def main():
     for (p, x, y), mj in majors.items():
         gate_modules[f"major {mj['pkg']} {x}->{y}"] = sorted(set(mj["modules"]))
         gate_items[f"major {mj['pkg']} {x}->{y}"] = f"{mj['from']}->{mj['to']}"
+        gate_why_[f"major {mj['pkg']} {x}->{y}"] = "major"
     if errors:
         gate_modules["cve-match-failed"] = ["(a failed match)"]
         gate_items["cve-match-failed"] = "; ".join(errors)
+        gate_why_["cve-match-failed"] = "match failed"
     gate = sorted([f"major {m['pkg']} {x}->{y}" for (p, x, y), m in majors.items()]
                   + [f"cve {k}" for k in introduced]
                   + (["cve-match-failed"] if errors else []))
@@ -737,7 +751,7 @@ def main():
         "notGated": [{"pkg": p, "why": w} for p, w in sorted(quiet.items())],
         "introduced": [{"key": k, "modules": sorted(set(v))} for k, v in sorted(introduced.items())],
         "errors": errors, "gate": gate, "digest": hashlib.sha256("\n".join(gate).encode()).hexdigest()[:16],
-        "gateModules": gate_modules, "gateItems": gate_items, "acked": sorted(acked & set(gate)),
+        "gateModules": gate_modules, "gateItems": gate_items, "gateWhy": gate_why_, "acked": sorted(acked & set(gate)),
         "staleAcks": sorted(acked - set(gate)), "passedAnalysed": sorted(passed),
         "scanCheck": scan_check,
         "vexStatements": vex_out, "vexUnreadable": vex_bad,
@@ -919,6 +933,13 @@ def render(o):
           + (f", {len(acked)} acknowledged" if acked else ""))
     if per:
         print("    by module: " + ", ".join(f"{m} {c}" for m, c in sorted(per.items(), key=lambda x: (-x[1], x[0]))))
+    why = {}
+    for g in left:
+        w = (o.get("gateWhy") or {}).get(g, "?")
+        why[w] = why.get(w, 0) + 1
+    if why:
+        print("    why: " + ", ".join(f"{w} {c}" for w, c in sorted(why.items(), key=lambda x: (-x[1], x[0])))
+              + "   (open: triage · carried: cve-triage.sh carry · risk high/critical/unrated · major · match failed: ack with a note)")
 
 
 if __name__ == "__main__":

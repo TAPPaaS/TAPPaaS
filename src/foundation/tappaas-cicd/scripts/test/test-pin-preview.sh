@@ -303,7 +303,7 @@ runv() {
         --base-label v2.1 --base-closures "${T}/base" --base-images "${T}/base-images.json" --base-nix-scanner "${NIXSCAN:-${T}/nix} --components {file}" \
         --now-closures "${T}/now" --now-images "${T}/now-images.json" --now-nix-scanner "${NIXSCAN:-${T}/nix} --components {file}" \
         --image-scanner "${T}/img --refs {file}" --from aaaaaaaaaaaa --to bbbbbbbbbbbb --out "${T}/p.json" --ignore "${T}/ignore.json" \
-        --details "${T}/d.json" --vex-root "${V}" --scorer "${SCORER:-${T}/scorer} --details {file} --json" "$@" 2>&1)"; RC=$?
+        --details "${T}/d.json" --vex-root "${VROOT:-${V}}" --scorer "${SCORER:-${T}/scorer} --details {file} --json" "$@" 2>&1)"; RC=$?
 }
 vcls() { jq -r --arg i "$1" '[.vexStatements[] | select(.id == $i) | .class] | join(",")' "${T}/p.json"; }
 VEXED="CVE-2@14.0.1:logging" runv
@@ -347,6 +347,41 @@ ck "…one analysed at risk high is still gated" "true" "$(jq '.gate | index("cv
 ck "each gate item has a fingerprint: severity and packages at their versions" "High grafana@14.0.1" \
    "$(jq -r '.gateItems["cve logging CVE-2"]' "${T}/p.json")"
 ck "…and a major its versions" "13.0.9->14.0.1" "$(jq -r '.gateItems["major grafana 13->14"]' "${T}/p.json")"
+# Both sides of the policy, item by item: what passes, what needs an ack and why.
+gw() { jq -r --arg k "cve logging CVE-2" '[(.gate | index($k) != null), ((.passedAnalysed // []) | index($k) != null), (.gateWhy[$k] // "-")] | join(" ")' "${T}/p.json"; }
+TRIAGED="CVE-2:logging:low" runv
+ck "risk low: passes without an ack" "false true -" "$(gw)"
+ck "…and still counts: the scorer gets it as a risk item, rated low" "risk low" \
+   "$(jq -r '.modules.logging.cves.new[] | select(.id=="CVE-2") | "\(.state) \(.risk)"' "${T}/d.json")"
+ck "…it is not in the gate, so not in its digest: logging has only its majors" '["major grafana 13->14","major protobuf 34->33"]' \
+   "$(jq -c '[.gate[] as $g | select((.gateModules[$g] // []) | index("logging")) | $g]' "${T}/p.json")"
+ck "…and the text says it passed" "yes" "$([[ "${OUT}" == *"pass without an ack: 1 (cve logging CVE-2)"* ]] && echo yes || echo no)"
+TRIAGED="CVE-2:logging:critical" runv
+ck "risk critical: needs an ack" "true false risk critical" "$(gw)"
+TRIAGED="CVE-2:logging:" runv
+ck "an exploitable statement with no rating: needs an ack" "true false risk unrated" "$(gw)"
+TRIAGED="CVE-2:logging:none" runv
+ck "a rating outside low…critical counts as none: needs an ack" "true false risk unrated" "$(gw)"
+TRIAGED="CVE-2:logging:low CVE-2::high" runv
+ck "rated low here and high in the baseline's VEX: the worst rating gates it" "true false risk high" "$(gw)"
+runv
+ck "open (nobody has analysed it): needs an ack" "true false open" "$(gw)"
+ck "a major's reason is major" "major" "$(jq -r '.gateWhy["major grafana 13->14"]' "${T}/p.json")"
+ck "the text counts what is left by reason" "yes" "$([[ "${OUT}" == *"why: major 2, open 2   (open: triage"* ]] && echo yes || echo no)"
+V2="${T}/vexroot2"; mkdir -p "${V2}/src/obs/logging"
+vexf "${V2}/src/obs/logging/logging-vex.json" "$(st CVE-2 not_affected 'grafana 13.9: the plugin is off' code_not_reachable "$(refs pkg:nix/grafana@13.9.0)")"
+VROOT="${V2}" runv
+ck "carried (analysed for grafana 13.9.0, 14.0.1 ships): needs an ack" "true false carried" "$(gw)"
+TRIAGED="CVE-1:logging:low" runv
+ck "an item in the release too is not new: never gated, whatever its state" "false" \
+   "$(jq '.gate | index("cve logging CVE-1") != null' "${T}/p.json")"
+NIXSCAN="${T}/bad" runv
+ck "a failed match: needs an ack, reason match failed" "match failed" "$(jq -r '.gateWhy["cve-match-failed"]' "${T}/p.json")"
+VEXED="CVE-OLD@13.0.9:logging" runv
+ck "a CVE the release had that VEX now settles is named per module (decidedIds)" '[]' \
+   "$(jq -c '.modules[] | select(.module=="logging") | .decidedIds' "${T}/p.json")"
+VEXED="CVE-1@3.5.2" run
+ck "…a decided one is listed by id" '["CVE-1"]' "$(jq -c '.modules[] | select(.module=="logging") | .decidedIds' "${T}/p.json")"
 # Stale acks: acknowledged, no longer in the gate.
 echo '{"ack":{"gate":["cve logging CVE-2","cve logging CVE-GONE-NOW"]}}' > "${T}/state.json"
 TRIAGED="CVE-2:logging:high" runv --acked "${T}/state.json"
