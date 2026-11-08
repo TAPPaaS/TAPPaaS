@@ -23,7 +23,7 @@ import { closeSync, existsSync, openSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 import { cloneObjects, endedBeforeEmit, reconcileAcks, silenced } from "./ack";
 import { Condition, HealthCmdb, HealthObject, Period, RootEntry, Status, conditionsOf, rootsOf, rootsOfSite, worse } from "./emit-cmdb";
-import { EventKind, HealthEvent, Journal, RootCauseEvent, TransitionEvent, eventLine } from "./events";
+import { EventKind, HealthEvent, Journal, RootCauseEvent, TransitionEvent, eventLine, levelChanged, levelRose } from "./events";
 import { renameGuarded, simulating, unlinkGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 
 export const CURSOR_FILE = ".health-emit-cursor";
@@ -106,7 +106,7 @@ export function transitions(periods: Period[]): Transition[] {
       const after = cur.find((c) => c.type === type);
       const from = before?.status ?? "unknown";
       const to = after?.status ?? "ok";
-      if (from === to || (!before && to === "ok")) continue;
+      if ((from === to && !levelChanged(type, before, after)) || (!before && to === "ok")) continue;
       out.push({ type, from, to, at: p.from, change: Number(p.change), after, before });
     }
     prev = cur;
@@ -263,6 +263,7 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
             symptoms: roots.find((e) => e.id === o.id)?.impactedCount ?? now[rootKey(o.id, type)]?.symptoms.length ?? 0,
             impacted: (now[rootKey(o.id, type)] ?? now[rootKey(o.id, "")])?.impacted ?? "nothing",
             silenced: silenced(c, input.now),
+            ...(t.after && levelRose(o.class, type, t.before, t.after) ? { levelUp: true as const } : {}),
           };
         };
         const windowMs = BUCKETS * intervalMs;

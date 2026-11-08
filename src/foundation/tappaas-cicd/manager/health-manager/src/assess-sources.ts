@@ -15,7 +15,9 @@ import { AlertItem } from "./alerts";
 import { CmdbItem, SiteIndex } from "./assess-model";
 import { POOL_FAIL, POOL_WARN } from "./checks";
 import { SWEEP_MAX_AGE_MS, SweepRecord } from "./cmdbsweep";
-import { STALE_DAYS, ScanStatus, TargetStatus, targetSubject } from "./security";
+import { STALE_DAYS, ScanStatus } from "./security";
+import { SiteSecurity } from "./site-score";
+import { Level } from "../../../lib/ts/src/score";
 import { CheckResult, CheckRow, CheckStatus, CheckSubject } from "./types";
 import { ConditionStatus, ConditionType } from "../../../lib/ts/src/health-rules";
 
@@ -98,7 +100,8 @@ export function fromGates(checks: CheckResult[], idx: SiteIndex): { findings: Fi
 const SECURITY_ALERTS = new Set(["RootKeyChanged", "FirewallCertChanged"]);
 // The rules over health-manager's own events: they report conditions, they are not one. As one, the
 // digest's firing was a new warning, which kept the digest firing the next day.
-const HEALTH_RULES = new Set(["HealthRootCause", "HealthRootRecovered", "HealthDailyDigest"]);
+// The two CVE rules (ADR-045 D4) tell what the security condition already holds.
+const HEALTH_RULES = new Set(["HealthRootCause", "HealthRootRecovered", "HealthDailyDigest", "CveNewCritical", "CveLevelUp"]);
 const CI_LABELS = ["tappaas_ci_id", "tappaas.ci.id", "service_instance_id", "service.instance.id", "host_id", "host.id"];
 const kebab = (s: string): string => s.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
 
@@ -215,22 +218,53 @@ function certificates(o: CmdbItem, certs: unknown, nowMs: number, add: (o: CmdbI
   }
 }
 
-// ── the CVE scan (ADR-011) ───────────────────────────────────────────
-// WARN, never FAIL, as its gate: a CVE published upstream never fails a sweep.
-export function fromCve(s: ScanStatus | null, nowMs: number, idx: SiteIndex): Finding[] {
+// ── the CVE scan (ADR-011) and its risk score (ADR-045 D4) ──────────
+// The security condition of a module, a node, a zone and an environment takes
+// its status from the score's level: ok and low are ok, medium and high a
+// warning, critical critical. The reason names the level (cve-medium,
+// cve-high, cve-critical), so a level change is a change even when the status
+// stays warning. A zone and an environment carry their own score (with the
+// zone's tier multiplier), not the worst of their members (derive.ts leaves
+// their security alone). A target whose scan failed is a warning of its own,
+// and a scan older than STALE_DAYS a warning on the site.
+export function levelStatus(l: Level): ConditionStatus {
+  return l === "critical" ? "critical" : l === "high" || l === "medium" ? "warning" : "ok";
+}
+export const CVE_LEVEL_REASONS = ["cve-medium", "cve-high", "cve-critical"];
+const levelReason = (l: Level): string => (levelStatus(l) === "ok" ? "ok" : `cve-${l}`);
+
+function scoreMessage(a: { score: number; level: Level }, why: string): string {
+  return `score ${a.score}, ${a.level}${why ? `: ${why}` : ""}`;
+}
+
+export function fromCve(s: ScanStatus | null, sec: SiteSecurity | null, nowMs: number, idx: SiteIndex): Finding[] {
   if (!s) return [];
   const out: Finding[] = [];
-  const line = (t: TargetStatus): Finding | null => {
-    const bad = t.verdict === "act" || t.verdict === "failed";
-    const o = idx.resolve(targetSubject(t)) ?? (bad ? idx.site : null);
-    if (!o) return null;
-    return bad
-      ? { object: o.id, type: "security", status: "warning", reason: t.verdict === "act" ? "cve-act" : "cve-scan-failed", message: `${t.name}: ${t.verdict === "act" ? `${t.critHighFixable ?? t.fixable ?? 0} fixable` : t.note}`, owner: "cve" }
-      : { object: o.id, type: "security", status: "ok", reason: "ok", message: "", owner: "cve" };
+  const add = (o: CmdbItem | null, status: ConditionStatus, reason: string, message: string): void => {
+    const at = o ?? (status !== "ok" ? idx.site : null);
+    if (at) out.push({ object: at.id, type: "security", status, reason, message: status === "ok" ? "" : message, owner: "cve" });
   };
-  for (const t of s.targets) {
-    const f = line(t);
-    if (f) out.push(f);
+  const units = sec?.units ?? {};
+  for (const u of Object.values(units)) {
+    const o = idx.resolve(u.subject);
+    const why = u.category ? `${u.counted} ${u.category}` : "";
+    add(o, levelStatus(u.level), levelReason(u.level), scoreMessage(u, why));
+    if (u.failed.length > 0) {
+      const t = s.targets.filter((x) => u.failed.includes(x.id));
+      add(o, "warning", "cve-scan-failed", t.map((x) => `${x.name}: ${x.note}`).join("; "));
+    }
+  }
+  for (const [z, a] of Object.entries(sec?.zones ?? {})) {
+    const o = idx.named(z, ["zone"]);
+    if (!o) continue;
+    const by = a.setBy.module ? units[a.setBy.module]?.name ?? a.setBy.module : "";
+    add(o, levelStatus(a.level), levelReason(a.level), scoreMessage(a, `×${a.multiplier ?? 1}${by ? `, set by ${by}` : ""}`));
+  }
+  for (const [e, a] of Object.entries(sec?.environments ?? {})) {
+    const o = idx.named(e, ["environment"]);
+    if (!o) continue;
+    const by = a.setBy.module ? `set by ${units[a.setBy.module]?.name ?? a.setBy.module} in ${a.setBy.zone}` : "";
+    add(o, levelStatus(a.level), levelReason(a.level), scoreMessage(a, by));
   }
   const days = Math.floor((nowMs - Date.parse(s.generated)) / DAY);
   if (days > STALE_DAYS && idx.site) out.push({ object: idx.site.id, type: "security", status: "warning", reason: "cve-scan-stale", message: `the last scan is ${days} days old`, owner: "cve" });

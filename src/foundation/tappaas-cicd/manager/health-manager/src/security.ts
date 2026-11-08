@@ -91,12 +91,33 @@ export interface TargetStatus {
   riskLevel?: string; // the worst risk-here among them
   critHighVex?: string[]; // Critical/High ids a VEX statement decided — not counted
   new: string[]; // critHighKeys not present in the previous scan
+  items?: CveItem[]; // every CVE the risk score looks at, with its state (ADR-045 D1)
+  newOpen?: string[]; // ids among `new` nobody has analysed (state open): what cve-new-critical mails
+  os?: { family: string; name: string }; // what trivy detected: the rescan matches the inventory as this system
+}
+
+// One CVE of a target as the risk score sees it (ADR-045 D1): decided (a VEX
+// statement says not affected, false positive or resolved), risk (analysed,
+// exploitable here, with a TAPPaaS rating), open (critical/high, not analysed),
+// carried (analysed for another version of the package, which no longer runs
+// here). Listed: risk items at any severity; open, carried and decided ones
+// when critical or high. Whether a fix exists is not part of it.
+export interface CveItem {
+  id: string;
+  state: "decided" | "risk" | "open" | "carried";
+  severity: string;
+  rating?: string; // risk: the TAPPaaS rating
+  pkg: string;
+  version: string;
+  analysis?: string; // the VEX statement's analysis (decided, risk, carried: the earlier one)
+  carriedFrom?: string; // carried: the version the earlier statement named
 }
 
 export interface ScanStatus {
   schema: 1;
   generated: string;
   sweep: { endTime: string; ok: boolean | null } | null;
+  inventory?: string; // a rescan: when the inventory it matched was taken (generated is when it was matched)
   scanners: Record<string, string>;
   notes: string[];
   targets: TargetStatus[];
@@ -511,6 +532,7 @@ export interface VexStatement {
   source: string;
   module: string; // whose targets it decides: "" = every target (templates, the estate-wide base)
   risk?: string; // exploitable/in_triage: the risk HERE, from ratings[] (source TAPPaaS) — low|medium|high|critical
+  detail?: string; // the analysis as written: justification and detail, for people to read
 }
 
 const VEX_SUPPRESS = new Set(["not_affected", "false_positive", "resolved", "resolved_with_pedigree"]);
@@ -519,7 +541,7 @@ const VEX_SUPPRESS = new Set(["not_affected", "false_positive", "resolved", "res
 // THIS deployment as a CycloneDX rating whose source is TAPPaaS — not the CVE's
 // own severity: a critical libxml2 flaw reachable only by an admin is low here.
 export function parseVex(json: string, source: string, module = ""): VexStatement[] {
-  type Doc = { vulnerabilities?: { id?: string; analysis?: { state?: string }; affects?: { ref?: string }[];
+  type Doc = { vulnerabilities?: { id?: string; analysis?: { state?: string; justification?: string; detail?: string }; affects?: { ref?: string }[];
     ratings?: { source?: { name?: string }; severity?: string }[] }[] };
   const doc = JSON.parse(json) as Doc;
   const out: VexStatement[] = [];
@@ -528,6 +550,8 @@ export function parseVex(json: string, source: string, module = ""): VexStatemen
     const s: VexStatement = { id: v.id, state: v.analysis.state, refs: (v.affects ?? []).map((a) => a.ref ?? "").filter(Boolean), source, module };
     const r = (v.ratings ?? []).find((x) => x.source?.name === "TAPPaaS" && x.severity);
     if (r?.severity) s.risk = r.severity.toLowerCase();
+    const why = [v.analysis.justification, v.analysis.detail].filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim());
+    if (why.length > 0) s.detail = why.join(": ");
     out.push(s);
   }
   return out;
@@ -566,6 +590,57 @@ function vexMatching(f: Finding, vex: VexStatement[]): VexStatement[] {
       return rp.base === fp.base && (rp.version === "" || rp.version === fp.version);
     });
   });
+}
+
+// A statement for the same CVE and package at another version: the analysis
+// was made for a build that no longer runs here (ADR-045 D1 "carried"). An
+// unversioned or a nixpkgs-patch statement is never carried: the first matches
+// every version, the second is about the build nixpkgs makes.
+export function vexCarried(f: Finding, vex: VexStatement[]): { statement: VexStatement; version: string } | null {
+  const fp = splitPurl(f.purl);
+  for (const s of vex) {
+    if (s.id !== f.id || s.source === PATCH_SOURCE) continue;
+    for (const r of s.refs) {
+      const rp = splitPurl(r);
+      if (rp.base === fp.base && rp.version !== "" && rp.version !== fp.version) return { statement: s, version: rp.version };
+    }
+  }
+  return null;
+}
+
+const STATE_RANK: Record<CveItem["state"], number> = { risk: 0, open: 1, carried: 2, decided: 3 };
+
+// The CVEs of a target as the score sees them, one per id: the first state in
+// risk, open, carried, decided order wins (one package analysed exploitable
+// makes the CVE a risk, whatever its other packages say).
+export function cveItems(all: Finding[], vex: VexStatement[]): CveItem[] {
+  const isCH = (f: Finding): boolean => f.severity === "Critical" || f.severity === "High";
+  const by = new Map<string, CveItem>();
+  for (const f of all) {
+    if (!f.id) continue;
+    let item: CveItem | null = null;
+    const base = { id: f.id, severity: f.severity, pkg: f.pkg, version: f.installed };
+    const dec = vexDeciders(f, vex);
+    if (dec.length > 0) {
+      if (isCH(f)) item = { ...base, state: "decided", ...(dec[0].detail ? { analysis: dec[0].detail } : dec[0].source === PATCH_SOURCE ? { analysis: "fixed by a patch nixpkgs applies" } : {}) };
+    } else {
+      const tri = vexTriage(f, vex);
+      if (tri.length > 0) {
+        const rank = ["critical", "high", "medium", "low"];
+        const t = [...tri].sort((a, b) => (rank.indexOf(a.risk ?? "") + 9) % 9 - (rank.indexOf(b.risk ?? "") + 9) % 9)[0];
+        item = { ...base, state: "risk", ...(t.risk ? { rating: t.risk } : {}), ...(t.detail ? { analysis: t.detail } : {}) };
+      } else if (isCH(f)) {
+        const c = vexCarried(f, vex);
+        item = c
+          ? { ...base, state: "carried", carriedFrom: c.version, ...(c.statement.detail ? { analysis: c.statement.detail } : {}) }
+          : { ...base, state: "open" };
+      }
+    }
+    if (!item) continue;
+    const had = by.get(f.id);
+    if (!had || STATE_RANK[item.state] < STATE_RANK[had.state]) by.set(f.id, item);
+  }
+  return [...by.values()].sort((a, b) => STATE_RANK[a.state] - STATE_RANK[b.state] || a.id.localeCompare(b.id));
 }
 
 // ── nixpkgs patches: a fix nixpkgs backported ──────────────────────────
@@ -660,6 +735,7 @@ export function summarize(
   }
   const chVex = new Set(all.filter((f) => f.id && isCH(f) && vexSuppresses(f, vex)).map((f) => f.id));
   if (chVex.size > 0) status.critHighVex = [...chVex].sort();
+  status.items = coverageFail ? [] : cveItems(all, vex);
   if (coverageFail) status.verdict = "failed";
   else if (!hasFixState) status.verdict = "triage";
   else if (chFix.length > 0) {
@@ -726,6 +802,8 @@ export function diffScans(cur: ScanStatus, prev: ScanStatus | null): ScanDiff {
     const p = prevById.get(t.id);
     const before = new Set(p?.critHighKeys ?? []);
     t.new = t.critHighKeys.filter((k) => !before.has(k));
+    const open = new Set((t.items ?? []).filter((i) => i.state === "open").map((i) => i.id));
+    t.newOpen = [...new Set(t.new.map((k) => k.split(" ")[0]).filter((id) => open.has(id)))].sort();
     if (t.verdict === "failed" && p?.verdict !== "failed") out.newlyFailed.push(t);
     const actBefore = new Set((p?.act ?? []).map((f) => `${f.id} ${f.pkg}`));
     const fresh = t.act.filter((f) => !actBefore.has(`${f.id} ${f.pkg}`));
@@ -753,6 +831,8 @@ export interface SecurityIO {
   grype(sbomFile: string): RemoteResult;
   trivyRootfs(dir: string): RemoteResult;
   trivyImage(ref: string): RemoteResult;
+  // A CycloneDX inventory matched offline (the rescan): no registry, no guest.
+  trivySbom?(file: string): RemoteResult;
   versions(): Record<string, string>;
   diskSpace(path: string): { free: number; total: number };
   cachesPresent(): boolean;
@@ -887,6 +967,9 @@ export class CliSecurityIO implements SecurityIO {
   }
   trivyRootfs(dir: string): RemoteResult {
     return exec("trivy", ["rootfs", "--skip-db-update", "--quiet", "--scanners", "vuln", "--list-all-pkgs", "--format", "json", dir], undefined, 15 * MIN);
+  }
+  trivySbom(file: string): RemoteResult {
+    return exec("trivy", ["sbom", "--skip-db-update", "--offline-scan", "--quiet", "--scanners", "vuln", "--format", "json", file], undefined, 15 * MIN);
   }
   trivyImage(ref: string): RemoteResult {
     return exec("trivy", ["image", "--skip-db-update", "--quiet", "--scanners", "vuln", "--list-all-pkgs", "--format", "json", ref], undefined, 30 * MIN);
@@ -1439,6 +1522,7 @@ function trivyTarget(base: Pick<TargetStatus, "id" | "name" | "layer" | "host" |
     const notes = [t.osName ? `${t.family} ${t.osName}` : "", buildOnly > 0 ? `${buildOnly} CVE(s) only in build-only packages (headers, compilers), not counted` : "", bundled?.note ?? ""];
     const status = summarize(base, t.components.length, osCoverage(t.family, t.components.length), running, vex, true, notes.filter(Boolean).join("; "));
     if (buildOnly > 0) status.buildOnly = buildOnly;
+    if (t.family) status.os = { family: t.family, name: t.osName };
     return {
       status,
       version: t.osName,
@@ -1501,6 +1585,165 @@ export function siteCdx(results: CdxTarget[], status: ScanStatus, site: string):
       components: r.components,
     })),
   };
+}
+
+// ── the daily rescan (ADR-045 D4) ──────────────────────────────────────
+// The last inventory matched again against freshly updated CVE databases: no
+// guest is probed, no new SBOM is taken, no sweep runs. So a CVE published on a
+// quiet day shows within a day. It talks only to the scanners' database mirrors
+// (the database update) — trivy matches the stored inventory with --offline-scan.
+// The firewall's findings come from its own audit, which only the full scan
+// runs: they stay as the last scan found them, and so does a target whose
+// inventory failed.
+
+interface CdxStored {
+  "bom-ref"?: string;
+  components?: Component[];
+}
+
+// The OS component trivy needs to match a stored OS inventory: the family and
+// release trivy detected when the inventory was taken ("debian 12.5" in the
+// note of a scan made before `os` was recorded).
+export function osOf(t: TargetStatus): { family: string; name: string } | null {
+  if (t.os?.family) return t.os;
+  const m = /^(debian|ubuntu|alpine|redhat|rocky|alma|centos|amazon|wolfi|chainguard|photon|suse[^ ]*|opensuse[^ ]*|oracle|fedora) (\S+)/.exec(t.note ?? "");
+  return m ? { family: m[1], name: m[2].replace(/;$/, "") } : null;
+}
+
+// A stored inventory as a document trivy reads: the OS as a component its
+// packages depend on, so trivy matches them as that release's packages.
+export function trivySbomDoc(comps: Component[], os: { family: string; name: string } | null): Record<string, unknown> {
+  const pkgs = comps.filter((c) => c.purl).map((c, i) => ({ ...c, "bom-ref": `pkg-${i}` }));
+  const osPkg = (c: { purl: string }): boolean => /^pkg:(deb|apk|rpm)\//.test(c.purl);
+  const doc = cdxDoc(pkgs as Component[]);
+  if (!os) return doc;
+  doc.components = [{ type: "operating-system", "bom-ref": "os", name: os.family, version: os.name }, ...pkgs];
+  doc.dependencies = [{ ref: "os", dependsOn: pkgs.filter(osPkg).map((c) => c["bom-ref"]) }];
+  return doc;
+}
+
+export interface RescanOpts {
+  configDir: string;
+  repoDir: string;
+  log?: (msg: string) => void;
+}
+
+export function runRescan(opts: RescanOpts, io: SecurityIO): { status: ScanStatus; cdx: Record<string, unknown> } | { error: string } {
+  const log = opts.log ?? ((): void => undefined);
+  const dir = sbomDir(opts.configDir);
+  const prev = readStatus(join(dir, STATUS_FILE));
+  if (!prev) return { error: "no security scan yet: the rescan matches the last scan's inventory" };
+  let cdx: { components?: CdxStored[] } & Record<string, unknown>;
+  try {
+    cdx = JSON.parse(readFileSync(join(dir, SITE_CDX_FILE), "utf8"));
+  } catch {
+    return { error: `${SITE_CDX_FILE} not readable: run the full scan` };
+  }
+  const stored = new Map((cdx.components ?? []).map((c) => [c["bom-ref"] ?? "", c.components ?? []]));
+  const inst = instanceModules(opts.configDir);
+  const v = loadVex(opts.configDir, opts.repoDir);
+  const vex = v.statements;
+  const notes: string[] = [`rescan of the inventory taken ${prev.inventory ?? prev.generated}: no guest probed`];
+  if (v.files.length > 0) notes.push(`VEX: ${vex.length} statement(s) from ${v.files.length} file(s)`);
+  for (const f of v.unreadable) notes.push(`VEX file not readable, ignored: ${f}`);
+  log("updating the scanner databases");
+  const dbNotes = io.dbUpdate();
+  notes.push(...dbNotes);
+
+  const nixTargets = prev.targets.filter((t) => t.layer === "nix" && t.coverage === "ok");
+  const names = [...new Set(nixTargets.flatMap((t) => (stored.get(t.id) ?? []).map((c) => c.name)))];
+  const patched = names.length > 0 ? patchVex(io.nixPatches(names)) : [];
+  if (patched.length > 0) vex.push(...patched);
+
+  const tmp = mkdtempSync(join(tmpdir(), "tappaas-rescan-"));
+  const targets: TargetStatus[] = [];
+  let kept = 0;
+  try {
+    for (const t of prev.targets) {
+      const comps = stored.get(t.id) ?? [];
+      const tv = vexFor(vex, t.id, inst);
+      const base = { id: t.id, name: t.name, layer: t.layer, host: t.host, ...(t.runsOn ? { runsOn: t.runsOn } : {}), ...(t.ref ? { ref: t.ref } : {}) };
+      const keep = (): void => {
+        kept++;
+        targets.push({ ...t });
+      };
+      if (t.coverage !== "ok" || t.layer === "opnsense" || t.layer === "unknown" || comps.length === 0) {
+        keep();
+        continue;
+      }
+      log(`matching ${t.name} again: ${comps.length} package(s)`);
+      const extra = { ...(t.module ? { module: t.module } : {}), ...(t.apt ? { apt: t.apt } : {}), ...(t.os ? { os: t.os } : {}) };
+      if (t.layer === "nix") {
+        const f = join(tmp, `${safe(t.id)}.cdx.json`);
+        writeFileGuarded(f, JSON.stringify(cdxDoc(comps)));
+        const g = io.grype(f);
+        let findings: Finding[] = [];
+        let cov = "";
+        if (!g.ran || g.rc !== 0) cov = `grype failed: ${lastLine(g.stderr) || `exit ${g.rc}`}`;
+        else {
+          try {
+            findings = grypeFindings(g.stdout);
+          } catch {
+            cov = "grype output not parseable";
+          }
+        }
+        if (cov) {
+          keep();
+          notes.push(`${t.name}: ${cov}; the last scan's result stands`);
+          continue;
+        }
+        targets.push({ ...summarize(base, comps.length, "", findings, tv, false, t.note), ...extra });
+        continue;
+      }
+      // debian, image: the packages trivy listed, matched by trivy offline; the
+      // libraries bundled in Python packages by grype, by CPE, as the full scan does.
+      if (!io.trivySbom) {
+        keep();
+        continue;
+      }
+      const bundled = comps.filter((c) => c.properties?.some((p) => p.name === "tappaas:bundled-in"));
+      const plain = comps.filter((c) => !bundled.includes(c));
+      const f = join(tmp, `${safe(t.id)}.cdx.json`);
+      writeFileGuarded(f, JSON.stringify(trivySbomDoc(plain, osOf(t))));
+      const r = io.trivySbom(f);
+      let findings: Finding[] = [];
+      try {
+        if (!r.ran || r.rc !== 0) throw new Error(lastLine(r.stderr) || `exit ${r.rc}`);
+        findings = trivyParse(r.stdout).findings.filter((x) => !isBuildOnly(x.pkg));
+      } catch (e) {
+        keep();
+        notes.push(`${t.name}: trivy failed (${(e as Error).message}); the last scan's result stands`);
+        continue;
+      }
+      if (bundled.length > 0) {
+        const bf = join(tmp, `${safe(t.id)}.bundled.cdx.json`);
+        writeFileGuarded(bf, JSON.stringify(cdxDoc(bundled)));
+        const g = io.grype(bf);
+        if (g.ran && g.rc === 0) {
+          try {
+            findings.push(...grypeFindings(g.stdout));
+          } catch {
+            /* the image's own match still stands */
+          }
+        }
+      }
+      targets.push({ ...summarize(base, comps.length, "", findings, tv, true, t.note), ...extra });
+    }
+  } finally {
+    rmGuarded(tmp, { recursive: true, force: true });
+  }
+  if (kept > 0) notes.push(`${kept} target(s) kept as the last scan found them (the firewall's audit, or a failed inventory)`);
+  const status: ScanStatus = {
+    schema: 1,
+    generated: new Date(io.now()).toISOString(),
+    sweep: prev.sweep,
+    inventory: prev.inventory ?? prev.generated,
+    scanners: io.versions(),
+    notes,
+    targets,
+  };
+  for (const t of status.targets) if (!t.module) t.module = moduleOf(t.id, inst);
+  return { status, cdx };
 }
 
 // ── persistence ────────────────────────────────────────────────────────

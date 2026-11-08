@@ -201,10 +201,17 @@ function membersOf(o: CmdbItem, objects: CmdbItem[], relations: CmdbRel[], model
   return [...inside];
 }
 
-function rollUp(own: Condition[], members: Condition[][], now: string, nowMs: number): Condition[] {
+// A zone and an environment carry their own CVE risk score (ADR-045 D4): the
+// zone's tier multiplier is the point, so the worst of the members does not
+// replace it. Their security condition is the score's, once a scan set it.
+const OWN_SECURITY = new Set(["zone", "environment"]);
+
+function rollUp(own: Condition[], members: Condition[][], now: string, nowMs: number, cls = ""): Condition[] {
   const out = new Map(own.map((c) => [c.type as string, c]));
   const types = new Set(members.flat().map((c) => c.type));
   for (const type of types) {
+    const mine = out.get(type);
+    if (type === "security" && OWN_SECURITY.has(cls) && mine && !mine.derived) continue;
     const counted = members.flatMap((m) => m.filter((c) => c.type === type && !silenced(c, nowMs)));
     if (!counted.length) continue;
     const worst = counted.reduce<ConditionStatus>((w, c) => (RANK[c.status] > RANK[w] ? c.status : w), "ok");
@@ -348,7 +355,7 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
   const rolled = objects.filter((o) => isA(o, "collection", model) || isA(o, "place", model));
   for (const o of rolled) {
     const members = membersOf(o, objects, relations, model).map((id) => out.get(id) ?? []);
-    const cs = rollUp(out.get(o.id) ?? [], members, now, nowMs);
+    const cs = rollUp(out.get(o.id) ?? [], members, now, nowMs, o.class);
     if (cs.length) out.set(o.id, cs);
   }
   return { conditions: out, rootCauses };

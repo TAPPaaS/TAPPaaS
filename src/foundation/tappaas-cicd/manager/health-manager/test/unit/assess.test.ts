@@ -11,7 +11,8 @@ import { CmdbItem, Condition, SiteIndex, conditionsOf } from "../../src/assess-m
 import { assessmentOf, readValidate } from "../../src/assess-validate";
 import { GATES } from "../../src/assess-sources";
 import { checkDiskThreshold, checkPendingReboot, checkPulse, checkQuorum, checkServiceLiveness, checkSiteTimezone, runHealthGates } from "../../src/checks";
-import { ScanStatus } from "../../src/security";
+import { CveItem, ScanStatus } from "../../src/security";
+import { siteSecurity } from "../../src/site-score";
 import { CheckResult } from "../../src/types";
 import { NOW, StubIO, T0, cond, obj, rel } from "./assess-fixture";
 import { FakeClusterClient } from "./fake-client";
@@ -195,16 +196,51 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check(got(r, nc, "impact") === undefined, "…no plane was asked: the sources are the CMDB's");
 }
 
-// ── the CVE scan ──
+// ── the CVE scan: the security condition from the risk level (ADR-045 D4) ──
 {
   const s = fresh();
+  const zr = obj("zone", "rossen");
+  const zm = obj("zone", "mgmt");
+  const env = obj("environment", "rossen");
+  s.items.push(zr, zm, env);
+  s.rels.push(rel("serves", zr, env), rel("member-of", m1, env));
   const io = new StubIO(s.items, s.rels);
-  const target = (id: string, verdict: string): unknown => ({ id, name: id, verdict, fixable: 3, critHighFixable: 1, note: "n", layer: "os" });
-  io.scan = { generated: NOW.toISOString(), targets: [target("nextcloud", "act"), target("node:tappaas1", "watch"), target("image:network/x", "failed")] } as unknown as ScanStatus;
+  const crit = (id: string): CveItem => ({ id, state: "open", severity: "Critical", pkg: "brotli", version: "1.1.0" });
+  const high = (id: string): CveItem => ({ id, state: "open", severity: "High", pkg: "p", version: "1" });
+  const target = (id: string, verdict: string, items: CveItem[], layer = "debian"): unknown =>
+    ({ id, name: id, verdict, coverage: verdict === "failed" ? "fail" : "ok", fixable: 3, critHighFixable: 1, note: "n", layer, items, targets: [], new: [], critHighKeys: [] });
+  const scan = (ts: unknown[]): ScanStatus => ({ generated: NOW.toISOString(), targets: ts } as unknown as ScanStatus);
+  const place = { placement: { nextcloud: ["rossen"], "node:tappaas1": ["mgmt"], network: ["mgmt"] }, zones: { rossen: { tier: 1, environment: "rossen" }, mgmt: { tier: 0 } } };
+  io.security = (sc) => siteSecurity(sc, place);
+  io.scan = scan([target("nextcloud", "act", [crit("CVE-1")]), target("node:tappaas1", "watch", []), target("image:network/x", "failed", [])]);
   const r = assess(io, {}, NOW);
-  check(got(r, nc, "security")?.status === "warning" && got(r, nc, "security")?.reason === "cve-act", "act: security on the module, a warning");
-  check(got(r, m1, "security")?.status === "ok", "…watch is ok on the node");
-  check(got(r, net, "security")?.reason === "cve-scan-failed", "…an image is its module's");
+  check(got(r, nc, "security")?.status === "warning" && got(r, nc, "security")?.reason === "cve-high", "one open critical: high, a warning on the module");
+  check(got(r, nc, "security")?.message === "score 20, high: 1 critical", "…the message gives the score and what counts");
+  check(got(r, m1, "security")?.status === "ok", "…nothing counted is ok on the node");
+  check(got(r, net, "security")?.reason === "cve-scan-failed", "…a failed image is its module's warning");
+  check(got(r, zr, "security")?.reason === "cve-high" && got(r, zr, "security")?.message.includes("×1") === true, "the zone has its own score, with its multiplier");
+  check(got(r, env, "security")?.reason === "cve-high" && got(r, env, "security")?.derived === false, "…and the environment its own, not a roll-up");
+
+  // The same critical in the management zone: ×2, critical there; the module stays high.
+  io.scan = scan([target("nextcloud", "watch", []), target("node:tappaas1", "watch", [crit("CVE-2")], "debian")]);
+  const r2 = assess(io, {}, later(5));
+  check(got(r2, m1, "security")?.status === "warning" && got(r2, m1, "security")?.reason === "cve-high", "a node's own level: high");
+  check(got(r2, zm, "security")?.status === "critical" && got(r2, zm, "security")?.reason === "cve-critical", "…the management zone ×2: critical");
+  check(got(r2, nc, "security")?.status === "ok", "a module whose CVEs went is ok again");
+  check(got(r2, env, "security")?.status === "ok" && got(r2, env, "security")?.derived === false, "the environment follows its own zones, not its node member's level");
+
+  // A level change inside warning is a transition: medium → high.
+  io.scan = scan([target("nextcloud", "watch", [high("CVE-3")])]);
+  const r3 = assess(io, {}, later(10));
+  check(got(r3, nc, "security")?.reason === "cve-medium", "one open high: medium");
+  io.scan = scan([target("nextcloud", "watch", [crit("CVE-4")])]);
+  const r4 = assess(io, {}, later(15));
+  check(r4.transitions.some((t) => t.id === nc.id && t.type === "security" && t.from === "warning" && t.to === "warning" && t.reason === "cve-high"), "medium → high is a transition, the status still warning");
+  check(got(r4, nc, "security")?.since === later(15).toISOString(), "…with a new since");
+
+  // Low is ok: an analysed low risk.
+  io.scan = scan([target("nextcloud", "watch", [{ id: "CVE-5", state: "risk", rating: "low", severity: "Critical", pkg: "x", version: "1" }])]);
+  check(got(assess(io, {}, later(20)), nc, "security")?.status === "ok", "low is ok");
 }
 
 // ── since and lastChecked; held until the source looks ──

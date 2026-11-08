@@ -16,6 +16,7 @@ import { join } from "path";
 import { renameGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 import { SweepDifference, SweepRecord, WORD } from "./cmdbsweep";
 import { ListRow } from "./emit-read";
+import { SiteSecurity } from "./site-score";
 
 const SEEN_FILE = ".health-digest-seen.json";
 const MAX_NEW = 30;
@@ -91,6 +92,37 @@ function sweepFindings(diffs: SweepDifference[]): Finding[] {
     });
 }
 
+// The CVE items that reach no mail of their own (ADR-045 D4): analysed risk
+// items and carried ones, per module. New open critical/high CVEs were mailed by
+// the scan, and a level rising to high or critical by health; a level change
+// shows here as the module's security condition. A module whose security
+// condition is acknowledged or in maintenance is left out.
+function securityFindings(sec: SiteSecurity | null, rows: ListRow[]): Finding[] {
+  if (!sec) return [];
+  const quiet = new Set(rows.filter((r) => r.type === "security" && (r.acknowledged || r.maintenance)).map((r) => r.name));
+  const out: Finding[] = [];
+  for (const u of Object.values(sec.units)) {
+    if (quiet.has(u.name)) continue;
+    for (const i of u.items.filter((x) => x.state === "risk" || x.state === "carried")) {
+      const how = i.state === "risk" ? `${i.rating ?? i.severity.toLowerCase()} risk` : `carried from ${i.carriedFrom ?? "another version"}`;
+      out.push({
+        key: `cve ${u.name} ${i.id} ${i.state}`,
+        object: u.kind === "node" ? `node ${u.name}` : u.name,
+        what: clip(`${how}: ${i.id} ${i.pkg} ${i.version}`),
+        group: `security cve ${i.state}`,
+        condition: true,
+      });
+    }
+  }
+  return out;
+}
+
+function securityLine(sec: SiteSecurity | null): string[] {
+  if (!sec) return [];
+  const by = sec.site.setBy.module ? `, set by ${sec.units[sec.site.setBy.module]?.name ?? sec.site.setBy.module}${sec.site.setBy.zone ? ` in ${sec.site.setBy.zone}` : ""}` : "";
+  return [`Security: the site's CVE risk is ${sec.site.level} (score ${sec.site.score}${by}).`, ""];
+}
+
 function groupLines(found: Finding[]): string[] {
   const groups = new Map<string, string[]>();
   for (const f of found) groups.set(f.group, [...(groups.get(f.group) ?? []), f.object]);
@@ -104,10 +136,10 @@ function groupLines(found: Finding[]): string[] {
 }
 
 /** The digest. Pure: seen is what the last one told, null before the first. */
-export function buildDigest(rows: ListRow[], sweep: SweepRecord | null, seen: DigestSeen | null): DigestDoc {
+export function buildDigest(rows: ListRow[], sweep: SweepRecord | null, seen: DigestSeen | null, security: SiteSecurity | null = null): DigestDoc {
   const unexplained = (sweep?.differences ?? []).filter((d) => !d.expected);
   const addresses = unexplained.filter((d) => d.class === "address" && !d.attribute);
-  const found = [...conditionFindings(rows), ...sweepFindings(unexplained.filter((d) => d.class !== "address"))];
+  const found = [...conditionFindings(rows), ...sweepFindings(unexplained.filter((d) => d.class !== "address")), ...securityFindings(security, rows)];
   const told = new Set(seen?.keys ?? []);
   const fresh = found.filter((f) => !told.has(f.key));
   const open = found.filter((f) => told.has(f.key));
@@ -123,6 +155,7 @@ export function buildDigest(rows: ListRow[], sweep: SweepRecord | null, seen: Di
   const out: string[] = [
     seen ? `${summary[0].toUpperCase()}${summary.slice(1)} since the last digest (${minute(seen.at)}).` : `The first digest: everything open counts as new (${fresh.length}).`,
     "",
+    ...securityLine(security),
   ];
   if (fresh.length) {
     const width = Math.min(32, Math.max(...fresh.map((f) => f.object.length)));
@@ -146,6 +179,7 @@ export function buildDigest(rows: ListRow[], sweep: SweepRecord | null, seen: Di
     "  health-manager show <class>/<name>      an object's conditions",
     "  cmdb sweep --last                       the last sweep's differences",
     "  health-manager ack <ci> --note <why>    a known warning: not told again",
+    ...(security ? ["  health-manager report security --cves  the CVE risk of every module, and what counts"] : []),
   );
   return { word, subject, body: `${out.join("\n")}\n`, new: fresh.length, open: found.length, keys };
 }

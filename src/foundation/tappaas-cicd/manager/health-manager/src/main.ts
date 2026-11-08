@@ -48,8 +48,11 @@ import { nodeGuests } from "./guests";
 import { reachLines, runVlanReach, writeReach } from "./vlanreach";
 import {
   CliSecurityIO, loadVex, scanComponentList, scanImageRefs, PREVIOUS_FILE, SITE_CDX_FILE, STATUS_FILE, notify, readStatus, renderReport, runScan, sbomDir,
-  sweepIsNewer, writeScan,
+  ScanStatus, runRescan, sweepIsNewer, writeScan,
 } from "./security";
+import { HISTORY_FILE, SiteSecurity, loadSiteSecurity, recordHistory, renderSecurity } from "./site-score";
+import { cveChangesEvent, cveNewEvent, quietUnits, securityJournal } from "./security-alerts";
+import { LiveHealthCmdb } from "./emit-cmdb";
 import { CheckResult, CheckStatus, ClusterClient, HealthReport } from "./types";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
@@ -123,9 +126,10 @@ export const HELP: HelpSpec = {
       details: "Patches the VM's OS (NixOS rebuild / apt) through update-os.sh; may reboot it.",
     },
     {
-      usage: "scan security [--if-new-sweep] [--notify]", effect: { noPreview: "runs the security scan and writes config/sbom" },
+      usage: "scan security [--if-new-sweep | --rescan] [--notify]", effect: { noPreview: "runs the security scan and writes config/sbom" },
       options: [
         ["--if-new-sweep", "Scan only when a sweep has written a result since the last scan (the unit's mode)."],
+        ["--rescan", "Refresh the CVE databases and match the last inventory again: no guest is probed, no new SBOM (the daily tappaas-security-rescan)."],
         ["--notify", "Mail the site owner when a fixable CVE or a failed scan is new since the last scan."],
       ],
       details:
@@ -133,7 +137,9 @@ export const HELP: HelpSpec = {
         "running inside them (by registry digest), the nodes and the firewall — and matches each\n" +
         "against its layer's CVE source. Read-only on every target. Writes\n" +
         "~/config/sbom/site.cdx.json (CycloneDX) and ~/config/sbom/cve-status.json; the previous\n" +
-        "status is kept as cve-status.previous.json. Runs after every sweep (tappaas-security-scan).",
+        "status is kept as cve-status.previous.json. Runs after every sweep (tappaas-security-scan).\n" +
+        "Each scan adds the day's risk scores to score-history.json and tells the journal\n" +
+        "(identifier tappaas-security) what is new: open critical/high CVEs, and other changes.",
     },
     {
       usage: "scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update] [--no-vex]", effect: { noPreview: "scans a component list" },
@@ -215,12 +221,14 @@ export const HELP: HelpSpec = {
     },
     // ── end ADR-041 assess ──
     {
-      usage: "report security [--all] [--json]", effect: "read",
+      usage: "report security [--cves] [--scan [--all]] [--json]", effect: "read",
       options: [
-        ["--all", "List every finding to act on, not the first ten per target."],
-        ["--json", "Print cve-status.json as it is."],
+        ["--cves", "List each module's counted CVEs under it, with state, rating and analysis."],
+        ["--scan", "Print the scan per target instead: coverage, counts and verdict."],
+        ["--all", "With --scan: every finding to act on, not the first ten per target."],
+        ["--json", "Print cve-status.json, with the risk scores under `score`."],
       ],
-      details: "Prints the last scan: per target its coverage, counts and verdict — ACT, SCAN FAILED,\ntriage (Nix), watch — then what to act on.",
+      details: "The risk score of the site, then each environment, zone and module: level, score, what sets\nit, open/risk/carried/decided counts and the last 7 days.",
     },
     {
       usage: "reboot <module>", effect: { noPreview: "reboots the module's guest" },
@@ -368,6 +376,7 @@ function assessIO(opts: Opts, client: ClusterClient, timed?: Timer): AssessIO {
       return { open: raw ? openAlerts(raw, opts.configDir) : null, recent: recentEvents(ALERTS_LOG, opts.configDir, Date.now()) };
     },
     cve: () => readStatus(join(sbomDir(opts.configDir), STATUS_FILE)),
+    security: (scan) => loadSiteSecurity(opts.configDir, scan),
     write: writeAssessment,
   };
 }
@@ -571,23 +580,35 @@ const SITE_NOTIFY_BIN = (): string => process.env.SITE_NOTIFY_BIN ?? "site-notif
 
 function cmdScanSecurity(opts: Opts, client: ClusterClient): number {
   const ifNew = opts.rest.includes("--if-new-sweep");
+  const rescan = opts.rest.includes("--rescan");
   const doNotify = opts.rest.includes("--notify");
-  if (opts.rest.some((a) => a !== "--if-new-sweep" && a !== "--notify")) die("scan security: unexpected argument");
+  if (opts.rest.some((a) => a !== "--if-new-sweep" && a !== "--notify" && a !== "--rescan")) die("scan security: unexpected argument");
+  if (ifNew && rescan) die("scan security: --if-new-sweep and --rescan do not go together");
   if (ifNew && !sweepIsNewer(opts.configDir)) {
     info("no sweep since the last security scan — nothing to do");
     return 0;
   }
   const repoDir = process.env.TAPPAAS_REPO ?? "/home/tappaas/TAPPaaS";
-  const { status, cdx } = runScan(
-    { configDir: opts.configDir, defaultNode: DEFAULT_NODE, repoDir, log: (m) => info(`  ${m}`) },
-    client,
-    new CliSecurityIO(),
-  );
+  const io = new CliSecurityIO();
+  const prevStatus = readStatus(join(sbomDir(opts.configDir), STATUS_FILE));
+  let status: ScanStatus;
+  let cdx: Record<string, unknown>;
+  if (rescan) {
+    const r = runRescan({ configDir: opts.configDir, repoDir, log: (m) => info(`  ${m}`) }, io);
+    if ("error" in r) die(`scan security --rescan: ${r.error}`);
+    ({ status, cdx } = r);
+  } else {
+    ({ status, cdx } = runScan({ configDir: opts.configDir, defaultNode: DEFAULT_NODE, repoDir, log: (m) => info(`  ${m}`) }, client, io));
+  }
   const diff = writeScan(opts.configDir, status, cdx);
+  const sec = recordHistory(opts.configDir, status);
   info("");
   for (const l of renderReport(status, false, Date.now())) info(l);
   info("");
-  info(`written: ${join(sbomDir(opts.configDir), SITE_CDX_FILE)}, ${STATUS_FILE} (previous: ${PREVIOUS_FILE})`);
+  for (const l of renderSecurity(sec, Date.now())) info(l);
+  info("");
+  info(`written: ${join(sbomDir(opts.configDir), SITE_CDX_FILE)}, ${STATUS_FILE} (previous: ${PREVIOUS_FILE}), ${HISTORY_FILE}`);
+  tellSecurity(opts, prevStatus, status, sec);
   if (doNotify) {
     const n = notify(status, diff, SITE_NOTIFY_BIN());
     info(n.sent ? `notice sent: ${n.message}` : n.message);
@@ -597,16 +618,39 @@ function cmdScanSecurity(opts: Opts, client: ClusterClient): number {
   return status.targets.length > 0 && status.targets.every((t) => t.verdict === "failed") ? 1 : 0;
 }
 
+// The scan's lines for the alert rules: new open critical/high (mailed at once)
+// and the other changes (the daily digest). A module whose security condition
+// is acknowledged or in maintenance is left out; without the CMDB nobody is.
+function tellSecurity(opts: Opts, prevStatus: ScanStatus | null, status: ScanStatus, sec: SiteSecurity): void {
+  let quiet = new Set<string>();
+  if (!cmdbOff()) {
+    try {
+      quiet = quietUnits(sec, new LiveHealthCmdb().objects(), new Date());
+    } catch (e) {
+      warn(`the CMDB did not answer (${(e as Error).message}): no module is treated as acknowledged`);
+    }
+  }
+  const prevSec = prevStatus ? loadSiteSecurity(opts.configDir, prevStatus) : null;
+  const lines = [cveNewEvent(status, sec, quiet), cveChangesEvent(prevSec, sec, quiet)].filter((e) => e !== null).map((e) => JSON.stringify(e));
+  if (lines.length === 0) return info("nothing new for the alert rules");
+  securityJournal(lines);
+  for (const l of lines) info(`told: ${l}`);
+}
+
 function cmdReportSecurity(opts: Opts): number {
   const s = readStatus(join(sbomDir(opts.configDir), STATUS_FILE));
   if (!s) die("no security scan yet — run: health-manager scan security");
   if (opts.rest.includes("--json")) {
-    console.log(JSON.stringify(s, null, 1));
+    console.log(JSON.stringify({ ...s, score: loadSiteSecurity(opts.configDir, s) }, null, 1));
     return 0;
   }
   info(`${BOLD}TAPPaaS Security Report${CL}`);
-  const tag = (l: string): string => l.replace(/ACT\b/, `${RD}ACT${CL}`).replace(/SCAN FAILED/, `${YW}SCAN FAILED${CL}`);
-  for (const l of renderReport(s, opts.rest.includes("--all"), Date.now())) info(tag(l));
+  if (opts.rest.includes("--scan")) {
+    const tag = (l: string): string => l.replace(/ACT\b/, `${RD}ACT${CL}`).replace(/SCAN FAILED/, `${YW}SCAN FAILED${CL}`);
+    for (const l of renderReport(s, opts.rest.includes("--all"), Date.now())) info(tag(l));
+    return 0;
+  }
+  for (const l of renderSecurity(loadSiteSecurity(opts.configDir, s), Date.now(), { items: opts.rest.includes("--cves") })) info(l);
   return 0;
 }
 

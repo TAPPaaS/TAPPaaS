@@ -1,5 +1,5 @@
 {
-  "_comment": "The platform's rules over the mothership's own logs. health-manager emit writes one JSON line per health event, identifier tappaas-health (ADR-041 D4); cmdb sweep writes one per difference, identifier cmdb-sweep (ADR-040 D15). A critical root cause is mailed at once; a warning, a symptom, or a sweep finding waits for the daily digest; a silenced event (acknowledged, in maintenance) is recorded and not mailed. All three are event rules: an alert over a log line resolves when its window moves on, not when the root recovers, so the recovery is a line of its own and a mail of its own. Which events leave the site is this file's choice, as ADR-039 D1 intends: edit the match.",
+  "_comment": "The platform's rules over the mothership's own logs. health-manager emit writes one JSON line per health event, identifier tappaas-health (ADR-041 D4); cmdb sweep writes one per difference, identifier cmdb-sweep (ADR-040 D15). A critical root cause is mailed at once; a warning, a symptom, or a sweep finding waits for the daily digest; a silenced event (acknowledged, in maintenance) is recorded and not mailed. All three are event rules: an alert over a log line resolves when its window moves on, not when the root recovers, so the recovery is a line of its own and a mail of its own. Which events leave the site is this file's choice, as ADR-039 D1 intends: edit the match. The security scan writes one line per scan, identifier tappaas-security: new open critical/high CVEs are mailed at once (cve-new-critical), other changes wait for the digest; a module's CVE risk level rising to high or critical is a health event of its own (cve-level-up).",
   "rules": [
     {
       "name": "health-root-cause",
@@ -40,13 +40,49 @@
       "title": "HealthDailyDigest",
       "headline": "Daily digest",
       "kind": "event",
-      "match": "(\"to\":\"warning\".*\"kind\":\"causal\".*\"silenced\":false|\"expected\":false)",
+      "match": "(\"to\":\"warning\".*\"kind\":\"causal\".*\"silenced\":false|\"expected\":false|\"event\":\"cve-changes\")",
       "window": 86400,
       "repeat": "24h",
-      "summary": "In the last 24 hours a condition became a warning root cause, or the discovery sweep found drift, something unmanaged, missing, or differing from config/. One mail a day while this fires; nothing when a day passes quietly. health-manager digest writes the mail, an ALERT when it has something new and a STATUS when not; the template below goes out only when it cannot.",
+      "summary": "In the last 24 hours a condition became a warning root cause, the security scan saw CVE changes that need no mail of their own (a new analysed or carried item, a level going down), or the discovery sweep found drift, something unmanaged, missing, or differing from config/. One mail a day while this fires; nothing when a day passes quietly. health-manager digest writes the mail, an ALERT when it has something new and a STATUS when not; the template below goes out only when it cannot.",
       "mail": {
         "subject": "{state}: daily digest could not be built",
         "body": "== Daily digest\nhealth-manager could not write today's digest, so this mail does not say what is new.\n\nhealth-manager list shows every condition that is not ok; cmdb sweep --last the last sweep's differences.\nIn Grafana (Explore, Loki): {query}"
+      }
+    },
+    {
+      "name": "cve-new-critical",
+      "title": "CveNewCritical",
+      "headline": "New critical or high CVEs nobody has analysed",
+      "kind": "event",
+      "match": "\"event\":\"cve-new\".*\"silenced\":false",
+      "capture": {
+        "count": "\"count\":(?P<count>[0-9]+)",
+        "modules": "\"modules\":\"(?P<modules>[^\"]*)\"",
+        "items": "\"items\":\"(?P<items>[^\"]*)\""
+      },
+      "window": 300,
+      "summary": "The security scan (after a sweep, or the daily rescan) found critical or high CVEs that are new since the last scan and that no VEX statement analyses. One mail per scan, listing them. A module whose security condition is acknowledged or in maintenance is left out.",
+      "mail": {
+        "subject": "{state}: {label.count} new open critical/high CVE(s) in {label.modules}",
+        "body": "== New open critical/high CVEs: {label.count}\nmodules: {label.modules}\n\n{label.items}\n\nhealth-manager report security --cves shows each module's CVEs and its risk score.\nTo analyse one: cve-triage.sh open <module>. To quiet a module: health-manager ack <module> --type security --note <why>.\nIn Grafana (Explore, Loki): {query}"
+      }
+    },
+    {
+      "name": "cve-level-up",
+      "title": "CveLevelUp",
+      "headline": "A module's CVE risk level rose to high or critical",
+      "kind": "event",
+      "match": "\"type\":\"security\".*\"silenced\":false.*\"levelUp\":true",
+      "capture": {
+        "name": "\"name\":\"(?P<name>[^\"]+)\"",
+        "level": "\"reason\":\"cve-(?P<level>[a-z]+)\"",
+        "message": "\"message\":\"(?P<message>[^\"]*)\""
+      },
+      "window": 300,
+      "summary": "A module's or a node's CVE risk level rose to high or critical. A level going down, and every other change, waits for the daily digest.",
+      "mail": {
+        "subject": "{state}: CVE risk of {label.name} is now {label.level}",
+        "body": "== CVE risk level up: {label.name}\nnow: {label.message}\nsince: {since}\n\nhealth-manager report security --cves shows what counts.\nhealth-manager ack {label.name} --type security --note <why> silences it until the level changes.\nIn Grafana (Explore, Loki): {query}"
       }
     }
   ]

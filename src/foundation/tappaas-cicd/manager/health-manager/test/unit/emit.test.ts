@@ -93,6 +93,42 @@ console.log("transitions");
   check(ts[2].type === "impact" && ts[2].to === "ok", "a condition that goes away has returned to ok");
 }
 
+console.log("transitions: a CVE risk level (ADR-045 D4)");
+{
+  const sec = (status: Condition["status"], reason: string, since: string): Condition => ({ type: "security", status, reason, message: reason, since });
+  const ts = transitions([
+    period([sec("warning", "cve-medium", T(-30))], T(-30), 1),
+    period([sec("warning", "cve-high", T(-20))], T(-20), 2),
+    period([sec("warning", "cve-high", T(-20))], T(-15), 3),
+    period([sec("warning", "cve-medium", T(-10))], T(-10), 4),
+  ]);
+  check(ts.length === 3, "medium → high and back are transitions, the status warning throughout; the same level is none");
+  check(ts[1].from === "warning" && ts[1].to === "warning" && ts[1].after?.reason === "cve-high", "…the second one, warning to warning, to high");
+  const other = transitions([period([cond("drift", "warning", T(-30))], T(-30), 1), period([cond("drift", "warning", T(-20), { reason: "other" })], T(-20), 2)]);
+  check(other.length === 1, "another type's reason change is no transition");
+
+  const mod = object("immich", "vm", [sec("warning", "cve-high", T(-3))]);
+  const zone = object("rossen", "zone", [sec("warning", "cve-high", T(-3))]);
+  const s = new Stub([mod, zone, object("site1", "site", [])]);
+  s.past = [object("immich", "vm", [sec("warning", "cve-medium", T(-60))])];
+  s.history.set("immich", [period([sec("warning", "cve-medium", T(-60))], T(-60), 5), period([sec("warning", "cve-high", T(-3))], T(-3), 8)]);
+  s.history.set("rossen", [period([sec("warning", "cve-medium", T(-60))], T(-60), 5), period([sec("warning", "cve-high", T(-3))], T(-3), 8)]);
+  const r = emit(s, cursor(5, 6), { now: NOW, intervalMin: 5 });
+  const ev = transitionsIn(r.events);
+  const m = ev.find((e) => e.ci === "immich");
+  check(m?.levelUp === true && m.reason === "cve-high", "a module rising to high: the event says levelUp");
+  check(ev.find((e) => e.ci === "rossen")?.levelUp === undefined, "…a zone never does (its module did)");
+  const rules = JSON.parse(readFileSync(join(__dirname, "../../../../../../../tappaas-cicd-alerts.json"), "utf8")) as { rules: { name: string; match: string }[] };
+  const rule = (n: string): RegExp => new RegExp(rules.rules.find((x) => x.name === n)!.match.replace(/\(\?P</g, "(?<"));
+  check(rule("cve-level-up").test(eventLine(m!)), "cve-level-up's match takes the module's line");
+  check(!rule("cve-level-up").test(eventLine(ev.find((e) => e.ci === "rossen")!)), "…not the zone's");
+  check(!rule("cve-level-up").test(eventLine({ ...m!, silenced: true })), "…nor an acknowledged one");
+  s.history.set("immich", [period([sec("warning", "cve-high", T(-60))], T(-60), 5), period([sec("warning", "cve-medium", T(-3))], T(-3), 8)]);
+  s.all[0].attributes.conditions = [sec("warning", "cve-medium", T(-3))];
+  const down = transitionsIn(emit(s, cursor(5, 6), { now: NOW, intervalMin: 5 }).events).find((e) => e.ci === "immich");
+  check(down !== undefined && down.levelUp === undefined, "going down is told, without levelUp");
+}
+
 console.log("emit: kinds");
 {
   const s = nodeDown();

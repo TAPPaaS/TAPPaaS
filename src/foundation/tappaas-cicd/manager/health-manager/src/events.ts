@@ -35,6 +35,30 @@ export interface TransitionEvent {
   symptoms: number; // on a root: what it impacts
   impacted: string; // on a root: what it impacts by class, "3 vm, 2 service"; else "nothing"
   silenced: boolean; // acknowledged or in maintenance: recorded, never mailed
+  levelUp?: true; // a module's CVE risk level rose to high or critical (cve-level-up mails it)
+}
+
+// The CVE risk level a security condition's reason names (ADR-045 D4): 0 for
+// any other reason (ok, low, or another source's), 2–4 for medium to critical.
+export const CVE_LEVEL_RANK: Record<string, number> = { "cve-medium": 2, "cve-high": 3, "cve-critical": 4 };
+export const cveLevelRank = (reason: string | undefined): number => CVE_LEVEL_RANK[reason ?? ""] ?? 0;
+
+/** A security condition whose level changed while its status did not
+ *  (medium to high: both warning) is a transition all the same. */
+export function levelChanged(type: string, before: { reason?: string } | undefined, after: { reason?: string } | undefined): boolean {
+  if (type !== "security" || !before || !after || before.reason === after.reason) return false;
+  return cveLevelRank(before.reason) > 0 || cveLevelRank(after.reason) > 0;
+}
+
+// The objects whose level is their own score's, not a module's: they never
+// raise cve-level-up (the module that set it did).
+const NOT_A_MODULE = new Set(["zone", "environment", "site"]);
+
+/** Did a module's (or a node's) level rise to high or critical? */
+export function levelRose(cls: string, type: string, before: { reason?: string } | undefined, after: { reason?: string } | undefined): boolean {
+  if (type !== "security" || NOT_A_MODULE.has(cls)) return false;
+  const to = cveLevelRank(after?.reason);
+  return to >= 3 && to > cveLevelRank(before?.reason);
 }
 
 export interface AckEvent {

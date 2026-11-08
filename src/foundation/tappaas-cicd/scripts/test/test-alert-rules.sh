@@ -139,10 +139,10 @@ hm = json.load(open(os.path.join(root, "tappaas-cicd-alerts.json")))
 ck(ar.validate(hm, True) == [], f"tappaas-cicd-alerts.json validates as foundation ({ar.validate(hm, True)})")
 hg = ar.render_group("tappaas-cicd", hm, lambda m: ["tappaas-cicd"])
 ck(ar.validate(hm, False) == [], "…and needs nothing a foundation rule alone may do")
-ck([r["title"] for r in hg["rules"]] == ["HealthRootCause", "HealthRootRecovered", "HealthDailyDigest"], "the three rules render")
+ck([r["title"] for r in hg["rules"]] == ["HealthRootCause", "HealthRootRecovered", "HealthDailyDigest", "CveNewCritical", "CveLevelUp"], "the five rules render")
 line = lambda **k: json.dumps({"event": "transition", "name": "tappaas2", "from": k.get("frm", "ok"), "to": k.get("to", "critical"), "reason": "node-down", "kind": k["kind"], "root": k["root"], "symptoms": 6, "impacted": "4 vm, 2 service", "silenced": k["silenced"]}, separators=(",", ":"))
 sweep = lambda expected: json.dumps({"kind": "changed", "class": "node", "name": "tappaas2", "source": "site-manager", "attribute": "memory", "before": 1, "after": 2, "expected": expected}, separators=(",", ":"))
-cause, back, digest = [re.compile(r["match"]) for r in hm["rules"]]
+cause, back, digest, cvenew, levelup = [re.compile(r["match"]) for r in hm["rules"]]
 ck(cause.search(line(kind="causal", root=True, silenced=False)), "a critical root's causal line matches")
 ck(not cause.search(line(kind="causal", root=True, silenced=False, to="warning")), "a warning root waits for the digest")
 ck(not cause.search(line(kind="symptom", root=False, silenced=False)), "a symptom never does")
@@ -156,9 +156,26 @@ ck(not digest.search(line(kind="symptom", root=False, silenced=False, to="warnin
 ck(digest.search(sweep(False)), "the digest takes a sweep difference nothing explains")
 ck(not digest.search(sweep(True)), "…not an expected one")
 ck(hm["rules"][2]["repeat"] == "24h" and hm["rules"][2]["window"] == 86400, "the digest is one mail a day")
-for r in hm["rules"]:
+for r in hm["rules"][:3]:
     for lbl, rx in r.get("capture", {}).items():
         ck(re.search(rx, line(kind="causal", root=True, silenced=False)), f"{r['name']}: {lbl} is read from the line")
+# ADR-045 D4: the security scan's lines, and a module's level rising
+cnew = lambda silenced=False: json.dumps({"event": "cve-new", "scan": "2026-11-08T03:00:00Z", "count": 2, "modules": "immich", "items": "CVE-2026-1 critical brotli 1.1.0 (immich); CVE-2026-2 high zlib 1.3 (immich)", "silenced": silenced}, separators=(",", ":"))
+cchg = json.dumps({"event": "cve-changes", "scan": "x", "count": 1, "what": "immich: 1 new risk", "silenced": False}, separators=(",", ":"))
+lvl = lambda up, silenced=False, cls="vm": json.dumps({"event": "transition", "class": cls, "name": "immich", "type": "security", "from": "warning", "to": "warning", "reason": "cve-high", "message": "score 20, high: 1 critical", "kind": "causal", "silenced": silenced, **({"levelUp": True} if up else {})}, separators=(",", ":"))
+ck(cvenew.search(cnew()), "cve-new-critical takes the scan's new open items")
+ck(not cvenew.search(cchg), "…not the other changes")
+ck(digest.search(cchg), "the digest takes the other changes")
+ck(levelup.search(lvl(True)), "cve-level-up takes a module's level rising")
+ck(not levelup.search(lvl(False)), "…not a level change that is no rise")
+ck(not levelup.search(lvl(True, silenced=True)), "…not an acknowledged module")
+ck(not cause.search(lvl(True)), "a level rising to high is no critical root cause")
+for lbl, rx in hm["rules"][3]["capture"].items():
+    ck(re.search(rx, cnew()), f"cve-new-critical: {lbl} is read from the line")
+ck(re.search(hm["rules"][3]["capture"]["items"], cnew()).group("items").startswith("CVE-2026-1 critical brotli"), "the mail lists the items")
+for lbl, rx in hm["rules"][4]["capture"].items():
+    ck(re.search(rx, lvl(True)), f"cve-level-up: {lbl} is read from the line")
+ck(re.search(hm["rules"][4]["capture"]["level"], lvl(True)).group("level") == "high", "the level-up mail names the level")
 ck(re.search(hm["rules"][0]["capture"]["impacted"], line(kind="causal", root=True, silenced=False)).group("impacted") == "4 vm, 2 service", "a critical root's mail says what it impacts, by class")
 
 # ── the core rules, moved out of logging.nix into their modules (ADR-039 D6) ──

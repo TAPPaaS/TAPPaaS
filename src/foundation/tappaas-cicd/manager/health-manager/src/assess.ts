@@ -19,9 +19,11 @@ import { SweepRecord } from "./cmdbsweep";
 import { derive } from "./derive";
 import { RulesDoc } from "./rules";
 import { ScanStatus } from "./security";
+import { SiteSecurity, siteSecurity } from "./site-score";
 import { CheckResult } from "./types";
 import { CmdbReport } from "../../../lib/ts/src/cmdb";
 import { CONDITION_TYPES, ConditionStatus } from "../../../lib/ts/src/health-rules";
+import { levelChanged } from "./events";
 
 /** Everything assess reads and writes; tests stub it. */
 export interface AssessIO {
@@ -33,6 +35,7 @@ export interface AssessIO {
   gates(): CheckResult[]; // only asked on a full run
   alerts(): { open: AlertItem[] | null; recent: AlertItem[] }; // open null: Grafana did not answer
   cve(): ScanStatus | null;
+  security?(scan: ScanStatus): SiteSecurity; // the scan's risk scores, placed by config/ (without: no zones)
   write(report: CmdbReport): void;
 }
 
@@ -170,7 +173,8 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
   findings.push(...t("observations", () => fromObservations(idx, ended, nowMs)));
   ran.add("observations");
   const scan = t("cve", () => io.cve());
-  findings.push(...fromCve(scan, nowMs, idx));
+  const sec = scan ? t("cve score", () => (io.security ? io.security(scan) : siteSecurity(scan, { placement: {}, zones: {} }))) : null;
+  findings.push(...fromCve(scan, sec, nowMs, idx));
   if (scan) ran.add("cve");
 
   const priorOf = (id: string): Condition[] => (idx.byId.get(id) ? conditionsOf(idx.byId.get(id)!) : []);
@@ -205,7 +209,7 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
     result.objects.push({ id: o.id, class: o.class, name: o.name, conditions: next });
     for (const c of next) {
       const p = byType.get(c.type);
-      if (!p || p.status !== c.status) result.transitions.push({ id: o.id, class: o.class, name: o.name, type: c.type, from: p?.status ?? null, to: c.status, reason: c.reason });
+      if (!p || p.status !== c.status || levelChanged(c.type, p, c)) result.transitions.push({ id: o.id, class: o.class, name: o.name, type: c.type, from: p?.status ?? null, to: c.status, reason: c.reason });
     }
     if (only && lasting(prior) === lasting(next)) continue;
     const attributes: Record<string, unknown> = { conditions: next };

@@ -20,6 +20,7 @@ const CLASSES: Record<string, string[]> = {
   site: ["site", "collection", "ci", "object"], cluster: ["cluster", "collection", "ci", "object"], environment: ["environment", "collection", "ci", "object"],
   server: ["server", "asset", "resource", "object"], "network-device": ["network-device", "asset", "resource", "object"],
   appliance: ["appliance", "asset", "resource", "object"], "passive-device": ["passive-device", "asset", "resource", "object"],
+  zone: ["zone", "network-element", "ci", "object"],
   port: ["port", "resource", "object"], disk: ["disk", "resource", "object"], rack: ["rack", "place", "object"], room: ["room", "place", "object"],
 };
 
@@ -56,6 +57,7 @@ export class StubIO implements AssessIO {
   recent: ReturnType<AssessIO["alerts"]>["recent"] = [];
   sweepRecord: ReturnType<AssessIO["sweep"]> = { time: NOW.toISOString(), counts: { expected: 0, drift: 0, desired: 0, unmanaged: 0, missing: 0, unread: 0, sourcesFailed: 0 } };
   scan: ReturnType<AssessIO["cve"]> = null;
+  security?: AssessIO["security"];
   retired: CmdbItem[] = [];
 
   constructor(

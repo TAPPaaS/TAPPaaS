@@ -13,6 +13,9 @@ import { HealthCmdb, LiveHealthCmdb, rootsOfSite } from "./emit-cmdb";
 import { runEmit, withEmitLock } from "./emit";
 import { historyLines, historyRows, listLines, listRows, rootDocs, rootLines, showDoc, showLines } from "./emit-read";
 import { HealthEvent, Journal, systemJournal } from "./events";
+import { STATUS_FILE, readStatus, sbomDir } from "./security";
+import { SiteSecurity, loadSiteSecurity } from "./site-score";
+import { join } from "path";
 
 const WHEN = "An ISO time, or from now: 30m, 2h, 7d.";
 
@@ -103,6 +106,13 @@ export interface EmitContext {
   now: Date;
   actor: string;
   sweep?: () => SweepRecord | null;
+  security?: (configDir: string) => SiteSecurity | null;
+}
+
+// The last scan's risk scores; null before the first scan.
+function readSecurity(configDir: string): SiteSecurity | null {
+  const s = readStatus(join(sbomDir(configDir), STATUS_FILE));
+  return s ? loadSiteSecurity(configDir, s) : null;
 }
 
 /** An ISO time, or a span: forward for --until, back for --since. */
@@ -178,7 +188,7 @@ function cmdDigest(ctx: EmitContext, rest: string[]): number {
   }
   const objects = ctx.cmdb.objects();
   const rows = listRows(objects, rootsOfSite(objects), {});
-  const doc = buildDigest(rows, (ctx.sweep ?? readLastSweep)(), readSeen(ctx.configDir));
+  const doc = buildDigest(rows, (ctx.sweep ?? readLastSweep)(), readSeen(ctx.configDir), (ctx.security ?? readSecurity)(ctx.configDir));
   info(rest.includes("--json") ? JSON.stringify(doc, null, 2) : `Subject: ${doc.subject}\n\n${doc.body}`);
   return 0;
 }
