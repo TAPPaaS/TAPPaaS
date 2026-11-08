@@ -10,7 +10,9 @@ SRC="${HERE}/../../../.."
 pass=0; fail=0
 ck() { if [[ "$2" == "$3" ]]; then pass=$((pass+1)); echo "  ok: $1"; else fail=$((fail+1)); echo "  FAIL: $1 (got '$2', want '$3')"; fi; }
 W="$(mktemp -d)"; trap 'rm -rf "${W}"' EXIT
-run() { bash -c '. "$1" >/dev/null 2>&1; eval "$2"' _ "${CIR}" "$1" 2>&1 | sed 's/\x1b\[[0-9;]*m//g'; }
+# env -u: under site-manager test the real progress channel (/dev/tty) is in the
+# environment, and these made-up steps would show as the module's own progress.
+run() { env -u TAPPAAS_TEST_PROGRESS -u TAPPAAS_TEST_MODULE bash -c '. "$1" >/dev/null 2>&1; eval "$2"' _ "${CIR}" "$1" 2>&1 | sed 's/\x1b\[[0-9;]*m//g'; }
 
 out="$(run 'TEST_STEPS=3; test_step basics; test_step "unit tests"; test_step deep; test_steps_done')"
 ck "each step names its place in module-manager's Step 4" \
