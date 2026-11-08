@@ -64,15 +64,15 @@ NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE0="$(get_config_value 'zone0' 'mgmt')"
 CURRENT_SIZE="$(get_config_value 'diskSize' '8G')"
 
-info "${BOLD}TAPPaaS Disk Resize${CL}"
-info "VM: $VMNAME (VMID: $VMID) on $NODE"
-info "Current configured size: $CURRENT_SIZE"
-info "New size: $NEW_SIZE"
+debug "${BOLD}TAPPaaS Disk Resize${CL}"
+debug "VM: $VMNAME (VMID: $VMID) on $NODE"
+debug "Current configured size: $CURRENT_SIZE"
+debug "New size: $NEW_SIZE"
 
 # Get actual current disk size from Proxmox
 ACTUAL_SIZE=$(ssh -o StrictHostKeyChecking=no "root@${NODE}.mgmt.internal" \
   "qm config $VMID | grep -oP 'scsi0:.*size=\K[0-9]+[GMTK]?'" 2>/dev/null || echo "unknown")
-info "Actual Proxmox disk size: $ACTUAL_SIZE"
+debug "Actual Proxmox disk size: $ACTUAL_SIZE"
 
 # Compare sizes
 CURRENT_BYTES=$(size_to_bytes "$ACTUAL_SIZE")
@@ -83,14 +83,14 @@ if [ "$NEW_BYTES" -le "$CURRENT_BYTES" ]; then
 fi
 
 # Resize disk in Proxmox
-info "Resizing disk in Proxmox from $ACTUAL_SIZE to $NEW_SIZE..."
+debug "Resizing disk in Proxmox from $ACTUAL_SIZE to $NEW_SIZE..."
 ssh -o StrictHostKeyChecking=no "root@${NODE}.mgmt.internal" \
   "qm resize $VMID scsi0 $NEW_SIZE" >/dev/null
 
-info "Proxmox disk resize complete."
+debug "Proxmox disk resize complete."
 
 # Resize filesystem inside VM
-info "Resizing filesystem inside VM..."
+debug "Resizing filesystem inside VM..."
 
 TARGET="${VMNAME}.${ZONE0}.internal"
 MAX_WAIT=30
@@ -110,7 +110,7 @@ done
 # Detect OS type
 OS_ID=$(ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" \
   "grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '\"'" 2>/dev/null)
-info "Detected OS: $OS_ID"
+debug "Detected OS: $OS_ID"
 
 # Find root device (resolve UUID symlinks)
 ROOT_DEV=$(ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "
@@ -121,7 +121,7 @@ ROOT_DEV=$(ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "
     echo \"\$dev\"
   fi
 " 2>/dev/null)
-info "Root device: $ROOT_DEV"
+debug "Root device: $ROOT_DEV"
 
 # Extract disk and partition number
 if [[ "$ROOT_DEV" =~ ^(/dev/[a-z]+)([0-9]+)$ ]]; then
@@ -135,35 +135,48 @@ else
   warn "The Proxmox disk has been resized. Please resize the filesystem manually."
   exit 0
 fi
-info "Disk: $DISK, Partition: $PARTNUM"
+debug "Disk: $DISK, Partition: $PARTNUM"
 
 # Detect filesystem type
 FSTYPE=$(ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "findmnt -n -o FSTYPE /" 2>/dev/null)
-info "Filesystem type: $FSTYPE"
+debug "Filesystem type: $FSTYPE"
+
+# resize2fs, its output shown only when it fails (or with TAPPAAS_DEBUG=1)
+grow_fs() {
+  local out
+  if ! out=$(ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "sudo resize2fs ${ROOT_DEV}" 2>&1); then
+    error "resize2fs ${ROOT_DEV} on ${VMNAME} failed:"
+    printf '%s\n' "${out}" >&2
+    exit 1
+  fi
+  debug "${out}"
+}
 
 # Resize based on OS
 case "$OS_ID" in
   nixos)
-    info "Resizing partition on NixOS using sfdisk..."
-    ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "
+    debug "Resizing partition on NixOS using sfdisk..."
+    out=$(ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "
       echo ', +' | sudo sfdisk --no-reread -N ${PARTNUM} ${DISK} 2>/dev/null || true
       sudo partprobe ${DISK} 2>/dev/null || sudo partx -u ${DISK} 2>/dev/null || true
-    " 2>/dev/null
+    " 2>/dev/null) || true
+    debug "${out}"
     if [ "$FSTYPE" == "ext4" ]; then
-      info "Resizing ext4 filesystem..."
-      ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "sudo resize2fs ${ROOT_DEV}" 2>/dev/null
+      debug "Resizing ext4 filesystem..."
+      grow_fs
     else
       warn "Unsupported filesystem $FSTYPE, partition resized but filesystem not expanded"
     fi
     ;;
   debian|ubuntu)
-    info "Resizing partition on Debian/Ubuntu using growpart..."
-    ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "
+    debug "Resizing partition on Debian/Ubuntu using growpart..."
+    out=$(ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "
       sudo growpart ${DISK} ${PARTNUM} 2>/dev/null || true
-    " 2>/dev/null
+    " 2>/dev/null) || true
+    debug "${out}"
     if [ "$FSTYPE" == "ext4" ]; then
-      info "Resizing ext4 filesystem..."
-      ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "sudo resize2fs ${ROOT_DEV}" 2>/dev/null
+      debug "Resizing ext4 filesystem..."
+      grow_fs
     else
       warn "Unsupported filesystem $FSTYPE, partition resized but filesystem not expanded"
     fi
@@ -177,11 +190,10 @@ esac
 
 # Verify new size
 NEW_FS_SIZE=$(ssh -o StrictHostKeyChecking=no "tappaas@${TARGET}" "df -BG / | tail -1 | awk '{print \$2}'" 2>/dev/null | tr -d 'G')
-info "New filesystem size: ${NEW_FS_SIZE}G"
+debug "New filesystem size: ${NEW_FS_SIZE}G"
 
 # Update JSON configuration with new size (Pattern A-aware write; #207)
-info "Updating JSON configuration..."
+debug "Updating JSON configuration..."
 jq_module_write "$VMNAME" '.diskSize = $size' --arg size "$NEW_SIZE"
 
-info "${BOLD}Disk resize completed successfully!${CL}"
-info "VM $VMNAME disk resized from $ACTUAL_SIZE to $NEW_SIZE"
+info "  ✓ ${VMNAME} disk resized from ${ACTUAL_SIZE} to ${NEW_SIZE} (filesystem ${NEW_FS_SIZE}G)"
