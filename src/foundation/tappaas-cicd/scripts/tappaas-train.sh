@@ -557,13 +557,17 @@ cmd_status() {
     fi
 
     images_check
-    if (( ${#IMG_MISSING[@]} == 0 )); then
+    if (( ${#IMG_MISSING[@]} == 0 && ${#IMG_UNVERIFIED[@]} == 0 )); then
         info "  ${GN}✓${CL} release images: ${IMG_COUNT} named, all published"
-    else
+    fi
+    if (( ${#IMG_MISSING[@]} > 0 )); then
         local im; for im in "${IMG_MISSING[@]}"; do error "  ✗ release image not published: ${im}"; done
         error "      publish it first (a nixos-template-v* / opnsense-firewall-v* tag on the GitHub repo builds it)"
         blocks=$((blocks+1))
     fi
+    local iu; for iu in "${!IMG_UNVERIFIED[@]}"; do
+        warn "  ⧗ release image not verified, its host did not answer (${IMG_WHY[$iu]}): ${IMG_UNVERIFIED[$iu]}"
+    done
 
     # Container image pins (#750): reported, never a block.
     pins_check
@@ -799,10 +803,58 @@ record_secrets() {
 # nixos-template-v1.4, whose tag never reached the GitHub repo that builds it, so
 # makerfloss's first night on 2.2 failed the templates update with a 404.
 # The URL is joined as Create-TAPPaaS-VM.sh joins it (one slash between).
-# IMG_MISSING: "<module> <url>" per unreachable image. TAPPAAS_TRAIN_FETCH (tests)
-# replaces the probe: `cmd <url>`, rc 0 = published.
+# Only a 404/410 means "not published". A 5xx, a timeout or a network error says
+# nothing about the image (github.com's edge answered 504 to every page on
+# 2026-11-08 while the asset downloaded through the API): the probe retries, then
+# asks the GitHub release API, and what it still cannot settle is UNVERIFIED — a
+# wait the operator may accept, never a refusal.
+# IMG_MISSING / IMG_UNVERIFIED: "<module> <url>" per image (IMG_WHY: why, per
+# unverified one). Tests: TAPPAAS_TRAIN_FETCH replaces the download probe
+# (`cmd <url>`: rc 0 published, rc 3 unreachable, any other rc not found);
+# TAPPAAS_TRAIN_API replaces the release API call (`cmd <api-url>` prints the JSON,
+# rc 0 found, rc 3 unreachable, other not found); TAPPAAS_TRAIN_RETRY_SLEEP the pause.
+image_probe() {   # $1 = url -> sets IP_STATE (ok|missing|unknown), IP_WHY
+    local url="$1" code="" try rc
+    IP_STATE="unknown"; IP_WHY=""
+    for try in 1 2 3; do
+        if [[ -n "${TAPPAAS_TRAIN_FETCH:-}" ]]; then
+            rc=0; ${TAPPAAS_TRAIN_FETCH} "${url}" >/dev/null 2>&1 || rc=$?
+            case "${rc}" in 0) code=200 ;; 3) code=000 ;; *) code=404 ;; esac
+        else
+            code="$(curl -sL --max-time 20 -r 0-0 -o /dev/null -w '%{http_code}' "${url}" 2>/dev/null)" || true
+            [[ -n "${code}" ]] || code=000
+        fi
+        case "${code}" in
+            200|206) IP_STATE="ok"; return 0 ;;
+            404|410) IP_STATE="missing"; return 0 ;;
+        esac
+        IP_WHY="HTTP ${code/#000/no answer}"
+        (( try < 3 )) && sleep "${TAPPAAS_TRAIN_RETRY_SLEEP:-$(( try * 3 ))}"
+    done
+    # The download URL could not be reached: for a GitHub release, the API knows
+    # whether the tag's release holds the asset.
+    local re='^https://github\.com/([^/]+)/([^/]+)/releases/download/([^/]+)/([^/]+)$'
+    [[ "${url}" =~ ${re} ]] || return 0
+    local owner="${BASH_REMATCH[1]}" repo="${BASH_REMATCH[2]}" tag="${BASH_REMATCH[3]}" asset="${BASH_REMATCH[4]}"
+    local api="https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}" body="" acode
+    if [[ -n "${TAPPAAS_TRAIN_API:-}" ]]; then
+        rc=0; body="$(${TAPPAAS_TRAIN_API} "${api}" 2>/dev/null)" || rc=$?
+        case "${rc}" in 0) acode=200 ;; 3) acode=000 ;; *) acode=404 ;; esac
+    else
+        body="$(curl -s --max-time 20 -w $'\n%{http_code}' "${api}" 2>/dev/null)" || true
+        acode="${body##*$'\n'}"; body="${body%$'\n'*}"
+    fi
+    case "${acode}" in
+        200) if jq -e --arg a "${asset}" 'any(.assets[]?; .name == $a and (.state // "uploaded") == "uploaded")' \
+                  >/dev/null 2>&1 <<<"${body}"; then IP_STATE="ok"
+             else IP_STATE="missing"; fi ;;
+        404) IP_STATE="missing" ;;
+        *)   acode="${acode:-000}"; IP_WHY="${IP_WHY}; the release API: HTTP ${acode/#000/no answer}" ;;
+    esac
+}
+
 images_check() {
-    IMG_MISSING=(); IMG_COUNT=0
+    IMG_MISSING=(); IMG_UNVERIFIED=(); IMG_WHY=(); IMG_COUNT=0
     local f url
     while IFS= read -r f; do
         url="$(jq -r '(.config["cluster:vm"] // .) | select((.imageType // "") == "img")
@@ -810,12 +862,12 @@ images_check() {
                      | (.imageLocation | sub("/+$"; "")) + "/" + (.image | sub("^/+"; ""))' "${REPO_DIR}/${f}" 2>/dev/null)"
         [[ -n "${url}" ]] || continue
         IMG_COUNT=$((IMG_COUNT+1))
-        if [[ -n "${TAPPAAS_TRAIN_FETCH:-}" ]]; then
-            ${TAPPAAS_TRAIN_FETCH} "${url}" >/dev/null 2>&1 && continue
-        else
-            curl -sfL --max-time 20 -r 0-0 -o /dev/null "${url}" && continue
-        fi
-        IMG_MISSING+=("$(basename "${f}" .json) ${url}")
+        image_probe "${url}"
+        case "${IP_STATE}" in
+            ok) ;;
+            missing) IMG_MISSING+=("$(basename "${f}" .json) ${url}") ;;
+            *)       IMG_UNVERIFIED+=("$(basename "${f}" .json) ${url}"); IMG_WHY+=("${IP_WHY}") ;;
+        esac
     done < <(g ls-files -- 'src/*.json' | grep -v -e '/test' -e 'fields.json$' -e 'schemas/')
 }
 
@@ -942,6 +994,9 @@ preflight() {
     images_check
     local im; for im in ${IMG_MISSING+"${IMG_MISSING[@]}"}; do
         PF_BROKEN+=("release image not published: ${im} — publish it before promoting")
+    done
+    local iu; for iu in ${IMG_UNVERIFIED+"${!IMG_UNVERIFIED[@]}"}; do
+        PF_WAIT+=("release image not verified, its host did not answer (${IMG_WHY[$iu]}): ${IMG_UNVERIFIED[$iu]} — retry later, or accept it with --force-boundary")
     done
 
     # A release does not go out with a module that is not a whole module.

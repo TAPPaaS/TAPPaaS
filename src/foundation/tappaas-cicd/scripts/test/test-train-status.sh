@@ -175,6 +175,44 @@ OUT="$(PATH="${TMP}/bin:${PATH}" TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR=
 OUT="$(PATH="${TMP}/bin:${PATH}" TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" TAPPAAS_TRAIN_NOW=$(( 1790000000 + 14*86400 )) \
     TAPPAAS_TRAIN_FETCH=true "${TRAIN}" status --no-fetch 2>&1)"
 [[ "${OUT}" == *"release images: 1 named, all published"* ]] && ok "…and a published one passes" || bad "published image: ${OUT}"
+# Only a 404 says "not published". An unreachable host (github.com answered 504 to
+# every page on 2026-11-08) is retried, then asked through the release API, and
+# what is still unsettled is a forceable wait, never a refusal.
+printf '#!/bin/sh\nexit 3\n' > "${TMP}/fetch-down"
+printf '#!/bin/sh\necho %s\n' "'{\"assets\":[{\"name\":\"t.qcow2.zst\",\"state\":\"uploaded\"}]}'" > "${TMP}/api-has"
+printf '#!/bin/sh\necho %s\n' "'{\"assets\":[{\"name\":\"other.zst\",\"state\":\"uploaded\"}]}'" > "${TMP}/api-lacks"
+printf '#!/bin/sh\nexit 3\n' > "${TMP}/api-down"
+chmod +x "${TMP}/fetch-down" "${TMP}/api-has" "${TMP}/api-lacks" "${TMP}/api-down"
+img_status() {  # $1 = fetch cmd, $2 = api cmd
+    OUT="$(PATH="${TMP}/bin:${PATH}" TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" TAPPAAS_TRAIN_NOW=$(( 1790000000 + 14*86400 )) \
+        TAPPAAS_TRAIN_RETRY_SLEEP=0 TAPPAAS_TRAIN_FETCH="$1" TAPPAAS_TRAIN_API="${2:-false}" "${TRAIN}" status --no-fetch 2>&1)"
+}
+img_status "${TMP}/fetch-down"
+[[ "${OUT}" == *"release image not verified, its host did not answer (HTTP no answer): tappaas-nixos https://example.invalid/"* \
+   && "${OUT}" != *"release image not published"* ]] \
+    && ok "an unreachable image host is 'not verified', not 'not published'" || bad "unreachable host: ${OUT}"
+# The same image on a GitHub release: the API settles it either way.
+sed -i.bak 's#https://example.invalid/nixos-template-v9.9/#https://github.com/o/r/releases/download/nixos-template-v9.9/#' \
+    "${TMP}/w/src/foundation/templates/tappaas-nixos.json" && rm -f "${TMP}/w/src/foundation/templates/tappaas-nixos.json.bak"
+git -C "${TMP}/w" commit -qam "github image" && git -C "${TMP}/w" push -q origin main
+img_status "${TMP}/fetch-down" "${TMP}/api-has"
+[[ "${OUT}" == *"release images: 1 named, all published"* ]] \
+    && ok "a GitHub download that does not answer, but whose release holds the asset, is published" || bad "api-has: ${OUT}"
+img_status "${TMP}/fetch-down" "${TMP}/api-lacks"
+[[ "${OUT}" == *"release image not published: tappaas-nixos https://github.com/o/r/releases/download/nixos-template-v9.9/t.qcow2.zst"* ]] \
+    && ok "…a release without the asset is not published" || bad "api-lacks: ${OUT}"
+img_status "${TMP}/fetch-down" "false"
+[[ "${OUT}" == *"release image not published: tappaas-nixos"* ]] \
+    && ok "…a tag with no release is not published" || bad "api-404: ${OUT}"
+img_status "${TMP}/fetch-down" "${TMP}/api-down"
+[[ "${OUT}" == *"not verified, its host did not answer (HTTP no answer; the release API: HTTP no answer)"* ]] \
+    && ok "…and with the API down too, it stays 'not verified'" || bad "api-down: ${OUT}"
+OUT="$(TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" TAPPAAS_BIN_DIR="${TMP}/bin" TAPPAAS_TRAIN_NOW=$(( 1790000000 + 20*86400 )) \
+    TAPPAAS_TRAIN_RETRY_SLEEP=0 TAPPAAS_TRAIN_FETCH="${TMP}/fetch-down" TAPPAAS_TRAIN_API="${TMP}/api-down" \
+    "${TRAIN}" boundary --dry-run --no-fetch 2>&1)"
+[[ "${OUT}" == *"⧗ release image not verified"*"retry later, or accept it with --force-boundary"* \
+   && "${OUT}" != *"✗ release image"* ]] \
+    && ok "a boundary waits on an unverified image (forceable), it does not refuse it" || bad "preflight unverified: ${OUT}"
 git -C "${TMP}/w" rm -q "src/foundation/templates/tappaas-nixos.json" && git -C "${TMP}/w" commit -qm "drop" && git -C "${TMP}/w" push -q origin main
 OUT="$(PATH="${TMP}/bin:${PATH}" TAPPAAS_REPO_DIR="${TMP}/w" TAPPAAS_CONFIG_DIR="${TMP}/cfg" "${TRAIN}" fault --help 2>&1)"; RC=$?
 [[ "${RC}" -ne 0 && "${OUT}" == *"is not a description"* ]] && ok "fault --help records no fault" || bad "fault --help: ${OUT}"
