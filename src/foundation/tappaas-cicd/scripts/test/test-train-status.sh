@@ -858,6 +858,34 @@ FAKE_NOW=$(( 1790000000 + 20*86400 )) run_prove boundary --resume --to nixos-26.
 git -C "${TMP}/w" rev-parse --verify --quiet origin/main >/dev/null \
     && ok "main was published" || bad "main was not published"
 
+echo "── a boundary killed mid-sweep still puts the site back on main ──"
+# 2026-11-08: the operator's ssh session dropped during the deep test; the run
+# died with it, nothing restored the declaration, and hrossen's next ordinary
+# update ran pin/2026-w45. A HUP (or Ctrl-C) must restore main like a failure does.
+setup_prove
+cat > "${TMP}/bin/site-manager" <<'STUB'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "repository modify")
+      br=""; for a in "$@"; do [[ "${_w:-}" == "1" ]] && { br="$a"; _w=0; }; [[ "$a" == "--branch" ]] && _w=1; done
+      jq --arg b "${br}" '.repositories[0].branch = $b' "${TAPPAAS_CONFIG_DIR}/site.json" > "${TAPPAAS_CONFIG_DIR}/.s" \
+        && mv "${TAPPAAS_CONFIG_DIR}/.s" "${TAPPAAS_CONFIG_DIR}/site.json"
+      git -C "${TAPPAAS_REPO_DIR}" checkout -q "${br}" 2>/dev/null ;;
+  "update"*) kill -HUP "${PPID}"; sleep 1 ;;   # the session drops under the sweep
+  *) : ;;
+esac
+exit 0
+STUB
+chmod +x "${TMP}/bin/site-manager"
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run_prove boundary --resume --to nixos-26.05 \
+    --staging-branch rehearse-staging --production-branch rehearse-prod
+[[ "${RC}" -eq 129 ]] && ok "a hang-up stops the boundary" || bad "a hang-up did not stop it (rc ${RC}): ${OUT}"
+[[ "$(jq -r .repositories[0].branch "${TMP}/cfg/site.json")" == "main" ]] \
+    && ok "…and the site is back on main" \
+    || bad "a killed boundary left the site tracking $(jq -r .repositories[0].branch "${TMP}/cfg/site.json")"
+[[ "$(git -C "${TMP}/w" rev-parse --abbrev-ref HEAD)" == "main" ]] \
+    && ok "…with the checkout on main too" || bad "the checkout stayed on $(git -C "${TMP}/w" rev-parse --abbrev-ref HEAD)"
+
 echo "── a boundary retried in the same week republishes its pin branch ──"
 # The situation this comes from: a boundary BLOCKED in phase 2 (#721) never
 # reaches phase 3, so the pin branch it published is still on the forge. The

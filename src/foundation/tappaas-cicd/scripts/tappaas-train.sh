@@ -1313,6 +1313,25 @@ declare_branch() {
     return 0
 }
 
+# While the site tracks the pin branch (from phase 2's declaration until phase 3
+# puts it back), ANY exit restores main: a failed step, Ctrl-C, or the ssh session
+# dropping under a long deep test (2026-11-08: the run died with the session and
+# left hrossen on pin/2026-w45, so the next ordinary update ran the pin branch).
+_PIN_TRACK_REPO=""
+site_on_pin() {
+    _PIN_TRACK_REPO="$1"
+    trap 'site_back_to_main' EXIT
+    trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM
+}
+site_back_to_main() {   # idempotent; safe in a trap on a dead terminal
+    [[ -n "${_PIN_TRACK_REPO}" ]] || return 0
+    local repo="${_PIN_TRACK_REPO}"; _PIN_TRACK_REPO=""
+    { warn "  restoring the site to main"; } 2>/dev/null || true
+    declare_branch "${repo}" main 2>/dev/null \
+        || { error "  the site still tracks the pin branch — run: site-manager repository modify ${repo} --branch main"; } 2>/dev/null || true
+}
+site_off_pin() { _PIN_TRACK_REPO=""; trap - EXIT HUP INT TERM; }
+
 pick_guest() {
     [[ -n "${GUEST}" ]] && { echo "${GUEST}"; return 0; }
     local f n
@@ -1347,7 +1366,9 @@ do_phase_prove() {
 
     # From here every exit restores the declaration: a site left tracking a pin
     # branch would take its next scheduled sweep from a branch nobody maintains.
-    _prove_fail() { warn "  restoring the site to main"; declare_branch "${repo}" main || true; return 1; }
+    # site_on_pin covers the exits no line here sees (a signal, a dropped session).
+    site_on_pin "${repo}"
+    _prove_fail() { site_back_to_main; return 1; }
 
     info "  ${guest} meets the new pin first (a failure there rolls that guest back, not the estate)"
     if ! "${BIN_DIR}/update-module.sh" "${guest}"; then
@@ -1378,6 +1399,7 @@ do_phase_main() {
         # --allow-no-pin-change: nothing was branched, so there is nothing to
         # land. main is already what was proved.
         info "${BOLD}Phase 3: nothing to land — main is what was proved${CL}"
+        site_off_pin
         return 0
     fi
     info "${BOLD}Phase 3: land ${br} on main${CL}"
@@ -1391,6 +1413,7 @@ do_phase_main() {
     # Back to the channel this site runs. Until this happens its nightly sweep
     # would pull from a pin branch nobody maintains.
     declare_branch "$(tracked_repo)" main || return 1
+    site_off_pin
     # The commit is an ancestor of main now, so the branch holds nothing that
     # main does not. Left behind, one accumulates every fortnight.
     g push -q origin --delete "${br}" >/dev/null 2>&1
