@@ -384,6 +384,29 @@
         options = lib.mkDefault "--delete-older-than 30d";
   };
 
+  # Container images: every update pulls the new image and nothing removed the
+  # old one, so a container guest grew by an image per update (identity held
+  # eleven Authentik versions, 12 GB). Daily, a guest running podman or docker drops
+  # the images no container uses; the running one stays, and rollback is the
+  # VM snapshot, not an old image. mkDefault: a module may tune it.
+  virtualisation.podman.autoPrune = lib.mkIf config.virtualisation.podman.enable {
+    enable = lib.mkDefault true;
+    dates  = lib.mkDefault "daily";
+    flags  = lib.mkDefault [ "--all" ];
+  };
+  virtualisation.docker.autoPrune = lib.mkIf config.virtualisation.docker.enable {
+    enable = lib.mkDefault true;
+    dates  = lib.mkDefault "daily";
+    flags  = lib.mkDefault [ "--all" ];
+  };
+
+  # The journal: systemd's own cap is 10% of / (up to 4G), which on a guest
+  # whose containers log to journald is a lot of disk for logs Loki already
+  # holds. 1G keeps weeks of local history.
+  services.journald.extraConfig = lib.mkDefault ''
+    SystemMaxUse=1G
+  '';
+
   # Firewall: explicit, as every TAPPaaS module declares it (canon C7, #390).
   # SSH is the one port every guest needs; the module importing this baseline
   # adds its own ports (the lists merge). mkDefault on enable: this file is a
