@@ -794,7 +794,8 @@ in
     serviceConfig = {
       Type = "oneshot";
       User = "tappaas";
-      ExecStart = "/home/tappaas/bin/health-manager scan security --if-new-sweep --notify";
+      # One scan at a time: the daily rescan below writes the same files.
+      ExecStart = "${pkgs.util-linux}/bin/flock /home/tappaas/config/.security-scan.lock /home/tappaas/bin/health-manager scan security --if-new-sweep --notify";
       Environment = [
         ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
           + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
@@ -810,6 +811,43 @@ in
       # A slow registry must not hold the unit for ever; the scan's own
       # timeouts are shorter.
       TimeoutStartSec = "2h";
+    };
+  };
+
+  # ADR-045 D4: the daily rescan. A CVE published on a quiet day shows within a
+  # day, even on a site that skips sweeps: the scanner databases are refreshed
+  # and the last inventory (config/sbom/site.cdx.json) is matched again. No
+  # guest is probed, no new SBOM is taken, no sweep runs, and nothing is fetched
+  # from the code forge: the only network it uses is the grype/trivy database
+  # mirrors (trivy matches the stored inventory with --offline-scan). It writes
+  # what the scan writes (config/sbom, the databases in ~/.cache), under the same
+  # lock, and tells the journal what is new for the alert rules.
+  systemd.timers.tappaas-security-rescan = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*-*-* 04:30:00";
+      RandomizedDelaySec = "30min";
+      Persistent = true;
+      Unit = "tappaas-security-rescan.service";
+    };
+  };
+  systemd.services.tappaas-security-rescan = {
+    description = "TAPPaaS security rescan — the last inventory against today's CVE databases";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "tappaas";
+      ExecStart = "${pkgs.util-linux}/bin/flock /home/tappaas/config/.security-scan.lock /home/tappaas/bin/health-manager scan security --rescan";
+      Environment = [
+        ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
+          + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
+          + ":/run/current-system/sw/bin")
+        "TAPPAAS_NIXPKGS=${pkgs.path}"
+      ];
+      ProtectSystem = "strict";
+      ReadWritePaths = [ "/home/tappaas/config" "/home/tappaas/.cache" ];
+      PrivateTmp = true;
+      NoNewPrivileges = true;
+      TimeoutStartSec = "1h";
     };
   };
 
