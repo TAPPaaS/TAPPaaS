@@ -122,7 +122,15 @@ Six phases, in this order:
 1. **Branch and move the pin.** `pin/<yyyy>-w<ww>` off `main`, then `nix flake update` for the
    estate. Add `--to nixos-26.05` for a **version move** — the nixpkgs release branch itself
    rather than a refresh within it. That is the only way past a frozen branch, and the script
-   never chooses one: `--to` is always your word.
+   never chooses one: `--to` is always your word. The **pin gate** then compares what this pin
+   brings with the last release and stops on anything not acknowledged (see *Before a boundary*).
+
+   **1b. Clean VEX.** Once the gate passes, the VEX statements nothing ships any more are removed
+   on the pin branch, in one `chore(vex): …` commit, so the cleanup is in the release and its
+   history. A statement is removed only when no channel (the new `main`, `staging` or `stable`)
+   ships its CVE at all; one whose CVE is now on another version of the package is kept and
+   listed as carried, for you to confirm. Nothing is removed after a failed CVE match, or when
+   the pin did not move.
 2. **Prove it here.** The site is first pointed at the pin branch — the sweep reconciles the
    checkout to whatever `site.json` declares, so a branch that is merely checked out gets reset
    back to `main` half way through and the rest of the sweep quietly builds the old revision.
@@ -218,7 +226,11 @@ A site on `main` between boundaries shows as `2.2+14`: fourteen commits past 2.2
 - **In the repository**, for everyone: the tags, and
   [`release/releases.json`](../../../release/releases.json) with
   [`RELEASES.md`](../../../RELEASES.md) rendered from it — every version, its commit, and the day
-  it reached each channel. The boundary commits it to `main` just before `main` is promoted to
+  it reached each channel. Its **security** section gives, per release with a score: the
+  release's level and score; each module's score and level against the previous release (a
+  module at 0 in both, with nothing fixed or decided, is only counted); what was fixed (FIXED
+  counts); what VEX decided (by CVE id, with the cleanup); what passed analysed at risk low or
+  medium; and what was accepted, each note with the items it covered. The boundary commits it to `main` just before `main` is promoted to
   staging (one `chore(release): …` commit), so the new tag holds its own record and every site
   has the full history after its next pull. The new version's commit cannot name its own hash:
   `RELEASES.md` shows its tag until the version reaches production, when the hash is filled in.
@@ -288,16 +300,17 @@ tappaas-train.sh ack --note "everything else: reviewed in the preview"
 | `ack --module <name> --note "<why>"` | Accept one module's items only: its new CVEs and the majors it ships (`baseline` for the shared row). Acks add up, each with its note; the preview's ACK column shows them. |
 
 **The table** — critical/high **CVEs** per module (a CVE that hits two packages counts once,
-as in the nightly `health-manager scan security`), "if released now" first:
+as in the nightly `health-manager scan security`), "if released now" first, the highest score
+first:
 
 ```
-  MODULE                OPEN  RISK  ACK   NOW │   V2.1  FIXED  DECIDED   NEW │  VEX  NOTE
-  NixOS baseline          26     0    0    26 │     31      5        0     0 │   29  the package versions every NixOS module ships
-  openwebui              142     0    0   142 │    231     89        0     0 │    0
-  immich                   0     9    0     9 │      —      0        0     9 │   33  risk medium; new since v2.1
-  identity                 0     5    0     5 │    204    179       21     1 │   26  risk low
-  coturn                   0     0    0     0 │      0      0        0     0 │    0
+  MODULE                OPEN  RISK CARRIED  ACK   NOW  SCORE LEVEL    │   V2.3  FIXED  DECIDED   NEW │  VEX  LIVE CARRIED  GONE  NOTE
+  NixOS baseline           0     0      11    0    11  15.97 medium   │     31     20        0     0 │   29    18      11     0  the package versions every NixOS module ships
+  immich                   1     6       0    9    16     20 high     │     12      3        0     7 │   71    68       0     3  risk medium
+  identity                 0     5       0    0     5   17.5 high     │    204    179       21     1 │   26    26       0     0  risk high
+  coturn                   0     0       0    0     0      0 ok       │      0      0        0     0 │    0     0       0     0
   …
+  MODULES                  …                                20 high     │ …                             release score 20 high, set by immich
   — the platform: patched by its own channel, not by a release — now, from the last scan —
   pvehost ×3             131     0    —   131 │                              │    4  tappaas1 130 · tappaas3 130 · tappaas2 130
   Debian LXC              89     0    —    89 │                              │    0  used by vllm-amd
@@ -309,10 +322,32 @@ as in the nightly `health-manager scan security`), "if released now" first:
   ships now. DECIDED: in the release, still shipped, but settled since by a VEX statement — not
   fixed, so not FIXED, and not in NOW (identity: 204 − 179 − 21 + 1 = 5). SAME (in both, still
   counted) is not a column — it is NOW minus NEW; `preview --module` lists it.
-- **OPEN · RISK · ACK = NOW.** OPEN: nobody has analysed it. RISK: analysed and still counted —
-  an `exploitable` statement in `<module>-vex.json` (or `templates-vex.json`), whose
-  `ratings[]` entry with source `TAPPaaS` gives the risk in this deployment (the NOTE shows the
-  worst). ACK: accepted for this release with `ack`. VEX (decided not affected) is not in NOW.
+- **OPEN · RISK · CARRIED · ACK = NOW.** Each counted CVE has one state:
+  - OPEN: nobody has analysed it.
+  - RISK: analysed and still counted. It has an `exploitable` statement in `<module>-vex.json` (or
+    `templates-vex.json`), whose `ratings[]` entry with source `TAPPaaS` gives the risk in this
+    deployment. The NOTE shows the worst.
+  - CARRIED: analysed for another version of the same package, and that version no longer ships.
+    It counts as open until someone confirms the old analysis still holds (`cve-triage.sh carry`).
+    `preview --module` prints the old analysis under the item.
+  - ACK: accepted for this release with `ack`. It keeps its state for the score.
+
+  VEX (decided not affected, false positive, resolved) is not in NOW.
+- **SCORE and LEVEL** are the module's release score. A CVE scores by its state: a RISK item by
+  its rating (critical 25, high 10, medium 3, low 1), an OPEN or CARRIED one by its severity
+  (critical 20, high 8). Only the highest category with any item counts, and each further item
+  in it counts half the one before. The level: ok (0), low (below 7), medium (7), high (16),
+  critical (30). One open critical is 20, high. The MODULES line gives the release score: its
+  highest module, and which module that is. `health-manager score` computes it; the record
+  keeps it.
+- **VEX LIVE · CARRIED · GONE** classify each statement in the module's VEX file against what
+  the channels ship after the boundary: the new `main` and `staging` (this preview's "now") and
+  the new `stable` (the release side). LIVE: it matches something a channel ships. CARRIED: its
+  CVE is still found on the same package, at a version the statement does not name. GONE:
+  nothing any channel ships has it. The boundary's phase 1b removes the GONE statements, and
+  the refs no channel ships from LIVE ones (the NOTE counts those refs). The text below the
+  table names every GONE statement. Platform modules, approximate ones and a run with a failed
+  match are not judged.
 - **The NixOS baseline** is one row (`baseline` to `ack --module` and `cve-triage.sh`): the package versions of `templates/tappaas-common.nix` (evaluated
   as an empty module) that every NixOS module ships — glibc, vim. A module's row is what it
   adds; a module on another version of a baseline package carries that version's CVEs itself.
@@ -320,7 +355,9 @@ as in the nightly `health-manager scan security`), "if released now" first:
 - **The mothership** is a module like the others: its system is evaluated in place on both
   sides (it reads this machine's `/etc/nixos`).
 - **The gate** names its module: `cve <module> <CVE>` (`cve baseline <CVE>` for the shared row)
-  and `major <pkg> a->b`; the last line says what is left to acknowledge, by module.
+  and `major <pkg> a->b`. The last lines say what is left to acknowledge, by module and by
+  reason (see *What needs an ack* below). Items that passed without an ack, and **stale acks**
+  (acknowledged, no longer in the gate), are listed above it.
 - **VEX**: the same triage statements the nightly scan applies (`<module>-vex.json` next to each
   module, deciding for that module only; the shared NixOS baseline's in `templates-vex.json`, for
   every module) apply here too, to both sides. A
@@ -356,16 +393,42 @@ number is a date or a sequence (100 or more: `20260107`, less `692`, systemd `26
 packages `release/pin-watch-ignore.json` lists with their reason. Those are reported as "not
 counted as major", never hidden; a major that goes *down* is labelled a downgrade.
 
+**What needs an ack.** Only what is new against the last release is gated. A CVE the release
+already shipped is not asked about again, whatever its state.
+
+| New against the last release | Needs an ack? | Reason shown |
+|---|---|---|
+| a critical/high CVE nobody has analysed | yes | `open` |
+| a critical/high CVE analysed for another version | yes | `carried` |
+| an analysed CVE rated high or critical here | yes | `risk high`, `risk critical` |
+| an analysed CVE with no rating (or one outside low…critical) | yes | `risk unrated` |
+| a major version change | yes | `major` |
+| a CVE match that failed | yes | `match failed` |
+| an analysed CVE rated **low or medium** here | **no**: it passes, and still counts in the score | — |
+
+When several statements rate the same CVE (the module's and the baseline's), the worst rating
+decides.
+
+**An ack is pinned.** `ack` stores, for each item, what it was given for: its severity and its
+packages at their versions (a major: its two versions), plus the preview's pin and digest. An ack
+covers a boundary item only while that is unchanged. If the pin the boundary takes ships the CVE
+at another version, the boundary stops and names the item, what was acked and what it is now.
+`ack` drops acked items that are no longer in the gate.
+
 **What a boundary does with it.** Right after phase 1 moves the pin — before the deep test — the
 boundary computes the same comparison for the pin it actually took:
 
-- nothing to acknowledge: it goes on, **no ack needed**;
-- everything gated is covered by the last `ack`: it goes on;
-- anything not covered: it **stops** before the deep test, names the new items, and leaves the
-  checkout clean. Run `preview`, read the upstream notes, `ack`, run the boundary again.
+- nothing to acknowledge: it goes on, **no ack needed** (and says how many new items passed as
+  analysed low/medium);
+- everything gated is covered by the ack: it goes on;
+- anything not covered: it **stops** before the deep test, names each item with its reason, and
+  leaves the checkout clean. Run `preview`, deal with the items, `ack`, run the boundary again.
 
-The accepted items are recorded on the release (`accepted` in `release/releases.json`, shown by
-`tappaas-train releases`); the boundary uses the ack up. `boundary --dry-run` says what the gate
+The record keeps the whole ack with the release, then resets it: the items, their fingerprints,
+every note, and the pin and digest (`ack` in `release/releases.json`; `accepted` lists the
+items, as `tappaas-train releases` shows). It also keeps each module's release score, level and
+counts, what passed analysed, and what the VEX cleanup did (`security`). `RELEASES.md` prints
+them in its security section. `boundary --dry-run` says what the gate
 would do with the last preview. When the comparison cannot be made — no release tag, no security
 scan, a pin that cannot be fetched — it says so and lets the deep test decide.
 
@@ -397,6 +460,96 @@ cve-triage.sh add immich CVE-2014-9826 --pkg imagemagick --state false_positive 
 version change asks again; `false_positive` covers the package; `exploitable` keeps the CVE
 counted, as RISK, with the risk here. `baseline` writes to `templates-vex.json`. Commit the
 file; the next scan and preview apply it.
+
+## The CVE runbook: from T-3 to the boundary
+
+The order of work for every boundary, based on ADR-045. Start three days before the boundary.
+Run it on the mothership that drives the train.
+
+**1. Preview (T-3).**
+
+```bash
+tappaas-train.sh preview                       # add --to nixos-XX.YY for a version move
+```
+
+Read the table from the top (the highest score first). For each module note OPEN, RISK,
+CARRIED and its SCORE and LEVEL. Under the table, read the VEX line (GONE statements the boundary
+will remove), the items that pass analysed, the stale acks, and *to acknowledge … why:*. The
+release score is on the MODULES line. For one module, CVE by CVE:
+
+```bash
+tappaas-train.sh preview --module immich       # NEW / FIXED / SAME, "fixed in", carried analyses
+```
+
+**2. Fix first.** No module is acked while a tested update would clear its items.
+
+- A CVE with a fixed version (`fixed in …` in `preview --module`) is cleared by moving the
+  package or image to it. For an image, `python3 src/foundation/tappaas-cicd/scripts/image-pins.py`
+  shows how far each pin is behind upstream. A NixOS package moves with the pin, or with an
+  override in the module.
+- Land the bump on `main`, let this site run it (`update-module.sh <module>`, then
+  `test-module.sh <module>`), and confirm the module works.
+- Run `tappaas-train.sh preview` again. The item is now FIXED.
+
+**3. Confirm carried items.** For each module with CARRIED items, read every previous analysis in
+`preview --module <module>`. If it still holds for the version now shipped:
+
+```bash
+cve-triage.sh carry immich                     # every carried item of the module
+cve-triage.sh carry baseline CVE-2026-0861     # or one by one; --dry-run shows the change
+```
+
+If it no longer holds, triage the item afresh (step 4).
+
+**4. Triage open critical/high.** For each module with OPEN items:
+
+```bash
+cve-triage.sh open immich                      # the OPEN CVEs, descriptions, ?range first
+cve-triage.sh add immich CVE-2026-1234 --pkg ffmpeg-headless --state not_affected \
+    --justification code_not_reachable --detail "<why, for this deployment>"
+cve-triage.sh add immich CVE-2014-9826 --pkg imagemagick --state false_positive --detail "<why>"
+cve-triage.sh add immich CVE-2026-5678 --pkg libtiff --state exploitable --risk medium --detail "<why>"
+```
+
+An `exploitable` item rated low or medium passes the gate without an ack (it still counts in the
+score); rated high or critical, it still needs one. An item that would take more than a short
+analysis can be acked with a note saying so (step 5); put it on the roadmap.
+
+`cve-triage.sh` and `carry` write the VEX file in this checkout, so the next `preview` sees them
+at once. Commit the VEX files to `main` and get this checkout back to `origin/main` before the
+boundary: the boundary refuses a checkout with uncommitted changes, and it releases what is on
+`main`.
+
+**5. Ack the rest, one note per module.** Run `preview` once more, then for each module still
+listed under *to acknowledge*:
+
+```bash
+tappaas-train.sh ack --module immich --note "brotli: no fix upstream yet; not reachable (no untrusted br streams); tracked on the roadmap"
+tappaas-train.sh ack --module logging --note "Grafana 14: read the upgrade notes, live-tested on this site"
+tappaas-train.sh ack --module baseline --note "glibc: decided for 2.42-103 in templates-vex.json"
+```
+
+The note says what was accepted and why: no fix upstream, not reachable in practice, tracked in
+the roadmap. A failed match is acked without `--module` (`ack --note "<why>"`), and only when the
+deep test is to decide. `tappaas-train.sh boundary --dry-run` then says whether the gate would
+pass with the last preview.
+
+**6. Boundary day.** The pin moves daily, so run `preview` again first. If something new is
+gated, or an acked item now ships at another version, deal with it (steps 2–5). Then:
+
+```bash
+tappaas-train.sh boundary --dry-run            # the plan and what the gate would do
+tappaas-train.sh boundary                      # add --to nixos-XX.YY for a version move
+```
+
+The pin gate re-checks the pin the boundary takes, phase 1b removes the GONE statements on the
+pin branch, and the record stores each module's release score and counts, what passed analysed,
+the VEX cleanup, and the ack with its notes. `RELEASES.md` gets the release's security section
+from that record.
+
+If the gate stops, it names each item and its reason, and leaves the checkout clean on `main`
+(nothing was proven or promoted yet). Deal with the items as in steps 2–5, then run
+`tappaas-train.sh boundary` again (with the same `--to`, if any).
 
 ## When staging finds a fault
 
