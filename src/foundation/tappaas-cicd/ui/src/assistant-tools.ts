@@ -15,6 +15,7 @@ import { JobSummary, shellQuote } from "./jobs";
 import { ManifestVerb, Manifests, applyArgv, findVerb, previewArgv, validateArgv } from "./manifest";
 import { MODULE_NAME, Reads } from "./reads";
 import { HealthDoc } from "./model";
+import { ConditionChange, HealthGraph, HealthNode, HealthObject, Status, healthEgo } from "./health";
 import { ToolDef } from "./litellm";
 import { Opened } from "./conversations";
 import { resolveTarget, wizardForVerb } from "../web/src/consoletargets";
@@ -104,6 +105,12 @@ export const TOOLS: Record<string, { line: string; description: string; paramete
     line: "health(gate?, subject?): the health gates and their findings",
     description: "The health gates (health-manager validate): each gate's status and its findings. Give `gate` for one gate in full (e.g. guest-memory, memory-commitment, pulse, backup-status), or `subject` for every finding naming a module or node.",
     parameters: obj({ gate: str("a gate name (optional)"), subject: str("a module or node name (optional)") }),
+  },
+  health_graph: {
+    line: "health_graph(object?, depth?): the root causes; with an object, why it fails: its conditions, what explains it, its neighbours, its last day",
+    description:
+      "Health as the Health view has it (conditions on every object, root causes derived along the relations). Without `object`: the current root causes, worst first, each with how many objects it explains. With `object` (a name such as identity or tappaas2, or an object id): that object's conditions, the root causes that explain it or the symptoms it explains, every object one relation away with its status, and its health changes and the jobs that touched it in the last 24 hours. Use it to explain in words why something fails, and say which objects you read. Give `depth` 2 only when the operator asks to look one relation further. Names and conditions only: no configuration.",
+    parameters: obj({ object: str("an object's name or id (optional)"), depth: { type: "integer", description: "1 (default), or 2 when the operator asks to look further" } }),
   },
   backup: {
     line: "backup(module?): backup policies and restore points",
@@ -225,6 +232,161 @@ function healthView(h: HealthDoc, gate: string | null, subject: string | null): 
     gates: h.gates.map((g) => ({ name: g.name, status: g.status, detail: g.detail, findings: g.findings.length })),
     attention: attention(h).map((a) => `${a.level} ${a.gate}: ${a.text}`),
   };
+}
+
+// ── health_graph (ADR-041 O5) ─────────────────────────────────────
+// What the assistant may read to explain a root cause: the root's conditions,
+// what it explains, the objects one relation away and its last day of events,
+// through the Health view's own reads. Bounded, and names and conditions only:
+// an object is its id, name, class and state, never its attributes or config.
+
+export const HEALTH_OBJECTS = 50;
+export const HEALTH_EVENTS = 100;
+export const HEALTH_HOURS = 24;
+// A full answer (HEALTH_OBJECTS and HEALTH_EVENTS) fits whole: one line each.
+export const HEALTH_RESULT_CHARS = 10000;
+
+const RANK: Record<Status, number> = { ok: 0, unknown: 1, warning: 2, critical: 3 };
+
+export interface HealthRead {
+  view: unknown;
+  read: string[]; // what was read, as the answer must list it
+  objects: number;
+  events: number;
+}
+
+const objName = (n: { class: string; label: string }): string => `${n.class} ${n.label}`;
+
+const short = (s: string | null | undefined, max = 120): string => (!s ? "" : s.length <= max ? s : `${s.slice(0, max - 1)}…`);
+
+// An object in one line: its name, class and state, nothing of its record.
+export function brief(n: HealthNode): string {
+  const issue = n.status !== "ok" && n.status !== "unknown" ? short([n.type, n.reason].filter((x) => x).join(": "), 80) : "";
+  const marks = [n.isRoot ? "root cause" : "", n.acknowledged ? "acknowledged" : "", n.maintenance ? "maintenance" : ""].filter((x) => x);
+  return `${n.label} (${n.class}, ${n.status}${issue ? `: ${issue}` : ""}${marks.length ? `; ${marks.join(", ")}` : ""})`;
+}
+
+// The object a name or id means: an id exactly, else a name or label without
+// regard to case; of several, a root cause first, then the worst.
+export function resolveHealthObject(doc: HealthGraph, ref: string): { node: HealthNode; others: string[] } | { error: string } {
+  const exact = doc.nodes.find((n) => n.id === ref);
+  if (exact) return { node: exact, others: [] };
+  const want = ref.toLowerCase();
+  const hits = doc.nodes.filter((n) => n.name.toLowerCase() === want || n.label.toLowerCase() === want);
+  if (!hits.length) {
+    const near = doc.nodes.filter((n) => n.label.toLowerCase().includes(want)).slice(0, 10).map(objName);
+    return { error: `no object named '${ref}'${near.length ? ` (similar: ${near.join(", ")})` : ""}; call health_graph() without an object for the root causes` };
+  }
+  hits.sort((a, b) => Number(b.isRoot) - Number(a.isRoot) || RANK[b.status] - RANK[a.status] || a.class.localeCompare(b.class));
+  return { node: hits[0], others: hits.slice(1, 10).map((n) => `${objName(n)} (${n.id})`) };
+}
+
+// The root causes now, worst first.
+export function healthRootsView(doc: HealthGraph): HealthRead {
+  const roots = [...doc.roots]
+    .sort((a, b) => RANK[b.status] - RANK[a.status] || b.impactedCount - a.impactedCount || a.label.localeCompare(b.label))
+    .slice(0, HEALTH_OBJECTS);
+  return {
+    view: {
+      generated: doc.generated,
+      counts: doc.counts,
+      rootCauses: roots.map((r) =>
+        `${r.label} (${r.class}, ${r.status}${r.type ? ` ${r.type}` : ""}${r.message ?? r.reason ? `: ${short(r.message ?? r.reason)}` : ""})` +
+        ` explains ${r.impactedCount}${r.since ? `; since ${r.since.replace("T", " ").slice(0, 16)}` : ""}${r.acknowledged ? "; acknowledged" : ""}${r.flapping ? "; flapping" : ""}`),
+      ...(doc.roots.length > roots.length ? { notShown: doc.roots.length - roots.length } : {}),
+      next: roots.length ? "For why one fails, call health_graph with its name." : undefined,
+    },
+    read: roots.map(objName),
+    objects: roots.length,
+    events: 0,
+  };
+}
+
+// One object, as the assistant may read it: its conditions, what explains it
+// or what it explains, its neighbours `depth` relations away, and its events
+// of the last HEALTH_HOURS. At most HEALTH_OBJECTS objects and HEALTH_EVENTS
+// events; what did not fit is counted, not dropped silently.
+export function healthObjectView(
+  doc: HealthGraph,
+  node: HealthNode,
+  depth: number,
+  record: Pick<HealthObject, "history" | "changes"> | Error | null,
+  now: number,
+  others: string[] = [],
+): HealthRead {
+  const nodeOf = new Map(doc.nodes.map((n) => [n.id, n]));
+  const seen = new Set([node.id]);
+  const take = (ids: string[]): { shown: HealthNode[]; notShown: number } => {
+    const shown: HealthNode[] = [];
+    let notShown = 0;
+    for (const id of ids) {
+      const n = nodeOf.get(id);
+      if (!n || seen.has(id)) continue; // each object once, where it first appears
+      if (seen.size >= HEALTH_OBJECTS) {
+        notShown++;
+        continue;
+      }
+      seen.add(id);
+      shown.push(n);
+    }
+    return { shown, notShown };
+  };
+  // What explains it first, then its neighbours, then what it explains.
+  const explainedBy = take(node.rootCause);
+  const ego = healthEgo(doc, node.id, Math.min(2, Math.max(1, depth)));
+  const groups = (ego?.groups ?? []).map((g) => ({ g, t: take(g.neighbours) }));
+  const root = doc.roots.find((r) => r.id === node.id);
+  const explains = take(root?.impacted ?? []);
+
+  const since = now - HEALTH_HOURS * 3600_000;
+  const recent = (at: string): boolean => Date.parse(at) >= since;
+  const changes = record && !(record instanceof Error) ? record.history.filter((c: ConditionChange) => recent(c.at)) : [];
+  // A job or a verb changed it; a manager's routine report (an observation) is not an event.
+  const jobs = record && !(record instanceof Error) ? record.changes.filter((c) => recent(c.time) && (c.job || c.verb)) : [];
+  const minute = (at: string): string => at.replace("T", " ").slice(0, 16);
+  const events = [
+    ...changes.map((c) => ({ at: c.at, line: `${minute(c.at)} ${c.type} ${c.from ?? "new"} → ${c.to}${c.message ?? c.reason ? `: ${short(c.message ?? c.reason)}` : ""}` })),
+    ...jobs.map((c) => ({ at: c.time, line: `${minute(c.time)} ${c.kind}${c.verb ? ` by ${short(c.verb, 60)}` : ""}${c.actor ? ` (${c.actor})` : ""}` })),
+  ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const shownEvents = events.slice(0, HEALTH_EVENTS);
+
+  const view = {
+    generated: doc.generated,
+    object: {
+      id: node.id,
+      is: brief(node),
+      conditions: node.issues.length
+        ? node.issues.map((i) => `${i.type} ${i.status}${i.reason ? `: ${short(i.reason, 60)}` : ""}${i.message ? ` — ${short(i.message)}` : ""}${i.since ? ` (since ${minute(i.since)})` : ""}${[i.derived ? "derived" : "", i.acknowledged ? "acknowledged" : "", i.maintenance ? "maintenance" : "", i.flapping ? "flapping" : ""].filter((x) => x).map((x) => `; ${x}`).join("")}`)
+        : `none open: ${node.status}`,
+    },
+    ...(others.length ? { alsoNamedSo: others } : {}),
+    explainedBy: explainedBy.shown.map(brief),
+    neighbours: groups.filter(({ t }) => t.shown.length || t.notShown).map(({ g, t }) => ({
+      relation: g.label, side: g.side === "up" ? "what it needs or is in" : "what needs it or is in it",
+      ...(g.anchor !== node.id ? { via: nodeOf.get(g.anchor)?.label ?? g.anchor } : {}),
+      objects: t.shown.map(brief), ...(t.notShown ? { notShown: t.notShown } : {}),
+    })),
+    ...(root ? { explains: { count: root.impactedCount, objects: explains.shown.map(brief), ...(explains.notShown ? { notShown: explains.notShown } : {}) } } : {}),
+    lastDay:
+      record instanceof Error ? `its history could not be read: ${record.message}`
+      : record === null ? "its history was not read"
+      : events.length === 0 ? `no change of a condition's status and no job in the last ${HEALTH_HOURS} h`
+      : { events: shownEvents.map((e) => e.line), ...(events.length > shownEvents.length ? { notShown: events.length - shownEvents.length } : {}) },
+  };
+  const read = [...seen].map((id) => objName(nodeOf.get(id) ?? { class: "?", label: id }));
+  if (record && !(record instanceof Error)) read.push(`${objName(node)}: health changes and jobs, last ${HEALTH_HOURS} h`);
+  const out = { ...view, read: `${seen.size} object(s), each listed once above${record && !(record instanceof Error) ? `; ${node.label}'s health changes and jobs, last ${HEALTH_HOURS} h` : ""}` };
+  // The whole answer fits the model's share: the oldest events give way first.
+  const day = out.lastDay as { events: string[]; notShown?: number } | string;
+  let kept = shownEvents.length;
+  if (typeof day !== "string") {
+    while (day.events.length && JSON.stringify(out).length > HEALTH_RESULT_CHARS) {
+      day.events.pop();
+      day.notShown = (day.notShown ?? 0) + 1;
+    }
+    kept = day.events.length;
+  }
+  return { view: out, read, objects: seen.size, events: kept };
 }
 
 // The manifest of one manager, as the model needs it.
@@ -415,6 +577,25 @@ async function call(ctx: ToolContext, name: string, args: Record<string, unknown
       const gate = arg(args, "gate");
       const subject = arg(args, "subject");
       return ok(`health${gate ? ` ${gate}` : ""}${subject ? ` ${subject}` : ""} (validate ${h.at ? new Date(h.at).toISOString().slice(11, 16) : "?"})`, healthView(h.value, gate, subject));
+    }
+    case "health_graph": {
+      const g = await r.healthGraph.get();
+      if (!g.value) return failed("health graph", `the health graph could not be read: ${g.error ?? "not yet"}`);
+      const doc = g.value;
+      if (!doc.hasConditions) return failed("health graph", "this site has no health conditions yet: health-manager assess has not run here. The health tool reads the gates.");
+      const ref = arg(args, "object");
+      const whole = (summary: string, v: unknown): ToolOutcome => ({ ok: true, summary, content: cap(JSON.stringify(v), HEALTH_RESULT_CHARS) });
+      if (!ref) {
+        const v = healthRootsView(doc);
+        return whole(`health graph: ${v.objects} root cause(s)`, v.view);
+      }
+      if (ref.length > 200) throw new Error("`object` must be a name or an id");
+      const hit = resolveHealthObject(doc, ref);
+      if ("error" in hit) return failed(`health graph ${ref}`, hit.error);
+      const depth = Number(args.depth) === 2 ? 2 : 1;
+      const record = await r.healthObjectOf(hit.node.id).catch((e: unknown) => (e instanceof Error ? e : new Error(String(e))));
+      const v = healthObjectView(doc, hit.node, depth, record, (ctx.now ?? Date.now)(), hit.others);
+      return whole(`health graph ${hit.node.label}${depth === 2 ? " (2 hops)" : ""}: ${v.objects} objects, ${v.events} events`, v.view);
     }
     case "backup": {
       const m = arg(args, "module");
