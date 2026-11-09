@@ -589,6 +589,12 @@ degrades the pool, all of them take it down), a log, cache or spare member
 no pool loses the `built-on` it had. A disk no asset records is only in the server's
 `disks[]` (`asset-manager disk adopt` records it).
 
+Each guest is **`stored-on`** each ZFS pool of its node that one of its disks, its rootfs
+or a mount point is on (a Proxmox zfspool storage carries its pool's name; `local-lvm` and
+other storages are no pool), and its `stored-on` any other pool of any node ends, so a
+moved disk or a migrated guest leaves none behind. A pool the report does not describe
+is named by a stub, by its name on its node.
+
 A guest's fields come from its `/etc/pve` config through the parse in lib/ts
 `guest-conf.ts`, the one module-manager reports an `update` or `modify` with.
 

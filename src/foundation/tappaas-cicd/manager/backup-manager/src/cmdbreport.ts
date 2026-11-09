@@ -1,12 +1,17 @@
 // cmdbreport.ts — what backup-manager reports to the CMDB (ADR-040 D4), from
 // what `restore list-all` already reads (`pbs-controller runs --json`) and the
 // peer records in config/: the datastore (size, used, retention; runs-on the
-// machine PBS runs on), a `backs-up` from it to every guest and machine of
+// machine PBS runs on; stored-on the pool its path is on), a `backs-up` from
+// it to every guest and machine of
 // this site it holds restore points for, and each buddy as a backup-peer
 // (direction, at its location, lastSeen: its sync's last run).
 
 import { CmdbBatch } from "../../../lib/ts/src/cmdb-reporter";
 import { BackupRuns, Peer, RawDiscover, RawRuns } from "./types";
+
+/** A node's ZFS pools (config/<node>.json storagePools): what a datastore's
+ *  path may be on. */
+export type PoolsOf = (node: string) => string[];
 
 export const SOURCE = "backup-manager";
 
@@ -38,7 +43,20 @@ export function putPeer(b: CmdbBatch, p: Peer, lastSeen?: string): string {
   return ref;
 }
 
-export function buildBackupReport(raw: RawRuns | null, runs: BackupRuns | null, peers: Peer[]): CmdbBatch {
+/** The datastore's `stored-on`: to the pool of its node its path is on
+ *  (`/<pool>/…`, a pool mounted where ZFS mounts it), and an end to the node's
+ *  other pools. A path on no pool (the root disk) relates to none. */
+export function storedOn(b: CmdbBatch, ds: string, node: string | null | undefined, path: string | null | undefined, poolsOf: PoolsOf): void {
+  if (!node) return;
+  const on = typeof path === "string" ? /^\/([^/]+)/.exec(path)?.[1] : undefined;
+  for (const pool of [...new Set(poolsOf(node))].sort()) {
+    const ref = b.stub("storage-pool", pool, { onNode: { class: "machine", name: node } }, `storage-pool:${node}/${pool}`);
+    if (pool === on) b.relate("stored-on", ds, ref);
+    else b.relations.push({ type: "stored-on", from: ds, to: ref, end: true });
+  }
+}
+
+export function buildBackupReport(raw: RawRuns | null, runs: BackupRuns | null, peers: Peer[], poolsOf: PoolsOf = () => []): CmdbBatch {
   const b = new CmdbBatch(SOURCE);
   if (raw && runs?.reachable && runs.store) {
     const status = raw.status ?? null;
@@ -48,6 +66,7 @@ export function buildBackupReport(raw: RawRuns | null, runs: BackupRuns | null, 
       retention: retentionOf(raw, runs.store),
     });
     if (runs.node) b.relate("runs-on", ds, { class: "machine", name: runs.node });
+    storedOn(b, ds, runs.node, raw.path, poolsOf);
     // This site's own restore points: its guests' and its hosts' file backups,
     // not the copies of other sites pulled or pushed here.
     const own = new Set(runs.targets.filter((t) => t.kind === "own" || t.kind === "host").map((t) => t.ns));
@@ -71,7 +90,7 @@ export function buildBackupReport(raw: RawRuns | null, runs: BackupRuns | null, 
 /** report --discover (ADR-040 D15): every datastore, not only the one the
  *  site's jobs use, with its GC state, each restore-point group's age, its
  *  prune settings and the sync jobs. */
-export function buildBackupDiscover(raw: RawDiscover, now: number): CmdbBatch {
+export function buildBackupDiscover(raw: RawDiscover, now: number, poolsOf: PoolsOf = () => []): CmdbBatch {
   const b = new CmdbBatch(SOURCE);
   for (const d of raw.datastores ?? []) {
     const ds = b.put("datastore", d.name, {
@@ -86,6 +105,7 @@ export function buildBackupDiscover(raw: RawDiscover, now: number): CmdbBatch {
       syncJobs: (raw.syncJobs ?? []).filter((s) => s.store === d.name),
     });
     if (raw.node) b.relate("runs-on", ds, { class: "machine", name: raw.node });
+    storedOn(b, ds, raw.node, d.path, poolsOf);
   }
   return b;
 }

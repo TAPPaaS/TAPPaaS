@@ -274,7 +274,9 @@ from the sweep) site-manager's, all volatile. A **`built-on`** relation joins a
 `redundancyGroup` `<node>:<pool>:<vdev>` on the members of a mirror or raidz vdev and
 `required: false` on a log, cache or spare member, so one failed disk of a mirror degrades
 its pool and a vdev with every member failed takes it down (the `built-on` rule in
-`health-rules.json`).
+`health-rules.json`). A **`stored-on`** relation joins a `vm`, an `lxc` or a backup
+`datastore` to each pool its data is on (`dependant: from`, required, n:m): a pool's
+`critical` takes them down with it; its warning (`DEGRADED`) reaches none.
 
 A subclass that declares an inherited field again with only some properties
 refines it (`vm` makes `name` a key of rank 2). A new class goes through

@@ -247,5 +247,42 @@ const rels = [
   check(at(warn.conditions, pool, "impact") === undefined, "a worn disk (a warning) crosses nothing");
 }
 
+// ── stored-on: a pool's failure reaches the guests and datastore on it ──
+{
+  const node = obj("machine", "tappaas3");
+  const pool = obj("storage-pool", "tankc1");
+  const other = obj("storage-pool", "tanka1");
+  const backup = obj("vm", "backup");
+  const ct = obj("lxc", "scratch");
+  const ds = obj("datastore", "tappaas_backup");
+  const elsewhere = obj("vm", "nextcloud");
+  const disk = obj("disk", "dsk-09");
+  const srels = [
+    rel("runs-on", pool, node), rel("runs-on", other, node), rel("runs-on", backup, node), rel("runs-on", ct, node), rel("runs-on", ds, node), rel("runs-on", elsewhere, node),
+    rel("stored-on", backup, pool), rel("stored-on", ct, pool), rel("stored-on", ds, pool), rel("stored-on", elsewhere, other), rel("built-on", pool, disk),
+  ];
+  const sobjs = [node, pool, other, backup, ct, ds, elsewhere, disk];
+
+  const warn = derive(sobjs, src([pool, [cond("operational", "warning", "pool-state", { message: "tankc1: zfs DEGRADED" })]]), srels, shippedModel(), now);
+  check([backup, ct, ds, elsewhere].every((o) => (warn.conditions.get(o.id) ?? []).length === 0), "a DEGRADED pool (a warning) reaches nothing stored on it");
+  check(warn.rootCauses.length === 1 && warn.rootCauses[0].id === pool.id && warn.rootCauses[0].impactedCount === 0, "…the pool its own warning, impacting none");
+
+  const crit = derive(sobjs, src(
+    [pool, [cond("operational", "critical", "pool-state", { message: "tankc1: zfs FAULTED", since: "2026-10-30T02:16:00.000Z" })]],
+    [backup, [cond("operational", "critical", "guest-stopped", { since: "2026-10-30T02:17:00.000Z" })]],
+  ), srels, shippedModel(), now);
+  for (const o of [backup, ct, ds]) {
+    const imp = at(crit.conditions, o, "impact");
+    check(imp?.status === "critical" && imp.rootCause === pool.id, `a FAULTED pool (critical): ${o.class} ${o.name} impacted critical, the pool its root cause`);
+  }
+  check(at(crit.conditions, backup, "operational")?.derived === true, "…a guest stopped on it is that failure seen from below");
+  check(at(crit.conditions, elsewhere, "impact") === undefined, "…a guest on another pool of the node untouched");
+  check(at(crit.conditions, node, "impact") === undefined, "…the node it runs on untouched");
+  check(crit.rootCauses.length === 1 && crit.rootCauses[0].id === pool.id && crit.rootCauses[0].impactedCount === 3, "…one root cause, the pool, impacting three");
+
+  const viaDisk = derive(sobjs, src([disk, [cond("operational", "critical", "smart")]]), srels, shippedModel(), now);
+  check(at(viaDisk.conditions, ds, "impact")?.status === "critical" && at(viaDisk.conditions, ds, "impact")?.rootCause === disk.id, "a single-disk pool's disk failed: the datastore impacted through the pool, the disk the root");
+}
+
 console.log(`\nResults: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

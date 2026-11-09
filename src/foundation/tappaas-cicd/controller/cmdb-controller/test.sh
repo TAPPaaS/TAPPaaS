@@ -477,7 +477,7 @@ check "…and it was rewritten in place" "2026-10-30T03:00:00Z" "$(cmdb show "${
 check "an assessment is no sighting: lastSeen stands" "${_seen}" "$(cmdb show "${_pid}" --json | jq -r '.lastSeen')"
 refuse "an assessment names objects by id" 4 "by id" \
     '{"source":"health-manager","assessment":true,"objects":[{"class":"zone","name":"nope","attributes":{"conditions":[]}}]}'
-check "the rules are served: runs-on's dependant, the shipped set" "from 6" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '"\(.data.relations[] | select(.name == "runs-on") | .dependant) \(.data.rules | length)"')"
+check "the rules are served: runs-on's dependant, the shipped set" "from 7" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '"\(.data.relations[] | select(.name == "runs-on") | .dependant) \(.data.rules | length)"')"
 check "…a rule's dependant clause, and the attributes one may name" "true true" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '"\(any(.data.rules[]; .dependant.haNode == true)) \(.data.fields | index("haNode") != null)"')"
 check "the containment is served: each relation type's tree end" "to from both null" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '[.data.relations[] | select(.name == ("allocated-to", "runs-on", "connects", "depends-on")) | .tree | tostring] | join(" ")')"
 refuse "a pool needs its node" 4 "no key" '{"source":"t","objects":[{"class":"storage-pool","name":"tanka1"}]}'

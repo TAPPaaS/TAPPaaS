@@ -2,9 +2,9 @@
   "reachable": true,
   "node": "tappaas3",
   "datastores": [
-    {"name": "tappaas_backup", "status": {"total": 4000, "used": 1000}, "gc": {"removed-bytes": 9, "upid": "UPID:x"},
+    {"name": "tappaas_backup", "path": "/tankc1/tappaas_backup", "status": {"total": 4000, "used": 1000}, "gc": {"removed-bytes": 9, "upid": "UPID:x"},
      "groups": [{"ns": "", "type": "vm", "id": "200", "snapshots": 3, "oldest": 1792000000, "newest": 1793000000}]},
-    {"name": "offsite", "status": {"total": 9000, "used": 10}, "gc": null, "groups": []}
+    {"name": "offsite", "path": "/var/lib/offsite", "status": {"total": 9000, "used": 10}, "gc": null, "groups": []}
   ],
   "pruneJobs": [{"id": "p1", "store": "tappaas_backup", "keep-daily": 7}],
   "syncJobs": [{"id": "s1", "store": "offsite", "remote": "buddy"}]

@@ -195,7 +195,7 @@ ADR-040 D4: `backup-manager report [--json]` sends the backups to the CMDB
 
 | Class | Name | Attributes | Relations |
 |---|---|---|---|
-| `datastore` | the PBS datastore | size, used (bytes, the datastore's status), retention (its prune job's keep-*) | `runs-on` the machine PBS runs on; `backs-up` every guest (`vm`/`lxc` by module) and machine (file backups) of this site it holds restore points for |
+| `datastore` | the PBS datastore | size, used (bytes, the datastore's status), retention (its prune job's keep-*) | `runs-on` the machine PBS runs on; `stored-on` the pool of that machine its path is on (`/<pool>/…`, from the machine's `storagePools`); `backs-up` every guest (`vm`/`lxc` by module) and machine (file backups) of this site it holds restore points for |
 | `backup-peer` | the buddy | direction (`pull`, `receive`; a buddy that pulls ours has none in the metamodel's enum), lastSeen (its sync's last run), description (its host) | `at` the location it names |
 
 Other sites' copies pulled or pushed here are not this site's restore points

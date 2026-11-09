@@ -238,6 +238,7 @@ export function siteObservation(configDir: string, live: ClusterRead | null, tap
   const nodes = clusterNodes(configDir);
   const members = new Set(live?.members.map((m) => m.name) ?? []);
   const names = [...new Set([...nodes.map((n) => n.name), ...members])];
+  const poolsOf = new Map<string, Set<string>>(); // node → its ZFS pools: what a guest's storage may be
   for (const name of names) {
     const raw = readJsonObject(join(configDir, `${name}.json`)) ?? {};
     const cfg = nodes.find((n) => n.name === name);
@@ -262,6 +263,8 @@ export function siteObservation(configDir: string, live: ClusterRead | null, tap
       ? discoveryReport(configDir, name, `machine/${name}`, host.discovery, attrs)
       : host?.storage ? storageReport(configDir, name, `machine/${name}`, host.storage) : { objects: [], relations: [] };
     objects.push({ ref: `machine/${name}`, class: "machine", name, attributes: compact(attrs) }, ...found.objects);
+    const pools = [...(Array.isArray(attrs.storagePools) ? (attrs.storagePools as unknown[]) : []), ...(host?.discovery?.pools ?? host?.storage?.pools ?? []).map((p) => p.name)];
+    poolsOf.set(name, new Set(pools.filter((p): p is string => typeof p === "string" && p !== "")));
     relations.push(...found.relations);
     if (!live || members.has(name)) relations.push({ type: "member-of", from: { ref: `machine/${name}` }, to: { ref: "cluster" } });
     const at = cfg?.location ?? (primary && locations[primary] ? primary : undefined);
@@ -304,11 +307,34 @@ export function siteObservation(configDir: string, live: ClusterRead | null, tap
         if (discover) attrs.disks = g.mountpoints;
       }
       if (discover) attrs.nics = g.nics;
-      objects.push({ class: cls, name, attributes: compact(attrs) });
+      const ref = `guest/${g.vmid}`;
+      objects.push({ ref, class: cls, name, attributes: compact(attrs) });
+      relations.push(...storedOn(ref, g, poolsOf, objects));
     }
   }
 
   return { source: SOURCE, kind: "observation", objects, relations };
+}
+
+/** A guest's `stored-on` relations: one to each ZFS pool of its node that a
+ *  disk, its rootfs or a mount point is on (a Proxmox zfspool storage is named
+ *  after its pool), and an end to every other pool of every node, so a disk
+ *  moved or a guest migrated leaves none behind. A pool this report does not
+ *  describe gets a stub, by its name on its node. */
+export function storedOn(ref: string, g: GuestRead, poolsOf: Map<string, Set<string>>, objects: CmdbObject[]): CmdbRelation[] {
+  const storages = [...(g.disks ?? []), ...(g.mountpoints ?? [])].map((d) => d.storage);
+  if (g.rootfs?.includes(":")) storages.push(g.rootfs.split(":")[0]);
+  const used = new Set(storages.filter((st) => poolsOf.get(g.node)?.has(st)));
+  const out: CmdbRelation[] = [];
+  for (const [node, pools] of [...poolsOf].sort(([a], [b]) => a.localeCompare(b))) {
+    for (const pool of [...pools].sort()) {
+      const poolRef = `pool/${node}/${pool}`;
+      if (!objects.some((o) => o.ref === poolRef)) objects.push({ ref: poolRef, class: "storage-pool", name: pool, attributes: { onNode: { ref: `machine/${node}` } } });
+      const on = node === g.node && used.has(pool);
+      out.push(on ? { type: "stored-on", from: { ref }, to: { ref: poolRef } } : { type: "stored-on", from: { ref }, to: { ref: poolRef }, end: true });
+    }
+  }
+  return out;
 }
 
 // ── the cables of a node's lan uplink ─────────────────────────────────

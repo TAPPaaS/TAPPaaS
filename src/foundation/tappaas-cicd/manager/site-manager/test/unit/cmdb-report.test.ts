@@ -4,7 +4,7 @@
 // each lan uplink leg's cable with its bond as redundancyGroup (ADR-041 D3).
 
 import { run } from "../../src/main";
-import { parseClusterProbe, parseGuestConf, parseHostProbe } from "../../src/cmdb-report";
+import { parseClusterProbe, parseGuestConf, parseHostProbe, storedOn } from "../../src/cmdb-report";
 import { FakeSiteClient } from "./fake-client";
 import { cmdbProblems } from "../../../../lib/ts/test/cmdb-check";
 import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from "fs";
@@ -146,6 +146,22 @@ const CLUSTER_OUT = [
   check(!!tmpl && tmpl.attributes?.desired === undefined, "a guest that is no module has no desired record");
   const ct = one("lxc", "scratch");
   check(ct?.attributes?.unprivileged === true && ct?.attributes?.rootfs === "tankb1:subvol-201-disk-0", "an lxc's rootfs and privilege");
+  // stored-on: a guest on each ZFS pool of its node its disks, rootfs or mount points are on.
+  const stored = (r.relations ?? []).filter((x: Obj) => x.type === "stored-on");
+  const poolAt = (ref: string): string => { const p = one("storage-pool", ref.split("/")[2]); return p ? `${p.attributes?.onNode?.ref}/${p.name}` : "?"; };
+  const on = (g: string | undefined): string[] => stored.filter((x: Obj) => x.from?.ref === g && !x.end).map((x: Obj) => poolAt(x.to.ref)).sort();
+  const off = (g: string | undefined): string[] => stored.filter((x: Obj) => x.from?.ref === g && x.end).map((x: Obj) => poolAt(x.to.ref)).sort();
+  check(JSON.stringify(on(vm?.ref)) === '["machine/tappaas1/tanka1"]', `a vm is stored-on the pool of its node its disks are on (${on(vm?.ref)})`);
+  check(JSON.stringify(off(vm?.ref)) === '["machine/tappaas2/tankb1"]', `…and ends any stored-on another pool (${off(vm?.ref)})`);
+  check(JSON.stringify(on(ct?.ref)) === '["machine/tappaas2/tankb1"]', `an lxc by its rootfs, on a node known from config only (${on(ct?.ref)})`);
+  check(on(tmpl?.ref).length === 0 && off(tmpl?.ref).length === 2, "a guest with no disk on a pool is stored-on none");
+  check(objs.filter((o) => o.class === "storage-pool").every((o) => o.attributes?.onNode?.ref?.startsWith("machine/")), "…each pool by its name on its node");
+  {
+    const pools = new Map([["tappaas1", new Set(["tanka1", "tankb1"])], ["tappaas2", new Set(["tanka1"])]]);
+    const rels = storedOn("g", { vmid: 1, name: "x", node: "tappaas1", type: "lxc", rootfs: "local-lvm:vm-1-disk-0", mountpoints: [{ storage: "tankb1", size: "8G" }], disks: [{ storage: "tanka1", size: "1G" }] }, pools, []);
+    const live = rels.filter((x) => !x.end).map((x) => (x.to as { ref: string }).ref).sort();
+    check(JSON.stringify(live) === '["pool/tappaas1/tanka1","pool/tappaas1/tankb1"]', `a mount point counts, a non-ZFS rootfs does not, another node's pool of the same name does not (${live})`);
+  }
   check(!objs.some((o) => o.name === "old"), "an archived module is not reported");
   check(!JSON.stringify(r).includes("null"), "no attribute is null (null would unset it)");
   check(one("machine", "tappaas1")?.attributes?.network?.live?.lrmActive === true && one("machine", "tappaas2")?.attributes?.network === undefined, "a node's network, for the topology; one that gives none is left out");

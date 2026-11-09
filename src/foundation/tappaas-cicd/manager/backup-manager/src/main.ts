@@ -68,13 +68,13 @@ import { placementFinishReset, placementReset, placementUseExternal, ResetDeps }
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { existsSync, readFileSync } from "fs";
 import { askTerminal, spawnGuarded, stream } from "../../../lib/ts/src/exec";
-import { clusterNodeNames } from "../../../lib/ts/src/nodes";
+import { clusterNodeNames, clusterNodes } from "../../../lib/ts/src/nodes";
 import { GN, CL, RD, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { readJsonObject, writeJsonAtomic } from "../../../lib/ts/src/config-io";
 import { ensureLocation, placeText as locationText, siteLocation } from "../../../lib/ts/src/locations";
 import { BackupPolicyStatus, Client, JobStatus, RawRuns, ScheduleBucket } from "./types";
 import { CmdbBatch, printOrSend, printOrSendAll, reportChange, sendReport } from "../../../lib/ts/src/cmdb-reporter";
-import { SOURCE as CMDB_SOURCE, buildBackupDiscover, buildBackupReport, putPeer } from "./cmdbreport";
+import { SOURCE as CMDB_SOURCE, PoolsOf, buildBackupDiscover, buildBackupReport, putPeer } from "./cmdbreport";
 
 const VERSION = "0.1.0";
 
@@ -1125,7 +1125,13 @@ function moduleOfVmid(configDir: string): (vmid: string) => string | null {
 }
 
 function backupReport(opts: Opts, raw: RawRuns): CmdbBatch {
-  return buildBackupReport(raw, shapeRuns(raw, moduleOfVmid(opts.configDir), Math.floor(Date.now() / 1000)), listPeers(opts.configDir));
+  return buildBackupReport(raw, shapeRuns(raw, moduleOfVmid(opts.configDir), Math.floor(Date.now() / 1000)), listPeers(opts.configDir), poolsOf(opts.configDir));
+}
+
+// A node's pools, as config/ records them (storagePools).
+function poolsOf(configDir: string): PoolsOf {
+  const nodes = clusterNodes(configDir);
+  return (node) => nodes.find((n) => n.name === node)?.storagePools ?? [];
 }
 
 function cmdReport(opts: Opts, client: Client): number {
@@ -1135,7 +1141,7 @@ function cmdReport(opts: Opts, client: Client): number {
   if (!opts.discover) return printOrSend(plain, opts.json);
   const d = client.discover();
   if (!d.reachable) process.stderr.write("[Warning] report: pbs-controller discover: PBS did not answer — left out\n");
-  return printOrSendAll(d.reachable ? [plain, buildBackupDiscover(d, Math.floor(Date.now() / 1000))] : [plain], opts.json);
+  return printOrSendAll(d.reachable ? [plain, buildBackupDiscover(d, Math.floor(Date.now() / 1000), poolsOf(opts.configDir))] : [plain], opts.json);
 }
 
 // A peer verb's buddy, once written; a buddy with no relationship left is ended.

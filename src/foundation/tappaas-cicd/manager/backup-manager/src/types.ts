@@ -182,6 +182,7 @@ export interface RawRuns {
   // The datastore's usage and the prune jobs (bytes; keep-* per job), for the CMDB.
   status?: { total?: number; used?: number; avail?: number } | null;
   pruneJobs?: Record<string, unknown>[];
+  path?: string | null; // the datastore's directory on its node: the pool it is stored on
 }
 
 // pbs-controller discover --json (ADR-040 D15); {reachable:false} when PBS did not answer.
@@ -190,6 +191,7 @@ export interface RawDiscover {
   node?: string;
   datastores?: {
     name: string;
+    path?: string | null;
     status?: { total?: number; used?: number } | null;
     gc?: Record<string, unknown> | null;
     groups?: { ns: string; type: string; id: string; snapshots: number; oldest: number; newest: number }[];

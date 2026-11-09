@@ -167,7 +167,8 @@ function report(extra: string[], cfg: string): Obj {
 {
   const r = report([], fixture());
   const objs: Obj[] = r.objects;
-  check(!objs.some((o) => o.class === "port" || o.class === "server" || o.class === "storage-pool"), "plain report: no ports, assets or pools");
+  check(!objs.some((o) => o.class === "port" || o.class === "server"), "plain report: no ports or assets");
+  check(objs.filter((o) => o.class === "storage-pool").every((o) => Object.keys(o.attributes ?? {}).join() === "onNode"), "…a pool only as the stub a guest's stored-on names");
   check(!JSON.stringify(r).includes("nics") && !JSON.stringify(r).includes("corosyncLinks") && cmdbProblems(r).length === 0, "plain report: no depth, and the metamodel takes it");
 }
 

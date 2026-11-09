@@ -41,11 +41,13 @@ const raw: RawRuns = {
   tasks: [],
   status: { total: 4000, used: 1000, avail: 3000 },
   pruneJobs: [{ id: "p1", store: "tappaas_backup", "keep-daily": 7, "keep-weekly": 4, comment: "x" }],
+  path: "/tankc1/tappaas_backup",
 };
 
 const tmp = mkdtempSync(join(tmpdir(), "bm-cmdb-"));
 const env = process.env;
 try {
+  writeFileSync(join(tmp, "tappaas3.json"), JSON.stringify({ moduleSource: "/repo/src/foundation/pvehost", kind: "machine", address: "tappaas3.mgmt.internal", storagePools: ["tanka1", "tankc1"] }));
   writeFileSync(join(tmp, "site.json"), JSON.stringify({ name: "home", locations: { home: { primary: true }, aunt: { city: "Aarhus" } } }));
   writeFileSync(join(tmp, "nextcloud.json"), JSON.stringify({ vmid: 200, dependsOn: ["backup:vm"] }));
   writeFileSync(join(tmp, "dns.json"), JSON.stringify({ kind: "lxc", vmid: 105 }));
@@ -83,6 +85,11 @@ try {
       JSON.stringify([{ class: "lxc", name: "dns" }, { class: "node", name: "tappaas1" }, { class: "vm", name: "nextcloud" }].map((x) => JSON.stringify(x)).sort()),
     "backs-up the guests (by module) and the host it holds restore points for — not a buddy's copy, not a guest no module has",
   );
+  const pool = (ref: unknown) => objs.find((o) => o.ref === ref);
+  const stored = rels.filter((x) => x.type === "stored-on" && x.from === "datastore:tappaas_backup");
+  const live = stored.filter((x) => !x.end).map((x) => pool(x.to));
+  check(live.length === 1 && live[0]?.name === "tankc1" && JSON.stringify(live[0]?.attributes?.onNode) === JSON.stringify({ class: "machine", name: "tappaas3" }), "…stored-on the pool its path is on, by its name on the PBS node");
+  check(JSON.stringify(stored.filter((x) => x.end).map((x) => pool(x.to)?.name)) === '["tanka1"]', "…and ends a stored-on the node's other pools");
   const buddy = obj("backup-peer", "buddy")?.attributes ?? {};
   check(objs.filter((o) => o.class === "backup-peer").length === 2, "one backup-peer per buddy, whatever its relationships");
   check(typeof buddy.role === "string", "…with its role, for the topology");
@@ -99,6 +106,12 @@ try {
   check(JSON.stringify(dsOf("tappaas_backup").retention) === JSON.stringify({ daily: 7 }), "…its prune settings");
   const rp = (dsOf("tappaas_backup").restorePoints as { id: string; snapshots: number; ageSeconds: number }[])[0];
   check(rp.id === "200" && rp.snapshots === 3 && rp.ageSeconds === 86400, "…each restore-point group's count and age");
+  const dpools = (store: string, end: boolean) => dr.relations!.filter((x) => x.type === "stored-on" && x.from === `datastore:${store}` && !!x.end === end).map((x) => dr.objects!.find((o) => o.ref === x.to)?.name).sort();
+  const drp = buildBackupDiscover(rd, T, (n) => (n === "tappaas3" ? ["tanka1", "tankc1"] : [])).report();
+  const dp = (store: string, end: boolean) => drp.relations!.filter((x) => x.type === "stored-on" && x.from === `datastore:${store}` && !!x.end === end).map((x) => drp.objects!.find((o) => o.ref === x.to)?.name).sort();
+  check(dpools("tappaas_backup", false).length === 0, "discover without the node's pools relates no pool");
+  check(JSON.stringify(dp("tappaas_backup", false)) === '["tankc1"]', "discover: a datastore stored-on its path's pool");
+  check(dp("offsite", false).length === 0 && dp("offsite", true).length === 2, "…one on the root disk on none, ending any it had");
   check((dsOf("offsite").syncJobs as { id: string }[])[0]?.id === "s1" && (dsOf("tappaas_backup").syncJobs as unknown[]).length === 0, "…the sync jobs into it");
   const dc = new FakeClient();
   dc.rawRuns = raw;

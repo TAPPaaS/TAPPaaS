@@ -28,6 +28,12 @@
       "cardinality": "n:m",
       "ends": [["storage-pool", "disk"]]
     },
+    "stored-on": {
+      "description": "A guest or a backup datastore keeps its data on a storage pool: site-manager reports one per pool a guest's disks, rootfs or mount points are on, backup-manager one from a datastore's path.",
+      "dependant": "from", "required": true,
+      "cardinality": "n:m",
+      "ends": [["vm", "storage-pool"], ["lxc", "storage-pool"], ["datastore", "storage-pool"]]
+    },
     "placed-in": {
       "description": "An asset stands in a rack or a room; a rack in a room.",
       "tree": "from",

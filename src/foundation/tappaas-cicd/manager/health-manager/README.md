@@ -727,11 +727,12 @@ impact it produces. A rule may also read the dependant: `"dependant": { "haNode"
 matches only a dependant whose attribute has that value (`true`: any value that is
 set), and such a rule wins over one without it for the same crossing. Shipped:
 `operational critical` crosses `runs-on`, `depends-on`, `member-of`, `connects` and
-`built-on` (a disk to the pool built on it) as `critical` impact, except that over
+`built-on` (a disk to the pool built on it) and `stored-on` (a pool to the guests
+and backup datastores whose data is on it) as `critical` impact, except that over
 `runs-on` a guest with `haNode` set (HA-protected) gets a `warning`: its node failed,
 and it is moving or has moved. A pool's mirror or raidz members are one redundancy
 group: one failed member degrades the pool, all of them take it down.
-A warning crosses nothing. `health-manager rules list` shows them (`… crosses
+A warning crosses nothing: a DEGRADED pool leaves its guests and datastores as they are. `health-manager rules list` shows them (`… crosses
 runs-on to a dependant with haNode set as warning impact`); `rules check [--file F]`
 validates them or a candidate, and exits 1 on what it cannot place, a dependant
 clause naming an attribute no class has among it.
