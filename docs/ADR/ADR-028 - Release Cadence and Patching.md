@@ -785,7 +785,7 @@ How CVEs are handled at a boundary is decided in
 and what passes without an ack, the boundary's VEX cleanup phase (`cve`, between the pin move and
 the proof), each module's release score in `release/releases.json` and in the security section of
 `RELEASES.md`, and the operator's order of work from three days before the boundary. The runbook
-is *The CVE runbook* in `src/foundation/tappaas-cicd/RELEASE-TRAIN.md`.
+is *The boundary checklist* in `src/foundation/tappaas-cicd/RELEASE-TRAIN.md`.
 
 ## Consequences
 

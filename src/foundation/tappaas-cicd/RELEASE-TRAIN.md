@@ -461,10 +461,11 @@ version change asks again; `false_positive` covers the package; `exploitable` ke
 counted, as RISK, with the risk here. `baseline` writes to `templates-vex.json`. Commit the
 file; the next scan and preview apply it.
 
-## The CVE runbook: from T-3 to the boundary
+## The boundary checklist: from T-3 to the boundary
 
-The order of work for every boundary, based on ADR-045. Start three days before the boundary.
-Run it on the mothership that drives the train.
+The order of work for every boundary. Start three days before the boundary. Steps 1–5 are the
+CVE runbook (ADR-045): the CVEs, the VEX files and the acks. Steps 6 and 7 make sure what is
+released is complete and described. Run it on the mothership that drives the train.
 
 **1. Preview (T-3).**
 
@@ -534,8 +535,54 @@ the roadmap. A failed match is acked without `--module` (`ack --note "<why>"`), 
 deep test is to decide. `tappaas-train.sh boundary --dry-run` then says whether the gate would
 pass with the last preview.
 
-**6. Boundary day.** The pin moves daily, so run `preview` again first. If something new is
-gated, or an acked item now ships at another version, deal with it (steps 2–5). Then:
+**6. Branches, roadmap, issues and the release note (T-1).** The boundary releases what is on
+`main`, and only that.
+
+- *Every branch is merged or knowingly left out.* List the branches with work `main` does not
+  have; a `+` from `git cherry` is a commit whose change is not on `main`:
+
+  ```bash
+  git fetch origin
+  for b in $(git for-each-ref --format='%(refname:short)' refs/heads/ refs/remotes/origin/); do
+      n=$(git cherry origin/main "$b" | grep -c '^+'); (( n > 0 )) && echo "$b: $n commit(s) not on main"
+  done
+  ```
+
+  Check the open pull requests on the forge too. Merge what is done and tested. What waits for
+  the next release stays on its branch, with a roadmap row that says so.
+- *The roadmap says what is done.* Each row whose work is on `main` is marked ✅ with its date
+  and commits. The boundary moves every ✅ row into the release's section of `ROADMAP.md`, so a
+  row left unmarked is missing from the release, and a ✅ on work that is not on `main` claims
+  something the release does not ship.
+- *Each ✅ row's issue is closed on the forge.* A commit ending in `close #N` closes it when it
+  lands on `main`; close the others by hand, with the commit in the closing comment.
+- *The release note is current.* The block between `<!-- next-release summary -->` and
+  `<!-- /next-release summary -->` in `ROADMAP.md` becomes the release's introduction in
+  `ROADMAP.md` and its text in `RELEASES.md`. Write it from the ✅ rows, for someone deciding
+  whether to upgrade: what changes for a site, what an operator has to do, what goes away.
+
+**7. Generated documentation.** Refresh the documents generated from the code, so the release
+describes the code it ships:
+
+| File | What it holds |
+|------|---------------|
+| `src/STATISTICS.md` | Line counts over `src/` by area and type (the earlier snapshot stays in `STATISTICS-v1.md`) |
+| `src/foundation/DEPENDENCIES.md`, `DEPENDENCIES.csv` | The direct dependencies between the foundation's scripts, managers, controllers and config files |
+| `src/foundation/PROGRAMS.csv` | Every executable the foundation installs, where it goes and its source |
+
+Any other file with a `Generated:` header counts too (except `STATISTICS-v1.md`, a frozen snapshot):
+
+```bash
+git grep -l '^Generated:' -- '*.md' '*.csv'
+```
+
+Regenerate each against `main` the way its header describes, set its `Generated:` line to today
+and the commit, and commit them to `main` with the rest. Steps 6 and 7 end like step 4: this
+checkout is back at `origin/main`.
+
+**8. Boundary day.** The pin moves daily, so run `preview` again first. If something new is
+gated, or an acked item now ships at another version, deal with it (steps 2–5). Merges since
+step 6 need their roadmap rows, issues and release note too. Then:
 
 ```bash
 tappaas-train.sh boundary --dry-run            # the plan and what the gate would do
