@@ -124,7 +124,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 2 | G2.2 DNS resolver robustness | L | M | 7 | – | 1 |
 | 1 | ✅ G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 27 | – | – |
 | 1 | G1.6 Secrets & privileged access | H | H | 4 | – | 1 |
-| 1 | G1.7 Parked for Erik discussion | – | – | 1 | – | 2 |
+| 1 | G1.7 Parked for Erik discussion | – | – | 1 | 1 | 1 |
 
 ## Planning items still open
 
@@ -452,14 +452,14 @@ Least privilege on the platform. Built: nodes hardened to the Proxmox guide, key
 |---|-------|:-:|:-:|------|
 | #142 | RFC: AI-agent access to cicd | H | L | Decision |
 
-### G1.7 Parked for Erik discussion · released: 1 · open: 2
+### G1.7 Parked for Erik discussion · released: 1 · done for 2.5: 1 · open: 1
 
-Waiting on a conversation between Lars and @ErikDaniel007, not on work: the controller pattern (#430), hass locale (#348) and Erik's image pins (#765).
+Waiting on a conversation between Lars and @ErikDaniel007, not on work: the controller pattern (#430) and hass locale (#348).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #348 | hass locale from site master data | M | L | **Parked 2026-09-21:** no test site runs hass. The fix is written on the issue — `core_config` at `lib/config.sh:158` plus a converge for onboarded instances, from `.location` |
-| #765 | Container image pins: list litellm, openwebui, vllm-amd, deconz; move the stale ones | L | L | From #750, for @ErikDaniel007: list his modules in `src/image-pins.json` and move the stale pins — euro-office v9.3.1 → v9.3.4 first; litellm and openwebui overlap #621 |
+| ✅ #765 | Container image pins: list litellm, openwebui, vllm-amd, deconz; move the stale ones | L | L | **Closed 2026-11-09**: all four listed in `src/image-pins.json`; euro-office v9.3.7, litellm v1.106.7, openwebui 0.13.0, vllm-amd and deconz on new digests, none stale |
 
 ---
 
