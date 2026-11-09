@@ -6,4 +6,5 @@
 [Info]   park switch port 7 on USW Pro XG 10 PoE (it was tappaas4's)
 [Info] DRY-RUN complete — no changes made.
   then: its node record 'tappaas4' is deleted
-  then: asset srv-04 is released from tappaas4 and kept: it goes back to stock
+  then: retired in the CMDB: CI tappaas4 with its app pve; pools rpool, tanka1 — never reused, its history kept
+  then: asset srv-04 is released from tappaas4 and kept: it goes back to stock, free for its next role

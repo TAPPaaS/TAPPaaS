@@ -56,6 +56,7 @@ export interface CheckOutcome {
   ports: SwitchPort[]; // the switch ports that will be parked
   asset: { key: string; fate: "kept" | "removed"; where: string | null } | null;
   record: "deleted" | "archived" | null;
+  retire: string | null; // the CIs retired in the CMDB, in site-manager's words
   tail: string[]; // the last lines, for a failure
 }
 
@@ -78,6 +79,7 @@ export function parseCheck(output: string, node: string, done: { exit: number | 
   const ports: SwitchPort[] = [];
   let asset: CheckOutcome["asset"] = null;
   let record: CheckOutcome["record"] = null;
+  let retire: string | null = null;
   for (const l of lines) {
     let m: RegExpMatchArray | null;
     if ((m = l.match(/^✗ (qemu|lxc) (\d+) \((.*?)\) runs here — move it: module-manager modify (\S+) /))) {
@@ -118,9 +120,11 @@ export function parseCheck(output: string, node: string, done: { exit: number | 
       losses.push({ text: `The site's backup server ran on ${node}: its backups are gone with it unless a copy exists elsewhere.`, target: BACKUP_TARGET });
     } else if ((m = l.match(/^park switch port (\S+) on (.+) \(it was /))) {
       ports.push({ sw: m[2], port: m[1] });
+    } else if ((m = l.match(/^then: retired in the CMDB: (.+)$/))) {
+      retire = m[1];
     } else if ((m = l.match(/^then: its node record '.*' is (deleted|archived)/))) {
       record = m[1] as "deleted" | "archived";
-    } else if ((m = l.match(/^then: asset (\S+) is released from \S+ and kept: it (?:stays placed in (.+)|goes back to stock)/))) {
+    } else if ((m = l.match(/^then: asset (\S+) is released from \S+ and kept: it (?:stays placed in (.+?)|goes back to stock)(?:, free for its next role)?$/))) {
       asset = { key: m[1], fate: "kept", where: m[2] ?? null };
     } else if ((m = l.match(/^then: asset (\S+) is released from \S+ and removed/))) {
       asset = { key: m[1], fate: "removed", where: null };
@@ -128,7 +132,7 @@ export function parseCheck(output: string, node: string, done: { exit: number | 
   }
   const exit = done?.exit ?? null;
   const state: CheckOutcome["state"] = !done ? "running" : exit === 0 && blockers.length === 0 ? "ok" : blockers.length ? "blocked" : "failed";
-  return { state, blockers, losses, ports, asset, record, tail: state === "failed" ? lastLines(lines.join("\n")) : [] };
+  return { state, blockers, losses, ports, asset, record, retire, tail: state === "failed" ? lastLines(lines.join("\n")) : [] };
 }
 
 export interface RemovalOutcome {
@@ -138,20 +142,22 @@ export interface RemovalOutcome {
   record: "deleted" | "archived" | null;
   asset: { key: string; fate: "kept" | "removed"; where: string | null } | null;
   assetTrouble: string | null; // the asset step that did not go through
+  retired: string | null; // the CIs retired in the CMDB, in site-manager's words
   warnings: string[];
 }
 
 // The removal's output (its apply phase): what was done.
 export function parseRemoval(output: string): RemovalOutcome {
   const lines = outputLines(output);
-  const out: RemovalOutcome = { removed: false, parked: [], notParked: [], record: null, asset: null, assetTrouble: null, warnings: [] };
+  const out: RemovalOutcome = { removed: false, parked: [], notParked: [], record: null, asset: null, assetTrouble: null, retired: null, warnings: [] };
   for (const l of lines) {
     let m: RegExpMatchArray | null;
     if (/^✓ \S+ is out of the cluster\.?$/.test(l)) out.removed = true;
     else if ((m = l.match(/^✓ (.+) port (\S+) parked$/))) out.parked.push({ sw: m[1], port: m[2] });
     else if ((m = l.match(/^could not park (.+) port (\S+) —/))) out.notParked.push({ sw: m[1], port: m[2] });
+    else if ((m = l.match(/^✓ retired in the CMDB: (.+)$/))) out.retired = m[1];
     else if ((m = l.match(/^✓ its node record is (deleted|archived)/))) out.record = m[1] as "deleted" | "archived";
-    else if ((m = l.match(/^✓ asset (\S+) released from \S+ and kept: it (?:stays placed in (.+)|goes back to stock)/))) out.asset = { key: m[1], fate: "kept", where: m[2] ?? null };
+    else if ((m = l.match(/^✓ asset (\S+) released from \S+ and kept: it (?:stays placed in (.+?)|goes back to stock)(?:, free for its next role)?$/))) out.asset = { key: m[1], fate: "kept", where: m[2] ?? null };
     else if ((m = l.match(/^✓ asset (\S+) removed: /))) out.asset = { key: m[1], fate: "removed", where: null };
     else if ((m = l.match(/^asset (\S+) (still plays \S+|is not removed): /))) out.assetTrouble = `The machine's asset record ${m[1]} ${m[2].startsWith("still") ? "still names the node" : "is only partly removed"}: finish it on its asset page.`;
     else if (/^(could not|the node record '.*' is still registered|CPU inventory not refreshed)/.test(l)) out.warnings.push(l);

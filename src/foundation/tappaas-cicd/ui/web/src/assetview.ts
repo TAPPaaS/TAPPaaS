@@ -90,3 +90,24 @@ export function stageCounts(tree: AssetTree): Record<string, number> {
   for (const a of tree.assets) out[a.stage] = (out[a.stage] ?? 0) + 1;
   return out;
 }
+
+// The assets with no role (ADR-040 D10's order: ordered and in stock first,
+// then placed and unallocated — a released server still in its rack), each
+// free for its next role. Not the disposed, and not a disk in another asset
+// (it goes with that asset). By stage, then name.
+const FREE_ORDER: Record<string, number> = { ordered: 0, stock: 1, placed: 2 };
+export function unallocated(tree: AssetTree | null | undefined): AssetRow[] {
+  if (!tree) return [];
+  return tree.assets
+    .filter((a) => !a.role && a.stage in FREE_ORDER && !a.in)
+    .sort((x, y) => FREE_ORDER[x.stage] - FREE_ORDER[y.stage] || x.name.localeCompare(y.name));
+}
+
+// Where a free asset is, in words: ordered for or in stock at its location,
+// or where it stands (location, room, rack and units).
+export function freeWhere(a: AssetRow, locName: (n: string) => string = (n) => n): string {
+  const loc = a.where.location ? locName(a.where.location) : "";
+  if (a.stage === "ordered") return loc ? `ordered for ${loc}` : "ordered";
+  if (a.stage === "stock" || !a.placed) return loc ? `in stock at ${loc}` : "in stock";
+  return [loc, a.where.room, a.where.rack ? `rack ${a.where.rack}${a.where.at ? ` ${a.where.at}` : ""}` : null].filter(Boolean).join(" · ") || "placed";
+}

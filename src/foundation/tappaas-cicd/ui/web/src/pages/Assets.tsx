@@ -1,4 +1,6 @@
-// Assets — every asset of the site in a tree, by where it stands: location →
+// Assets — first the assets without a role (ordered, in stock, placed and
+// unallocated: free for a next role, ADR-040 D10), then every asset of the
+// site in a tree, by where it stands: location →
 // room → rack → asset (by its placement), the ones placed nowhere — in stock,
 // ordered, or a device a switch port sees that nobody recorded — under their
 // location's Not placed, the disposed ones under Disposed. Each asset with its
@@ -13,7 +15,7 @@
 
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useRead } from "../api";
-import { AssetsSel, STAGES, assetsSelOf, assetsSelText, filterLocation, itemsOf, stageCounts } from "../assetview";
+import { AssetsSel, STAGES, assetsSelOf, assetsSelText, filterLocation, freeWhere, itemMatches, itemsOf, stageCounts, unallocated } from "../assetview";
 import { assetPath } from "../details";
 import { DISK_COLOR, adoptOffer, diskText, healthText } from "../diskview";
 import { OperateButton, Step } from "../operate";
@@ -182,6 +184,37 @@ function LocationTree({ tree, l, sel, pick }: { tree: AssetTree; l: AssetTreeLoc
         ) : null}
       </ul>
     </li>
+  );
+}
+
+// The assets with no role — ordered, in stock, or placed and unallocated
+// (a released server still in its rack) — each with its stage, its faulty
+// flag and where it is: what a new node, switch or access point can be.
+function FreeAssets({ tree, q, locName }: { tree: AssetTree; q: string; locName: (n: string) => string }) {
+  const all = unallocated(tree);
+  const shown = all.filter((a) => itemMatches(tree, { device: a.placedAs, asset: a.name, kind: a.kind, at: null, seen: false }, q));
+  return (
+    <Section title="Without a role" aside={<span className="muted small">{all.length ? `${all.length} free for a next role` : ""}</span>}>
+      {all.length === 0 ? <p className="muted">Every asset plays a role or is disposed of.</p> : null}
+      {all.length > 0 && shown.length === 0 ? <p className="muted">None of them matches '{q}'.</p> : null}
+      {shown.length ? (
+        <ul className="atree">
+          {shown.map((a) => (
+            <li key={a.name}>
+              <div className="atree-row">
+                <ClassIcon cls={assetClassOf(a.kind)} size={18} />
+                <Link to={assetPath(a.name)}>{a.displayName ?? a.name}</Link>
+                {a.displayName && a.displayName !== a.name ? <span className="muted small mono">{a.name}</span> : null}
+                <span className="atree-kind">{a.kind}</span>
+                <StageBadge a={a} />
+                <span className="small">{freeWhere(a, locName)}</span>
+                <span className="muted small">{[a.vendor, a.model].filter(Boolean).join(" ")}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </Section>
   );
 }
 
@@ -375,6 +408,7 @@ export function Assets() {
       {tree?.disksError && !tree.allocationsError ? <div className="readstate readstate-warn">The CMDB's disks were not read: {tree.disksError}. The disks are listed from asset-manager's record, without their health or pool.</div> : null}
       <div className="assets-view">
         <div className="assets-tree">
+          {tree ? <FreeAssets tree={tree} q={q} locName={(n) => tree.locations.find((l) => l.name === n)?.displayName ?? n} /> : null}
           <Section title="By location, room and rack" aside={<input className="search" type="search" placeholder="filter: name, kind, model, serial, role…" value={q} onChange={(e) => setQ(e.target.value)} />}>
             {tree && tree.assets.length === 0 && !tree.locations.some((l) => itemsOf(l).length) ? <p className="muted">No asset is recorded yet: Record a device… records one; a node, switch or access point the topology sees is listed here once an asset is allocated to it.</p> : null}
             {tree && q && shown.length === 0 ? <p className="muted">Nothing matches '{q}'.</p> : null}

@@ -109,7 +109,7 @@ export function RemoveNodeWizard({ onClose, node: preset }: { onClose: () => voi
 // The check as CheckStep reads it: noderemove.ts's findings in its output.
 const readCheck = (node: string) => (job: Job): CheckOutcome =>
   job.state === "refused"
-    ? { state: "failed", blockers: [], losses: [], ports: [], asset: null, record: null, tail: [] }
+    ? { state: "failed", blockers: [], losses: [], ports: [], asset: null, record: null, retire: null, tail: [] }
     : parseCheck(job.output, node, job.state === "done" ? { exit: job.exit } : null);
 
 // What the removal did, in the operator's words.
@@ -131,6 +131,7 @@ function Removed({ node, result }: { node: string; result: RemovalOutcome }) {
             {result.asset.fate === "kept" ? (result.asset.where ? `is kept, still placed in ${result.asset.where}.` : "is kept, in stock.") : "is removed, with its place and cables."}
           </li>
         ) : null}
+        {result.retired ? <li>Retired in the CMDB: {result.retired}.</li> : null}
         {result.assetTrouble ? <li className="readstate-warn">{result.assetTrouble}</li> : null}
         {result.warnings.map((w, i) => (
           <li key={i} className="muted">{w}</li>
@@ -162,7 +163,7 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
       okLine={() => <>{node} can be removed{how === "lost" ? "" : ": nothing runs on it, nothing is kept on it"}. {how === "erase" ? "Its disks are wiped first, then it is powered off and removed." : how === "shutdown" ? "It is powered off, then removed; its disks keep their data." : "It is taken out of the cluster as a dead machine."}</>}
       blockedLine={<>{node} cannot be removed yet:</>}
       lossesLine={<p>Lost with it:</p>}
-      choices={(outcome) => (how === "lost" ? (
+      choices={(outcome) => (<>{outcome.retire ? <p className="small">Retired in the CMDB: {outcome.retire}.</p> : null}{how === "lost" ? (
         <p className="small">The machine is gone for good, so its record is removed as well, with its place in the rack and its cables. Its history stays.</p>
       ) : outcome.asset ? (
         <>
@@ -176,7 +177,7 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
         </>
       ) : (
         <p className="small muted">No machine record is kept for {node}: nothing to keep or remove.</p>
-      ))}
+      )}</>)}
       confirm={<TypedConfirm object={node} value={confirm} set={setConfirm} />}
       typed={confirm}
       confirmed={confirmMatches(confirm, node, node)}

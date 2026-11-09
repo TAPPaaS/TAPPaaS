@@ -5,7 +5,7 @@
 
 import { AssetPositions, assetTree } from "../../src/assets";
 import { CmdbRelationRow } from "../../src/cmdb";
-import { allocatedSince, allocationHistory, assetsSelOf, assetsSelText, filterLocation, findAsset, itemsOf, stageCounts } from "../../web/src/assetview";
+import { allocatedSince, allocationHistory, assetsSelOf, assetsSelText, filterLocation, findAsset, freeWhere, itemsOf, stageCounts, unallocated } from "../../web/src/assetview";
 import { assetPath, assetsSelectPath, ciDetails, portAnchor, selDetails } from "../../web/src/details";
 import { AssetTree, CiHistoryRow } from "../../web/src/types";
 import { check, done } from "./check";
@@ -94,6 +94,15 @@ check(assetsSelText({ kind: "room", id: "cellar" }) === "room:cellar", "a select
 const f = filterLocation(t, t.locations[0], "z840");
 check(f !== null && itemsOf(f).length === 1 && itemsOf(f)[0].asset === "srv-01" && f.rooms.length === 1, "a filter keeps the matching rows and their room and rack");
 check(filterLocation(t, t.locations[0], "nothing-like-it") === null && filterLocation(t, t.locations[0], " ") === t.locations[0], "a filter that keeps nothing; an empty one keeps all");
+const free = unallocated(t);
+check(free.map((a) => `${a.name}:${a.stage}`).join(",") === "srv-03:ordered,srv-02:stock,dev-02:placed", `without a role: ordered, in stock, then placed — not the disposed, not one in a role (${free.map((a) => a.name).join(",")})`);
+check(freeWhere(free[0]) === "ordered for cabin" && freeWhere(free[1], (n) => n.toUpperCase()) === "in stock at HOME", "an ordered and a stocked asset: where it is due or kept");
+check(freeWhere(free[2]) === "home · cellar", `a placed one: where it stands (${freeWhere(free[2])})`);
+const released = { ...t, assets: [...t.assets, { ...srv1, name: "srv-09", role: null, stage: "placed", faulty: true, in: undefined }] } as unknown as AssetTree;
+check(unallocated(released).some((a) => a.name === "srv-09" && a.faulty) && freeWhere(unallocated(released).find((a) => a.name === "srv-09")!) === "home · cellar · rack r1 U5-6", "a released server still in its rack, faulty flag kept, with its rack and units");
+const diskIn = { ...t, assets: [...t.assets, { ...srv1, name: "dsk-01", kind: "disk", role: null, stage: "placed", in: { asset: "srv-01", bay: "1" } }] } as unknown as AssetTree;
+check(!unallocated(diskIn).some((a) => a.name === "dsk-01"), "a disk in another asset goes with it, not listed alone");
+check(unallocated(null).length === 0, "no tree: none");
 check(stageCounts(t).operational === 2 && stageCounts(t).disposed === 1 && stageCounts(t).ordered === 1, "the stages counted");
 
 // ── the Details link ─────────────────────────────────────────────────────

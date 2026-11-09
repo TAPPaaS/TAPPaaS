@@ -33,6 +33,15 @@ check(ok.state === "ok" && ok.blockers.length === 0, "nothing holds it: it can b
 check(ok.ports.map((p) => `${p.sw}|${p.port}`).join() === "USW Pro XG 10 PoE|4,crs-a|ether7", "the switch ports to be parked, a switch name with spaces too");
 check(ok.record === "deleted" && !!ok.asset && ok.asset.key === "srv-03" && ok.asset.fate === "kept" && ok.asset.where === "rack1 U20-U21", "the record's and the asset's fate");
 check(parseCheck(clean, "tappaas4", null).state === "running", "no exit yet: still running");
+// Today's wording: the CIs retired, the kept asset free for its next role.
+const now = parseCheck([
+  "  then: retired in the CMDB: CI tappaas4 with its app pve; pools rpool, tanka1 — never reused, its history kept",
+  "  then: asset srv-03 is released from tappaas4 and kept: it stays placed in rack1 U20-U21, free for its next role",
+].join("\n"), "tappaas4", { exit: 0 });
+check(now.retire === "CI tappaas4 with its app pve; pools rpool, tanka1 — never reused, its history kept", `the CIs to be retired (${now.retire})`);
+check(now.asset?.fate === "kept" && now.asset.where === "rack1 U20-U21", `the kept asset's place, without the words after it (${now.asset?.where})`);
+check(parseCheck("  then: asset srv-03 is released from tappaas4 and kept: it goes back to stock, free for its next role", "tappaas4", { exit: 0 }).asset?.where === null, "back to stock: no place");
+check(ok.retire === null, "an older site-manager: no CIs named");
 const removing = parseCheck("  then: asset srv-03 is released from tappaas4 and removed: its 1 recorded cable(s), its placement in rack1 U20, its record", "tappaas4", { exit: 0 });
 check(removing.asset?.fate === "removed" && removing.asset.key === "srv-03", "an asset to be removed");
 
@@ -93,6 +102,9 @@ const res = parseRemoval([
 check(res.removed && res.record === "deleted", "out of the cluster, the record deleted");
 check(res.parked.map((p) => `${p.sw}|${p.port}`).join() === "USW Pro XG 10 PoE|4" && res.notParked.map((p) => `${p.sw}|${p.port}`).join() === "crs-a|ether7", "parked and not parked ports");
 check(res.asset?.key === "srv-03" && res.asset.fate === "kept" && res.asset.where === "rack1 U20-U21", "the asset kept, where");
+const resNow = parseRemoval("\x1b[32m✓\x1b[m retired in the CMDB: CI tappaas4 with its pools tanka1 — never reused, its history kept\n\x1b[32m✓\x1b[m asset srv-03 released from tappaas4 and kept: it goes back to stock, free for its next role\n✓ asset srv-03 removed: its cables, placement and record — decommissioned, the CMDB keeps it as disposed");
+check(resNow.retired === "CI tappaas4 with its pools tanka1 — never reused, its history kept", "the CIs retired");
+check(resNow.asset?.fate === "removed", "the asset removed, decommissioned (today's words)");
 const res2 = parseRemoval("✓ tappaas4 is out of the cluster.\n✓ asset srv-03 released from tappaas4\n✓ asset srv-03 removed: its cables, placement and record");
 check(res2.asset?.fate === "removed", "the asset removed");
 const res2d = parseRemoval("✓ tappaas4 is out of the cluster.\n✓ asset srv-03 released from tappaas4\n✓ asset srv-03 removed: its cables, placement and record and its 3 disks' records");
