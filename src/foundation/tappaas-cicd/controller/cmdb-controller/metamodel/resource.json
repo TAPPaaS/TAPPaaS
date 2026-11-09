@@ -4,6 +4,9 @@
     "resource": {
       "parent": "object",
       "abstract": true,
+      "symbol": "▪",
+      "family": "assets",
+      "label": "resource",
       "description": "A resource: allocated to a CI or free.",
       "fields": {
         "stage": { "type": "string", "volatile": true, "enum": ["ordered", "stock", "placed", "operational", "disposed"], "description": "The asset's lifecycle stage (D7)." },
@@ -16,6 +19,9 @@
       "parent": "resource",
       "abstract": true,
       "physical": true,
+      "symbol": "▮",
+      "family": "assets",
+      "label": "asset",
       "description": "A physical thing. Named by a tag per kind (srv-01, sw-01, ap-01, dev-01; O5). Known by vendor + serial, then any of its ports' MACs, then its tag (D5).",
       "keyVia": [
         { "rank": 2, "class": "port", "relation": "part-of", "field": "mac", "description": "Any of its ports' MACs: a port in the same report that is part of it, matched to a stored port's MAC (D9: a MAC is unique across all ports)." }
@@ -51,6 +57,9 @@
     },
     "server": {
       "parent": "asset",
+      "symbol": "▤",
+      "family": "assets",
+      "label": "server",
       "description": "A server. The BMC is a port with role bmc.",
       "fields": {
         "bootDisks": { "type": "array", "items": { "type": "string" }, "description": "Serials." },
@@ -62,6 +71,9 @@
     },
     "network-device": {
       "parent": "asset",
+      "symbol": "⇄",
+      "family": "assets",
+      "label": "switch or access point",
       "description": "A switch or an access point.",
       "fields": {
         "deviceType": { "type": "string", "enum": ["switch", "access-point"] },
@@ -72,6 +84,9 @@
     },
     "appliance": {
       "parent": "asset",
+      "symbol": "ϟ",
+      "family": "assets",
+      "label": "modem, ONT or UPS",
       "description": "A modem, an ONT, a UPS.",
       "fields": {
         "deviceType": { "type": "string", "enum": ["modem", "ont", "ups"] },
@@ -80,6 +95,9 @@
     },
     "passive-device": {
       "parent": "asset",
+      "symbol": "▦",
+      "family": "assets",
+      "label": "patch panel or PDU",
       "description": "A patch panel, a PDU.",
       "fields": {
         "deviceType": { "type": "string", "enum": ["patch-panel", "pdu"] },
@@ -88,6 +106,9 @@
     },
     "other-device": {
       "parent": "asset",
+      "symbol": "▱",
+      "family": "assets",
+      "label": "other device",
       "description": "Anything else with a port: a USB network adapter, a printer.",
       "fields": {
         "ports": { "type": "integer" }
@@ -96,6 +117,9 @@
     "port": {
       "parent": "resource",
       "physical": true,
+      "symbol": "•",
+      "family": "assets",
+      "label": "port",
       "description": "A connector on an asset (D9): its name within its asset is its key.",
       "fields": {
         "plate": { "type": "boolean", "description": "It comes from the asset's faceplate: the asset's record does not list it." },
@@ -127,6 +151,9 @@
     "disk": {
       "parent": "resource",
       "physical": true,
+      "symbol": "◍",
+      "family": "assets",
+      "label": "disk",
       "description": "A disk in an asset: named by its tag (dsk-NN), its by-id name shown. Known by the asset it is in and its name; its serial is unique across all disks (asset-manager refuses a second). Moving it to another asset ends this CI and begins one there, so its history of placements is its CIs'. A pool is built-on it.",
       "fields": {
         "name": { "key": 1, "description": "The disk asset's tag (dsk-NN)." },
@@ -154,6 +181,9 @@
     "pool": {
       "parent": "resource",
       "abstract": true,
+      "symbol": "◔",
+      "family": "assets",
+      "label": "consumable pool",
       "description": "A consumable consumed by allocations (O10; no leaves yet).",
       "fields": {
         "capacity": { "type": "number" },

@@ -4,6 +4,9 @@
     "object": {
       "parent": null,
       "abstract": true,
+      "symbol": "○",
+      "family": "other",
+      "label": "CMDB object",
       "description": "Every object in the CMDB: a CI, a resource or a place.",
       "fields": {
         "name": { "type": "string", "required": true, "immutable": true, "identifying": true, "otel": ["service.name", "host.name"], "description": "The object's name: a module's name, an asset's tag, a port's label. Kept in object.name." },
@@ -39,6 +42,9 @@
     "ci": {
       "parent": "object",
       "abstract": true,
+      "symbol": "●",
+      "family": "other",
+      "label": "configuration item",
       "description": "A configuration item: exists because a desired record exists, and ends with it (D7).",
       "expiry": "7d",
       "fields": {
@@ -51,6 +57,9 @@
       "parent": "ci",
       "abstract": true,
       "desiredRecord": true,
+      "symbol": "▢",
+      "family": "compute",
+      "label": "node",
       "description": "What runs software (ArchiMate Node): a module of kind vm, lxc, machine or device.",
       "fields": {
         "zone": { "type": "string", "description": "The zone it is in: the zone0 of its record (ADR-040 step 4)." },
@@ -67,6 +76,9 @@
     },
     "vm": {
       "parent": "node",
+      "symbol": "◫",
+      "family": "compute",
+      "label": "virtual machine",
       "description": "A module of kind vm.",
       "fields": {
         "vmid": { "type": "integer", "key": 1, "description": "The Proxmox VMID: VMID + cluster, then the module name (D5)." },
@@ -84,6 +96,9 @@
     },
     "lxc": {
       "parent": "node",
+      "symbol": "◧",
+      "family": "compute",
+      "label": "container",
       "description": "A module of kind lxc.",
       "fields": {
         "vmid": { "type": "integer", "key": 1 },
@@ -99,6 +114,9 @@
     },
     "machine": {
       "parent": "node",
+      "symbol": "▣",
+      "family": "compute",
+      "label": "TAPPaaS node",
       "description": "A module of kind machine: a cluster member, a satellite, a managed host.",
       "fields": {
         "network": { "type": "object", "volatile": true, "description": "`site-manager node network show`: its uplinks declared and live, LLDP, HA, corosync. An attribute, as nics[]: a port needs an asset, this does not." },
@@ -118,6 +136,9 @@
     },
     "device": {
       "parent": "node",
+      "symbol": "▭",
+      "family": "compute",
+      "label": "managed device",
       "description": "A module of kind device: reachable, not managed; also a switch or AP from the switch configuration.",
       "fields": {
         "vendor": { "type": "string" },
@@ -143,6 +164,9 @@
     "software": {
       "parent": "ci",
       "abstract": true,
+      "symbol": "◇",
+      "family": "software",
+      "label": "software",
       "description": "What runs in a node: known by its name within its node (D5).",
       "fields": {
         "name": { "key": 1 },
@@ -154,6 +178,9 @@
     },
     "app": {
       "parent": "software",
+      "symbol": "◈",
+      "family": "software",
+      "label": "application",
       "description": "An application with a version: pve on tappaas1, authentik in identity; a module of kind application.",
       "fields": {
         "stack": { "type": "string" },
@@ -168,6 +195,9 @@
     },
     "service": {
       "parent": "software",
+      "symbol": "⊙",
+      "family": "software",
+      "label": "service",
       "description": "<module>:<service>.",
       "fields": {
         "provider": { "type": "string", "description": "The module that provides it." }
@@ -175,6 +205,9 @@
     },
     "controller": {
       "parent": "software",
+      "symbol": "⟳",
+      "family": "software",
+      "label": "controller",
       "description": "A controller of the control plane.",
       "fields": {
         "registry": { "type": "object", "description": "Its config/control-plane.json entry." },
@@ -183,16 +216,22 @@
     },
     "manager": {
       "parent": "software",
+      "symbol": "☰",
+      "family": "software",
+      "label": "manager",
       "description": "A manager of the control plane.",
       "fields": {
         "registry": { "type": "object" },
         "aliases": { "type": "array", "items": { "type": "string" } }
       }
     },
-    "network-element": { "parent": "ci", "abstract": true, "description": "What the network is made of.", "fields": {} },
+    "network-element": { "parent": "ci", "abstract": true, "symbol": "⋈", "family": "network", "label": "network element", "description": "What the network is made of.", "fields": {} },
     "zone": {
       "parent": "network-element",
       "desiredRecord": true,
+      "symbol": "⬡",
+      "family": "network",
+      "label": "zone",
       "description": "A zone of zones.json.",
       "fields": {
         "state": { "type": "string", "description": "active, inactive, mandatory, …, as zones.json has it." },
@@ -208,6 +247,9 @@
     },
     "ssid": {
       "parent": "network-element",
+      "symbol": "≋",
+      "family": "network",
+      "label": "wireless network",
       "description": "A wireless network.",
       "fields": {
         "security": { "type": "string" },
@@ -217,6 +259,9 @@
     },
     "address": {
       "parent": "network-element",
+      "symbol": "⌖",
+      "family": "network",
+      "label": "IP address",
       "description": "An IP address, leased or reserved.",
       "fields": {
         "ip": { "type": "string" },
@@ -227,6 +272,9 @@
     },
     "dns-name": {
       "parent": "network-element",
+      "symbol": "@",
+      "family": "network",
+      "label": "DNS name",
       "description": "A name in DNS.",
       "fields": {
         "fqdn": { "type": "string" },
@@ -236,6 +284,9 @@
     },
     "proxy-route": {
       "parent": "network-element",
+      "symbol": "↪",
+      "family": "network",
+      "label": "proxy route",
       "description": "A reverse-proxy route.",
       "fields": {
         "host": { "type": "string" },
@@ -247,6 +298,9 @@
     },
     "certificate-authority": {
       "parent": "network-element",
+      "symbol": "✦",
+      "family": "network",
+      "label": "certificate authority",
       "description": "One of the site's CAs: the internal CA, or a CA for a domain tree. Its fingerprint is part of its key, so a replaced CA is a new CI and its history stays with the old one.",
       "fields": {
         "name": { "key": 1, "description": "ca-manager's id: internal, or domain-<domain>." },
@@ -263,6 +317,9 @@
     },
     "vpn-peer": {
       "parent": "network-element",
+      "symbol": "⇌",
+      "family": "network",
+      "label": "VPN peer",
       "description": "A WireGuard peer.",
       "fields": {
         "publicKey": { "type": "string", "immutable": true },
@@ -271,9 +328,12 @@
         "lastHandshake": { "type": "string", "volatile": true }
       }
     },
-    "storage-element": { "parent": "ci", "abstract": true, "description": "What storage is made of.", "fields": {} },
+    "storage-element": { "parent": "ci", "abstract": true, "symbol": "⊟", "family": "storage", "label": "storage element", "description": "What storage is made of.", "fields": {} },
     "storage-pool": {
       "parent": "storage-element",
+      "symbol": "◒",
+      "family": "storage",
+      "label": "storage pool",
       "description": "A pool on a node: ZFS pool names repeat across the nodes, so its key is its name on its node.",
       "fields": {
         "name": { "key": 1 },
@@ -288,6 +348,9 @@
     "share": {
       "parent": "storage-element",
       "desiredRecord": true,
+      "symbol": "⋔",
+      "family": "storage",
+      "label": "share",
       "description": "An NFS or SMB share.",
       "fields": {
         "path": { "type": "string" },
@@ -296,6 +359,9 @@
     },
     "datastore": {
       "parent": "storage-element",
+      "symbol": "↺",
+      "family": "storage",
+      "label": "backup datastore",
       "description": "A backup datastore.",
       "fields": {
         "size": { "type": "integer", "volatile": true, "description": "Its filesystem's: moves with what shares the disk." },
@@ -309,6 +375,9 @@
     },
     "backup-peer": {
       "parent": "storage-element",
+      "symbol": "⇆",
+      "family": "storage",
+      "label": "backup buddy",
       "description": "A buddy site we back up to or receive from.",
       "fields": {
         "role": { "type": "string", "description": "As backup-manager peers says it: pull, remote, receive." },
@@ -319,9 +388,12 @@
         "lastSeen": { "type": "string", "volatile": true }
       }
     },
-    "identity": { "parent": "ci", "abstract": true, "desiredRecord": true, "description": "ADR-007a's objects, identity-manager's.", "fields": {} },
+    "identity": { "parent": "ci", "abstract": true, "symbol": "I", "family": "identity", "label": "identity", "desiredRecord": true, "description": "ADR-007a's objects, identity-manager's.", "fields": {} },
     "organization": {
       "parent": "identity",
+      "symbol": "O",
+      "family": "identity",
+      "label": "organization",
       "description": "An organization.",
       "fields": {
         "domain": { "type": "string" }
@@ -329,6 +401,9 @@
     },
     "group": {
       "parent": "identity",
+      "symbol": "G",
+      "family": "identity",
+      "label": "group",
       "description": "A group.",
       "fields": {
         "uuid": { "type": "string", "key": 1, "immutable": true, "description": "The Authentik UUID (D5)." },
@@ -337,6 +412,9 @@
     },
     "user": {
       "parent": "identity",
+      "symbol": "U",
+      "family": "identity",
+      "label": "user",
       "description": "A user.",
       "fields": {
         "uuid": { "type": "string", "key": 1, "immutable": true, "description": "The Authentik UUID (D5)." },
@@ -347,15 +425,21 @@
     },
     "role": {
       "parent": "identity",
+      "symbol": "R",
+      "family": "identity",
+      "label": "role",
       "description": "A role.",
       "fields": {
         "scope": { "type": "string" }
       }
     },
-    "collection": { "parent": "ci", "abstract": true, "description": "What groups other CIs.", "fields": {} },
+    "collection": { "parent": "ci", "abstract": true, "symbol": "◌", "family": "collections", "label": "collection", "description": "What groups other CIs.", "fields": {} },
     "site": {
       "parent": "collection",
       "desiredRecord": true,
+      "symbol": "◆",
+      "family": "collections",
+      "label": "site",
       "description": "The site.",
       "fields": {
         "publicIp": { "type": "string", "description": "site.json network.publicIp: an address, or auto." },
@@ -380,6 +464,9 @@
     },
     "cluster": {
       "parent": "collection",
+      "symbol": "⁂",
+      "family": "collections",
+      "label": "cluster",
       "description": "The Proxmox cluster.",
       "fields": {
         "quorum": { "type": "boolean", "volatile": true },
@@ -389,6 +476,9 @@
     "environment": {
       "parent": "collection",
       "desiredRecord": true,
+      "symbol": "E",
+      "family": "collections",
+      "label": "environment",
       "description": "An environment.",
       "fields": {
         "domain": { "type": "string" },

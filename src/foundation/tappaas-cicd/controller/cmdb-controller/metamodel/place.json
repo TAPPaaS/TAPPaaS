@@ -5,11 +5,17 @@
       "parent": "object",
       "abstract": true,
       "physical": true,
+      "symbol": "⊕",
+      "family": "places",
+      "label": "place",
       "description": "Where something stands.",
       "fields": {}
     },
     "location": {
       "parent": "place",
+      "symbol": "⌂",
+      "family": "places",
+      "label": "location",
       "description": "A place with an address: the site's building, a provider's data centre, a buddy's site (site.json locations).",
       "fields": {
         "kind": { "type": "string", "enum": ["site", "remote"] },
@@ -23,6 +29,9 @@
     },
     "room": {
       "parent": "place",
+      "symbol": "□",
+      "family": "places",
+      "label": "room",
       "description": "A room in a location.",
       "fields": {
         "name": { "key": 1 },
@@ -31,6 +40,9 @@
     },
     "rack": {
       "parent": "place",
+      "symbol": "▯",
+      "family": "places",
+      "label": "rack",
       "description": "A rack in a room.",
       "fields": {
         "name": { "key": 1 },

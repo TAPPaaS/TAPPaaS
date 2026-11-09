@@ -282,6 +282,71 @@ A subclass that declares an inherited field again with only some properties
 refines it (`vm` makes `name` a key of rank 2). A new class goes through
 ADR-022h's gate, under an existing abstract class; nothing adds a root.
 
+### How a class is drawn
+
+Every class also has a `symbol`, a `family` and a `label`: the console draws
+an object as its symbol on its family's colour, with the label (the class in
+the operator's words) as its name. No two classes share a symbol, so a TAPPaaS
+node (▣) and the server it runs on (▤) are told apart at a glance.
+[`metamodel/gen-symbols.mjs`](./metamodel/gen-symbols.mjs) checks that and
+writes the console's copy and the table below; a new class gets its symbol in
+the same change, and the console's tests fail until the script has run.
+
+<!-- class-symbols:begin (metamodel/gen-symbols.mjs writes this table) -->
+
+| Symbol | Class | What it is | Family |
+|:---:|---|---|---|
+| ▢ | `node` | node | compute: what runs software |
+| ◫ | `vm` | virtual machine | compute: what runs software |
+| ◧ | `lxc` | container | compute: what runs software |
+| ▣ | `machine` | TAPPaaS node | compute: what runs software |
+| ▭ | `device` | managed device | compute: what runs software |
+| ▪ | `resource` | resource | assets: physical things and their parts |
+| ▮ | `asset` | asset | assets: physical things and their parts |
+| ▤ | `server` | server | assets: physical things and their parts |
+| ⇄ | `network-device` | switch or access point | assets: physical things and their parts |
+| ϟ | `appliance` | modem, ONT or UPS | assets: physical things and their parts |
+| ▦ | `passive-device` | patch panel or PDU | assets: physical things and their parts |
+| ▱ | `other-device` | other device | assets: physical things and their parts |
+| • | `port` | port | assets: physical things and their parts |
+| ◍ | `disk` | disk | assets: physical things and their parts |
+| ◔ | `pool` | consumable pool | assets: physical things and their parts |
+| ⋈ | `network-element` | network element | network: what the network is made of |
+| ⬡ | `zone` | zone | network: what the network is made of |
+| ≋ | `ssid` | wireless network | network: what the network is made of |
+| ⌖ | `address` | IP address | network: what the network is made of |
+| @ | `dns-name` | DNS name | network: what the network is made of |
+| ↪ | `proxy-route` | proxy route | network: what the network is made of |
+| ✦ | `certificate-authority` | certificate authority | network: what the network is made of |
+| ⇌ | `vpn-peer` | VPN peer | network: what the network is made of |
+| ⊟ | `storage-element` | storage element | storage: what storage is made of |
+| ◒ | `storage-pool` | storage pool | storage: what storage is made of |
+| ⋔ | `share` | share | storage: what storage is made of |
+| ↺ | `datastore` | backup datastore | storage: what storage is made of |
+| ⇆ | `backup-peer` | backup buddy | storage: what storage is made of |
+| ◇ | `software` | software | software: what runs in a node |
+| ◈ | `app` | application | software: what runs in a node |
+| ⊙ | `service` | service | software: what runs in a node |
+| ⟳ | `controller` | controller | software: what runs in a node |
+| ☰ | `manager` | manager | software: what runs in a node |
+| I | `identity` | identity | identity: users, groups, roles |
+| O | `organization` | organization | identity: users, groups, roles |
+| G | `group` | group | identity: users, groups, roles |
+| U | `user` | user | identity: users, groups, roles |
+| R | `role` | role | identity: users, groups, roles |
+| ⊕ | `place` | place | places: where things stand |
+| ⌂ | `location` | location | places: where things stand |
+| □ | `room` | room | places: where things stand |
+| ▯ | `rack` | rack | places: where things stand |
+| ◌ | `collection` | collection | collections: what groups other objects |
+| ◆ | `site` | site | collections: what groups other objects |
+| ⁂ | `cluster` | cluster | collections: what groups other objects |
+| E | `environment` | environment | collections: what groups other objects |
+| ○ | `object` | CMDB object | other: the roots of the class tree |
+| ● | `ci` | configuration item | other: the roots of the class tree |
+
+<!-- class-symbols:end -->
+
 ## Tests
 
 ```bash

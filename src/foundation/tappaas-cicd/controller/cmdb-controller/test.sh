@@ -10,6 +10,7 @@
 #     (and that an overlapping period is refused), the GIN index; a second
 #     start applies it again without harm
 #   - the metamodel loaded as data: class_ancestor's closure, attribute_def
+#   - the class symbols: each class its own, the console copy and README table current
 #   - a report: a server asset with an rj45 port, a machine CI the asset is
 #     allocated to, a vm on it
 #   - query: every asset (subclasses), every physical object, by attribute
@@ -115,6 +116,19 @@ else
     bad "a wrong tree end was loaded"
 fi
 
+echo "== the class symbols =="
+if _sym_out="$(node "${HERE}/metamodel/gen-symbols.mjs" --check 2>&1)"; then
+    ok "every class has its own symbol, a family and a label; the console's copy and the README table are current"
+else
+    bad "class symbols: ${_sym_out}"
+fi
+_show="$(node -e "const m=require('${DIST}/controller/cmdb-controller/src/metamodel.js').Metamodel.fromDir('${HERE}/metamodel'); const c=m.classes.get('machine'); process.stdout.write(c.symbol+' '+c.family+' '+c.label)" 2>&1 || true)"
+if [[ "${_show}" == "▣ compute TAPPaaS node" ]]; then
+    ok "the loader keeps a class's symbol, family and label"
+else
+    bad "the loader lost the class symbol: ${_show}"
+fi
+
 if [[ "$(id -u)" -eq 0 ]]; then
     echo "  skip: PostgreSQL does not run as root; run this as tappaas"
     results; exit $?
@@ -186,7 +200,7 @@ check "attribute_def: a port's kind is required, one of the D9 connectors" "stri
 check "faulty is a flag on resource" "boolean" "$(sql "SELECT type FROM attribute_def WHERE class = 'resource' AND name = 'faulty'")"
 check "a physical class: asset's subclasses inherit it" "t" "$(sql "SELECT physical FROM class WHERE name = 'server'")"
 check "cmdb class show: an asset's keys" "serial,vendor|name" "$(cmdb class show server --json | jq -r '[.keys[].components | join(",")] | join("|")')"
-cmdb class list >"${T}/classes.txt" 2>&1 && grep -q "^      server" "${T}/classes.txt" && ok "cmdb class list draws the tree" || bad "class list: $(head -5 "${T}/classes.txt")"
+cmdb class list >"${T}/classes.txt" 2>&1 && grep -q "^      ▤ server" "${T}/classes.txt" && ok "cmdb class list draws the tree, each class with its symbol" || bad "class list: $(head -5 "${T}/classes.txt")"
 
 echo "== a report: a server, its rj45 port, a machine on it, a vm on that =="
 cat >"${T}/r1.json" <<JSON

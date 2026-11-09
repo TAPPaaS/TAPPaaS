@@ -294,7 +294,7 @@ function run(argv: string[]): number {
           const walk = (p: string | null, depth: number): void => {
             for (const r of byParent.get(p) ?? []) {
               const tags = [r.abstract ? "abstract" : "", r.physical ? "physical" : ""].filter(Boolean).join(", ");
-              out.push(`${"  ".repeat(depth)}${String(r.name)}${tags ? `  (${tags})` : ""}`);
+              out.push(`${"  ".repeat(depth)}${r.symbol ? `${String(r.symbol)} ` : ""}${String(r.name)}${r.label && r.label !== r.name ? ` — ${String(r.label)}` : ""}${tags ? `  (${tags})` : ""}`);
               walk(String(r.name), depth + 1);
             }
           };
@@ -313,6 +313,7 @@ function run(argv: string[]): number {
           return [
             `${name}${d.abstract ? " (abstract)" : ""}${d.physical ? " (physical)" : ""} — ${String(d.description)}`,
             `  is a      ${(d.ancestors as string[]).join(" < ")}`,
+            ...(d.symbol ? [`  drawn as  ${String(d.symbol)} ${String(d.label ?? name)} (${String(d.family)})`] : []),
             `  keys      ${keys.length ? keys.map((k) => `(${(k.components as string[]).join(", ")})`).join(" then ") : "(name), within the class"} in ${String(d.keyScope)}`,
             "",
             table(

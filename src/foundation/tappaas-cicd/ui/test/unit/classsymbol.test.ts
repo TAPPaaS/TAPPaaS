@@ -2,13 +2,20 @@
 // classsymbol.ts): the metamodel's classes all in the table, no two symbols
 // alike, a TAPPaaS node and its server asset apart in shape and family.
 
+import { spawnSync } from "child_process";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { CLASS_SYMBOL, FAMILY_COLOR, assetClassOf, classSymbol } from "../../web/src/classsymbol";
 import { check, done } from "./check";
 
 const meta = join(__dirname, "..", "..", "..", "..", "..", "controller", "cmdb-controller", "metamodel");
-const classes = ["ci", "place", "resource"].flatMap((f) => Object.keys((JSON.parse(readFileSync(join(meta, `${f}.json`), "utf8")) as { classes: Record<string, unknown> }).classes));
+const defs = ["ci", "place", "resource"].flatMap((f) => Object.entries((JSON.parse(readFileSync(join(meta, `${f}.json`), "utf8")) as { classes: Record<string, { symbol?: string; family?: string; label?: string }> }).classes));
+const classes = defs.map(([c]) => c);
+const differ = defs.filter(([c, d]) => !CLASS_SYMBOL[c] || CLASS_SYMBOL[c].symbol !== d.symbol || CLASS_SYMBOL[c].family !== d.family || CLASS_SYMBOL[c].word !== d.label).map(([c]) => c);
+check(differ.length === 0, `the console's copy is the metamodel's ${differ.join(", ")}`);
+const run = spawnSync(process.execPath, [join(meta, "gen-symbols.mjs"), "--check"], { encoding: "utf8" });
+const gen = run.status === 0 ? "" : run.stderr || `exit ${run.status}`;
+check(gen === "", `gen-symbols --check passes (symbols, families, both copies current) ${gen}`);
 
 check(classes.length >= 40, `the metamodel has its classes (${classes.length})`);
 const missing = classes.filter((c) => !CLASS_SYMBOL[c]);

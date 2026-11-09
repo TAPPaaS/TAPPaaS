@@ -734,6 +734,9 @@ export class Store {
       physical: c.physical,
       depth: this.mm.ancestors(c.name).length - 1,
       description: c.description,
+      symbol: c.symbol,
+      family: c.family,
+      label: c.label,
     }));
   }
 
@@ -746,6 +749,9 @@ export class Store {
       abstract: c.abstract,
       physical: c.physical,
       description: c.description,
+      symbol: c.symbol,
+      family: c.family,
+      label: c.label,
       ancestors: this.mm.ancestors(name),
       subclasses: this.mm.descendants(name).filter((d) => d !== name),
       keys: this.mm.keys(name),

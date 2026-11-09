@@ -40,6 +40,9 @@ export interface ClassDef {
   abstract: boolean;
   physical: boolean; // effective: declared here or on an ancestor
   description: string;
+  symbol: string | null; // how the console draws it (metamodel/gen-symbols.mjs)
+  family: string | null;
+  label: string | null;
   declared: Record<string, Partial<FieldDef> & { spec?: Record<string, unknown> }>;
   expiry: string | null; // as declared ("7d"); inherited, see expirySeconds()
   desiredRecord: boolean; // a config/ record can declare it; inherited, see hasDesiredRecord()
@@ -157,6 +160,9 @@ export class Metamodel {
         abstract: raw.abstract === true,
         physical: raw.physical === true,
         description: typeof raw.description === "string" ? raw.description : "",
+        symbol: typeof raw.symbol === "string" ? raw.symbol : null,
+        family: typeof raw.family === "string" ? raw.family : null,
+        label: typeof raw.label === "string" ? raw.label : null,
         declared,
         expiry: typeof raw.expiry === "string" ? raw.expiry : null,
         desiredRecord: raw.desiredRecord === true,
