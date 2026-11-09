@@ -36,7 +36,7 @@ Shared library of functions and utilities for module installation scripts.
 
 **Usage:** Source this file in install scripts:
 ```bash
-. /home/tappaas/bin/common-install-routines.sh <vmname>
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" <vmname>
 ```
 
 **Features:**

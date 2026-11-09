@@ -115,7 +115,7 @@ know the live value.
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
-. /home/tappaas/bin/common-install-routines.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh"
 
 # STDOUT IS THE CONTRACT: exactly one JSON object, nothing else.
 # info/warn/debug and check_json all write to STDOUT, so hold the real stdout
