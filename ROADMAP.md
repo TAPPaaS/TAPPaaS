@@ -108,7 +108,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 7 | G7.1 DevOps stack | H | M | 1 | – | 2 |
 | 7 | G7.2 New and reworked app modules | H | M | 4 | – | 1 |
 | 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | 15 | – | 12 |
-| 6 | G6.2 User interface & physical view | H | L | 6 | – | 4 |
+| 6 | G6.2 User interface & physical view | H | L | 6 | 1 | 3 |
 | 6 | G6.3 Data model | M | M | 9 | – | 2 |
 | 5 | G5.1 Satellite & off-site | H | M | 1 | – | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
@@ -164,7 +164,7 @@ met gates are recorded in the releases that carried their waves.
 | Asset lifecycle and CMDB | #906 — [ADR-040](docs/ADR/ADR-040%20-%20Asset%20Lifecycle%20and%20CMDB.md) **Accepted v1.0 2026-10-29**, mostly built and live-tested on hrossen ([plan](docs/plans/adr-040-live-test-plan.md)); alerts carry no CI id yet (its implementation plan step 5): the IT4IT 3.0.1 Digital Product Backbone end to end, checked against the standard; resources (assets) beside the CIs with two lifecycles; the actual state as a CMDB kept by cmdb-controller and fed by every manager; physical assets with a lifecycle of their own as one kind of CI | G6.3 |
 | Scaled deployment sizes | #917 — [ADR-044](docs/ADR/ADR-044%20-%20Scaled%20Deployment%20Sizes.md) **Accepted v1.0 2026-11-06**, built and live on hrossen, and the 32 GB install at small passed 2026-11-06: a site and each environment are small, medium or large, and a module's small/large values size its guest | #917 closed |
 | Resource allocation | #907: pools consumed by allocations — RAM, CPU, storage, addresses, VLANs — with limits and breach; builds on ADR-040's `pool` class | G3.1 |
-| Health in the CMDB | [ADR-041](docs/ADR/ADR-041%20-%20Health%20in%20the%20CMDB%2C%20Root%20Cause%20and%20the%20Health%20View.md) **Accepted v1.0 2026-10-30** (O3, O5, O6 open), built and live-tested on hrossen ([plan](docs/plans/adr-041-live-test-plan.md)): conditions on every CMDB object, health-manager split into assess and emit, root cause derived along relations, a Health view in the console; #908 | G6.2, G6.3 |
+| Health in the CMDB | [ADR-041](docs/ADR/ADR-041%20-%20Health%20in%20the%20CMDB%2C%20Root%20Cause%20and%20the%20Health%20View.md) **Accepted v1.4 2026-10-31** (every open question decided), built and live-tested on hrossen ([plan](docs/plans/adr-041-live-test-plan.md)): conditions on every CMDB object, health-manager split into assess and emit, root cause derived along relations, a Health view in the console; #908 | G6.2, G6.3 |
 | Disks as assets | [ADR-042](docs/ADR/ADR-042%20-%20Disks%20as%20Assets%20and%20CIs.md) **Accepted v1.0 2026-10-31** (ADR-040 O4): a disk is an asset identified by its serial, placed in a bay of a server, with a `disk` CI built on by the pools; implementation steps 1–4 built (metamodel, site-manager, health, console); step 5, `disk adopt` and a sweep on the test system, not yet recorded | G6.3 |
 | Site certificates | [ADR-043](docs/ADR/ADR-043%20-%20Site%20Certificates.md) **Accepted — implemented v1.0 2026-11-06**: one internal CA per site for `<module>.<zone>.internal`, one more per domain tree without public certificates; `ca-manager` owns every certificate and the DNS providers. Steps 1–6 built (progress 2026-11-03), proven on lab2; on hrossen the internal CA, logging's and the firewall's syslog certificates are live. Still to verify: step 7 (a fresh lab2), a real DNS provider, O1–O3, O5 | #787, #310, #771 |
 | Install | #403, #377 — [ADR-037](docs/ADR/ADR-037%20-%20Install.md) **Accepted v1.2 2026-10-27**: ZFS on the boot disk by default, a module's `storage` a preference with the boot pool last (P1, live on the spare machine as a mirrored tappaas4); adding a node is two verbs — `node add` stands it up (joined, patched, rebooted), `node storage add` gives it pools; boot disks by size, model or serial, the MAC learned from the switch port, the console's Add node wizard (D4, P4a–P4d built, not yet run in a real node add); a hosted server on one IP (P2); the bootstrap ends at the console (P3). Next: Stage 2 on the spare machine, then P2 | G3.1, G3.5 |
@@ -271,7 +271,7 @@ The links a site stands on: node uplinks bonded under `lan`, switch ports and tr
 | #883 | A debug bundle for support: the log and an anonymized `~/config`, attached to the failure mail | M | L | **Opened 2026-10-26.** PII removed from the configs; the mail suggests forwarding it to a support address. First trigger: a failed update |
 | #918 | A repository that fails to sync stops the nightly update with no alert that names it | M | L | **Waiting on @ErikDaniel007 (2026-11-06).** The failure mail already goes out every failed night, so it is open why none arrived on the reported site; the likeliest cause is that the notifier scripts were among the files a hard stop emptied (#920). Asked to check `~/config/update-tappaas.failures`. Still to do either way: the mail names the repository and the last git error |
 
-### G6.2 User interface & physical view — Ease H · Risk L · released: 6 · open: 4
+### G6.2 User interface & physical view — Ease H · Risk L · released: 6 · done for 2.5: 1 · open: 3
 
 A general TAPPaaS user experience, starting with a physical view of the site: nodes, bonds, switches and ports, APs, WAN and satellite, with zones, guests and live state on them, designed first in a spike and an ADR. The service catalog and Backstage are decided against it. Linked to G6.1.
 
@@ -280,7 +280,7 @@ A general TAPPaaS user experience, starting with a physical view of the site: no
 | #885 | console: agents act through the identity gate | M | M | **Opened 2026-10-26** from #839 P4: a service identity per agent in Authentik, a group limiting its jobs, every job recorded under its name. Builds on #142 |
 | #886 | console: a security view of the SIEM's alerts | M | L | **Opened 2026-10-26** from #839 P4: open alerts per node and module, read-only, linked to the SIEM. After #843 |
 | #887 | console: a status page and badges for the site's users | M | L | **Opened 2026-10-26** from #839 P4: `status.<domain>` with each published app up or down, and badges; needs gated `proxyRoutes` |
-| #908 | ADR-041: health in the CMDB, root cause and a Health view in the console | M | M | **Built, live-tested on hrossen** (ADR-041, merged with `adr-041` 2026-11-01): conditions on every CMDB object, health-manager split into assess and emit, root cause along the relations, the Health view. Open: ADR-041 O3, O5, O6 |
+| ✅ #908 | ADR-041: health in the CMDB, root cause and a Health view in the console | M | M | **Closed 2026-11-09**: built and live-tested on hrossen (merged with `adr-041` 2026-11-01); every open question decided; the assistant explains a root cause from the health graph (O5, `fcca7530`) |
 
 ### G6.3 Data model — Ease M · Risk M · released: 9 · open: 2
 
