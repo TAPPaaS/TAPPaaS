@@ -119,7 +119,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
 | 3 | G3.4 AI stack maturity | M | M | 4 | 1 | 7 |
-| 3 | G3.5 Installer UX | L | L | 2 | – | 2 |
+| 3 | ✅ G3.5 Installer UX | L | L | 2 | 1 | – |
 | 2 | G2.1 Firewall exposure & rule order | M | H | 26 | – | 3 |
 | 2 | G2.2 DNS resolver robustness | L | M | 7 | 1 | 2 |
 | 1 | ✅ G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 27 | – | – |
@@ -404,13 +404,13 @@ A production-grade AI stack (its test conventions, #119 and #120, are in G5.2): 
 | #800 | litellm: `trusted_proxy_ranges` and env-credential login (1.103 warnings) | L | L | **Opened 2026-10-08.** Merge pair with #828: name the proxy so failed sign-ins are limited per client; master-key login off where SSO is wired |
 | #828 | litellm: the UI accepts the master key as a static admin login | L | L | **Opened 2026-10-14.** Merge pair with #800: `disable_env_credential_login` once a real admin exists; INSTALL.md calls the master key the fallback login today |
 
-### G3.5 Installer UX — Ease L · Risk L · released: 2 · open: 2
+### ✅ G3.5 Installer UX — Ease L · Risk L · released: 2 · done for 2.5: 1
 
-A first install that is easier to get through: resumable (#377), showing its progress (#266), asking only what the hardware needs (#405), reusing what it already downloaded (#83).
+A first install that is easier to get through: a first node that can be run again (#377), showing its progress (#266), and asking only what the hardware needs (#405). A bootstrap that resumes from any step is ADR-037 P3b.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #377 | Installer cannot restart; mgmt-net routing | M | L | **ADR-037 D3 (P3b, 2.5):** the bootstrap decides what is left from its records, so a second run continues |
+| ✅ #377 | Installer cannot restart; mgmt-net routing | M | L | **Closed 2026-11-09**: a first node run again resumes its firewall and platform steps (`c04a2cd4`); the admin PC's route across the gateway switch is detected (`c2f579be`). Full resume: ADR-037 P3b |
 
 ---
 
