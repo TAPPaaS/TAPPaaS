@@ -3411,11 +3411,14 @@
       "id": "CVE-2026-36849",
       "analysis": {
         "state": "exploitable",
-        "detail": "No public description; kept affected because debian libtiff6 is used only by gdk-pixbuf's TIFF loader, which librsvg uses for embedded raster images; an uploaded SVG with a data: TIFF image decoded by ffprobe reaches it. Risk here: unknown libtiff flaw behind the ffprobe/librsvg chain. Action: no fixed Debian 12 package yet; goes away only with an upstream image rebuilt on a fixed base"
+        "detail": "No public description; kept affected at low. Debian 13 libtiff6 is used only by gdk-pixbuf's TIFF loader, which librsvg uses for embedded raster images; Pillow bundles its own libtiff. The known path from user data, an uploaded SVG with a data: TIFF decoded by ffprobe, is closed by BYPASS_PYDUB_PREPROCESSING=true, but no other path to librsvg in 0.13.0 is ruled out. Action: goes away with an upstream image on a fixed Debian base. Re-triaged for deb13u3 on 2026-11-09"
       },
       "affects": [
         {
           "ref": "pkg:deb/debian/libtiff6@4.5.0-6%2Bdeb12u4"
+        },
+        {
+          "ref": "pkg:deb/debian/libtiff6@4.7.0-3%2Bdeb13u3"
         }
       ],
       "ratings": [
