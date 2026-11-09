@@ -117,14 +117,14 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 7 | – | 2 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 32 | 2 | 2 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
-| 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
+| 3 | G3.3 App module fixes | L | L | 15 | – | 8 |
 | 3 | G3.4 AI stack maturity | M | M | 4 | 1 | 7 |
 | 3 | ✅ G3.5 Installer UX | L | L | 2 | 1 | – |
 | 2 | G2.1 Firewall exposure & rule order | M | H | 26 | – | 3 |
 | 2 | G2.2 DNS resolver robustness | L | M | 7 | 1 | 2 |
 | 1 | ✅ G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 27 | – | – |
 | 1 | G1.6 Secrets & privileged access | H | H | 4 | – | 1 |
-| 1 | G1.7 Parked for Erik discussion | – | – | 1 | 1 | 1 |
+| 1 | ✅ G1.7 Parked for Erik discussion | – | – | 1 | 1 | – |
 
 ## Planning items still open
 
@@ -375,15 +375,16 @@ Every app wired to the identity provider the same way: OIDC for hass, Nextcloud 
 |---|-------|:-:|:-:|------|
 | #345 | hass: appliance-aware OIDC staging | M | L | |
 
-### G3.3 App module fixes — Ease L · Risk L · released: 15 · open: 7
+### G3.3 App module fixes — Ease L · Risk L · released: 15 · open: 8
 
-The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end (#715), Home Assistant (#552, #568, #571 — maintainer-owned), Nextcloud and euro-office (#332, #751; its test 12, #658, is in G5.2), litellm consumers (#553), windows-server (#411), forgejo (#283, #284), in-guest backups (#754), container stop timeouts (#786).
+The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end (#715), Home Assistant (#552, #568, #571 — maintainer-owned; locale from site data, #348), Nextcloud and euro-office (#332, #751; its test 12, #658, is in G5.2), litellm consumers (#553), windows-server (#411), forgejo (#283, #284), in-guest backups (#754), container stop timeouts (#786).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #552 | hass: a lost LLAT blocks every update | L | L | **Assigned to @ErikDaniel007 — do not fix (operator, 2026-09-26).** `ha-llat.sh` has no recovery path, so a lost token blocks every update |
 | #568 | hass: backup freeze leaves Frigate unhealthy | M | L | |
 | #571 | hassanova has no release baseline | L | M | Fix exists unmerged (`ed8a9799`), but landing it makes the merge reconcile a Production module for the first time (Risk M). **Needs its owner or a decision** |
+| #348 | hass locale from site master data | M | L | **Parked 2026-09-21:** no test site runs hass. The fix is written on the issue — `core_config` at `lib/config.sh:158` plus a converge for onboarded instances, from `.location` Moved from G1.7 2026-11-09 (operator). |
 | #553 | litellm:models cannot reach an appliance consumer | M | L | |
 | #715 | Nextcloud-hub revisited: Talk never worked end to end; races, retries and tests hid real failures | H | M | Talk stack and Nextcloud 35 on `main` (`c998ca5f`). Open: how @AndreasJe's branch lands, one `/etc/secrets` mode, rotating early OIDC secrets — until an off-network Talk call works |
 | #411 | windows-server: `deploy-instances.sh` missing | L | L | **Verified open 2026-09-26** (low-risk sweep): the script does not exist; writing it is the work |
@@ -456,13 +457,12 @@ Least privilege on the platform. Built: nodes hardened to the Proxmox guide, key
 |---|-------|:-:|:-:|------|
 | #142 | RFC: AI-agent access to cicd | H | L | Decision |
 
-### G1.7 Parked for Erik discussion · released: 1 · done for 2.5: 1 · open: 1
+### ✅ G1.7 Parked for Erik discussion · released: 1 · done for 2.5: 1 · open: 0
 
-Waiting on a conversation between Lars and @ErikDaniel007, not on work: the controller pattern (#430) and hass locale (#348).
+Waiting on a conversation between Lars and @ErikDaniel007, not on work: the controller pattern (#430).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #348 | hass locale from site master data | M | L | **Parked 2026-09-21:** no test site runs hass. The fix is written on the issue — `core_config` at `lib/config.sh:158` plus a converge for onboarded instances, from `.location` |
 | ✅ #765 | Container image pins: list litellm, openwebui, vllm-amd, deconz; move the stale ones | L | L | **Closed 2026-11-09**: all four listed in `src/image-pins.json`; euro-office v9.3.7, litellm v1.106.7, openwebui 0.13.0, vllm-amd and deconz on new digests, none stale |
 
 ---
@@ -919,7 +919,7 @@ One module contract — what community modules copy and deployed configs point a
 
 #### G1.4 Common NixOS baseline — Ease H · Risk H
 
-One NixOS baseline every VM imports, carrying the site's time zone, locale, keyboard and time source — the same facts applied to Debian guests and nodes — and pins with a cadence. Left: hass locale (#348, G1.7) and Windows guests (#678, Future Work).
+One NixOS baseline every VM imports, carrying the site's time zone, locale, keyboard and time source — the same facts applied to Debian guests and nodes — and pins with a cadence. Left: hass locale (#348, G3.3) and Windows guests (#678, Future Work).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
