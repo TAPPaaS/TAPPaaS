@@ -120,8 +120,8 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
 | 3 | G3.4 AI stack maturity | M | M | 4 | 1 | 7 |
 | 3 | G3.5 Installer UX | L | L | 2 | – | 2 |
-| 2 | G2.1 Firewall exposure & rule order | M | H | 26 | – | 2 |
-| 2 | G2.2 DNS resolver robustness | L | M | 7 | – | 1 |
+| 2 | G2.1 Firewall exposure & rule order | M | H | 26 | – | 3 |
+| 2 | G2.2 DNS resolver robustness | L | M | 7 | 1 | 2 |
 | 1 | ✅ G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 27 | – | – |
 | 1 | G1.6 Secrets & privileged access | H | H | 4 | – | 1 |
 | 1 | G1.7 Parked for Erik discussion | – | – | 1 | 1 | 1 |
@@ -417,7 +417,7 @@ A first install that is easier to get through: resumable (#377), showing its pro
 
 Changes to live firewall and DNS behaviour on every installation. Restrictive defaults get harder to introduce the longer users rely on permissive ones, so they come early; every change shows its dry-run diff (#645) before `--apply`.
 
-### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 26 · open: 2
+### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 26 · open: 3
 
 Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: the review of the tier model and rule creation is done and published (#816), with most of its findings fixed; pinholes no longer shadowed (#386); every zone policy covers IPv6 (#815), and IPv6 itself is built (#26). The rules manager's overlap report, covered pinholes and sequence map are built (#160, #256, #162, on the branch). The review findings are done: #817, #818, #822 closed; #819–#821, #823 and the ADR amendments (#824) closed — on `main` 2026-10-13 after a clean `--deep` (144/0). Inbound IPv6 to Caddy, IPv6 anti-spoofing, DNSSEC (#263), #576, #257, #660 and #683 followed, on `main` 2026-10-13 after a clean `--deep` (144/0). Lockout check re-run on hrossen 2026-10-13 against the current rules, IPv4 and IPv6: only mgmt reaches the firewall's GUI and SSH, on any address; the WAN passes 80/443 and nothing else (the admin VPN not re-probed). Open: the NetBird rules below, pending the NetBird decision; #706 moved to G4.4 behind #668. NetBird rules (#385, #222) are low priority until the NetBird decision.
 
@@ -425,14 +425,17 @@ Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/S
 |---|-------|:-:|:-:|------|
 | #385 | Persist the NetBird OPT1 pass rule | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision (*Decisions*). Land with #222 |
 | #222 | NetBird → srv floating rule is fragile | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision. The #816 review found no code that creates NetBird rules |
+| #925 | IP blocklists from `site.json`: URL-table alias, blocked in and out | M | M | **Opened 2026-11-09** from #157: `ipBlocklists` (Spamhaus DROP as the example, empty by default) as an alias, a WAN inbound and zone outbound block; lists stay their publishers' |
 
-### G2.2 DNS resolver robustness — Ease L · Risk M · released: 7 · open: 1
+### G2.2 DNS resolver robustness — Ease L · Risk M · released: 7 · done for 2.5: 1 · open: 2
 
-A resolver that holds up: a working Unbound restart (#387), a written IPv6 stance (#149), DNSSEC with split horizon (#263), and optional blocklists (#157). Public DNS that follows the WAN (#383, #830) moved to G6.1.
+A resolver that holds up: a working Unbound restart (#387), a written IPv6 stance (#149), DNSSEC with split horizon (#263), optional blocklists (#157), kept fresh (#923) and one threat-only list on by default (#924). Public DNS that follows the WAN (#383, #830) moved to G6.1.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| FW #157 | Default DNS blocklists (DNSBL / maltrail) | M | M | **Built 2026-10-13** (`e919308b`): `site.json` `dnsBlocklists` drive Unbound's blocklists; the pfBlockerNG replacement guide (`network/docs/pfblockerng-replacement.md`) awaits @ErikDaniel007's review before the issue closes |
+| ✅ FW #157 | Default DNS blocklists (DNSBL / maltrail) | M | M | **Closed 2026-11-09**: `site.json` `dnsBlocklists` drive Unbound's blocklists from OPNsense's catalogue (`e919308b`); CrowdSec bans inbound abuse (#851). Rest: #923, #924, #925 |
+| #923 | DNS blocklists: refresh them daily, drop `atf`, skip an unknown list code | L | M | **Opened 2026-11-09** from #157: no cron refreshes the lists; OPNsense 26.7.8 drops `atf`, which our docs and tests use. Before sites move to 26.7. Guide rewritten here |
+| #924 | A threat-only DNS blocklist on by default for new sites | L | M | **Opened 2026-11-09** from #157: hagezi `hgz011` for home and guest zones on fresh installs; existing sites untouched. After #923 |
 
 ---
 
