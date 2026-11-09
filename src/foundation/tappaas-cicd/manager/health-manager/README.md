@@ -599,7 +599,8 @@ on a worker thread, placing the alert as `alerts` does; one about no known objec
 
 `tappaas-cicd-alerts.json` holds the three rules over these lines, and over `cmdb sweep`'s.
 `HealthRootCause` mails a causal event that is not silenced and whose status is **critical**, with
-what it impacts by class (`impacts: 3 vm, 2 service`); `HealthRootRecovered` mails the RESOLVED of a critical root's recovery.
+what it impacts by class (`impacts: 3 vm, 2 service`), except a module whose CVE risk rose to critical, which
+`CveLevelUp` mails instead; `HealthRootRecovered` mails the RESOLVED of a critical root's recovery.
 `HealthDailyDigest` collects the rest once a day: a warning that became a root cause, and every
 sweep difference nothing explains (drift, unmanaged, missing, differing from `config/`) — one mail
 while the last 24 hours hold any such line, none on a quiet day. `health-manager digest` writes
