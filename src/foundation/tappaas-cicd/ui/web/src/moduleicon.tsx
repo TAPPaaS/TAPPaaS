@@ -33,7 +33,7 @@ export function ModuleIcon({ name, cls, size = 40 }: { name: string; cls?: strin
 export function ClassIcon({ cls, size = 22 }: { cls: string; size?: number }) {
   const s = classSymbol(cls);
   return (
-    <span className="micon micon-tile" style={{ width: size, height: size, background: FAMILY_COLOR[s.family], fontSize: size * 0.56 }} title={s.word} role="img" aria-label={s.word}>
+    <span className="micon micon-tile" style={{ width: size, height: size, background: FAMILY_COLOR[s.family], fontSize: size * 0.74, borderRadius: Math.max(3, Math.round(size * 0.22)) }} title={s.word} role="img" aria-label={s.word}>
       {s.symbol}
     </span>
   );

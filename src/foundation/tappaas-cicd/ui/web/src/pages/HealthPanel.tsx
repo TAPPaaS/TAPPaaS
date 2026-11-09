@@ -14,6 +14,7 @@ import { HealthCondition, HealthObject, HealthStatus } from "../types";
 import { DetailsLinks, Dot, Level, ReadState, Section, Tag, when } from "../ui";
 import { ciDetails } from "../details";
 import { CiPanel } from "./CiPanel";
+import { ClassIcon } from "../moduleicon";
 
 const LEVEL: Record<HealthStatus, Level> = { ok: "pass", warning: "warn", critical: "fail", unknown: "skip" };
 const hm = (title: string, verb: string, id: string, extra: Partial<Step> = {}): Step => ({ title, bin: "health-manager", verb, fixed: [id], ...extra });
@@ -85,7 +86,7 @@ export function HealthPanel({ id, close, pick, showInTree }: { id: string; close
     <aside className="sidepanel health-panel">
       <header>
         <div>
-          <b>{o?.label ?? "…"}</b>
+          <b className="ci-title">{o ? <ClassIcon cls={o.class} size={20} /> : null}{o?.label ?? "…"}</b>
           <div className="muted small">{o?.class ?? ""}{o?.ancestors.length ? ` · ${o.ancestors.filter((a) => a !== o.class && a !== "object").join(" › ")}` : ""}</div>
         </div>
         <button className="btn-x" onClick={close} aria-label="Close">×</button>

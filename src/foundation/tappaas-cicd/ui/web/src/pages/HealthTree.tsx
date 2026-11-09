@@ -106,7 +106,7 @@ function Row({ n, depth, trail, m, selected, select, filters }: { n: TreeNode; d
         {n.children ? <button className="ht-caret" onClick={() => m.toggle(n.id)} aria-label={isOpen ? `Close ${n.label}` : `Open ${n.label}`} aria-expanded={isOpen}>{isOpen ? "▾" : "▸"}</button> : <span className="ht-caret" />}
         <button className={`ht-name${facet ? " ht-facet" : ""}`} onClick={() => (facet ? m.toggle(n.id) : select(n.id))} title={title}>
           <Dot level={LEVEL[n.status]} title={title} />
-          {facet ? null : <ClassIcon cls={n.class} size={15} />}
+          {facet ? null : <ClassIcon cls={n.class} size={17} />}
           <span className="hc-name">{n.label}</span>
           {n.isRoot ? <span className="ht-root" title="a root cause">◎</span> : null}
           {n.flapping ? <span className="hc-mark" title="flapping">↯</span> : null}
@@ -152,7 +152,7 @@ function Matches({ q, selected, select }: { q: string; selected: string | null; 
       {rows.map((n) => (
         <li key={n.id}>
           <button className={`ht-match${selected === n.id ? " ht-on" : ""}`} onClick={() => select(n.id)}>
-            <span className="ht-name"><Dot level={LEVEL[n.status]} title={n.status} /> <ClassIcon cls={n.class} size={15} /> <span className="hc-name">{n.label}</span></span>
+            <span className="ht-name"><Dot level={LEVEL[n.status]} title={n.status} /> <ClassIcon cls={n.class} size={17} /> <span className="hc-name">{n.label}</span></span>
             <span className="muted small">{n.where || n.class}</span>
           </button>
         </li>

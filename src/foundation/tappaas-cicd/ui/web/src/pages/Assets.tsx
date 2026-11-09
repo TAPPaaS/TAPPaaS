@@ -114,7 +114,7 @@ function Item({ tree, it, sel, pick }: { tree: AssetTree; it: AssetTreeItem; sel
     <li>
       <div className="atree-row">
         {it.at ? <span className="muted small">{it.at}</span> : null}
-        <ClassIcon cls={assetClassOf(a.kind)} size={16} />
+        <ClassIcon cls={assetClassOf(a.kind)} size={18} />
         <Link to={assetPath(a.name)}>{a.displayName ?? a.name}</Link>
         {a.displayName && a.displayName !== a.name ? <span className="muted small mono">{a.name}</span> : null}
         <span className="atree-kind">{a.kind}</span>
@@ -132,7 +132,7 @@ function Item({ tree, it, sel, pick }: { tree: AssetTree; it: AssetTreeItem; sel
 function Row({ label, kind, on, onClick, aside }: { label: ReactNode; kind: string; on: boolean; onClick?: () => void; aside?: ReactNode }) {
   return (
     <div className={`atree-row${on ? " row-on" : ""}`}>
-      {CLASS_SYMBOL[kind] ? <ClassIcon cls={kind} size={16} /> : null}
+      {CLASS_SYMBOL[kind] ? <ClassIcon cls={kind} size={18} /> : null}
       <span className="atree-kind">{kind}</span>
       {onClick ? <button className="hlink" onClick={onClick}>{label}</button> : <b>{label}</b>}
       {aside ? <span className="muted small">{aside}</span> : null}
