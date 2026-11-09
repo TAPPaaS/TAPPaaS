@@ -1326,12 +1326,15 @@
       "id": "CVE-2026-88647",
       "analysis": {
         "state": "not_affected",
-        "detail": "GnuTLS TLS-client hostname-verification bypass (CN fallback); nothing in the diyHue image makes TLS connections through gnutls (curl and Python use OpenSSL; the gnutls CoAP client is for unconfigured Tradfri support).",
+        "detail": "GnuTLS TLS-client hostname-verification bypass (CN fallback); nothing in the diyHue image makes TLS connections through gnutls (curl and Python use OpenSSL; the gnutls CoAP client is for unconfigured Tradfri support).\ncarried from 3.8.9-3+deb13u2 on 2026-11-09",
         "justification": "code_not_reachable"
       },
       "affects": [
         {
           "ref": "pkg:deb/debian/libgnutls30t64@3.8.9-3%2Bdeb13u2"
+        },
+        {
+          "ref": "pkg:deb/debian/libgnutls30t64@3.8.9-3%2Bdeb13u4"
         }
       ]
     },
@@ -1339,12 +1342,15 @@
       "id": "CVE-2026-88648",
       "analysis": {
         "state": "not_affected",
-        "detail": "GnuTLS TLS-client cross-domain CA restriction bypass; nothing in the diyHue image makes TLS connections through gnutls (curl and Python use OpenSSL; the gnutls CoAP client is for unconfigured Tradfri support).",
+        "detail": "GnuTLS TLS-client cross-domain CA restriction bypass; nothing in the diyHue image makes TLS connections through gnutls (curl and Python use OpenSSL; the gnutls CoAP client is for unconfigured Tradfri support).\ncarried from 3.8.9-3+deb13u2 on 2026-11-09",
         "justification": "code_not_reachable"
       },
       "affects": [
         {
           "ref": "pkg:deb/debian/libgnutls30t64@3.8.9-3%2Bdeb13u2"
+        },
+        {
+          "ref": "pkg:deb/debian/libgnutls30t64@3.8.9-3%2Bdeb13u4"
         }
       ]
     },
@@ -1680,7 +1686,7 @@
       "id": "CVE-2026-76642",
       "analysis": {
         "state": "not_affected",
-        "detail": "mount/login/nsenter/fstab handling in util-linux; the diyHue container runs only python3 HueEmulator3.py as root, never runs mount, login or nsenter, and has no fstab user entries. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+        "detail": "mount/login/nsenter/fstab handling in util-linux; the diyHue container runs only python3 HueEmulator3.py as root, never runs mount, login or nsenter, and has no fstab user entries. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 2.41-5, 4.16.0-2+really2.41-5 on 2026-11-09",
         "justification": "code_not_reachable"
       },
       "affects": [
@@ -1710,6 +1716,33 @@
         },
         {
           "ref": "pkg:deb/debian/util-linux@2.41-5"
+        },
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1"
         }
       ]
     },
@@ -1717,7 +1750,7 @@
       "id": "CVE-2026-78408",
       "analysis": {
         "state": "not_affected",
-        "detail": "mount/login/nsenter/fstab handling in util-linux; the diyHue container runs only python3 HueEmulator3.py as root, never runs mount, login or nsenter, and has no fstab user entries. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+        "detail": "mount/login/nsenter/fstab handling in util-linux; the diyHue container runs only python3 HueEmulator3.py as root, never runs mount, login or nsenter, and has no fstab user entries. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 2.41-5, 4.16.0-2+really2.41-5 on 2026-11-09",
         "justification": "code_not_reachable"
       },
       "affects": [
@@ -1747,6 +1780,33 @@
         },
         {
           "ref": "pkg:deb/debian/util-linux@2.41-5"
+        },
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1"
         }
       ]
     },
@@ -1754,7 +1814,7 @@
       "id": "CVE-2026-78409",
       "analysis": {
         "state": "not_affected",
-        "detail": "mount/login/nsenter/fstab handling in util-linux; the diyHue container runs only python3 HueEmulator3.py as root, never runs mount, login or nsenter, and has no fstab user entries. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+        "detail": "mount/login/nsenter/fstab handling in util-linux; the diyHue container runs only python3 HueEmulator3.py as root, never runs mount, login or nsenter, and has no fstab user entries. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 2.41-5, 4.16.0-2+really2.41-5 on 2026-11-09",
         "justification": "code_not_reachable"
       },
       "affects": [
@@ -1784,6 +1844,33 @@
         },
         {
           "ref": "pkg:deb/debian/util-linux@2.41-5"
+        },
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1"
         }
       ]
     },
@@ -1791,7 +1878,7 @@
       "id": "CVE-2026-78410",
       "analysis": {
         "state": "not_affected",
-        "detail": "mount/login/nsenter/fstab handling in util-linux; the diyHue container runs only python3 HueEmulator3.py as root, never runs mount, login or nsenter, and has no fstab user entries. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+        "detail": "mount/login/nsenter/fstab handling in util-linux; the diyHue container runs only python3 HueEmulator3.py as root, never runs mount, login or nsenter, and has no fstab user entries. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 2.41-5, 4.16.0-2+really2.41-5 on 2026-11-09",
         "justification": "code_not_reachable"
       },
       "affects": [
@@ -1821,6 +1908,33 @@
         },
         {
           "ref": "pkg:deb/debian/util-linux@2.41-5"
+        },
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1"
         }
       ]
     },
@@ -1828,7 +1942,7 @@
       "id": "CVE-2026-12064",
       "analysis": {
         "state": "not_affected",
-        "detail": "curl tool with --proto-default sftp/scp; the diyHue container only runs curl on https:// URLs in githubInstall.sh. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+        "detail": "curl tool with --proto-default sftp/scp; the diyHue container only runs curl on https:// URLs in githubInstall.sh. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 8.14.1-2+deb13u2 on 2026-11-09",
         "justification": "code_not_reachable"
       },
       "affects": [
@@ -1837,6 +1951,12 @@
         },
         {
           "ref": "pkg:deb/debian/libcurl4t64@8.14.1-2%2Bdeb13u2"
+        },
+        {
+          "ref": "pkg:deb/debian/curl@8.14.1-2%2Bdeb13u7"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl4t64@8.14.1-2%2Bdeb13u7"
         }
       ]
     },
@@ -1844,7 +1964,7 @@
       "id": "CVE-2026-8458",
       "analysis": {
         "state": "not_affected",
-        "detail": "Negotiate-auth connection reuse in libcurl; diyHue's curl calls use no Negotiate authentication. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+        "detail": "Negotiate-auth connection reuse in libcurl; diyHue's curl calls use no Negotiate authentication. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 8.14.1-2+deb13u2 on 2026-11-09",
         "justification": "code_not_reachable"
       },
       "affects": [
@@ -1853,6 +1973,12 @@
         },
         {
           "ref": "pkg:deb/debian/libcurl4t64@8.14.1-2%2Bdeb13u2"
+        },
+        {
+          "ref": "pkg:deb/debian/curl@8.14.1-2%2Bdeb13u7"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl4t64@8.14.1-2%2Bdeb13u7"
         }
       ]
     },
@@ -1860,7 +1986,7 @@
       "id": "CVE-2026-15308",
       "analysis": {
         "state": "not_affected",
-        "detail": "Python's incremental HTMLParser; diyHue never parses HTML. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+        "detail": "Python's incremental HTMLParser; diyHue never parses HTML. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 3.13.5-2 on 2026-11-09",
         "justification": "code_not_reachable"
       },
       "affects": [
@@ -1875,6 +2001,18 @@
         },
         {
           "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-stdlib@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13@3.13.5-2%2Bdeb13u5"
         }
       ]
     },
@@ -1882,7 +2020,7 @@
       "id": "CVE-2026-19445",
       "analysis": {
         "state": "not_affected",
-        "detail": "Use-after-free when an sni_callback swaps SSLSocket.context; diyHue's HTTPS server (Flask/Werkzeug on 443) wraps its listening socket with one fixed context and sets no sni_callback. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+        "detail": "Use-after-free when an sni_callback swaps SSLSocket.context; diyHue's HTTPS server (Flask/Werkzeug on 443) wraps its listening socket with one fixed context and sets no sni_callback. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 3.13.5-2 on 2026-11-09",
         "justification": "code_not_reachable"
       },
       "affects": [
@@ -1897,6 +2035,18 @@
         },
         {
           "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-stdlib@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13@3.13.5-2%2Bdeb13u5"
         }
       ]
     },
@@ -1904,7 +2054,7 @@
       "id": "CVE-2026-19553",
       "analysis": {
         "state": "not_affected",
-        "detail": "wrap_bio() accepting server_hostname=None with check_hostname; diyHue's outbound HTTPS goes through requests/urllib3, which use wrap_socket with the hostname set, and the only wrap_bio user (AnyIO) makes no TLS connections here. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+        "detail": "wrap_bio() accepting server_hostname=None with check_hostname; diyHue's outbound HTTPS goes through requests/urllib3, which use wrap_socket with the hostname set, and the only wrap_bio user (AnyIO) makes no TLS connections here. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 3.13.5-2 on 2026-11-09",
         "justification": "code_not_reachable"
       },
       "affects": [
@@ -1919,6 +2069,18 @@
         },
         {
           "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-stdlib@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13@3.13.5-2%2Bdeb13u5"
         }
       ]
     },
@@ -1926,7 +2088,7 @@
       "id": "CVE-2026-7210",
       "analysis": {
         "state": "not_affected",
-        "detail": "pyexpat/ElementTree XML parsing; diyHue's Python code parses no XML from the network. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+        "detail": "pyexpat/ElementTree XML parsing; diyHue's Python code parses no XML from the network. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 3.13.5-2 on 2026-11-09",
         "justification": "code_not_reachable"
       },
       "affects": [
@@ -1941,6 +2103,18 @@
         },
         {
           "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-stdlib@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13@3.13.5-2%2Bdeb13u5"
         }
       ]
     },
@@ -1948,7 +2122,7 @@
       "id": "CVE-2026-82049",
       "analysis": {
         "state": "not_affected",
-        "detail": "tarfile extraction filter bypass; diyHue never extracts tar archives in Python (it only creates config backups with the tar CLI). (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+        "detail": "tarfile extraction filter bypass; diyHue never extracts tar archives in Python (it only creates config backups with the tar CLI). (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 3.13.5-2 on 2026-11-09",
         "justification": "code_not_reachable"
       },
       "affects": [
@@ -1963,6 +2137,18 @@
         },
         {
           "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.13-stdlib@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13-minimal@3.13.5-2%2Bdeb13u5"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.13@3.13.5-2%2Bdeb13u5"
         }
       ]
     },
@@ -1970,7 +2156,7 @@
       "id": "CVE-2026-16742",
       "analysis": {
         "state": "not_affected",
-        "detail": "systemd-homed signature check; the diyHue container runs no systemd or homed, the systemd packages are only libraries in the image. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+        "detail": "systemd-homed signature check; the diyHue container runs no systemd or homed, the systemd packages are only libraries in the image. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 257.9-1~deb13u1 on 2026-11-09",
         "justification": "code_not_reachable"
       },
       "affects": [
@@ -1988,6 +2174,21 @@
         },
         {
           "ref": "pkg:deb/debian/udev@257.9-1~deb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsystemd-shared@257.13-1~deb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libsystemd0@257.13-1~deb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libudev1@257.13-1~deb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/systemd@257.13-1~deb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/udev@257.13-1~deb13u1"
         }
       ]
     },
@@ -1995,12 +2196,15 @@
       "id": "CVE-2026-9538",
       "analysis": {
         "state": "not_affected",
-        "detail": "Perl interpreter/module bug; perl-base is only Debian's packaging runtime in the diyHue image, and nothing diyHue runs invokes perl. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+        "detail": "Perl interpreter/module bug; perl-base is only Debian's packaging runtime in the diyHue image, and nothing diyHue runs invokes perl. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 5.40.1-6 on 2026-11-09",
         "justification": "code_not_reachable"
       },
       "affects": [
         {
           "ref": "pkg:deb/debian/perl-base@5.40.1-6"
+        },
+        {
+          "ref": "pkg:deb/debian/perl-base@5.40.1-6%2Bdeb13u1"
         }
       ]
     }
