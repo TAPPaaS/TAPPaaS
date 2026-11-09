@@ -109,7 +109,7 @@ export const TOOLS: Record<string, { line: string; description: string; paramete
   health_graph: {
     line: "health_graph(object?, depth?): the root causes; with an object, why it fails: its conditions, what causes it, what it brings down, what is nearby, its last day",
     description:
-      "Health as the Health view has it (conditions on every object, root causes derived along the relations). Without `object`: the current root causes, worst first, each with how many objects it brings down. With `object` (a name such as identity or tappaas2, or an object id): that object's conditions, the root causes that make it fail, what fails because of it, every other object one relation away with its own status, and its health changes and the jobs that touched it in the last 24 hours. Use it to explain in words why something fails, and say which objects you read. Give `depth` 2 only when the operator asks to look one relation further. Names and conditions only: no configuration.",
+      "Health as the Health view has it (conditions on every object, root causes derived along the relations). Without `object`: the current root causes, worst first, each with how many objects it brings down. With `object` (a name such as identity or tappaas2, or an object id; when several objects share a name, such as a pool on each node, say where: 'tanka1 on tappaas3'): that object's conditions, the root causes that make it fail, what fails because of it, every other object one relation away with its own status, and its health changes and the jobs that touched it in the last 24 hours. Use it to explain in words why something fails, and say which objects you read. Give `depth` 2 only when the operator asks to look one relation further. Names and conditions only: no configuration.",
     parameters: obj({ object: str("an object's name or id (optional)"), depth: { type: "integer", description: "1 (default), or 2 when the operator asks to look further" } }),
   },
   backup: {
@@ -266,19 +266,39 @@ export function brief(n: HealthNode): string {
   return `${n.label} (${n.class}, ${n.status}${issue ? `: ${issue}` : ""}${marks.length ? `; ${marks.join(", ")}` : ""})`;
 }
 
+// Where an object is: the objects it runs on (a pool's node, a guest's machine).
+export function whereOf(doc: HealthGraph, n: HealthNode): string | null {
+  const label = new Map(doc.nodes.map((x) => [x.id, x.label]));
+  const on = doc.edges.filter((e) => e.type === "runs-on" && e.from === n.id).map((e) => label.get(e.to) ?? e.to);
+  return on.length ? on.join(", ") : null;
+}
+
 // The object a name or id means: an id exactly, else a name or label without
-// regard to case; of several, a root cause first, then the worst.
+// regard to case, narrowed by where it is when the name says ("tanka1 on
+// tappaas3", "tappaas3/tanka1"). Of several of one name (a pool on each node),
+// one in the graph comes first — an object with no relation left is a leftover
+// — then a root cause, then the worst; the others are named with where they are.
 export function resolveHealthObject(doc: HealthGraph, ref: string): { node: HealthNode; others: string[] } | { error: string } {
   const exact = doc.nodes.find((n) => n.id === ref);
   if (exact) return { node: exact, others: [] };
-  const want = ref.toLowerCase();
-  const hits = doc.nodes.filter((n) => n.name.toLowerCase() === want || n.label.toLowerCase() === want);
+  const named = (w: string): HealthNode[] => doc.nodes.filter((n) => n.name.toLowerCase() === w || n.label.toLowerCase() === w);
+  const want = ref.toLowerCase().trim();
+  let hits = named(want);
+  if (!hits.length) {
+    const m = /^(.+?)\s+(?:on|in|at)\s+(.+)$/.exec(want) ?? (/^([^/\s]+)\/([^/\s]+)$/.exec(want) ? [want, want.split("/")[1], want.split("/")[0]] : null);
+    if (m) {
+      const place = m[2].trim();
+      hits = named(m[1].trim()).filter((n) => (whereOf(doc, n) ?? "").toLowerCase().split(", ").includes(place));
+    }
+  }
   if (!hits.length) {
     const near = doc.nodes.filter((n) => n.label.toLowerCase().includes(want)).slice(0, 10).map(objName);
     return { error: `no object named '${ref}'${near.length ? ` (similar: ${near.join(", ")})` : ""}; call health_graph() without an object for the root causes` };
   }
-  hits.sort((a, b) => Number(b.isRoot) - Number(a.isRoot) || RANK[b.status] - RANK[a.status] || a.class.localeCompare(b.class));
-  return { node: hits[0], others: hits.slice(1, 10).map((n) => `${objName(n)} (${n.id})`) };
+  const linked = new Set(doc.edges.flatMap((e) => [e.from, e.to]));
+  hits.sort((a, b) => Number(linked.has(b.id)) - Number(linked.has(a.id)) || Number(b.isRoot) - Number(a.isRoot) || RANK[b.status] - RANK[a.status] || a.class.localeCompare(b.class));
+  const where = (n: HealthNode): string => whereOf(doc, n) ?? (linked.has(n.id) ? "" : "no relation left: a leftover record");
+  return { node: hits[0], others: hits.slice(1, 10).map((n) => `${objName(n)}${where(n) ? ` (${where(n).startsWith("no ") ? where(n) : `on ${where(n)}`})` : ""} id ${n.id}`) };
 }
 
 // The root causes now, worst first.
@@ -358,11 +378,13 @@ export function healthObjectView(
     object: {
       id: node.id,
       is: brief(node),
+      ...(whereOf(doc, node) ? { on: whereOf(doc, node) } : {}),
       conditions: node.issues.length
         ? node.issues.map((i) => `${i.type} ${i.status}${i.reason ? `: ${short(i.reason, 60)}` : ""}${i.message ? ` — ${short(i.message)}` : ""}${i.since ? ` (since ${minute(i.since)})` : ""}${[i.derived ? "derived" : "", i.acknowledged ? "acknowledged" : "", i.maintenance ? "maintenance" : "", i.flapping ? "flapping" : ""].filter((x) => x).map((x) => `; ${x}`).join("")}`)
         : `none open: ${node.status}`,
     },
     howToRead:
+      (others.length ? `${others.length + 1} objects are named ${node.label}: this is the one ${whereOf(doc, node) ? `on ${whereOf(doc, node)}` : "with no node"}; the others are in alsoNamedSo — say which one you read, and if the operator meant another, call again with its id. ` : "") +
       `causedBy: the root causes that make ${node.label} fail. bringsDown: what fails because ${node.label} fails — only these are its consequences. ` +
       `nearby: objects one relation away, each with its own state; a nearby object's problem is not caused by ${node.label} unless it is in bringsDown, and one marked "a root cause of its own" has a separate problem. ` +
       "End your answer with the objects you used, as \"Read: …\".",

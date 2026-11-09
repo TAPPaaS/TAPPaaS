@@ -137,6 +137,37 @@ async function tool(): Promise<void> {
   check(!miss.ok && /no object named/.test(miss.content), "an unknown object is refused with the way on");
 }
 
+// Several objects of one name: a pool on each node, and a leftover of a
+// removed node with no relation left.
+function sameName(): void {
+  const mk = (id: string, cls: string, name: string, status: HealthNode["status"], isRoot: boolean): HealthNode => ({
+    id, class: cls, name, label: name, environment: null, module: null, rootCause: [], isRoot,
+    types: {}, issues: [], status, type: status === "ok" ? null : "operational", reason: null, since: null, acknowledged: false, maintenance: false, flapping: false,
+  });
+  const nodes = [
+    mk("m1", "machine", "tappaas1", "ok", false), mk("m3", "machine", "tappaas3", "warning", true),
+    mk("p1", "storage-pool", "tanka1", "ok", false), mk("p3", "storage-pool", "tanka1", "warning", true), mk("old", "storage-pool", "tanka1", "warning", true),
+  ];
+  const doc = {
+    generated: "2026-11-09T20:00:00Z", at: null, topology: "t", hasConditions: true, site: "s", nodes,
+    edges: [{ id: "e1", type: "runs-on", from: "p1", to: "m1" }, { id: "e3", type: "runs-on", from: "p3", to: "m3" }],
+    relationTypes: [{ name: "runs-on", dependant: "from", tree: null }],
+    roots: [], counts: { ok: 2, unknown: 0, warning: 3, critical: 0, acknowledged: 0 },
+  } as unknown as HealthGraph;
+  const bare = resolveHealthObject(doc, "tanka1");
+  check("node" in bare && bare.node.id === "p3", "a name several share: a pool in the graph before a leftover root");
+  check("node" in bare && bare.others.some((o) => /on tappaas1/.test(o)) && bare.others.some((o) => /no relation left: a leftover record\) id old/.test(o)), `the others named with where they are (${"node" in bare ? bare.others.join(" | ") : ""})`);
+  const on = resolveHealthObject(doc, "tanka1 on tappaas1");
+  const slash = resolveHealthObject(doc, "tappaas1/tanka1");
+  check("node" in on && on.node.id === "p1" && "node" in slash && slash.node.id === "p1", "the node narrows it: 'tanka1 on tappaas1', 'tappaas1/tanka1'");
+  check("error" in resolveHealthObject(doc, "tanka1 on tappaas9"), "a node it is not on finds nothing");
+  if ("node" in bare) {
+    const v = healthObjectView(doc, bare.node, 1, null, Date.parse("2026-11-09T20:00:00Z"), bare.others).view as { howToRead: string; object: { on?: string } };
+    check(/^3 objects are named tanka1: this is the one on tappaas3/.test(v.howToRead) && v.object.on === "tappaas3", "the answer says which of them it read, and where");
+  }
+}
+
 pure();
 bounds();
+sameName();
 void tool().then(() => done("assistant-health"));
