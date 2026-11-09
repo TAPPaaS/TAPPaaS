@@ -2,10 +2,390 @@
   "_README": "Every TAPPaaS version: the revision it names and when it reached each channel (ADR-028 D13). tappaas-train writes this at each boundary and urgent fix; RELEASES.md is rendered from it (tappaas-train releases --render after a hand edit). Dates are UTC days. kind: minor | major (a boundary), patch (an urgent fix, ADR-028 D12), release (made by hand, before the train).",
   "releases": [
     {
+      "version": "2.4",
+      "commit": "",
+      "staging": "2026-11-09",
+      "production": null,
+      "kind": "minor",
+      "forced": true,
+      "pin": "c56a87d8e41c",
+      "supersedes": [
+        "2.3.1",
+        "2.3.2",
+        "2.3.3"
+      ],
+      "accepted": [
+        "major forgejo 16->17"
+      ],
+      "ack": {
+        "items": [
+          "cve immich CVE-2026-111497",
+          "cve jellyfin CVE-2026-111497",
+          "major forgejo 16->17"
+        ],
+        "fingerprints": {},
+        "notes": [
+          {
+            "module": "immich",
+            "note": "brotli 1.2.0 fixed by 54f16aab: replaceDependencies to 1.2.1, processes map 1.2.1 on hrossen; the preview's build closure still lists 1.2.0",
+            "at": "2026-11-07T19:48:39Z",
+            "items": 1
+          },
+          {
+            "module": "jellyfin",
+            "note": "brotli 1.2.0 fixed by 54f16aab: replaceDependencies to 1.2.1, jellyfin maps 1.2.1 on hrossen; the preview's build closure still lists 1.2.0",
+            "at": "2026-11-07T19:48:57Z",
+            "items": 1
+          },
+          {
+            "module": "forgejo",
+            "note": "16.0 EOL 2026-10-29; 17.0.1 checked: DB migration, CLI and API calls TAPPaaS uses work; Woodpecker not tested; rollback needs restore",
+            "at": "2026-11-07T19:49:07Z",
+            "items": 1
+          }
+        ],
+        "pin": "c56a87d8e41ce69bd2af57eb35dcc117a9dfca33",
+        "digest": "13c19408a399f034",
+        "at": "2026-11-07T19:49:07Z"
+      },
+      "security": {
+        "release": {
+          "score": 20,
+          "level": "high",
+          "setBy": {
+            "module": "deconz"
+          }
+        },
+        "modules": {
+          "baseline": {
+            "score": 14,
+            "level": "medium",
+            "open": 3,
+            "risk": 2,
+            "carried": 0,
+            "ack": 0,
+            "now": 5,
+            "fixed": 36,
+            "decided": 2,
+            "vex": 39,
+            "new": 0,
+            "decidedIds": [
+              "CVE-2026-119586",
+              "CVE-2026-84243"
+            ]
+          },
+          "coturn": {
+            "score": 0,
+            "level": "ok",
+            "open": 0,
+            "risk": 0,
+            "carried": 0,
+            "ack": 0,
+            "now": 0,
+            "fixed": 0,
+            "decided": 0,
+            "vex": 0,
+            "new": 0
+          },
+          "deconz": {
+            "score": 20,
+            "level": "high",
+            "open": 12,
+            "risk": 0,
+            "carried": 0,
+            "ack": 0,
+            "now": 12,
+            "fixed": 9,
+            "decided": 0,
+            "vex": 21,
+            "new": 0
+          },
+          "euro-office": {
+            "score": 12,
+            "level": "medium",
+            "open": 2,
+            "risk": 0,
+            "carried": 0,
+            "ack": 0,
+            "now": 2,
+            "fixed": 0,
+            "decided": 0,
+            "vex": 0,
+            "new": 0
+          },
+          "forgejo": {
+            "score": 0,
+            "level": "ok",
+            "open": 0,
+            "risk": 0,
+            "carried": 0,
+            "ack": 0,
+            "now": 0,
+            "fixed": 0,
+            "decided": 0,
+            "vex": 0,
+            "new": 0
+          },
+          "identity": {
+            "score": 20,
+            "level": "high",
+            "open": 19,
+            "risk": 5,
+            "carried": 0,
+            "ack": 0,
+            "now": 24,
+            "fixed": 0,
+            "decided": 0,
+            "vex": 18,
+            "new": 0
+          },
+          "immich": {
+            "score": 15.97,
+            "level": "medium",
+            "open": 8,
+            "risk": 6,
+            "carried": 1,
+            "ack": 0,
+            "now": 15,
+            "fixed": 3,
+            "decided": 4,
+            "vex": 58,
+            "new": 0,
+            "decidedIds": [
+              "CVE-2026-107696",
+              "CVE-2026-52296",
+              "CVE-2026-70628",
+              "CVE-2026-70632"
+            ]
+          },
+          "jellyfin": {
+            "score": 14,
+            "level": "medium",
+            "open": 2,
+            "risk": 7,
+            "carried": 1,
+            "ack": 0,
+            "now": 10,
+            "fixed": 3,
+            "decided": 2,
+            "vex": 31,
+            "new": 0,
+            "decidedIds": [
+              "CVE-2026-70628",
+              "CVE-2026-70632"
+            ]
+          },
+          "karakeep": {
+            "score": 0,
+            "level": "ok",
+            "open": 0,
+            "risk": 0,
+            "carried": 0,
+            "ack": 0,
+            "now": 0,
+            "fixed": 2,
+            "decided": 0,
+            "vex": 0,
+            "new": 0
+          },
+          "lazysite": {
+            "score": 0,
+            "level": "ok",
+            "open": 0,
+            "risk": 0,
+            "carried": 0,
+            "ack": 0,
+            "now": 0,
+            "fixed": 0,
+            "decided": 0,
+            "vex": 1,
+            "new": 0
+          },
+          "litellm": {
+            "score": 12,
+            "level": "medium",
+            "open": 2,
+            "risk": 0,
+            "carried": 0,
+            "ack": 0,
+            "now": 2,
+            "fixed": 31,
+            "decided": 0,
+            "vex": 2,
+            "new": 0
+          },
+          "logging": {
+            "score": 0,
+            "level": "ok",
+            "open": 0,
+            "risk": 0,
+            "carried": 0,
+            "ack": 0,
+            "now": 0,
+            "fixed": 2,
+            "decided": 0,
+            "vex": 1,
+            "new": 0
+          },
+          "nextcloud": {
+            "score": 0,
+            "level": "ok",
+            "open": 0,
+            "risk": 0,
+            "carried": 0,
+            "ack": 0,
+            "now": 0,
+            "fixed": 2,
+            "decided": 0,
+            "vex": 9,
+            "new": 0
+          },
+          "nextcloud-hpb": {
+            "score": 0,
+            "level": "ok",
+            "open": 0,
+            "risk": 0,
+            "carried": 0,
+            "ack": 0,
+            "now": 0,
+            "fixed": 0,
+            "decided": 0,
+            "vex": 23,
+            "new": 0
+          },
+          "nomad": {
+            "score": 0,
+            "level": "ok",
+            "open": 0,
+            "risk": 0,
+            "carried": 0,
+            "ack": 0,
+            "now": 0,
+            "fixed": 0,
+            "decided": 0,
+            "vex": 0,
+            "new": 0
+          },
+          "openwebui": {
+            "score": 20,
+            "level": "high",
+            "open": 37,
+            "risk": 1,
+            "carried": 1,
+            "ack": 0,
+            "now": 39,
+            "fixed": 62,
+            "decided": 0,
+            "vex": 71,
+            "new": 0
+          },
+          "tappaas-cicd": {
+            "score": 0,
+            "level": "ok",
+            "open": 0,
+            "risk": 0,
+            "carried": 0,
+            "ack": 0,
+            "now": 0,
+            "fixed": 0,
+            "decided": 0,
+            "vex": 2,
+            "new": 0
+          },
+          "vaultwarden": {
+            "score": 0,
+            "level": "ok",
+            "open": 0,
+            "risk": 0,
+            "carried": 0,
+            "ack": 0,
+            "now": 0,
+            "fixed": 0,
+            "decided": 0,
+            "vex": 0,
+            "new": 0
+          },
+          "vllm-amd": {
+            "score": 15.75,
+            "level": "medium",
+            "open": 6,
+            "risk": 0,
+            "carried": 0,
+            "ack": 0,
+            "now": 6,
+            "fixed": 40,
+            "decided": 0,
+            "vex": 11,
+            "new": 0
+          },
+          "woodpecker": {
+            "score": 0,
+            "level": "ok",
+            "open": 0,
+            "risk": 0,
+            "carried": 0,
+            "ack": 0,
+            "now": 0,
+            "fixed": 0,
+            "decided": 0,
+            "vex": 0,
+            "new": 0
+          }
+        },
+        "model": {
+          "weights": {
+            "risk": {
+              "critical": 25,
+              "high": 10,
+              "medium": 3,
+              "low": 1
+            },
+            "open": {
+              "critical": 20,
+              "high": 8
+            }
+          },
+          "bands": [
+            {
+              "level": "critical",
+              "from": 30
+            },
+            {
+              "level": "high",
+              "from": 16
+            },
+            {
+              "level": "medium",
+              "from": 7
+            },
+            {
+              "level": "low",
+              "from": 0
+            }
+          ],
+          "tierMultipliers": {
+            "0": 2,
+            "1": 1,
+            "2": 0.75,
+            "3": 0.5,
+            "4": 0.25,
+            "5": 0.1,
+            "6": 0.1
+          },
+          "halving": 0.5
+        },
+        "vex": {
+          "removed": 213,
+          "pruned": 33,
+          "carried": 92
+        }
+      }
+    },
+    {
       "version": "2.3.3",
       "commit": "3cca97fc031e",
       "staging": "2026-10-26",
-      "production": null,
+      "production": "2026-11-09",
       "kind": "patch",
       "channel": "staging",
       "why": "service down: an IPv4-only site's CrowdSec stops at start on an empty whitelist (makerfloss, 2026-10-26)",

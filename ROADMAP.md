@@ -100,21 +100,20 @@ release is fixed forward.
 
 ## At a glance
 
-Per group: its scores, and where its rows are. *released* = shipped in a release (the release sections say which); *done for 2.4* = done on `main`, ships at the next boundary; *open* = still to do.
+Per group: its scores, and where its rows are. *released* = shipped in a release (the release sections say which); *done for 2.5* = done on `main`, ships at the next boundary; *open* = still to do.
 
-| Wave | Group | Ease | Risk | released | done for 2.4 | open |
+| Wave | Group | Ease | Risk | released | done for 2.5 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
 | 7 | G7.1 DevOps stack | H | M | 1 | – | 2 |
 | 7 | G7.2 New and reworked app modules | H | M | 4 | – | 1 |
-| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | 11 | 4 | 12 |
+| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | 15 | – | 12 |
 | 6 | G6.2 User interface & physical view | H | L | 6 | – | 4 |
 | 6 | G6.3 Data model | M | M | 9 | – | 2 |
 | 5 | G5.1 Satellite & off-site | H | M | 1 | – | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 3 |
-| 4 | G4.5 Governance, CI & sign-offs | M | L | 6 | 1 | 2 |
-| 4 | ✅ G4.6 Community module extension points | H | M | – | 7 | – |
-| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 29 | 3 | 5 |
+| 4 | G4.5 Governance, CI & sign-offs | M | L | 7 | – | 2 |
+| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 32 | – | 5 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
 | 3 | G3.4 AI stack maturity | M | M | 4 | – | 8 |
@@ -203,8 +202,6 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #250 | `dependsOn` ownership for community modules | Option D, `dependsOn.sh`. Out of G1.3 since 2026-09-20 (operator) |
 | #294 | Zone-aligned VMID ranges | Renumbering means backup/restore to a new VMID. **Proposal:** new scheme for new installs and variants only; never renumber in place. Out of G1.7 since 2026-10-16 (operator) |
 | #464 | migrate-firewall-to-network: dry-run reports a step it cannot predict | A dry run that overstates what it will do teaches an operator to distrust dry runs. Parking lot on the forge |
-| ✅ #488 | apply-json-merge pins fields the operator never changed | **Done 2026-10-26** (`21fb806e`): a field `.orig` never had takes the release value, warned with the old one, unless `modify --set` recorded it (`<module>.json.operator`) |
-| ✅ #801 | Default update schedule: daily on every channel | **Done 2026-10-26** (`88968c6e`): new sites update daily at 02:00; migration 0024 moves a site on the old weekly default, warned with the way back |
 | #678 | windows-server: time zone, keyboard and locale from the site | From G1.4: its own time-zone vocabulary and a Windows test |
 | #757 | `debianhost` over PXE (ADR-026 D8a) | `adopt` covers every known site |
 | #893 | Memory ballooning as an opt-in per module | A minimum memory per module (`balloon`), counted by the capacity check; not for passthrough VMs. First: is free-page reporting on? Opened 2026-10-27 |
@@ -251,7 +248,7 @@ New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129),
 The physical site and how an operator sees and runs it. Not ordered by upgrade risk like Waves 0–4:
 these two groups are designed together — the fabric is what the physical view shows and changes.
 
-### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · released: 11 · done for 2.4: 4 · open: 12
+### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · released: 15 · open: 12
 
 The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports and trunks kept in line with the zones (#668, #697, #706, #731), the WAN and the ISP (public DNS that follows the WAN, #383, #830; mail when the ISP blocks port 25, #125). Switch setup needs a systematic model, at install and on day 2. Operating the site belongs here too: a service desk (#63) and a SIEM (#843, Wazuh the best candidate). Linked to G6.2: the physical view shows and later changes it.
 
@@ -268,11 +265,7 @@ The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports
 | #63 | Service desk tooling spike | M | L | |
 | #843 | Create a SIEM for TAPPaaS | H | M | **Opened 2026-10-16.** Wazuh the best candidate (agents, syslog from OPNsense/Proxmox, FIM, vulnerability detection); placement, sizing and its overlap with logging to decide |
 | #883 | A debug bundle for support: the log and an anonymized `~/config`, attached to the failure mail | M | L | **Opened 2026-10-26.** PII removed from the configs; the mail suggests forwarding it to a support address. First trigger: a failed update |
-| ✅ #905 | Log alerting: a rule whose query cannot run mails under its own name; a Loki that is down slips past the watchdog | L | L | **Closed 2026-10-29** (`8e1db270`, `a37702fa`): rules keep their state when a query cannot run, the Heartbeat stops instead, and only a firing Heartbeat refreshes the receiver's file; the watchdog asks the logging VM and names Loki or Grafana; heartbeat every 10 min, watchdog every 5, stale after 35. Live on hrossen: Loki stopped 10:36 → one mail "log alerting is down: Loki does not answer" at 11:14, no rule mails; RESOLVED 4 min after Loki returned. From a false LanLegDown: the logging VM's backup stalled Grafana's database |
 | #918 | A repository that fails to sync stops the nightly update with no alert that names it | M | L | **Waiting on @ErikDaniel007 (2026-11-06).** The failure mail already goes out every failed night, so it is open why none arrived on the reported site; the likeliest cause is that the notifier scripts were among the files a hard stop emptied (#920). Asked to check `~/config/update-tappaas.failures`. Still to do either way: the mail names the repository and the last git error |
-| ✅ #919 | A checkout with empty git objects cannot be synced or repaired | M | M | **Closed 2026-11-06** (`4cb47468`, `9d80e6f4`): the sync deletes empty loose objects and copies in every object origin has from a fresh clone; empty tracked files are restored from `HEAD`, not stashed; `repository sync` repairs before its own fetch. An object only this checkout had is reported. Hard-stop drill on hrossen passed |
-| ✅ #920 | A hard stop of the mothership leaves zero-byte git objects and files | L | L | **Closed 2026-11-06** (`4cb47468`): each managed checkout gets `core.fsync=all` and `core.fsyncMethod=fsync`, and the working tree is flushed after a sync. Live on hrossen's checkouts |
-| ✅ #921 | `network:proxy` retries ACME forever for a name no wildcard covers and with no public DNS | M | L | **Closed 2026-11-06** (`a7afff95`, `8f1e6908`): under `dnsMode` wildcard the certificate must cover the name; with none and no public A record the name is not published. Live-tested on hrossen. Not done: a 421 answer for unknown hostnames |
 
 ### G6.2 User interface & physical view — Ease H · Risk L · released: 6 · open: 4
 
@@ -337,37 +330,20 @@ Shared storage as a managed part of a site: the rest of the NFS service (#772). 
 | #863 | backup: spin down the tankb/tankc backup disks when idle | L | L | **Opened 2026-10-20:** the backup pools' spinning disks run 24/7 for about 30 minutes of writes a night; nothing sets a standby timer |
 | #864 | cluster: check SSD wear, and place the boot and Loki disks on purpose | M | L | **Opened 2026-10-20:** the PVE boot disk writes more than the VM pool (about 100 GB a day measured on hrossen) and nothing watches wear. ADR-042's disk CIs give wear a home |
 
-### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 6 · done for 2.4: 1 · open: 2
+### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 7 · open: 2
 
 The project's own machinery (CI runners, #415, moved to G7.1 with the Woodpecker module): community-health files (#486), the remaining ADRs (#359; the ADR-010 sign-off, #406, is in G5.1), a tool for urgent patches (#746), a logging-function lint (#747); the service-desk spike (#63) is in G7.2.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| ✅ #888 | site-manager: reconcile clones and branch switches skip the signature checks | L | L | **Done 2026-10-26** (`2ad00c5e`): a reconcile clone is introduced, a switch goes through `repository sync`; requireSigned warns without `channels.json` |
 | #486 | ADR-015 community-health files | L | L | |
 | #359 | legal/processor ADR | M | L | |
-
-### ✅ G4.6 Community module extension points — Ease H · Risk M · done for 2.4: 7
-
-What a Community module needs from the platform so it does not carry its own copy (from @AndreasJe's hosting module, 2026-10-28): one place for its secrets (#902), containers watched and logged like VMs (#901, #903), its own validated fields (#899) and its own alert rules (#904). The last two get an ADR each first.
-
-| # | Issue | Ease | Risk | Note |
-|---|-------|:-:|:-:|------|
-| ✅ #902 | Convention: where modules escrow their secrets on the mothership | L | M | **Done 2026-10-29** (`f2b657b4`): `/home/tappaas/secrets/<module>/<instance>.env` (and `<instance>/` for files), created by `module_secrets_file`/`module_secrets_dir`; in the mothership's file backup with `~/.loki-push`; kept by `delete --archive`, removed by `--remove`; documented in the module template. Existing flat files stay where they are. Mothership side live at the next tappaas-cicd update |
-| ✅ #901 | health-manager: health gates that reach containers | M | M | **Done 2026-10-29** (`61eef6df`, `4aabf51f`): disk and pending-reboot gates probe an LXC module through `pct exec`; LXC `diskSize` grow-only (`update-disk.sh`, `pct resize`), `auto-grow.sh` grows a container's rootfs; `health-manager reboot` restarts a container. Live on hrossen: 8G→10G, shrink refused, 86% full grew 10G→15G |
-| ✅ #903 | logging:logs: journal client for Debian and LXC guests | M | M | **Done 2026-10-29** (`76e119fe`): one Alloy pipeline for NixOS and a plain `config.alloy`; Alloy 1.16.3-1 from Grafana's apt repo, key pinned (expires 2027-08-22), held; applied by `logging:logs` install/update, removed on delete. Live on hrossen: a container's journal in Loki with host/zone/unit labels, secrets scrubbed, removal clean. HostSilent on a stopped client not observed (Loki was stopped by #905's test) |
-| ✅ #904 | logging: module-supplied alert rules | M | L | **Done 2026-10-29** (`f143d7cc`..`3c37b77f`; [ADR-039](docs/ADR/ADR-039%20-%20Module%20Alerting.md)): `<module>-alerts.json` (line patterns, never LogQL; scoped to the module's own hosts), mail templates, support bundle and anonymized lines (`site.json` `alerts.includeLines`), one Grafana group per module through the API; the core rules moved to pvehost/cluster/network/backup/logging (Heartbeat stays); firewall and nodes declare `logging:logs` as syslog senders; `health-manager alerts` and the `open-alerts` gate; documented in *Develop a Module*. Live on hrossen: converted rules replace the old ones, a node line fires RootKeyChanged, HostSilent on a stopped container and none after its delete. P6 (hosting adopts it) with @AndreasJe |
-| ✅ #912 | tappaas-alert-rules: apply crashes on a site.json with a `location` object | L | L | **Done 2026-10-31** (`969ca988`): only a string counts as a module's source. Migration 0019 should have removed that `location`. Unit-tested |
-| ✅ #913 | pbs-controller: list and purge ignore container backups | L | M | **Done 2026-10-31** (`1621dd33`): both see `ct/<vmid>`; a vmid with both a vm and a ct group is refused. Unit-tested; live test with a real container still to do |
-| ✅ #910 | wait_for_guest_settled waits the full timeout on a container without sshd | L | L | **Done 2026-10-31** (`a14a6cbd`): a container is asked through `pct exec` on its node. Unit-tested; live test with a real container still to do |
-
----
 
 ## Wave 3 — stability & correctness
 
 Low upgrade risk. Build continuously, in any order within a group.
 
-### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 29 · done for 2.4: 3 · open: 5
+### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 32 · open: 5
 
 Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), a readiness wait that skips UDP ports (#826), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753). Built from the 2.0→2.2 field report (#832): a capacity pre-flight before the sweep (#833) and visible size changes on legacy sites (#834). Next by design: dynamic placement on PVE 9.2's load balancer (#838).
 
@@ -375,11 +351,8 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 |---|-------|:-:|:-:|------|
 | #403 | Install on the root disk; smarter placement | M | M | **P1 on `main` 2026-10-26** (`d4a2bac8`, `5f502153`): ZFS boot by default; `storage` falls back down to `local-zfs`, warned; a mirror boots either disk. **Live 2026-10-27** on the spare machine joined to hrossen as tappaas4 (PXE, mirrored rpool): a module asking `tanka1` built on `local-zfs`; `node add` now registers `local-zfs` and runs the cluster baseline and reboot for a new node (`07815562`, `9b0ac026`); `node delete` archives it, drops its DNS and parks its switch port (`3b12736d`, `917d2550`). ADR-037 D4 built (`14a51af5`, `444e9949`, `7e730c56`). Left: the ESP health gate |
 | #838 | Dynamic placement of workloads (PVE 9.2 CRS load balancer) | H | M | **Opened 2026-10-15.** Opt-in next to the fixed default: `HANode` as a list, an empty list = dynamic; the CPU level the candidate set shares (#827), capable nodes only (#836). ADR first |
-| ✅ #917 | Scaled deployment: site and environment size (small/medium/large) sizes module VMs and LXCs | M | M | **Closed 2026-11-06**: a fresh install at small on a 32 GB node with foundation, home and office works (operator). Built 2026-11-05/06, live on hrossen ([ADR-044](docs/ADR/ADR-044%20-%20Scaled%20Deployment%20Sizes.md) Proposed v0.5; `9d2396d7`, `35f25f82`): `size` on site and environment (`install.sh`/`bootstrap-tappaas.sh --size`, `site-manager`/`environment-manager --size`, the console's forms); `coresSmallLarge`/`memorySmallLarge`/`diskSmallLarge` beside each module's medium values, resolved at install and before the 3-way merge (sizing is never a pin). Values from hrossen's guests; foundation + home + office at small is 26.25 GiB. Follow-up: Immich's ML peak on a real library |
 | #884 | More dynamic placement and resource allocation: disk and RAM per site size (`minimalTest`, small, large), falling back to the minimum under constraint | H | M | **Opened 2026-10-26.** TAPPaaS heuristics next to Proxmox's own allocation; ADR first. The per-size part is #917 (ADR-044); falling back to the minimum under constraint is still open. Related: #838, #880, #663, #866 |
 | #907 | ADR needed: resource allocation — pools consumed by allocations (storage, RAM, CPU, addresses, VLANs) | H | M | **Opened 2026-10-29** from ADR-040 O10: IT4IT's Resource is consumed; ADR-040 leaves `pool` and `allocated-to` in the CMDB's model for it. Related: #838, #884, #833 |
-| ✅ #891 | A memory-tight node holds back only the module that grows; pause modules for temporary room | M | M | **Done 2026-10-27** (`eec438af`, `8f178808`; ADR-017 D9): growth past 95% keeps its current memory and warns, the rest goes on; an LXC counts at its 7-day peak + 25%; in the maintenance window `pauseOk` modules (lowest `pausePriority` first) are paused for a suspended module's patch or a node drain and resumed after the reboots. Live-tested on hrossen |
-| ✅ #890 | Suspended modules are patched | L | M | **Done 2026-10-27** (`eec438af`): a closing pass resumes, updates, tests and suspends each suspended module one at a time when it fits; `suspend --no-update` opts out; health warns after 14 days unpatched. Live-tested on hrossen (deconz-test) |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
 
 ### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 14 · open: 1
@@ -487,6 +460,13 @@ someone deciding whether to upgrade. The release-train boundary turns it into th
 summary (`release/roadmap-cut.py`) and leaves this block empty again.
 
 <!-- next-release summary -->
+
+<!-- /next-release summary -->
+
+## Release 2.4 — staging 2026-11-09 · production at the next boundary
+
+Tag `v2.4`, cut into staging 2026-11-09 by a release-train boundary.
+
 Sites update daily at 02:00 by default: a site still on the old weekly default (Tuesday or Thursday at 02:00) moves to daily on its first update, with a warning that names how to keep weekly; any schedule chosen otherwise stays. An update no longer keeps a configuration value nobody chose: when a release starts to define a field the site already has with another value, the release value is taken and the update warns with the value it replaced, unless the operator set it with `module modify --set`, which now records the fields it sets. Every way a repository moves now goes through the signature checks: a repository that site-manager clones again, or moves to the branch site.json declares, is verified like an update, and a staging or production clone without recorded signers is refused with the command that adds it.
 
 Every site gets its own certificate authority. `ca-manager` owns the site's certificates and its DNS providers, whoever issues them; `acme-setup.sh` stays as a shim, and the old credential file moves into it. Logging takes its journals, queries and syslog over TLS with the site CA's certificates; the plain ports close a release later. A new site starts in local DNS mode, and without a domain it is `<site>.home.arpa` throughout.
@@ -498,9 +478,60 @@ A module can ship its own alert rules as line patterns, and the foundation's ale
 In the console, Day 1 follows the confirmed order and ends with the rest of the foundation placed on the machines; Day 2 gains Add a repository and Add a switch. A memory-tight node holds back only the module that grows, and modules can be paused to make room.
 
 A hard stop of the mothership no longer leaves a repository it cannot sync: git writes in the managed checkouts reach the disk, and a sync repairs empty objects and empty files from origin. A proxied name that no wildcard certificate covers and that has no public DNS record is no longer published, so the proxy stops retrying a certificate it cannot get.
-<!-- /next-release summary -->
 
-## Release 2.3.3 — staging 2026-10-26 · production at the next boundary
+The rows below are what it carried, by the wave and group they came from.
+
+### Wave 3 — stability & correctness
+
+#### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| ✅ #917 | Scaled deployment: site and environment size (small/medium/large) sizes module VMs and LXCs | M | M | **Closed 2026-11-06**: a fresh install at small on a 32 GB node with foundation, home and office works (operator). Built 2026-11-05/06, live on hrossen ([ADR-044](docs/ADR/ADR-044%20-%20Scaled%20Deployment%20Sizes.md) Proposed v0.5; `9d2396d7`, `35f25f82`): `size` on site and environment (`install.sh`/`bootstrap-tappaas.sh --size`, `site-manager`/`environment-manager --size`, the console's forms); `coresSmallLarge`/`memorySmallLarge`/`diskSmallLarge` beside each module's medium values, resolved at install and before the 3-way merge (sizing is never a pin). Values from hrossen's guests; foundation + home + office at small is 26.25 GiB. Follow-up: Immich's ML peak on a real library |
+| ✅ #891 | A memory-tight node holds back only the module that grows; pause modules for temporary room | M | M | **Done 2026-10-27** (`eec438af`, `8f178808`; ADR-017 D9): growth past 95% keeps its current memory and warns, the rest goes on; an LXC counts at its 7-day peak + 25%; in the maintenance window `pauseOk` modules (lowest `pausePriority` first) are paused for a suspended module's patch or a node drain and resumed after the reboots. Live-tested on hrossen |
+| ✅ #890 | Suspended modules are patched | L | M | **Done 2026-10-27** (`eec438af`): a closing pass resumes, updates, tests and suspends each suspended module one at a time when it fits; `suspend --no-update` opts out; health warns after 14 days unpatched. Live-tested on hrossen (deconz-test) |
+
+### Wave 4 — additive capabilities
+
+#### G4.5 Governance, CI & sign-offs — Ease M · Risk L
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| ✅ #888 | site-manager: reconcile clones and branch switches skip the signature checks | L | L | **Done 2026-10-26** (`2ad00c5e`): a reconcile clone is introduced, a switch goes through `repository sync`; requireSigned warns without `channels.json` |
+
+#### G4.6 Community module extension points — Ease H · Risk M
+
+What a Community module needs from the platform so it does not carry its own copy (from @AndreasJe's hosting module, 2026-10-28): one place for its secrets (#902), containers watched and logged like VMs (#901, #903), its own validated fields (#899) and its own alert rules (#904). The last two get an ADR each first.
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| ✅ #902 | Convention: where modules escrow their secrets on the mothership | L | M | **Done 2026-10-29** (`f2b657b4`): `/home/tappaas/secrets/<module>/<instance>.env` (and `<instance>/` for files), created by `module_secrets_file`/`module_secrets_dir`; in the mothership's file backup with `~/.loki-push`; kept by `delete --archive`, removed by `--remove`; documented in the module template. Existing flat files stay where they are. Mothership side live at the next tappaas-cicd update |
+| ✅ #901 | health-manager: health gates that reach containers | M | M | **Done 2026-10-29** (`61eef6df`, `4aabf51f`): disk and pending-reboot gates probe an LXC module through `pct exec`; LXC `diskSize` grow-only (`update-disk.sh`, `pct resize`), `auto-grow.sh` grows a container's rootfs; `health-manager reboot` restarts a container. Live on hrossen: 8G→10G, shrink refused, 86% full grew 10G→15G |
+| ✅ #903 | logging:logs: journal client for Debian and LXC guests | M | M | **Done 2026-10-29** (`76e119fe`): one Alloy pipeline for NixOS and a plain `config.alloy`; Alloy 1.16.3-1 from Grafana's apt repo, key pinned (expires 2027-08-22), held; applied by `logging:logs` install/update, removed on delete. Live on hrossen: a container's journal in Loki with host/zone/unit labels, secrets scrubbed, removal clean. HostSilent on a stopped client not observed (Loki was stopped by #905's test) |
+| ✅ #904 | logging: module-supplied alert rules | M | L | **Done 2026-10-29** (`f143d7cc`..`3c37b77f`; [ADR-039](docs/ADR/ADR-039%20-%20Module%20Alerting.md)): `<module>-alerts.json` (line patterns, never LogQL; scoped to the module's own hosts), mail templates, support bundle and anonymized lines (`site.json` `alerts.includeLines`), one Grafana group per module through the API; the core rules moved to pvehost/cluster/network/backup/logging (Heartbeat stays); firewall and nodes declare `logging:logs` as syslog senders; `health-manager alerts` and the `open-alerts` gate; documented in *Develop a Module*. Live on hrossen: converted rules replace the old ones, a node line fires RootKeyChanged, HostSilent on a stopped container and none after its delete. P6 (hosting adopts it) with @AndreasJe |
+| ✅ #912 | tappaas-alert-rules: apply crashes on a site.json with a `location` object | L | L | **Done 2026-10-31** (`969ca988`): only a string counts as a module's source. Migration 0019 should have removed that `location`. Unit-tested |
+| ✅ #913 | pbs-controller: list and purge ignore container backups | L | M | **Done 2026-10-31** (`1621dd33`): both see `ct/<vmid>`; a vmid with both a vm and a ct group is refused. Unit-tested; live test with a real container still to do |
+| ✅ #910 | wait_for_guest_settled waits the full timeout on a container without sshd | L | L | **Done 2026-10-31** (`a14a6cbd`): a container is asked through `pct exec` on its node. Unit-tested; live test with a real container still to do |
+
+### Wave 6 — site fabric and user experience
+
+#### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| ✅ #905 | Log alerting: a rule whose query cannot run mails under its own name; a Loki that is down slips past the watchdog | L | L | **Closed 2026-10-29** (`8e1db270`, `a37702fa`): rules keep their state when a query cannot run, the Heartbeat stops instead, and only a firing Heartbeat refreshes the receiver's file; the watchdog asks the logging VM and names Loki or Grafana; heartbeat every 10 min, watchdog every 5, stale after 35. Live on hrossen: Loki stopped 10:36 → one mail "log alerting is down: Loki does not answer" at 11:14, no rule mails; RESOLVED 4 min after Loki returned. From a false LanLegDown: the logging VM's backup stalled Grafana's database |
+| ✅ #919 | A checkout with empty git objects cannot be synced or repaired | M | M | **Closed 2026-11-06** (`4cb47468`, `9d80e6f4`): the sync deletes empty loose objects and copies in every object origin has from a fresh clone; empty tracked files are restored from `HEAD`, not stashed; `repository sync` repairs before its own fetch. An object only this checkout had is reported. Hard-stop drill on hrossen passed |
+| ✅ #920 | A hard stop of the mothership leaves zero-byte git objects and files | L | L | **Closed 2026-11-06** (`4cb47468`): each managed checkout gets `core.fsync=all` and `core.fsyncMethod=fsync`, and the working tree is flushed after a sync. Live on hrossen's checkouts |
+| ✅ #921 | `network:proxy` retries ACME forever for a name no wildcard covers and with no public DNS | M | L | **Closed 2026-11-06** (`a7afff95`, `8f1e6908`): under `dnsMode` wildcard the certificate must cover the name; with none and no public A record the name is not published. Live-tested on hrossen. Not done: a 421 answer for unknown hostnames |
+
+### Future Work
+
+| # | Issue | Note |
+|---|-------|------|
+| ✅ #488 | apply-json-merge pins fields the operator never changed | **Done 2026-10-26** (`21fb806e`): a field `.orig` never had takes the release value, warned with the old one, unless `modify --set` recorded it (`<module>.json.operator`) |
+| ✅ #801 | Default update schedule: daily on every channel | **Done 2026-10-26** (`88968c6e`): new sites update daily at 02:00; migration 0024 moves a site on the old weekly default, warned with the way back |
+
+## Release 2.3.3 — staging 2026-10-26 · production 2026-11-09
 
 Tag `v2.3.3`, moved into staging 2026-10-26 as an urgent fix on top of 2.3.2 (`tappaas-train patch`, ADR-028 D12); production stays on 2.2.2 until the next boundary.
 
