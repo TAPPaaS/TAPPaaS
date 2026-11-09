@@ -414,6 +414,8 @@ in
 
   systemd.services.tappaas-console = {
     description = "TAPPaaS console — the site's web UI";
+    # Online is not "mgmt has its address": the console waits for that itself
+    # (CONSOLE_MGMT_WAIT), then exits 1 and Restart= below tries again.
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     unitConfig.ConditionPathExists = "/home/tappaas/bin/console";

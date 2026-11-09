@@ -65,6 +65,8 @@ export const HELP: HelpSpec = {
   common: [["--config-dir DIR", "Config root (default: $TAPPAAS_CONFIG, $CONFIG_DIR or /home/tappaas/config)."]],
   notes: [
     "Environment: CONSOLE_LISTEN, CONSOLE_ALLOW, CONSOLE_WEB_DIR, CONSOLE_STATE_DIR,\n" +
+      "CONSOLE_MGMT_WAIT (seconds to wait at start for the mothership's mgmt address, then fail;\n" +
+      "default 120),\n" +
       "CONSOLE_FIREWALL (the firewall's address; default the gateway of mgmt's network in zones.json),\n" +
       "CONSOLE_SETUP_ALLOW, CONSOLE_SETUP_TOKEN_FILE, CONSOLE_SECRETS_DIR (where the wizard's\n" +
       "credential files go; default $HOME), CONSOLE_MANIFEST_FILE\n" +
@@ -175,6 +177,33 @@ export function mgmtAddress(net: string | null): string | null {
   return null;
 }
 
+// The address to listen on in mgmt, when the network has not brought it up yet
+// (a network restart can start the console first, 2026-11-08): look again
+// every intervalMs until timeoutMs has passed; null if it never came.
+export async function waitForMgmtAddress(
+  net: string,
+  timeoutMs: number,
+  opts: { intervalMs?: number; find?: (net: string) => string | null; sleep?: (ms: number) => Promise<void>; now?: () => number } = {},
+): Promise<string | null> {
+  const find = opts.find ?? mgmtAddress;
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const now = opts.now ?? Date.now;
+  const interval = opts.intervalMs ?? 1000;
+  const end = now() + timeoutMs;
+  for (;;) {
+    const a = find(net);
+    if (a) return a;
+    if (now() >= end) return null;
+    await sleep(Math.min(interval, Math.max(0, end - now())));
+  }
+}
+
+// How long serve waits for that address: CONSOLE_MGMT_WAIT seconds, default 120.
+export function mgmtWaitMs(env: Record<string, string | undefined> = process.env): number {
+  const s = Number(env.CONSOLE_MGMT_WAIT);
+  return (env.CONSOLE_MGMT_WAIT && Number.isFinite(s) && s >= 0 ? s : 120) * 1000;
+}
+
 function resolve4(host: string): Promise<string | null> {
   return new Promise((r) => lookup(host, { family: 4 }, (err, address) => r(err ? null : address)));
 }
@@ -223,8 +252,16 @@ async function serve(o: ServeOpts): Promise<number> {
   const adminNet = zoneNetwork(o.configDir, "admin");
   let listen = o.listen;
   if (!listen) {
-    const own = mgmtAddress(mgmtNet);
-    if (!own) warn(`no interface in mgmt's network (${mgmtNet ?? "zones.json unreadable"}): listening on loopback only`);
+    let own = mgmtAddress(mgmtNet);
+    if (!mgmtNet) warn("zones.json has no mgmt network: listening on loopback only");
+    else if (!own) {
+      // Never settle on loopback alone while mgmt is configured: wait for the
+      // address, then fail, and the unit's Restart= starts the console again.
+      const ms = mgmtWaitMs();
+      info(`no address in mgmt's network (${mgmtNet}) yet: waiting up to ${ms / 1000}s for it`);
+      own = await waitForMgmtAddress(mgmtNet, ms);
+      if (!own) die(`no address in mgmt's network (${mgmtNet}) after ${ms / 1000}s: not serving on loopback alone`);
+    }
     listen = [...(own ? [{ host: own, port: DEFAULT_PORT }] : []), { host: "127.0.0.1", port: DEFAULT_PORT }];
   }
   const access: AccessConfig = {

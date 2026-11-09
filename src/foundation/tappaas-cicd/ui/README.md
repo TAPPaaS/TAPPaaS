@@ -689,6 +689,11 @@ console serve                                   # as the unit does: mgmt address
 console serve --listen 127.0.0.1:9197 --web web/dist --state-dir ~/tmp/console   # a dev run
 ```
 
+Without `--listen`, the console listens on its address in mgmt's network (zones.json) and on
+loopback. When that address is not up yet at start, it waits for it (`CONSOLE_MGMT_WAIT`
+seconds, default 120) and then exits with an error, and the unit starts it again: it never
+serves on loopback alone while mgmt has a network.
+
 Development without installing: build with `nix-shell -p typescript nodejs_22 --run "tsc -p
 tsconfig.json"` and `cd web && npm ci && npm run build`, run `node dist/ui/src/main.js serve
 --listen 127.0.0.1:<port> --web web/dist --state-dir <dir>`, and `ssh -L <port>:127.0.0.1:<port>`
