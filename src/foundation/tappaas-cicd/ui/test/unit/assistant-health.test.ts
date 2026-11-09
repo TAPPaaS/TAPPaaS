@@ -26,7 +26,7 @@ function objectsIn(v: unknown): unknown[] {
   const out: unknown[] = [];
   const walk = (x: unknown, key: string): void => {
     if (Array.isArray(x)) {
-      if (["explainedBy", "objects"].includes(key)) out.push(...x);
+      if (["causedBy", "objects"].includes(key)) out.push(...x);
       else x.forEach((y) => walk(y, key));
     } else if (x && typeof x === "object") for (const [k, y] of Object.entries(x as Record<string, unknown>)) walk(y, k);
   };
@@ -38,7 +38,7 @@ function pure(): void {
   // The roots, worst first.
   const roots = healthRootsView(g);
   const rc = (roots.view as { rootCauses: string[] }).rootCauses;
-  check(rc[0]?.startsWith("tappaas2 (machine, critical") && / explains [1-9]/.test(rc[0]), `the root causes, the worst first (${rc.join(" | ")})`);
+  check(rc[0]?.startsWith("tappaas2 (machine, critical") && / brings down [1-9]/.test(rc[0]), `the root causes, the worst first (${rc.join(" | ")})`);
   check(roots.read.some((r) => r.endsWith("tappaas2")) && roots.events === 0, "the roots list says what it read");
 
   // A name means its object; a miss says how to go on.
@@ -59,16 +59,17 @@ function pure(): void {
     { id: 3, kind: "observation", source: "health-manager", job: null, verb: null, actor: null, time: "2026-10-30T08:55:00Z" },
   ];
   const r = healthObjectView(g, node("tappaas2"), 1, { history: hist, changes: jobs }, NOW);
-  const v = r.view as { object: { is: string; conditions: string[] }; explains?: { count: number; objects: string[] }; neighbours: unknown[]; lastDay: { events: string[] }; read: string };
+  const v = r.view as { object: { is: string; conditions: string[] }; bringsDown: { count: number; objects: string[] }; nearby: unknown[]; howToRead: string; lastDay: { events: string[] }; read: string };
   check(/critical/.test(v.object.is) && /^operational critical: node-down — tappaas2 does not answer \(since 2026-10-30 02:14\)$/.test(v.object.conditions[0] ?? ""), `the root's own conditions (${v.object.conditions[0]})`);
-  check((v.explains?.count ?? 0) > 0 && objectsIn(r.view).some((o) => typeof o === "string" && o.startsWith("nextcloud (")), "the symptoms it explains: counted, and each listed once (nextcloud as a neighbour)");
-  check(v.neighbours.length > 0, "the objects one relation away, by relation");
+  check(v.bringsDown.count > 0 && v.bringsDown.objects.some((o) => o.startsWith("nextcloud (")), "what it brings down, listed as such (nextcloud), not only as nearby");
+  check(/only these are its consequences/.test(v.howToRead) && /Read: …/.test(v.howToRead), "how to read it: nearby is not caused, end with what was read");
+  check(v.nearby.length > 0 && !JSON.stringify(v.nearby).includes("nextcloud ("), "the rest one relation away, by relation; a symptom not repeated there");
   check(r.events === 2 && v.lastDay.events.every((e) => e.startsWith("2026-10-30")) && v.lastDay.events.some((e) => / by module-manager modify \(lars\)$/.test(e)), "the last 24 hours only: a change and a job; the older ones and a routine report left out");
   check(/health changes and jobs, last 24 h/.test(v.read) && r.read.length === r.objects + 1, `the read list: every object and the history (${v.read})`);
 
   // A symptom points at its root.
-  const s = healthObjectView(g, node("nextcloud"), 1, null, NOW).view as { explainedBy: string[]; lastDay: string };
-  check(s.explainedBy.some((o) => o.startsWith("tappaas2 (")), "a symptom names the root that explains it");
+  const s = healthObjectView(g, node("nextcloud"), 1, null, NOW).view as { causedBy: string[]; bringsDown: unknown; lastDay: string };
+  check(s.causedBy.some((o) => o.startsWith("tappaas2 (")) && s.bringsDown === "nothing", "a symptom names the root that causes it, and brings nothing down");
   check(s.lastDay === "its history was not read", "no record: said, not invented");
   const quiet = healthObjectView(g, node("nextcloud"), 1, { history: [], changes: [jobs[2]] }, NOW).view as { lastDay: string };
   check(/^no change of a condition's status and no job in the last 24 h$/.test(quiet.lastDay), "a manager's routine report is no event; a quiet day is said");
@@ -105,9 +106,9 @@ function bounds(): void {
   } as unknown as HealthGraph;
   const history: ConditionChange[] = Array.from({ length: 300 }, (_, i) => ({ at: new Date(NOW - i * 60_000).toISOString(), type: "operational", from: "ok", to: "critical", reason: null, message: null, source: "h" }));
   const r = healthObjectView(doc, nodes[0], 1, { history, changes: [] }, NOW);
-  const v = r.view as { neighbours: { notShown?: number }[]; explains: { notShown?: number }; lastDay: { events: string[]; notShown?: number } };
+  const v = r.view as { nearby: { notShown?: number }[]; bringsDown: { notShown?: number }; lastDay: { events: string[]; notShown?: number } };
   check(r.objects === HEALTH_OBJECTS, `at most ${HEALTH_OBJECTS} objects (${r.objects})`);
-  check((v.neighbours[0]?.notShown ?? 0) === 121 - HEALTH_OBJECTS, `what did not fit is counted (${v.neighbours[0]?.notShown})`);
+  check((v.bringsDown.notShown ?? 0) === 121 - HEALTH_OBJECTS && v.nearby.length === 0, `what did not fit is counted (${v.bringsDown.notShown}), nothing listed twice`);
   check(r.events === HEALTH_EVENTS && v.lastDay.events.length === HEALTH_EVENTS && v.lastDay.notShown === 300 - HEALTH_EVENTS, `at most ${HEALTH_EVENTS} events, the newest, the rest counted`);
   check(JSON.stringify(r.view).length <= HEALTH_RESULT_CHARS, `a full answer fits whole (${JSON.stringify(r.view).length} of ${HEALTH_RESULT_CHARS} characters)`);
   // Long names and messages: the oldest events give way, the objects stay.
@@ -129,7 +130,7 @@ async function tool(): Promise<void> {
   const all = await runTool(ctx, "health_graph", "{}");
   check(all.ok && /tappaas2/.test(all.content) && /root cause/.test(all.summary), `the roots through the tool (${all.summary})`);
   const one = await runTool(ctx, "health_graph", '{"object":"nextcloud"}');
-  check(one.ok && /"explainedBy":\["tappaas2 \(/.test(one.content) && /"read":/.test(one.content), `one object through the tool (${one.summary})`);
+  check(one.ok && /"causedBy":\["tappaas2 \(/.test(one.content) && /"read":/.test(one.content), `one object through the tool (${one.summary})`);
   const deep = await runTool(ctx, "health_graph", '{"object":"nextcloud","depth":2}');
   check(deep.ok && /\(2 hops\)/.test(deep.summary), "a second hop when asked");
   const miss = await runTool(ctx, "health_graph", '{"object":"nosuch"}');

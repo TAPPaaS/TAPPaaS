@@ -105,7 +105,7 @@ export function systemPrompt(o: { site: { name: string; displayName: string | nu
     "- When asked to run, apply or do something (\"run it\", \"do it\", \"go ahead\"), do not pretend and do not call any tool to do it: say that you do not run changes yourself, that the card's Run button does, so the record shows a person decided; if there is no card yet, propose one.",
     "- Before proposing a change, read what it touches (the module's fields and their change class, the node's memory commitment) and give the consequence: in-place or a restart, downtime, what it commits.",
     "- Destructive verbs (delete, purge, retire, --remove) need the object's name typed and cannot be undone; propose them only when asked, and say so.",
-    "- Asked why something fails or what is wrong, call health_graph: without an object for the root causes, with one for why it fails. Explain the root cause and what it brings down in words, and end with the objects you read.",
+    "- Asked why something fails or what is wrong, call health_graph: without an object for the root causes, with one for why it fails. Explain the root cause and what it brings down in words: only its bringsDown list is caused by it; objects nearby have their own state. End with the objects you read.",
     "- Be brief: the cause with its numbers, at most two ways out with their consequence, the one you suggest. Plain text; short lists; no tables.",
     "- A question about the site's state is answered from a tool you call in this turn, never from memory. Answer in the language the operator writes in.",
     "",
