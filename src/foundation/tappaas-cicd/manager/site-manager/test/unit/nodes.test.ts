@@ -185,7 +185,7 @@ function quiet(argv: string[]): { rc: number; out: string[] } {
     let r = quiet(["node", "delete", "tappaas2", "--config-only", "--config-dir", d]);
     check(r.rc === 0 && calls(d).join("; ") === "module-manager delete tappaas2 --remove --force; asset-manager asset release srv-02",
       `the default: the record deleted, the asset released and kept (${calls(d).join("; ")} | ${r.out.join(" ")})`);
-    check(r.out.some((l) => /asset srv-02 released from tappaas2 and kept: it stays placed in rack1 U12/.test(l)), "it says where the kept asset is");
+    check(r.out.some((l) => /asset srv-02 released from tappaas2 and kept: it stays placed in rack1 U12, free for its next role/.test(l)), "it says where the kept asset is");
 
     d = fresh();
     process.env.PATH = `${join(d, "bin")}:${PATH}`;
@@ -202,7 +202,7 @@ function quiet(argv: string[]): { rc: number; out: string[] } {
     r = quiet(["node", "delete", "tappaas2", "--config-only", "--asset", "remove", "--config-dir", d]);
     check(r.rc === 0 && calls(d).slice(1).join("; ") === "asset-manager asset release srv-02; asset-manager cable remove srv-02:1; asset-manager unplace srv-02; asset-manager asset remove srv-02 --with-disks",
       `--asset remove: release, its cable, its placement, its record (${calls(d).join("; ")})`);
-    check(r.out.some((l) => /asset srv-02 removed: its cables, placement and record/.test(l)), "it says the asset is removed");
+    check(r.out.some((l) => /asset srv-02 removed: its cables, placement and record — decommissioned, the CMDB keeps it as disposed/.test(l)), "it says the asset is removed: decommissioned");
 
     d = fresh();
     process.env.PATH = `${join(d, "bin")}:${PATH}`;

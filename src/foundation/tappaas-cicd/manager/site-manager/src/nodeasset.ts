@@ -168,11 +168,11 @@ export function releaseNodeAsset(name: string, apply: boolean, fate: AssetFate =
   }
   const where = a.placed ? `stays placed in ${a.placed}` : "goes back to stock";
   if (!apply) {
-    if (fate === "keep") info(`  then: asset ${a.key} is released from ${name} and kept: it ${where}`);
+    if (fate === "keep") info(`  then: asset ${a.key} is released from ${name} and kept: it ${where}, free for its next role`);
     else {
       const r = assetRemovalSteps(doc, a.key);
       const parts = [r.cables ? `its ${r.cables} recorded cable(s)` : "", r.placed ? `its placement in ${r.placed}` : "", "its record"].filter(Boolean);
-      info(`  then: asset ${a.key} is released from ${name} and removed: ${parts.join(", ")}${disksWords(r.disks)}`);
+      info(`  then: asset ${a.key} is released from ${name} and removed: ${parts.join(", ")}${disksWords(r.disks)} — decommissioned, the CMDB keeps it as disposed with its history`);
     }
     return;
   }
@@ -182,7 +182,7 @@ export function releaseNodeAsset(name: string, apply: boolean, fate: AssetFate =
     return;
   }
   if (fate === "keep") {
-    info(`${GN}✓${CL} asset ${a.key} released from ${name} and kept: it ${where}`);
+    info(`${GN}✓${CL} asset ${a.key} released from ${name} and kept: it ${where}, free for its next role`);
     return;
   }
   info(`${GN}✓${CL} asset ${a.key} released from ${name}`);
@@ -195,7 +195,7 @@ export function releaseNodeAsset(name: string, apply: boolean, fate: AssetFate =
       return;
     }
   }
-  info(`${GN}✓${CL} asset ${a.key} removed: its cables, placement and record${disksWords(r2.disks)}`);
+  info(`${GN}✓${CL} asset ${a.key} removed: its cables, placement and record${disksWords(r2.disks)} — decommissioned, the CMDB keeps it as disposed`);
 }
 
 // The disks' records that go with a removed asset, in words.
