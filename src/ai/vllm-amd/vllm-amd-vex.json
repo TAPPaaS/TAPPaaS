@@ -2065,6 +2065,99 @@
           "ref": "pkg:generic/openssl@4.0.2"
         }
       ]
+    },
+    {
+      "id": "CVE-2026-111064",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "The vulnerable aiohttp is the 3.14.3 copy vendored in Ray's runtime_env agent (ray/_private/runtime_env/agent/thirdparty_files), loaded only by that agent in a Ray cluster; the container runs only vLLM's OpenAI API server (uvicorn) and its EngineCore with the multiprocessing executor, no Ray processes. The aiohttp vLLM itself imports is 3.14.5, which has the fix. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/aiohttp@3.14.3"
+        },
+        {
+          "ref": "pkg:pypi/aiohttp@3.14.5"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-111066",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "The vulnerable aiohttp is the 3.14.3 copy vendored in Ray's runtime_env agent (ray/_private/runtime_env/agent/thirdparty_files), loaded only by that agent in a Ray cluster; the container runs only vLLM's OpenAI API server (uvicorn) and its EngineCore with the multiprocessing executor, no Ray processes. The aiohttp vLLM itself imports is 3.14.5, which has the fix. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/aiohttp@3.14.3"
+        },
+        {
+          "ref": "pkg:pypi/aiohttp@3.14.5"
+        }
+      ]
+    },
+    {
+      "id": "GHSA-2g87-pp6c-29x5",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "The vulnerable aiohttp is the 3.14.3 copy vendored in Ray's runtime_env agent (ray/_private/runtime_env/agent/thirdparty_files), loaded only by that agent in a Ray cluster; the container runs only vLLM's OpenAI API server (uvicorn) and its EngineCore with the multiprocessing executor, no Ray processes. The aiohttp vLLM itself imports is 3.14.5, which has the fix. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/aiohttp@3.14.3"
+        },
+        {
+          "ref": "pkg:pypi/aiohttp@3.14.5"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-109518",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "APT download/redirect flaw; apt never runs in the running container, which runs only the vLLM API server and engine. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/ubuntu/apt@2.8.3"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libapt-pkg6.0t64@2.8.3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-102554",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Guava inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed and nothing deserialises Java objects. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:maven/com.google.guava/guava@32.0.1-jre"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-114613",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "The leak is in msgpack's C extension; the C extension vLLM imports is msgpack 1.2.4, which has the fix, and the other copy (pip's vendored msgpack 1.1.2) is pure Python, which the advisory says does not leak, and is loaded only when pip runs. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/msgpack@1.1.2"
+        },
+        {
+          "ref": "pkg:pypi/msgpack@1.2.4"
+        }
+      ]
     }
   ]
 }

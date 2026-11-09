@@ -2207,6 +2207,165 @@
           "ref": "pkg:deb/debian/perl-base@5.40.1-6%2Bdeb13u1"
         }
       ]
+    },
+    {
+      "id": "CVE-2026-109518",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "APT download/redirect flaw; apt never runs in the running container (githubInstall.sh's apt-get step is only used when building the image). Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/apt@3.0.3"
+        },
+        {
+          "ref": "pkg:deb/debian/libapt-pkg7.0@3.0.3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-111497",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libbrotli1 is only libcurl's dependency; the Python process does not map it and no brotli Python module is installed. curl runs only from githubInstall.sh (self-update) to GitHub and the bridge itself, never with --compressed, so it never asks for or decodes brotli content. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libbrotli1@1.1.0-2%2Bb7"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-113351",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "The Python process maps libexpat via pyexpat, but diyHue's code parses no XML (it only renders its own description.xml; grep of /opt/hue-emulator finds no XML parser use), and the only XML parsing in installed packages is dbus_fast introspection for BlueZ, unreachable without bluetoothd or a system D-Bus. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libexpat1@2.9.0-1~deb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-115506",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "The Python process maps libexpat via pyexpat, but diyHue's code parses no XML (it only renders its own description.xml; grep of /opt/hue-emulator finds no XML parser use), and the only XML parsing in installed packages is dbus_fast introspection for BlueZ, unreachable without bluetoothd or a system D-Bus. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libexpat1@2.9.0-1~deb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-117610",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "The Python process maps libexpat via pyexpat, but diyHue's code parses no XML (it only renders its own description.xml; grep of /opt/hue-emulator finds no XML parser use), and the only XML parsing in installed packages is dbus_fast introspection for BlueZ, unreachable without bluetoothd or a system D-Bus. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libexpat1@2.9.0-1~deb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-118370",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "The Python process maps libexpat via pyexpat, but diyHue's code parses no XML (it only renders its own description.xml; grep of /opt/hue-emulator finds no XML parser use), and the only XML parsing in installed packages is dbus_fast introspection for BlueZ, unreachable without bluetoothd or a system D-Bus. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libexpat1@2.9.0-1~deb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-6554",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libpcap BPF interpreter with a crafted filter program from a local attacker; libpcap is only nmap's library, nmap runs with filters of its own, and there are no local users in the container. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libpcap0.8t64@1.10.5-2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-119373",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "SQLite FTS5/session-extension flaws with crafted databases; diyHue keeps its state in YAML files, opens no SQLite database, and the Python process does not map libsqlite3. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-119374",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "SQLite FTS5/session-extension flaws with crafted databases; diyHue keeps its state in YAML files, opens no SQLite database, and the Python process does not map libsqlite3. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-119379",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "SQLite FTS5/session-extension flaws with crafted databases; diyHue keeps its state in YAML files, opens no SQLite database, and the Python process does not map libsqlite3. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-76844",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Flaws in zlib's gzwrite file API; Python's zlib module (used by urllib3/requests for gzip responses) only inflates in memory, and nothing in diyHue writes gz files through zlib. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/zlib1g@1.3.dfsg%2Breally1.3.1-1%2Bb1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-85091",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Flaws in zlib's gzwrite file API; Python's zlib module (used by urllib3/requests for gzip responses) only inflates in memory, and nothing in diyHue writes gz files through zlib. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/zlib1g@1.3.dfsg%2Breally1.3.1-1%2Bb1"
+        }
+      ]
     }
   ]
 }

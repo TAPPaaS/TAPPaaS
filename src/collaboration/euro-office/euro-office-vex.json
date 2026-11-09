@@ -9,5 +9,35 @@
       "description": "TAPPaaS module euro-office: triage of its own critical/high CVEs (#788). Euro-Office DocumentServer v9.3.3 runs as one podman container (Ubuntu 24.04 based) on the euro-office VM, publishing only container nginx on :80; the firewall's Caddy terminates TLS and proxies the editor endpoint to Nextcloud users. Inside, supervisord runs nginx, the pkg-built Node services (docservice, converter, adminpanel), PostgreSQL 16, Redis on 127.0.0.1 and RabbitMQ, all internal to the container. Verified live on hrossen: only :80 and :22 listen on the VM; the Node binaries do not link the system libssl, nginx/postgres/redis link libssl3t64 3.0.13-0ubuntu3.12 but only for TCP TLS, and nginx serves plain HTTP."
     }
   },
-  "vulnerabilities": []
+  "vulnerabilities": [
+    {
+      "id": "CVE-2026-109518",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "APT download/redirect flaw; apt never runs in the running container, supervisord starts only nginx, the Node services, PostgreSQL, Redis and RabbitMQ. Verified live on hrossen with documentserver:v9.3.7.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/ubuntu/apt@2.8.3"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libapt-pkg6.0t64@2.8.3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-111497",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Only the nginx master maps libbrotlidec, through the image_filter module's libgd and libfreetype (freetype uses brotli only for WOFF2 fonts); image_filter is loaded but used in no server block, so nginx never draws text with a font, and nginx does not brotli-decode request bodies. The document converter (x2t) links no system brotli or freetype, and curl is used without --compressed. Verified live on hrossen with documentserver:v9.3.7.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/ubuntu/libbrotli1@1.1.0-2build2"
+        }
+      ]
+    }
+  ]
 }
