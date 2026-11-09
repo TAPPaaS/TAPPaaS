@@ -421,13 +421,43 @@ report_failed_units() {
     done <<< "${units}"
 }
 
+# Every login below uses the mothership's own key. A session that forwards the
+# operator's agent (the release-signing alias) hands each ssh an SSH_AUTH_SOCK,
+# and ssh asks that agent for its keys before it authenticates, IdentitiesOnly
+# or not. A vault-backed agent that is locked answers only once someone unlocks
+# it, so an unattended update waited on one login for as long as the operator's
+# session stayed open. Nothing in this script needs the agent.
+drop_operator_agent() {
+    unset SSH_AUTH_SOCK
+}
+
+# `cloud-init status --wait` blocks for as long as cloud-init says it is running,
+# and a guest whose cloud-init never finishes would hold the update with it. The
+# ceiling is far above a first boot's package upgrade (about two minutes).
+CLOUD_INIT_MAX_SECONDS="${CLOUD_INIT_MAX_SECONDS:-900}"
+SSH_WAIT_OPTS=(-n -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=4)
+
+# cloud_init_wait <ip> — bounded `cloud-init status --wait`; 124 when the ceiling
+# fired, which the callers turn into a warning and carry on, as they always have
+# for a cloud-init that reports an error.
+cloud_init_wait() {
+    local ip="$1" rc=0
+    # Its "status: done" is not ours to print.
+    timeout -k 10 "${CLOUD_INIT_MAX_SECONDS}" \
+        ssh "${SSH_WAIT_OPTS[@]}" "tappaas@${ip}" "cloud-init status --wait" >/dev/null 2>&1 || rc=$?
+    if (( rc == 124 || rc == 137 )); then
+        warn "cloud-init on ${ip} still not finished after ${CLOUD_INIT_MAX_SECONDS} s — carrying on without it"
+        return 124
+    fi
+    return 0
+}
+
 # Wait for cloud-init to finish (Debian/Ubuntu)
 wait_for_cloud_init() {
     local ip="$1"
 
     info "Waiting for cloud-init to finish..."
-    # Its "status: done" is not ours to print.
-    ssh "tappaas@${ip}" "cloud-init status --wait" >/dev/null 2>&1 || true
+    cloud_init_wait "${ip}" || true
 }
 
 # Wait until the VM is actually ready for privileged provisioning: cloud-init
@@ -443,7 +473,7 @@ wait_for_provisioning() {
     local waited=0
 
     info "Waiting for cloud-init to finish on ${ip}..."
-    ssh -o BatchMode=yes "tappaas@${ip}" "cloud-init status --wait" >/dev/null 2>&1 || true
+    cloud_init_wait "${ip}" || true
 
     info "Waiting for passwordless sudo on ${ip}..."
     while ! ssh -o BatchMode=yes "tappaas@${ip}" "sudo -n true" 2>/dev/null; do
@@ -1286,6 +1316,8 @@ main() {
     local vmname="$1"
     local vmid="$2"
     local node="$3"
+
+    drop_operator_agent
 
     # Callers pass the CONFIGURED node. A guest whose node change is deferred
     # (or failed) still runs on the old one, and asking the new one for its IP
