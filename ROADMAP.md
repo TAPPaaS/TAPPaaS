@@ -191,7 +191,7 @@ met gates are recorded in the releases that carried their waves.
 ## Future Work — not yet in a wave
 
 Known work that no wave holds yet. A ✅ row is done and ships with the next release. (Small
-items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in that group.)
+items that belong to a group — FW #40, #157, #158, #162 — are rows in that group.)
 
 | # | Issue | Note |
 |---|-------|------|
@@ -221,6 +221,8 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #914 | switch-manager: observe mode for an existing switch controller (UniFi) | **Parked 2026-11-04, to rethink.** Adopting a controller that already runs a network must change nothing on it; today interrogate types AP uplinks and parks free ports, and any later push trunks them to TAPPaaS's VLANs and removes undeclared SSIDs. Idea on the issue: a controller `observe` mode and hand-over per port |
 | #915 | First node's LAN uplink chosen on Day 1, not guessed; Hetzner design | The unattended install guesses the LAN port (first other port, no link check). Day 1's first-node step gets the LAN uplink: a physical port (link dots, Rescan) or "this machine alone". Hetzner: install over SSH and a routed or virtual-MAC WAN for one machine; several machines need an overlay over the vSwitch (MTU 1400) and an ADR |
 | #916 | Install from a Windows PC: the first node's install media and network boot | `bootstrap-tappaas.sh` runs on macOS and Linux only. Start with WSL2 + Docker Desktop for the build, the install and its log, the stick written by a Windows tool, no network boot on Windows; try WSL2 mirrored networking for PXE; a PowerShell port only if needed |
+| #926 | CrowdSec community blocklist as an opt-in per site | **Opened 2026-11-09.** Off by default: enrolling sends each local ban (attacker IP, scenario, time) to CrowdSec SAS, and shared reputation can block CGNAT and VPN users. #925 covers known-bad networks without sharing |
+| FW #83 | Reuse already-downloaded images | Out of G3.5 2026-11-09 (operator). The img download lives in a temp dir deleted on exit; reuse needs a cache location and a staleness policy for moving tags, a decision first |
 
 ---
 
@@ -409,7 +411,6 @@ A first install that is easier to get through: resumable (#377), showing its pro
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #377 | Installer cannot restart; mgmt-net routing | M | L | **ADR-037 D3 (P3b, 2.5):** the bootstrap decides what is left from its records, so a second run continues |
-| FW #83 | Reuse already-downloaded images | H | L | **Re-scored Ease L → H (2026-09-26):** the img download lives in a temp dir deleted on exit. Reuse needs a cache location and a staleness policy (moving tags) — a decision first |
 
 ---
 
