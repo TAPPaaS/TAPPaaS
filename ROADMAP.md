@@ -9,9 +9,10 @@ or migrate an existing installation land first, while there are still few instal
 community modules depending on today's names, schemas and layouts. It is built in **waves** — make
 upgrades safe (0), make the breaking changes (1), harden the network (2), stability (3), new
 capabilities (4) — each made of **groups** of related issues. Two waves stand beside that order:
-**live verification (5)** — tests and sign-offs on real systems, kept apart from development and
-fixes — **site fabric and user experience (6)**, the switching fabric designed together with
-the physical view of the UI — and **enhance the stacks (7)**: new modules and significant upgrades.
+**enterprise scale and tests (5)** — placement and resources beyond one node, and tests and
+sign-offs on real systems, kept apart from development and fixes — **site fabric and user
+experience (6)**, the switching fabric designed together with the physical view of the UI — and
+**enhance the stacks (7)**: new modules and significant upgrades.
 
 This file replaces the security & stability plan (2026-10-06) — kept, closed, as
 [docs/plans/security-and-stability-plan.md](docs/plans/security-and-stability-plan.md) — which was compiled
@@ -111,9 +112,10 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 6 | G6.3 Data model | M | M | 9 | – | 2 |
 | 5 | G5.1 Satellite & off-site | H | M | 1 | – | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
+| 5 | G5.3 Enterprise scale | H | M | – | – | 2 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 3 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 7 | – | 2 |
-| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 32 | – | 5 |
+| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 32 | 2 | 2 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
 | 3 | G3.4 AI stack maturity | M | M | 4 | – | 8 |
@@ -287,9 +289,9 @@ The meta model of the configuration is written down in [`src/DATAMODEL.md`](src/
 | #866 | Data model: parked simplifications (backup cascade, module placement, `module:service`) | – | – | **Parked** (operator, 2026-10-23): findings 5–7 of `src/DATAMODEL.md`, recorded so they are not lost |
 | #906 | Asset lifecycle and CMDB: the actual state of the site (assets, nodes, guests, modules, zones, environments, people) in a CMDB along the IT4IT backbone; an asset from procured to disposed, whether or not it is a node, switch or device at the time; ports and Wi-Fi on the asset; an asset-manager beside or replacing position-manager | H | M | **Opened 2026-10-29.** ADR-040 **Accepted v1.0 2026-10-29**; mostly built and live-tested on hrossen (cmdb-controller on PostgreSQL, asset-manager, the sweep, the console's Assets and Physical views); alerts carry no CI id yet: assets as resources beside the CIs, an asset reused and a CI never; a module is a node of its kind with software in it; a class hierarchy with inheritance, cmdb-controller a 24/7 API with the CLI in front, the metamodel as data in PostgreSQL, OpenTelemetry identity on every CI; build cmdb-controller, borrow IT4IT, UCMDB, CIM, NetBox models; event management a later ADR |
 
-## Wave 5 — live verification
+## Wave 5 — enterprise scale and tests
 
-Tests, proofs and sign-offs on real systems, kept apart from development and bug fixes: what is built and waits for a real VPS, a real buddy or a real failure, and the test conventions themselves.
+What a site needs beyond one node, and the tests, proofs and sign-offs on real systems, kept apart from development and bug fixes: what is built and waits for a real VPS, a real buddy, a second disk or a real failure, and the test conventions themselves.
 
 ### G5.1 Satellite & off-site — Ease H · Risk M · released: 1 · open: 6
 
@@ -315,6 +317,15 @@ How tests run (a `test` verb on the managers, #499) and the module tests that st
 | #120 | litellm test.sh conventions | L | L | 2 of 6 items done |
 | #119 | openwebui test coverage | L | L | |
 | #409 | vllm-amd: `test-model.sh` drifted from the compose `update.sh` generates | L | L | |
+
+### G5.3 Enterprise scale — Ease H · Risk M · open: 2
+
+Placement and resources for a site of several nodes: guests placed and rebalanced by PVE 9.2's load balancer over a list of candidate nodes, falling back to a module's small values when no node can fit the full ones (#838, with what was left of #884), and the boot mirror proven to survive a lost disk (#922, from #403).
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| #922 | Boot mirror: health check for an unregistered ESP, and the mirror drills | M | L | **Opened 2026-11-09** from #403: health reports an `rpool` member with no registered ESP; boot with either disk detached; a disk replaced by the runbook |
+| #838 | Dynamic placement of workloads (PVE 9.2 CRS load balancer) | H | M | **Opened 2026-10-15.** Opt-in next to the fixed default: `HANode` as a list, an empty list = dynamic; CPU level (#827), capable nodes (#836). From #884: fall back to small values under constraint. ADR first |
 
 ## Wave 4 — additive capabilities
 
@@ -343,15 +354,14 @@ The project's own machinery (CI runners, #415, moved to G7.1 with the Woodpecker
 
 Low upgrade risk. Build continuously, in any order within a group.
 
-### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 32 · open: 5
+### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 32 · done for 2.5: 2 · open: 2
 
-Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), a readiness wait that skips UDP ports (#826), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753). Built from the 2.0→2.2 field report (#832): a capacity pre-flight before the sweep (#833) and visible size changes on legacy sites (#834). Next by design: dynamic placement on PVE 9.2's load balancer (#838).
+Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), a readiness wait that skips UDP ports (#826), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753). Built from the 2.0→2.2 field report (#832): a capacity pre-flight before the sweep (#833) and visible size changes on legacy sites (#834). Dynamic placement went to G5.3 (#838).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #403 | Install on the root disk; smarter placement | M | M | **P1 on `main` 2026-10-26** (`d4a2bac8`, `5f502153`): ZFS boot by default; `storage` falls back down to `local-zfs`, warned; a mirror boots either disk. **Live 2026-10-27** on the spare machine joined to hrossen as tappaas4 (PXE, mirrored rpool): a module asking `tanka1` built on `local-zfs`; `node add` now registers `local-zfs` and runs the cluster baseline and reboot for a new node (`07815562`, `9b0ac026`); `node delete` archives it, drops its DNS and parks its switch port (`3b12736d`, `917d2550`). ADR-037 D4 built (`14a51af5`, `444e9949`, `7e730c56`). Left: the ESP health gate |
-| #838 | Dynamic placement of workloads (PVE 9.2 CRS load balancer) | H | M | **Opened 2026-10-15.** Opt-in next to the fixed default: `HANode` as a list, an empty list = dynamic; the CPU level the candidate set shares (#827), capable nodes only (#836). ADR first |
-| #884 | More dynamic placement and resource allocation: disk and RAM per site size (`minimalTest`, small, large), falling back to the minimum under constraint | H | M | **Opened 2026-10-26.** TAPPaaS heuristics next to Proxmox's own allocation; ADR first. The per-size part is #917 (ADR-044); falling back to the minimum under constraint is still open. Related: #838, #880, #663, #866 |
+| ✅ #403 | Install on the root disk; smarter placement | M | M | **Closed 2026-11-09**: ZFS boot by default; `storage` falls back down to `local-zfs`, warned and recorded; `node add`/`node delete`. Live on tappaas4 (mirrored rpool). ESP health check and mirror drills: #922 |
+| ✅ #884 | More dynamic placement and resource allocation: disk and RAM per site size (`minimalTest`, small, large), falling back to the minimum under constraint | H | M | **Closed 2026-11-09**: per-size disk and RAM is #917 (ADR-044); a memory-tight node holds back growth (#891); the fallback under constraint went to #838 (G5.3) |
 | #907 | ADR needed: resource allocation — pools consumed by allocations (storage, RAM, CPU, addresses, VLANs) | H | M | **Opened 2026-10-29** from ADR-040 O10: IT4IT's Resource is consumed; ADR-040 leaves `pool` and `allocated-to` in the CMDB's model for it. Related: #838, #884, #833 |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
 
