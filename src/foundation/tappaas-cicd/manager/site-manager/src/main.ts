@@ -100,7 +100,7 @@ export const HELP: HelpSpec = {
         ["--brandingLogo <path>", "branding.logo — the sign-in page's logo (svg, png, jpg, webp), relative to the config dir; applied by the identity update"],
         ["--brandingLogoDark <path>", "branding.logoDark — its dark-theme variant, same file type"],
         ["--dnssec true|false", "the firewall's resolver validates DNSSEC (default true); applied by the next network update"],
-        ["--dnsBlocklistsLists <a,b>", "dnsBlocklists.lists — OPNsense blocklist codes (atf, hgz011, oisd1, ag, …); '' blocks nothing. Applied by the next network update"],
+        ["--dnsBlocklistsLists <a,b>", "dnsBlocklists.lists — OPNsense blocklist codes (hgz011, oisd1, ag, …); '' blocks nothing. Applied by the next network update"],
         ["--dnsBlocklistsZones <a,b>", "dnsBlocklists.zones — the zones whose clients are filtered; '' filters every client"],
         ["--dnsBlocklistsAllow <a,b>", "dnsBlocklists.allow — domains never blocked"],
         ["--diskAutoGrowEnabled true|false", "diskAutoGrow.enabled — grow a VM's disk when its / fills up, at every module update"],

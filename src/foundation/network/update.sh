@@ -241,15 +241,23 @@ esac
 # unbound-manager brings Unbound's DNSBL to site.json `dnsBlocklists` (absent:
 # none): the lists, for the zones named (all clients when none), with the
 # names never blocked. TAPPaaS owns its own entries only. A change fetches the
-# lists, reloads Unbound and is checked.
+# lists, reloads Unbound and is checked. A daily cron job refreshes the lists
+# while any blocklist entry exists. A list code the firewall no longer offers
+# is skipped, and said as a warning. After a change the resolver is checked
+# again five minutes later: a list too big for the firewall is removed again.
 _bl_out="$(/home/tappaas/bin/unbound-manager --no-ssl-verify dnsbl --config-dir "${CONFIG_DIR}" 2>&1)" && _bl_rc=0 || _bl_rc=$?
-case "${_bl_rc}:${_bl_out}" in
-    0:*"dnsbl: set "*|0:*"dnsbl: remove "*)
-                  while IFS= read -r _l; do info "  ${_l}"; done <<< "${_bl_out}" ;;
-    0:*)          while IFS= read -r _l; do debug "  ${_l}"; done <<< "${_bl_out}" ;;
-    *)            printf '%s\n' "${_bl_out}" >&2
-                  warn "unbound-manager could not bring the DNS blocklists to site.json (continuing)" ;;
-esac
+if [[ ${_bl_rc} -eq 0 ]]; then
+    while IFS= read -r _l; do
+        case "${_l}" in
+            "dnsbl: skipped "*|"dnsbl: zone "*) warn "  ${_l}" ;;
+            "dnsbl: set "*|"dnsbl: remove "*|"dnsbl: refresh "*|"dnsbl: checking "*|"dnsbl: the resolver "*) info "  ${_l}" ;;
+            *) debug "  ${_l}" ;;
+        esac
+    done <<< "${_bl_out}"
+else
+    printf '%s\n' "${_bl_out}" >&2
+    warn "unbound-manager could not bring the DNS blocklists to site.json (continuing)"
+fi
 
 # ── Output levels ───────────────────────────────────────────────────
 #

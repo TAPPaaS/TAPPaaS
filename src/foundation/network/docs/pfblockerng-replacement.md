@@ -1,78 +1,92 @@
-# Replacing pfBlockerNG on a TAPPaaS firewall
+# Blocking on TAPPaaS, compared with pfBlockerNG and Pi-hole
 
-pfBlockerNG is a pfSense package; OPNsense has no single equivalent. On TAPPaaS its four jobs
-are covered as follows — one by TAPPaaS itself, three by OPNsense features you set up in its GUI.
+What a TAPPaaS firewall blocks, how it compares with what people know from pfBlockerNG
+(pfSense) and Pi-hole, and what OPNsense offers beside it. TAPPaaS curates no list of its
+own: every list stays its publisher's, and TAPPaaS only decides which ones apply where.
 
-| pfBlockerNG feature | On TAPPaaS | Managed by |
-|---|---|---|
-| **DNSBL** — refuse names on ad, tracker and threat lists | Unbound's blocklists, from `site.json` `dnsBlocklists` | TAPPaaS (network update) |
-| **IP blocklists** (IPv4/IPv6 feeds) | a *URL Table* alias plus a block rule | OPNsense GUI |
-| **GeoIP blocking** | a *GeoIP* alias plus a block rule | OPNsense GUI |
-| **Alerts and reports** | Unbound's query reporting; the firewall log | OPNsense GUI |
+## At a glance
 
-## DNSBL → `dnsBlocklists`
+| Job | pfBlockerNG | Pi-hole | TAPPaaS |
+|---|---|---|---|
+| Refuse names on ad, tracker and threat lists | DNSBL | its core job | Unbound's blocklists, from `site.json` `dnsBlocklists` |
+| Different lists for different networks | per-interface DNSBL | groups per client | `dnsBlocklists.zones`: the zones whose clients are filtered |
+| Names never blocked | DNSBL whitelist | allowlist | `dnsBlocklists.allow` |
+| Lists kept current | its cron | gravity update | a daily cron job the network update keeps |
+| Block known-bad networks | IPv4/IPv6 feeds | — | an OPNsense URL-table alias and block rules, set by hand |
+| Ban clients that abuse a published service | — | — | CrowdSec on the firewall, from Caddy's logs |
+| Block whole countries | GeoIP | — | an OPNsense GeoIP alias, set by hand |
+| A page that says a name is blocked | DNSBL VIP | blocking page | none: a blocked name answers NXDOMAIN |
+| Reports | its dashboard | its dashboard | *Reporting → Unbound DNS*; the firewall log |
 
-Declare it in `config/site.json` and update the `network` module:
+## DNS blocklists — `dnsBlocklists`
 
 ```jsonc
 "dnsBlocklists": {
-  "lists": ["atf", "hgz011", "oisd1"],
-  "zones": ["home", "guest"],
-  "allow": ["example.org"]
+  "lists": ["hgz011", "oisd1"],    // OPNsense's catalogue codes
+  "zones": ["home", "guest"],      // whose clients are filtered; none listed: every client
+  "allow": ["example.org"]         // never blocked
 }
 ```
 
-```bash
-module-manager update network
-```
+`site-manager site modify --dnsBlocklistsLists hgz011,oisd1 --dnsBlocklistsZones home,guest`
+writes it, and `module-manager update network` applies it.
 
-| pfBlockerNG | `dnsBlocklists` |
-|---|---|
-| DNSBL feeds and groups | `lists` — OPNsense's catalogue codes (the network update names the valid ones if one is wrong). Threat feeds: `atf` (abuse.ch ThreatFox), `hgz011`–`hgz013` (hagezi threat intelligence). Ads and tracking: `oisd0`, `oisd1`, `ag`, `el`, `ep`, `sb`, and hagezi's `hgz001`–`hgz008` levels |
-| DNSBL whitelist | `allow` |
-| Per-interface DNSBL | `zones` — filtering applies to those zones' clients, IPv4 and IPv6; none listed: every client |
-| DNSBL VIP / web server for blocked pages | none: a blocked name answers NXDOMAIN |
-| Custom feed URLs | not in `dnsBlocklists`; add an entry by hand in *Services → Unbound DNS → Blocklist* (TAPPaaS leaves hand-made entries alone) |
+- **Lists** come from OPNsense's catalogue. Threat feeds: `hgz011`–`hgz013` (hagezi). Ads and
+  tracking: `oisd0`, `oisd1`, `ag`, `el`, `ep`, `sb`, and hagezi's `hgz001`–`hgz008` levels.
+  OPNsense changes the catalogue between releases; a code it no longer offers is skipped with
+  a warning, and the network update names the codes it does offer.
+- **Zones.** Leave the service zones out: their modules download updates, images and models,
+  and a false positive there fails an update rather than a web page.
+- **Custom list URLs** are not in `dnsBlocklists`. Add an entry by hand in *Services → Unbound
+  DNS → Blocklist*; TAPPaaS leaves hand-made entries alone, and its daily refresh covers them.
+- **A block page.** OPNsense can answer a blocked name with an address of your choice instead
+  of NXDOMAIN (*Destination Address*), for a web server that explains the block. TAPPaaS
+  answers NXDOMAIN: a client sees a failed lookup.
 
-Leave the service zones out of `zones`: their modules download updates, images and models, and
-a false positive there makes an update fail.
-
-To see why a name is blocked, on the firewall:
+Why is a name blocked? On the firewall:
 
 ```sh
 python3 /usr/local/opnsense/scripts/unbound-dnsbl/dnsbl_match.py --domain <name> --src <client-ip>
 ```
 
-## IP blocklists → URL Table alias
+## IP blocklists — by hand
 
-1. *Firewall → Aliases → Add*: type **URL Table (IPs)**, the feed's URL, a refresh interval
-   (e.g. daily). Spamhaus DROP (`https://www.spamhaus.org/drop/drop.txt`) is the usual start.
-2. *Firewall → Rules → WAN*: a **block** rule, source the alias, placed first.
-3. For outbound filtering, a block rule with the alias as destination on the zones you choose.
+1. *Firewall → Aliases → Add*: type **URL Table (IPs)**, the feed's URL, a daily refresh.
+   Spamhaus DROP (`https://www.spamhaus.org/drop/drop.txt`) is the usual start.
+2. A **block** rule on WAN with the alias as source, and one on each zone with the alias as
+   destination, without a TAPPaaS description, so the network update leaves them alone.
 
-TAPPaaS does not reconcile these: a rule without a TAPPaaS description is left alone by the
-network update, so it survives updates.
+## CrowdSec — bans for abusive clients
 
-## GeoIP blocking → GeoIP alias
+CrowdSec runs on the firewall and reads Caddy's access logs. A client that keeps failing to
+sign in, probes for known exploits or announces itself as a scanner is banned at the firewall
+for four hours, for every published name. It acts on what it sees, after the fact; IP
+blocklists act before. It runs local only: nothing about the site's traffic leaves it, and no
+community list comes in. See [network/README.md](../README.md#crowdsec--bans-at-the-firewall).
+
+## GeoIP — by hand
 
 1. Create a free MaxMind account and licence key; set it under *Firewall → Aliases → GeoIP
-   settings* (the URL includes the key).
-2. Add an alias of type **GeoIP**, selecting the countries.
-3. Block rule on WAN with the alias as source.
+   settings*.
+2. Add an alias of type **GeoIP** with the countries.
+3. Add a block rule on WAN with the alias as source, without a TAPPaaS description, so the
+   network update leaves it alone.
 
-Prefer blocking inbound only: blocking destinations by country breaks content delivery networks.
+Block inbound only: blocking destinations by country breaks content delivery networks.
 
-## Alerts and reports
+## What OPNsense offers beside it
 
-- *Reporting → Unbound DNS* shows queries, blocked names and top clients once *Enable
-  statistics* is on under *Services → Unbound DNS → Advanced*.
-- Blocked connections from an IP rule appear in *Firewall → Log Files → Live View*; give the
-  rule logging.
-- Intrusion detection (Suricata, *Services → Intrusion Detection*) and os-maltrail cover the
-  behavioural alerts pfBlockerNG does not; both are optional plugins TAPPaaS does not configure.
+None of these is configured by TAPPaaS. Each is a plugin or a GUI setting an operator can add.
+
+| Feature | What it adds | Cost |
+|---|---|---|
+| Q-Feeds connector (`os-q-feeds-connector`) | threat-intelligence feeds as firewall aliases and as an Unbound filter | Community tier free (registration, delayed data); paid tiers for current data |
+| Intrusion detection (Suricata, *Services → Intrusion Detection*) | rule-based inspection, inline since OPNsense 26.1; ET Open rules | free |
+| os-maltrail | alerts on traffic to known-malicious hosts; reports, does not block | free |
+| Zenarmor (`os-sensei`) | application and category filtering | free tier; categories and policies need a subscription |
 
 ## Known gaps
 
-- No blocked-page web server: clients see a failed lookup, not a notice.
-- TAPPaaS manages DNSBL only. IP and GeoIP blocklists are GUI configuration, kept by OPNsense's
-  own backups rather than by `site.json`.
+- No block page: clients see a failed lookup, not a notice.
+- IP and GeoIP blocking and custom DNS list URLs are GUI configuration, kept by OPNsense's own
+  backups rather than by `site.json`.

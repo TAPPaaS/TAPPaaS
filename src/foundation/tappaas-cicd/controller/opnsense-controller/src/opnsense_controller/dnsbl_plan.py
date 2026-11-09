@@ -1,10 +1,16 @@
 """DNS blocklists from site.json (#157): what Unbound's DNSBL should hold.
 
 `site.json` `dnsBlocklists` (absent: none) names the lists — OPNsense's own
-catalogue codes (`atf` abuse.ch ThreatFox, `hgz011` hagezi threat feeds, `oisd1`,
-...) — the zones whose clients are filtered, and names that are never blocked:
+catalogue codes (`hgz011` hagezi threat intelligence, `oisd1` OISD big, `ag`
+AdGuard, ...) — the zones whose clients are filtered, and names that are never
+blocked:
 
-    "dnsBlocklists": {"lists": ["atf", "hgz011"], "zones": ["home", "guest"], "allow": ["example.org"]}
+    "dnsBlocklists": {"lists": ["hgz011"], "zones": ["home", "guest"], "allow": ["example.org"]}
+
+A code the firewall no longer offers (OPNsense drops lists from its catalogue,
+as it did ThreatFox `atf` in 26.7.8) is skipped with a warning; the rest still
+apply. The lists are refreshed daily by a cron job TAPPaaS owns while any
+blocklist entry exists (`cron_plan`).
 
 TAPPaaS owns the DNSBL entries described `TAPPaaS: site blocklists…`; entries
 an operator adds by hand are left alone. OPNsense requires one entry's networks
@@ -23,6 +29,11 @@ import ipaddress
 from dataclasses import dataclass, field
 
 DESCRIPTION = "TAPPaaS: site blocklists"
+# OPNsense's configd action for "Update Unbound DNSBLs" (the cron's command).
+CRON_COMMAND = "unbound dnsbl"
+CRON_DESCRIPTION = "TAPPaaS: refresh the DNS blocklists"
+# Daily, at a quiet hour: the lists are a few MB from their publishers.
+CRON_SCHEDULE = {"minutes": "17", "hours": "4", "days": "*", "months": "*", "weekdays": "*"}
 
 
 class DnsblError(ValueError):
@@ -72,12 +83,17 @@ def desired(site: dict, zones: dict, known_lists: set[str], v6_for_zone) -> Desi
     lists = [str(x) for x in decl.get("lists") or []]
     if not lists:
         return None
-    unknown = [x for x in lists if x not in known_lists]
-    if unknown:
-        raise DnsblError(f"unknown blocklist(s) {', '.join(unknown)} — this firewall offers: "
-                         f"{', '.join(sorted(known_lists))}")
     nets: list[str] = []
     warnings: list[str] = []
+    unknown = [x for x in lists if x not in known_lists]
+    if unknown:
+        lists = [x for x in lists if x in known_lists]
+        if not lists:
+            # Removing the entry would stop all blocking; keep it as it is.
+            raise DnsblError(f"none of the blocklists {', '.join(unknown)} is offered by this "
+                             f"firewall — it offers: {', '.join(sorted(known_lists))}")
+        warnings.append(f"skipped {', '.join(unknown)}: not offered by this firewall "
+                        "(remove from site.json dnsBlocklists.lists)")
     for z in decl.get("zones") or []:
         zd = zones.get(z)
         if not isinstance(zd, dict) or not zd.get("ip"):
@@ -126,3 +142,37 @@ def needs_change(item: dict, have: dict) -> bool:
         "source_nets": split(item["source_nets"]),
         "nxdomain": "1",
     }
+
+
+def cron_plan(jobs: list[dict], want: bool) -> tuple[bool, list[str]]:
+    """(add ours?, uuids of ours to delete) for the daily refresh job.
+
+    `jobs` are cron searchJobs rows. Wanted while any blocklist entry exists.
+    An operator's own refresh job counts: TAPPaaS then keeps none of its own.
+    One of ours that was disabled or rescheduled is replaced.
+    """
+    ours = [j for j in jobs if (j.get("description") or "") == CRON_DESCRIPTION]
+    theirs = [j for j in jobs if (j.get("description") or "") != CRON_DESCRIPTION
+              and str(j.get("enabled", "1")) == "1" and _is_refresh(j.get("command"))]
+    if not want or theirs:
+        return False, [j.get("uuid", "") for j in ours]
+    good = [j for j in ours if _as_wanted(j)]
+    keep = good[0] if good else None
+    return keep is None, [j.get("uuid", "") for j in ours if j is not keep]
+
+
+def cron_job() -> dict:
+    """The job TAPPaaS writes (cron addJob's `job`)."""
+    return {"enabled": "1", **CRON_SCHEDULE, "command": CRON_COMMAND, "parameters": "",
+            "description": CRON_DESCRIPTION}
+
+
+def _as_wanted(job: dict) -> bool:
+    return (str(job.get("enabled", "")) == "1" and _is_refresh(job.get("command"))
+            and all(str(job.get(k, "")) == v for k, v in CRON_SCHEDULE.items()))
+
+
+def _is_refresh(command) -> bool:
+    """A cron row's command, as the key or as OPNsense's label for it."""
+    c = str(command or "").strip().lower()
+    return c == CRON_COMMAND or c == "update unbound dnsbls"

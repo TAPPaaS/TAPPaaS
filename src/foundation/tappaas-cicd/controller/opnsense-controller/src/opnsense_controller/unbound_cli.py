@@ -462,12 +462,52 @@ def _known_lists(mgr) -> set[str]:
     return {k for k in (item.get("type") or {}) if k}
 
 
+def _cron_api(mgr, command: str, action: str, data=None, params=None) -> dict:
+    p = {"module": "cron", "controller": "settings", "command": command, "action": action}
+    if data is not None:
+        p["data"] = data
+    if params:
+        p["params"] = params
+    return (mgr.client.run_module("raw", params=p).get("result") or {}).get("response") or {}
+
+
+def dnsbl_cron(mgr, want: bool, check_mode: bool) -> bool:
+    """Keep OPNsense's daily "Update Unbound DNSBLs" job while any blocklist
+    entry exists (#923); without it the lists stay as first downloaded."""
+    from .dnsbl_plan import cron_job, cron_plan
+
+    jobs = (_cron_api(mgr, "searchJobs", "get") or {}).get("rows") or []
+    add, drop = cron_plan(jobs, want)
+    if not add and not drop:
+        return True
+    verb = "would " if check_mode else ""
+    if add:
+        print(f"dnsbl: {verb}refresh the lists daily (cron)")
+    elif not want:
+        print(f"dnsbl: {verb}remove the daily refresh (no blocklists)")
+    if check_mode:
+        return True
+    for uuid in drop:
+        res = _cron_api(mgr, "delJob", "post", params=[uuid])
+        if res.get("result") != "deleted":
+            print(f"ERROR: dnsbl: deleting cron job {uuid} returned {res}", file=sys.stderr)
+            return False
+    if add:
+        res = _cron_api(mgr, "addJob", "post", {"job": cron_job()})
+        if res.get("result") != "saved":
+            print(f"ERROR: dnsbl: adding the refresh cron job returned {res}", file=sys.stderr)
+            return False
+    mgr.client.run_module("raw", params={"module": "cron", "controller": "service",
+                                         "command": "reconfigure", "action": "post"})
+    return True
+
+
 def dnsbl(args) -> bool:
     """Bring Unbound's DNS blocklists to `site.json` `dnsBlocklists` (#157).
 
-    One TAPPaaS-owned entry; absent from site.json, it is removed. A change
+    TAPPaaS-owned entries; absent from site.json, they are removed. A change
     downloads the lists and reloads Unbound once; the resolver must answer
-    afterwards.
+    afterwards. A daily cron job refreshes the lists while any entry exists.
     """
     import json
     from pathlib import Path
@@ -481,7 +521,10 @@ def dnsbl(args) -> bool:
         ifaces = read_interfaces(mgr.client)
         want = desired(site, zones, _known_lists(mgr), lambda cidr: with_v6([cidr], ifaces))
         items = want.items() if want else {}
-        ours = {r.get("description"): r for r in _dnsbl_entries(mgr) if is_ours(r.get("description") or "")}
+        entries = _dnsbl_entries(mgr)
+        ours = {r.get("description"): r for r in entries if is_ours(r.get("description") or "")}
+        theirs = [r for r in entries if not is_ours(r.get("description") or "")
+                  and str(r.get("enabled", "1")) == "1"]
         for w in (want.warnings if want else []):
             print(f"dnsbl: {w}")
         verb = "would " if args.check_mode else ""
@@ -497,7 +540,7 @@ def dnsbl(args) -> bool:
         if not drop and not put:
             print("dnsbl: " + (f"{', '.join(want.lists)} for {', '.join(want.source_nets) or 'every client'} — matches site.json"
                                if want else "no blocklists — matches site.json"))
-            return True
+            return dnsbl_cron(mgr, bool(items or theirs), args.check_mode)
         if want and put:
             print(f"dnsbl: {verb}set {', '.join(want.lists)} for "
                   f"{', '.join(want.source_nets) or 'every client'}"
@@ -505,7 +548,7 @@ def dnsbl(args) -> bool:
         for d in drop:
             print(f"dnsbl: {verb}remove '{d}'")
         if args.check_mode:
-            return True
+            return dnsbl_cron(mgr, bool(items or theirs), True)
         for d in drop:
             res = _unbound_api(mgr, "settings", "delDnsbl", "post", params=[ours[d].get("uuid")])
             if res.get("result") != "deleted":
@@ -524,7 +567,46 @@ def dnsbl(args) -> bool:
         # configuration (the entry set) itself.
         _unbound_api(mgr, "service", "dnsbl", "post")
         _unbound_api(mgr, "service", "reconfigure", "post")
-    return _verify_resolver_after_write(args.firewall, "DNS blocklists")
+        if not dnsbl_cron(mgr, bool(items or theirs), False):
+            return False
+        if not _verify_resolver_after_write(args.firewall, "DNS blocklists"):
+            return False
+        settle = getattr(args, "settle", DNSBL_SETTLE_SECONDS)
+        if put and settle > 0:
+            return _dnsbl_settled(mgr, args.firewall, settle, bool(theirs))
+    return True
+
+
+# Unbound loads the lists into memory after it answers again: a list too big
+# for the firewall gets it killed minutes later (hgz011, 1.5 million names, on a
+# 4 GB firewall: 3.5 minutes). Look again after this long.
+DNSBL_SETTLE_SECONDS = 300
+
+
+def _dnsbl_settled(mgr, firewall: str, settle: int, theirs: bool) -> bool:
+    """After a blocklist write: is Unbound still answering `settle` seconds on?
+    If not, take TAPPaaS's entries out again, so the site keeps its resolver."""
+    import time
+
+    from .dnsbl_plan import is_ours
+
+    print(f"dnsbl: checking the resolver again in {settle} s (the lists load into memory)")
+    time.sleep(settle)
+    probe_ip = _resolver_probe_ip(firewall)
+    if check_unbound_dns(host=probe_ip, label="SETTLED", retries=3, delay=5.0):
+        print("dnsbl: the resolver still answers with the lists loaded")
+        return True
+    print(f"ERROR: dnsbl: Unbound stopped answering {settle} s after the blocklists were loaded — "
+          "most likely out of memory (a list too big for this firewall). Removing TAPPaaS's "
+          "blocklist entries; choose a smaller list (hgz013 rather than hgz011).", file=sys.stderr)
+    for r in _dnsbl_entries(mgr):
+        if is_ours(r.get("description") or ""):
+            _unbound_api(mgr, "settings", "delDnsbl", "post", params=[r.get("uuid")])
+    _unbound_api(mgr, "service", "reconfigure", "post")
+    dnsbl_cron(mgr, theirs, False)
+    if _verify_resolver_after_write(firewall, "removing the DNS blocklists"):
+        print("dnsbl: blocklists removed, the resolver answers again", file=sys.stderr)
+    return False
 
 
 def _parse_bool(v: str) -> bool:
@@ -584,6 +666,9 @@ Examples:
                           help="DNS blocklists from site.json dnsBlocklists (absent: none)")
     p_bl.add_argument("--config-dir", default=os.environ.get("CONFIG_DIR", "/home/tappaas/config"),
                       help="where site.json and zones.json are (default: /home/tappaas/config)")
+    p_bl.add_argument("--settle", type=int, default=DNSBL_SETTLE_SECONDS,
+                      help="after a change, check the resolver again this many seconds later and "
+                           f"remove the blocklists if Unbound died (default {DNSBL_SETTLE_SECONDS}; 0: no check)")
 
     args = parse_with_globals(parser, {
         "firewall": "firewall.mgmt.internal", "port": None,

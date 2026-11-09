@@ -89,8 +89,9 @@ other nested record (or a wildcard over existing ones). A write that still stops
 the resolver is rolled back.
 
 `dnssec` and `dnsbl` are what the `network` module's update runs. `dnsbl` writes the
-entries described `TAPPaaS: site blocklists…` (one per address family) and leaves
-hand-made ones alone; see [`network/DESIGN.md`](../../../network/DESIGN.md#dns-blocklists).
+entries described `TAPPaaS: site blocklists…` (one per address family), leaves
+hand-made ones alone, skips a list code the firewall no longer offers with a warning,
+and keeps the daily refresh cron job while any blocklist entry exists; see [`network/DESIGN.md`](../../../network/DESIGN.md#dns-blocklists).
 
 ### `caddy-manager` — reverse proxy
 

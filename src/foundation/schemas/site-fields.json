@@ -378,14 +378,14 @@
       }
     },
     "dnsBlocklists": {
-      "description": "DNS blocklists the firewall's resolver applies, by the network module's update. Absent: none. lists are OPNsense's blocklist codes (atf = abuse.ch ThreatFox, hgz011 = hagezi threat intelligence, oisd1 = OISD big, ag = AdGuard, ...); zones limits filtering to those zones' clients, IPv4 and IPv6 (none listed: every client); allow names domains never blocked. A blocked name answers NXDOMAIN.",
+      "description": "DNS blocklists the firewall's resolver applies, by the network module's update. Absent: none. lists are OPNsense's blocklist codes (hgz011 = hagezi threat intelligence, oisd1 = OISD big, ag = AdGuard, ...); zones limits filtering to those zones' clients, IPv4 and IPv6 (none listed: every client); allow names domains never blocked. A blocked name answers NXDOMAIN.",
       "type": "object",
       "default": null,
-      "example": {"lists": ["atf", "hgz011"], "zones": ["home", "guest"], "allow": ["example.org"]},
-      "note": "Service zones are best left out: their modules fetch updates, images and models, and a false positive there fails an update. A change takes effect as cached answers expire (minutes). An unknown list code is refused with the codes the firewall offers.",
+      "example": {"lists": ["hgz011"], "zones": ["home", "guest"], "allow": ["example.org"]},
+      "note": "Service zones are best left out: their modules fetch updates, images and models, and a false positive there fails an update. A change takes effect as cached answers expire (minutes); the lists are refreshed daily. A code the firewall no longer offers is skipped with a warning naming it.",
       "changeClass": "in-place",
       "properties": {
-        "lists": {"description": "OPNsense's blocklist codes (atf, hgz011, oisd1, ag, ...). None: no blocking.", "type": "array", "items": {"type": "string"}},
+        "lists": {"description": "OPNsense's blocklist codes (hgz011, oisd1, ag, ...). None: no blocking.", "type": "array", "items": {"type": "string"}},
         "zones": {"description": "The zones whose clients are filtered (none listed: every client).", "type": "array", "items": {"type": "string"}, "references": "zones"},
         "allow": {"description": "Domains never blocked.", "type": "array", "items": {"type": "string"}}
       }

@@ -107,10 +107,10 @@ check(opts.includes("--updateFrequency") && opts.includes("--updateWeekday") && 
   writeFileSync(siteFile, JSON.stringify({ name: "s", version: "1.0", defaultEnvironment: "home" }));
   check(run(["site", "modify", "--dnssec", "false", "--config-dir", dir], c) === 0 && doc().dnssec === false, "--dnssec false writes a boolean");
   check(run(["site", "modify", "--dnssec", "maybe", "--config-dir", dir], c) !== 0, "…and anything but true|false is refused");
-  run(["site", "modify", "--dnsBlocklistsLists", "atf, hgz011", "--dnsBlocklistsZones", "home,guest", "--dnsBlocklistsAllow", "example.org", "--config-dir", dir], c);
-  check(JSON.stringify(doc().dnsBlocklists) === '{"lists":["atf","hgz011"],"zones":["home","guest"],"allow":["example.org"]}', "dnsBlocklists: three comma lists");
+  run(["site", "modify", "--dnsBlocklistsLists", "hgz011, oisd1", "--dnsBlocklistsZones", "home,guest", "--dnsBlocklistsAllow", "example.org", "--config-dir", dir], c);
+  check(JSON.stringify(doc().dnsBlocklists) === '{"lists":["hgz011","oisd1"],"zones":["home","guest"],"allow":["example.org"]}', "dnsBlocklists: three comma lists");
   run(["site", "modify", "--dnsBlocklistsZones", "", "--config-dir", dir], c);
-  check(JSON.stringify(doc().dnsBlocklists) === '{"lists":["atf","hgz011"],"zones":[],"allow":["example.org"]}', "…'' empties one, the others kept");
+  check(JSON.stringify(doc().dnsBlocklists) === '{"lists":["hgz011","oisd1"],"zones":[],"allow":["example.org"]}', "…'' empties one, the others kept");
   run(["site", "modify", "--diskAutoGrowThreshold", "85", "--diskAutoGrowPoolCeiling", "75", "--diskAutoGrowEnabled", "true", "--config-dir", dir], c);
   check(JSON.stringify(doc().diskAutoGrow) === '{"enabled":true,"threshold":85,"poolCeiling":75}', "diskAutoGrow: integers and a boolean, by key");
   run(["site", "modify", "--diskAutoGrowGrowPercent", "100", "--diskAutoGrowMinGrowGB", "10", "--config-dir", dir], c);

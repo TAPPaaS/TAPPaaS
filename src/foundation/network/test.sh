@@ -210,7 +210,7 @@ BASIC_FAIL=${FAIL}
 # Standard tests (always run; non-destructive)
 # ─────────────────────────────────────────────────────────────────────
 
-test_step "tools, schemas, zones, DNS, proxy, CrowdSec (Standard 1-6b)"
+test_step "tools, schemas, zones, DNS, proxy, CrowdSec, blocklists (Standard 1-6c)"
 
 section "Standard 1: CLI tools available"
 
@@ -451,6 +451,25 @@ else
         empty|0) fail "CrowdSec's site whitelist has no entries — CrowdSec stops at start on it; the network update removes it" ;;
         *)       pass "CrowdSec never bans the site's own IPv6 networks ($(_csv whitelist) whitelisted)" ;;
     esac
+fi
+
+section "Standard 6c: blocklists match site.json"
+
+# A dry run of what the network update applies: nothing to change means the
+# DNS blocklists and their daily refresh job are as site.json asks.
+if command -v unbound-manager >/dev/null 2>&1; then
+    if _bl="$(unbound-manager --no-ssl-verify --check-mode dnsbl --config-dir "${CONFIG_DIR}" 2>&1)"; then
+        if grep -q "would " <<<"${_bl}"; then
+            fail "DNS blocklists differ from site.json: $(grep "would " <<<"${_bl}" | tr '\n' ' ')"
+        else
+            pass "DNS blocklists and their daily refresh match site.json"
+        fi
+        grep -q "dnsbl: skipped " <<<"${_bl}" && warn "$(grep "dnsbl: skipped " <<<"${_bl}")"
+    else
+        fail "unbound-manager dnsbl --check-mode failed: ${_bl}"
+    fi
+else
+    skip "unbound-manager missing"
 fi
 
 test_step "rules, pinholes, test tooling, proxy drift (Standard 7-12)"

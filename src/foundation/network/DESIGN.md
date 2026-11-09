@@ -409,29 +409,42 @@ network update applies it with `unbound-manager dnsbl`). A blocked name answers 
 
 ```jsonc
 "dnsBlocklists": {
-  "lists": ["atf", "hgz011"],      // OPNsense's catalogue codes
+  "lists": ["hgz013"],             // OPNsense's catalogue codes
   "zones": ["home", "guest"],      // whose clients are filtered; none listed: every client
   "allow": ["example.org"]         // never blocked
 }
 ```
 
-- **Lists** are OPNsense's own catalogue: `atf` (abuse.ch ThreatFox), `hgz011`–`hgz013`
-  (hagezi threat intelligence), `oisd0`/`oisd1` (OISD), `ag` (AdGuard), `el`/`ep` (EasyList,
-  EasyPrivacy), `sb` (Steven Black), and hagezi's ad, scam, gambling and bypass lists.
-  `unbound-manager dnsbl` refuses an unknown code and names the ones the firewall offers.
+- **Lists** are OPNsense's own catalogue: `hgz011`–`hgz013` (hagezi threat intelligence: full, Medium, Mini),
+  `oisd0`/`oisd1` (OISD), `ag` (AdGuard), `el`/`ep` (EasyList, EasyPrivacy), `sb` (Steven
+  Black), and hagezi's ad, scam, gambling and bypass lists. OPNsense changes the catalogue
+  between releases (26.7.8 dropped ThreatFox, `atf`): a code the firewall no longer offers is
+  skipped with a warning naming it, and the other lists still apply. When none of the codes is
+  offered, the entry on the firewall is left as it is.
+- **Memory.** Unbound holds every name in memory. hagezi's full Threat Intelligence (`hgz011`, about 1.5
+  million names) needs well over 2 GB free on the firewall: a 4 GB firewall running CrowdSec ran
+  out and lost its resolver. The Mini list (`hgz013`, about 190,000 names) fits a small one. After
+  a change the network update checks the resolver again a few minutes later, and removes the
+  entry if Unbound has died.
 - **Zones.** Filtering applies to the listed zones' networks, IPv4 and IPv6. Leave service
   zones out: their modules fetch updates, images and models, and a false positive there fails
   an update rather than a page.
 - **Ownership.** TAPPaaS writes the entries described `TAPPaaS: site blocklists…` — one per
   address family, as OPNsense requires one entry's networks to share family and size. Entries
   added by hand in the GUI are left alone.
-- **Timing.** The lists are fetched when the entry changes and by OPNsense's own schedule. A
-  name already in Unbound's cache answers until its TTL runs out, so a new block takes effect
-  within minutes.
+- **Timing.** The lists are downloaded when the entry changes, and every day at 04:17 by a
+  cron job the network update keeps while any blocklist entry exists, hand-made ones included
+  (*System → Settings → Cron*, `TAPPaaS: refresh the DNS blocklists`, OPNsense's *Update
+  Unbound DNSBLs*). An operator's own enabled refresh job takes its place; with no entries
+  left, TAPPaaS's job is removed. A name already in Unbound's cache answers until its TTL runs
+  out, so a new block takes effect within minutes.
 - **Checking a name:** on the firewall,
   `python3 /usr/local/opnsense/scripts/unbound-dnsbl/dnsbl_match.py --domain <name> --src <client-ip>`
   prints `Block` with the entry that decides it, or `Pass`. A query from the firewall itself is
   not a client's view.
+
+How this compares with pfBlockerNG and Pi-hole, and what OPNsense offers beside it:
+[docs/pfblockerng-replacement.md](docs/pfblockerng-replacement.md).
 
 ## Troubleshooting: Unbound / DNSBL
 
