@@ -33,6 +33,7 @@ const raw: RawRuns = {
     { ns: "", type: "ct", id: "105", time: T },
     { ns: "", type: "vm", id: "999", time: T }, // a guest no module has
     { ns: "fs/tappaas1", type: "host", id: "tappaas1", time: T },
+    { ns: "fs/tappaas4", type: "host", id: "tappaas4", time: T }, // a removed node's restore points
     { ns: "pull/buddy", type: "vm", id: "300", time: T }, // a buddy's copy, not ours
   ],
   verifyJobs: [],
@@ -48,6 +49,7 @@ const tmp = mkdtempSync(join(tmpdir(), "bm-cmdb-"));
 const env = process.env;
 try {
   writeFileSync(join(tmp, "tappaas3.json"), JSON.stringify({ moduleSource: "/repo/src/foundation/pvehost", kind: "machine", address: "tappaas3.mgmt.internal", storagePools: ["tanka1", "tankc1"] }));
+  writeFileSync(join(tmp, "tappaas1.json"), JSON.stringify({ moduleSource: "/repo/src/foundation/pvehost", kind: "machine", address: "tappaas1.mgmt.internal" }));
   writeFileSync(join(tmp, "site.json"), JSON.stringify({ name: "home", locations: { home: { primary: true }, aunt: { city: "Aarhus" } } }));
   writeFileSync(join(tmp, "nextcloud.json"), JSON.stringify({ vmid: 200, dependsOn: ["backup:vm"] }));
   writeFileSync(join(tmp, "dns.json"), JSON.stringify({ kind: "lxc", vmid: 105 }));
@@ -83,7 +85,7 @@ try {
   check(
     JSON.stringify(to("backs-up", "datastore:tappaas_backup")) ===
       JSON.stringify([{ class: "lxc", name: "dns" }, { class: "node", name: "tappaas1" }, { class: "vm", name: "nextcloud" }].map((x) => JSON.stringify(x)).sort()),
-    "backs-up the guests (by module) and the host it holds restore points for — not a buddy's copy, not a guest no module has",
+    "backs-up the guests (by module) and the host it holds restore points for — not a buddy's copy, not a guest no module has, not a removed node",
   );
   const pool = (ref: unknown) => objs.find((o) => o.ref === ref);
   const stored = rels.filter((x) => x.type === "stored-on" && x.from === "datastore:tappaas_backup");

@@ -56,7 +56,12 @@ export function storedOn(b: CmdbBatch, ds: string, node: string | null | undefin
   }
 }
 
-export function buildBackupReport(raw: RawRuns | null, runs: BackupRuns | null, peers: Peer[], poolsOf: PoolsOf = () => []): CmdbBatch {
+/** Whether a host's file backups are of something this site still has (its
+ *  config/<name>.json): a removed node's restore points stay in PBS, but a
+ *  `backs-up` to it would bring back a CI its removal retired. */
+export type SiteHas = (name: string) => boolean;
+
+export function buildBackupReport(raw: RawRuns | null, runs: BackupRuns | null, peers: Peer[], poolsOf: PoolsOf = () => [], siteHas: SiteHas = () => true): CmdbBatch {
   const b = new CmdbBatch(SOURCE);
   if (raw && runs?.reachable && runs.store) {
     const status = raw.status ?? null;
@@ -72,7 +77,9 @@ export function buildBackupReport(raw: RawRuns | null, runs: BackupRuns | null, 
     const own = new Set(runs.targets.filter((t) => t.kind === "own" || t.kind === "host").map((t) => t.ns));
     for (const g of runs.guests) {
       if (!own.has(g.ns) || g.snapshots === 0) continue;
-      if (g.type === "host") b.relate("backs-up", ds, { class: "node", name: g.id }); // a file backup: of a machine or a guest
+      if (g.type === "host") {
+        if (siteHas(g.id)) b.relate("backs-up", ds, { class: "node", name: g.id }); // a file backup: of a machine or a guest
+      }
       else if (g.module) b.relate("backs-up", ds, { class: g.type === "ct" ? "lxc" : "vm", name: g.module });
     }
   }

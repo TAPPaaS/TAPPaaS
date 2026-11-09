@@ -1125,7 +1125,7 @@ function moduleOfVmid(configDir: string): (vmid: string) => string | null {
 }
 
 function backupReport(opts: Opts, raw: RawRuns): CmdbBatch {
-  return buildBackupReport(raw, shapeRuns(raw, moduleOfVmid(opts.configDir), Math.floor(Date.now() / 1000)), listPeers(opts.configDir), poolsOf(opts.configDir));
+  return buildBackupReport(raw, shapeRuns(raw, moduleOfVmid(opts.configDir), Math.floor(Date.now() / 1000)), listPeers(opts.configDir), poolsOf(opts.configDir), (name) => existsSync(join(opts.configDir, `${name}.json`)));
 }
 
 // A node's pools, as config/ records them (storagePools).
