@@ -62,7 +62,7 @@ export interface ScoredItem {
 }
 
 export interface ModuleScore {
-  score: number; // rounded for display: two decimals, never across a level band
+  score: number; // rounded for display: a whole number, never across a level band
   raw: number;
   level: Level;
   category: Category | null; // the category that counts
@@ -104,11 +104,26 @@ export function levelOf(score: number): Level {
   return "low";
 }
 
-// Two decimals for people, but never rounded across a band: 15.9999 is shown
-// 15.99 (medium), not 16.00 (high).
+// A whole number for people, but never rounded across a band: 29.6 is shown
+// 29 (high), not 30 (critical), and 0.3 is shown 1 (low), not 0 (ok).
 export function displayScore(raw: number): number {
-  const r = Math.round(raw * 100) / 100;
-  return levelOf(r) === levelOf(raw) ? r : Math.floor(raw * 100) / 100;
+  const r = Math.round(raw);
+  if (levelOf(r) === levelOf(raw)) return r;
+  return r > raw ? Math.floor(raw) : Math.ceil(raw);
+}
+
+// Each level's range in whole points, highest first, as a page explains the
+// score: critical 30 and above, high 16–29, …, ok 0.
+export function levelRanges(): { level: Level; from: number; to: number | null }[] {
+  const out: { level: Level; from: number; to: number | null }[] = [];
+  let next: number | null = null;
+  for (const b of BANDS) {
+    const from = Math.max(1, b.from);
+    out.push({ level: b.level, from, to: next === null ? null : next - 1 });
+    next = from;
+  }
+  out.push({ level: "ok", from: 0, to: 0 });
+  return out;
 }
 
 // The halving sum of a list of points, highest first.

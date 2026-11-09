@@ -53,6 +53,14 @@ export interface SecurityView {
   environments: SecurityEnvironment[];
   outside: SecurityZone[];
   failed: string[];
+  levels?: { level: RiskLevel; from: number; to: number | null }[];
+}
+
+// The score's ranges in one line: "critical 30 and above · high 16–29 · … · ok 0".
+export function levelsText(levels: SecurityView["levels"]): string {
+  return (levels ?? [])
+    .map((l) => `${l.level} ${l.to === null ? `${l.from} and above` : l.from === l.to ? `${l.from}` : `${l.from}–${l.to}`}`)
+    .join(" · ");
 }
 
 // The status colour of a level, as health has it: ok and low are fine, medium

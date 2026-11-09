@@ -8,12 +8,13 @@ import { join } from "path";
 import { moduleSummaries } from "../../src/badges";
 import { ModuleRow } from "../../src/model";
 import { lastDays, moduleLevel, securityView } from "../../src/security";
-import { allUnits, countsText, cveCategory, cveNote, riskText, riskTone, securityTile, sparkPoints, sparkTitle, unitLabel } from "../../web/src/security";
+import { allUnits, countsText, cveCategory, cveNote, levelsText, riskText, riskTone, securityTile, sparkPoints, sparkTitle, unitLabel } from "../../web/src/security";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
 const raw = JSON.parse(readFileSync(join(FIX, "reads", "health-manager-report-security-json.out"), "utf8")) as Record<string, unknown>;
 const v = securityView(raw)!;
+check(levelsText(v.levels) === "critical 30 and above · high 16–29 · medium 7–15 · low 1–6 · ok 0", `the score per level, explained in one line (${levelsText(v.levels)})`);
 
 // ── the view ──
 check(v !== null && v.site.level === "high" && v.site.score === 20 && v.site.setBy === "immich in rossen", "the site: high, 20, set by immich in rossen");

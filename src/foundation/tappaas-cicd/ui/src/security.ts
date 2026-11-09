@@ -7,6 +7,8 @@
 // sets it, the state counts and seven days of scores, and each module's counted
 // CVEs. Whether a fix exists is never passed on: no fix field leaves here.
 
+import { levelRanges } from "../../lib/ts/src/score";
+
 export type Level = "ok" | "low" | "medium" | "high" | "critical";
 export type CveState = "decided" | "risk" | "open" | "carried";
 
@@ -84,6 +86,7 @@ export interface SecurityView {
   environments: SecurityEnvironment[];
   outside: SecurityZone[]; // zones in no environment: directly under the site
   failed: string[]; // units whose scan failed, not counted
+  levels: { level: Level; from: number; to: number | null }[]; // each level's range of the score, highest first
 }
 
 const str = (v: unknown): string | null => (typeof v === "string" && v ? v : null);
@@ -164,6 +167,7 @@ export function securityView(raw: Record<string, unknown> | null): SecurityView 
     environments,
     outside: s.outside.map(zone).filter(shown).sort((x, y) => y.score - x.score || x.name.localeCompare(y.name)),
     failed: Object.values(s.units).filter((u) => (u.failed ?? []).length > 0).map((u) => u.name).sort(),
+    levels: levelRanges(),
   };
 }
 

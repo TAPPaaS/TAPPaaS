@@ -5,7 +5,7 @@
 // health status.
 
 import {
-  ScoredItem, displayScore, halvingSum, itemPoints, levelOf, moduleScore, releaseScores, siteScores, tierMultiplier, zoneScore,
+  ScoredItem, displayScore, halvingSum, levelRanges, itemPoints, levelOf, moduleScore, releaseScores, siteScores, tierMultiplier, zoneScore,
 } from "../../../../lib/ts/src/score";
 import { mkdtempSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
@@ -48,7 +48,7 @@ check(near(three.raw, 43.75) && three.level === "critical", "3 analysed critical
 const ro = moduleScore([open("Critical"), risk("critical")]);
 check(near(ro.raw, 35) && ro.level === "critical", "a risk critical and an open critical = 25 + 10 = 35, highest first");
 const nine = moduleScore(many(9, () => open("High")));
-check(near(nine.raw, 8 * (2 - 2 ** -8)) && nine.score === 15.97 && nine.level === "medium", "9 open highs ≈ 15.97, medium");
+check(near(nine.raw, 8 * (2 - 2 ** -8)) && nine.score === 15 && nine.level === "medium", "9 open highs ≈ 15.97, shown 15: medium, never rounded up into high");
 const immich = moduleScore([open("Critical"), ...many(9, () => open("High")), ...many(6, () => risk("medium"))]);
 check(immich.raw === 20 && immich.level === "high" && immich.category === "critical" && immich.counted === 1,
   "immich 2.4: one open critical, nine open highs, six risk items = 20, high (only the top category counts)");
@@ -73,8 +73,10 @@ check(sixty.raw < 16 && sixty.level === "medium", `60 open highs stay below 16 a
 check(sixty.score < 16, `…and are not displayed as 16.00 (${sixty.score})`);
 check(moduleScore(many(200, () => risk("critical"))).raw < 50, "200 analysed criticals stay below 50");
 check(halvingSum([1, 25, 10]) === 25 + 5 + 0.25, "the halving takes the points highest first");
-check(displayScore(15.996) === 15.99 && displayScore(15.994) === 15.99 && displayScore(43.75) === 43.75, "display never rounds across a band");
-check(displayScore(29.999) === 29.99 && levelOf(29.999) === "high", "29.999 stays high, shown 29.99");
+check(displayScore(15.6) === 15 && displayScore(14.5) === 15 && displayScore(43.75) === 44 && displayScore(7.2) === 7, "a whole number, never rounded across a band");
+check(displayScore(29.999) === 29 && levelOf(29.999) === "high", "29.999 stays high, shown 29");
+check(displayScore(0.3) === 1 && displayScore(0) === 0, "just above 0 is low, shown 1; 0 is ok");
+check(JSON.stringify(levelRanges()) === JSON.stringify([{ level: "critical", from: 30, to: null }, { level: "high", from: 16, to: 29 }, { level: "medium", from: 7, to: 15 }, { level: "low", from: 1, to: 6 }, { level: "ok", from: 0, to: 0 }]), "each level's range in whole points");
 
 console.log("levels");
 check(levelOf(0) === "ok" && levelOf(0.0001) === "low" && levelOf(6.99) === "low" && levelOf(7) === "medium", "ok 0, low below 7, medium from 7");

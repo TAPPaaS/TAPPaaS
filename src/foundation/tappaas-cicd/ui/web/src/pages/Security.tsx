@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { useRead } from "../api";
 import {
-  STATE_WORD, SecurityCve, SecurityRow, SecurityUnit, SecurityView, SecurityZone, countsText, cveCategory, cveNote, riskText, riskTone, sparkPoints, sparkTitle, unitLabel,
+  STATE_WORD, SecurityCve, SecurityRow, SecurityUnit, SecurityView, SecurityZone, countsText, cveCategory, cveNote, levelsText, riskText, riskTone, sparkPoints, sparkTitle, unitLabel,
 } from "../security";
 import { Badge, Link, ReadState, Section, since, when } from "../ui";
 
@@ -110,6 +110,7 @@ export function Security() {
               <span>{v.site.setBy ? <>set by <b>{v.site.setBy}</b></> : "nothing counts"}</span>
               <Spark days={v.days} values={v.site.spark} />
             </div>
+            {v.levels?.length ? <p className="muted small">Score per level: {levelsText(v.levels)}.</p> : null}
           </Section>
           <Section title="Environments, zones and modules" aside="open a module for its CVEs">
             <div className="sec-head sec-row">

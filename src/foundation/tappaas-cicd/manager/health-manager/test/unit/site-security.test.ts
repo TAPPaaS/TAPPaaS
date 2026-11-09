@@ -123,7 +123,7 @@ console.log("site scores");
   check(sec.units.immich.score === 20 && sec.units.immich.level === "high", "immich: one open critical, the same CVE in its image counted once: 20, high");
   check(sec.zones.rossen.score === 20 && sec.zones.rossen.multiplier === 1, "rossen ×1: 20");
   check(sec.zones.mgmt.score === 40 && sec.zones.mgmt.level === "critical" && sec.zones.mgmt.setBy.module === "firewall", "mgmt ×2: the firewall's open critical is 40, critical");
-  check(sec.zones.dmz.score === 9.38 && sec.zones.dmz.level === "medium", "dmz ×0.25: two rated criticals (37.5) are 9.38, medium");
+  check(sec.zones.dmz.score === 9 && sec.zones.dmz.level === "medium", "dmz ×0.25: two rated criticals (37.5) are 9.375, shown 9, medium");
   check(sec.zones.iotCams.score === 2 && sec.zones.iotCams.level === "low", "iotCams ×0.1: an open critical is 2, low");
   check(sec.environments.rossen.score === 20 && sec.environments.mgmt.score === 40, "an environment is the highest of its zones");
   check(sec.outside.includes("dmz") && sec.outside.includes(NO_ZONE), "zones in no environment roll up to the site directly");
