@@ -116,8 +116,8 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 3 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 7 | – | 2 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 32 | 2 | 2 |
-| 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
-| 3 | G3.3 App module fixes | L | L | 15 | – | 8 |
+| 3 | ✅ G3.2 Identity & SSO wiring | M | L | 14 | – | – |
+| 3 | G3.3 App module fixes | L | L | 15 | – | 9 |
 | 3 | G3.4 AI stack maturity | M | M | 4 | 1 | 7 |
 | 3 | ✅ G3.5 Installer UX | L | L | 2 | 1 | – |
 | 2 | G2.1 Firewall exposure & rule order | M | H | 26 | – | 3 |
@@ -367,24 +367,24 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | #907 | ADR needed: resource allocation — pools consumed by allocations (storage, RAM, CPU, addresses, VLANs) | H | M | **Opened 2026-10-29** from ADR-040 O10: IT4IT's Resource is consumed; ADR-040 leaves `pool` and `allocated-to` in the CMDB's model for it. Related: #838, #884, #833 |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
 
-### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 14 · open: 1
+### ✅ G3.2 Identity & SSO wiring — Ease M · Risk L · released: 14 · open: 0
 
-Every app wired to the identity provider the same way: OIDC for hass, Nextcloud and forgejo (#345, #401, #282), a site-specific login page (#479), logging's SSO dependency (#701), a test for forward-auth (#752), and Jellyfin behind forward-auth (#805) with Authentik sign-in (#806).
+Every app wired to the identity provider the same way: OIDC for Nextcloud and forgejo (#401, #282), a site-specific login page (#479), logging's SSO dependency (#701), a test for forward-auth (#752), and Jellyfin behind forward-auth (#805) with Authentik sign-in (#806).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #345 | hass: appliance-aware OIDC staging | M | L | |
 
-### G3.3 App module fixes — Ease L · Risk L · released: 15 · open: 8
+### G3.3 App module fixes — Ease L · Risk L · released: 15 · open: 9
 
-The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end (#715), Home Assistant (#552, #568, #571 — maintainer-owned; locale from site data, #348), Nextcloud and euro-office (#332, #751; its test 12, #658, is in G5.2), litellm consumers (#553), windows-server (#411), forgejo (#283, #284), in-guest backups (#754), container stop timeouts (#786).
+The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end (#715), Home Assistant (#552, #568, #571 — maintainer-owned; locale from site data, #348; OIDC staging, #345), Nextcloud and euro-office (#332, #751; its test 12, #658, is in G5.2), litellm consumers (#553), windows-server (#411), forgejo (#283, #284), in-guest backups (#754), container stop timeouts (#786).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #552 | hass: a lost LLAT blocks every update | L | L | **Assigned to @ErikDaniel007 — do not fix (operator, 2026-09-26).** `ha-llat.sh` has no recovery path, so a lost token blocks every update |
 | #568 | hass: backup freeze leaves Frigate unhealthy | M | L | |
 | #571 | hassanova has no release baseline | L | M | Fix exists unmerged (`ed8a9799`), but landing it makes the merge reconcile a Production module for the first time (Risk M). **Needs its owner or a decision** |
-| #348 | hass locale from site master data | M | L | **Parked 2026-09-21:** no test site runs hass. The fix is written on the issue — `core_config` at `lib/config.sh:158` plus a converge for onboarded instances, from `.location` Moved from G1.7 2026-11-09 (operator). |
+| #348 | hass locale from site master data | M | L | **Parked 2026-09-21:** no test site runs hass. The fix is written on the issue — `core_config` at `lib/config.sh:158` plus a converge for onboarded instances, from `.location`. Moved from G1.7 2026-11-09 (operator). |
+| #345 | hass: appliance-aware OIDC staging | M | L | Moved from G3.2 2026-11-09 (operator). |
 | #553 | litellm:models cannot reach an appliance consumer | M | L | |
 | #715 | Nextcloud-hub revisited: Talk never worked end to end; races, retries and tests hid real failures | H | M | Talk stack and Nextcloud 35 on `main` (`c998ca5f`). Open: how @AndreasJe's branch lands, one `/etc/secrets` mode, rotating early OIDC secrets — until an off-network Talk call works |
 | #411 | windows-server: `deploy-instances.sh` missing | L | L | **Verified open 2026-09-26** (low-risk sweep): the script does not exist; writing it is the work |
