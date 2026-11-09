@@ -660,7 +660,8 @@ export function checkStoragePools(client: ClusterClient): CheckResult {
     let status: CheckStatus = pct >= POOL_FAIL ? "fail" : pct >= POOL_WARN ? "warn" : "pass";
     let detail = `${pct.toFixed(0)}% used (${gib(p.used)}/${gib(p.total)}G)`;
     if (p.provisioned > p.total) {
-      detail += `, disks add up to ${gib(p.provisioned)}G — overcommitted by thin disks`;
+      // The reason first: the warning is the overcommit, not how full it is now.
+      detail = `overcommitted: its thin disks can grow to ${gib(p.provisioned)}G, more than the ${gib(p.total)}G it holds (${pct.toFixed(0)}% used now)`;
       if (status === "pass") status = "warn";
     }
     rows.push({ status, text: `${p.node}/${p.storage}: ${detail}`, subject: { kind: "pool", name: `${p.node}/${p.storage}` } });
