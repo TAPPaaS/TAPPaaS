@@ -21,6 +21,7 @@ when:
         - docs/install/*.md
         - GLOSSARY.md
         - BUILD.md
+        - TESTING.md
         - docs/ADR/README.md
         - src/**/*.md
         # ROADMAP.md is left out on purpose: its rows change too often to rebuild
