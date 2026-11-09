@@ -232,7 +232,7 @@ New modules and significant upgrades of existing ones: what a site can run, beyo
 
 ### G7.1 DevOps stack — Ease H · Risk M · released: 1 · open: 2
 
-Forgejo gets its CI: a Woodpecker module wired to it (#840), whose agents can also build TAPPaaS itself (#415), and Forgejo on PostgreSQL when load asks for it (#284).
+Forgejo gets its CI: a Woodpecker module wired to it, whose agents can also build TAPPaaS itself, and Forgejo on PostgreSQL when load asks for it.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -241,7 +241,7 @@ Forgejo gets its CI: a Woodpecker module wired to it (#840), whose agents can al
 
 ### G7.2 New and reworked app modules — Ease H · Risk M · released: 4 · open: 1
 
-New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129), Karakeep for bookmarks (#842) — and a rework of LiteLLM's control plane (#170, decided with #430).
+New and reworked app modules: a Markdown website, N.O.M.A.D. for the home stack, Karakeep for bookmarks, and a declarative control plane for LiteLLM.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -254,7 +254,7 @@ these two groups are designed together — the fabric is what the physical view 
 
 ### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · released: 15 · open: 12
 
-The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports and trunks kept in line with the zones (#668, #697, #706, #731), the WAN and the ISP (public DNS that follows the WAN, #383, #830; mail when the ISP blocks port 25, #125). Switch setup needs a systematic model, at install and on day 2. Operating the site belongs here too: a service desk (#63) and a SIEM (#843, Wazuh the best candidate). Linked to G6.2: the physical view shows and later changes it.
+The links a site stands on: node uplinks bonded under `lan`, switch ports and trunks kept in line with the zones, and the WAN and the ISP — public DNS that follows the WAN, mail when the ISP blocks port 25. Switch setup needs a systematic model, at install and on day 2. Operating the site belongs here too: a service desk and a SIEM, Wazuh the best candidate. Linked to G6.2: the physical view shows and later changes it.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -273,7 +273,7 @@ The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports
 
 ### G6.2 User interface & physical view — Ease H · Risk L · released: 6 · open: 4
 
-A general TAPPaaS user experience, starting with a physical view of the site: nodes, bonds, switches and ports, APs, WAN and satellite, with zones, guests and live state on them (#839; homelable as a starting point), designed first in a spike and an ADR (#844). The service catalog (#183) and Backstage (#91) are decided against it. Linked to G6.1.
+A general TAPPaaS user experience, starting with a physical view of the site: nodes, bonds, switches and ports, APs, WAN and satellite, with zones, guests and live state on them, designed first in a spike and an ADR. The service catalog and Backstage are decided against it. Linked to G6.1.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -284,7 +284,7 @@ A general TAPPaaS user experience, starting with a physical view of the site: no
 
 ### G6.3 Data model — Ease M · Risk M · released: 9 · open: 2
 
-The meta model of the configuration is written down in [`src/DATAMODEL.md`](src/DATAMODEL.md) (2026-10-22: every JSON, which field names which object, and seven places where the model says one thing twice). The operator decided to fix the first four and park the rest (#866). Where a thing is becomes two things, a location and a placement, by ADR-036 (Accepted 2026-10-23). Linked to G6.2: the console's Physical view draws what this group models.
+The meta model of the configuration, written down in [`src/DATAMODEL.md`](src/DATAMODEL.md): every JSON, which field names which object, and the places where the model says one thing twice, fixed or parked. Where a thing is becomes two things, a location and a placement (ADR-036). Linked to G6.2: the console's Physical view draws what this group models.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -297,7 +297,7 @@ What a site needs beyond one node, and the tests, proofs and sign-offs on real s
 
 ### G5.1 Satellite & off-site — Ease H · Risk M · released: 1 · open: 6
 
-Everything the satellite and the off-site copy still have to prove: the satellite as a module on a real VPS (#671) and makerfloss's satellite converted (#775), the site-liveness watchers in a real outage (#776), the buddy tunnel and relay (#796, #795), the sshPort passthrough (#762) and the ADR-010 hardening sign-off (#406).
+Everything the satellite and the off-site copy still have to prove: the satellite as a module on a real VPS, makerfloss's satellite converted, the site-liveness watchers in a real outage, the buddy tunnel and relay, the SSH port passthrough and the hardening sign-off.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -310,7 +310,7 @@ Everything the satellite and the off-site copy still have to prove: the satellit
 
 ### G5.2 Test coverage & conventions — Ease H · Risk L · open: 5
 
-How tests run (a `test` verb on the managers, #499) and the module tests that still miss their conventions or probe the wrong thing (#119, #120, #409, #658).
+How tests run — a `test` verb on the managers — and the module tests that still miss their conventions or probe the wrong thing.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -322,7 +322,7 @@ How tests run (a `test` verb on the managers, #499) and the module tests that st
 
 ### G5.3 Enterprise scale — Ease H · Risk M · open: 2
 
-Placement and resources for a site of several nodes: guests placed and rebalanced by PVE 9.2's load balancer over a list of candidate nodes, falling back to a module's small values when no node can fit the full ones (#838, with what was left of #884), and the boot mirror proven to survive a lost disk (#922, from #403).
+Placement and resources for a site of several nodes: guests placed and rebalanced by PVE 9.2's load balancer over a list of candidate nodes, falling back to a module's small values when no node can fit the full ones, and the boot mirror proven to survive a lost disk.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -335,7 +335,7 @@ New capabilities with low upgrade risk.
 
 ### G4.4 Storage & physical devices — Ease H · Risk L · released: 5 · open: 3
 
-Shared storage as a managed part of a site: the rest of the NFS service (#772). The physical network (#668, #697, #706, #731, #155, #158) moved to G6.1.
+Shared storage as a managed part of a site: the rest of the NFS service.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -345,7 +345,7 @@ Shared storage as a managed part of a site: the rest of the NFS service (#772). 
 
 ### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 7 · open: 2
 
-The project's own machinery (CI runners, #415, moved to G7.1 with the Woodpecker module): community-health files (#486), the remaining ADRs (#359; the ADR-010 sign-off, #406, is in G5.1), a tool for urgent patches (#746), a logging-function lint (#747); the service-desk spike (#63) is in G7.2.
+The project's own machinery: community-health files, the remaining ADRs, a tool for urgent patches and a lint for the logging functions.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -358,7 +358,7 @@ Low upgrade risk. Build continuously, in any order within a group.
 
 ### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 32 · done for 2.5: 2 · open: 2
 
-Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), a readiness wait that skips UDP ports (#826), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753). Built from the 2.0→2.2 field report (#832): a capacity pre-flight before the sweep (#833) and visible size changes on legacy sites (#834). Dynamic placement went to G5.3 (#838).
+Guests sized, placed, started and stopped right: memory defaults from measurement, moving a running guest to another node, a readiness wait that skips UDP ports, hardware drift, shutdown and boot order, storage growth and placement, a composite-module ADR, a sweep that survives a guest restarting itself, a capacity pre-flight before the sweep, and size changes a legacy site can see.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -369,14 +369,14 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 
 ### ✅ G3.2 Identity & SSO wiring — Ease M · Risk L · released: 14 · open: 0
 
-Every app wired to the identity provider the same way: OIDC for Nextcloud and forgejo (#401, #282), a site-specific login page (#479), logging's SSO dependency (#701), a test for forward-auth (#752), and Jellyfin behind forward-auth (#805) with Authentik sign-in (#806).
+Every app wired to the identity provider the same way: OIDC for Nextcloud and forgejo, a site-specific login page, logging's SSO dependency, a test for forward-auth, and Jellyfin behind forward-auth with Authentik sign-in.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 
 ### G3.3 App module fixes — Ease L · Risk L · released: 15 · open: 9
 
-The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end (#715), Home Assistant (#552, #568, #571 — maintainer-owned; locale from site data, #348; OIDC staging, #345), Nextcloud and euro-office (#332, #751; its test 12, #658, is in G5.2), litellm consumers (#553), windows-server (#411), forgejo (#283, #284), in-guest backups (#754), container stop timeouts (#786).
+The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end, Home Assistant (maintainer-owned fixes, locale from the site, OIDC staging), Nextcloud and euro-office, litellm consumers, windows-server, forgejo, in-guest backups and container stop timeouts.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -392,7 +392,7 @@ The known rough edges of the app modules, fixed and tested so they stay fixed: N
 
 ### G3.4 AI stack maturity — Ease M · Risk M · released: 4 · done for 2.5: 1 · open: 7
 
-A production-grade AI stack (its test conventions, #119 and #120, are in G5.2): hardened (#121) and kept current (#621), LiteLLM sized for its workers (#677), and vLLM's models recoverable after a restore (#758).
+A production-grade AI stack: hardened and kept current, LiteLLM sized for its workers, and vLLM's models recoverable after a restore.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -407,7 +407,7 @@ A production-grade AI stack (its test conventions, #119 and #120, are in G5.2): 
 
 ### ✅ G3.5 Installer UX — Ease L · Risk L · released: 2 · done for 2.5: 1
 
-A first install that is easier to get through: a first node that can be run again (#377), showing its progress (#266), and asking only what the hardware needs (#405). A bootstrap that resumes from any step is ADR-037 P3b.
+A first install that is easier to get through: a first node that can be run again, that shows its progress, and that asks only what the hardware needs. A bootstrap that resumes from any step is ADR-037 P3b.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -417,11 +417,11 @@ A first install that is easier to get through: a first node that can be run agai
 
 ## Wave 2 — network behaviour hardening
 
-Changes to live firewall and DNS behaviour on every installation. Restrictive defaults get harder to introduce the longer users rely on permissive ones, so they come early; every change shows its dry-run diff (#645) before `--apply`.
+Changes to live firewall and DNS behaviour on every installation. Restrictive defaults get harder to introduce the longer users rely on permissive ones, so they come early; every change shows its dry-run diff before `--apply`.
 
 ### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 26 · open: 3
 
-Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: the review of the tier model and rule creation is done and published (#816), with most of its findings fixed; pinholes no longer shadowed (#386); every zone policy covers IPv6 (#815), and IPv6 itself is built (#26). The rules manager's overlap report, covered pinholes and sequence map are built (#160, #256, #162, on the branch). The review findings are done: #817, #818, #822 closed; #819–#821, #823 and the ADR amendments (#824) closed — on `main` 2026-10-13 after a clean `--deep` (144/0). Inbound IPv6 to Caddy, IPv6 anti-spoofing, DNSSEC (#263), #576, #257, #660 and #683 followed, on `main` 2026-10-13 after a clean `--deep` (144/0). Lockout check re-run on hrossen 2026-10-13 against the current rules, IPv4 and IPv6: only mgmt reaches the firewall's GUI and SSH, on any address; the WAN passes 80/443 and nothing else (the admin VPN not re-probed). Open: the NetBird rules below, pending the NetBird decision; #706 moved to G4.4 behind #668. NetBird rules (#385, #222) are low priority until the NetBird decision.
+Tighter firewall defaults that keep what modules need: the gateway, GUI/SSH and anti-spoofing rules, pinholes that nothing shadows, IPv6 in every zone policy, a reviewed tier model and rule creation, a rules manager that reports overlaps, covered pinholes and rule order, and IP blocklists from `site.json`. The NetBird rules are low priority until the NetBird decision.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -431,7 +431,7 @@ Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/S
 
 ### G2.2 DNS resolver robustness — Ease L · Risk M · released: 7 · done for 2.5: 1 · open: 2
 
-A resolver that holds up: a working Unbound restart (#387), a written IPv6 stance (#149), DNSSEC with split horizon (#263), optional blocklists (#157), kept fresh (#923) and one threat-only list on by default (#924). Public DNS that follows the WAN (#383, #830) moved to G6.1.
+A resolver that holds up: a working Unbound restart, a written IPv6 stance, DNSSEC with split horizon, and DNS blocklists kept fresh, with one threat-only list on by default for new sites.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -447,11 +447,11 @@ Everything that renames, re-schemas or rebuilds, landed while few installations 
 
 ### ✅ G1.2 Backup placement model + managed machines (ADR-012, ADR-026) — Ease M · Risk H · released: 27
 
-Backups where the operator chooses — a node, a managed machine, an external PBS or the satellite — encrypted, with every machine TAPPaaS manages a module (ADR-012, ADR-026). The satellite's live test (#671), makerfloss's satellite (#775) and the buddy tunnel and relay (#795, #796) moved to G5.1.
+Backups where the operator chooses — a node, a managed machine, an external PBS or the satellite — encrypted, with every machine TAPPaaS manages a module (ADR-012, ADR-026).
 
 ### G1.6 Secrets & privileged access — Ease H · Risk H · released: 4 · open: 1
 
-Least privilege on the platform. Built: nodes hardened to the Proxmox guide, key-only SSH, encrypted backups. Next: how an AI agent may reach the mothership (#142), SSH to the mothership through the satellite (#762) moved to G5.1. Secrets management (#58) waits in Future Work.
+Least privilege on the platform: nodes hardened to the Proxmox guide, key-only SSH, encrypted backups, and a decided way for an AI agent to reach the mothership. Secrets management waits in Future Work.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -459,7 +459,7 @@ Least privilege on the platform. Built: nodes hardened to the Proxmox guide, key
 
 ### ✅ G1.7 Parked for Erik discussion · released: 1 · done for 2.5: 1 · open: 0
 
-Waiting on a conversation between Lars and @ErikDaniel007, not on work: the controller pattern (#430).
+Waiting on a conversation between Lars and @ErikDaniel007, not on work: the controller pattern.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -515,7 +515,7 @@ The rows below are what it carried, by the wave and group they came from.
 
 #### G4.6 Community module extension points — Ease H · Risk M
 
-What a Community module needs from the platform so it does not carry its own copy (from @AndreasJe's hosting module, 2026-10-28): one place for its secrets (#902), containers watched and logged like VMs (#901, #903), its own validated fields (#899) and its own alert rules (#904). The last two get an ADR each first.
+What a Community module needs from the platform so it does not carry its own copy: one place for its secrets, containers watched and logged like VMs, its own validated fields and its own alert rules — the last two with an ADR each first.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -742,7 +742,7 @@ The rows below are what it carried, by the wave and group they came from.
 
 #### G4.1 Alerting & cluster resilience — Ease M · Risk M
 
-Be told when something breaks, and survive more of it. Built: alerts from Loki by mail, every VM's logs in Loki, a credential per pushing VM, container severities from the line, each line's own timestamp, a release CVE preview with majors gated at the boundary (#788); two-node quorum with a QDevice verb (#835), HA failover only to nodes that carry the guest's bridges (#836), a site-timezone gate (#837). A site gone dark is now watched from outside (#776, built — its proof is in G5.1); the bonded lan uplink (#40) and the mail relay (#125) moved to G6.1.
+Be told when something breaks, and survive more of it: alerts from Loki by mail, every VM's logs in Loki with a credential per pushing VM, container severities and each line's own timestamp, a release CVE preview with majors gated at the boundary, two-node quorum with a QDevice, HA failover only to nodes that carry the guest's bridges, a site-timezone gate, and a site gone dark watched from outside.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -753,7 +753,7 @@ Be told when something breaks, and survive more of it. Built: alerts from Loki b
 
 #### G4.2 Proxy & ingress — Ease M · Risk L
 
-Publish less of each app: limit a route to some paths (#642), some zones (#643) or a provider's source addresses (#656), as ADR-023 describes. One model for how a module's routes are authenticated — several ports, native app clients, machine callers (#845, ADR-032). Decide whether an internal proxy is needed at all (#154).
+Publish less of each app: limit a route to some paths, some zones or a provider's source addresses (ADR-023). One model for how a module's routes are authenticated — several ports, native app clients, machine callers (ADR-032). Decide whether an internal proxy is needed at all.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -765,7 +765,7 @@ Publish less of each app: limit a route to some paths (#642), some zones (#643) 
 
 #### G4.3 Manager verb gaps — Ease M · Risk L
 
-The verbs operators otherwise do by hand (the `test` verbs, #499, are in G5.2): install a whole stack (#763), suspend a module (#428), migrate by changing `.node` (#429), private repositories (#634), module-level `--set` rules (#654).
+The verbs operators otherwise do by hand: install a whole stack, suspend a module, migrate by changing `.node`, private repositories and module-level `--set` rules.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
@@ -919,7 +919,7 @@ One module contract — what community modules copy and deployed configs point a
 
 #### G1.4 Common NixOS baseline — Ease H · Risk H
 
-One NixOS baseline every VM imports, carrying the site's time zone, locale, keyboard and time source — the same facts applied to Debian guests and nodes — and pins with a cadence. Left: hass locale (#348, G3.3) and Windows guests (#678, Future Work).
+One NixOS baseline every VM imports, carrying the site's time zone, locale, keyboard and time source — the same facts applied to Debian guests and nodes — and pins with a cadence.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
