@@ -146,6 +146,12 @@ export class Api {
       if (r.change !== null) this.o.log(`report ${r.change} from ${String((body as Obj).source)}: ${r.objects.length} object(s), ${r.relations.length} relation(s)`);
       return send(res, 200, { ok: true, data: r });
     }
+    if (method === "POST" && what === "retire" && !ref) {
+      const body = (await readBody(req)) as Obj;
+      const r = await s.retire(body ?? {});
+      if (r.change !== null) this.o.log(`retire ${r.change}: ${r.retired.length} object(s) retired`);
+      return send(res, 200, { ok: true, data: r });
+    }
     if (method === "POST" && what === "query" && !ref) {
       const body = await readBody(req);
       return send(res, 200, { ok: true, data: await s.query((body ?? {}) as Obj) });

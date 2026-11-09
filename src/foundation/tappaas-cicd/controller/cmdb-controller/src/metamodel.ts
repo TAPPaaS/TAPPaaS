@@ -260,6 +260,20 @@ export class Metamodel {
     return this.ancestors(name).some((a) => this.classes.get(a)!.desiredRecord);
   }
 
+  /** The CI classes known by another object: a key holds a relation from
+   *  them to it (a pool or software by its node). Such a CI cannot be found
+   *  again, nor live, once that object has ended (D7). */
+  keyedOn(): { class: string; relation: string }[] {
+    const out: { class: string; relation: string }[] = [];
+    for (const [c, def] of this.classes) {
+      if (def.abstract || !this.isA(c, "ci")) continue;
+      for (const f of this.fields(c).values()) {
+        if (f.type === "relation" && f.key !== null && f.spec.direction !== "in") out.push({ class: c, relation: String(f.spec.relation) });
+      }
+    }
+    return out;
+  }
+
   /** The keys of a class that are fields of related objects, own and inherited. */
   keyVia(name: string): KeyVia[] {
     return this.ancestors(name).flatMap((a) => this.classes.get(a)!.keyVia);

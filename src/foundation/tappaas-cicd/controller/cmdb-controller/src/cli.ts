@@ -24,6 +24,9 @@ const HELP = `cmdb — the CMDB: the actual state of the site
                                                       changed, what differs from config/; exit 0 clean,
                                                       1 drift or unmanaged, 2 missing or a source failed.
                                                       --last prints the last record, runs nothing
+  cmdb retire <id>... | --orphans [--apply]           retire CIs (D7): those named by id, or what a
+                                                      retired object left behind (a removed node's
+                                                      pools); lists them, --apply retires them
   cmdb rescan                                         ask every cmdbSource component to report again
   cmdb class list                                     the class tree
   cmdb class show <class>                             a class: fields, keys, relations
@@ -37,7 +40,7 @@ interface Args {
   opts: Map<string, string[]>;
 }
 
-const FLAGS = new Set(["json", "physical", "recorded", "all", "help", "last"]);
+const FLAGS = new Set(["json", "physical", "recorded", "all", "help", "last", "orphans", "apply"]);
 
 function parse(argv: string[]): Args {
   const pos: string[] = [];
@@ -271,6 +274,21 @@ function run(argv: string[]): number {
       const d = (a.opts.has("last") ? cmdbRequest("GET", "/v1/sweep") : cmdbRequest("POST", "/v1/sweep", {}, { timeoutSeconds: 4 * 3600 })) as Obj;
       print(json, d, () => sweepText(d));
       return a.opts.has("last") ? 0 : Number(d.exitCode ?? 0);
+    }
+    case "retire": {
+      const ids = a.pos.slice(1);
+      if (!ids.length && !a.opts.has("orphans")) throw new Error("retire: name ids, or --orphans");
+      const apply = a.opts.has("apply");
+      const d = cmdbRequest("POST", "/v1/retire", { ids, orphans: a.opts.has("orphans"), apply }) as Obj;
+      const want = (d.retire as Obj[]) ?? [];
+      print(json, d, () =>
+        !want.length
+          ? "nothing to retire"
+          : `${apply ? `retired in change ${String(d.change)}` : "[preview] would retire"} (--apply retires; what is known by each goes with it):\n` +
+            table(want.map((x) => [String(x.class), String(x.name), String(x.reason), String(x.id)]), ["CLASS", "NAME", "WHY", "ID"]) +
+            (apply ? `\n${(d.retired as string[]).length} object(s) retired in all` : ""),
+      );
+      return 0;
     }
     case "rescan": {
       const replay = replaySpool();

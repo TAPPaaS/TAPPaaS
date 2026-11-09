@@ -216,6 +216,15 @@ export function typeOk(f: FieldDef, v: unknown): string | null {
 }
 
 /** What a report wrote, for the reporter. */
+/** A CI to retire, and why (D7). */
+export interface RetireCandidate {
+  id: string;
+  class: string;
+  name: string;
+  reason: string;
+  on?: string; // the ended object it was known by
+}
+
 export interface ReportResult {
   change: number | null;
   objects: { ref?: string; id: string; class: string; name: string; reportedAs?: string; created: boolean; adopted?: boolean; changed: string[]; drift: string[]; ended: boolean }[];
@@ -287,6 +296,71 @@ export class Store {
     // A report moves the clock the expiry is read against; it never fails for it.
     await this.expire().catch(() => undefined);
     return result;
+  }
+
+  // ── retire (D7) ──────────────────────────────────────────────────────
+
+  /** The live CIs an ended object left behind: known by it (a key holds a
+   *  relation to it, D5) and with no such relation open, the last one to an
+   *  object that has ended — a pool of a node removed before a node's end
+   *  took its pools with it. Nothing can find them again. */
+  async orphans(): Promise<RetireCandidate[]> {
+    const keyed = this.mm.keyedOn();
+    if (!keyed.length) return [];
+    const rows = (
+      await this.pg.query(
+        `SELECT DISTINCT o.id, o.class, o.name, t.class AS on_class, t.name AS on_name, t.id AS on_id
+           FROM object o
+           JOIN jsonb_to_recordset($1::jsonb) AS k(class text, relation text) ON k.class = o.class
+           CROSS JOIN LATERAL (SELECT r.to_object FROM relation r WHERE r.from_object = o.id AND r.type = k.relation
+                                ORDER BY upper(r.validity) DESC NULLS FIRST LIMIT 1) last
+           JOIN object t ON t.id = last.to_object
+          WHERE o.ended IS NULL AND t.ended IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM relation r2 WHERE r2.from_object = o.id AND r2.type = k.relation AND upper_inf(r2.validity))
+          ORDER BY o.class, o.name, o.id`,
+        [JSON.stringify(keyed)],
+      )
+    ).rows;
+    return rows.map((r) => ({ id: String(r.id), class: String(r.class), name: String(r.name), reason: `its ${String(r.on_class)} ${String(r.on_name)} is retired`, on: String(r.on_id) }));
+  }
+
+  /** Retire live CIs (D7): by id, or the orphans. A preview unless apply;
+   *  applied, one change (verb as given, default "retire") ends each, and
+   *  what is known by each with it. Never a resource: an asset is disposed
+   *  of through asset-manager. */
+  async retire(body: Obj): Promise<{ change: number | null; apply: boolean; retire: RetireCandidate[]; retired: string[] }> {
+    const apply = body.apply === true;
+    const ids = Array.isArray(body.ids) ? body.ids.map(String) : [];
+    if (!ids.length && body.orphans !== true) throw new HttpError(400, "retire: name ids, or orphans: true");
+    const want: RetireCandidate[] = body.orphans === true ? await this.orphans() : [];
+    for (const id of ids) {
+      if (!UUID_RE.test(id)) throw new HttpError(400, `retire: ${id} is not an id`);
+      const r = (await this.pg.query("SELECT id, class, name, ended FROM object WHERE id = $1", [id])).rows[0];
+      if (!r) throw new HttpError(404, `retire: no object ${id}`);
+      if (r.ended !== null) throw new HttpError(409, `retire: ${String(r.class)} ${String(r.name)} (${id}) is already ended`);
+      if (!this.mm.isA(String(r.class), "ci")) throw new HttpError(422, `retire: ${String(r.class)} ${String(r.name)} is not a CI — an asset is disposed of through asset-manager`);
+      if (!want.some((w) => w.id === id)) want.push({ id, class: String(r.class), name: String(r.name), reason: "named" });
+    }
+    if (!apply || !want.length) return { change: null, apply, retire: want, retired: [] };
+    const verb = typeof body.verb === "string" && body.verb ? body.verb : "retire";
+    const t = new Date().toISOString();
+    const { event, retired } = await this.pg.tx(async (q) => {
+      const run = new ReportRun(this.mm, q, CONTROLLER_SOURCE, "change", t, false, false);
+      const c = await q(`INSERT INTO change (kind, source, job, verb, actor, time) VALUES ('change', $1, $2, $3, $4, $5) RETURNING id`, [
+        CONTROLLER_SOURCE, typeof body.job === "string" ? body.job : null, verb, typeof body.actor === "string" ? body.actor : null, t,
+      ]);
+      run.change = Number(c.rows[0].id);
+      for (const w of want) await run.retire(w.id, w.class);
+      const touched = [...run.touched];
+      const ev = await q(
+        `UPDATE change SET objects = ARRAY(SELECT (jsonb_array_elements_text($2::jsonb))::uuid) WHERE id = $1
+          RETURNING id, kind, source, job, verb, actor, time, to_jsonb(objects) AS objects, to_jsonb(relations) AS relations, drift`,
+        [run.change, touched],
+      );
+      return { event: ev.rows[0] as unknown as ChangeEvent, retired: touched };
+    });
+    for (const fn of this.listeners) fn(event);
+    return { change: Number(event.id), apply, retire: want, retired };
   }
 
   // ── unseen (D5) ──────────────────────────────────────────────────────
@@ -1335,23 +1409,29 @@ class ReportRun {
     return rid;
   }
 
+  /** Retire (or dispose of) a live object by id, as a report's end does. */
+  async retire(id: string, cls: string): Promise<void> {
+    const s = (await this.q(`SELECT id, value, lower(validity) AS "from" FROM attribute WHERE object = $1 AND name = 'stage' AND upper_inf(validity)`, [id])).rows;
+    const stage = s.length ? ([["stage", { id: Number(s[0].id), value: s[0].value, from: String(s[0].from) }]] as [string, Current][]) : [];
+    await this.end(id, cls, new Map(stage));
+    this.touched.add(id);
+  }
+
   // Retired (a CI) or disposed (a resource): its relations end, its rows stay.
-  // The software running on an ended node ends with it: its key is that node.
+  // What is known by the ended object ends with it — the pools and software
+  // on an ended node: their key is that node, so nothing can find them again.
   private async end(id: string, cls: string, current: Map<string, Current>): Promise<void> {
     await this.q("UPDATE object SET ended = $2 WHERE id = $1 AND ended IS NULL", [id, this.t]);
-    if (this.mm.isA(cls, "node")) {
-      const software = await this.q(
-        `SELECT o.id, o.class, s.id AS stage_id, s.value AS stage, lower(s.validity) AS "from"
-           FROM relation r JOIN object o ON o.id = r.from_object AND o.ended IS NULL
-           LEFT JOIN attribute s ON s.object = o.id AND s.name = 'stage' AND upper_inf(s.validity)
-          WHERE r.type = 'runs-on' AND r.to_object = $1 AND upper_inf(r.validity) AND o.class IN (SELECT jsonb_array_elements_text($2::jsonb))`,
-        [id, JSON.stringify(this.mm.descendants("software"))],
+    const keyed = this.mm.keyedOn();
+    if (keyed.length) {
+      const dependants = await this.q(
+        `SELECT DISTINCT o.id, o.class FROM relation r
+           JOIN object o ON o.id = r.from_object AND o.ended IS NULL
+           JOIN jsonb_to_recordset($2::jsonb) AS k(class text, relation text) ON k.class = o.class AND k.relation = r.type
+          WHERE r.to_object = $1 AND upper_inf(r.validity)`,
+        [id, JSON.stringify(keyed)],
       );
-      for (const r of software.rows) {
-        const stage = r.stage_id == null ? [] : ([["stage", { id: Number(r.stage_id), value: r.stage, from: String(r.from) }]] as [string, Current][]);
-        await this.end(String(r.id), String(r.class), new Map(stage));
-        this.touched.add(String(r.id));
-      }
+      for (const r of dependants.rows) await this.retire(String(r.id), String(r.class));
     }
     for (const r of (await this.q("SELECT id FROM relation WHERE (from_object = $1 OR to_object = $1) AND upper_inf(validity)", [id])).rows) {
       await this.closeRelation(Number(r.id));

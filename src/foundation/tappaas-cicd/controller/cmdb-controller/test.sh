@@ -315,6 +315,38 @@ check "…retired" "retired" "$(cmdb query service --all --json | jq -r '[.[] | 
 check "the same service on another node stays" "1" "$(cmdb query service --json | jq '[.[] | select(.name == "m:web")] | length')"
 check "the machine a guest ran on stays, a vm is not software" "1" "$(cmdb query machine --where name=tappaas1 --json | jq 'length')"
 
+echo "== a node's pools end with it; what an earlier end left behind is retired (D7) =="
+cmdb report --json >/dev/null <<<'{"source":"storage-manager","objects":[
+  {"ref":"n","class":"machine","name":"pool-node"},
+  {"class":"storage-pool","name":"tanka1","attributes":{"onNode":{"ref":"n"}}},
+  {"class":"storage-pool","name":"tanka1","attributes":{"onNode":{"class":"machine","name":"tappaas1"}}}]}'
+LIVE_POOL="$(cmdb relations --type runs-on --to machine/tappaas1 --json | jq -r '[.[] | select(.from.class == "storage-pool")][0].from.id')"
+cmdb report --json >/dev/null <<<'{"source":"site-manager","kind":"change","verb":"node delete pool-node","objects":[{"class":"machine","name":"pool-node","end":true}]}'
+check "the removed node's pool is retired" "retired" "$(cmdb query storage-pool --all --json | jq -r '[.[] | select(.ended != null)][0].attributes.stage')"
+check "the pool of that name on another node stays" "1 ${LIVE_POOL}" "$(cmdb query storage-pool --json | jq -r '"\(length) \(.[0].id)"')"
+# The leftovers of before: a pool whose node ended after its runs-on had.
+cmdb report --json >/dev/null <<<'{"source":"storage-manager","objects":[{"ref":"n","class":"machine","name":"old-node"},{"class":"storage-pool","name":"tankb1","attributes":{"onNode":{"ref":"n"}}}]}'
+OLD_POOL="$(cmdb query storage-pool --where name=tankb1 --json | jq -r '.[0].id')"
+OLD_NODE="$(cmdb show machine/old-node --json | jq -r '.id')"
+cmdb report --json >/dev/null <<JSON
+{"source":"storage-manager","kind":"change","relations":[{"type":"runs-on","from":{"id":"${OLD_POOL}"},"to":{"id":"${OLD_NODE}"},"end":true}]}
+JSON
+cmdb report --json >/dev/null <<<'{"source":"site-manager","kind":"change","objects":[{"class":"machine","name":"old-node","end":true}]}'
+check "a pool left behind by an earlier end is still live" "1" "$(cmdb query storage-pool --where name=tankb1 --json | jq 'length')"
+out="$(cmdb retire --orphans --json)"
+check "retire --orphans lists it, and only it, as a preview" "false ${OLD_POOL}" "$(jq -r '"\(.apply) \([.retire[].id] | join(","))"' <<<"${out}")"
+check "…the preview retires nothing" "1" "$(cmdb query storage-pool --where name=tankb1 --json | jq 'length')"
+out="$(cmdb retire --orphans --apply --json)"
+check "--apply retires it, with its history" "0 retired" "$(cmdb query storage-pool --where name=tankb1 --json | jq 'length') $(cmdb show "${OLD_POOL}" --json | jq -r '.attributes.stage.value // .attributes.stage')"
+check "…and nothing else" "${LIVE_POOL}" "$(cmdb query storage-pool --json | jq -r '[.[].id] | join(",")')"
+RET_VM="$(cmdb report --json <<<'{"source":"module-manager","objects":[{"class":"vm","name":"retire-me","attributes":{"vmid":702}}]}' | jq -r '.result.objects[0].id')"
+out="$(cmdb retire "${RET_VM}" --json)"
+check "retire <id> previews the one named" "false named" "$(jq -r '"\(.apply) \(.retire[0].reason)"' <<<"${out}")"
+cmdb retire "${RET_VM}" --apply --json >/dev/null
+check "retire <id> --apply retires it" "0" "$(cmdb query vm --where name=retire-me --json | jq 'length')"
+out="$(cmdb retire "${RET_VM}" --json 2>&1)" && bad "an ended object retired again: ${out}" || ok "an ended object is refused"
+out="$(cmdb retire "${SRV_ID}" --json 2>&1)" && bad "an asset was retired: ${out}" || ok "an asset is not retired: asset-manager disposes of it"
+
 echo "== the listeners =="
 check "loopback without the token: 401" "401" "$(curl -s -o /dev/null -w '%{http_code}' "http://${CMDB_LISTEN}/v1/health")"
 check "loopback with the token: 200" "200" "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $(cat "${CMDB_TOKEN_FILE}")" "http://${CMDB_LISTEN}/v1/health")"

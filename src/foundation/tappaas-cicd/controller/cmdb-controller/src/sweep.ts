@@ -350,6 +350,10 @@ export class Sweep {
     d.log(`sweep: asking every source${since ? ` (the last sweep: ${since})` : " (the first: this one is the baseline)"}`);
     const sources = await (d.rescanAll ?? (async () => (await rescan(d.log, rescanSources(), { discover: true })).asked))();
     await this.store.expire(now());
+    // What a retired object left behind is retired with it (D7), as a change,
+    // so the differences below list it as expected.
+    const orphans = await this.store.retire({ orphans: true, apply: true, verb: "sweep: retire orphans" });
+    for (const o of orphans.retire) d.log(`sweep: retired ${o.class} ${o.name} (${o.id}): ${o.reason}`);
     const until = now().toISOString();
 
     const differences: Difference[] = since ? await this.sinceLast(since, until) : [];
