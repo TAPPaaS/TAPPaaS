@@ -84,6 +84,23 @@ in
     "10.0.0.18" = [ "tappaas9.mgmt.internal" "tappaas9" ];
   };
 
+  # The mothership logs in to its own nodes, guests and firewall with its own
+  # keys only: ~/.ssh/id_ed25519, or the key ~/.ssh/config names for a host
+  # (tappaas-fw for the firewall). Without this, a session that forwards the
+  # operator's agent (`ssh -A`, to sign a release) offers the agent's keys first
+  # on every internal login, and a vault-backed agent asks to approve each one.
+  # IdentitiesOnly alone still lists the agent's keys: a locked agent stalls
+  # every login (update-os sat 16 min, 2026-11-08). The keys are files, so no
+  # agent at all. Scoped to tappaas and internal names: the agent still serves
+  # git to the forge, a satellite's public address and tag signing (ssh-keygen
+  # -Y sign asks it directly). `Match all` closes the block.
+  programs.ssh.extraConfig = ''
+    Match localuser tappaas host "*.internal,10.*,localhost,127.0.0.1,tappaas-cicd,tappaas?"
+      IdentitiesOnly yes
+      IdentityAgent none
+    Match all
+  '';
+
   # Set your time zone.
   # No time zone here: it is the site's fact, not the mothership's (#472). It
   # arrives through /etc/nixos/tappaas-site.nix, which the baseline imports.
