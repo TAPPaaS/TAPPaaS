@@ -44,9 +44,11 @@ Usage:
                  --image-scanner CMD --from REV --to REV --out preview.json [--ignore FILE]
                  [--details FILE] [--acked release-train.json] [--vex-root DIR] [--scorer CMD]
   A scanner CMD carries {file}: the JSON list it is handed.
+  An images FILE maps each module to the list of image references it runs
+  (release-images.py; karakeep runs three). A bare string is read as one.
   --details writes, per module, each side's critical/high CVEs (id, package,
-  version, severity, nixos|image), its image references and the package versions
-  that change — for working out what to fix.
+  version, severity, nixos|image — an image package names its image), its image
+  references and the package versions that change — for working out what to fix.
 
   pin-preview.py --show MODULE --details FILE    one module from a details file:
                                                  NEW, FIXED and SAME, each CVE listed
@@ -285,6 +287,12 @@ def fingerprint(cve):
     return cve["severity"] + " " + ",".join(sorted(f"{p['pkg']}@{p['version']}" for p in cve["packages"]))
 
 
+def image_lists(d):
+    """module -> [image refs]: a module runs one image or several (karakeep's web app,
+    chrome and meilisearch); an images file from before that holds one string each."""
+    return {m: ([v] if isinstance(v, str) else [x for x in v or [] if x]) for m, v in (d or {}).items()}
+
+
 def run_scorer(cmd, details_path):
     """health-manager score --details: the one score (lib/ts), per module and the release."""
     r = subprocess.run([x.replace("{file}", details_path) for x in shlex.split(cmd)], capture_output=True, text=True)
@@ -310,9 +318,9 @@ def main():
     try:
         inv = inventory(json.load(open(a.inventory)))
         status = json.load(open(a.status))
-        base_img = json.load(open(a.base_images))
-        now_img = json.load(open(a.now_images))
-    except (OSError, ValueError) as e:
+        base_img = image_lists(json.load(open(a.base_images)))
+        now_img = image_lists(json.load(open(a.now_images)))
+    except (OSError, ValueError, AttributeError, TypeError) as e:
         print(f"pin-preview: bad input: {e}", file=sys.stderr)
         return 2
     ignore = {}
@@ -373,7 +381,7 @@ def main():
             sup.setdefault((f.get("pkg"), f.get("installed")), []).append(f)
         nix[side] = by
         nix_sup[side] = sup
-    refs = sorted(set(base_img.values()) | set(now_img.values()))
+    refs = sorted({x for d in (base_img, now_img) for rs in d.values() for x in rs})
     img, err = run_scanner(a.image_scanner, refs) if refs else ({}, "")
     if err:
         errors.append(f"images: {err}")
@@ -389,23 +397,25 @@ def main():
         by = f.get("vexModules")
         return by is None or "" in by or m in by
 
-    def findings_for(side, pairs, ref, m, suppressed=False):
-        """Findings of these NixOS (pkg, version) pairs and this image on one side. A
-        finding another module's VEX decided is still m's finding."""
+    def findings_for(side, pairs, images, m, suppressed=False):
+        """Findings of these NixOS (pkg, version) pairs and these images on one side, an
+        image's marked with its reference. A finding another module's VEX decided is
+        still m's finding."""
         out = []
-        def take(open_, sup, src):
+        def take(open_, sup, src, ref=None):
+            at = {"from": src, **({"image": ref} if ref else {})}
             if suppressed:
-                return [dict(f, **{"from": src}) for f in sup if decided(f, m)]
-            return [dict(f, **{"from": src}) for f in open_] + [dict(f, **{"from": src}) for f in sup if not decided(f, m)]
+                return [dict(f, **at) for f in sup if decided(f, m)]
+            return [dict(f, **at) for f in open_] + [dict(f, **at) for f in sup if not decided(f, m)]
         for p, v in pairs:
             out += take(nix[side].get((p, v), []), nix_sup[side].get((p, v), []), "nixos")
-        if ref:
+        for ref in images or []:
             r = img.get(ref) or {}
-            out += take(r.get("findings", []), r.get("suppressed", []), "image")
+            out += take(r.get("findings", []), r.get("suppressed", []), "image", ref)
         return out
 
     def side_findings(side, m, suppressed=False):
-        """A module's findings on one side: its NixOS packages' and its image's."""
+        """A module's findings on one side: its NixOS packages' and its images'."""
         pairs = [(p, v) for p, vs in pkgs[side].get(m, {}).items() for v in vs]
         return findings_for(side, pairs, (base_img if side == "base" else now_img).get(m), m, suppressed)
 
@@ -420,6 +430,8 @@ def main():
                 e["severity"] = "Critical"
             pk = {"pkg": f.get("pkg"), "version": f.get("installed", ""), "fixed": f.get("fixed", ""), "from": f["from"],
                   "purl": f.get("purl") or (finding_purl(f, "nixos") if f["from"] == "nixos" else "")}
+            if f.get("image"):
+                pk["image"] = f["image"]
             if f.get("unversioned"):
                 pk["unversioned"] = True
             if pk not in e["packages"]:
@@ -573,7 +585,7 @@ def main():
         bfo, nfo, vxo = own(bf, "base"), own(nf, "now"), own(vx, "now")
         note = "new since " + a.base_label if not in_base else ("removed" if not in_now else "")
         row, gone = make_row(m, bfo, nfo, vxo, in_base, in_now, note, approx.get(m, False))
-        row["image"] = now_img.get(m) or base_img.get(m)
+        row["images"] = now_img.get(m) or base_img.get(m) or []
         rows.append(row)
         bk, nk = set(bf), set(nf)
         for k in nk:  # the details keep the module's whole picture, the baseline marked
@@ -583,7 +595,7 @@ def main():
         bp, np_ = pkgs["base"].get(m, {}), pkgs["now"].get(m, {})
         details[m] = {
             "module": m, "approximate": approx.get(m, False), "note": row["note"],
-            "image": {"base": base_img.get(m), "now": now_img.get(m)},
+            "image": {"base": base_img.get(m, []), "now": now_img.get(m, [])},
             "packages": [{"pkg": p, "base": max(bp[p], key=vkey) if p in bp else None, "now": max(np_[p], key=vkey) if p in np_ else None}
                          for p in sorted(set(bp) | set(np_))
                          if (max(bp[p], key=vkey) if p in bp else None) != (max(np_[p], key=vkey) if p in np_ else None)],
@@ -688,8 +700,7 @@ def main():
             for v in vs:
                 for f in nix[side].get((p_, v), []) + nix_sup[side].get((p_, v), []):
                     out_.setdefault(f["id"], set()).add(split_purl(finding_purl(f, "nixos")))
-        ref = (base_img if side == "base" else now_img).get(m)
-        if ref:
+        for ref in (base_img if side == "base" else now_img).get(m, []):
             r = img.get(ref) or {}
             for f in r.get("findings", []) + r.get("suppressed", []):
                 out_.setdefault(f["id"], set()).add(split_purl(finding_purl(f, "image")))
@@ -801,10 +812,15 @@ def show(module, path):
     print(f"{module} — if released now (pin {d.get('to', '')[:12]}) against {b} (pin {d.get('from', '')[:12]})"
           + ("   ≈ approximate: runs nowhere on the build system" if m.get("approximate") else "")
           + (f"   [{m['note']}]" if m.get("note") else ""))
-    i = m.get("image") or {}
-    if i.get("base") or i.get("now"):
-        same = i.get("base") == i.get("now")
-        print(f"  image: {i.get('now') or '—'}" + ("   (unchanged)" if same else f"   ({b}: {i.get('base') or '—'})"))
+    i = image_lists(m.get("image") or {})  # an older details file: one string per side
+    repo = lambda r: re.split(r"@|:(?=[^/:]*$)", r)[0]  # the image without its tag or digest
+    olds = {repo(r): r for r in i.get("base", [])}
+    for n in i.get("now", []) + [r for r in i.get("base", []) if repo(r) not in {repo(x) for x in i.get("now", [])}]:
+        o = olds.get(repo(n))
+        if n not in i.get("now", []):
+            print(f"  image: —   ({b}: {n})")
+        else:
+            print(f"  image: {n}" + ("   (unchanged)" if o == n else f"   ({b}: {o or '—'})"))
     moved = [p for p in m.get("packages", []) if p["base"] and p["now"]]
     gone = [p["pkg"] for p in m.get("packages", []) if p["base"] and not p["now"]]
     added = [p["pkg"] for p in m.get("packages", []) if p["now"] and not p["base"]]
@@ -833,7 +849,8 @@ def show(module, path):
             for i, p in enumerate(f["packages"]):
                 head = f"{f['severity']:<8} {f['id']:<20} {tag:<10}" if i == 0 else " " * 40
                 fix = f"  fixed in {p['fixed']}" if p.get("fixed") else ""
-                print(f"    {head} {p['pkg'] or '':<28} {p['version'] or '':<24} {p['from']}{fix}")
+                src = f"image {p['image'].split('/')[-1]}" if p.get("image") else p["from"]  # which of its images
+                print(f"    {head} {p['pkg'] or '':<28} {p['version'] or '':<24} {src}{fix}")
             c = f.get("carried")
             if c:
                 print(f"{'':44}analysed for {', '.join(c['from'])}: {c['state']}"

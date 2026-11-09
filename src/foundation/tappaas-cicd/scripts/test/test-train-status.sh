@@ -709,6 +709,20 @@ FAKE_GATE='["major grafana 13->14"]' run_to preview
 printf '{"baseLabel":"v2.1","from":"a","to":"b","modules":{"logging":{"module":"logging","approximate":false,"note":"","image":{},"packages":[],"cves":{"new":[{"id":"CVE-2","severity":"High","packages":[{"pkg":"grafana","version":"14.0.1","fixed":"","from":"nixos"}]}],"fixed":[],"same":[],"vex":[]}}}}' > "${TMP}/cfg/train-preview-details.json"
 run_to preview --module logging
 [[ "${RC}" -eq 0 && "${OUT}" == *"NEW"*"CVE-2"*"grafana"* ]] && ok "preview --module shows one module from the details" || bad "--module: ${OUT}"
+# A module that runs several images: each one listed, each CVE with the image it is in.
+jq '.modules.karakeep = {"module":"karakeep","approximate":false,"note":"","packages":[],
+  "image":{"base":["ghcr.io/k/karakeep:0.9","ghcr.io/k/karakeep-chrome:1.0","getmeili/meilisearch:v1.0"],
+           "now":["ghcr.io/k/karakeep:1.0","ghcr.io/k/karakeep-chrome:1.0","getmeili/meilisearch:v1.0"]},
+  "cves":{"new":[],"fixed":[],"vex":[],"same":[{"id":"CVE-5","severity":"High","status":"open","packages":[
+    {"pkg":"openssl","version":"3.0.1","fixed":"","from":"image","image":"ghcr.io/k/karakeep-chrome:1.0"},
+    {"pkg":"openssl","version":"3.5.0","fixed":"","from":"image","image":"getmeili/meilisearch:v1.0"}]}]}}' \
+    "${TMP}/cfg/train-preview-details.json" > "${TMP}/d.json" && mv "${TMP}/d.json" "${TMP}/cfg/train-preview-details.json"
+run_to preview --module karakeep
+[[ "${RC}" -eq 0 && "${OUT}" == *"image: ghcr.io/k/karakeep:1.0   (v2.1: ghcr.io/k/karakeep:0.9)"* \
+   && "${OUT}" == *"image: ghcr.io/k/karakeep-chrome:1.0   (unchanged)"* && "${OUT}" == *"image: getmeili/meilisearch:v1.0   (unchanged)"* ]] \
+    && ok "preview --module lists every image of a module that runs several" || bad "--module karakeep images: ${OUT}"
+[[ "${OUT}" == *"openssl"*"3.0.1"*"image karakeep-chrome:1.0"*"openssl"*"3.5.0"*"image meilisearch:v1.0"* ]] \
+    && ok "…each CVE package with the image it is in" || bad "--module karakeep packages: ${OUT}"
 FAKE_GATE='["major grafana 13->14"]' FAKE_NOW=$(( 1790000000 + 20*86400 )) run_to boundary --resume --to nixos-26.05
 [[ "${RC}" -ne 0 && "${OUT}" == *"stopped before the deep test"* && "${OUT}" == *"major grafana 13->14"* ]] \
     && ok "the boundary stops on an unaccepted major, before the deep test" || bad "boundary went on: ${OUT}"

@@ -39,8 +39,10 @@ drvs "${T}/base/logging.txt" grafana-13.0.9 openssl-3.5.1 gcc-15.1.0 abseil-cpp-
 # now: grafana 14 (a major), openssl 3.5.2; deconz is new and runs nowhere here.
 drvs "${T}/now/logging.txt" grafana-14.0.1 openssl-3.5.2 gcc-16.2.0 abseil-cpp-20260817.0 less-710 xgcc-16.2.0 protobuf-33.6 polkit-1.pam
 drvs "${T}/now/deconz.txt" openssl-3.5.2 cmake-4.1.0
-echo '{"openwebui":"ow:0.10.2","litellm":"lit:1.85.0"}' > "${T}/base-images.json"
-echo '{"openwebui":"ow:0.10.2","litellm":"lit:1.103.3"}' > "${T}/now-images.json"
+# A module may run several images (karakeep: its web app and meilisearch); openwebui
+# keeps the older one-string form, still read.
+echo '{"openwebui":"ow:0.10.2","litellm":["lit:1.85.0"],"karakeep":["kk:1.0","meili:1.0"]}' > "${T}/base-images.json"
+echo '{"openwebui":"ow:0.10.2","litellm":["lit:1.103.3"],"karakeep":["kk:1.1","meili:1.0"]}' > "${T}/now-images.json"
 echo '{"packages":{"xgcc":"GCC runtime libraries"}}' > "${T}/ignore.json"
 
 # The scanners answer from fixed tables: by name@version, and by image reference.
@@ -77,7 +79,7 @@ cat > "${T}/img" <<'EOF'
 #!/usr/bin/env python3
 import json, sys
 db = {"ow:0.10.2": [("CVE-W1", "Critical", "perl"), ("CVE-W2", "High", "libssl3"), ("CVE-W2", "High", "openssl")], "lit:1.85.0": [("CVE-L1", "High", "PyJWT"), ("CVE-L2", "High", "tar")],
-      "lit:1.103.3": [("CVE-L2", "High", "tar")]}
+      "lit:1.103.3": [("CVE-L2", "High", "tar")], "kk:1.0": [("CVE-K1", "High", "next")], "meili:1.0": [("CVE-M1", "High", "heed")]}
 refs = json.load(open(sys.argv[sys.argv.index("--refs") + 1]))
 json.dump({r: {"findings": [{"id": i, "severity": s, "pkg": p, "installed": "x", "fixed": "y" if p == "openssl" else ""} for i, s, p in db.get(r, [])], "suppressed": [], "error": ""}
            for r in refs}, sys.stdout)
@@ -97,11 +99,13 @@ ck "runs" "0" "${RC}"
 ck "logging: now 2 | v2.1 2, fixed 1, new 1, same 1" "2 2 1 1 1" "$(row logging)"
 ck "an image module counts like a NixOS one: litellm 1 | 2, fixed 1" "1 2 1 0 1" "$(row litellm)"
 ck "an unchanged image: openwebui 2 | 2, same 2" "2 2 0 0 2" "$(row openwebui)"
+ck "a module with two images counts both: karakeep 1 | 2, fixed 1 (web), same 1 (meilisearch)" "1 2 1 0 1" "$(row karakeep)"
+ck "…and its row names both images" "kk:1.1 meili:1.0" "$(jq -r '.modules[] | select(.module=="karakeep") | .images | join(" ")' "${T}/p.json")"
 ck "one CVE in two packages counts once, as in the nightly scan (CVE-W2: libssl3 + openssl)" "2" "$(jq '.modules[] | select(.module=="openwebui") | .now' "${T}/p.json")"
 ck "a module new since the release: deconz, no release column" "1 null 0 1 0" "$(row deconz)"
 ck "…counted though it runs nowhere, marked approximate" "true" "$(jq '.modules[] | select(.module=="deconz") | .approximate' "${T}/p.json")"
 ck "…from runtime package names only — no build tool" "1" "$(jq '.modules[] | select(.module=="deconz") | .now' "${T}/p.json")"
-ck "the modules total: now 6 | v2.1 6" "6 6" "$(jq -r '"\(.total.now) \(.total.base)"' "${T}/p.json")"
+ck "the modules total: now 7 | v2.1 8" "7 8" "$(jq -r '"\(.total.now) \(.total.base)"' "${T}/p.json")"
 ck "the platform has only a now: firewall 0" "0" "$(jq -r '.platform[] | select(.module == "network") | .now' "${T}/p.json")"
 ck "the site's nodes are ONE pvehost row, its CVEs counted once by id (3, not 3+2)" "pvehost ×2 3 tappaas1 3 · tappaas2 2" \
    "$(jq -r '.platform[] | select(.module == "pvehost") | "\(.target) \(.now) \(.note)"' "${T}/p.json")"
@@ -122,7 +126,7 @@ ck "the gate: majors and what is new against the release" \
 ck "the table: NOW first, then the release's columns — no SAME (it is NOW minus NEW)" "yes" \
    "$([[ "${OUT}" == *"MODULE"*"NOW"*"│"*"V2.1"*"FIXED"*"NEW"*"│"*"VEX"* && "$(grep -m1 'MODULE' <<<"${OUT}")" != *SAME* ]] && echo yes || echo no)"
 ck "…with the approximate row said" "yes" "$([[ "${OUT}" == *"deconz"*"≈ approximate"* ]] && echo yes || echo no)"
-ck "…and a grand TOTAL with the platform" "yes" "$(grep -qE '^ +TOTAL +75 ' <<<"${OUT}" && echo yes || echo no)"
+ck "…and a grand TOTAL with the platform" "yes" "$(grep -qE '^ +TOTAL +76 ' <<<"${OUT}" && echo yes || echo no)"
 # ── the details file: per module, each CVE with what it is (#788) ──
 D="${T}/d.json"
 ck "details: logging's NEW lists the CVE, package, version and where it comes from" "CVE-2 grafana 14.0.1 High nixos" \
@@ -133,7 +137,15 @@ ck "one CVE, every package it hits, with the version that fixes it" "CVE-W2 libs
    "$(jq -r '.modules.openwebui.cves.same[] | select(.id=="CVE-W2") | "\(.id) \([.packages[].pkg] | join(",")) \([.packages[].fixed | select(. != "")] | join(","))"' "${D}")"
 ck "…and the packages that change" "true" "$(jq '[.modules.logging.packages[] | select(.pkg=="grafana" and .base=="13.0.9" and .now=="14.0.1")] | length == 1' "${D}")"
 ck "an image module: both references, and its CVEs marked image" "lit:1.85.0 lit:1.103.3 image" \
-   "$(jq -r '.modules.litellm | "\(.image.base) \(.image.now) \(.cves.fixed[0].packages[0].from)"' "${D}")"
+   "$(jq -r '.modules.litellm | "\(.image.base | join(" ")) \(.image.now | join(" ")) \(.cves.fixed[0].packages[0].from)"' "${D}")"
+ck "two images: both sides list both, each CVE names the image it is in" "kk:1.0,meili:1.0 kk:1.1,meili:1.0 CVE-K1@kk:1.0 CVE-M1@meili:1.0" \
+   "$(jq -r '.modules.karakeep | "\(.image.base | join(",")) \(.image.now | join(",")) \(.cves.fixed[0].id)@\(.cves.fixed[0].packages[0].image) \(.cves.same[0].id)@\(.cves.same[0].packages[0].image)"' "${D}")"
+SHOW="$(python3 "${PP}" --show karakeep --details "${D}" 2>&1)"
+ck "--show lists each image, matched by name with the release's" "yes" \
+   "$([[ "${SHOW}" == *"image: kk:1.1   (v2.1: kk:1.0)"* && "${SHOW}" == *"image: meili:1.0   (unchanged)"* ]] && echo yes || echo no)"
+jq '.modules.litellm.image = {"base":"lit:1.85.0","now":"lit:1.103.3"}' "${D}" > "${T}/d1.json"
+SHOW="$(python3 "${PP}" --show litellm --details "${T}/d1.json" 2>&1)"
+ck "…and an older details file's one-string image" "yes" "$([[ "${SHOW}" == *"image: lit:1.103.3   (v2.1: lit:1.85.0)"* ]] && echo yes || echo no)"
 SHOW="$(python3 "${PP}" --show logging --details "${D}" 2>&1)"; RC=$?
 ck "--show prints one module: NEW, FIXED and SAME, each CVE on its line" "yes" \
    "$([[ ${RC} -eq 0 && "${SHOW}" == *"NEW"*"CVE-2"*"FIXED"*"CVE-OLD"*"SAME"*"CVE-1"* && "${SHOW}" == *"grafana"*"13.0.9 -> 14.0.1"* ]] && echo yes || echo no)"
@@ -305,7 +317,7 @@ ck "deconz-test (deconz in the test environment) is no separate 'not compared' r
 mv "${T}/cs5.bak" "${T}/cve-status.json"
 
 # ── ADR-045: VEX statements live / carried / gone, carried items, the score ──
-V="${T}/vexroot"; mkdir -p "${V}/src/obs/logging" "${V}/src/foundation/templates" "${V}/src/foundation/pvehost" "${V}/src/home/deconz" "${V}/src/test-repository/x"
+V="${T}/vexroot"; mkdir -p "${V}/src/home/karakeep" "${V}/src/obs/logging" "${V}/src/foundation/templates" "${V}/src/foundation/pvehost" "${V}/src/home/deconz" "${V}/src/test-repository/x"
 vexf() { local f="$1"; shift; printf '{"bomFormat":"CycloneDX","specVersion":"1.5","vulnerabilities":[%s]}\n' "$(IFS=,; echo "$*")" > "${f}"; }
 st() { printf '{"id":"%s","analysis":{"state":"%s","detail":"%s"%s},"affects":[%s]%s}' "$1" "$2" "$3" "${4:+,\"justification\":\"$4\"}" "$5" "${6:-}"; }
 refs() { local o=""; for r in "$@"; do o+="${o:+,}{\"ref\":\"${r}\"}"; done; echo "${o}"; }
@@ -319,6 +331,11 @@ vexf "${V}/src/foundation/templates/templates-vex.json" \
   "$(st CVE-TG not_affected 'old glibc' requires_environment "$(refs pkg:nix/glibc@2.40)")" \
   "$(st CVE-TD not_affected 'a node package' requires_environment "$(refs pkg:deb/debian/libc6@2.41)")"
 vexf "${V}/src/foundation/pvehost/pvehost-vex.json" "$(st CVE-P not_affected 'no ceph' code_not_reachable "$(refs pkg:deb/debian/librados2@19)")"
+# karakeep: one statement on each image — the second one's (meilisearch) is matched too.
+vexf "${V}/src/home/karakeep/karakeep-vex.json" \
+  "$(st CVE-K1 not_affected 'web: the release still ships it' code_not_reachable "$(refs pkg:generic/next@x)")" \
+  "$(st CVE-M1 not_affected 'meilisearch: no LMDB from outside' code_not_reachable "$(refs pkg:generic/heed@x)")" \
+  "$(st CVE-M1 not_affected 'meilisearch, an older heed' code_not_reachable "$(refs pkg:generic/heed@0.9)")"
 vexf "${V}/src/home/deconz/deconz-vex.json" "$(st CVE-DZ not_affected 'x' code_not_reachable "$(refs pkg:nix/zz@1)")"
 vexf "${V}/src/test-repository/x/x-vex.json" "$(st CVE-T not_affected 'fixture' code_not_reachable "$(refs pkg:nix/a@1)")"
 cat > "${T}/scorer" <<'PYEOF'
@@ -352,6 +369,8 @@ ck "a baseline statement on a Debian package (a node's) is never judged" "unjudg
 ck "the platform's statements are not judged (not in the preview)" "unjudged" "$(vcls CVE-P)"
 ck "an approximate module's statements are not judged" "unjudged" "$(vcls CVE-DZ)"
 ck "test trees are not read" "" "$(vcls CVE-T)"
+ck "a two-image module: a statement on its second image is LIVE, one on the first the release ships LIVE" "live live,carried" \
+   "$(vcls CVE-K1) $(vcls CVE-M1)"
 ck "the row counts them: logging LIVE 2, CARRIED 1, GONE 2, one dead ref" "2 1 2 1" \
    "$(jq -r '.modules[] | select(.module=="logging") | "\(.vexLive) \(.vexCarried) \(.vexGone) \(.vexDeadRefs)"' "${T}/p.json")"
 ck "a carried CVE is CARRIED, not OPEN, in the row" "0 1" "$(jq -r '.modules[] | select(.module=="logging") | "\(.open) \(.carried)"' "${T}/p.json")"

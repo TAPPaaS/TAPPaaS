@@ -21,24 +21,28 @@ mkdir -p "${R}/src/ai/web" "${R}/src/home/db"; git -C "${R}" mv src/apps/web/web
 echo 'version = "1.2.0";' > "${R}/src/ai/web/web.nix"
 echo 'lines = [ "1.0.0" "2.0.1" ];' > "${R}/src/foundation/idp/idp.nix"
 echo 'digest = "sha256:abc123";' > "${R}/src/home/db/db.nix"
+printf 'webImage = "ex/kk:1.0";\nchromeImage = "ex/kk-chrome:2.0";\n' > "${R}/src/home/db/kk.nix"
 cat > "${R}/src/image-pins.json" <<'EOF'
 {"pins":[
  {"module":"web","image":"ex/web","kind":"tag","file":"src/ai/web/web.nix","match":"version = \"([^\"]+)\";"},
  {"module":"idp","image":"ex/idp","kind":"tag","file":"src/foundation/idp/idp.nix","match":"lines = \\[[^\\]]*\"([0-9.]+)\"\\s*\\];",
   "earlierMatch":["server = \"([0-9.]+)\";"]},
- {"module":"db","image":"ex/db","kind":"digest","file":"src/home/db/db.nix","match":"digest = \"(sha256:[0-9a-f]+)\";"}
+ {"module":"db","image":"ex/db","kind":"digest","file":"src/home/db/db.nix","match":"digest = \"(sha256:[0-9a-f]+)\";"},
+ {"module":"kk","image":"ex/kk","kind":"tag","file":"src/home/db/kk.nix","match":"webImage = \"ex/kk:([^\"]+)\";"},
+ {"module":"kk","image":"ex/kk-chrome","kind":"tag","file":"src/home/db/kk.nix","match":"chromeImage = \"ex/kk-chrome:([^\"]+)\";"}
 ]}
 EOF
 git -C "${R}" add -A; git -C "${R}" commit -qm since
 
 then="$(python3 "${RI}" --repo "${R}" --ref v1.0)"
 now="$(python3 "${RI}" --repo "${R}")"
-ck "a release's image is read from where its file was then (src/apps/)" "ex/web:0.9.0" "$(jq -r .web <<<"${then}")"
-ck "a value whose form changed is read with earlierMatch" "ex/idp:1.0.0" "$(jq -r .idp <<<"${then}")"
-ck "a module the release did not have is left out" "null" "$(jq -r .db <<<"${then}")"
-ck "the working tree: the moved, bumped file" "ex/web:1.2.0" "$(jq -r .web <<<"${now}")"
-ck "…the current form, its last value" "ex/idp:2.0.1" "$(jq -r .idp <<<"${now}")"
-ck "…and a digest pin as image@digest" "ex/db@sha256:abc123" "$(jq -r .db <<<"${now}")"
+ck "a release's image is read from where its file was then (src/apps/)" "ex/web:0.9.0" "$(jq -r '.web | if . == null then "null" else join(" ") end' <<<"${then}")"
+ck "a value whose form changed is read with earlierMatch" "ex/idp:1.0.0" "$(jq -r '.idp | if . == null then "null" else join(" ") end' <<<"${then}")"
+ck "a module the release did not have is left out" "null" "$(jq -r '.db | if . == null then "null" else join(" ") end' <<<"${then}")"
+ck "the working tree: the moved, bumped file" "ex/web:1.2.0" "$(jq -r '.web | if . == null then "null" else join(" ") end' <<<"${now}")"
+ck "…the current form, its last value" "ex/idp:2.0.1" "$(jq -r '.idp | if . == null then "null" else join(" ") end' <<<"${now}")"
+ck "…and a digest pin as image@digest" "ex/db@sha256:abc123" "$(jq -r '.db | if . == null then "null" else join(" ") end' <<<"${now}")"
+ck "a module with two images lists both, in pin order" "ex/kk:1.0 ex/kk-chrome:2.0" "$(jq -r '.kk | join(" ")' <<<"${now}")"
 
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"

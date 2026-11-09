@@ -7,10 +7,11 @@ tag) or in the working tree. Files moved between releases (src/apps/ became
 src/ai/, src/home/, …), so a file the pin names that the ref lacks is looked up
 by its last two path parts (`openwebui/openwebui.nix`), and a value whose form
 changed is read with the pin's `earlierMatch` patterns. A module the ref does not
-have is left out: it is new since that release.
+have is left out: it is new since that release. A module may run several images
+(karakeep: its web app, chrome and meilisearch): each is listed, in pin order.
 
 Usage: release-images.py --repo DIR [--ref TAG] [--pins FILE]
-Prints {"<module>": "<image>:<tag>" | "<image>@sha256:…"} on stdout.
+Prints {"<module>": ["<image>:<tag>" | "<image>@sha256:…", …]} on stdout.
 """
 import argparse, json, re, subprocess, sys
 
@@ -51,7 +52,9 @@ def resolve(repo, ref, pins):
         if not found:
             continue
         value = found[-1] if isinstance(found[-1], str) else found[-1][0]
-        out[pin["module"]] = f"{pin['image']}@{value}" if pin.get("kind") == "digest" else f"{pin['image']}:{value}"
+        img = f"{pin['image']}@{value}" if pin.get("kind") == "digest" else f"{pin['image']}:{value}"
+        if img not in out.setdefault(pin["module"], []):
+            out[pin["module"]].append(img)
     return out
 
 
