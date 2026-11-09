@@ -567,12 +567,13 @@ describes the code it ships. Each has a Claude Code command (in the project's `.
 | File | What it holds | Regenerate with |
 |------|---------------|-----------------|
 | `src/STATISTICS.md` | Line counts over `src/` for the revision to be released and the last release, with the delta | `/tappaas-statistics 2.5`, which runs `src/generate-statistics.py --last v2.4 --last-label 2.4 --current origin/main --current-label 2.5` |
-| `src/foundation/DEPENDENCIES.md`, `DEPENDENCIES.csv`, `PROGRAMS.csv` | Every executable the foundation installs, its sources, and the direct dependencies between the scripts, managers, controllers and config files | `/tappaas-generate-script-dependencies` |
-| `src/module-dependencies.md` | The graph of which module depends on which, from each module's `dependsOn` and `provides` | `/tappaas-module-dependencies` |
+| `src/foundation/DEPENDENCIES.md`, `DEPENDENCIES.csv`, `PROGRAMS.csv` | Every executable the foundation installs, its sources, and the direct dependencies between the scripts, managers, controllers and config files | `/tappaas-generate-script-dependencies`, which runs `src/foundation/generate-dependencies.py` |
+| `src/module-dependencies.md` | The graph of which module depends on which, from each module's `dependsOn` and `provides` | `/tappaas-module-dependencies`, which runs `src/generate-module-dependencies.sh` |
 
+Each command runs a generator in the repository, so the output is the same whoever runs it.
 `src/generate-statistics.py` counts both sides from git by the same rules, so it needs no
-checkout and the two columns compare. The dependency documents are written by reading the code;
-check the diff before committing them. `STATISTICS-v1.md` is a frozen snapshot and stays as it is.
+checkout and the two columns compare. The two dependency generators take `--check`, which says
+whether the committed files are stale. `STATISTICS-v1.md` is a frozen snapshot and stays as it is.
 Commit the refreshed files to `main` with the rest. Steps 6 and 7 end like step 4: this checkout
 is back at `origin/main`.
 

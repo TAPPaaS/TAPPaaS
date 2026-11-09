@@ -1,421 +1,438 @@
 # TAPPaaS Foundation Layer - Dependency Documentation
 
-Generated: 2026-06-25; refreshed 2026-09-02 for ADR-020 (the declared-field
-converge: `report-service.sh`, `converge-lib.sh`, the `update-<field>.sh` hooks
-and the per-service `fields.json` manifests).
+Generated: 2026-11-09 by `src/foundation/generate-dependencies.py`, with [PROGRAMS.csv](PROGRAMS.csv) and [DEPENDENCIES.csv](DEPENDENCIES.csv). Do not edit by hand: change the generator and run it again.
 
-This document summarizes the direct dependencies between the scripts, the
-TypeScript managers/controllers, Python packages and configuration files under
-`src/foundation/`. The canonical machine-readable data lives in
-[`DEPENDENCIES.csv`](DEPENDENCIES.csv); the installed program surface (what
-lands on `/home/tappaas/bin` on the `tappaas-cicd` mothership) lives in
-[`PROGRAMS.csv`](PROGRAMS.csv).
+What a foundation program is, and what each code file under `src/foundation/` depends on: the bash files it sources, the TAPPaaS programs its code names, and the site config files it reads. Read from the code, so a program called through a variable is missed and a name that only appears in a message counts; the generator's docstring has the exact rules.
 
-A "direct dependency" is one of:
+## Summary
 
-- a script **sourced** via `.` / `source`,
-- another TAPPaaS **program/script/bin invoked** by name (e.g.
-  `install-module.sh`, `caddy-manager`, `network-manager`),
-- a **config file read**: `site.json`, `zones.json`, the `environments/` tree,
-  `network.json` (the renamed firewall config, read with a `firewall.json`
-  fallback), or a module's own `<name>.json`.
+162 programs, 845 code files read (414 bash, 335 typescript, 70 python, 26 nix), 1541 direct dependencies.
 
-> **ADR-007 — the 7 verb-aligned managers are the front doors.** Each is a
-> compiled TypeScript bin (one bin per manager, source = its `src/*.ts` tree,
-> built by `default.nix`, linked by `install.sh`):
-> `people-manager`, `network-manager`, `module-manager`, `site-manager`,
-> `environment-manager`, `backup-manager`, `health-manager`. They **shell out**
-> to the legacy bash verb scripts (thin orchestration), so a manager's
-> dependency row lists the `*.sh` verbs its `src/main.ts` spawns.
+| Area | Bash | Python | TypeScript | Nix | Files |
+|------|-----:|-------:|-----------:|----:|------:|
+| `tappaas-cicd/ui` | 5 | 0 | 150 | 1 | 156 |
+| `tappaas-cicd/lib` | 31 | 0 | 31 | 1 | 63 |
+| `cluster` | 53 | 0 | 0 | 0 | 53 |
+| `tappaas-cicd/controller/opnsense-controller` | 5 | 43 | 0 | 1 | 49 |
+| `tappaas-cicd/manager/health-manager` | 9 | 0 | 36 | 1 | 46 |
+| `tappaas-cicd/scripts` | 32 | 10 | 0 | 0 | 42 |
+| `backup` | 41 | 0 | 0 | 0 | 41 |
+| `tappaas-cicd/manager/module-manager` | 17 | 0 | 17 | 1 | 35 |
+| `tappaas-cicd/manager/site-manager` | 11 | 0 | 20 | 1 | 32 |
+| `network` | 28 | 0 | 2 | 1 | 31 |
+| `tappaas-cicd/manager/network-manager` | 7 | 0 | 22 | 1 | 30 |
+| `tappaas-cicd/migrations` | 27 | 0 | 0 | 0 | 27 |
+| `tappaas-cicd/manager/backup-manager` | 4 | 0 | 14 | 1 | 19 |
+| `tappaas-cicd/manager/identity-manager` | 5 | 0 | 12 | 1 | 18 |
+| `templates` | 15 | 0 | 0 | 3 | 18 |
+| `identity` | 13 | 0 | 0 | 2 | 15 |
+| `satellite` | 14 | 0 | 0 | 0 | 14 |
+| `tappaas-cicd/controller/cmdb-controller` | 3 | 0 | 9 | 1 | 13 |
+| `tappaas-cicd/controller/node-provisioner` | 3 | 9 | 0 | 1 | 13 |
+| `tappaas-cicd/manager/environment-manager` | 4 | 0 | 8 | 1 | 13 |
+| `logging` | 9 | 0 | 0 | 1 | 10 |
+| `storage` | 10 | 0 | 0 | 0 | 10 |
+| `tappaas-cicd/controller/authentik-controller` | 3 | 5 | 0 | 1 | 9 |
+| `tappaas-cicd/manager/asset-manager` | 4 | 0 | 4 | 1 | 9 |
+| `tappaas-cicd/manager/ca-manager` | 3 | 0 | 5 | 1 | 9 |
+| `tappaas-cicd/manager/storage-manager` | 3 | 0 | 5 | 1 | 9 |
+| `tappaas-cicd` | 5 | 0 | 0 | 2 | 7 |
+| `tappaas-cicd/controller/proxmox-controller` | 7 | 0 | 0 | 0 | 7 |
+| `pvehost` | 6 | 0 | 0 | 0 | 6 |
+| `tappaas-cicd/update-tappaas` | 3 | 2 | 0 | 1 | 6 |
+| `tappaas-cicd/manager/ap-manager` | 5 | 0 | 0 | 0 | 5 |
+| `tappaas-cicd/manager/switch-manager` | 5 | 0 | 0 | 0 | 5 |
+| `console` | 4 | 0 | 0 | 0 | 4 |
+| `debianhost` | 4 | 0 | 0 | 0 | 4 |
+| `tappaas-cicd/controller/pbs-controller` | 4 | 0 | 0 | 0 | 4 |
+| `(top level)` | 2 | 1 | 0 | 0 | 3 |
+| `tappaas-cicd/controller` | 3 | 0 | 0 | 0 | 3 |
+| `tappaas-cicd/manager` | 3 | 0 | 0 | 0 | 3 |
+| `tappaas-cicd/test-vm-creation` | 2 | 0 | 0 | 0 | 2 |
+| `tappaas-cicd/test-repository` | 1 | 0 | 0 | 0 | 1 |
+| `tappaas-cicd/test-variants` | 1 | 0 | 0 | 0 | 1 |
 
-> **`configuration.json` is RETIRED.** Site configuration is now `site.json`
-> (plus the `environments/` tree and `zones.json`). A few not-yet-migrated bash
-> scripts still read `configuration.json`; those reads are flagged in the CSV.
+## Programs
 
-> Note: the former `firewall` module is the **`network`** module
-> (`src/foundation/network/`, config `network.json`, sub-services
-> `network:proxy|rules|nat|dns|discovery`). The rules-plane Python entry point
-> `opnsense-firewall` keeps its name intentionally.
+86 programs, 50 scripts and 26 sourced libraries (PROGRAMS.csv lists each with its source). The front doors are the managers; controllers plug into them; the services run beside them.
 
-## Summary: directories and file counts
+| Component | Kind | Programs |
+|-----------|------|----------|
+| `module-manager` | manager | `module-manager`, `adopt-module.sh`, `copy-update-json.sh`, `delete-module.sh`, `install-module.sh`, `module-format.sh`, `rename-instance.sh`, `resolve-module.sh`, `set-module-field.sh`, `snapshot-vm.sh`, `suspend-module.sh`, `test-module.sh`, `test-validate-module-tier-source.sh`, `update-module.sh`, `validate-module-tier-source.sh`, `validate-modules-mandatory.sh` |
+| `site-manager` | manager | `site-manager`, `convert-json-to-config.sh`, `create-configuration.sh`, `create-site.sh`, `repository.sh`, `test-create-site.sh`, `validate-catalog.sh`, `validate-configuration.sh`, `validate-site.sh` |
+| `network-manager` | manager | `network-manager`, `zone-reconcile`, `network-manager-wgvpn` |
+| `environment-manager` | manager | `environment-manager` |
+| `identity-manager` | manager | `identity-manager`, `validate-identities.sh`, `validate-people.sh`, `people-manager` |
+| `backup-manager` | manager | `backup-manager` |
+| `health-manager` | manager | `health-manager`, `check-disk-threshold.sh`, `check-firewall-cert.sh`, `check-ha-health.sh`, `check-repo-signatures.sh`, `reboot-guest.sh`, `update-os.sh` |
+| `storage-manager` | manager | `storage-manager` |
+| `ca-manager` | manager | `ca-manager` |
+| `asset-manager` | manager | `asset-manager`, `position-manager`, `rack-manager` |
+| `ap-manager` | manager | `ap-manager`, `setup-wlan-secrets.sh`, `ap-controller` |
+| `switch-manager` | manager | `setup-switches.sh`, `switch-manager`, `switch-controller` |
+| `pbs-controller` | controller | `pbs-controller`, `backup-controller` |
+| `authentik-controller` | controller | `authentik-controller`, `authentik-manager`, `identity-controller` |
+| `node-provisioner` | controller | `node-provisioner` |
+| `opnsense-controller` | controller | `opnsense-controller`, `opnsense-firewall`, `zone-manager`, `dns-manager`, `dhcp-manager`, `unbound-manager`, `ipv6-manager`, `mdns-manager`, `caddy-manager`, `nat-manager`, `snat-manager`, `acme-manager`, `trust-manager`, `syslog-manager`, `rules-manager`, `test-network-manager`, `opnsense-ensure-patches`, `opnsense-manager` |
+| `proxmox-controller` | controller | `migrate-node.sh`, `migrate-vm.sh`, `proxmox-controller`, `resize-disk.sh`, `proxmox-manager` |
+| `cmdb-controller` | controller | `cmdb-controller`, `cmdb` |
+| `update-tappaas` | service | `update-tappaas` |
+| `console` | service | `console`, `tappaas` |
 
-| Directory | Files analyzed |
-|-----------|---------------:|
-| `tappaas-cicd/` (top level) | 5 |
-| `tappaas-cicd/lib/` | 14 |
-| `tappaas-cicd/scripts/` (+ `scripts/test/`) | 13 |
-| `tappaas-cicd/manager/` (dispatchers) | 3 |
-| `tappaas-cicd/manager/people-manager/` (6 ts + 5 sh) | 11 |
-| `tappaas-cicd/manager/site-manager/` (5 ts + 11 sh) | 16 |
-| `tappaas-cicd/manager/environment-manager/` (7 ts + 5 sh) | 12 |
-| `tappaas-cicd/manager/module-manager/` (12 ts + 16 sh) | 28 |
-| `tappaas-cicd/manager/network-manager/` (14 ts + 4 sh) | 18 |
-| `tappaas-cicd/manager/health-manager/` (6 ts + 8 sh) | 14 |
-| `tappaas-cicd/manager/backup-manager/` (8 ts + 4 sh) | 12 |
-| `tappaas-cicd/controller/` (dispatchers) | 3 |
-| `tappaas-cicd/controller/proxmox-controller/` | 7 |
-| `tappaas-cicd/manager/switch-manager/` | 6 |
-| `tappaas-cicd/manager/ap-manager/` | 6 |
-| `tappaas-cicd/controller/authentik-controller/` (3 sh + 4 py + 3 test) | 10 |
-| `tappaas-cicd/controller/node-provisioner/` (3 sh + 9 py + 3 test) | 15 |
-| `tappaas-cicd/controller/pbs-controller/` | 3 |
-| `tappaas-cicd/controller/opnsense-controller/` (23 py + 8 test) | 31 |
-| `tappaas-cicd/update-tappaas/` (py pkg) | 2 |
-| `tappaas-cicd/opnsense-patch/` (sh + php) | 2 |
-| `tappaas-cicd/test-variants/` | 5 |
-| `tappaas-cicd/test-vm-creation/` (+ `rollback-fixture/`) | 10 |
-| `tappaas-cicd/test-repository/` | 1 |
-| `network/` (top level) | 7 |
-| `network/scripts/` (`switch-controller/` TS port) | 1 |
-| `network/services/proxy/` | 5 |
-| `network/services/rules/` | 4 |
-| `network/services/nat/` | 5 |
-| `network/services/dns/` | 4 |
-| `network/services/discovery/` | 4 |
-| `network/test-fixtures/` | 6 |
-| `cluster/` (+ `lib/`, `services/*`) | 27 |
-| `backup/` (+ `lib/`, `scripts/*`, `services/*`) | 42 |
-| `identity/` (+ `lib/`, `services/*`) | 10 |
-| `logging/` | 3 |
-| `templates/` (+ `services/*`, `winserver/`) | 11 |
-| `Deprecated/` | 2 |
+## Most depended upon
 
-## Key dependency chains (6 main flows)
+| File or program | Files that name it | What it is |
+|-----------------|------------------:|------------|
+| `common-install-routines.sh` | 151 | script — tappaas-cicd/lib |
+| `site.json` | 122 | config file |
+| `module-manager` | 92 | program — manager: module-manager |
+| `zones.json` | 91 | config file |
+| `site-manager` | 67 | program — manager: site-manager |
+| `network-manager` | 54 | program — manager: network-manager |
+| `backup-manager` | 52 | program — manager: backup-manager |
+| `health-manager` | 34 | program — manager: health-manager |
+| `asset-manager` | 30 | program — manager: asset-manager |
+| `environments/` | 29 | config file |
+| `update-tappaas` | 26 | program — service: update-tappaas |
+| `dns-manager` | 24 | program — controller: opnsense-controller |
+| `ap-manager` | 24 | program — manager: ap-manager |
+| `opnsense-controller` | 23 | program — controller: opnsense-controller |
+| `switch-manager` | 22 | program — manager: switch-manager |
+| `identity-manager` | 22 | program — manager: identity-manager |
+| `environment-manager` | 22 | program — manager: environment-manager |
+| `component-install-lib.sh` | 22 | script — tappaas-cicd/lib |
+| `network.json` | 21 | config file |
+| `ca-manager` | 21 | program — manager: ca-manager |
+| `storage-manager` | 20 | program — manager: storage-manager |
+| `module-catalog.json` | 19 | config file |
+| `pbs-job.sh` | 18 | sourced file |
+| `update-module.sh` | 15 | program — manager: module-manager |
+| `node-provisioner` | 15 | program — controller: node-provisioner |
+| `install-module.sh` | 15 | program — manager: module-manager |
+| `authentik-controller` | 15 | program — controller: authentik-controller |
+| `pbs-namespace.sh` | 14 | sourced file |
+| `control-plane.json` | 13 | config file |
+| `caddy-manager` | 12 | program — controller: opnsense-controller |
 
-### 0. First-node install chain (the bootstrap; ADR-007)
+## Entry points
 
-`foundation/install.sh` is the ENTRY point (the URL the install guide downloads).
-It threads two names through the whole chain: `--name <site-code>` (cluster name =
-site.json `.name`) and `--organization <org>` (default environment = organisation;
-defaults to the site code):
+Programs and scripts no other foundation code names: what an operator, a timer, a node or another repository runs.
 
-```
-foundation/install.sh  --name <site-code> [--organization <org>] --domain <d>   <- entry orchestrator
-  [1/5] cluster/install.sh --name <site-code>   -> config-network.sh, config-storage.sh
-                                                 (pvecm create <site-code>; writes ~/tappaas/.cluster-role)
-  [2/5] config-firewall.sh        (prebuilt OPNsense @ 10.0.0.1)
-  [3/5] config-network.sh --swap-gateway      (staged by [1/5])
-  [4/5] sanity-check.sh
-  [5/5] install-platform.sh --name <site-code> --organization <org> --domain <d>
-          -> tappaas-cicd/bootstrap.sh   (clone + nixos-rebuild)
-          -> tappaas-cicd/install.sh --name <site-code> --organization <org>   (the cicd platform install)
-               -> create-site.sh --name <site-code> --organization <org>   => site.json
-               -> network-manager init => zones.json (default zone <org>)
-               -> environment-manager add   => mgmt + <org> envs
-               -> copy-update-json.sh + update-module.sh (cluster/templates/network/tappaas-cicd)
-# secondary node: [1/5] joins, then the chain stops (role != created).
-# later, from the mothership: rest-of-foundation.sh -> backup/identity/logging,
-#   then people-manager bootstrap + reconcile => the <org> organisation.
-```
+- **manager: ap-manager:** `ap-controller`, `setup-wlan-secrets.sh`
+- **manager: health-manager:** `check-firewall-cert.sh`, `check-repo-signatures.sh`
+- **manager: module-manager:** `module-format.sh`, `validate-module-tier-source.sh`, `validate-modules-mandatory.sh`
+- **manager: site-manager:** `test-create-site.sh`
+- **controller: opnsense-controller:** `opnsense-manager`
+- **controller: pbs-controller:** `backup-controller`
+- **tappaas-cicd/lib:** `audit-jq-readers.sh`, `test-common-install-routines.sh`, `test-config-readers.sh`, `test-converge-lib.sh`, `test-ha-vm-lib.sh`, `test-log-shipping.sh`, `test-repo-sync.sh`, `test-simulate.sh`, `test-unbound-prune.sh`, `test-verify-repo.sh`
+- **tappaas-cicd/scripts:** `control-plane-registry.sh`, `flake-pin-audit.sh`, `migrate-drop-variant.sh`, `move-module.sh`, `nixos-baseline-eval.sh`, `tappaas-alert-watchdog.sh`, `tappaas-render-fragments.sh`, `tappaas-support-bundle.sh`, `tappaas-unit-run.sh`, `test-tappaas-repair-ownership.sh`, `update-tappaas-schedule.sh`
 
-### 1. Module lifecycle through the manager (ADR-007)
+## What each front door calls
 
-```
-module-manager (TS)                  <- the verb-aligned front door
-  src/main.ts spawns:
-    install-module.sh   -> common-install-routines.sh -> copy-update-json.sh -> convert-json-to-config.sh
-                                                       -> validate-module-tier-source.sh
-    update-module.sh    -> apply-json-merge.sh -> convert-json-to-config.sh
-                        -> snapshot-vm.sh -> update-module.sh / update-os.sh
-    delete-module.sh    -> common-install-routines.sh
-    test-module.sh
-  src/main.ts runs in-process (native TS, ADR-007 refactor Phase 7.3):
-    src/reconcile.ts    -> <provider>/update-service.sh -> module update.sh / install.sh
-    src/inspect.ts      -> <provider>/report-service.sh  (ADR-020: no qm/pct parsing here)
-    src/converge.ts     -> <provider>/report-service.sh  (the drift record)
-    set-module-field.sh <- `modify --set` writes the field before the converge
-```
+Each manager, controller and service, with the programs, sourced files and config files its source names directly.
 
-### 1b. The declared-field converge (ADR-020)
-
-Since ADR-020 the converge is one pipeline, and the arrows show why: desired
-state and the diff are computed ONCE, in the manager, and a service only reports
-raw state and applies a record. The bash side no longer defaults, parses or
-compares.
-
-```
-module-manager module drift <m> --service <p>:<s>          [TS]
-  src/converge.ts
-    <- src/resolve.ts        -> lib/ts/src/desired.ts       the ONE resolver
-    <- services/<s>/fields.json                             the change classes
-    <- <provider>/services/<s>/report-service.sh            actual state, raw
-         -> cluster/lib/report-lib.sh -> common-install-routines.sh
-         -> cluster/lib/vm-net.sh        (NIC decoding, both guest types)
-    -> lib/ts/src/drift.ts                                  the ONE differ
-                                   |
-                            the drift record
-                                   v
-<provider>/services/<s>/update-service.sh [--apply-drift <file>]
-  -> tappaas-cicd/lib/converge-lib.sh          the ONE runner
-       -> converge_apply_set                   (one batched qm/pct set)
-       -> services/<s>/update-<field>.sh       update-net.sh / update-disk.sh /
-       |                                       update-node.sh -> resize-disk.sh
-       -> converge_side_effect_*                reboot -> wait-ip -> dns, once
-```
-
-A service whose fields are all `apply: "reconcile"` (network:proxy, network:rules,
-backup:vm, …) needs no `report-service.sh` and keeps its own idempotent reconcile;
-its `fields.json` declares the change classes only.
-
-### 2. Site / environment bootstrap (site-native, ADR-007)
-
-```
-site-manager (TS)        owns site.json
-  src/main.ts spawns: create-site.sh, repository.sh, validate-site.sh,
-                      environment-manager, network-manager, people-manager
-environment-manager (TS) owns the environments/ tree
-  src/main.ts spawns: network-manager, module-manager
-  (native: the minimal-set bootstrap and the validate gate;
-   reads site.json, zones.json, environments/)
-```
-
-### 3. Network reconciliation (network-manager orchestrator + plane controllers)
-
-```
-network-manager (TS)     owns zones.json (single source of truth)
-  src/main.ts spawns:  zone-manager (opnsense rules+vlan plane),
-                       proxmox-controller, switch-manager, ap-manager, scp
-network/update.sh -> zone-manager (--execute against zones.json)
-```
-
-### 4. Network service planes (proxy / rules / nat / dns / discovery)
-
-```
-network/services/proxy/install-service.sh
-  -> common-install-routines.sh
-  -> access-list.sh -> caddy-manager (+ zones.json)
-  -> caddy-manager / unbound-manager
-  -> site.json / network.json / zones.json
-network/services/rules/*-service.sh  -> rules-manager (+ network.json)
-network/services/nat/*-service.sh    -> nat-common.sh -> nat-manager (+ network.json)
-network/services/dns/*-service.sh    -> dns-manager  (+ network.json)
-```
-
-### 5. Health + backup managers (read-only verbs over controllers)
-
-```
-health-manager (TS)  src/main.ts spawns: update-os.sh,
-                     check-disk-threshold.sh, backup-manager
-backup-manager (TS)  src/main.ts spawns: pbs-controller,
-                     foundation backup/restore.sh (restore verb)
-health-manager (TS) checks.ts -> backup-manager list --json
-```
-
-## Most-connected files (most depended upon)
-
-| File | Incoming references | Role |
-|------|--------------------:|------|
-| `common-install-routines.sh` | 130+ | shared logging / helpers, sourced by nearly every script |
-| `zones.json` | 30+ | network zone / VLAN source of truth (network-manager owns) |
-| `network.json` | 24 | firewall VM config (was `firewall.json`) |
-| `site.json` | 22 | site/system configuration (replaces `configuration.json`) |
-| `pbs-job.sh` | 22 | PBS backup job + schedule buckets (backup module) |
-| `config.py` | 18 | opnsense-controller shared API client/config |
-| `dns-manager` | 15 | DNS record CLI (opnsense-controller) |
-| `update-module.sh` | 14 | module update verb (wrapped by module-manager) |
-| `install-module.sh` | 13 | module install verb (wrapped by module-manager) |
-| `delete-module.sh` | 13 | module delete verb (wrapped by module-manager) |
-| `validate-site.sh` | 9 | site validation (wrapped by site-manager) |
-| `pbs-namespace.sh` | 8 | PBS namespace helper |
-| `vm-net.sh` | 6 | VM network helper (cluster/lib) |
-| `caddy-manager` | 6 | reverse-proxy CLI (opnsense-controller) |
-| `copy-update-json.sh` | 6 | config-to-VM copy verb |
-| `Create-TAPPaaS-VM.sh` | 6 | VM creation (node-local) |
-| `update-os.sh` | 5 | OS update verb (wrapped by health-manager) |
-
-## Top-level entry points (programs nothing else depends on)
-
-These are the operator-facing commands and orchestrators — no other file in the
-foundation tree depends on them:
-
-- **Foundation install:** `foundation/install.sh` (the entry orchestrator — see
-  flow 0). `cluster/install.sh`, `cluster/install-platform.sh`,
-  `tappaas-cicd/bootstrap.sh`, `tappaas-cicd/install.sh` are invoked **by** it (no
-  longer top-level), but remain runnable standalone for re-runs/manual fallback.
-  Also: `tappaas-cicd/pre-update.sh`, `tappaas-cicd/update.sh`
-- **The 7 managers (front doors):** `module-manager`, `site-manager`,
-  `environment-manager`, `network-manager`, `people-manager`, `backup-manager`,
-  `health-manager`
-- **Network:** `network/update.sh`, `network/test.sh`,
-  `network/migrate-firewall-to-network.sh`
-- **Ops:** `cluster/reboot-cluster.sh`
-- **Identity:** `identity/install.sh`
-- **Nightly update:** `update-tappaas`
-- **Top-level controllers:** `opnsense-controller`, `proxmox-controller`,
-  `switch-manager`, `ap-manager`, `authentik-controller`,
-  `pbs-controller`, `node-provisioner` (PXE provisioning, design N3;
-  drives `dhcp-manager` from the opnsense-controller family)
-
-## Mermaid dependency graphs
-
-### First-node install chain (foundation/install.sh orchestrator)
+### `module-manager` (manager)
 
 ```mermaid
-graph TD
-    FI["foundation/install.sh<br/>(entry; --name site-code --organization org)"] --> CI["[1/5] cluster/install.sh<br/>(node; pvecm create site-code)"]
-    CI --> CN["config-network.sh"]
-    CI --> CS["config-storage.sh"]
-    CI --> ROLE["~/tappaas/.cluster-role"]
-    FI -->|reads| ROLE
-    FI --> FW["[2/5] config-firewall.sh"]
-    FI --> CUT["[3/5] config-network.sh --swap-gateway"]
-    FI --> SAN["[4/5] sanity-check.sh"]
-    FI --> IP["[5/5] install-platform.sh<br/>--name site-code --organization org"]
-    IP --> BS["tappaas-cicd/bootstrap.sh"]
-    IP --> CICD["tappaas-cicd/install.sh<br/>--name site-code --organization org"]
-    CICD --> CSITE["create-site.sh => site.json"]
-    CICD --> ZI["network-manager init => zones.json"]
-    CICD --> CME["environment-manager add<br/>=> mgmt + org envs"]
-    ROF["rest-of-foundation.sh<br/>(later, from cicd)"] --> US["people-manager bootstrap + reconcile<br/>=> org organisation"]
+graph LR
+    n0["module-manager"]
+    n0 --> n1["switch-manager"]
+    n0 --> n2["components.json"]
+    n0 --> n3["install-module.sh"]
+    n0 --> n4["adopt-module.sh"]
+    n0 --> n5["update-module.sh"]
+    n0 --> n6["delete-module.sh"]
+    n0 --> n7["test-module.sh"]
+    n0 --> n8["snapshot-vm.sh"]
+    n0 --> n9["migrate-vm.sh"]
+    n0 --> n10["suspend-module.sh"]
+    n0 --> n11["control-plane.json"]
+    n0 --> n12["site.json"]
+    n0 --> n13["module-catalog.json"]
+    n0 --> n14["zones.json"]
+    n0 --> n15["site-manager"]
+    n0 --> n16["rename-instance.sh"]
+    n0 --> n17["set-module-field.sh"]
+    n0 --> n18["network-manager"]
 ```
 
-### Module lifecycle (module-manager front door)
+### `site-manager` (manager)
 
 ```mermaid
-graph TD
-    MM["module-manager (TS)"] --> IM["install-module.sh"]
-    MM --> UM["update-module.sh"]
-    MM --> DM["delete-module.sh"]
-    MM --> RT["src/reconcile.ts (TS, in-process)"]
-    MM --> TM["test-module.sh"]
-    IM --> CIR["common-install-routines.sh"]
-    IM --> CUJ["copy-update-json.sh"]
-    IM --> VMT["validate-module-tier-source.sh"]
-    CUJ --> CJC["convert-json-to-config.sh"]
-    UM --> AJM["apply-json-merge.sh"]
-    UM --> SV["snapshot-vm.sh"]
-    AJM --> CJC
-    SV --> UM
-    RT --> ISS["dependsOn update-service.sh"]
-    RT --> MUS["module update.sh / install.sh"]
-    DM --> CIR
+graph LR
+    n0["site-manager"]
+    n0 --> n1["asset-manager"]
+    n0 --> n2["validate-site.sh"]
+    n0 --> n3["identity-manager"]
+    n0 --> n4["network-manager"]
+    n0 --> n5["module-manager"]
+    n0 --> n6["environment-manager"]
+    n0 --> n7["create-site.sh"]
+    n0 --> n8["repository.sh"]
+    n0 --> n9["update-tappaas"]
+    n0 --> n10["adopt-module.sh"]
+    n0 --> n11["site.json"]
+    n0 --> n12["health-manager"]
+    n0 --> n13["prepare-netboot.sh"]
+    n0 --> n14["copy-update-json.sh"]
+    n0 --> n15["channels.json"]
+    n0 --> n16["module-catalog.json"]
+    n0 --> n17["node-provisioner"]
+    n0 --> n18["switch-manager"]
+    n0 --> n19["zones.json"]
+    n0 --> n20["update-module.sh"]
+    n0 --> n21["storage-manager"]
 ```
 
-### Site / environment bootstrap
+### `network-manager` (manager)
 
 ```mermaid
-graph TD
-    SM["site-manager (TS)"] --> CST["create-site.sh"]
-    SM --> REP["repository.sh"]
-    SM --> VST["validate-site.sh"]
-    SM --> EM["environment-manager (TS)"]
-    SM --> NM["network-manager (TS)"]
-    SM --> PM["people-manager (TS)"]
-    SM --> SJ["site.json"]
-    EM --> NM
-    EM --> MM["module-manager (TS)"]
-    EM --> ENV["environments/"]
-    EM --> ZJ["zones.json"]
+graph LR
+    n0["network-manager"]
+    n0 --> n1["dns-manager"]
+    n0 --> n2["caddy-manager"]
+    n0 --> n3["network-manager-wgvpn"]
+    n0 --> n4["opnsense-firewall"]
+    n0 --> n5["zones.json"]
+    n0 --> n6["cmdb-controller"]
+    n0 --> n7["health-manager"]
+    n0 --> n8["asset-manager"]
+    n0 --> n9["site-manager"]
+    n0 --> n10["switch-manager"]
+    n0 --> n11["ap-manager"]
+    n0 --> n12["module-manager"]
+    n0 --> n13["backup-manager"]
+    n0 --> n14["environment-manager"]
+    n0 --> n15["site.json"]
+    n0 --> n16["environments/"]
+    n0 --> n17["zone-manager"]
+    n0 --> n18["proxmox-controller"]
+    n0 --> n19["snat-manager"]
+    n0 --> n20["ipv6-manager"]
 ```
 
-### Network reconciliation (network-manager orchestrator)
+### `environment-manager` (manager)
 
 ```mermaid
-graph TD
-    NM["network-manager (TS)"] --> ZJ["zones.json"]
-    NM --> ZM["zone-manager"]
-    NM --> PX["proxmox-controller"]
-    NM --> SC["switch-manager"]
-    NM --> AP["ap-manager"]
-    NU["network/update.sh"] --> ZM
-    ZM --> ZJ
+graph LR
+    n0["environment-manager"]
+    n0 --> n1["site.json"]
+    n0 --> n2["network-manager"]
+    n0 --> n3["module-manager"]
+    n0 --> n4["unbound-manager"]
+    n0 --> n5["acme-manager"]
+    n0 --> n6["ca-manager"]
+    n0 --> n7["zones.json"]
+    n0 --> n8["environments/"]
 ```
 
-### Health + backup managers
+### `identity-manager` (manager)
 
 ```mermaid
-graph TD
-    HM["health-manager (TS)"] --> UOS["update-os.sh"]
-    HM --> CDT["check-disk-threshold.sh"]
-    HM --> BM["backup-manager (TS)"]
-    BM --> BC["pbs-controller"]
-    BM --> FR["backup/restore.sh"]
-    IM["install-module.sh"] --> BM
+graph LR
+    n0["identity-manager"]
+    n0 --> n1["authentik-controller"]
 ```
 
-### opnsense-controller (rules plane, Python)
+### `backup-manager` (manager)
 
 ```mermaid
-graph TD
-    ZM["zone_manager.py"] --> CFG["config.py"]
-    ZM --> LOG["log.py"]
-    ZM --> VL["vlan_manager.py"]
-    ZM --> FW["firewall_manager.py"]
-    ZM --> DH["dhcp_manager.py"]
-    ZM --> ZJ["zones.json"]
-    RM["rules_manager.py"] --> CFG
-    RM --> FW
-    RM --> ZJ
-    FCLI["firewall_cli.py (opnsense-firewall)"] --> FW
-    FW --> CFG
+graph LR
+    n0["backup-manager"]
+    n0 --> n1["pbs-controller"]
+    n0 --> n2["site.json"]
+    n0 --> n3["update-module.sh"]
+    n0 --> n4["cmdb-controller"]
+    n0 --> n5["site-manager"]
+    n0 --> n6["environment-manager"]
+    n0 --> n7["module-manager"]
+    n0 --> n8["zones.json"]
 ```
 
-## Manager front-door adoption (ADR-007)
+### `health-manager` (manager)
 
-**Question:** are the 7 managers now the entry points, or are the legacy bash
-verb scripts still called directly (bypassing the manager)?
+```mermaid
+graph LR
+    n0["health-manager"]
+    n0 --> n1["tappaas"]
+    n0 --> n2["backup-manager"]
+    n0 --> n3["storage-manager"]
+    n0 --> n4["proxmox-controller"]
+    n0 --> n5["site-manager"]
+    n0 --> n6["switch-manager"]
+    n0 --> n7["site.json"]
+    n0 --> n8["module-manager"]
+    n0 --> n9["control-plane.json"]
+    n0 --> n10["network-manager"]
+    n0 --> n11["ipv6-manager"]
+    n0 --> n12["zones.json"]
+    n0 --> n13["update-os.sh"]
+    n0 --> n14["reboot-guest.sh"]
+    n0 --> n15["site-notify.sh"]
+    n0 --> n16["module-catalog.json"]
+```
 
-For each wrapped legacy verb script we classified every *production* caller
-(tests, the script's own self-reference, `src/*.ts` of its owning manager, and
-doc/comment strings are excluded — those are expected). A caller is **MANAGER**
-when the path goes through the owning TS manager, and **DIRECT** when a
-production script/program executes the legacy verb itself.
+### `storage-manager` (manager)
 
-| Wrapped verb | Owning manager | Production callers | Verdict |
-|--------------|----------------|--------------------|---------|
-| `install-module.sh` | module-manager | module-manager (TS); `cluster/services/vm/install-service.sh` (template build) | mostly MANAGER, 1 DIRECT |
-| `update-module.sh` | module-manager | module-manager (TS); `install.sh`; `update-tappaas` (nightly); `network/update.sh`* | MANAGER + **2 DIRECT** |
-| `delete-module.sh` | module-manager | module-manager / environment-manager (TS); `cluster/services/{lxc,vm}/delete-service.sh`** | MANAGER (service-plane callbacks) |
-| `copy-update-json.sh` | module-manager | module-manager (TS); `install.sh`; `backup/install.sh` | MANAGER + **2 DIRECT** |
-| `snapshot-vm.sh` | module-manager | module-manager (TS); `common-install-routines.sh` (lib) | MANAGER (lib-internal) |
-| `create-site.sh` | site-manager | site-manager (TS); `install.sh` (bootstrap) | MANAGER + **1 DIRECT** |
-| `repository.sh` | site-manager | site-manager (TS); `rest-of-foundation.sh` (echoed hint only) | MANAGER (clean) |
-| `validate-site.sh` | site-manager | site-manager / environment-manager (TS); `install.sh` (bootstrap) | MANAGER + **1 DIRECT** |
-| `validate-configuration.sh` | site-manager | validate-site.sh; people validate.sh; `cluster/update.sh` | MANAGER + **1 DIRECT** |
-| `validate-people.sh` | people-manager | people-manager flow | MANAGER (clean) |
-| `update-os.sh` | health-manager | health-manager (TS); `templates/services/{nixos,debian}/update-service.sh` | MANAGER + **2 DIRECT** |
-| `check-disk-threshold.sh` | health-manager | health-manager (TS) only | MANAGER (clean) |
-| `pbs-controller` | (backup-manager wraps) | backup-manager (TS) only | MANAGER (clean) |
+```mermaid
+graph LR
+    n0["storage-manager"]
+    n0 --> n1["module-manager"]
+    n0 --> n2["proxmox-controller"]
+    n0 --> n3["cmdb-controller"]
+    n0 --> n4["install-module.sh"]
+    n0 --> n5["site-manager"]
+```
 
-\* `network/update.sh` only *mentions* update-module.sh in comments (it is
-*called by* update-module.sh, it does not call it) — not a real DIRECT caller.
-\** `cluster/services/{lxc,vm}/*-service.sh` are the module-lifecycle *service
-hooks* that `install-module.sh`/`delete-module.sh` themselves invoke — they are
-below the manager, not bypassing it.
+### `ca-manager` (manager)
 
-### Remaining DIRECT callers (the retire/migration targets)
+```mermaid
+graph LR
+    n0["ca-manager"]
+    n0 --> n1["trust-manager"]
+    n0 --> n2["caddy-manager"]
+    n0 --> n3["acme-manager"]
+    n0 --> n4["site.json"]
+```
 
-| Caller | Bypasses (legacy verb called directly) | Why it is still direct |
-|--------|----------------------------------------|------------------------|
-| `tappaas-cicd/install.sh` | `create-site.sh`, `copy-update-json.sh`, `update-module.sh` | First-boot bootstrap — the pre-manager steps run before the manager bins are linked on PATH; the environments step now goes through `environment-manager add` (linked just before it runs) |
-| `tappaas-cicd/update-tappaas` (`main.py`) | `update-module.sh` (+ `reboot-cluster.sh`) | Nightly auto-updater calls `update-module.sh` per module directly instead of `module-manager update` |
-| `templates/services/nixos/update-service.sh` | `update-os.sh` | Template update-plane hook shells `update-os.sh` directly |
-| `templates/services/debian/update-service.sh` | `update-os.sh` | same as above |
-| `cluster/services/vm/install-service.sh` | `install-module.sh` | Builds the VM template via `install-module.sh` directly (a nested-module build) |
-| `cluster/update.sh` | `validate-configuration.sh` | Pre-distribution gate calls `validate-configuration.sh` directly (and `validate-configuration.sh` itself is a retired-config validator) |
-| `backup/install.sh` | `copy-update-json.sh` | Backup module install copies its config via `copy-update-json.sh` directly |
+### `asset-manager` (manager)
 
-### Verdict
+```mermaid
+graph LR
+    n0["asset-manager"]
+    n0 --> n1["site-manager"]
+    n0 --> n2["site.json"]
+    n0 --> n3["network-manager"]
+    n0 --> n4["cmdb-controller"]
+```
 
-**Adoption is strong but not complete: ~7 production DIRECT-call holdouts
-remain** (the environments + people bootstraps moved onto the manager verbs —
-`environment-manager add` / `people-manager bootstrap` — in the ADR-007
-refactor Phase 8). The read-only/backup verbs (`validate-*`, `pbs-controller`,
-`check-disk-threshold`) are reached **only** through their
-managers — clean (the backup bash layer — `backup-restore`/`backup-status` —
-was retired outright in the ADR-007 refactor Phase 7.4, absorbed into the TS
-`backup-manager`). The holdouts cluster in two predictable places:
+### `ap-manager` (manager)
 
-1. **First-boot / nightly bootstrap** (`install.sh`, `update-tappaas`,
-   `rest-of-foundation.sh`) — these run before or outside the manager surface
-   and are the principal migration targets (esp. `update-tappaas` →
-   `module-manager`, and a `tappaas-cicd`-native bootstrap to retire the
-   `install.sh` direct calls).
-2. **Template/cluster service hooks** (`templates/services/{nixos,debian}`,
-   `cluster/services/vm`) — these call `update-os.sh` / `install-module.sh`
-   directly as part of the module-service contract; lower priority because they
-   already sit inside a module-lifecycle invocation.
+```mermaid
+graph LR
+    n0["ap-manager"]
+    n0 --> n1["common-install-routines.sh"]
+    n0 --> n2["vm-net.sh"]
+    n0 --> n3["cli-gate.sh"]
+    n0 --> n4["wlan-lib.sh"]
+    n0 --> n5["asset-role.sh"]
+    n0 --> n6["controller-lib.sh"]
+    n0 --> n7["locations.sh"]
+    n0 --> n8["cmdb-report.sh"]
+    n0 --> n9["asset-manager"]
+    n0 --> n10["site-manager"]
+    n0 --> n11["network-manager"]
+    n0 --> n12["zones.json"]
+```
 
-The only verb still tied to retired config is `validate-configuration.sh`
-(called by `cluster/update.sh`); it should be replaced by `validate-site.sh`
-(via `site-manager validate`) as part of the `configuration.json` retirement.
+### `switch-manager` (manager)
+
+```mermaid
+graph LR
+    n0["switch-manager"]
+    n0 --> n1["common-install-routines.sh"]
+    n0 --> n2["vm-net.sh"]
+    n0 --> n3["cli-gate.sh"]
+    n0 --> n4["controller-lib.sh"]
+    n0 --> n5["locations.sh"]
+    n0 --> n6["asset-role.sh"]
+    n0 --> n7["cmdb-report.sh"]
+    n0 --> n8["asset-manager"]
+    n0 --> n9["site-manager"]
+    n0 --> n10["ap-manager"]
+    n0 --> n11["network-manager"]
+    n0 --> n12["zones.json"]
+```
+
+### `pbs-controller` (controller)
+
+```mermaid
+graph LR
+    n0["pbs-controller"]
+    n0 --> n1["cli-gate.sh"]
+    n0 --> n2["module-manager"]
+    n0 --> n3["backup-manager"]
+```
+
+### `authentik-controller` (controller)
+
+Names no other program or config file.
+
+### `node-provisioner` (controller)
+
+```mermaid
+graph LR
+    n0["node-provisioner"]
+    n0 --> n1["dhcp-manager"]
+```
+
+### `opnsense-controller` (controller)
+
+Names no other program or config file.
+
+### `proxmox-controller` (controller)
+
+```mermaid
+graph LR
+    n0["proxmox-controller"]
+    n0 --> n1["common-install-routines.sh"]
+    n0 --> n2["vm-net.sh"]
+    n0 --> n3["zones.json"]
+```
+
+### `cmdb-controller` (controller)
+
+```mermaid
+graph LR
+    n0["cmdb-controller"]
+    n0 --> n1["components.json"]
+    n0 --> n2["module-manager"]
+    n0 --> n3["zones.json"]
+    n0 --> n4["environments/"]
+```
+
+### `update-tappaas` (service)
+
+```mermaid
+graph LR
+    n0["update-tappaas"]
+    n0 --> n1["module-manager"]
+    n0 --> n2["backup-manager"]
+    n0 --> n3["unbound-manager"]
+    n0 --> n4["tappaas-repair-ownership.sh"]
+    n0 --> n5["site-manager"]
+    n0 --> n6["tappaas-self-rebuild.sh"]
+    n0 --> n7["tappaas-collation-reconcile.sh"]
+    n0 --> n8["site.json"]
+    n0 --> n9["zones.json"]
+```
+
+### `console` (service)
+
+```mermaid
+graph LR
+    n0["console"]
+    n0 --> n1["install-access.sh"]
+    n0 --> n2["module-manager"]
+    n0 --> n3["network-manager"]
+    n0 --> n4["health-manager"]
+    n0 --> n5["backup-manager"]
+    n0 --> n6["switch-manager"]
+    n0 --> n7["site.json"]
+    n0 --> n8["module-catalog.json"]
+    n0 --> n9["cmdb"]
+    n0 --> n10["zones.json"]
+    n0 --> n11["site-manager"]
+    n0 --> n12["storage-manager"]
+    n0 --> n13["environment-manager"]
+    n0 --> n14["node-provisioner"]
+    n0 --> n15["identity-manager"]
+    n0 --> n16["rest-of-foundation.sh"]
+    n0 --> n17["ap-manager"]
+    n0 --> n18["cmdb-controller"]
+    n0 --> n19["update-tappaas"]
+    n0 --> n20["control-plane.json"]
+    n0 --> n21["asset-manager"]
+    n0 --> n22["ca-manager"]
+    n0 --> n23["ipv6-manager"]
+```
