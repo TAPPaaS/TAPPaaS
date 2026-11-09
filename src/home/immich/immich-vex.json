@@ -126,45 +126,6 @@
       ]
     },
     {
-      "id": "CVE-2026-59851",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Server-side GSSAPI key exchange flaw; libssh is used only as an ffmpeg sftp client here, and the VM's SSH server is OpenSSH.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/libssh@0.12.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2023-52356",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "TIFFReadRGBATileExt heap overflow fixed by commit 5155851 (MR 546), first released in libtiff 4.7.0; the shipped libtiff is 4.7.2.",
-        "justification": "code_not_present"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/libtiff@4.7.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-4775",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "putcontig8bitYCbCr44tile overflow fixed by commit 782a11d6, which is in the v4.7.2 tag (Debian marks 4.7.2-1 fixed); the shipped libtiff is 4.7.2.",
-        "justification": "code_not_present"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/libtiff@4.7.2"
-        }
-      ]
-    },
-    {
       "id": "CVE-2026-54873",
       "analysis": {
         "state": "not_affected",
@@ -174,9 +135,6 @@
       "affects": [
         {
           "ref": "pkg:nix/openssl@3.5.8"
-        },
-        {
-          "ref": "pkg:nix/openssl@3.6.4"
         }
       ]
     },
@@ -190,9 +148,6 @@
       "affects": [
         {
           "ref": "pkg:nix/openssl@3.5.8"
-        },
-        {
-          "ref": "pkg:nix/openssl@3.6.4"
         }
       ]
     },
@@ -206,9 +161,6 @@
       "affects": [
         {
           "ref": "pkg:nix/openssl@3.5.8"
-        },
-        {
-          "ref": "pkg:nix/openssl@3.6.4"
         }
       ]
     },
@@ -222,9 +174,6 @@
       "affects": [
         {
           "ref": "pkg:nix/openssl@3.5.8"
-        },
-        {
-          "ref": "pkg:nix/openssl@3.6.4"
         }
       ]
     },
@@ -237,9 +186,6 @@
       },
       "affects": [
         {
-          "ref": "pkg:nix/glibc@2.42-84"
-        },
-        {
           "ref": "pkg:nix/glibc@2.44-25"
         }
       ]
@@ -251,9 +197,6 @@
         "detail": "strfmon width padding overflow, real in glibc 2.44; only reachable if a program calls strfmon with right-justified padding \u2014 immich's Node and Python services do not. Kept counted as glibc is."
       },
       "affects": [
-        {
-          "ref": "pkg:nix/glibc@2.42-84"
-        },
         {
           "ref": "pkg:nix/glibc@2.44-25"
         }
@@ -277,9 +220,6 @@
       },
       "affects": [
         {
-          "ref": "pkg:nix/glibc@2.42-84"
-        },
-        {
           "ref": "pkg:nix/glibc@2.44-25"
         }
       ],
@@ -301,9 +241,6 @@
         "detail": "Disputed upstream (ldd on a malicious ELF, treated by glibc as a non-security bug); the record names no affected versions. Kept counted as glibc is."
       },
       "affects": [
-        {
-          "ref": "pkg:nix/glibc@2.42-84"
-        },
         {
           "ref": "pkg:nix/glibc@2.44-25"
         }
@@ -329,9 +266,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -345,9 +279,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -361,9 +292,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -377,9 +305,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -393,9 +318,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -409,9 +331,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -425,9 +344,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -441,9 +357,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -457,9 +370,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -473,9 +383,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -489,9 +396,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -505,9 +409,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -521,9 +422,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -537,9 +435,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -553,9 +448,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -569,9 +461,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -679,9 +568,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -711,9 +597,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -727,9 +610,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },
@@ -743,9 +623,6 @@
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        },
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
       ]
     },

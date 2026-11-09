@@ -414,45 +414,6 @@
       ]
     },
     {
-      "id": "CVE-2026-59851",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Server-side GSSAPI key-exchange check; no libssh server runs (sshd is OpenSSH) and libssh is only a dep of the unused ffmpeg libs.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/libssh@0.12.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2023-52356",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libtiff is only linked by openjpeg/libwebp tools under ffmpeg-8.1.2-lib; neither janus nor the signaling server maps it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/libtiff@4.7.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-4775",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libtiff is only linked by openjpeg/libwebp tools under ffmpeg-8.1.2-lib; neither janus nor the signaling server maps it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/libtiff@4.7.2"
-        }
-      ]
-    },
-    {
       "id": "CVE-2026-107695",
       "analysis": {
         "state": "not_affected",

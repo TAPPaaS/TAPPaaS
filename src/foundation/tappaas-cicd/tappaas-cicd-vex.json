@@ -11,75 +11,10 @@
   },
   "vulnerabilities": [
     {
-      "id": "CVE-2026-54873",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Packet-buffer retention in OpenSSL's own QUIC stack; nothing on the mothership uses it (curl's HTTP/3 runs on ngtcp2, with OpenSSL only for crypto).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/openssl@3.6.4"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-84784",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "NEW_CONNECTION_ID flood against OpenSSL's own QUIC stack; nothing on the mothership uses it (curl's HTTP/3 runs on ngtcp2).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/openssl@3.6.4"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-84782",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "DTLS handshake retransmission; nothing on the mothership speaks DTLS.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/openssl@3.6.4"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-72897",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Needs a TLS server that swaps SSL_CTX mid-handshake between contexts with different providers loaded; nothing on the mothership is configured that way.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/openssl@3.6.4"
-        }
-      ]
-    },
-    {
       "id": "CVE-2026-59850",
       "analysis": {
         "state": "not_affected",
         "detail": "Channel callbacks after close in an SSH session; libssh is only ansible-pylibssh's, and ansible-core is used for module-spec validation, never to connect.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/libssh@0.12.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-59851",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "A libssh SSH server with GSSAPIKeyExchange; the mothership runs no libssh server (sshd is OpenSSH).",
         "justification": "code_not_reachable"
       },
       "affects": [
@@ -98,19 +33,6 @@
       "affects": [
         {
           "ref": "pkg:nix/libxslt@1.1.45"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-4176",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Compress::Raw::Zlib's vendored zlib; perl on the mothership runs NixOS's own scripts and git's helpers, none of which inflate attacker data through it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/perl@5.42.0"
         }
       ]
     }

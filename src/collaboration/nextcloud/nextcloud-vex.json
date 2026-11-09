@@ -87,32 +87,6 @@
       ]
     },
     {
-      "id": "CVE-2023-52356",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "TIFFReadRGBATileExt heap overflow fixed by commit 5155851 (MR 546), first released in libtiff 4.7.0; the shipped libtiff is 4.7.2.",
-        "justification": "code_not_present"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/libtiff@4.7.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-4775",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "putcontig8bitYCbCr44tile overflow fixed by commit 782a11d6, which is in the v4.7.2 tag (Debian marks 4.7.2-1 fixed); the shipped libtiff is 4.7.2.",
-        "justification": "code_not_present"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/libtiff@4.7.2"
-        }
-      ]
-    },
-    {
       "id": "CVE-2025-7425",
       "analysis": {
         "state": "not_affected",

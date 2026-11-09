@@ -35,18 +35,6 @@
       ]
     },
     {
-      "id": "CVE-2024-5290",
-      "analysis": {
-        "state": "false_positive",
-        "detail": "An Ubuntu packaging issue (its D-Bus policy for wpa_supplicant), not upstream wpa_supplicant; and the baseline no longer runs wpa_supplicant on guests."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/wpa_supplicant"
-        }
-      ]
-    },
-    {
       "id": "CVE-2026-62960",
       "analysis": {
         "state": "false_positive",
@@ -263,9 +251,6 @@
       "affects": [
         {
           "ref": "pkg:nix/perl@5.42.3"
-        },
-        {
-          "ref": "pkg:nix/perl@5.42.0"
         }
       ]
     },
@@ -279,9 +264,6 @@
       "affects": [
         {
           "ref": "pkg:nix/perl@5.42.3"
-        },
-        {
-          "ref": "pkg:nix/perl@5.42.0"
         }
       ]
     },
@@ -295,9 +277,6 @@
       "affects": [
         {
           "ref": "pkg:nix/perl@5.42.3"
-        },
-        {
-          "ref": "pkg:nix/perl@5.42.0"
         }
       ]
     },
@@ -311,19 +290,6 @@
       "affects": [
         {
           "ref": "pkg:nix/dnsmasq@2.93"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2025-6021",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "xmlBuildQName on attacker XML; libxml2's users on a guest (nix-daemon; nginx on logging, no XML/XSLT configured) parse no attacker XML.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/libxml2@2.15.4"
         }
       ]
     },
@@ -376,19 +342,6 @@
       "affects": [
         {
           "ref": "pkg:nix/libcap@2.77"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-2100",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "C_DeriveKey on a remote PKCS#11 token; guests use no PKCS#11 tokens.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/p11-kit@0.26.2"
         }
       ]
     },

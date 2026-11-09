@@ -11,58 +11,6 @@
   },
   "vulnerabilities": [
     {
-      "id": "CVE-2026-102266",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Empty-k oct key in a trusted JWKS; Authentik builds PyJWK keys only from the JWKS of an admin-configured OIDC source or JWT federation source, TAPPaaS configures none, and an IdP would have to publish a symmetric key with empty k.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/pyjwt@2.13.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-102272",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "HMAC/asymmetric key confusion via a BOM-prefixed public JWK passed as an HMAC secret; every Authentik jwt.decode call pins one server-chosen algorithm or passes a parsed key object, never public-key text where HS* is allowed.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/pyjwt@2.13.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-102273",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "HMAC/asymmetric key confusion via container JWK forms; every Authentik jwt.decode call pins one server-chosen algorithm or passes a parsed key object, never public-key text where HS* is allowed.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/pyjwt@2.13.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-63349",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "anyio.run_process/open_process extra_groups mishandling; neither Authentik nor its dependencies call anyio's process API with group arguments (only watchfiles' dev reloader references run_process).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/anyio@4.14.1"
-        }
-      ]
-    },
-    {
       "id": "CVE-2026-75804",
       "analysis": {
         "state": "not_affected",
@@ -71,16 +19,10 @@
       },
       "affects": [
         {
-          "ref": "pkg:deb/debian/libssl-dev@3.5.7-1~deb13u2"
-        },
-        {
           "ref": "pkg:deb/debian/libssl3t64@3.5.7-1~deb13u2"
         },
         {
           "ref": "pkg:deb/debian/openssl@3.5.7-1~deb13u2"
-        },
-        {
-          "ref": "pkg:deb/debian/openssl-provider-legacy@3.5.7-1~deb13u2"
         }
       ]
     },
@@ -107,32 +49,6 @@
       ]
     },
     {
-      "id": "CVE-2026-102268",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "is_pem_format misses some PEM forms in mixed HMAC/asymmetric setups; Authentik never passes PEM text to jwt.decode with HS* allowed (HS256 only with secrets, asymmetric only with key objects).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/pyjwt@2.13.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-63374",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "TLS hostname check bypass for internationalized hostnames on anyio TLS clients; the only anyio TLS client path is async httpx in the enterprise Microsoft Entra provider, which TAPPaaS does not configure and which talks to ASCII Microsoft hosts; other outbound HTTP uses requests/urllib3.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/anyio@4.14.1"
-        }
-      ]
-    },
-    {
       "id": "CVE-2026-6653",
       "analysis": {
         "state": "not_affected",
@@ -142,32 +58,6 @@
       "affects": [
         {
           "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-102267",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "PyJWKClient redirect handling; Authentik 2026.8.3 never uses PyJWKClient (no reference outside tests), it fetches JWKS itself with requests.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/pyjwt@2.13.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-102271",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "DER public key used as HMAC secret in mixed-algorithm setups; Authentik never passes DER key bytes to jwt.decode with HS* allowed (header-chosen alg paths get cryptography key objects, which HMAC rejects).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/pyjwt@2.13.0"
         }
       ]
     },
@@ -355,19 +245,6 @@
       ]
     },
     {
-      "id": "CVE-2026-103111",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "pcre2 JIT with attacker-controlled patterns; libpcre2 is linked only by coreutils/findutils/dpkg tools, Authentik's Python uses re and the Go server uses regexp.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libpcre2-8-0@10.46-1~deb13u2"
-        }
-      ]
-    },
-    {
       "id": "CVE-2026-84782",
       "analysis": {
         "state": "not_affected",
@@ -376,16 +253,10 @@
       },
       "affects": [
         {
-          "ref": "pkg:deb/debian/libssl-dev@3.5.7-1~deb13u2"
-        },
-        {
           "ref": "pkg:deb/debian/libssl3t64@3.5.7-1~deb13u2"
         },
         {
           "ref": "pkg:deb/debian/openssl@3.5.7-1~deb13u2"
-        },
-        {
-          "ref": "pkg:deb/debian/openssl-provider-legacy@3.5.7-1~deb13u2"
         }
       ]
     },
@@ -607,98 +478,6 @@
       "affects": [
         {
           "ref": "pkg:deb/debian/libgnutls30t64@3.8.9-3%2Bdeb13u4"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-66046",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Python's built-in expat (expat 2.8.2, statically in pyexpat), found by the bundled-library scan (#811). authentik parses SAML requests with defusedxml over the standard XML library, before anyone signs in, wherever a SAML provider is configured. A crafted document makes the parse quadratic (attributes) or hash-floods it: denial of service of the worker parsing it. Fixed in expat 2.8.4+; goes away with an image on a newer Python."
-      },
-      "affects": [
-        {
-          "ref": "pkg:generic/expat@2.8.2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "medium",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-76641",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Python's built-in expat (expat 2.8.2, statically in pyexpat). Needs an external entity parser (XML_ExternalEntityParserCreate); ElementTree and minidom do not create one, and defusedxml refuses external entities before any would be.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:generic/expat@2.8.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-76956",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Python's built-in expat (expat 2.8.2, statically in pyexpat), found by the bundled-library scan (#811). authentik parses SAML requests with defusedxml over the standard XML library, before anyone signs in, wherever a SAML provider is configured. A crafted document makes the parse quadratic (attributes) or hash-floods it: denial of service of the worker parsing it. Fixed in expat 2.8.4+; goes away with an image on a newer Python."
-      },
-      "affects": [
-        {
-          "ref": "pkg:generic/expat@2.8.2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "medium",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-76957",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Python's built-in expat (expat 2.8.2, statically in pyexpat). Needs custom encoding callbacks; CPython's unknown-encoding handler gives expat a table with no convert callback.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:generic/expat@2.8.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-93990",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Python's built-in expat (expat 2.8.2, statically in pyexpat). authentik parses SAML requests with defusedxml over the standard XML library, before anyone signs in, wherever a SAML provider is configured. A lone UTF-16 high surrogate is passed on unpaired; the application sees a malformed string, at worst a failed request. Fixed in expat 2.8.5."
-      },
-      "affects": [
-        {
-          "ref": "pkg:generic/expat@2.8.2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
         }
       ]
     },

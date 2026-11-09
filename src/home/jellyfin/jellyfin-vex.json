@@ -23,18 +23,6 @@
       ]
     },
     {
-      "id": "CVE-2018-6553",
-      "analysis": {
-        "state": "false_positive",
-        "detail": "Ubuntu's CUPS AppArmor profile; NixOS ships no such profile and only cups-lib is present (via gtk), no cupsd."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/cups"
-        }
-      ]
-    },
-    {
       "id": "CVE-2026-59850",
       "analysis": {
         "state": "exploitable",
@@ -53,57 +41,6 @@
           "severity": "low",
           "method": "other",
           "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-59851",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Server-side GSSAPI key-exchange check; libssh is used only as libavformat's SFTP client, and the VM's sshd is OpenSSH.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/libssh@0.12.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2023-52356",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "TIFFReadRGBATile crash; libtiff is only linked by openjpeg/libwebp command-line tools, gdk-pixbuf/gtk4 and opencv, none of which Jellyfin or its ffmpeg load (ffmpeg decodes TIFF natively).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/libtiff@4.7.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-4775",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "putcontig8bitYCbCr44tile overflow; libtiff is only linked by openjpeg/libwebp tools, gdk-pixbuf/gtk4 and opencv, none of which Jellyfin or its ffmpeg load.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/libtiff@4.7.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2011-2411",
-      "analysis": {
-        "state": "false_positive",
-        "detail": "Samba on HP NonStop servers (H06/J06); not this Linux samba build, which is present only as libsmbclient for ffmpeg."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/samba"
         }
       ]
     },
