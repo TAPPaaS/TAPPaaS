@@ -48,7 +48,7 @@ function ObjectCard({ c, v, grow }: { c: Card; v: HealthView; grow: () => void }
   return (
     <>
       <div className="cf-title">
-        {n.module ? <ModuleIcon name={n.module} size={20} /> : <ClassIcon cls={n.class} size={20} />}
+        {n.module ? <ModuleIcon name={n.module} cls={n.class} size={20} /> : <ClassIcon cls={n.class} size={20} />}
         <span className="hc-name">{n.label}</span>
         <Marks v={v} />
       </div>

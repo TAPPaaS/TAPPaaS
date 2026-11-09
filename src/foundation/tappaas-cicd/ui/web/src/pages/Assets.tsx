@@ -22,6 +22,8 @@ import { AddRoomButton, PlaceActions, RecordDeviceButton, RecordSeenButton, rack
 import { viewLink } from "../physical/views";
 import { LocationLink, locationOption, useSiteLocations } from "../locations";
 import { AssetRow, AssetTree, AssetTreeItem, AssetTreeLocation, AssetTreePort, Topology } from "../types";
+import { ClassIcon } from "../moduleicon";
+import { CLASS_SYMBOL, assetClassOf } from "../classsymbol";
 import { Badge, KV, Level, Link, ReadState, Section, canOperate, replacePath, since, useMe } from "../ui";
 
 export const STAGE_LEVEL: Record<string, Level> = { ordered: "info", stock: "skip", placed: "info", operational: "pass", disposed: "unknown" };
@@ -112,6 +114,7 @@ function Item({ tree, it, sel, pick }: { tree: AssetTree; it: AssetTreeItem; sel
     <li>
       <div className="atree-row">
         {it.at ? <span className="muted small">{it.at}</span> : null}
+        <ClassIcon cls={assetClassOf(a.kind)} size={16} />
         <Link to={assetPath(a.name)}>{a.displayName ?? a.name}</Link>
         {a.displayName && a.displayName !== a.name ? <span className="muted small mono">{a.name}</span> : null}
         <span className="atree-kind">{a.kind}</span>
@@ -129,6 +132,7 @@ function Item({ tree, it, sel, pick }: { tree: AssetTree; it: AssetTreeItem; sel
 function Row({ label, kind, on, onClick, aside }: { label: ReactNode; kind: string; on: boolean; onClick?: () => void; aside?: ReactNode }) {
   return (
     <div className={`atree-row${on ? " row-on" : ""}`}>
+      {CLASS_SYMBOL[kind] ? <ClassIcon cls={kind} size={16} /> : null}
       <span className="atree-kind">{kind}</span>
       {onClick ? <button className="hlink" onClick={onClick}>{label}</button> : <b>{label}</b>}
       {aside ? <span className="muted small">{aside}</span> : null}

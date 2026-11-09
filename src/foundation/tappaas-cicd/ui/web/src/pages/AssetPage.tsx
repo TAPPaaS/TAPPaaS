@@ -32,6 +32,8 @@ import { viewLink } from "../physical/views";
 import { DeviceLocationButton, LocationLink, PlacementLine } from "../locations";
 import { AssetRow, AssetTree, CiHistoryRow, CiRecord, ModuleSummary, RackCable, Topology } from "../types";
 import { Badge, KV, Link, OpenIn, ReadState, Section, canOperate, useHash, useMe, when } from "../ui";
+import { ClassIcon } from "../moduleicon";
+import { assetClassOf } from "../classsymbol";
 import { CiPanel } from "./CiPanel";
 import { StageBadge } from "./Assets";
 
@@ -203,7 +205,7 @@ export function AssetPage({ name }: { name: string }) {
   return (
     <div className="page asset-page">
       <div className="page-head">
-        <h1>{a.displayName ?? a.name}</h1>
+        <h1 className="ci-title"><ClassIcon cls={assetClassOf(a.kind)} size={26} />{a.displayName ?? a.name}</h1>
         <span className="muted">
           <Link to="/assets">Assets</Link> · {a.kind}
           {a.displayName && a.displayName !== a.name ? ` · ${a.name}` : ""}

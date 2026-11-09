@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 import { useRead } from "../api";
 import { CiHistoryRow, CiRecord, CiTraceStep } from "../types";
+import { ClassIcon } from "../moduleicon";
 import { Link, ReadState, Section, Tag, when } from "../ui";
 
 export type CiRef = { id: string } | { name: string; cls?: string };
@@ -116,7 +117,7 @@ export function CiPanel({ start, close, back, embedded, only }: { start: CiRef; 
         <>
           <header>
             <div>
-              <b>{o?.label ?? ("name" in here ? here.name : "…")}</b>
+              <b className="ci-title">{o ? <ClassIcon cls={o.class} size={18} /> : null}{o?.label ?? ("name" in here ? here.name : "…")}</b>
               <div className="muted small">{o ? `${o.class}${o.ancestors.length ? ` · ${o.ancestors.filter((a) => a !== o.class && a !== "object").join(" › ")}` : ""} · CMDB record` : "CMDB record"}</div>
             </div>
             {close ? <button className="btn-x" onClick={close} aria-label="Close">×</button> : null}

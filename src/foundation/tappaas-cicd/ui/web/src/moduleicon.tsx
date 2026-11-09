@@ -1,8 +1,10 @@
 // moduleicon.tsx — a module's icon (GET /api/v1/modules/<name>/icon: the file
 // its config declares or the icon.svg / icon.png of its module directory),
-// else a tile with its initial in a colour taken from its name.
+// else a tile; and an object's class tile (classsymbol.ts: its symbol on its
+// family's colour, its class in the operator's words as the label).
 
 import { useState } from "react";
+import { FAMILY_COLOR, classSymbol } from "./classsymbol";
 
 const TILE = ["var(--accent)", "var(--violet-600)", "var(--cyan-600)", "var(--pink-700)", "var(--lime-700)", "var(--amber-700)", "var(--blue-700)", "var(--teal-700)"];
 
@@ -12,9 +14,12 @@ function tileColor(name: string): string {
   return TILE[h % TILE.length];
 }
 
-export function ModuleIcon({ name, size = 40 }: { name: string; size?: number }) {
+// A module without an icon of its own: the class tile of the object it is
+// (cls), else its initial in a colour taken from its name.
+export function ModuleIcon({ name, cls, size = 40 }: { name: string; cls?: string; size?: number }) {
   const [none, setNone] = useState(false);
   if (none) {
+    if (cls) return <ClassIcon cls={cls} size={size} />;
     return (
       <span className="micon micon-tile" style={{ width: size, height: size, background: tileColor(name), fontSize: size * 0.48 }} aria-hidden>
         {name.charAt(0).toUpperCase()}
@@ -24,13 +29,12 @@ export function ModuleIcon({ name, size = 40 }: { name: string; size?: number })
   return <img className="micon" src={`/api/v1/modules/${encodeURIComponent(name)}/icon`} width={size} height={size} alt="" onError={() => setNone(true)} />;
 }
 
-// An object that is no module: a tile for its class, by the same rule.
-const CLASS_LETTER: Record<string, string> = { machine: "M", vm: "V", lxc: "C", device: "D", site: "◆", environment: "E", cluster: "◎", zone: "Z", datastore: "B", "storage-pool": "P", port: "·", disk: "◍", user: "U", group: "G" };
-
+// An object that is no module, or a module without an icon: its class's tile.
 export function ClassIcon({ cls, size = 22 }: { cls: string; size?: number }) {
+  const s = classSymbol(cls);
   return (
-    <span className="micon micon-tile" style={{ width: size, height: size, background: tileColor(cls), fontSize: size * 0.52 }} title={cls} aria-hidden>
-      {CLASS_LETTER[cls] ?? cls.charAt(0).toUpperCase()}
+    <span className="micon micon-tile" style={{ width: size, height: size, background: FAMILY_COLOR[s.family], fontSize: size * 0.56 }} title={s.word} role="img" aria-label={s.word}>
+      {s.symbol}
     </span>
   );
 }

@@ -696,7 +696,9 @@ button.mod-tile:hover { background: var(--info-bg); }
 .mod-tile.st-fail { border-color: var(--fail); background: var(--fail-bg); }
 .mod-name { font-size: 11.5px; margin-top: 3px; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .micon { border-radius: var(--radius-panel); object-fit: contain; display: block; }
-.micon-tile { display: inline-flex; align-items: center; justify-content: center; color: var(--white); font-weight: 700; }
+.micon-tile { display: inline-flex; align-items: center; justify-content: center; color: var(--white); font-weight: 700; flex: none; line-height: 1; }
+.ci-title { display: inline-flex; align-items: center; gap: var(--sp-8); }
+.atree .atree-row .micon-tile { align-self: center; }
 .env-page { display: flex; gap: 14px; align-items: flex-start; }
 .env-page .sidepanel { position: sticky; top: 10px; max-height: calc(100vh - 120px); }
 .rack-room { cursor: pointer; }
