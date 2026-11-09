@@ -3,7 +3,7 @@
 # Name:    Forgejo — self-hosted Git service (Gitea fork)
 # Type:    NixOS VM
 # Zone:    srvWork
-# Version: 16.0.5
+# Version: 17.0.1
 # Date:    2026-06-01
 # Author:  @ErikDaniel007
 # License: MIT (Forgejo upstream)
@@ -13,7 +13,7 @@
 
 let
   versions = {
-    forgejo    = "16.0.5";
+    forgejo    = "17.0.1";
     forgejoApp = pkgs.forgejo;  # resolved from nixpkgs — pin overrideAttrs if needed
   };
 
