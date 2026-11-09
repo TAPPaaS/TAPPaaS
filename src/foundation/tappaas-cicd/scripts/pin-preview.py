@@ -914,8 +914,14 @@ def render(o):
         k = {c: sum(1 for v in vs if v["class"] == c) for c in ("live", "carried", "gone", "unjudged")}
         print(f"  VEX statements: {k['live']} live, {k['carried']} carried, {k['gone']} gone"
               + (f", {k['unjudged']} not judged (platform, approximate, or a failed match)" if k["unjudged"] else ""))
-        for v in [v for v in vs if v["class"] == "gone"][:12]:
-            print(f"    GONE    {v['id']:<22} {v['file']}  ({', '.join(v['refs']) or 'every package'})")
+        gone = {}
+        for v in vs:
+            if v["class"] == "gone":
+                m = os.path.basename(v["file"]).removesuffix("-vex.json")
+                gone[m] = gone.get(m, 0) + 1
+        if gone:
+            print("    gone: " + ", ".join(f"{m} {c}" for m, c in sorted(gone.items(), key=lambda kv: (-kv[1], kv[0])))
+                  + " — the preview JSON names each one")
     if o.get("passedAnalysed"):
         print(f"  new, already analysed at risk low/medium — pass without an ack: {len(o['passedAnalysed'])} ({tl(o['passedAnalysed'])})")
     if o.get("staleAcks"):

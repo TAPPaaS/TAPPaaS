@@ -332,7 +332,7 @@ ck "the table has the score and the VEX columns" "yes" \
 ck "…each module's score from the scorer, never computed in Python" "20 high" "$(jq -r '.modules[] | select(.module=="logging") | "\(.score) \(.level)"' "${T}/p.json")"
 ck "…and the release's score" "20 high logging" "$(jq -r '"\(.release.score) \(.release.level) \(.release.setBy.module)"' "${T}/p.json")"
 ck "…said on the MODULES line" "yes" "$([[ "${OUT}" == *"MODULES"*"release score 20 high, set by logging"* ]] && echo yes || echo no)"
-ck "the GONE statements are named in the text" "yes" "$([[ "${OUT}" == *"GONE    CVE-GONE"*"logging-vex.json"* ]] && echo yes || echo no)"
+ck "the GONE statements are counted per module in the text" "yes" "$([[ "${OUT}" == *"    gone: logging 2, templates 1"* && "${OUT}" != *"CVE-GONE"* ]] && echo yes || echo no)"
 SCORER=false runv
 ck "a failed scorer is said, and the preview still runs" "0 yes" "${RC} $([[ "${OUT}" == *"no score: health-manager score failed"* ]] && echo yes || echo no)"
 NIXSCAN="${T}/bad" runv

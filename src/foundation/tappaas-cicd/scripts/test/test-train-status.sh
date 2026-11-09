@@ -756,7 +756,7 @@ FAKE_GATE='["cve immich CVE-B","cve immich CVE-C"]' FAKE_VEX="${VX}" run_to boun
 [[ "${OUT}" == *"1b clean VEX on the pin branch"* ]] && ok "the plan names the VEX cleanup" || bad "no cleanup in the plan: ${OUT}"
 FAKE_GATE='["cve immich CVE-B","cve immich CVE-C"]' FAKE_ITEMS='{"cve immich CVE-B":"Critical brotli@1.2.0","cve immich CVE-C":"High x@1"}' FAKE_VEX="${VX}" FAKE_PASSED='["cve immich CVE-P"]' \
     FAKE_NOW=$(( 1790000000 + 20*86400 )) run_to boundary --resume --to nixos-26.05
-[[ "${RC}" -eq 0 && "${OUT}" == *"Phase 1b: VEX cleanup"*"removed  CVE-L1"*"removed  CVE-T1"*"carried  CVE-G1"* ]] \
+[[ "${RC}" -eq 0 && "${OUT}" == *"Phase 1b: VEX cleanup"*"removed     2 "*"immich 2"*"carried     1 "*"immich 1"* && "${OUT}" != *"CVE-L1"* ]] \
     && ok "the boundary's cve phase removes the gone statements and lists the carried" || bad "cve phase: ${OUT}"
 _pb="$(git -C "${TMP}/w" ls-remote --heads origin 'pin/*' | awk '{print $2}' | sed 's#refs/heads/##' | head -1)"
 [[ -n "${_pb}" && "$(git -C "${TMP}/w" log -1 --format=%s "origin/${_pb}")" == "chore(vex): remove 2 statement(s) no channel ships" ]] \
