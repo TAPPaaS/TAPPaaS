@@ -118,7 +118,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 32 | 2 | 2 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
-| 3 | G3.4 AI stack maturity | M | M | 4 | – | 8 |
+| 3 | G3.4 AI stack maturity | M | M | 4 | 1 | 7 |
 | 3 | G3.5 Installer UX | L | L | 2 | – | 2 |
 | 2 | G2.1 Firewall exposure & rule order | M | H | 26 | – | 2 |
 | 2 | G2.2 DNS resolver robustness | L | M | 7 | – | 1 |
@@ -387,14 +387,14 @@ The known rough edges of the app modules, fixed and tested so they stay fixed: N
 | #411 | windows-server: `deploy-instances.sh` missing | L | L | **Verified open 2026-09-26** (low-risk sweep): the script does not exist; writing it is the work |
 | #754 | In-guest backup timers: drop for PBS or say why they stay | L | L | **2026-10-14:** identity, coturn, euro-office, vaultwarden dropped (three had produced empty archives every night). **litellm and openwebui assigned to @ErikDaniel007** — openwebui's `restore.sh` reads `/var/backup` |
 
-### G3.4 AI stack maturity — Ease M · Risk M · released: 4 · open: 8
+### G3.4 AI stack maturity — Ease M · Risk M · released: 4 · done for 2.5: 1 · open: 7
 
 A production-grade AI stack (its test conventions, #119 and #120, are in G5.2): hardened (#121) and kept current (#621), LiteLLM sized for its workers (#677), and vLLM's models recoverable after a restore (#758).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #121 | litellm production-grade | M | L | Renamed backups: old backup files must still restore |
-| #621 | Bump litellm / openwebui | M | M | After #121 LLM-003 gives update.sh a health gate |
+| ✅ #621 | Bump litellm / openwebui | M | M | **Closed 2026-11-09**: litellm v1.106.7, openwebui 0.13.0, both in the pin report; the update gate comes from the generic module update (tests before and after, `ready.sh`) |
 | #812 | vllm-amd: privileged LXC, unauthenticated vLLM API, sshd password auth | M | L | **Opened 2026-10-09** from the #788 triage of its Debian LXC: root in ct312 is root on tappaas2 (Docker inside, GPU devices); vLLM :8000 on all interfaces with no `--api-key`, bypassing LiteLLM; `PasswordAuthentication yes` |
 | #758 | vllm-amd: the models bind mount is in no backup | M | L | The 33 GB `/tanka1/vllm-models` bind mount is in no backup, so a restored container has no models. Maintainer @ErikDaniel007: re-download, back it up, or call it cache |
 | #677 | litellm's default workers do not fit its default 4 GB | L | L | Found 2026-09-20 by `--deep`: litellm plus four workers leave 43 MB free in the default 4 GB. Either the default memory covers the workers, or the workers follow the memory |
