@@ -22,6 +22,10 @@
 #   --as-is     evaluate the module alone, without adding the baseline (the "before")
 #   --drv       print each system's derivation: removing a copy that equals the
 #               baseline should leave it unchanged (compare two runs; nix-diff)
+#   --replacements  with --drv: for a module that sets system.replaceDependencies,
+#               also print each pair as `  replace: <module.nix> <old> <new>`, for the
+#               derivation and the output it names — the built system rewrites old
+#               into new, so its closure holds new
 #   --nixpkgs   nixpkgs to evaluate against (default: the template's pinned rev)
 #   --src DIR   the tree to evaluate (a src/ directory) instead of this checkout's —
 #               another release's, unpacked (the release CVE preview, #788)
@@ -31,12 +35,13 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$(cd "${HERE}/../../.." && pwd)"
 BASELINE="${SRC}/foundation/templates/tappaas-common.nix"
-AS_IS=0; DRV=0; NIXPKGS=""
+AS_IS=0; DRV=0; REPL=0; NIXPKGS=""
 FILES=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --as-is)   AS_IS=1; shift ;;
         --drv)     DRV=1; shift ;;
+        --replacements) REPL=1; shift ;;
         --nixpkgs) NIXPKGS="${2:?--nixpkgs needs a value}"; shift 2 ;;
         --src)     SRC="$(cd "${2:?--src needs a directory}" && pwd)"; BASELINE="${SRC}/foundation/templates/tappaas-common.nix"; shift 2 ;;
         -h|--help) awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -102,6 +107,20 @@ for f in "${FILES[@]}"; do
     if out="$(nix-instantiate "${mode[@]}" -I "nixpkgs=${NIXPKGS}" -I "nixos-config=${d}/wrapper.nix" \
                 '<nixpkgs/nixos>' 2>&1)"; then
         echo "  ok: ${rel}$( (( DRV )) && printf ' %s' "$(tail -1 <<<"${out}")")"; PASS=$((PASS+1))
+        # What replaceDependencies swaps in the built system, as derivation and
+        # output pairs: the system's .drv closure holds both (its replacement step
+        # reads the original's outputs), its runtime closure only the new.
+        # Asked only of a module that names it, so the others cost nothing more.
+        if (( DRV && REPL )) && cat "${d}"/*.nix | sed -E 's/#.*$//' | grep -qE 'replace(Runtime)?Dependencies'; then
+            nix-instantiate --eval --strict --json --quiet -I "nixpkgs=${NIXPKGS}" -I "nixos-config=${d}/wrapper.nix" \
+                --expr 'let sys = (import <nixpkgs/nixos> { }).config.system;
+                            pairs = o: n: [ [ o.drvPath n.drvPath ] [ o.outPath n.outPath ] ];
+                        in builtins.concatLists (if sys ? replaceDependencies
+                           then map (x: pairs x.oldDependency x.newDependency) sys.replaceDependencies.replacements
+                           else map (x: pairs x.original x.replacement) (sys.replaceRuntimeDependencies or [ ]))' \
+                2>/dev/null | jq -r --arg rel "${rel}" 'unique | .[] | "  replace: \($rel) \(.[0]) \(.[1])"' \
+                || echo "  replace: ${rel} ? ?"
+        fi
     else
         echo "  FAIL: ${rel}"; FAIL=$((FAIL+1))
         # The verdict, not the trace: the error line and the definitions it names.

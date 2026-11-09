@@ -20,7 +20,7 @@
 #                 [--production-branch <b>]    promote onto <b> instead of `stable`
 #                 [--staging-branch <b>]       use <b> as the staging channel — set both to
 #                                              throwaway refs to rehearse a whole boundary
-#                 [--guest <module>]           the guest that meets the new pin first
+#                 [--guest <module>]           the guest that meets the new pin first, this run
 #                 [--to <nixos-XX.YY>]         a VERSION move: change the release branch itself
 #                 [--allow-no-pin-change]      prove the pin already in the tree, without moving it
 #                 [--major]                    cut the next MAJOR (3.0) instead of the next minor
@@ -28,6 +28,9 @@
 #                                          where phase 6 verifies a boundary: an ssh name this site
 #                                          reaches the staging site's mothership by. Recorded once,
 #                                          used by every boundary that is not a rehearsal
+#   tappaas-train canary [<module> | --clear]
+#                                          the NixOS guest that meets a new pin first, recorded
+#                                          once; without one, a low-risk app guest by default
 #   tappaas-train fault <what>             record a staging fault; blocks the next promotion
 #   tappaas-train fault --resolved <commit>  clear it — the commit must be on main
 #   tappaas-train patch <staging|production> <commit> --why "<what>" [--dry-run]
@@ -584,6 +587,11 @@ cmd_status() {
     else
         warn "  no staging site recorded — a boundary skips phase 6: ${SCRIPT_NAME} staging-site <host>"
     fi
+    if choose_canary; then
+        info "  canary ${BL}${CANARY}${CL} (${CANARY_WHY}): meets a new pin first"
+    else
+        warn "  no canary: ${CANARY_WHY} — ${SCRIPT_NAME} canary <module>"
+    fi
 
     # What would stop a boundary. Reported, never acted on: status changes
     # nothing, which is what makes it safe to run when something is wrong.
@@ -696,16 +704,18 @@ cmd_init() {
         return 0
     fi
     local now; now="$(now_epoch)"
-    local tmp="${STATE_FILE}.tmp.$$" keep_host=""
+    local tmp="${STATE_FILE}.tmp.$$" keep_host="" keep_canary=""
     [[ -f "${STATE_FILE}" ]] && keep_host="$(jq -r '.stagingHost // empty' "${STATE_FILE}" 2>/dev/null)"
+    [[ -f "${STATE_FILE}" ]] && keep_canary="$(jq -r '.canaryGuest // empty' "${STATE_FILE}" 2>/dev/null)"
     jq -n --arg started "$(iso_utc "${now}")" --arg next "$(day_utc $(( now + BOUNDARY_DAYS * 86400 )))" \
-          --argjson channels "$(channels_state "" "")" --arg pin "${PIN_REV}" --arg sh "${keep_host}" '{
+          --argjson channels "$(channels_state "" "")" --arg pin "${PIN_REV}" --arg sh "${keep_host}" --arg cg "${keep_canary}" '{
             soakStarted: $started,
             nextBoundary: $next,
             channels: $channels,
             pin: $pin,
             fault: null
-          } + (if $sh == "" then {} else {stagingHost: $sh} end)' > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" \
+          } + (if $sh == "" then {} else {stagingHost: $sh} end)
+            + (if $cg == "" then {} else {canaryGuest: $cg} end)' > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" \
         || { rm -f "${tmp}"; error "could not write ${STATE_FILE}"; return 1; }
     info "  ${GN}✓${CL} soak clock started — a boundary becomes due in ${BOUNDARY_DAYS} days"
     return 0
@@ -1391,21 +1401,63 @@ site_back_to_main() {   # idempotent; safe in a trap on a dead terminal
 }
 site_off_pin() { _PIN_TRACK_REPO=""; trap - EXIT HUP INT TERM; }
 
-pick_guest() {
-    [[ -n "${GUEST}" ]] && { echo "${GUEST}"; return 0; }
-    local f n
-    for f in "${CONFIG_DIR}"/*.json; do
-        jq -e '(.dependsOn // []) | index("templates:nixos")' "${f}" >/dev/null 2>&1 || continue
-        n="$(basename "${f}" .json)"; echo "${n}"; return 0
-    done
-    return 1
+# The canary: the guest that meets a new pin first, so a bad revision is caught
+# by a machine that rolls back from a snapshot. Chosen on purpose, in this order:
+#   --guest <module>              this run's word
+#   `canary <module>` (recorded)   the site's standing choice, in release-train.json
+#   the default                   a low-risk app guest, derived from the module configs
+# choose_canary sets CANARY and CANARY_WHY; it returns 1 when there is none.
+CANARY=""; CANARY_WHY=""
+is_nixos_guest() {
+    jq -e '(.dependsOn // []) | index("templates:nixos")' "${CONFIG_DIR}/$1.json" >/dev/null 2>&1
+}
+# The default never risks the estate or the site's data: a NixOS guest outside the
+# foundation stack that no other module depends on, with no SSO accounts
+# (identity:*), no shared storage (storage:nfs) and no HA placement — then the
+# smallest disk, then the name, so the choice is stable from run to run.
+default_canary() {
+    local files=() f
+    for f in "${CONFIG_DIR}"/*.json; do [[ -f "${f}" ]] && files+=("${f}"); done
+    (( ${#files[@]} > 0 )) || return 1
+    jq -rn '
+      [inputs | select(type == "object") | {
+          n: (input_filename | split("/") | last | rtrimstr(".json")),
+          d: (.dependsOn // []), s: (.stack // ""),
+          disk: ((.config // {})["cluster:vm"].diskSize // "" | tostring | ascii_downcase)}] as $m
+      | ($m | map(.d[] | split(":")[0]) | unique) as $used
+      | $m
+      | map(select((.d | index("templates:nixos")) and .s != "foundation"
+                   and ((.n | IN($used[])) | not)
+                   and (.d | any(startswith("identity:") or . == "storage:nfs" or . == "cluster:ha") | not)))
+      | sort_by(((.disk | capture("^(?<v>[0-9.]+)(?<u>[mgt]?)")) // {v: "1e9", u: ""}
+                 | (.v | tonumber) * ({"m": 0.001, "g": 1, "t": 1024, "": 1}[.u])), .n)
+      | .[0].n // empty' "${files[@]}" 2>/dev/null | grep .
+}
+choose_canary() {
+    CANARY=""; CANARY_WHY=""
+    if [[ -n "${GUEST}" ]]; then
+        CANARY="${GUEST}"; CANARY_WHY="--guest"; return 0
+    fi
+    local rec=""
+    [[ -f "${STATE_FILE}" ]] && rec="$(jq -r '.canaryGuest // empty' "${STATE_FILE}" 2>/dev/null)"
+    if [[ -n "${rec}" ]]; then
+        if ! is_nixos_guest "${rec}"; then
+            CANARY_WHY="the recorded canary ${rec} is not an installed NixOS guest"
+            return 1
+        fi
+        CANARY="${rec}"; CANARY_WHY="the site's canary"; return 0
+    fi
+    CANARY="$(default_canary)" || {
+        CANARY=""; CANARY_WHY="no low-risk NixOS guest to default to"; return 1; }
+    CANARY_WHY="default: an app guest nothing depends on, no accounts or shared data, smallest disk"
+    return 0
 }
 
 do_phase_prove() {
     local br; br="$(jq -r '.boundary.branch // empty' "${STATE_FILE}")"
     info "${BOLD}Phase 2: prove the pin here${CL}"
-    local guest; guest="$(pick_guest)" \
-        || { error "no NixOS guest found to try first — name one with --guest"; return 1; }
+    choose_canary || { error "${CANARY_WHY} — record one with: ${SCRIPT_NAME} canary <module> (or --guest)"; return 1; }
+    local guest="${CANARY}"
     if [[ "${DRY_RUN}" == "1" ]]; then
         info "  (dry run) would track ${br:-the pin branch}, update ${guest} first, then sweep, then test --deep"
         return 0
@@ -1621,7 +1673,11 @@ cmd_boundary() {
     fi
     preview_plan
     vex_plan
-    info "  2  prove it here: $(pick_guest 2>/dev/null || echo "a guest") first, then the sweep, then --deep"
+    if choose_canary; then
+        info "  2  prove it here: ${BL}${CANARY}${CL} first (${CANARY_WHY}), then the sweep, then --deep"
+    else
+        warn "  2  prove it here — no guest to try first: ${CANARY_WHY} (${SCRIPT_NAME} canary <module>)"
+    fi
     info "  3  land on main (hours: the sweep reboots nodes, the deep test builds guests)"
     # The version is decided once, here, and kept: a resumed run tags what the
     # plan said, not whatever is "next" by the time it gets there.
@@ -1780,6 +1836,39 @@ cmd_staging_site() {
     fi
     mv -f "${tmp}" "${STATE_FILE}" || { rm -f "${tmp}"; die "could not write ${STATE_FILE}"; }
     info "  ${GN}✓${CL} staging site recorded: ${host} (channel ${rchan:-unset}) — every boundary that is not a rehearsal verifies it in phase 6"
+}
+
+# ── canary ───────────────────────────────────────────────────────────
+# Which guest meets a new pin first, recorded once for this site. Without one a
+# boundary takes the default (choose_canary). Checked when recorded: it must be
+# an installed NixOS guest, since only those build from the pin.
+cmd_canary() {
+    local m="${1:-}" tmp="${STATE_FILE}.tmp.$$"
+    if [[ -z "${m}" ]]; then
+        if choose_canary; then info "canary: ${CANARY} (${CANARY_WHY})"; else warn "no canary: ${CANARY_WHY}"; fi
+        return 0
+    fi
+    if [[ "${m}" == "--clear" ]]; then
+        if [[ -f "${STATE_FILE}" ]]; then
+            jq 'del(.canaryGuest)' "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" \
+                || { rm -f "${tmp}"; die "could not write ${STATE_FILE}"; }
+        fi
+        if choose_canary; then info "  ${GN}✓${CL} canary cleared — boundaries take the default: ${CANARY}"
+        else info "  ${GN}✓${CL} canary cleared — ${CANARY_WHY}"; fi
+        return 0
+    fi
+    [[ "${m}" =~ ^[A-Za-z0-9._-]+$ ]] || die "not a module name: '${m}'"
+    [[ -f "${CONFIG_DIR}/${m}.json" ]] || die "${m} is not installed on this site — nothing recorded"
+    is_nixos_guest "${m}" || die "${m} is not a NixOS guest: it does not build from the pin — nothing recorded"
+    [[ "$(jq -r '.stack // empty' "${CONFIG_DIR}/${m}.json")" == foundation ]] \
+        && warn "  ${m} is a foundation module: a bad pin there reaches what every guest needs"
+    if [[ -f "${STATE_FILE}" ]]; then
+        jq --arg m "${m}" '.canaryGuest = $m' "${STATE_FILE}" > "${tmp}"
+    else
+        jq -n --arg m "${m}" '{canaryGuest: $m}' > "${tmp}"
+    fi
+    mv -f "${tmp}" "${STATE_FILE}" || { rm -f "${tmp}"; die "could not write ${STATE_FILE}"; }
+    info "  ${GN}✓${CL} canary recorded: ${m} — every boundary updates it first"
 }
 
 # ── fault ────────────────────────────────────────────────────────────
@@ -1977,7 +2066,17 @@ pin_findings() {
                       -e '/misc/' -e '/00-Template/' -e '/test-' -e '/test-fixtures/' | sort)
         info "  evaluating ${#files[@]} NixOS module(s) of $([[ ${side} == base ]] && echo "${tag}" || echo "this tree") — nothing is built"
         (( ${#files[@]} > 0 )) || continue
-        while read -r ok rel drv; do
+        while read -r ok rel drv new; do
+            # replaceDependencies: the built system rewrites <drv> (a derivation or
+            # an output) into <new>, so pin-preview counts the new version.
+            if [[ "${ok}" == "replace:" ]]; then
+                if [[ "${drv}" == /nix/store/* && "${new}" == /nix/store/* ]]; then
+                    echo "${drv} ${new}" >> "${work}/${side}/$(basename "${rel}" .nix).replace"
+                else
+                    info "  $(basename "${rel}" .nix) replaces dependencies that did not evaluate — counted without the replacement"
+                fi
+                continue
+            fi
             [[ "${ok}" == "ok:" && "${drv}" == *.drv ]] || continue
             local mname; mname="$(basename "${rel}" .nix)"
             # A module that runs nowhere here has no inventory to say which of its
@@ -1994,7 +2093,7 @@ pin_findings() {
                 info "  ${mname} runs nowhere here and its system did not build — counted approximately (≈)"
             fi
             nix-store -q --requisites "${drv}" > "${work}/${side}/${mname}.txt" 2>/dev/null || true
-        done < <(bash "${TRAIN_SCRIPTS}/nixos-baseline-eval.sh" --src "${tree}" ${mode} --drv --nixpkgs "${src}" "${files[@]}" 2>&1)
+        done < <(bash "${TRAIN_SCRIPTS}/nixos-baseline-eval.sh" --src "${tree}" ${mode} --drv --replacements --nixpkgs "${src}" "${files[@]}" 2>&1)
         # The shared baseline: an empty module with templates/tappaas-common.nix added —
         # what every guest starts from. Its packages are the preview's baseline row.
         mkdir -p "${work}/${side}-bl"
@@ -2225,7 +2324,7 @@ cmd_releases() {
 
 # The range must cover the whole header block above: extend it when the header
 # grows, or --help quietly stops before its last line.
-usage() { sed -n '3,59p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '3,62p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 command -v jq >/dev/null 2>&1 || die "jq is required"
 NO_FETCH=0; DRY_RUN=0; RESUME=0; FORCE_BOUNDARY=0
@@ -2335,6 +2434,7 @@ case "${1:-}" in
     preview)  cmd_preview ;;
     ack)      cmd_ack ;;
     staging-site) shift; cmd_staging_site "$@" ;;
+    canary)   shift; cmd_canary "$@" ;;
     -h|--help|help|"") usage ;;
-    *) die "unknown command '${1}' (status | init | boundary | staging-site | fault | patch | preview | ack | releases)" ;;
+    *) die "unknown command '${1}' (status | init | boundary | staging-site | canary | fault | patch | preview | ack | releases)" ;;
 esac

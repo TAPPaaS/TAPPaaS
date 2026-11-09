@@ -118,17 +118,35 @@ def inventory(cdx):
     return out
 
 
+def replacements(path):
+    """old -> new store path (derivations and outputs) from a <module>.replace file
+    (system.replaceDependencies)."""
+    out = {}
+    if os.path.isfile(path):
+        for line in open(path):
+            ab = line.split()
+            if len(ab) == 2:
+                out[ab[0]] = ab[1]
+    return out
+
+
 def closures(d):
-    """module -> {pname: set(versions)} from <module>.txt files of .drv paths."""
+    """module -> {pname: set(versions)} from <module>.txt files of .drv paths.
+    A module whose system uses replaceDependencies has a <module>.replace beside it:
+    its .drv closure holds both sides of each pair, the system it builds only the
+    new one, so the old paths are dropped and the new ones counted."""
     out = {}
     if not d or not os.path.isdir(d):
         return out
     for f in sorted(os.listdir(d)):
         if not f.endswith(".txt"):
             continue
+        swap = replacements(os.path.join(d, f[:-4] + ".replace"))
+        paths = [p for p in (line.strip() for line in open(os.path.join(d, f))) if p and p not in swap]
+        paths += [n for n in swap.values() if n not in paths]
         pk = {}
-        for line in open(os.path.join(d, f)):
-            pv = parse_name(line.strip())
+        for line in paths:
+            pv = parse_name(line)
             if pv and not SOURCE.search(pv[1]):
                 pk.setdefault(pv[0], set()).add(pv[1])
         out[f[:-4]] = pk

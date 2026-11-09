@@ -134,9 +134,9 @@ Six phases, in this order:
 2. **Prove it here.** The site is first pointed at the pin branch — the sweep reconciles the
    checkout to whatever `site.json` declares, so a branch that is merely checked out gets reset
    back to `main` half way through and the rest of the sweep quietly builds the old revision.
-   Then one NixOS guest meets the new revision *first*, so a bad pin is caught by a machine that
-   can be rolled back from a snapshot rather than by the machine that would have to do the
-   repairing. Then the full sweep, then `site-manager test --deep`. **This takes hours and
+   Then one NixOS guest — the *canary* (below) — meets the new revision *first*, so a bad pin is
+   caught by a machine that can be rolled back from a snapshot rather than by the machine that
+   would have to do the repairing. The plan names the canary and why it was chosen. Then the full sweep, then `site-manager test --deep`. **This takes hours and
    reboots nodes.** However it ends, the site is put back on `main`.
 
    **A `--to` move reboots this mothership.** Across a nixpkgs release an in-place switch
@@ -177,7 +177,7 @@ estate is untouched, and the boundary stops.
 | `--force-boundary` | proceed despite a *wait* condition (the soak is not complete). It is recorded. It cannot lift a broken one |
 | `--to <nixos-XX.YY>` | a version move: rewrite the nixpkgs release branch in phase 1 |
 | `--major` | cut the next major (2.7 → 3.0) instead of the next minor. Only ever your word |
-| `--guest <module>` | choose the guest that meets the new pin first (default: the first module that depends on `templates:nixos`) |
+| `--guest <module>` | the guest that meets the new pin first, for this run only (instead of the canary below) |
 | `--staging-host <host>` | run phase 6 against this host for this run, instead of the recorded staging site |
 | `--staging-branch <b>` / `--production-branch <b>` | promote onto throwaway refs instead of `staging` and `stable` — a whole boundary rehearsed without touching a real channel. A rehearsal cuts no version and writes no record |
 
@@ -196,6 +196,23 @@ asks it before anything moves: a staging site that cannot be reached stops the b
 in the middle of its own sweep makes it wait. A rehearsal (`--staging-branch`/`--production-branch`)
 never uses the recorded site — phase 6 runs a real update, which a promotion onto throwaway refs
 must not.
+
+**The canary is chosen on purpose.** The guest that meets a new pin first is the site's choice,
+recorded once:
+
+```bash
+tappaas-train.sh canary euro-office    # record it: refused unless it is an installed NixOS guest
+tappaas-train.sh canary                # show it and why; status and the plan show it too
+tappaas-train.sh canary --clear        # forget it: boundaries take the default again
+```
+
+Without one, the default is a low-risk application guest: a NixOS guest outside the foundation
+stack that no other module depends on, with no single sign-on accounts (`identity:*`), no shared
+storage (`storage:nfs`) and no HA placement — of those, the smallest disk, then the name. With
+no such guest the plan says so and phase 2 stops before anything is updated; record one. A
+foundation module can be recorded, with a warning: a bad pin there reaches what every guest needs.
+The canary lives in `config/release-train.json` beside the staging site and survives `init`. A
+recorded canary that has been removed from the site is reported, never silently replaced.
 
 `stable` is never *created* by a promotion, only fast-forwarded. A production channel that appears
 because of a typo is exactly what this is here to prevent.
@@ -354,6 +371,10 @@ first:
   The MODULES total counts the baseline once.
 - **The mothership** is a module like the others: its system is evaluated in place on both
   sides (it reads this machine's `/etc/nixos`).
+- **A replaced dependency counts at its new version.** A module whose system swaps a package
+  with `system.replaceDependencies` (immich and jellyfin carry a patched brotli this way) runs
+  only the replacement, but its evaluated closure holds both. The preview reads the pairs from
+  the evaluated configuration and counts the package as the module runs it — without a build.
 - **The gate** names its module: `cve <module> <CVE>` (`cve baseline <CVE>` for the shared row)
   and `major <pkg> a->b`. The last lines say what is left to acknowledge, by module and by
   reason (see *What needs an ack* below). Items that passed without an ack, and **stale acks**

@@ -500,6 +500,65 @@ FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --dry-run
 [[ "${OUT}" == *"SKIPPED: no staging site recorded"* ]] && ok "…and the plan says phase 6 would be skipped" \
     || bad "plan after --clear: ${OUT}"
 
+echo "── canary: the guest that meets a new pin first, on purpose ──"
+# Alphabetical order once made coturn the canary by accident — a module another
+# guest depends on. The default must skip foundation, providers, SSO apps,
+# shared storage and HA guests, and take the smallest disk.
+make_train 3 2
+FAKE_NOW=1790000000 run init
+mod() { printf '%s\n' "$2" > "${TMP}/cfg/$1.json"; }
+N='"templates:nixos"'
+mod coturn        '{"stack":"collaboration","dependsOn":["cluster:vm",'"$N"'],"config":{"cluster:vm":{"diskSize":"8G"}}}'
+mod nextcloud-hpb '{"stack":"collaboration","dependsOn":["coturn:turn",'"$N"'],"config":{"cluster:vm":{"diskSize":"16G"}}}'
+mod identity      '{"stack":"foundation","dependsOn":['"$N"'],"config":{"cluster:vm":{"diskSize":"4G"}}}'
+mod immich        '{"stack":"home","dependsOn":["identity:identity",'"$N"'],"config":{"cluster:vm":{"diskSize":"4G"}}}'
+mod jellyfin      '{"stack":"home","dependsOn":["storage:nfs",'"$N"'],"config":{"cluster:vm":{"diskSize":"4G"}}}'
+mod vaultwarden   '{"stack":"security","dependsOn":["cluster:ha",'"$N"'],"config":{"cluster:vm":{"diskSize":"4G"}}}'
+mod debian-app    '{"stack":"misc","dependsOn":["templates:debian"],"config":{"cluster:vm":{"diskSize":"2G"}}}'
+mod euro-office   '{"stack":"collaboration","dependsOn":['"$N"'],"config":{"cluster:vm":{"diskSize":"32G"}}}'
+plain() { sed 's/\x1b\[[0-9;]*m//g' <<<"${OUT}"; }
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --dry-run
+[[ "$(plain)" == *"2  prove it here: nextcloud-hpb first (default: an app guest nothing depends on"* ]] \
+    && ok "the default skips providers, foundation, SSO, shared storage and HA, then the smallest disk" \
+    || bad "default canary: $(plain)"
+run status
+[[ "$(plain)" == *"canary nextcloud-hpb (default:"* ]] && ok "status names the canary and why" || bad "status: $(plain)"
+run canary debian-app
+[[ "${RC}" -ne 0 && "$(jq -r '.canaryGuest // empty' "${TMP}/cfg/release-train.json")" == "" ]] \
+    && ok "a guest that does not build from the pin is refused" || bad "debian canary: rc=${RC} ${OUT}"
+run canary nosuch
+[[ "${RC}" -ne 0 && "${OUT}" == *"not installed"* ]] && ok "an uninstalled module is refused" || bad "nosuch: ${OUT}"
+run canary euro-office
+[[ "${RC}" -eq 0 && "$(jq -r '.canaryGuest' "${TMP}/cfg/release-train.json")" == "euro-office" \
+   && "$(jq -r '.soakStarted // empty' "${TMP}/cfg/release-train.json")" != "" ]] \
+    && ok "a NixOS guest is recorded beside the train state" || bad "record: rc=${RC} ${OUT}"
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --dry-run
+[[ "$(plain)" == *"euro-office first (the site's canary)"* ]] && ok "the plan takes the site's canary" || bad "plan: $(plain)"
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --dry-run --guest coturn
+[[ "$(plain)" == *"coturn first (--guest)"* ]] && ok "--guest overrides it for one run" || bad "--guest: $(plain)"
+jq 'del(.soakStarted)' "${TMP}/cfg/release-train.json" > "${TMP}/x" \
+    && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
+FAKE_NOW=1790000000 run init
+[[ "$(jq -r '.canaryGuest // empty' "${TMP}/cfg/release-train.json")" == "euro-office" ]] \
+    && ok "init keeps the recorded canary" || bad "init dropped it: $(cat "${TMP}/cfg/release-train.json")"
+run canary identity
+[[ "${RC}" -eq 0 && "${OUT}" == *"foundation module"* ]] && ok "a foundation canary is the operator's word, with a warning" \
+    || bad "foundation canary: ${OUT}"
+rm -f "${TMP}/cfg/identity.json"
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --dry-run
+[[ "$(plain)" == *"recorded canary identity is not an installed NixOS guest"* ]] \
+    && ok "a recorded canary that is gone is reported, not silently replaced" || bad "gone canary: $(plain)"
+run canary --clear
+[[ "${RC}" -eq 0 && "$(jq -r '.canaryGuest // empty' "${TMP}/cfg/release-train.json")" == "" && "${OUT}" == *"default: nextcloud-hpb"* ]] \
+    && ok "--clear returns to the default" || bad "--clear: ${OUT}"
+# coturn stays a provider: nextcloud-hpb still depends on it.
+rm -f "${TMP}/cfg/euro-office.json"
+mod nextcloud-hpb '{"stack":"collaboration","dependsOn":["coturn:turn","identity:identity",'"$N"']}'
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --dry-run
+[[ "$(plain)" == *"no low-risk NixOS guest to default to"* && "$(plain)" != *"coturn first"* ]] \
+    && ok "with no safe default it says so instead of risking a provider" || bad "no default: $(plain)"
+rm -f "${TMP}"/cfg/{coturn,nextcloud-hpb,immich,jellyfin,vaultwarden,debian-app}.json
+
 echo "── both flags together isolate a WHOLE boundary ──"
 # Redirecting only production would still advance the real staging channel,
 # which the staging site tracks — that is a real boundary with the production
