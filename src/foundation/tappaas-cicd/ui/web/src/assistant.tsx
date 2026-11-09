@@ -23,26 +23,11 @@ import { Command, JobOutput, JobStatusLine, quote } from "./jobs";
 import { AssistantStatus, Me } from "./types";
 import { FindingList, Link, TypedConfirm, canOperate, navigate, useMe } from "./ui";
 import { refusalLines, runFailure } from "./wizards";
+import { Focus, focusLabel, focusLabelOf, focusOf } from "./focus";
 
-// What is in view, sent with every question.
-export interface Focus {
-  page: string; // overview, physical, modules, module, activity, …
-  kind?: string; // the object in view: module, node, zone, finding, …
-  name?: string;
-  detail?: string; // e.g. the finding's text
-}
+export type { Focus };
+export { focusLabel, focusLabelOf, focusOf };
 
-export function focusOf(path: string): Focus {
-  const seg = path.split("/").filter((s) => s.length > 0).map((s) => decodeURIComponent(s));
-  if (seg.length === 0) return { page: "overview" };
-  if (seg[0] === "modules" && seg[1]) return { page: "module", kind: "module", name: seg[1] };
-  return { page: seg[0] };
-}
-
-export function focusLabel(f: Focus): string {
-  if (f.kind && f.name) return `${f.kind} ${f.name}`;
-  return `page ${f.page}`;
-}
 
 export interface AssistantApi {
   available: boolean;
@@ -352,7 +337,7 @@ export function AssistantDrawer({ status, focus, site, asked, open, onClose }: {
     e.preventDefault();
     const q = text;
     setText("");
-    void send(q, focus);
+    void send(q, focusOf(window.location.pathname, window.location.search));
   };
 
   const load = async (id: string) => {
@@ -367,7 +352,7 @@ export function AssistantDrawer({ status, focus, site, asked, open, onClose }: {
       <header className="drawer-head">
         <div>
           <div className="drawer-title">✦ Assistant</div>
-          <div className="muted small">context: {focusLabel(focus)} · site {site}</div>
+          <div className="muted small">context: {focusLabelOf(focus.page === "health" ? focusOf(window.location.pathname, window.location.search) : focus)} · site {site}</div>
           <div className="muted small">LiteLLM · {status.model ?? "?"}{status.modelFrom === "console.json" ? " (console.json)" : " (site default)"}</div>
         </div>
         <button className="btn btn-small" disabled={busy} onClick={() => { setConversation(null); setTurns([]); }} title="Start a new conversation">New</button>

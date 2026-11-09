@@ -9,6 +9,8 @@ import { join } from "path";
 import { HEALTH_EVENTS, HEALTH_OBJECTS, HEALTH_RESULT_CHARS, ToolContext, healthObjectView, healthRootsView, resolveHealthObject, runTool, toolDefs } from "../../src/assistant-tools";
 import { ConditionChange, HealthGraph, HealthNode, buildHealth } from "../../src/health";
 import { Reads } from "../../src/reads";
+import { focusObject } from "../../src/assistant";
+import { focusOf } from "../../web/src/focus";
 import { check, done } from "./check";
 import { FakeCmdb, healthSite, relationTypes } from "./fake-cmdb";
 import { fakeSite } from "./fake-site";
@@ -133,6 +135,12 @@ async function tool(): Promise<void> {
   check(one.ok && /"causedBy":\["tappaas2 \(/.test(one.content) && /"read":/.test(one.content), `one object through the tool (${one.summary})`);
   const deep = await runTool(ctx, "health_graph", '{"object":"nextcloud","depth":2}');
   check(deep.ok && /\(2 hops\)/.test(deep.summary), "a second hop when asked");
+  // The object selected in the Health view: named in the operator's words, and a lookup hint.
+  const f = focusOf("/health", `?select=${ids.tappaas2}`);
+  check(f.kind === "object" && f.name === ids.tappaas2 && focusOf("/health", "").kind === undefined && focusOf("/modules/immich", "").name === "immich", "the Health view's selection is the focus");
+  const named = await focusObject(ctx, f);
+  check(named !== null && named.id === ids.tappaas2 && named.focus.kind === "machine" && named.focus.name === "tappaas2" && /selected; id /.test(named.focus.detail ?? ""), `the backend names it (${named?.focus.kind} ${named?.focus.name}: ${named?.focus.detail})`);
+  check((await focusObject(ctx, { page: "modules" })) === null && (await focusObject(ctx, { page: "health", kind: "object", name: "not-an-id" })) === null, "no selection, no object");
   const miss = await runTool(ctx, "health_graph", '{"object":"nosuch"}');
   check(!miss.ok && /no object named/.test(miss.content), "an unknown object is refused with the way on");
 }
@@ -161,6 +169,8 @@ function sameName(): void {
   const slash = resolveHealthObject(doc, "tappaas1/tanka1");
   check("node" in on && on.node.id === "p1" && "node" in slash && slash.node.id === "p1", "the node narrows it: 'tanka1 on tappaas1', 'tappaas1/tanka1'");
   check("error" in resolveHealthObject(doc, "tanka1 on tappaas9"), "a node it is not on finds nothing");
+  const sel = resolveHealthObject(doc, "tanka1", "old");
+  check("node" in sel && sel.node.id === "old", "the object selected on the page wins a shared name, even a leftover");
   if ("node" in bare) {
     const v = healthObjectView(doc, bare.node, 1, null, Date.parse("2026-11-09T20:00:00Z"), bare.others).view as { howToRead: string; object: { on?: string } };
     check(/^3 objects are named tanka1: this is the one on tappaas3/.test(v.howToRead) && v.object.on === "tappaas3", "the answer says which of them it read, and where");

@@ -76,7 +76,7 @@ export function App() {
     setOpen: setDrawer,
     ask: (question, focus) => {
       setDrawer(true);
-      setAsked((a) => ({ question, focus: focus ?? focusOf(path), n: (a?.n ?? 0) + 1 }));
+      setAsked((a) => ({ question, focus: focus ?? focusOf(path, window.location.search), n: (a?.n ?? 0) + 1 }));
     },
   };
 
@@ -163,7 +163,7 @@ export function App() {
         {page}
       </div>
       {/* Mounted while available, so a conversation survives closing the drawer. */}
-      {assistant.available && astatus ? <AssistantDrawer status={astatus} focus={focusOf(path)} site={s?.name ?? "…"} asked={asked} open={assistant.open} onClose={() => setDrawer(false)} /> : null}
+      {assistant.available && astatus ? <AssistantDrawer status={astatus} focus={focusOf(path, window.location.search)} site={s?.name ?? "…"} asked={asked} open={assistant.open} onClose={() => setDrawer(false)} /> : null}
     </div>
     </AssistantContext.Provider>
     </MeContext.Provider>

@@ -46,6 +46,7 @@ export interface ToolContext {
   fetch?: typeof fetch;
   now?: () => number;
   shell?: boolean; // the caller is tappaas ask: open_console gives an address, opens nothing
+  focusId?: string; // the CMDB object selected on the operator's page: a shared name means it first
 }
 
 export interface ProposedJob {
@@ -278,7 +279,7 @@ export function whereOf(doc: HealthGraph, n: HealthNode): string | null {
 // tappaas3", "tappaas3/tanka1"). Of several of one name (a pool on each node),
 // one in the graph comes first — an object with no relation left is a leftover
 // — then a root cause, then the worst; the others are named with where they are.
-export function resolveHealthObject(doc: HealthGraph, ref: string): { node: HealthNode; others: string[] } | { error: string } {
+export function resolveHealthObject(doc: HealthGraph, ref: string, focusId?: string): { node: HealthNode; others: string[] } | { error: string } {
   const exact = doc.nodes.find((n) => n.id === ref);
   if (exact) return { node: exact, others: [] };
   const named = (w: string): HealthNode[] => doc.nodes.filter((n) => n.name.toLowerCase() === w || n.label.toLowerCase() === w);
@@ -296,7 +297,7 @@ export function resolveHealthObject(doc: HealthGraph, ref: string): { node: Heal
     return { error: `no object named '${ref}'${near.length ? ` (similar: ${near.join(", ")})` : ""}; call health_graph() without an object for the root causes` };
   }
   const linked = new Set(doc.edges.flatMap((e) => [e.from, e.to]));
-  hits.sort((a, b) => Number(linked.has(b.id)) - Number(linked.has(a.id)) || Number(b.isRoot) - Number(a.isRoot) || RANK[b.status] - RANK[a.status] || a.class.localeCompare(b.class));
+  hits.sort((a, b) => Number(b.id === focusId) - Number(a.id === focusId) || Number(linked.has(b.id)) - Number(linked.has(a.id)) || Number(b.isRoot) - Number(a.isRoot) || RANK[b.status] - RANK[a.status] || a.class.localeCompare(b.class));
   const where = (n: HealthNode): string => whereOf(doc, n) ?? (linked.has(n.id) ? "" : "no relation left: a leftover record");
   return { node: hits[0], others: hits.slice(1, 10).map((n) => `${objName(n)}${where(n) ? ` (${where(n).startsWith("no ") ? where(n) : `on ${where(n)}`})` : ""} id ${n.id}`) };
 }
@@ -621,7 +622,7 @@ async function call(ctx: ToolContext, name: string, args: Record<string, unknown
         return whole(`health graph: ${v.objects} root cause(s)`, v.view);
       }
       if (ref.length > 200) throw new Error("`object` must be a name or an id");
-      const hit = resolveHealthObject(doc, ref);
+      const hit = resolveHealthObject(doc, ref, ctx.focusId);
       if ("error" in hit) return failed(`health graph ${ref}`, hit.error);
       const depth = Number(args.depth) === 2 ? 2 : 1;
       const record = await r.healthObjectOf(hit.node.id).catch((e: unknown) => (e instanceof Error ? e : new Error(String(e))));

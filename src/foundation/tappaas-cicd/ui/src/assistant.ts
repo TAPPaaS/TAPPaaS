@@ -13,7 +13,7 @@
 // wizards, and the managers' verbs in short form.
 
 import { AssistantStatus, ChatFn, ChatMessage, ToolCall } from "./litellm";
-import { ToolContext, runTool, toolDefs, toolLines } from "./assistant-tools";
+import { ToolContext, runTool, toolDefs, toolLines, whereOf } from "./assistant-tools";
 import { Conversation, Conversations, Focus, Opened, Proposal, Step, Turn, trimHistory, userKey } from "./conversations";
 import { catalogText } from "../web/src/consoletargets";
 import { Me } from "./access";
@@ -105,6 +105,7 @@ export function systemPrompt(o: { site: { name: string; displayName: string | nu
     "- When asked to run, apply or do something (\"run it\", \"do it\", \"go ahead\"), do not pretend and do not call any tool to do it: say that you do not run changes yourself, that the card's Run button does, so the record shows a person decided; if there is no card yet, propose one.",
     "- Before proposing a change, read what it touches (the module's fields and their change class, the node's memory commitment) and give the consequence: in-place or a restart, downtime, what it commits.",
     "- Destructive verbs (delete, purge, retire, --remove) need the object's name typed and cannot be undone; propose them only when asked, and say so.",
+    "- What is in view is a strong hint: \"this\", \"it\" or a name the object in view has mean that object; pass its id to a tool when the name is shared.",
     "- Asked why something fails or what is wrong, call health_graph: without an object for the root causes, with one for why it fails. Explain the root cause and what it brings down in words: only its bringsDown list is caused by it; objects nearby have their own state. End with the objects you read.",
     "- Be brief: the cause with its numbers, at most two ways out with their consequence, the one you suggest. Plain text; short lists; no tables.",
     "- A question about the site's state is answered from a tool you call in this turn, never from memory. Answer in the language the operator writes in.",
@@ -185,6 +186,19 @@ export function historyFor(messages: ChatMessage[], currentFrom: number, budget 
   return trimHistory(all.slice(start));
 }
 
+// A CMDB object selected on a page (the Health view's ?select=<id>) said in the
+// operator's words — its class, name and where it is — with its id, so "this
+// pool" and a name several objects share mean the one in view.
+const OBJECT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export async function focusObject(tools: ToolContext, f: Focus): Promise<{ id: string; focus: Focus } | null> {
+  if (f.kind !== "object" || !f.name || !OBJECT_ID.test(f.name)) return null;
+  const g = await tools.reads.healthGraph.get().catch(() => null);
+  const n = g?.value?.nodes.find((x) => x.id === f.name);
+  if (!g?.value || !n) return { id: f.name, focus: { ...f, detail: `the object with id ${f.name}` } };
+  const where = whereOf(g.value, n);
+  return { id: n.id, focus: { page: f.page, kind: n.class, name: n.label, detail: `selected; id ${n.id}${where ? `, on ${where}` : ""}` } };
+}
+
 function parseFocus(v: unknown): Focus | null {
   if (!v || typeof v !== "object" || Array.isArray(v)) return null;
   const o = v as Record<string, unknown>;
@@ -241,7 +255,9 @@ export class Assistant {
       conv = c;
     } else conv = this.d.store.create(user);
 
-    const focus = parseFocus(input.focus);
+    const parsed = parseFocus(input.focus);
+    const seen = parsed ? await focusObject(this.d.tools, parsed) : null;
+    const focus = seen?.focus ?? parsed;
     const turn: Turn = { n: conv.turns.length + 1, at: new Date(this.now()).toISOString(), question: message, focus, steps: [], answer: "", proposals: [], opened: [], model: status.model, error: null };
     emit({ type: "conversation", id: conv.id, turn: turn.n, model: status.model });
     const from = conv.messages.length;
@@ -251,7 +267,8 @@ export class Assistant {
       content: systemPrompt({ site: await this.d.site(), me, focus, manifest: shortManifest(this.d.tools.manifests()), tools: toolLines(this.d.tools), now: new Date(this.now()) }),
     };
     const tools = toolDefs(this.d.tools);
-    const ctx: ToolContext = me.via === "local" ? { ...this.d.tools, shell: true } : this.d.tools;
+    const base: ToolContext = seen ? { ...this.d.tools, focusId: seen.id } : this.d.tools;
+    const ctx: ToolContext = me.via === "local" ? { ...base, shell: true } : base;
     let tookWritten = false;
     try {
       for (let round = 0; ; round++) {
