@@ -6043,6 +6043,1215 @@
           "ref": "pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"
         }
       ]
+    },
+    {
+      "id": "CVE-2026-96760",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Authlib's JWS deserialize_json() skips signature checks; Open WebUI never calls authlib.jose, and Authlib 1.7.2's OIDC client verifies the id_token with joserfc's compact jwt.decode against Authentik's JWKS. The id_token arrives server-to-server from Authentik's token endpoint, not from the browser. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/authlib@1.7.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-114615",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "OctKey.import_key() accepting prefixed PEM bytes as an HMAC secret; Open WebUI configures no PEM verification keys: id_token keys come as JWKs from Authentik's JWKS through joserfc KeySet, and the token itself comes server-to-server from Authentik's token endpoint. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/authlib@1.7.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-114616",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Zero-length HMAC key in Authlib; Open WebUI's only Authlib use is the OIDC client to Authentik, whose secrets (client secret, JWKS keys) are never empty, and the id_token is fetched server-to-server, so no attacker token reaches the HMAC path. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/authlib@1.7.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-116672",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Flaw is in Authlib's ClientConfigurationEndpoint (dynamic client registration server); Open WebUI is only an OAuth/OIDC client (authlib.integrations.starlette_client) and runs no authorization server. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/authlib@1.7.2"
+        }
+      ]
+    },
+    {
+      "id": "GHSA-pxh4-856f-4h89",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Empty-k oct JWK accepted as an HMAC key; the only JWKS PyJWT parses is Authentik's (back-channel logout), which publishes no oct keys, and that decode allows only RS*/ES*; Open WebUI's own session tokens use HS256 with its non-empty WEBUI_SECRET_KEY. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/pyjwt@2.13.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-119283",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "joserfc jwe.decrypt_json() recipient loop; Open WebUI imports joserfc only for JWS (JWSRegistry) and Authlib uses it to verify the JWS id_token; no JWE is ever decrypted. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/joserfc@1.7.4"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-114134",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Flaw is in Black's GitHub Action (required-version from pyproject.toml), which is not part of the pip package; Open WebUI only calls black.format_str() on code an admin submits. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/black@26.5.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-112940",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "filelock ReadWriteLock name swap needs rename rights in the lock's parent directory; its only user is chromadb's local HNSW segment under /app/backend/data/vector_db, writable only by the container's mapped root, and no other local user or process exists in the container (uvicorn is the only process). Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/filelock@3.32.7"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-24747",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "torch weights_only unpickler on a crafted .pth; the only models loaded are the admin-set embedding model (sentence-transformers/all-MiniLM-L6-v2 from the Hugging Face Hub), which loads model.safetensors, and no user can supply a checkpoint; Open WebUI calls torch.load nowhere. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/torch@2.9.1%2Bcpu"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-113351",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Needs a parser reused through XML_ParserReset; CPython's pyexpat (bundled expat 2.9.0, the copy the app uses) never resets a parser, and Debian libexpat1 is not mapped by the uvicorn process (fontconfig/git tooling only). Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libexpat1@2.9.0-1~deb13u1"
+        },
+        {
+          "ref": "pkg:generic/expat@2.9.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-117610",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Needs an external-entity subparser; neither ElementTree/docx2txt nor openpyxl (defusedxml) creates one with pyexpat, and Debian libexpat1 is not loaded by the uvicorn process. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libexpat1@2.9.0-1~deb13u1"
+        },
+        {
+          "ref": "pkg:generic/expat@2.9.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-115506",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Late billion-laughs detection in expat. Any signed-in user can upload a .docx; Open WebUI's DocxLoader runs docx2txt, which parses word/document.xml with plain xml.etree (pyexpat, bundled expat 2.9.0), so internal entities are expanded. Risk here: low (bounded CPU burn in the single uvicorn worker, signed-in users only). Action: goes away when the upstream image ships a Python with expat >= 2.9.1. Verified live on hrossen with open-webui:0.13.3."
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/expat@2.9.0"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-115506",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Debian libexpat1 is not mapped by the uvicorn process (pyexpat uses its bundled copy, ldd shows no libexpat); it only serves fontconfig/git/mesa, never untrusted XML, and the ffmpeg/librsvg path is closed by BYPASS_PYDUB_PREPROCESSING=true. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libexpat1@2.9.0-1~deb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-118370",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "storeAtts overflow needs a start tag with over 2^30 attributes (multi-GB XML). Open WebUI sets no upload size limit and docx2txt parses the whole document.xml with pyexpat, but memory runs out long before; kept at low. Risk here: low. Action: goes away when the upstream image ships a Python with a fixed expat. Verified live on hrossen with open-webui:0.13.3."
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/expat@2.9.0"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-118370",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Debian libexpat1 is not mapped by the uvicorn process (pyexpat uses its bundled copy); it only serves fontconfig/git/mesa, never untrusted XML. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libexpat1@2.9.0-1~deb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-75141",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "hvcC box writer (HEVC muxing); pydub's ffmpeg would only write WAV/MP3, and BYPASS_PYDUB_PREPROCESSING=true with STT engine \"web\" means no upload reaches Debian ffmpeg at all. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ffmpeg@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavcodec61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavdevice61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavfilter10@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavformat61@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libavutil59@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libpostproc58@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswresample5@7.1.5-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/libswscale8@7.1.5-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2023-6605",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "DASH playlist SSRF. PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-1594",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-25469",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-9951",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-107695",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-107696",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-30754",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-30997",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-30998",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Flaw is in FFmpeg's tools/zmqsend utility, which is not part of PyAV's wheel. PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-30999",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-40962",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-52296",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-52297",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64830",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64832",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "NVDEC hardware decoder; the VM has no NVIDIA GPU and nothing requests hwaccel. PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64833",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64834",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-64835",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-65703",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-65704",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-65705",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-65706",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66036",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66039",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66040",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-66041",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-70628",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-70632",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-8461",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-96611",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PyAV's bundled FFmpeg 7.1 is loaded in the uvicorn process, but the only code that feeds it data is faster-whisper's decode_audio for local Whisper STT (engine \"\"); the stored STT engine is \"web\" (transcription_handler has no branch for it, so faster-whisper never runs), BYPASS_PYDUB_PREPROCESSING=true, and nothing else in Open WebUI (transformers/torchvision video helpers are unused) opens media with av. Reachable by any user with audio upload once an admin sets the STT engine to local Whisper. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/ffmpeg@7.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2022-33065",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "AU/MAT4 header overflows when reading a file; soundfile's bundled libsndfile is used only by the local transformers TTS engine to sf.write() synthesised samples (TTS engine is not set to it here), and no code path reads an attacker-supplied audio file with soundfile. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/libsndfile@1.2.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-52194",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "IRCAM header overflow when reading a file; soundfile's bundled libsndfile is used only by the local transformers TTS engine to sf.write() synthesised samples (TTS engine is not set to it here), and no code path reads an attacker-supplied audio file with soundfile. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/libsndfile@1.2.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-37555",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "IMA ADPCM WAV header overflow when reading a file; soundfile's bundled libsndfile is used only by the local transformers TTS engine to sf.write() synthesised samples (TTS engine is not set to it here), and no code path reads an attacker-supplied audio file with soundfile. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/libsndfile@1.2.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-102523",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Flaw is in the MariaDB server (SQL engine, CONNECT engine, service unit, dump tooling), none of which is installed; libmariadb3/mariadb-common are only the client library pulled in by libmariadb-dev, linked by no running binary, and Open WebUI uses PostgreSQL. Based on dpkg contents and the existing analysis for this image.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libmariadb3@11.8.6-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mariadb-common@11.8.6-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-107815",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Flaw is in the MariaDB server (SQL engine, CONNECT engine, service unit, dump tooling), none of which is installed; libmariadb3/mariadb-common are only the client library pulled in by libmariadb-dev, linked by no running binary, and Open WebUI uses PostgreSQL. Based on dpkg contents and the existing analysis for this image.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libmariadb3@11.8.6-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mariadb-common@11.8.6-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-107818",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Flaw is in the MariaDB server (SQL engine, CONNECT engine, service unit, dump tooling), none of which is installed; libmariadb3/mariadb-common are only the client library pulled in by libmariadb-dev, linked by no running binary, and Open WebUI uses PostgreSQL. Based on dpkg contents and the existing analysis for this image.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libmariadb3@11.8.6-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mariadb-common@11.8.6-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-107823",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Flaw is in the MariaDB server (SQL engine, CONNECT engine, service unit, dump tooling), none of which is installed; libmariadb3/mariadb-common are only the client library pulled in by libmariadb-dev, linked by no running binary, and Open WebUI uses PostgreSQL. Based on dpkg contents and the existing analysis for this image.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libmariadb3@11.8.6-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mariadb-common@11.8.6-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-85746",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Flaw is in the MariaDB server (SQL engine, CONNECT engine, service unit, dump tooling), none of which is installed; libmariadb3/mariadb-common are only the client library pulled in by libmariadb-dev, linked by no running binary, and Open WebUI uses PostgreSQL. Based on dpkg contents and the existing analysis for this image.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libmariadb3@11.8.6-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mariadb-common@11.8.6-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-86047",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Flaw is in the MariaDB server (SQL engine, CONNECT engine, service unit, dump tooling), none of which is installed; libmariadb3/mariadb-common are only the client library pulled in by libmariadb-dev, linked by no running binary, and Open WebUI uses PostgreSQL. Based on dpkg contents and the existing analysis for this image.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libmariadb3@11.8.6-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mariadb-common@11.8.6-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-92262",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Flaw is in the MariaDB server (SQL engine, CONNECT engine, service unit, dump tooling), none of which is installed; libmariadb3/mariadb-common are only the client library pulled in by libmariadb-dev, linked by no running binary, and Open WebUI uses PostgreSQL. Based on dpkg contents and the existing analysis for this image.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libmariadb3@11.8.6-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mariadb-common@11.8.6-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-97380",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Flaw is in the MariaDB server (SQL engine, CONNECT engine, service unit, dump tooling), none of which is installed; libmariadb3/mariadb-common are only the client library pulled in by libmariadb-dev, linked by no running binary, and Open WebUI uses PostgreSQL. Based on dpkg contents and the existing analysis for this image.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libmariadb3@11.8.6-0%2Bdeb13u1"
+        },
+        {
+          "ref": "pkg:deb/debian/mariadb-common@11.8.6-0%2Bdeb13u1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-119373",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "FTS5 prefix-merge overflow needs attacker-chosen negative rowids; Debian libsqlite3 is mapped through Python's _sqlite3, but Open WebUI stores its data in PostgreSQL and the only SQLite use (chroma's local store) inserts app-assigned rowids with app-built SQL. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-119374",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Needs a crafted database file opened with FTS5 secure-delete; no user can upload or replace an SQLite database, and the only SQLite file is created by chroma itself. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-119379",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "sqlite3changeset_apply() of the session extension; Python's sqlite3 module exposes no session/changeset API and nothing in the container applies changesets. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-109089",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libXi overflow from a malicious X server reply; no X server or DISPLAY exists in the container and nothing opens an X connection. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxi6@1.8.2-1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-109090",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libXi overflow from a malicious X server reply; no X server or DISPLAY exists in the container and nothing opens an X connection. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxi6@1.8.2-1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-14456",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "QUIC listener channel flood. The OpenSSL 4.0.1 statically linked into the cryptography wheel serves only cryptography's primitives (JWK/OIDC key handling, Fernet); TLS for Python's ssl comes from Debian libssl3 and psycopg bundles its own, so this copy never runs TLS, DTLS, QUIC, OCSP or CMP. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-14457",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "RFC7250 raw public key TLS handshake. The OpenSSL 4.0.1 statically linked into the cryptography wheel serves only cryptography's primitives (JWK/OIDC key handling, Fernet); TLS for Python's ssl comes from Debian libssl3 and psycopg bundles its own, so this copy never runs TLS, DTLS, QUIC, OCSP or CMP. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-18798",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "QUIC server QRX double free. The OpenSSL 4.0.1 statically linked into the cryptography wheel serves only cryptography's primitives (JWK/OIDC key handling, Fernet); TLS for Python's ssl comes from Debian libssl3 and psycopg bundles its own, so this copy never runs TLS, DTLS, QUIC, OCSP or CMP. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-54873",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "QUIC packet buffer retention. The OpenSSL 4.0.1 statically linked into the cryptography wheel serves only cryptography's primitives (JWK/OIDC key handling, Fernet); TLS for Python's ssl comes from Debian libssl3 and psycopg bundles its own, so this copy never runs TLS, DTLS, QUIC, OCSP or CMP. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-54874",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "DTLS future-epoch buffering. The OpenSSL 4.0.1 statically linked into the cryptography wheel serves only cryptography's primitives (JWK/OIDC key handling, Fernet); TLS for Python's ssl comes from Debian libssl3 and psycopg bundles its own, so this copy never runs TLS, DTLS, QUIC, OCSP or CMP. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-54876",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "TLS client OCSP response leak. The OpenSSL 4.0.1 statically linked into the cryptography wheel serves only cryptography's primitives (JWK/OIDC key handling, Fernet); TLS for Python's ssl comes from Debian libssl3 and psycopg bundles its own, so this copy never runs TLS, DTLS, QUIC, OCSP or CMP. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-63073",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "CMP client sender DN format string. The OpenSSL 4.0.1 statically linked into the cryptography wheel serves only cryptography's primitives (JWK/OIDC key handling, Fernet); TLS for Python's ssl comes from Debian libssl3 and psycopg bundles its own, so this copy never runs TLS, DTLS, QUIC, OCSP or CMP. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-63075",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "QUIC ACK metadata growth. The OpenSSL 4.0.1 statically linked into the cryptography wheel serves only cryptography's primitives (JWK/OIDC key handling, Fernet); TLS for Python's ssl comes from Debian libssl3 and psycopg bundles its own, so this copy never runs TLS, DTLS, QUIC, OCSP or CMP. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-63076",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "CMP PBM protection parsing. The OpenSSL 4.0.1 statically linked into the cryptography wheel serves only cryptography's primitives (JWK/OIDC key handling, Fernet); TLS for Python's ssl comes from Debian libssl3 and psycopg bundles its own, so this copy never runs TLS, DTLS, QUIC, OCSP or CMP. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-72897",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "TLS server SSL_set_SSL_CTX switch. The OpenSSL 4.0.1 statically linked into the cryptography wheel serves only cryptography's primitives (JWK/OIDC key handling, Fernet); TLS for Python's ssl comes from Debian libssl3 and psycopg bundles its own, so this copy never runs TLS, DTLS, QUIC, OCSP or CMP. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84782",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "DTLS retransmission. The OpenSSL 4.0.1 statically linked into the cryptography wheel serves only cryptography's primitives (JWK/OIDC key handling, Fernet); TLS for Python's ssl comes from Debian libssl3 and psycopg bundles its own, so this copy never runs TLS, DTLS, QUIC, OCSP or CMP. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84783",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Concurrent X.509 extension cache during TLS chain building. The OpenSSL 4.0.1 statically linked into the cryptography wheel serves only cryptography's primitives (JWK/OIDC key handling, Fernet); TLS for Python's ssl comes from Debian libssl3 and psycopg bundles its own, so this copy never runs TLS, DTLS, QUIC, OCSP or CMP. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-84784",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "QUIC NEW_CONNECTION_ID flood. The OpenSSL 4.0.1 statically linked into the cryptography wheel serves only cryptography's primitives (JWK/OIDC key handling, Fernet); TLS for Python's ssl comes from Debian libssl3 and psycopg bundles its own, so this copy never runs TLS, DTLS, QUIC, OCSP or CMP. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-63072",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "CMS_decrypt() key-unwrap overflow; Open WebUI and its libraries never decrypt CMS/PKCS#7 EnvelopedData with cryptography. The OpenSSL 4.0.1 statically linked into the cryptography wheel serves only cryptography's primitives (JWK/OIDC key handling, Fernet); TLS for Python's ssl comes from Debian libssl3 and psycopg bundles its own, so this copy never runs TLS, DTLS, QUIC, OCSP or CMP. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-75803",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "EVP_Cipher() one-shot AEAD tag skip on empty ChaCha20-Poly1305/AES-OCB ciphertext; cryptography's AEAD classes finalize through update/final rather than EVP_Cipher, and Open WebUI uses neither cipher (Fernet is AES-CBC+HMAC). Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-119203",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Infinite trailer search in a crafted incomplete PDF, hit while opening. Open WebUI's PDFLoader (default content extraction, page mode) opens every uploaded PDF with PdfReader, reads len(reader.pages) and reader.page_labels and calls extract_text(); extraction runs in the single uvicorn worker.  Risk here: medium (any signed-in user uploading to a chat or knowledge base can hang or exhaust the shared service). Action: fixed in pypdf 6.21.4; goes away with an upstream image that bumps pypdf. Verified live on hrossen with open-webui:0.13.3."
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/pypdf@6.21.2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-119204",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Memory blow-up flattening a crafted page tree, hit when the loader walks reader.pages. Open WebUI's PDFLoader (default content extraction, page mode) opens every uploaded PDF with PdfReader, reads len(reader.pages) and reader.page_labels and calls extract_text(); extraction runs in the single uvicorn worker.  Risk here: medium (any signed-in user uploading to a chat or knowledge base can hang or exhaust the shared service). Action: fixed in pypdf 6.21.4; goes away with an upstream image that bumps pypdf. Verified live on hrossen with open-webui:0.13.3."
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/pypdf@6.21.2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-119206",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Quadratic page-label lookup; the loader reads reader.page_labels for every upload in page mode. Open WebUI's PDFLoader (default content extraction, page mode) opens every uploaded PDF with PdfReader, reads len(reader.pages) and reader.page_labels and calls extract_text(); extraction runs in the single uvicorn worker.  Risk here: medium (any signed-in user uploading to a chat or knowledge base can hang or exhaust the shared service). Action: fixed in pypdf 6.21.3; goes away with an upstream image that bumps pypdf. Verified live on hrossen with open-webui:0.13.3."
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/pypdf@6.21.2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-119208",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Forged /Count in an encrypted PDF; pypdf tries the empty user password itself and the loader reads len(reader.pages). Open WebUI's PDFLoader (default content extraction, page mode) opens every uploaded PDF with PdfReader, reads len(reader.pages) and reader.page_labels and calls extract_text(); extraction runs in the single uvicorn worker.  Risk here: medium (any signed-in user uploading to a chat or knowledge base can hang or exhaust the shared service). Action: fixed in pypdf 6.21.3; goes away with an upstream image that bumps pypdf. Verified live on hrossen with open-webui:0.13.3."
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/pypdf@6.21.2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-119209",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Huge cross-reference stream entry counts, hit while opening. Open WebUI's PDFLoader (default content extraction, page mode) opens every uploaded PDF with PdfReader, reads len(reader.pages) and reader.page_labels and calls extract_text(); extraction runs in the single uvicorn worker.  Risk here: medium (any signed-in user uploading to a chat or knowledge base can hang or exhaust the shared service). Action: fixed in pypdf 6.21.3; goes away with an upstream image that bumps pypdf. Verified live on hrossen with open-webui:0.13.3."
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/pypdf@6.21.2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-119205",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Cyclic DictionaryObject during clone/duplicate (PdfWriter append/clone); Open WebUI only reads PDFs with PdfReader and never clones objects. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/pypdf@6.21.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-119207",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Error-message amplification only in strict mode; Open WebUI's PDFLoader constructs PdfReader with the default strict=False. Verified live on hrossen with open-webui:0.13.3.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/pypdf@6.21.2"
+        }
+      ]
     }
   ]
 }
