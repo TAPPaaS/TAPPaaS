@@ -188,7 +188,7 @@ by default and set as a day-two step. The shortcuts (scalar, site-wide): `--chan
 `--wanIpv6Mode`, `--wanIpv6Address`, `--wanIpv6Gateway`, `--wanIpv6Prefix`, `--wanIpv6PrefixLength` (the WAN's IPv6, `network.wan.ipv6`; see network-manager's IPV6.md), `--backupTarget`,
 `--backupOffsite`, `--primaryLocation`, `--locale`, `--keyboard`, `--networkIsp`, `--networkPublicIp`, `--ipv6`, `--requireSigned`, `--dnssec`, `--alertsIncludeLines`,
 `--brandingLogo`, `--brandingLogoDark`, `--dnsBlocklistsLists|Zones|Allow` (comma lists, `''`
-empties one), `--diskAutoGrowEnabled|Threshold|GrowPercent|MinGrowGB|PoolCeiling`, and the
+empties one), `--ipBlocklists` (a comma list of http(s) URLs, `''` blocks nothing), `--diskAutoGrowEnabled|Threshold|GrowPercent|MinGrowGB|PoolCeiling`, and the
 update schedule. That is every field `site-fields.json` classes `in-place`. `name`, `version`
 and `defaultEnvironment` are `immutable`: `--name`, `--version` and `--defaultEnvironment` are
 refused, with the reason the schema gives, and nothing is written. The `locations` (use

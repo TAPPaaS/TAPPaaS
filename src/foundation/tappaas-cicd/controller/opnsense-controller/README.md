@@ -153,6 +153,7 @@ rules-manager list-rules [--module <m>] [--orphans]
 rules-manager overlaps [--module <m>]   # shadowed / redundant / conflicting rules (read-only)
 rules-manager list-slots                # the sequence map: slots, rules in use, rules left out
 rules-manager recheck-covered           # rewrite rules a narrowed access-to no longer covers
+rules-manager ip-blocklists [--config-dir <dir>]   # site.json ipBlocklists: URL-table aliases, WAN-in and zones-out blocks
 rules-manager create-alias <name> --addresses <a,...> [--type host] [--description <d>]
 rules-manager remove-alias <name>
 ```

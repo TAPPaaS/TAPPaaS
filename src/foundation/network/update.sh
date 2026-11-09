@@ -329,6 +329,23 @@ if ! /home/tappaas/bin/rules-manager --no-ssl-verify recheck-covered 2>&1 | relo
     warn "rules-manager recheck-covered failed — a module whose access-to was narrowed gets its rules at its next update"
 fi
 
+# IP blocklists: site.json `ipBlocklists` (empty: none) become URL-table
+# aliases the firewall refreshes daily, blocked on the WAN and from every zone.
+# After the zones, so every zone's interface exists for the outbound rule.
+_ib_out="$(/home/tappaas/bin/rules-manager --no-ssl-verify ip-blocklists --config-dir "${CONFIG_DIR}" 2>&1)" && _ib_rc=0 || _ib_rc=$?
+if [[ ${_ib_rc} -eq 0 ]]; then
+    while IFS= read -r _l; do
+        case "${_l}" in
+            "ipbl: zone "*) warn "  ${_l}" ;;
+            "ipbl: add "*|"ipbl: update "*|"ipbl: set "*|"ipbl: block "*|"ipbl: remove "*) info "  ${_l}" ;;
+            *) debug "  ${_l}" ;;
+        esac
+    done <<< "${_ib_out}"
+else
+    printf '%s\n' "${_ib_out}" >&2
+    warn "rules-manager could not bring the IP blocklists to site.json (continuing)"
+fi
+
 # mDNS across zones (#257): the repeater relays among the zones with
 # `"mdns": true` and those modules name in discoveryMdns. After the zone
 # reconcile, so a zone's interface exists before it joins.

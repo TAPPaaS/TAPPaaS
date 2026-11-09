@@ -446,6 +446,30 @@ tracking lists are the operator's choice.
   prints `Block` with the entry that decides it, or `Pass`. A query from the firewall itself is
   not a client's view.
 
+## IP blocklists
+
+The firewall can block address lists that their publishers maintain (`site.json` `ipBlocklists`,
+a list of URLs; empty or absent: none). The network update applies it with
+`rules-manager ip-blocklists`, after the zones.
+
+```jsonc
+"ipBlocklists": ["https://www.spamhaus.org/drop/drop.txt", "https://www.spamhaus.org/drop/dropv6.txt"]
+```
+
+- **Aliases.** Each URL is an OPNsense *URL Table (IPs)* alias, `tappaas_ipbl_<hash>`, that the
+  firewall downloads again every day. The network alias `tappaas_ipblocklists` nests them. A
+  list must be plain text, one address or network a line (`;` comments allowed).
+- **Rules.** Two, at sequence 960, ahead of every zone and module rule: `tappaas-ipbl: from the
+  IP blocklists, on the WAN` blocks a listed source arriving from the internet, before any
+  published service or port forward; `tappaas-ipbl: to the IP blocklists, from the zones`
+  blocks a listed destination on every Active and Mandatory zone and on `mgmt`. Both cover IPv4
+  and IPv6.
+- **Ownership.** TAPPaaS owns the aliases named `tappaas_ipbl…` and the rules described
+  `tappaas-ipbl:`. Removing a URL removes its alias; an empty list removes the rules and the
+  aliases. A zone whose interface does not exist yet is left out with a warning, and added at
+  the next update.
+- **Checking an address:** on the firewall, `pfctl -t tappaas_ipblocklists -T test <address>`.
+
 How this compares with pfBlockerNG and Pi-hole, and what OPNsense offers beside it:
 [docs/pfblockerng-replacement.md](docs/pfblockerng-replacement.md).
 

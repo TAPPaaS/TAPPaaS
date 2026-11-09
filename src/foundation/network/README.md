@@ -15,6 +15,7 @@ firewall rules and the Caddy reverse proxy for every published service.
 | Reverse proxy (`network:proxy`) | consumer modules | `dependsOn: ["network:proxy"]` → Caddy entry `<service>.<domain>` |
 | Per-module firewall rules (`network:rules`) | consumer modules | `dependsOn: ["network:rules"]` → `rules-manager` compiles `ports`/`ingress`/`egress` |
 | Public HTTPS entry (Caddy :80/:443) | internet | for services with `proxyAllowedZones: ["internet"]` |
+| Blocked address lists (`site.json` `ipBlocklists`) | internet, every zone | automatic: an address on a list is refused arriving on the WAN and as a destination from every zone — see [DESIGN.md](DESIGN.md#ip-blocklists) |
 | Bans for abusive clients (CrowdSec) | internet | automatic: a client guessing sign-ins or probing for known exploits is blocked at the firewall — see [CrowdSec](#crowdsec--bans-at-the-firewall) |
 | Switch / WiFi-AP / Proxmox VLAN reconciliation (ADR-008) | TAPPaaS admin | `network-manager reconcile`, `switch-manager`, `ap-manager` — see [scripts/README.md](scripts/README.md) |
 | Isolated test network on a spare NIC | TAPPaaS admin | `test-network.sh` — see [docs/test-network-setup.md](docs/test-network-setup.md) |

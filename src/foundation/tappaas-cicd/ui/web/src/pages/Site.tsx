@@ -77,7 +77,7 @@ function NodeActions() {
 // (the site read carries it), their pools' use the storage inventory's; the
 // IPv6 prefix and Caddy's IPv6 address are the ipv6 read's.
 const SITE_FIELDS = ["name", "displayName", "branding", "version", "defaultEnvironment", "size", "owner", "email", "primaryLocation", "locale", "keyboard", "network", "ipv6", "dnssec"];
-const SETTINGS_FIELDS = ["dnsBlocklists", "diskAutoGrow", "requireSigned"];
+const SETTINGS_FIELDS = ["dnsBlocklists", "ipBlocklists", "diskAutoGrow", "requireSigned"];
 const UPDATE_FIELDS = ["updateSchedule", "channel", "automaticReboot", "snapshotRetention"];
 
 // A value as the card shows it: absent is the schema's default, an object its
@@ -216,6 +216,7 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
           <KV
             rows={[
               ["DNS blocklists", val(s.dnsBlocklists, "none")],
+              ["IP blocklists", val(s.ipBlocklists, "none")],
               ["disk auto-grow", val(s.diskAutoGrow, "on, the defaults")],
               ["require signed", val(s.requireSigned, "no (default)")],
             ]}

@@ -123,6 +123,7 @@ check(field(site, "diskAutoGrow.threshold")?.class === "in-place", "…a leaf ta
 check(field(site, "name")?.editable === false && /^immutable: The site's code/.test(field(site, "name")?.why ?? "") && field(site, "name")?.value === "rossen", "…name shown, refused with the schema's reason");
 check(/^immutable: Written once/.test(field(site, "version")?.why ?? "") && /^immutable: /.test(field(site, "defaultEnvironment")?.why ?? ""), "…version and defaultEnvironment too");
 check(field(site, "dnssec")?.arg === "--set" && field(site, "dnssec")?.type === "boolean" && field(site, "dnsBlocklists.zones")?.type === "list" && field(site, "dnsBlocklists.zones")?.typeText === "zones", "…dnssec a boolean, the blocklist zones a list of zones");
+check(field(site, "ipBlocklists")?.arg === "--set" && field(site, "ipBlocklists")?.type === "list" && field(site, "ipBlocklists")?.class === "in-place", "…the IP blocklists a list, set in place");
 check(field(site, "diskAutoGrow.threshold")?.arg === "--set" && field(site, "diskAutoGrow.threshold")?.default === "80" && field(site, "branding.logoDark")?.arg === "--set", "…disk growth by key, with its defaults; branding's two files");
 check(/^manual: Has verbs of its own: site-manager location/.test(field(site, "locations")?.why ?? "") && /^manual: Retired: migration 0022/.test(field(site, "hardware")?.why ?? ""), "…the locations are manual and the retired hardware says why");
 

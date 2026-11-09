@@ -390,6 +390,15 @@
         "allow": {"description": "Domains never blocked.", "type": "array", "items": {"type": "string"}}
       }
     },
+    "ipBlocklists": {
+      "description": "Address lists, by URL, the firewall blocks both ways: from them on the WAN, and to them from every zone. Each list stays its publisher's and is downloaded daily into an OPNsense URL-table alias. Empty: nothing blocked.",
+      "type": "array",
+      "items": {"type": "string", "pattern": "^https?://\\S+$"},
+      "default": [],
+      "example": ["https://www.spamhaus.org/drop/drop.txt", "https://www.spamhaus.org/drop/dropv6.txt"],
+      "note": "Applied by the next network update; removing a URL removes its alias, and an empty list removes the block rules. A list must be plain text, one address or network a line.",
+      "changeClass": "in-place"
+    },
     "size": {
       "description": "How big this site is expected to be: small (a few users; one node, or up to three small ones; or a test system), medium (up to about 50 concurrent users, many modules in one or two environments) or large (100+ users, three or more large nodes, possibly many environments). Foundation modules take their cores, memory and disk from it, and so does every environment that does not set a size of its own: small the module's small value, medium its plain value, large its large value.",
       "type": "string",

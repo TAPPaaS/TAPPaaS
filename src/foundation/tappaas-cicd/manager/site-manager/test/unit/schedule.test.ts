@@ -111,6 +111,11 @@ check(opts.includes("--updateFrequency") && opts.includes("--updateWeekday") && 
   check(JSON.stringify(doc().dnsBlocklists) === '{"lists":["hgz011","oisd1"],"zones":["home","guest"],"allow":["example.org"]}', "dnsBlocklists: three comma lists");
   run(["site", "modify", "--dnsBlocklistsZones", "", "--config-dir", dir], c);
   check(JSON.stringify(doc().dnsBlocklists) === '{"lists":["hgz011","oisd1"],"zones":[],"allow":["example.org"]}', "…'' empties one, the others kept");
+  run(["site", "modify", "--ipBlocklists", "https://www.spamhaus.org/drop/drop.txt, https://www.spamhaus.org/drop/dropv6.txt", "--config-dir", dir], c);
+  check(JSON.stringify(doc().ipBlocklists) === '["https://www.spamhaus.org/drop/drop.txt","https://www.spamhaus.org/drop/dropv6.txt"]', "ipBlocklists: a comma list of URLs");
+  check(run(["site", "modify", "--ipBlocklists", "drop.txt", "--config-dir", dir], c) !== 0 && (doc().ipBlocklists as string[]).length === 2, "…a value that is not an http(s) URL is refused, nothing written");
+  run(["site", "modify", "--ipBlocklists", "", "--config-dir", dir], c);
+  check(JSON.stringify(doc().ipBlocklists) === "[]", "…'' blocks nothing");
   run(["site", "modify", "--diskAutoGrowThreshold", "85", "--diskAutoGrowPoolCeiling", "75", "--diskAutoGrowEnabled", "true", "--config-dir", dir], c);
   check(JSON.stringify(doc().diskAutoGrow) === '{"enabled":true,"threshold":85,"poolCeiling":75}', "diskAutoGrow: integers and a boolean, by key");
   run(["site", "modify", "--diskAutoGrowGrowPercent", "100", "--diskAutoGrowMinGrowGB", "10", "--config-dir", dir], c);

@@ -12,7 +12,7 @@ own: every list stays its publisher's, and TAPPaaS only decides which ones apply
 | Different lists for different networks | per-interface DNSBL | groups per client | `dnsBlocklists.zones`: the zones whose clients are filtered |
 | Names never blocked | DNSBL whitelist | allowlist | `dnsBlocklists.allow` |
 | Lists kept current | its cron | gravity update | a daily cron job the network update keeps |
-| Block known-bad networks | IPv4/IPv6 feeds | — | an OPNsense URL-table alias and block rules, set by hand |
+| Block known-bad networks, both ways | IPv4/IPv6 feeds | — | `site.json` `ipBlocklists`: a URL-table alias, blocked on the WAN and from every zone |
 | Ban clients that abuse a published service | — | — | CrowdSec on the firewall, from Caddy's logs |
 | Block whole countries | GeoIP | — | an OPNsense GeoIP alias, set by hand |
 | A page that says a name is blocked | DNSBL VIP | blocking page | none: a blocked name answers NXDOMAIN |
@@ -53,12 +53,18 @@ Why is a name blocked? On the firewall:
 python3 /usr/local/opnsense/scripts/unbound-dnsbl/dnsbl_match.py --domain <name> --src <client-ip>
 ```
 
-## IP blocklists — by hand
+## IP blocklists — `ipBlocklists`
 
-1. *Firewall → Aliases → Add*: type **URL Table (IPs)**, the feed's URL, a daily refresh.
-   Spamhaus DROP (`https://www.spamhaus.org/drop/drop.txt`) is the usual start.
-2. A **block** rule on WAN with the alias as source, and one on each zone with the alias as
-   destination, without a TAPPaaS description, so the network update leaves them alone.
+```jsonc
+"ipBlocklists": ["https://www.spamhaus.org/drop/drop.txt", "https://www.spamhaus.org/drop/dropv6.txt"]
+```
+
+Each URL becomes an OPNsense *URL Table (IPs)* alias that the firewall refreshes daily from
+its publisher. Its addresses are blocked twice: arriving on the WAN, ahead of every published
+service and port forward, and as a destination from every zone, ahead of the zones' own rules.
+`site-manager site modify --ipBlocklists <url>,<url>` writes the field; empty (the default)
+blocks nothing. Removing a URL removes its alias at the next network update; an empty list
+removes the rules too.
 
 ## CrowdSec — bans for abusive clients
 
@@ -92,5 +98,5 @@ None of these is configured by TAPPaaS. Each is a plugin or a GUI setting an ope
 ## Known gaps
 
 - No block page: clients see a failed lookup, not a notice.
-- IP and GeoIP blocking and custom DNS list URLs are GUI configuration, kept by OPNsense's own
+- GeoIP blocking and custom DNS list URLs are GUI configuration, kept by OPNsense's own
   backups rather than by `site.json`.

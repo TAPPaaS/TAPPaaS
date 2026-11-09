@@ -931,6 +931,7 @@ rules-manager add-rules --help
 | `list-rules [--module <n>] [--orphans]` | List `tappaas-module:` rules in OPNsense |
 | `create-alias <name>` | Create or update an OPNsense alias |
 | `remove-alias <name>` | Delete an OPNsense alias |
+| `ip-blocklists [--config-dir <dir>]` | Bring `site.json` `ipBlocklists` to the firewall: a URL-table alias per list (refreshed daily), the group `tappaas_ipblocklists`, and two block rules at sequence 960 — from the lists on the WAN, to them from every zone. Empty or absent: all of it removed. The network update runs it |
 
 #### Global Options
 

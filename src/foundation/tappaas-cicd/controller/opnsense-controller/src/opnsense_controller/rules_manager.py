@@ -688,6 +688,42 @@ def nfs_derived_egress(modules_dir: Path, data: dict, instance: str = "") -> tup
     return list(seen.values()), aliases
 
 
+
+def _selected_list(v) -> list[str]:
+    """An OPNsense alias field as its values: {key: {selected}} or "a\nb"."""
+    if isinstance(v, dict):
+        return [k for k, o in v.items() if k and isinstance(o, dict) and str(o.get("selected")) == "1"]
+    return [x for x in str(v or "").replace(",", "\n").split("\n") if x.strip()]
+
+
+def _selected_one(v) -> str:
+    vals = _selected_list(v)
+    return vals[0] if vals else ""
+
+
+def _alias_matches(current: dict, item: dict) -> bool:
+    """Does a stored URL-table alias hold what TAPPaaS would write?"""
+    try:
+        freq_ok = float(current.get("updatefreq") or 0) == float(item["updatefreq"])
+    except (TypeError, ValueError):
+        freq_ok = False
+    return (str(current.get("enabled", "")) == "1"
+            and _selected_one(current.get("type")) == item["type"]
+            and _selected_list(current.get("content")) == [item["content"]]
+            and freq_ok)
+
+
+def _rule_differs(have: "FirewallRuleInfo | None", want: FirewallRule) -> bool:
+    """Is the stored rule missing or different from what TAPPaaS would write?"""
+    if have is None:
+        return True
+    want_if = want.interface if isinstance(want.interface, list) else [want.interface]
+    have_if = sorted(x for x in str(have.interface or "").split(",") if x)
+    return (not have.enabled or have.action != want.action.value
+            or have_if != sorted(want_if)
+            or have.source_net != want.source_net or have.destination_net != want.destination_net
+            or have.sequence != want.sequence or have.ip_protocol != want.ip_protocol.value)
+
 def load_global_aliases(path: Path | None) -> dict[str, dict]:
     """Load firewall/aliases.json; returns {} if file missing."""
     if path is None or not path.is_file():
@@ -2341,6 +2377,120 @@ class RulesManager:
                  "IPv6 networks are not excluded until the network module has been updated")
             self._upsert_alias(NOT_INTERNET_ALIAS, "network", NOT_INTERNET_RANGES, desc)
 
+    # ── IP blocklists (site.json ipBlocklists) ───────────────────────────
+    def ip_blocklists(self, site: dict, zones_raw: dict) -> bool:
+        """Bring the IP blocklists to `site.json` `ipBlocklists` (ipbl_plan).
+
+        URL-table aliases, the group that nests them, and the two block rules
+        (WAN in, zones out). Absent or empty: all of them are removed. Prints
+        `ipbl: …` lines; True when the firewall matches (or would, in check mode).
+        """
+        from .ipbl_plan import (GROUP_ALIAS, SEQUENCE, WAN_RULE, ZONES_RULE, IpblError, desired,
+                                stale_aliases, urltable_item)
+        try:
+            want = desired(site, zones_raw)
+        except IpblError as exc:
+            print(f"ERROR: ipbl: {exc}", file=sys.stderr)
+            return False
+        verb = "would " if self.check_mode else ""
+        existing = [r.get("name", "") for r in (self._alias_raw("searchItem") or {}).get("rows") or []
+                    if isinstance(r, dict)]
+        rules = {r.description: r for r in self.fw.list_rules("tappaas-ipbl:")}
+        stale = stale_aliases(existing, want)
+
+        if want is None:
+            gone = [d for d in (WAN_RULE, ZONES_RULE) if d in rules]
+            if not gone and not stale:
+                print("ipbl: no IP blocklists — matches site.json")
+                return True
+            for d in gone:
+                print(f"ipbl: {verb}remove rule '{d}'")
+            for a in stale:
+                print(f"ipbl: {verb}remove alias {a}")
+            if self.check_mode:
+                return True
+            for d in gone:
+                self.fw.delete_rule(d, apply=False)
+            self.fw.apply_changes()
+            ok = all([self._delete_alias(a) for a in stale])
+            self._finish_alias_deletes()
+            return ok
+
+        # Each list's alias, then the group, then the rules that name it.
+        changed = False
+        for name, url in want.aliases().items():
+            item = urltable_item(name, url)
+            current = self._alias_item(name)
+            if current is not None and _alias_matches(current, item):
+                continue
+            print(f"ipbl: {verb}{'update' if current is not None else 'add'} alias {name} ← {url}")
+            changed = True
+            if not self.check_mode and not self._alias_item_write(current, item):
+                return False
+        group = sorted(want.aliases())
+        group_now = self._alias_item(GROUP_ALIAS)
+        if group_now is None or sorted(_selected_list(group_now.get("content"))) != group:
+            print(f"ipbl: {verb}set {GROUP_ALIAS} to {', '.join(group)}")
+            changed = True
+            if not self.check_mode:
+                self._upsert_alias(GROUP_ALIAS, "network", group,
+                                   "TAPPaaS: every IP blocklist (site.json ipBlocklists)")
+
+        ifaces: list[str] = []
+        for z in want.zones:
+            spec = self.zones.get(z)
+            try:
+                iface = self._zone_to_interface(spec) if spec else None
+            except InterfaceLookupError as exc:
+                print(f"ipbl: zone '{z}' left out: {exc}")
+                continue
+            if iface and iface not in ifaces:
+                ifaces.append(iface)
+        wanted = [
+            FirewallRule(description=WAN_RULE, action=RuleAction.BLOCK, interface="wan",
+                         direction=RuleDirection.IN, ip_protocol=IpProtocol.BOTH,
+                         source_net=GROUP_ALIAS, log=True, quick=True, sequence=SEQUENCE),
+            FirewallRule(description=ZONES_RULE, action=RuleAction.BLOCK, interface=sorted(ifaces),
+                         direction=RuleDirection.IN, ip_protocol=IpProtocol.BOTH,
+                         destination_net=GROUP_ALIAS, log=True, quick=True, sequence=SEQUENCE),
+        ]
+        put = [r for r in wanted if r.interface and _rule_differs(rules.get(r.description), r)]
+        for r in put:
+            where = "the WAN" if r.description == WAN_RULE else ", ".join(want.zones)
+            print(f"ipbl: {verb}block {'from' if r.description == WAN_RULE else 'to'} the lists on {where}")
+        if stale:
+            print(f"ipbl: {verb}remove alias(es) {', '.join(stale)}")
+        if not changed and not put and not stale:
+            print(f"ipbl: {len(want.urls)} list(s), blocked on the WAN and from {len(want.zones)} zone(s) — matches site.json")
+            return True
+        if self.check_mode:
+            return True
+        self.reconfigure_aliases()
+        for r in put:
+            self.fw.create_rule(r, apply=False)
+        if put:
+            self.fw.apply_changes()
+        ok = all([self._delete_alias(a) for a in stale])
+        self._finish_alias_deletes()
+        return ok
+
+    def _alias_item(self, name: str) -> dict | None:
+        """The stored alias `name` (getItem's `alias`, with its uuid), or None."""
+        found = self._alias_raw(f"getAliasUUID/{name}")
+        uuid = (found or {}).get("uuid")
+        if not isinstance(uuid, str) or not uuid:
+            return None
+        item = (self._alias_raw(f"getItem/{uuid}") or {}).get("alias")
+        return {**item, "uuid": uuid} if isinstance(item, dict) else None
+
+    def _alias_item_write(self, current: dict | None, item: dict) -> bool:
+        cmd = f"setItem/{current['uuid']}" if current else "addItem"
+        res = self._alias_raw(cmd, "post", {"alias": item})
+        if not res or res.get("result") != "saved":
+            print(f"ERROR: ipbl: alias {item['name']}: {cmd} returned {res}", file=sys.stderr)
+            return False
+        return True
+
     def _upsert_alias(
         self, name: str, alias_type: str, addresses: list[str], description: str
     ) -> None:
@@ -2935,6 +3085,12 @@ def main() -> int:
                                    help="Remove an OPNsense alias")
     p_da.add_argument("name", help="Alias name")
 
+    p_ib = subparsers.add_parser("ip-blocklists", parents=[global_parser],
+                                 help="Bring the IP blocklists (URL-table aliases, WAN-in and "
+                                      "zones-out block rules) to site.json ipBlocklists")
+    p_ib.add_argument("--config-dir", default=str(DEFAULT_MODULES_DIR),
+                      help="Directory holding site.json (default: /home/tappaas/config)")
+
     # Global flags are attached (via parents=[global_parser]) to both the
     # top-level parser and every subparser, so each subparser carries its own
     # copy with the original default. argparse applies the chosen subparser's
@@ -2984,6 +3140,13 @@ def _dispatch(args: argparse.Namespace, manager: RulesManager) -> int:
     if args.output == "json":
         os.environ["TAPPAAS_SILENT"] = "1"
     cmd = args.command
+    if cmd == "ip-blocklists":
+        site_file = Path(args.config_dir) / "site.json"
+        site = json.loads(site_file.read_text()) if site_file.is_file() else {}
+        with open(_find_zones_file(args.zones_file)) as f:
+            zones_raw = json.load(f)
+        return 0 if manager.ip_blocklists(site, zones_raw) else 1
+
     if cmd == "add-rules":
         result = manager.add_rules(args.module)
         if result.errors:

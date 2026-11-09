@@ -471,6 +471,17 @@ if command -v unbound-manager >/dev/null 2>&1; then
 else
     skip "unbound-manager missing"
 fi
+if command -v rules-manager >/dev/null 2>&1; then
+    if _ib="$(rules-manager --no-ssl-verify --check-mode ip-blocklists --config-dir "${CONFIG_DIR}" 2>&1)"; then
+        if grep -q "ipbl: would " <<<"${_ib}"; then
+            fail "IP blocklists differ from site.json: $(grep "ipbl: would " <<<"${_ib}" | tr '\n' ' ')"
+        else
+            pass "IP blocklists match site.json"
+        fi
+    else
+        fail "rules-manager ip-blocklists --check-mode failed: ${_ib}"
+    fi
+fi
 
 test_step "rules, pinholes, test tooling, proxy drift (Standard 7-12)"
 
@@ -2254,7 +2265,7 @@ EVIDENCE
         fi
     fi
 
-    test_step "source NAT and teardown (Deep 12-)"
+    test_step "source NAT, IP blocklists and teardown (Deep 12-13)"
     section "Deep 12: source NAT — subnet-filtering device (ADR-016, #239)"
 
     # The one test that would have caught #239. A device that accepts only its
@@ -2466,6 +2477,72 @@ EVIDENCE
         fi
 
         rm -rf "${_snat_tmp}"
+    fi
+
+    section "Deep 13: IP blocklists — blocked both ways, removed with the field"
+
+    # Spamhaus DROP for the run, unless site.json lists blocklists already; the
+    # field as it was is put back at the end, and so is the firewall. An address
+    # from the list must be in the pf table, the WAN must block it as a source
+    # and the zones as a destination, and a connection from the mothership (mgmt)
+    # to it must be dropped by the zones rule. Without the field, nothing of it
+    # may stay.
+    _ib_site="${CONFIG_DIR}/site.json"
+    _ib_saved="$(mktemp)"
+    cp "${_ib_site}" "${_ib_saved}"
+    _ib_fw="root@${FIREWALL_FQDN:-firewall.mgmt.internal}"
+    _ib_t=tappaas_ipblocklists
+    _ib_had="$(jq -r '(.ipBlocklists // []) | length' "${_ib_site}")"
+    if [[ "${_ib_had}" == "0" ]]; then
+        jq '.ipBlocklists = ["https://www.spamhaus.org/drop/drop.txt"]' "${_ib_saved}" > "${_ib_site}"
+    fi
+    if rules-manager --no-ssl-verify ip-blocklists --config-dir "${CONFIG_DIR}" >/dev/null 2>&1; then
+        pass "Deep 13: rules-manager ip-blocklists applied the lists"
+    else
+        fail "Deep 13: rules-manager ip-blocklists failed"
+    fi
+    # The firewall downloads the list when the alias is reconfigured: wait for it.
+    # (root's shell on the firewall is csh: every command goes through /bin/sh.)
+    _ib_ip=""
+    for _ in $(seq 1 12); do
+        _ib_ip="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "${_ib_fw}" /bin/sh -s <<<"pfctl -t ${_ib_t} -T show 2>/dev/null | awk 'NR==1 {print \$1}'" 2>/dev/null || true)"
+        [[ -n "${_ib_ip}" ]] && break
+        sleep 10
+    done
+    if [[ -z "${_ib_ip}" ]]; then
+        fail "Deep 13: the pf table ${_ib_t} is empty after 2 minutes — the list was not downloaded"
+    else
+        pass "Deep 13: the pf table ${_ib_t} holds the list (first entry ${_ib_ip})"
+        _ib_rules="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "${_ib_fw}" /bin/sh -s <<<"pfctl -sr 2>/dev/null | grep '<${_ib_t}>'" 2>/dev/null || true)"
+        grep -q "^block.* from <${_ib_t}>" <<<"${_ib_rules}" \
+            && pass "Deep 13: the WAN blocks the lists as a source" \
+            || fail "Deep 13: no pf block from <${_ib_t}> — inbound from a listed address is not refused: ${_ib_rules}"
+        grep -q "^block.* to <${_ib_t}>" <<<"${_ib_rules}" \
+            && pass "Deep 13: the zones block the lists as a destination" \
+            || fail "Deep 13: no pf block to <${_ib_t}> — the zones can reach a listed address"
+        # One address inside the first listed network, probed from mgmt.
+        _ib_probe="$(python3 -c 'import ipaddress, sys; n = ipaddress.ip_network(sys.argv[1], strict=False); print(n[1] if n.num_addresses > 2 else n[0])' "${_ib_ip}" 2>/dev/null || true)"
+        if [[ -n "${_ib_probe}" ]]; then
+            if curl -s -o /dev/null --connect-timeout 5 "http://${_ib_probe}/"; then
+                fail "Deep 13: ${_ib_probe} (on the list) answered from mgmt — outbound is not blocked"
+            else
+                pass "Deep 13: ${_ib_probe} (on the list) is unreachable from mgmt"
+            fi
+        fi
+    fi
+    # Teardown: the field as it was, then the firewall to match it.
+    cp "${_ib_saved}" "${_ib_site}"
+    rm -f "${_ib_saved}"
+    rules-manager --no-ssl-verify ip-blocklists --config-dir "${CONFIG_DIR}" >/dev/null 2>&1 \
+        || fail "Deep 13: putting the IP blocklists back to site.json failed"
+    if [[ "${_ib_had}" == "0" ]]; then
+        _ib_left="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "${_ib_fw}" /bin/sh -s <<<"pfctl -sr 2>/dev/null | grep -c '<${_ib_t}>'; pfctl -s Tables | grep -c '${_ib_t}'" 2>/dev/null | awk '{s += $1} END {if (NR) print s}')"
+        _ib_left="${_ib_left:-?}"
+        if [[ "${_ib_left}" == "0" ]] && rules-manager --no-ssl-verify --check-mode ip-blocklists --config-dir "${CONFIG_DIR}" 2>&1 | grep -q "no IP blocklists — matches site.json"; then
+            pass "Deep 13: without the field, the aliases and both rules are gone"
+        else
+            fail "Deep 13: IP blocklist rules or aliases left after removing the field (pf rules and tables naming it: ${_ib_left})"
+        fi
     fi
 
     DEEP_COMPLETED=1

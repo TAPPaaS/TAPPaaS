@@ -103,6 +103,7 @@ export const HELP: HelpSpec = {
         ["--dnsBlocklistsLists <a,b>", "dnsBlocklists.lists — OPNsense blocklist codes (hgz013, oisd1, ag, …); '' blocks nothing. Applied by the next network update"],
         ["--dnsBlocklistsZones <a,b>", "dnsBlocklists.zones — the zones whose clients are filtered; '' filters every client"],
         ["--dnsBlocklistsAllow <a,b>", "dnsBlocklists.allow — domains never blocked"],
+        ["--ipBlocklists <url,url>", "ipBlocklists — address lists (plain text, by URL) blocked from the WAN and to them from every zone; '' blocks nothing. Applied by the next network update"],
         ["--diskAutoGrowEnabled true|false", "diskAutoGrow.enabled — grow a VM's disk when its / fills up, at every module update"],
         ["--diskAutoGrowThreshold <pct>", "diskAutoGrow.threshold — grow at or over this % full (default 80)"],
         ["--diskAutoGrowGrowPercent <pct>", "diskAutoGrow.growPercent — grow by this % of the disk (default 50)"],
@@ -753,6 +754,12 @@ function cmdSite(o: Opts): void {
     setList("--dnsBlocklistsLists", ["dnsBlocklists", "lists"]);
     setList("--dnsBlocklistsZones", ["dnsBlocklists", "zones"]);
     setList("--dnsBlocklistsAllow", ["dnsBlocklists", "allow"]);
+    {
+      const urls = (o.flags.get("--ipBlocklists") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+      const bad = urls.filter((u) => !/^https?:\/\/\S+$/.test(u));
+      if (bad.length) no(`--ipBlocklists: not an http(s) URL: ${bad.join(", ")}`);
+      setList("--ipBlocklists", ["ipBlocklists"]);
+    }
     setBool("--diskAutoGrowEnabled", ["diskAutoGrow", "enabled"]);
     setRange("--diskAutoGrowThreshold", ["diskAutoGrow", "threshold"], 1, 100);
     setRange("--diskAutoGrowGrowPercent", ["diskAutoGrow", "growPercent"], 1, Infinity);

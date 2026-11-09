@@ -82,7 +82,8 @@ A port forward is accepted only for a module in a zone that lists `internet` in
 so an operator may expose its SSH as the way in.
 
 **5. The site** — `config/site.json` `ipv6` (default `false`): whether the firewall allows
-IPv6 at all ([Address family](#address-family)). How a site gets IPv6, and which zones carry
+IPv6 at all ([Address family](#address-family)); and `ipBlocklists`, address lists blocked both
+ways ([IP blocklists](#ip-blocklists)). How a site gets IPv6, and which zones carry
 it, is in [IPV6.md](IPV6.md).
 
 ## How the rules get written
@@ -188,6 +189,7 @@ interface the order is:
 | Order | Sequence | Rules | Written by |
 |---|---|---|---|
 | 1 | OPNsense | anti-lockout, DHCP, bogons and system rules | OPNsense |
+| 1b | 960 | **IP blocklists** — block a listed source on the WAN, and a listed destination on every zone ([below](#ip-blocklists)) | rules-manager |
 | 2 | 970 / 971 | **anti-spoofing** — drop any source outside the zone's networks (IPv4 / IPv6) | zone-manager |
 | 3 | 975 | **mDNS** — pass UDP 5353 to `224.0.0.251` on the zones that share discovery ([ZONES.md](ZONES.md#discovery-across-zones-mdns)) | mdns-manager |
 | 4 | 980, 981 | **admin guard** — block TCP 8443 (GUI) and 22 (SSH) to every firewall address | zone-manager |
@@ -308,6 +310,20 @@ Rule names carry their identity: `tappaas-module:<vm>:ingress:<peer>:<port>`,
 `tappaas-svcdep:<consumer>:<service>:<provider>:<port>`, each followed by a human description.
 A rule is one per identity: changing only its description rewrites the rule in place.
 
+## IP blocklists
+
+From `site.json` `ipBlocklists`: each URL an OPNsense URL-table alias the firewall refreshes
+daily, nested in `tappaas_ipblocklists`, and two rules at sequence 960 that `rules-manager
+ip-blocklists` writes during the network update:
+
+| Rule | Interface | Matches | Action |
+|---|---|---|---|
+| `tappaas-ipbl: from the IP blocklists, on the WAN` | WAN | source in `tappaas_ipblocklists`, IPv4 and IPv6 | block |
+| `tappaas-ipbl: to the IP blocklists, from the zones` | every Active and Mandatory zone, and `mgmt` | destination in `tappaas_ipblocklists`, IPv4 and IPv6 | block |
+
+On the WAN it comes before Caddy's rule and every port forward, so a listed address reaches no
+published service. Empty or absent `ipBlocklists`: neither rule nor any of the aliases exists.
+
 ## Address family
 
 Zone and module rules cover IPv4 and IPv6 (see [Zone rules](#zone-rules) and
@@ -344,6 +360,7 @@ rules-manager expected-pinholes <module> # which auto-pinholes it should carry, 
 rules-manager list-rules --orphans       # TAPPaaS rules nothing declares any more
 rules-manager overlaps                   # rules that are shadowed, redundant or in conflict
 rules-manager list-slots                 # each module's slot, rules in use, rules left out
+rules-manager --check-mode ip-blocklists # the IP blocklists against site.json
 ssh root@firewall.mgmt.internal 'pfctl -sr'   # the rules pf actually evaluates, in order
 ```
 

@@ -74,7 +74,7 @@ const stable = FLAGS.site?.modify ?? {};
 const sdefs = flattenSchema(schema("site-fields.json"));
 check(same(Object.values(stable), [...smOpts, "--channel"]) && smOpts.length > 30, `site modify: the table is site-manager site modify's options, flag for flag (${smOpts.filter((f) => !Object.values(stable).includes(f)).join(" ")})`);
 check(Object.keys(stable).every((f) => sdefs.some((d) => d.name === f && d.changeClass === "in-place")), "…each a field site-fields.json classes in-place");
-check(["dnssec", "dnsBlocklists.lists", "diskAutoGrow.threshold", "branding.logo"].every((f) => stable[f]), "…dnssec, the blocklists, disk growth and branding among them");
+check(["dnssec", "dnsBlocklists.lists", "ipBlocklists", "diskAutoGrow.threshold", "branding.logo"].every((f) => stable[f]), "…dnssec, the blocklists, disk growth and branding among them");
 check(["name", "version", "defaultEnvironment"].every((f) => !stable[f] && sdefs.find((d) => d.name === f)?.changeClass === "immutable"), "…name, version and defaultEnvironment immutable, with no flag");
 
 // ── site-manager location add/modify: its options over $defs.location ───

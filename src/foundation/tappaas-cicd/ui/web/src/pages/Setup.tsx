@@ -343,7 +343,7 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
     blocking: (
       <p className="small toolbar">
         <OperateButton label="Change…" title="Blocking" steps={[
-          fieldsStep({ title: "site-manager site modify (blocking)", bin: "site-manager", verb: "site modify", kind: "site", name: null, mode: "modify", fields: ["dnsBlocklists"], note: "Empty lists block nothing. Leave the service zones out: their modules download updates and models." }),
+          fieldsStep({ title: "site-manager site modify (blocking)", bin: "site-manager", verb: "site modify", kind: "site", name: null, mode: "modify", fields: ["dnsBlocklists", "ipBlocklists"], note: "Empty lists block nothing. Leave the service zones out of the DNS blocklists: their modules download updates and models." }),
           mm("module-manager update network", "update", { fixed: ["network"], note: "Applies the blocklists on the firewall." }),
         ]} />
         <span className="muted">A threat list keeps the people's devices away from known malware and phishing names; it is maintained by its publisher.</span>

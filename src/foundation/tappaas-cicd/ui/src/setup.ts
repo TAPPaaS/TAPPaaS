@@ -29,7 +29,8 @@
 //   stacks     optional: which stacks have modules installed
 //   public     optional (ADR-043 D10): the default environment is public (wildcard
 //              or per-service), or "stay local" was answered
-//   blocking   optional: what the firewall blocks (site.json dnsBlocklists). A
+//   blocking   optional: what the firewall blocks (site.json dnsBlocklists,
+//              ipBlocklists). A
 //              new site starts with a threat-only list; the step shows it and
 //              lets the operator change or clear it, so it reads as done
 //
@@ -92,6 +93,7 @@ export interface SetupInputs {
   health?: { gates: { name: string; status: string; detail: string }[] | null; reach: VlanReach | null }; // its record's storagePools and uplinks.lan.ports (MACs); null: no node record
   repositories?: string[]; // site.json repositories[].name
   dnsBlocklists?: { lists: string[]; zones: string[] } | null; // site.json; null: none
+  ipBlocklists?: string[]; // site.json; the URLs
   answers?: SetupAnswers;
 }
 
@@ -257,18 +259,19 @@ export function setupSteps(i: SetupInputs): SetupStep[] {
           : "local: the site's own CA signs its names, and each person imports it. Going public needs a DNS provider or public records"
         : "no default environment",
   });
-  steps.push(blockingStep(i.dnsBlocklists));
+  steps.push(blockingStep(i.dnsBlocklists, i.ipBlocklists ?? []));
   return steps.sort((a, b) => STEP_ORDER.indexOf(a.id as (typeof STEP_ORDER)[number]) - STEP_ORDER.indexOf(b.id as (typeof STEP_ORDER)[number]));
 }
 
 // What the firewall blocks. Done either way: the default is a choice already
 // made, and clearing it is one too.
-export function blockingStep(dns: SetupInputs["dnsBlocklists"]): SetupStep {
+export function blockingStep(dns: SetupInputs["dnsBlocklists"], ip: string[] = []): SetupStep {
   const title = `Blocking ${OPTIONAL}`;
   const text = dns && dns.lists.length
     ? `DNS: ${dns.lists.join(", ")} for ${dns.zones.length ? dns.zones.join(", ") : "every client"}; each list is kept by its publisher. Ads and tracking lists are your choice`
     : "DNS: no blocklist, names are not filtered";
-  return { id: "blocking", title, required: false, done: true, detail: text };
+  const ips = ip.length ? `IP: ${ip.length} address list(s) blocked both ways (${ip.join(", ")})` : "IP: no address list";
+  return { id: "blocking", title, required: false, done: true, detail: `${text}; ${ips}` };
 }
 
 // site.json dnsBlocklists as the step reads it: absent or no lists is none.
@@ -533,6 +536,7 @@ export async function gatherSetup(d: GatherDeps): Promise<SetupInputs> {
       reach: readVlanReach(d.vlanReachFile ?? "/var/lib/tappaas/vlan-reach.json"),
     },
     dnsBlocklists: dnsBlocklistsOf(site as Record<string, unknown>),
+    ipBlocklists: Array.isArray(site.ipBlocklists) ? (site.ipBlocklists as unknown[]).filter((u): u is string => typeof u === "string") : [],
     repositories: Array.isArray(site.repositories) ? (site.repositories as { name?: unknown }[]).map((r) => (typeof r.name === "string" ? r.name : "")).filter(Boolean) : [],
     answers: readSetupAnswers(d.stateDir),
   };

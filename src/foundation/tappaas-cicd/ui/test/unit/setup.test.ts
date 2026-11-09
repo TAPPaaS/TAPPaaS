@@ -84,6 +84,7 @@ async function main(): Promise<void> {
   check(blockingStep(dnsBlocklistsOf({})).done === true && /no blocklist/.test(blockingStep(dnsBlocklistsOf({})).detail), "…none set (or cleared): done, says names are not filtered");
   check(dnsBlocklistsOf({ dnsBlocklists: { lists: [], zones: ["home"] } }) === null, "…empty lists are none");
   check(/every client/.test(blockingStep({ lists: ["hgz013"], zones: [] }).detail), "…no zones: every client");
+  check(/IP: no address list/.test(bl.detail) && /IP: 1 address list\(s\) blocked both ways \(https:\/\/www\.spamhaus\.org\/drop\/drop\.txt\)/.test(blockingStep(null, ["https://www.spamhaus.org/drop/drop.txt"]).detail), "…the IP lists, by URL");
   check(steps.filter((s) => s.id !== "wifi").every((s) => s.done === true) && setupComplete(steps), "hrossen: every step reads as done but the optional WiFi");
 
   // ── the WiFi step ───────────────────────────────────────────────────
