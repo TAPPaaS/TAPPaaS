@@ -371,6 +371,10 @@ first:
   The MODULES total counts the baseline once.
 - **The mothership** is a module like the others: its system is evaluated in place on both
   sides (it reads this machine's `/etc/nixos`).
+- **A replaced dependency counts at its new version.** A module whose system swaps a package
+  with `system.replaceDependencies` (immich and jellyfin carry a patched brotli this way) runs
+  only the replacement, but its evaluated closure holds both. The preview reads the pairs from
+  the evaluated configuration and counts the package as the module runs it — without a build.
 - **The gate** names its module: `cve <module> <CVE>` (`cve baseline <CVE>` for the shared row)
   and `major <pkg> a->b`. The last lines say what is left to acknowledge, by module and by
   reason (see *What needs an ack* below). Items that passed without an ack, and **stale acks**

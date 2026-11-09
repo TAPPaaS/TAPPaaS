@@ -48,7 +48,8 @@ cat > "${T}/nix" <<'EOF'
 #!/usr/bin/env python3
 import json, sys
 db = {"grafana@13.0.9": [("CVE-OLD", "High")], "openssl@3.5.1": [("CVE-1", "Critical")],
-      "openssl@3.5.2": [("CVE-1", "Critical"), ("CVE-LOW", "Low")], "grafana@14.0.1": [("CVE-2", "High")]}
+      "openssl@3.5.2": [("CVE-1", "Critical"), ("CVE-LOW", "Low")], "grafana@14.0.1": [("CVE-2", "High")],
+      "brotli@1.2.0": [("CVE-BR", "Critical")]}
 import os
 comps = json.load(open(sys.argv[sys.argv.index("--components") + 1]))
 vexed = set(os.environ.get("VEXED", "").split())
@@ -259,6 +260,38 @@ python3 "${PP}" --inventory "${T}/site4.cdx.json" --status "${T}/cs4.json" \
     --image-scanner "${T}/img --refs {file}" --from a --to b --out "${T}/p4.json" --ignore "${T}/ignore.json" >/dev/null 2>&1
 ck "a running instance (deconz-test) makes its module (deconz) run: not approximate" "false" \
    "$(jq -r '.modules[] | select(.module=="deconz") | .approximate' "${T}/p4.json")"
+# replaceDependencies (immich swaps brotli 1.2.0 for 1.2.1): the .drv closure holds
+# both, the built system only the new. With the pairs the train read from the
+# evaluated config (<module>.replace), the replaced package counts at its new
+# version — even when the last scan still saw the old one running.
+mkdir -p "${T}/n5" "${T}/b5"
+drvs "${T}/n5/immich.txt" brotli-1.2.0 brotli-1.2.1 openssl-3.5.2 nodejs-22.1.0
+echo "/nix/store/${H}-brotli-1.2.0-lib" >> "${T}/n5/immich.txt"   # the original's output, read by the replacement step
+drvs "${T}/b5/immich.txt" brotli-1.2.0 openssl-3.5.2 nodejs-22.1.0
+cat > "${T}/site5.cdx.json" <<'EOF'
+{"components":[{"name":"immich","properties":[{"name":"tappaas:layer","value":"nix"}],"components":[{"name":"brotli","version":"1.2.0"},{"name":"openssl","version":"3.5.2"}]}]}
+EOF
+echo '{"targets":[{"name":"immich","layer":"nix","critical":2,"high":0}]}' > "${T}/cs5.json"
+pp5() { python3 "${PP}" --inventory "${T}/site5.cdx.json" --status "${T}/cs5.json" \
+    --base-label v2.1 --base-closures "${T}/b5" --base-images "${T}/noimg.json" --base-nix-scanner "${T}/nix --components {file}" \
+    --now-closures "${T}/n5" --now-images "${T}/noimg.json" --now-nix-scanner "${T}/nix --components {file}" \
+    --image-scanner "${T}/img --refs {file}" --from a --to b --out "${T}/p5.json" --details "${T}/d5.json" --ignore "${T}/ignore.json" >/dev/null 2>&1; }
+pp5
+ck "without the pairs the old brotli still counts (what the 2.4 preview reported)" "2" \
+   "$(jq -r '.modules[] | select(.module=="immich") | .now' "${T}/p5.json")"
+printf '%s\n' "/nix/store/${H}-brotli-1.2.0.drv /nix/store/${H}-brotli-1.2.1.drv" \
+    "/nix/store/${H}-brotli-1.2.0-lib /nix/store/${H}-brotli-1.2.1-lib" > "${T}/n5/immich.replace"
+pp5
+ck "with them brotli counts at 1.2.1: its CVE is fixed, not carried" "1 CVE-BR" \
+   "$(jq -r '.modules[] | select(.module=="immich") | .now' "${T}/p5.json") $(jq -r '[.modules.immich.cves.fixed[].id] | join(",")' "${T}/d5.json")"
+ck "…and the package list says 1.2.0 → 1.2.1" "1.2.0 1.2.1" \
+   "$(jq -r '.modules.immich.packages[] | select(.pkg=="brotli") | "\(.base) \(.now)"' "${T}/d5.json")"
+# A pair whose new derivation the closure lacks still adds it.
+drvs "${T}/n5/immich.txt" brotli-1.2.0 openssl-3.5.2 nodejs-22.1.0
+pp5
+ck "…also when only the old one is in the closure" "1.2.1" \
+   "$(jq -r '.modules.immich.packages[] | select(.pkg=="brotli") | .now' "${T}/d5.json")"
+
 # The row adds up: NOW = V2.1 − FIXED − DECIDED + NEW. A CVE the release had that a
 # VEX statement now settles at the new version is DECIDED, not FIXED and not in NOW.
 VEXED="CVE-1@3.5.2" run

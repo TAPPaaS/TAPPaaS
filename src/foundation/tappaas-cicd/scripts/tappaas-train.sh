@@ -2066,7 +2066,17 @@ pin_findings() {
                       -e '/misc/' -e '/00-Template/' -e '/test-' -e '/test-fixtures/' | sort)
         info "  evaluating ${#files[@]} NixOS module(s) of $([[ ${side} == base ]] && echo "${tag}" || echo "this tree") — nothing is built"
         (( ${#files[@]} > 0 )) || continue
-        while read -r ok rel drv; do
+        while read -r ok rel drv new; do
+            # replaceDependencies: the built system rewrites <drv> (a derivation or
+            # an output) into <new>, so pin-preview counts the new version.
+            if [[ "${ok}" == "replace:" ]]; then
+                if [[ "${drv}" == /nix/store/* && "${new}" == /nix/store/* ]]; then
+                    echo "${drv} ${new}" >> "${work}/${side}/$(basename "${rel}" .nix).replace"
+                else
+                    info "  $(basename "${rel}" .nix) replaces dependencies that did not evaluate — counted without the replacement"
+                fi
+                continue
+            fi
             [[ "${ok}" == "ok:" && "${drv}" == *.drv ]] || continue
             local mname; mname="$(basename "${rel}" .nix)"
             # A module that runs nowhere here has no inventory to say which of its
@@ -2083,7 +2093,7 @@ pin_findings() {
                 info "  ${mname} runs nowhere here and its system did not build — counted approximately (≈)"
             fi
             nix-store -q --requisites "${drv}" > "${work}/${side}/${mname}.txt" 2>/dev/null || true
-        done < <(bash "${TRAIN_SCRIPTS}/nixos-baseline-eval.sh" --src "${tree}" ${mode} --drv --nixpkgs "${src}" "${files[@]}" 2>&1)
+        done < <(bash "${TRAIN_SCRIPTS}/nixos-baseline-eval.sh" --src "${tree}" ${mode} --drv --replacements --nixpkgs "${src}" "${files[@]}" 2>&1)
         # The shared baseline: an empty module with templates/tappaas-common.nix added —
         # what every guest starts from. Its packages are the preview's baseline row.
         mkdir -p "${work}/${side}-bl"
