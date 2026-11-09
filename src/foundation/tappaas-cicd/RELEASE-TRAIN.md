@@ -562,23 +562,19 @@ pass with the last preview.
   whether to upgrade: what changes for a site, what an operator has to do, what goes away.
 
 **7. Generated documentation.** Refresh the documents generated from the code, so the release
-describes the code it ships:
+describes the code it ships. Each has a Claude Code command (in the project's `.claude/commands/`):
 
-| File | What it holds |
-|------|---------------|
-| `src/STATISTICS.md` | Line counts over `src/` by area and type (the earlier snapshot stays in `STATISTICS-v1.md`) |
-| `src/foundation/DEPENDENCIES.md`, `DEPENDENCIES.csv` | The direct dependencies between the foundation's scripts, managers, controllers and config files |
-| `src/foundation/PROGRAMS.csv` | Every executable the foundation installs, where it goes and its source |
+| File | What it holds | Regenerate with |
+|------|---------------|-----------------|
+| `src/STATISTICS.md` | Line counts over `src/` for the revision to be released and the last release, with the delta | `/tappaas-statistics 2.5`, which runs `src/generate-statistics.py --last v2.4 --last-label 2.4 --current origin/main --current-label 2.5` |
+| `src/foundation/DEPENDENCIES.md`, `DEPENDENCIES.csv`, `PROGRAMS.csv` | Every executable the foundation installs, its sources, and the direct dependencies between the scripts, managers, controllers and config files | `/tappaas-generate-script-dependencies` |
+| `src/module-dependencies.md` | The graph of which module depends on which, from each module's `dependsOn` and `provides` | `/tappaas-module-dependencies` |
 
-Any other file with a `Generated:` header counts too (except `STATISTICS-v1.md`, a frozen snapshot):
-
-```bash
-git grep -l '^Generated:' -- '*.md' '*.csv'
-```
-
-Regenerate each against `main` the way its header describes, set its `Generated:` line to today
-and the commit, and commit them to `main` with the rest. Steps 6 and 7 end like step 4: this
-checkout is back at `origin/main`.
+`src/generate-statistics.py` counts both sides from git by the same rules, so it needs no
+checkout and the two columns compare. The dependency documents are written by reading the code;
+check the diff before committing them. `STATISTICS-v1.md` is a frozen snapshot and stays as it is.
+Commit the refreshed files to `main` with the rest. Steps 6 and 7 end like step 4: this checkout
+is back at `origin/main`.
 
 **8. Boundary day.** The pin moves daily, so run `preview` again first. If something new is
 gated, or an acked item now ships at another version, deal with it (steps 2–5). Merges since
