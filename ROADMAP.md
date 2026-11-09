@@ -203,7 +203,7 @@ items that belong to a group — FW #40, #157, #158, #162 — are rows in that g
 | #223 | OPNsense 26.1 InterfaceAssignController may break on a future upgrade | Parked 2026-10-13 (agreed 2026-05-27): works on 26.1 as deployed; revisit when an upgrade breaks it. Parking lot on the forge |
 | #250 | `dependsOn` ownership for community modules | Option D, `dependsOn.sh`. Out of G1.3 since 2026-09-20 (operator) |
 | #294 | Zone-aligned VMID ranges | Renumbering means backup/restore to a new VMID. **Proposal:** new scheme for new installs and variants only; never renumber in place. Out of G1.7 since 2026-10-16 (operator) |
-| #464 | migrate-firewall-to-network: dry-run reports a step it cannot predict | A dry run that overstates what it will do teaches an operator to distrust dry runs. Parking lot on the forge |
+| ✅ #464 | migrate-firewall-to-network: dry-run reports a step it cannot predict | **Closed 2026-11-09**: the firewall-to-network migration is over |
 | #678 | windows-server: time zone, keyboard and locale from the site | From G1.4: its own time-zone vocabulary and a Windows test |
 | #757 | `debianhost` over PXE (ADR-026 D8a) | `adopt` covers every known site |
 | #893 | Memory ballooning as an opt-in per module | A minimum memory per module (`balloon`), counted by the capacity check; not for passthrough VMs. First: is free-page reporting on? Opened 2026-10-27 |
