@@ -1692,9 +1692,16 @@ function cmdUpdate(o: Opts, client: SiteClient): number {
     `site-manager update --stop ends it after the module in progress)`);
   debug(`follow:   journalctl -fu ${UNIT}`);
   debug(`status:   systemctl status ${UNIT}`);
-  if (client.followUnit(started.invocationId) === "detached") {
+  const end = client.followUnit(started.invocationId);
+  if (end === "detached") {
     infoTagged(`detached — the run continues: journalctl -fu ${UNIT} · to stop it: site-manager update --stop`);
     return 0;
+  }
+  if (end === "lost") {
+    // Its result is unknown here, so not a success: a caller must not go on as if it were.
+    warn(`systemd stopped answering, so the run's end could not be seen — it may still be running: ` +
+      `systemctl status ${UNIT} · journalctl -fu ${UNIT}`);
+    return 1;
   }
   const result = client.unitResult();
   const last0 = readResult(o.configDir);

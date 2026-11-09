@@ -21,11 +21,11 @@ import { nodeDiscoveryProbe, nodeStorageProbe, parseNodeDiscovery, parseNodeStor
 import { CLUSTER_DISCOVERY, CLUSTER_PROBE, ClusterRead, HOST_PROBE, STORAGE_MARK, parseClusterProbe, parseHostProbe, splitStorage } from "./cmdb-report";
 import { defaultConfigDir, rmGuarded } from "../../../lib/ts/src/config-io";
 import { clusterScript } from "./config";
-import { capture as run, captureResult, spawnGuarded, stream as runStreaming, streamToFile } from "../../../lib/ts/src/exec";
+import { infoTagged } from "../../../lib/ts/src/cli";
+import { capture as run, captureResult, configEnv, spawnGuarded, stream as runStreaming, streamToFile } from "../../../lib/ts/src/exec";
 import { setNodeStoragePools } from "../../../lib/ts/src/nodes";
 import { RepositoryTrust, SiteClient } from "./types";
-import { UNIT } from "./unitrun";
-import { spawn } from "child_process";
+import { FollowEnd, UNIT, followRun, splitCursor } from "./unitrun";
 
 // Bin names (overridable via env for tests / relocations). Resolved LAZILY, as
 // in environment-manager/src/clients.ts: a module-level const would freeze the
@@ -292,23 +292,49 @@ export class CliSiteClient implements SiteClient {
     return { ok: true, invocationId: "", err: "" };
   }
 
-  followUnit(invocationId: string): "finished" | "detached" {
+  followUnit(invocationId: string): FollowEnd {
     // Only what the run prints. Every sudo/runuser in the unit also logs to
     // syslog under its cgroup (pam_unix session lines, sudo's COMMAND= audit) —
     // hundreds per sweep; they stay in the journal but out of the operator's view.
+    // Polled by cursor rather than `journalctl -f`: see followRun (unitrun.ts).
     const filter = invocationId ? [`_SYSTEMD_INVOCATION_ID=${invocationId}`] : ["-u", UNIT];
-    const j = spawn(JOURNALCTL(), ["-f", "-o", "cat", ...filter, "_TRANSPORT=stdout"], { stdio: "inherit" });
+    // Ctrl-C goes to the whole foreground group. Without a handler it kills this
+    // process outright; with one, the child it reached ends with SIGINT and the
+    // loop detaches cleanly. One arriving between children is remembered here.
+    let interrupted = false;
+    const onInt = (): void => { interrupted = true; };
+    process.on("SIGINT", onInt);
+    const hit = (signal: string | null | undefined): boolean => interrupted || signal === "SIGINT";
     try {
-      for (;;) {
-        const st = this.unitState();
-        if (st !== "activating" && st !== "active" && st !== "deactivating") return "finished";
-        // Ctrl-C reaches sleep too; that is the only way this loop learns of it.
-        const s = spawnGuarded("sleep", ["2"], {});
-        if (s.signal === "SIGINT") return "detached";
-      }
+      return followRun(invocationId, {
+        probe: () => {
+          const r = spawnGuarded(SYSTEMCTL(), ["show", "-p", "ActiveState", "-p", "InvocationID", UNIT],
+            { encoding: "utf8", env: configEnv() });
+          if (hit(r.signal)) return { ok: false, state: "", invocation: "", interrupted: true };
+          const kv = new Map<string, string>();
+          for (const l of String(r.stdout ?? "").split("\n")) {
+            const i = l.indexOf("=");
+            if (i > 0) kv.set(l.slice(0, i), l.slice(i + 1).trim());
+          }
+          const state = kv.get("ActiveState") ?? "";
+          return { ok: !r.error && r.status === 0 && state !== "", state, invocation: kv.get("InvocationID") ?? "" };
+        },
+        poll: (after) => {
+          const args = ["-q", "--no-pager", "-a", "-o", "cat", "--show-cursor"];
+          if (after) args.push(`--after-cursor=${after}`);
+          const r = spawnGuarded(JOURNALCTL(), [...args, ...filter, "_TRANSPORT=stdout"],
+            { encoding: "utf8", env: configEnv(), maxBuffer: 64 * 1024 * 1024 });
+          if (hit(r.signal)) return { ok: false, text: "", cursor: after, interrupted: true };
+          if (r.error || r.status !== 0) return { ok: false, text: "", cursor: after };
+          return { ok: true, ...splitCursor(String(r.stdout ?? "")) };
+        },
+        sleep: (sec) => hit(spawnGuarded("sleep", [String(sec)], {}).signal),
+        write: (text) => process.stdout.write(text),
+        note: (line) => infoTagged(line),
+        now: () => Date.now(),
+      });
     } finally {
-      spawnGuarded("sleep", ["1"], {}); // let journalctl print the last lines
-      j.kill("SIGTERM");
+      process.off("SIGINT", onInt);
     }
   }
 
