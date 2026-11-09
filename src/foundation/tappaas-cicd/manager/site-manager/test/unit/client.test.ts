@@ -73,16 +73,43 @@ try {
 
     // ── followUnit ────────────────────────────────────────────────────
     // Only the run's own stdout/stderr: each sudo/runuser in the unit also
-    // writes pam_unix and sudo-audit syslog lines into its journal.
-    const inactive = join(root, "systemctl-inactive");
-    writeFileSync(inactive, "#!/usr/bin/env bash\necho inactive\n");
-    chmodSync(inactive, 0o755);
-    process.env.SITE_SYSTEMCTL_BIN = inactive;
-    process.env.SITE_JOURNALCTL_BIN = stub(0);
-    c.followUnit("abc123");
+    // writes pam_unix and sudo-audit syslog lines into its journal. Read by
+    // cursor, so a re-executing PID 1 (the mothership's own switch) costs nothing:
+    // here `systemctl show` fails once mid-run, as it does then, and the follower
+    // carries on until systemd says the unit is inactive.
+    const n = join(root, "probe-n");
+    writeFileSync(n, "0");
+    const sysctl = join(root, "systemctl-reexec");
+    writeFileSync(sysctl, `#!/usr/bin/env bash
+i=$(cat '${n}'); echo $((i+1)) > '${n}'
+case $i in
+  0) echo ActiveState=active; echo InvocationID=abc123 ;;
+  1) echo "Failed to get properties: Connection reset by peer" >&2; exit 1 ;;
+  2) echo ActiveState=active; echo InvocationID=abc123 ;;
+  *) echo ActiveState=inactive; echo InvocationID=abc123 ;;
+esac
+`);
+    chmodSync(sysctl, 0o755);
+    const jlog = join(root, "journalctl-argv");
+    const jctl = join(root, "journalctl-cursor");
+    writeFileSync(jctl, `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> '${jlog}'
+echo "-- cursor: c1"
+`);
+    chmodSync(jctl, 0o755);
+    process.env.SITE_SYSTEMCTL_BIN = sysctl;
+    process.env.SITE_JOURNALCTL_BIN = jctl;
+    const end = c.followUnit("abc123");
+    const calls = readFileSync(jlog, "utf8").trim().split("\n");
+    check(end === "finished", `followUnit outlives a failed systemctl show mid-run (got: ${end})`);
+    check(readFileSync(n, "utf8").trim() === "4", "followUnit stops only once systemd says inactive");
     check(
-      spawned() === "-f -o cat _SYSTEMD_INVOCATION_ID=abc123 _TRANSPORT=stdout",
-      `followUnit follows the invocation's stdout only (got: ${spawned()})`,
+      calls[0] === "-q --no-pager -a -o cat --show-cursor _SYSTEMD_INVOCATION_ID=abc123 _TRANSPORT=stdout",
+      `followUnit reads the invocation's stdout only, from its start (got: ${calls[0]})`,
+    );
+    check(
+      calls.slice(1).every((a) => a === "-q --no-pager -a -o cat --show-cursor --after-cursor=c1 _SYSTEMD_INVOCATION_ID=abc123 _TRANSPORT=stdout"),
+      `each later read starts after the last cursor (got: ${calls[1]})`,
     );
   } finally {
     if (prevEnv === undefined) delete process.env.SITE_ENVIRONMENT_BIN;

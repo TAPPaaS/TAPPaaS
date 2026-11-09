@@ -273,14 +273,15 @@ export interface SiteClient {
   //   unitState     → ActiveState of update-tappaas.service ("inactive", "active", …)
   //   startUnit     → systemctl start --no-block; the new run's InvocationID
   //   followUnit    → stream that invocation's journal until the unit stops;
-  //                   "detached" when the operator pressed Ctrl-C
+  //                   "detached" when the operator pressed Ctrl-C, "lost" when
+  //                   systemd stayed unreachable for minutes (the run is untouched)
   //   unitResult    → the unit's Result ("success", "exit-code", …)
   //   unitInvocationId → the running invocation's InvocationID ("" when none)
   //   repoProbe     → a checkout's HEAD, its origin tip, and commits behind
   //   runUpdateDryRun → update-tappaas --dry-run (the sweep plan); its exit code
   unitState(): string;
   startUnit(): { ok: boolean; invocationId: string; err: string };
-  followUnit(invocationId: string): "finished" | "detached";
+  followUnit(invocationId: string): "finished" | "detached" | "lost";
   unitResult(): string;
   unitInvocationId(): string;
   repoProbe(path: string, branch: string): { head: string | null; tip: string | null; behind: number | null };

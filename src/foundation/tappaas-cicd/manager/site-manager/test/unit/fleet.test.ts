@@ -89,6 +89,12 @@ const clean = () => { try { unlinkSync(join(cfg, ".update-request.json")); } cat
   check(run(["update", "--config-dir", cfg], c) === 0, "Ctrl-C detaches with exit 0 (the run continues)");
 }
 {
+  // The train goes on to its deep test on exit 0: an end it could not see is not one.
+  const c = new FakeSiteClient(); clean();
+  c.followEnd = "lost";
+  check(run(["update", "--config-dir", cfg], c) === 1, "a run whose end could not be seen is exit 1, not a success");
+}
+{
   const c = new FakeSiteClient(); clean();
   run(["repository", "hold", "extra", "--reason", "testing", "--config-dir", cfg], c);
   const rc = run(["update", "--dry-run", "--config-dir", cfg], c);

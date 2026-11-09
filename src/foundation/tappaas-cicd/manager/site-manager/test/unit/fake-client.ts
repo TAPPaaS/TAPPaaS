@@ -154,6 +154,7 @@ export class FakeSiteClient implements SiteClient {
   startOk = true;
   unitResultValue = "success";
   detach = false;
+  followEnd: "finished" | "detached" | "lost" | null = null;
   probes = new Map<string, { head: string | null; tip: string | null; behind: number | null }>();
   unitState(): string {
     return this.unitStateValue;
@@ -162,9 +163,9 @@ export class FakeSiteClient implements SiteClient {
     this.log.push("start-unit");
     return this.startOk ? { ok: true, invocationId: "inv-1", err: "" } : { ok: false, invocationId: "", err: "denied" };
   }
-  followUnit(invocationId: string): "finished" | "detached" {
+  followUnit(invocationId: string): "finished" | "detached" | "lost" {
     this.log.push(`follow ${invocationId}`);
-    return this.detach ? "detached" : "finished";
+    return this.followEnd ?? (this.detach ? "detached" : "finished");
   }
   unitResult(): string {
     return this.unitResultValue;
