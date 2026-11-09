@@ -60,11 +60,11 @@ let
   containerRoot = 200000;
 
   versions = {
-    # 0.13.0 (2026-11-06: security fixes, and database migrations the pre-update
-    # snapshot covers). Never land on
+    # 0.13.3 (2026-11-09: 0.13.1's unlisted security fixes and database
+    # migrations the pre-update snapshot covers). Never land on
     # 0.11.0–0.11.2: they can skip database migrations without an error
     # (upstream #29280), fixed in 0.11.3.
-    openwebui   = "0.13.0";              # OpenWebUI container version (Docker Hub, no v-prefix)
+    openwebui   = "0.13.3";              # OpenWebUI container version (Docker Hub, no v-prefix)
     postgresPkg = pkgs.postgresql_17;   # PostgreSQL version
     redisPkg    = pkgs.redis;           # Redis version
   };
