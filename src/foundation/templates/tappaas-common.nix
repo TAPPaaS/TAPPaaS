@@ -64,6 +64,14 @@
         };
   };
 
+  # cloud-init runs at boot only. When a pin changes its units, a switch would
+  # restart cloud-init-local and cloud-init together; both write
+  # /run/cloud-init/status.json and the loser fails the switch (exit 4).
+  systemd.services.cloud-init-local.restartIfChanged = false;
+  systemd.services.cloud-init.restartIfChanged = false;
+  systemd.services.cloud-config.restartIfChanged = false;
+  systemd.services.cloud-final.restartIfChanged = false;
+
   # Use the systemd-boot EFI boot loader.
   boot.loader.systemd-boot.enable = lib.mkDefault true;
   boot.loader.efi.canTouchEfiVariables = lib.mkDefault true;
