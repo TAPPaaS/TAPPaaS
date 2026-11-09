@@ -1,5 +1,9 @@
 # TAPPaaS test coverage (foundation)
 
+> The three test levels (component, module, deep), how to run them, and the current
+> check counts per module are in [TESTING.md](../../TESTING.md) at the repository
+> root. This page goes into what each foundation suite covers and where it falls short.
+
 Cross-component view of the test suites: every component exposes a **`test.sh`**
 (the component contract) with a **fast tier** (offline / non-disruptive, always
 run) and an optional **deep tier** (live, gated by `TAPPAAS_TEST_DEEP=1` and/or
