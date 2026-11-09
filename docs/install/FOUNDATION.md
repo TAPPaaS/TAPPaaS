@@ -195,6 +195,8 @@ The Day 2 page, in any order:
 - **Stacks:** the applications, each stack with its own install notes (AI, collaboration, home,
   security).
 - **Make it public** (below).
+- **Blocking:** a new site's firewall refuses the names on one threat list (hagezi Threat
+  Intelligence Mini) for the home and guest zones. Change it, add ads and tracking lists, or clear it.
 - **Wi-Fi:** register the access points and give each client zone its network name and
   passphrase.
 - **The physical site:** rooms, racks and where each machine stands.

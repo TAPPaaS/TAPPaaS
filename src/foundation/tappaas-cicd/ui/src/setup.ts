@@ -29,6 +29,9 @@
 //   stacks     optional: which stacks have modules installed
 //   public     optional (ADR-043 D10): the default environment is public (wildcard
 //              or per-service), or "stay local" was answered
+//   blocking   optional: what the firewall blocks (site.json dnsBlocklists). A
+//              new site starts with a threat-only list; the step shows it and
+//              lets the operator change or clear it, so it reads as done
 //
 // The order is Day 1's (operator, 2026-11-02): first node, more nodes, the
 // admin VPN, the foundation with sign-in, repositories, switches, Wi-Fi, the
@@ -88,6 +91,7 @@ export interface SetupInputs {
   // last VLAN probe across the nodes (null: never run).
   health?: { gates: { name: string; status: string; detail: string }[] | null; reach: VlanReach | null }; // its record's storagePools and uplinks.lan.ports (MACs); null: no node record
   repositories?: string[]; // site.json repositories[].name
+  dnsBlocklists?: { lists: string[]; zones: string[] } | null; // site.json; null: none
   answers?: SetupAnswers;
 }
 
@@ -104,7 +108,7 @@ export interface WifiInputs {
   aps: { name: string; ssids: { name: string; zone: string | null }[] }[] | null; // null: ap-manager list could not be read
 }
 
-export type StepId = "firstnode" | "nodes" | "vpn" | "bootstrap" | "health" | "repos" | "switch" | "wifi" | "physical" | "stacks" | "public";
+export type StepId = "firstnode" | "nodes" | "vpn" | "bootstrap" | "health" | "repos" | "switch" | "wifi" | "physical" | "stacks" | "public" | "blocking";
 
 export interface SetupStep {
   id: StepId;
@@ -129,7 +133,7 @@ export function moduleState(s: { config: boolean; test: TestResult | null }): { 
 export const OPTIONAL = "(optional, can be done as a Day 2 operation)";
 
 // Day 1's order: the required steps, the health check, then the optional ones.
-export const STEP_ORDER = ["firstnode", "nodes", "vpn", "bootstrap", "health", "switch", "public", "repos", "stacks", "wifi", "physical"] as const;
+export const STEP_ORDER = ["firstnode", "nodes", "vpn", "bootstrap", "health", "switch", "public", "blocking", "repos", "stacks", "wifi", "physical"] as const;
 
 export function setupSteps(i: SetupInputs): SetupStep[] {
   const steps: SetupStep[] = [];
@@ -253,7 +257,26 @@ export function setupSteps(i: SetupInputs): SetupStep[] {
           : "local: the site's own CA signs its names, and each person imports it. Going public needs a DNS provider or public records"
         : "no default environment",
   });
+  steps.push(blockingStep(i.dnsBlocklists));
   return steps.sort((a, b) => STEP_ORDER.indexOf(a.id as (typeof STEP_ORDER)[number]) - STEP_ORDER.indexOf(b.id as (typeof STEP_ORDER)[number]));
+}
+
+// What the firewall blocks. Done either way: the default is a choice already
+// made, and clearing it is one too.
+export function blockingStep(dns: SetupInputs["dnsBlocklists"]): SetupStep {
+  const title = `Blocking ${OPTIONAL}`;
+  const text = dns && dns.lists.length
+    ? `DNS: ${dns.lists.join(", ")} for ${dns.zones.length ? dns.zones.join(", ") : "every client"}; each list is kept by its publisher. Ads and tracking lists are your choice`
+    : "DNS: no blocklist, names are not filtered";
+  return { id: "blocking", title, required: false, done: true, detail: text };
+}
+
+// site.json dnsBlocklists as the step reads it: absent or no lists is none.
+export function dnsBlocklistsOf(site: Record<string, unknown>): { lists: string[]; zones: string[] } | null {
+  const d = site.dnsBlocklists as { lists?: unknown; zones?: unknown } | null | undefined;
+  const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+  if (!d || typeof d !== "object" || !strs(d.lists).length) return null;
+  return { lists: strs(d.lists), zones: strs(d.zones) };
 }
 
 // The zones that should have WiFi: active (no state is Active) and of type Client.
@@ -509,6 +532,7 @@ export async function gatherSetup(d: GatherDeps): Promise<SetupInputs> {
       gates: d.health ? await d.health().catch(() => null) : null,
       reach: readVlanReach(d.vlanReachFile ?? "/var/lib/tappaas/vlan-reach.json"),
     },
+    dnsBlocklists: dnsBlocklistsOf(site as Record<string, unknown>),
     repositories: Array.isArray(site.repositories) ? (site.repositories as { name?: unknown }[]).map((r) => (typeof r.name === "string" ? r.name : "")).filter(Boolean) : [],
     answers: readSetupAnswers(d.stateDir),
   };

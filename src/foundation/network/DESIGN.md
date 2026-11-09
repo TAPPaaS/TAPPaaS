@@ -405,7 +405,10 @@ Turn it off only where an upstream path strips signatures.
 ## DNS blocklists
 
 Unbound can refuse names on public blocklists (`site.json` `dnsBlocklists`, absent: none; the
-network update applies it with `unbound-manager dnsbl`). A blocked name answers NXDOMAIN.
+network update applies it with `unbound-manager dnsbl`). A blocked name answers NXDOMAIN. A new
+site starts with one threat-only list, hagezi Threat Intelligence Mini (`hgz013`), for its home and
+guest zones (`create-site.sh`); an update never adds blocklists to an existing site. Ads and
+tracking lists are the operator's choice.
 
 ```jsonc
 "dnsBlocklists": {

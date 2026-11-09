@@ -22,16 +22,20 @@ own: every list stays its publisher's, and TAPPaaS only decides which ones apply
 
 ```jsonc
 "dnsBlocklists": {
-  "lists": ["hgz011", "oisd1"],    // OPNsense's catalogue codes
+  "lists": ["hgz013", "oisd1"],    // OPNsense's catalogue codes
   "zones": ["home", "guest"],      // whose clients are filtered; none listed: every client
   "allow": ["example.org"]         // never blocked
 }
 ```
 
-`site-manager site modify --dnsBlocklistsLists hgz011,oisd1 --dnsBlocklistsZones home,guest`
-writes it, and `module-manager update network` applies it.
+`site-manager site modify --dnsBlocklistsLists hgz013,oisd1 --dnsBlocklistsZones home,guest`
+writes it, and `module-manager update network` applies it. A new site starts with hagezi
+Threat Intelligence Mini (`hgz013`) for its home and guest zones; ads and tracking lists are the
+operator's choice.
 
-- **Lists** come from OPNsense's catalogue. Threat feeds: `hgz011`–`hgz013` (hagezi). Ads and
+- **Lists** come from OPNsense's catalogue. Threat feeds: `hgz011`–`hgz013` (hagezi: full, Medium,
+  Mini). Unbound holds every name in memory: the full list (`hgz011`, about 1.5 million names)
+  needs well over 2 GB free on the firewall, the Mini list (`hgz013`) a fraction of it. Ads and
   tracking: `oisd0`, `oisd1`, `ag`, `el`, `ep`, `sb`, and hagezi's `hgz001`–`hgz008` levels.
   OPNsense changes the catalogue between releases; a code it no longer offers is skipped with
   a warning, and the network update names the codes it does offer.

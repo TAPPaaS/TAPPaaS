@@ -378,14 +378,14 @@
       }
     },
     "dnsBlocklists": {
-      "description": "DNS blocklists the firewall's resolver applies, by the network module's update. Absent: none. lists are OPNsense's blocklist codes (hgz011 = hagezi threat intelligence, oisd1 = OISD big, ag = AdGuard, ...); zones limits filtering to those zones' clients, IPv4 and IPv6 (none listed: every client); allow names domains never blocked. A blocked name answers NXDOMAIN.",
+      "description": "DNS blocklists the firewall's resolver applies, by the network module's update. Absent: none. A new site starts with hgz013 (hagezi Threat Intelligence Mini) for its home and guest zones; an update never adds it to an existing site. lists are OPNsense's blocklist codes (hgz011 = hagezi threat intelligence, oisd1 = OISD big, ag = AdGuard, ...); zones limits filtering to those zones' clients, IPv4 and IPv6 (none listed: every client); allow names domains never blocked. A blocked name answers NXDOMAIN.",
       "type": "object",
       "default": null,
-      "example": {"lists": ["hgz011"], "zones": ["home", "guest"], "allow": ["example.org"]},
-      "note": "Service zones are best left out: their modules fetch updates, images and models, and a false positive there fails an update. A change takes effect as cached answers expire (minutes); the lists are refreshed daily. A code the firewall no longer offers is skipped with a warning naming it.",
+      "example": {"lists": ["hgz013"], "zones": ["home", "guest"], "allow": ["example.org"]},
+      "note": "Service zones are best left out: their modules fetch updates, images and models, and a false positive there fails an update. A change takes effect as cached answers expire (minutes); the lists are refreshed daily. A code the firewall no longer offers is skipped with a warning naming it. Unbound holds every name in memory: hgz011 (about 1.5 million names) needs well over 2 GB free on the firewall; hgz013 about 190,000.",
       "changeClass": "in-place",
       "properties": {
-        "lists": {"description": "OPNsense's blocklist codes (hgz011, oisd1, ag, ...). None: no blocking.", "type": "array", "items": {"type": "string"}},
+        "lists": {"description": "OPNsense's blocklist codes (hgz013, oisd1, ag, ...). None: no blocking.", "type": "array", "items": {"type": "string"}},
         "zones": {"description": "The zones whose clients are filtered (none listed: every client).", "type": "array", "items": {"type": "string"}, "references": "zones"},
         "allow": {"description": "Domains never blocked.", "type": "array", "items": {"type": "string"}}
       }

@@ -12,7 +12,7 @@ import { AccessConfig, Me, decide, setupState } from "../../src/access";
 import { Jobs } from "../../src/jobs";
 import { Runner, Streamer } from "../../src/run";
 import { parseKv, secretCommand, secretStatus, writeSecret } from "../../src/secrets";
-import { SetupInputs, TESTS_FILE, healthStep, readSetupAnswers, recordSetupAnswer, physicalStep, readPhysical, WifiInputs, clientZonesWithoutWifi, closeSetupToken, gatherSetup, parseApList, parseSwitches, parseWgvpnPeers, readSetupTests, readWifiZones, recordSetupTest, setupCheckModules, setupComplete, setupSteps, wifiStep } from "../../src/setup";
+import { SetupInputs, TESTS_FILE, blockingStep, dnsBlocklistsOf, healthStep, readSetupAnswers, recordSetupAnswer, physicalStep, readPhysical, WifiInputs, clientZonesWithoutWifi, closeSetupToken, gatherSetup, parseApList, parseSwitches, parseWgvpnPeers, readSetupTests, readWifiZones, recordSetupTest, setupCheckModules, setupComplete, setupSteps, wifiStep } from "../../src/setup";
 import { testGate } from "./gate-fixture";
 import { check, done } from "./check";
 
@@ -65,7 +65,7 @@ async function main(): Promise<void> {
     },
   };
   let steps = setupSteps(hrossen);
-  check(steps.map((s) => s.id).join() === "firstnode,nodes,vpn,bootstrap,health,switch,public,repos,stacks,wifi,physical", "Day 1's order: first node, nodes, VPN, foundation, health, then switches, make it public, repositories, stacks, Wi-Fi, physical");
+  check(steps.map((s) => s.id).join() === "firstnode,nodes,vpn,bootstrap,health,switch,public,blocking,repos,stacks,wifi,physical", "Day 1's order: first node, nodes, VPN, foundation, health, then switches, make it public, blocking, repositories, stacks, Wi-Fi, physical");
   check(steps.filter((s) => s.required).map((s) => s.id).join() === "firstnode,vpn,bootstrap,health", "…required: the first node, the VPN, the foundation and the health checks");
   check(steps.filter((s) => !s.required).every((s) => s.title.endsWith("(optional, can be done as a Day 2 operation)")), "…every optional step says it can wait for Day 2");
   // Status and health checks: the modules, the nodes, the internet, the VLANs across the nodes.
@@ -78,6 +78,12 @@ async function main(): Promise<void> {
   const split = hs({ reach: { ...hrossen.health!.reach!, ok: false, vlans: [{ vid: 410, zone: "home", missing: [{ from: "tappaas1", to: "tappaas2" }] }] } });
   check(split.done === false && /VLANs not crossing: 410 \(home\)/.test(split.detail), "…a VLAN that does not cross: not done, named");
   check(!steps.some((s) => (s.id as string) === "tls"), "…and no TLS step (ADR-043 D10)");
+  // Blocking: the new site's threat list shown, and done either way.
+  const bl = blockingStep(dnsBlocklistsOf({ dnsBlocklists: { lists: ["hgz013"], zones: ["home", "guest"], allow: [] } }));
+  check(bl.done === true && /DNS: hgz013 for home, guest/.test(bl.detail) && !bl.required, "blocking: the default list and its zones, done, optional");
+  check(blockingStep(dnsBlocklistsOf({})).done === true && /no blocklist/.test(blockingStep(dnsBlocklistsOf({})).detail), "…none set (or cleared): done, says names are not filtered");
+  check(dnsBlocklistsOf({ dnsBlocklists: { lists: [], zones: ["home"] } }) === null, "…empty lists are none");
+  check(/every client/.test(blockingStep({ lists: ["hgz013"], zones: [] }).detail), "…no zones: every client");
   check(steps.filter((s) => s.id !== "wifi").every((s) => s.done === true) && setupComplete(steps), "hrossen: every step reads as done but the optional WiFi");
 
   // ── the WiFi step ───────────────────────────────────────────────────

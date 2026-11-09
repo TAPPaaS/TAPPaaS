@@ -153,6 +153,27 @@ fi
 [[ "$(jqv "$SITE" '.ipv6')" == "true" ]]       && ok ".ipv6 preserved across --force"    || bad ".ipv6 dropped by --force (got '$(jqv "$SITE" '.ipv6')')"
 run_validate "$SITE" && ok "site.json with channel validates" || bad "site.json with channel failed schema validation"
 
+# --- Case 6b: DNS blocklists — on for a fresh site, never added by a re-run ---
+C6="${WORK}/case6b"; mkdir -p "$C6"
+if "$CREATE" --name testsite --config-dir "$C6" >/dev/null 2>&1; then
+    [[ "$(jqv "$C6/site.json" '.dnsBlocklists | tojson')" == '{"lists":["hgz013"],"zones":["home","guest"],"allow":[]}' ]] \
+        && ok "a fresh site gets hgz013 for home and guest" \
+        || bad "fresh dnsBlocklists wrong (got '$(jqv "$C6/site.json" '.dnsBlocklists | tojson')')"
+    run_validate "$C6/site.json" && ok "site.json with dnsBlocklists validates" || bad "site.json with dnsBlocklists failed schema validation"
+    jq 'del(.dnsBlocklists)' "$C6/site.json" > "$C6/s.tmp" && mv "$C6/s.tmp" "$C6/site.json"
+    "$CREATE" --name testsite --config-dir "$C6" --force >/dev/null 2>&1
+    [[ "$(jqv "$C6/site.json" 'has("dnsBlocklists")')" == "false" ]] \
+        && ok "--force keeps a site without blocklists without them" \
+        || bad "--force added dnsBlocklists to a site that had none"
+else
+    bad "create-site.sh for the blocklists case failed"
+fi
+C6z="${WORK}/case6bz"; mkdir -p "$C6z"; echo '{"home": {"state": "Active"}}' > "$C6z/zones.json"
+"$CREATE" --name testsite --config-dir "$C6z" >/dev/null 2>&1
+[[ "$(jqv "$C6z/site.json" '.dnsBlocklists.zones | join(",")')" == "home" ]] \
+    && ok "the default names only the zones zones.json declares" \
+    || bad "default zones not limited to zones.json (got '$(jqv "$C6z/site.json" '.dnsBlocklists.zones | join(",")')')"
+
 # --- Case 7: the TAPPaaS signer fingerprints (ADR-033 D5) ---
 # A throwaway signed repository stands in for /home/tappaas/TAPPaaS: the
 # TAPPaaS entry's path is pointed at it, and bootstrap.sh's fingerprint file is

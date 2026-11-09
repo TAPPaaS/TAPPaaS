@@ -1,11 +1,11 @@
 """DNS blocklists from site.json (#157): what Unbound's DNSBL should hold.
 
 `site.json` `dnsBlocklists` (absent: none) names the lists — OPNsense's own
-catalogue codes (`hgz011` hagezi threat intelligence, `oisd1` OISD big, `ag`
+catalogue codes (`hgz013` hagezi threat intelligence Mini, `oisd1` OISD big, `ag`
 AdGuard, ...) — the zones whose clients are filtered, and names that are never
 blocked:
 
-    "dnsBlocklists": {"lists": ["hgz011"], "zones": ["home", "guest"], "allow": ["example.org"]}
+    "dnsBlocklists": {"lists": ["hgz013"], "zones": ["home", "guest"], "allow": ["example.org"]}
 
 A code the firewall no longer offers (OPNsense drops lists from its catalogue,
 as it did ThreatFox `atf` in 26.7.8) is skipped with a warning; the rest still

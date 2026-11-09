@@ -11,6 +11,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { Read, post, useRead } from "../api";
 import { JobOutput, JobStatusLine, quote, stripAnsi } from "../jobs";
 import { OperateButton, Step } from "../operate";
+import { fieldsStep } from "../fields";
 import { useJobRun } from "../run";
 import { JobSummary, SiteRead } from "../types";
 import { Dot, Link, ReadState, canOperate, replacePath, since, useMe } from "../ui";
@@ -338,6 +339,15 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
           <AnswerButton step="vpn" answer="on-lan" label="This computer is on the LAN" given={ans("vpn")} onChanged={r.reload} />
         </p>
       </>
+    ),
+    blocking: (
+      <p className="small toolbar">
+        <OperateButton label="Change…" title="Blocking" steps={[
+          fieldsStep({ title: "site-manager site modify (blocking)", bin: "site-manager", verb: "site modify", kind: "site", name: null, mode: "modify", fields: ["dnsBlocklists"], note: "Empty lists block nothing. Leave the service zones out: their modules download updates and models." }),
+          mm("module-manager update network", "update", { fixed: ["network"], note: "Applies the blocklists on the firewall." }),
+        ]} />
+        <span className="muted">A threat list keeps the people's devices away from known malware and phishing names; it is maintained by its publisher.</span>
+      </p>
     ),
     health: <HealthChecks doc={d ?? null} done={d ? (r.env?.data?.steps ?? []).find((x) => x.id === "health")?.done ?? null : null} />,
     stacks: <AddStackButton opens={false} />,

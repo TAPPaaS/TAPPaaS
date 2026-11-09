@@ -36,6 +36,9 @@
 #   channel           <- preserved from existing site.json, else absent (= production,
 #                        ADR-028 D9)
 #   snapshotRetention <- preserved from existing site.json, else 5
+#   dnsBlocklists     <- preserved from existing site.json (absent stays absent);
+#                        a fresh site gets hagezi Threat Intelligence Mini (hgz013)
+#                        for its home and guest zones (those zones.json has)
 #   repositories[]    <- built from --upstream-git/--branch (default TAPPaaS repo),
 #                        preserving any existing operator-set repositories; the
 #                        TAPPaaS entry's trust from config/.trust/TAPPaaS.signers.json
@@ -56,7 +59,7 @@
 #
 # Idempotent: if site.json already exists, --force is required to overwrite. On a
 # --force re-run, operator-set fields are preserved (repositories, email,
-# automaticReboot, ipv6, channel, snapshotRetention, owner, displayName, locations,
+# automaticReboot, ipv6, channel, snapshotRetention, dnsBlocklists, owner, displayName, locations,
 # primaryLocation, locale, keyboard, network, backup) — only discovery-derived and explicitly-passed fields are refreshed.
 #
 # Usage: create-site.sh --name <N> [OPTIONS]
@@ -557,6 +560,21 @@ apply_tappaas_anchor() {
 }
 
 # ---------------------------------------------------------------------------
+# A fresh site's DNS blocklists: hgz013 (Mini: the full hgz011 needs over 2 GB
+# free on the firewall) for home and guest, limited to the ones
+# zones.json declares when it is there already (a zone the blocklists name must
+# exist, or the network update refuses the entry). Neither: no blocklists.
+# ---------------------------------------------------------------------------
+default_dns_blocklists() {
+    local zones_file="${CONFIG_DIR}/zones.json" zones='["home","guest"]'
+    if [[ -f "${zones_file}" ]]; then
+        zones="$(jq -c '[("home", "guest") as $z | select(has($z)) | $z]' "${zones_file}" 2>/dev/null)" \
+            || zones='["home","guest"]'
+    fi
+    jq -cn --argjson z "${zones}" 'if ($z | length) == 0 then null else {lists: ["hgz013"], zones: $z, allow: []} end'
+}
+
+# ---------------------------------------------------------------------------
 # Build and write site.json.
 # ---------------------------------------------------------------------------
 build_and_write_site() {
@@ -607,6 +625,16 @@ build_and_write_site() {
     local size_v
     if [[ -n "${SIZE}" ]]; then size_v="\"${SIZE}\""; else size_v="$(jq -c '.size // null' <<<"$existing")"; fi
     snapshotRetention="$(jq -r 'if .snapshotRetention != null then (.snapshotRetention|tostring) else "5" end' <<<"$existing")"
+    # DNS blocklists: a fresh site starts with one threat-only list, kept by its
+    # publisher, for the people's zones (never the service zones, where a false
+    # positive breaks a module's downloads). An existing site keeps what it says,
+    # absent included: an update never turns blocking on.
+    local blocklists
+    if [[ -n "${EXISTING_SITE}" ]]; then
+        blocklists="$(jq -c '.dnsBlocklists // null' <<<"$existing")"
+    else
+        blocklists="$(default_dns_blocklists)"
+    fi
     # defaultEnvironment / owner both key on the ORG (the default
     # organization/environment/zone), decoupled from the site code (#426). An
     # explicit --organization overrides; otherwise an existing value is preserved
@@ -673,6 +701,7 @@ build_and_write_site() {
         --argjson channel "$channel" \
         --argjson size "$size_v" \
         --argjson snapshotRetention "$snapshotRetention" \
+        --argjson blocklists "$blocklists" \
         --argjson repositories "$repos_json" \
         '{
             name: $name,
@@ -694,7 +723,8 @@ build_and_write_site() {
          } + (if $keyboard == "" then {} else {keyboard: $keyboard} end)
            + (if $channel == null then {} else {channel: $channel} end)
            + (if $size == null then {} else {size: $size} end)
-           + (if $hardware == null then {} else {hardware: $hardware} end)' > "$TMP_SITE"
+           + (if $hardware == null then {} else {hardware: $hardware} end)
+           + (if $blocklists == null then {} else {dnsBlocklists: $blocklists} end)' > "$TMP_SITE"
 
     jq empty "$TMP_SITE" >/dev/null 2>&1 || die "Generated site.json is invalid JSON."
 
