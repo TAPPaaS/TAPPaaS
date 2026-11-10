@@ -100,6 +100,21 @@
           "lastChecked": "2026-11-01T08:50:02.363Z",
           "maintenance": null,
           "acknowledged": null
+        },
+        {
+          "type": "performance",
+          "since": "2026-10-30T11:20:00.000Z",
+          "reason": "threshold",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": true,
+          "message": "nomad: I/O pressure 24 %, its pool tankc1 is slow",
+          "rootCause": [
+            "0a7d1804-da8c-415e-879c-b077276ae2cd"
+          ],
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
         }
       ],
       "source": "health-manager",
