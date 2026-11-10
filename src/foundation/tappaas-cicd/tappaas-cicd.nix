@@ -483,6 +483,11 @@ in
         # its timestamp under /run/sudo. "-": absent until first used.
         "-/var/lib/tappaas-pxe"
         "-/run/sudo"
+        # The site's own state the verbs keep beside the console's: what
+        # `health-manager vlan-reach` found (Day 1 reads it), the WAN address
+        # `network-manager topology` saw, maintenance windows, open alerts and
+        # support bundles. tappaas's, as from a shell.
+        "/var/lib/tappaas"
         # `backup-manager key export --usb` records which keys the stick now
         # holds (usb-copy.json, beside the escrow, tappaas's): without it the
         # write succeeds but the backup-keys gate keeps asking for a stick.

@@ -345,6 +345,13 @@ export function queuedBehind(jobs: { id: string; kind: string; state: string; bi
 }
 
 // The last lines a job printed, without its colours or blank lines.
+// What a folded output pane hides: the lines before its last `tail`, counted as
+// the pane shows them (blank lines dropped), so the fold never offers lines that
+// are not there.
+export function foldedCount(raw: string, tail: number): number {
+  return Math.max(0, lastLines(raw, Number.MAX_SAFE_INTEGER).length - tail);
+}
+
 export function lastLines(raw: string, n = 8): string[] {
   // eslint-disable-next-line no-control-regex
   const lines = raw.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").split("\n").map((l) => l.trimEnd()).filter((l) => l.trim() !== "");

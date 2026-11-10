@@ -7,7 +7,7 @@ import { cancelJob, reloadAll, useJob, useRead } from "./api";
 import { Job, JobSummary } from "./types";
 import { Tag, canOperate, useMe, when } from "./ui";
 import { jobLive } from "./wizard";
-import { lastLines, queuedBehind } from "./wizards";
+import { foldedCount, lastLines, queuedBehind } from "./wizards";
 
 export function quote(argv: string[]): string {
   return argv.map((a) => (/^[A-Za-z0-9_@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, `'\\''`)}'`)).join(" ");
@@ -88,9 +88,9 @@ export function Output({ text, live, collapsed, tail = FOLD_LINES }: { text: str
   const byHand = useRef(0);
   const [open, setOpen] = useState(false);
   const shown = stripAnsi(text) || (live ? "…" : "(no output)");
-  const lines = shown.split("\n");
   const kept = lastLines(shown, tail);
-  const foldable = !!collapsed && lines.length > kept.length;
+  const hidden = foldedCount(shown, tail);
+  const foldable = !!collapsed && hidden > 0;
   const fold = foldable && !open;
   useLayoutEffect(() => {
     const el = ref.current;
@@ -107,7 +107,7 @@ export function Output({ text, live, collapsed, tail = FOLD_LINES }: { text: str
   return (
     <div className="output-box">
       {foldable ? (
-        <button className="btn btn-small output-fold" onClick={() => setOpen(!open)}>{fold ? `▸ ${lines.length - kept.length} earlier lines` : "▾ fold"}</button>
+        <button className="btn btn-small output-fold" onClick={() => setOpen(!open)}>{fold ? `▸ ${hidden} earlier line${hidden === 1 ? "" : "s"}` : "▾ fold"}</button>
       ) : null}
       <pre ref={ref} tabIndex={0} onScroll={onScroll} onWheel={hand} onTouchStart={hand} onTouchMove={hand} onKeyDown={hand} className={`output${live ? " output-live" : ""}`}>{fold ? kept.join("\n") : shown}</pre>
     </div>
