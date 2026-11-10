@@ -3,19 +3,19 @@
 | | |
 |---|---|
 | **Status** | **Draft** — for the operator's review |
-| **Version** | 0.1 |
+| **Version** | 0.2 |
 | **Date** | 2026-11-10 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
-| **Closes / addresses** | Amends ADR-045 (D1 states, D2 lifecycle, D5 gate) and ADR-011 §8 (VEX). Built on the measurement in [`docs/plans/cve-as-built.md`](../plans/cve-as-built.md). The delivery of these records to production is a separate ADR (the security stream). |
-| **Changelog** | v0.1 (2026-11-10): first draft. |
+| **Closes / addresses** | Amends ADR-045 (D1 states, D2 lifecycle, D5 gate) and ADR-011 §8 (VEX). Built on the measurement in [`docs/plans/cve-as-built.md`](../plans/cve-as-built.md). Delivery to production is [ADR-048](<ADR-048 - The Security Stream.md>). |
+| **Changelog** | v0.1 (2026-11-10): first draft. v0.2 (2026-11-10): the operator's answers. Central decisions are **per component**, not per CVE and version: the component record replaces the assessment file, and VEX is generated from it (D2, D3). A site acceptance **lowers the site's score** (D5). Decisions reach production **faster than code** (ADR-048). The scan/rescan defect and "new means first seen" are **built** (D9); every figure is re-sized against the corrected scan. |
 
 ADR-045 gave CVEs a lifecycle and a score. Running it for one boundary showed that the records
 are the wrong size for daily work: a VEX statement is one CVE at one version, a site ack is a
 whole CI, and nothing in between says "this critical counts as high here, because". This ADR
-adds that record, makes decisions survive version moves where the reasoning allows it, separates
-what TAPPaaS decides from what a site decides, and turns the operator's list of CVEs into a list
-of actions.
+makes the **component** the unit of a central decision, gives a reclassification a reason, an
+author and an end date, separates what TAPPaaS decides from what a site decides, and turns the
+operator's list of CVEs into a list of actions.
 
 **Why a new ADR and not an amendment.** ADR-045 is accepted and live, and its score, bands and
 boundary phase stay. This changes the record model under it and adds a site layer and a daily
@@ -23,22 +23,25 @@ check. Folding that into ADR-045 would bury a second decision in the first one's
 
 ## Context
 
-Measured on hrossen on 2026-11-10 (the as-built document has the detail):
+Measured on hrossen on 2026-11-10, with the corrected scan (D9):
 
+- 37 scan targets in 24 scored units: 1 critical, 2 high, 21 medium. Expanding them lists 2414
+  CVE rows: 209 open, 189 analysed, 18 carried, 1998 decided.
+- The 82 open critical/high CVEs sit in 31 packages, and in 56 unit-and-package pairs. Counted as
+  components (D2) they are about 40: the baseline's sqlite is one, not 17.
 - The site is critical because of 21 curl CVEs on the firewall. One sentence about how the
   firewall uses curl settles them. Today that is 21 statements pinned to curl 8.21.0.
-- Three sqlite highs from the NixOS baseline set the level of 22 of 24 units.
+- Three sqlite highs from the NixOS baseline are the only open items of 15 units and set their
+  level.
 - 1708 VEX statements fall into 398 module-and-package groups with 767 distinct analysis texts.
   1215 of the 1502 `not_affected` statements say `code_not_reachable`: the module does not use
-  the affected part. That reasoning is about the module, and it is recorded per version.
+  the affected part. That is a statement about how a module uses a component, recorded once per
+  CVE and version.
 - The 2.4 boundary removed 213 statements and carried 92; 91 were confirmed by hand the same day.
   The next boundary will remove about 440.
-- A reclassification exists only as `exploitable` plus a rating. It has no author, date, expiry
-  or structured reason.
+- A reclassification exists only as `exploitable` plus a rating, with no author, date, expiry or
+  structured reason.
 - Site acks on CVEs: none. A site ack silences a CI's mail and changes no score.
-- The operator sees 36 conditions, 24 unit rows and 1732 expandable CVE rows. The 43 open
-  critical/high CVEs are 14 package decisions (82 CVEs in 31 packages by the nightly scan's
-  higher count).
 - No step looks at a newer upstream version.
 
 ## Decision
@@ -48,135 +51,130 @@ Measured on hrossen on 2026-11-10 (the as-built document has the detail):
 | Layer | Question it answers | Writer | Where |
 |---|---|---|---|
 | **Facts** | What is installed, and which CVEs match it? | the scan | `config/sbom/` on the site |
-| **Central decisions** | Does it affect TAPPaaS as built, and how bad is it in a TAPPaaS deployment? | TAPPaaS maintainers | the repo, next to the module |
+| **Central decisions** | How does TAPPaaS use this component, and what does that make of its CVEs? | TAPPaaS maintainers | the repo, next to the module; delivered by the feed (ADR-048) |
 | **Site decisions** | Does this installation accept what is left? | the site's operator | the site's `config/` |
 
 A central decision is true for every site that deploys the module the way TAPPaaS ships it. A
 site decision is only for what makes a site different, and should be rare. The scan applies them
-in a fixed order: a VEX statement that decides a CVE wins; then a site acceptance; then a central
-assessment; then the upstream severity.
+in a fixed order: a central "not affected" wins; then a site acceptance; then the central
+contextual severity; then the upstream severity.
 
-Central decisions are of three kinds:
+### D2. The component is the unit of a central decision
 
-| Kind | Says | Record |
+**What a component is.** One upstream project as one module uses it:
+
+| Part | Is | Examples |
 |---|---|---|
-| **VEX statement** | not affected, false positive, resolved | `<module>-vex.json`, CycloneDX, as today |
-| **Assessment** (new, D2) | affected, and its severity here is X, because | `<module>-assess.json` |
-| **Deferral** (new, D6) | known, not yet analysed or not yet fixed, accepted for a release | `<module>-assess.json`, kind `deferred` |
+| module | the module, `templates` for the shared NixOS baseline, or a platform role | `network`, `immich`, `templates`, `pvehost` |
+| ecosystem | where the package comes from | `nix`, `deb`, `opnsense`, `npm`, `pypi`, `go` |
+| source name | the upstream source project, not the binary package | `curl`, `tiff` (for libtiff6, libtiff-dev, libtiffxx6), `sqlite`, `imagemagick` |
 
-### D2. The assessment: a contextual severity with a reason
+Written `network/opnsense:curl`, `karakeep/deb:tiff`, `templates/nix:sqlite`. For Debian and
+Alpine the source name is the distribution's source package, which the scan now keeps for every
+package (D9); for Nix it is the package name; for a language package its registry name. A
+package whose findings match no record forms a component by itself, so every finding belongs to
+exactly one component, and a component can exist with no record yet. hrossen's 1708 statements
+fall into 398 such groups.
 
-An assessment replaces `exploitable` plus `ratings[]`. It is its own file, so a VEX file stays
-plain CycloneDX and the assessments can travel as data.
+The same upstream project in two modules is two components. immich and nextcloud both ship
+ImageMagick and use it differently. What they share through the baseline is decided once, on
+`templates`.
+
+**The record.** `<module>-components.json` holds one entry per component:
 
 ```json
-{
-  "id": "network-curl-outbound",
-  "module": "network",
-  "package": "pkg:generic/opnsense/curl",
-  "versions": "*",
-  "cves": ["CVE-2026-86413", "CVE-2026-86414"],
-  "match": { "AV": ["N"], "UI": ["R", "A", "P"] },
-  "modified": { "AV": "A" },
-  "rating": null,
+"network/opnsense:curl": {
+  "use": "Outbound only. The firewall's update job and an administrator fetch firmware, packages and lists from the configured mirrors. No service on the firewall passes a URL from the network to curl.",
   "reason": "client-only",
-  "justification": "curl on the firewall only makes outbound requests that an administrator or the update job starts: firmware and package fetches from the configured mirrors. No service on the firewall passes a URL from the network to curl. An attacker has to control a mirror or sit on the management path.",
   "assumes": { "maxExposure": "internal" },
-  "author": "larsrossen",
-  "decided": "2026-11-10",
-  "reviewBy": "2027-02-08",
+  "versions": "8.*",
+  "rules": [
+    { "id": "r1", "match": { "AV": ["N"], "UI": ["R", "A", "P"] }, "modified": { "MAV": "A" },
+      "why": "The attacker has to control a mirror or sit on the management path." }
+  ],
+  "cves": {
+    "CVE-2026-86413": { "decision": "assessed", "rule": "r1", "read": "larsrossen 2026-11-10" },
+    "CVE-2026-94265": { "decision": "not_affected", "justification": "code_not_reachable",
+                         "why": "HTTP/3 is not built into the firewall's curl." },
+    "CVE-2026-97001": { "decision": "assessed", "rating": "high", "why": "…" }
+  },
+  "author": "larsrossen", "decided": "2026-11-10", "reviewBy": "2027-02-08",
   "basis": { "CVE-2026-86413": { "severity": "Critical", "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H", "kev": false } }
 }
 ```
 
-- **Scope.** A module (or `templates` for the baseline, or a platform role: `pvehost`, `network`),
-  one package, a version range (D3), and the CVEs it covers. The CVEs are a list, a `match` rule,
-  or both.
-- **`match`: a rule on the upstream CVSS vector**, within this one module and package. A new CVE
-  that fits is assessed the day it appears, marked `auto` until a maintainer has read it (D7,
-  review queue). A rule never crosses a package or a module. Without `match`, only the listed
-  CVEs are covered.
-- **`modified`: CVSS environmental metrics.** The contextual severity is the upstream vector
-  re-scored with the modified metrics (attack vector, privileges required, user interaction, and
-  the confidentiality, integrity and availability requirements). The result is computed, so it
-  moves when upstream changes the vector, and anyone can check it. The example turns a network
-  attack vector into an adjacent one.
-- **`rating`: a plain level** (low to critical), only for CVEs without a usable vector (VuXML
-  entries, advisories with a severity word only). When both are possible, `modified` is used.
-- **`reason`** from a fixed list: `internal-only`, `client-only`, `admin-input-only`,
+- **`use`** is the standing statement: how this module uses this component. It is mandatory, at
+  least 80 characters, and shown wherever a decision from this record is shown.
+- **`reason`** from a fixed list (`internal-only`, `client-only`, `admin-input-only`,
   `local-access-required`, `feature-disabled`, `mitigated-by-rule`, `data-not-sensitive`,
-  `other`. The view groups and filters by it.
-- **`justification`** is mandatory free text. The tool refuses fewer than 80 characters and
-  refuses `other` without it. It is shown wherever the rating is shown.
-- **`assumes`**: what must be true at a site for the assessment to hold (D5).
-- **`author`, `decided`, `reviewBy`.** `reviewBy` is mandatory, at most 180 days ahead, 90 by
-  default.
-- **`basis`**: what upstream said when it was decided, per CVE, written by the tool.
+  `not-used`, `other`). The view groups by it.
+- **`assumes`**: what must be true at a site for the record to hold (D5).
+- **`versions`**: which versions of the component the `use` statement holds for (D3).
+- **`rules`**: a contextual severity for every CVE of this component whose upstream CVSS vector
+  matches. `modified` holds CVSS environmental metrics; the contextual severity is the upstream
+  vector re-scored with them, so it is computed, checkable, and moves when upstream changes the
+  vector. A rule can only re-rate. It can never say "not affected".
+- **`cves`**: what has been decided for a CVE by name. `not_affected`, `false_positive` and
+  `resolved` exist only here, each added by a person with a justification. An `assessed` entry
+  either confirms a rule's result (`rule` and `read`) or sets its own (`modified`, or a plain
+  `rating` where the CVE has no usable vector, as with VuXML entries).
+- **`author`, `decided`, `reviewBy`**: `reviewBy` is mandatory, at most 180 days ahead, 90 by
+  default. It is the component's date, not each CVE's.
+- **`basis`**: what upstream said when each CVE was decided, written by the tool.
 
-The scan keeps the CVSS vector, the KEV flag and the EPSS score of each finding (grype and trivy
-both report them; today the scan drops them).
+`cve-triage.sh component <module> <source> …` creates and edits records. Before it writes, it
+prints every CVE on the last scan that the record would cover and what each would become.
 
-**Re-evaluation.** An assessment stops applying, and its CVEs become `review` (D4), when:
+**VEX is generated.** `<module>-vex.json` stays, as CycloneDX, for anyone who wants the standard
+format. It is written by `cve-triage.sh export` from the component records and the versions the
+channels ship, at each feed build and each boundary. Nobody edits it. The boundary's "gone" and
+"carried" bookkeeping (ADR-045 D2) goes away with the hand-kept statements.
 
-| Trigger | Checked by |
+**The scan keeps the CVSS vector, the known-exploited flag and the EPSS score** of each finding.
+Grype and trivy report all three; today the scan drops them.
+
+### D3. How a wrong coarse decision gets caught
+
+A component record covers CVEs nobody has read yet. That is its purpose and its risk. Seven
+guards, from the structure outward:
+
+| Guard | What it catches |
 |---|---|
-| upstream severity or vector differs from `basis` | every scan |
-| the CVE enters the known-exploited list | every scan; the CVE counts at its upstream severity at once and raises `cve-new-critical` |
-| EPSS rises above 10 % | every scan |
-| `reviewBy` has passed | every scan; a 14-day warning in the review queue first |
-| the package version leaves `versions` | every scan |
-| the site does not meet `assumes` | every scan, on that site only (D5) |
+| **A rule re-rates, it never hides.** Only a named CVE can be `not_affected`. | A blanket "this component does not matter". The CVE stays on the page at its contextual severity. |
+| **A matched CVE is `auto` until read.** It sits in the maintainers' Review queue with its description and the rule that caught it. Unread after 14 days, it counts at its upstream severity again. | A CVE that fits the rule's vector and not its reasoning. |
+| **Known-exploited overrides everything.** The CVE counts at its upstream severity at once and raises `cve-new-critical`. An EPSS above 10 % sends it to Review. | A CVE the rule underrated and attackers did not. |
+| **Upstream changed its mind.** The vector or severity differs from `basis`: back to Review. | A decision made on an early, wrong advisory. |
+| **`assumes` is checked on every site, every scan** (D5). | A site that deploys the module differently from what the `use` statement describes. |
+| **`versions` ends.** A new major version of the component sends the whole record to Review; inside the range nothing is asked. | A `use` statement that a rewrite of the component made untrue. |
+| **`reviewBy`.** The record is listed 14 days before the date, and stops applying 14 days after it. | A `use` statement that stopped being true while nobody looked. |
 
-The first, fourth and fifth leave the old rating in force for 14 days so a date does not turn a
-site critical overnight; the queue shows them from the first day. Known-exploited and EPSS do not
-wait.
+Two more are cheap and visible. The release notes and the console show, per component, how many
+CVEs a rule re-rated and from what to what, so "21 CVEs, 6 critical to high, by one rule" is in
+front of every reader. And a rule is limited to environmental metrics: it cannot lower a CVE by
+more than the CVSS arithmetic allows for the stated change in exposure.
 
-`cve-triage.sh assess <module> --package <p> [--cve … | --match …] --modified AV:A --reason …
---justification "…"` writes the record and prints every CVE it would cover on the last scan
-before it writes.
-
-### D3. Decisions survive version moves where the reasoning allows it
-
-A VEX statement and an assessment both get a `versions` range in place of the exact version.
-What the default is depends on what the reasoning rests on:
-
-| Reasoning | Examples | Default range |
-|---|---|---|
-| About the deployment | every assessment; `requires_environment`, `requires_configuration`, `protected_by_mitigating_control`, `protected_at_perimeter` | `*`: holds until the review date |
-| About how the module uses the package | `code_not_reachable`, `requires_dependency` | the same major version; a move inside it is carried automatically and listed for review afterwards |
-| About the build | `code_not_present`, `protected_by_compiler`, `resolved`, nixpkgs patches | the exact version, as today |
-| About the match | `false_positive` | every version, as today |
-
-ADR-045 D2 said a carry is never automatic. This changes it for the second row: 1215 statements
-say the module does not use the affected code, and a patch release rarely changes what a module
-calls. The carry is made by the boundary's `cve` phase, committed with the list, and each carried
-statement sits in the review queue (D7) until someone ticks it. A major version move still stops
-and asks first.
-
-A VEX statement may also name several CVEs of one package with one analysis text, so "immich
-does not use ImageMagick's MVG coder" is one statement over eight CVEs. `cve-triage add` already
-merges same-analysis statements; it gains `--cve` more than once.
+When any guard fires, the affected CVEs are in state `review` (D4): counted at their upstream
+severity, with the old decision attached. Three of the guards (upstream change, version, date)
+leave the old result in force for 14 days so a date does not turn a site critical overnight.
 
 ### D4. States
 
-ADR-045's four states become six:
-
 | State | Meaning | Counts as |
 |---|---|---|
-| decided | a VEX statement says not affected, false positive or resolved | 0 |
-| **assessed** (was `risk`) | an assessment applies | its contextual severity |
+| decided | named `not_affected`, `false_positive` or `resolved` | 0 |
+| **assessed** (was `risk`) | a contextual severity applies, by rule or by name | that severity |
 | **accepted** (new) | the site accepted it (D5) | 0 in the level; listed and counted beside the score |
 | **deferred** (new) | centrally known and put off with a note (D6) | its upstream severity |
-| **review** (was `carried`) | a decision exists and its basis no longer holds: version, upstream change, date, or a failed site assumption | its upstream severity, with the old decision attached |
+| **review** (was `carried`) | a decision exists and a guard of D3 fired, or a site assumption fails | its upstream severity, with the old decision attached |
 | open | critical/high, nobody has looked | its upstream severity |
 
-Points, bands and zone multipliers are ADR-045's. One change: an assessed item scores the same
-points as an open one of the same level (20 and 8), so analysing something never raises the score.
+Points, bands and zone multipliers are ADR-045's. One proposed change is an open question:
+assessed and open items scoring the same points.
 
 ### D5. The site layer: assumptions and acceptances
 
-**Assumptions are checked, not acked.** An assessment's `assumes` is evaluated against the site's
-own configuration at every scan:
+**Assumptions are checked, not acked.** A record's `assumes` is evaluated against the site's own
+configuration at every scan:
 
 | Key | Holds when |
 |---|---|
@@ -185,60 +183,59 @@ own configuration at every scan:
 | `zoneTier: "<=1"` | the instance's `zone0` tier is in range |
 | `serviceOff: <service>` | the module's config has the service disabled |
 
-When an assumption fails, the assessment does not apply on that site and the CVE is `review` with
+When an assumption fails, the record does not apply on that site and its CVEs are `review` with
 the text "assumes internal only; nextcloud is public here". A site that deploys differently gets
-the truth for its deployment without a site record, and when its exposure changes the next scan
-picks it up.
+the truth for its deployment without writing anything, and when its exposure changes the next
+scan picks it up. A check that cannot be evaluated counts as failed.
 
 **A site acceptance** is the one site record:
 
 ```json
-{ "cve": "CVE-2026-109258", "package": "pkg:nix/imagemagick", "unit": "immich",
+{ "component": "immich/nix:imagemagick", "cve": "CVE-2026-109258", "unit": "immich",
   "note": "Uploads are from two family accounts only.", "by": "lars", "at": "2026-11-10", "until": "2027-05-10" }
 ```
 
 - Stored in the site's `config/security-acceptances.json`, written by
-  `health-manager accept <unit> <CVE> --note … --until …` and by the console.
-- Keyed by CVE, package without version, and unit. It survives version moves and rescans.
+  `health-manager accept <unit> <CVE> --note … --until …` and by the console. `--component`
+  without a CVE accepts every CVE of that component currently counted, by name; it does not
+  cover future ones.
+- Keyed by component, CVE and unit. No version: it survives version moves, rescans and upgrades.
 - `until` is mandatory, at most one year.
-- It ends, and says so in the digest, when: `until` passes; the CVE enters the known-exploited
-  list; the upstream severity rises; or a central decision now covers the CVE (the acceptance is
-  archived as superseded).
-- An accepted item leaves the level. The row shows "high, 2 accepted" so the acceptance stays
-  visible and counted.
-- `health-manager ack --type security` remains what it is: quiet mail for one CI. The console
-  and the alert texts point at `accept` for CVEs.
+- **It lowers the site's score.** An accepted item leaves the level of its unit and of the zone,
+  environment and site above. The row reads "high, 2 accepted" so the acceptance stays visible
+  and counted.
+- It ends, and says so in the digest, when: `until` passes; the CVE becomes known-exploited; the
+  upstream severity rises; or a central decision now covers the CVE (archived as superseded).
+- `health-manager ack --type security` remains what it is: quiet mail for one CI.
 
-A site cannot rate a CVE down in any other way. It can accept, with a date, or it can change its
+A site cannot rate a CVE down in any other way. It can accept, with a date, or change its
 deployment so an assumption holds.
 
 ### D6. The release ack becomes a deferral
 
 A boundary ack for a CVE is spent at the release and tells no site anything. It becomes a central
 record: `tappaas-train.sh ack --module <m> --note` writes a `deferred` entry for each CVE gate
-item into `<module>-assess.json` on the pin branch, with `reviewBy` at the next boundary.
+item into its component's record, with `reviewBy` at the next boundary.
 
-- Sites see "known, put off until 2026-11-23: <note>" next to the CVE, where today they see an
-  unexplained open item.
-- At the next boundary an expired deferral is a gate item again, so "accepted once" cannot become
-  "accepted for ever".
+- Sites see "known, put off until 2026-11-23: <note>" next to the CVE.
+- At the next boundary an expired deferral is a gate item again.
 - Majors and failed matches keep the ack in `release-train.json`. The record phase archives only
-  the acks the gate actually used.
+  the acks the gate used.
 
 ### D7. The view is a list of actions
 
 The Security page and `health-manager report security` open with queues, and keep ADR-045's
-site → zone → module table underneath as the detail.
+site → zone → module table underneath as the detail. A card is a component, never a CVE.
 
 **For a site's operator:**
 
 | Queue | A card says | Source |
 |---|---|---|
-| Update | "Update to 2.4.1 clears 14 in 3 modules" | the site's scan against its channel's release record |
-| Coming | "2.5 on 23 Nov clears 9" | the candidate's record on staging |
-| Your decision | "immich: assumes internal only, public here (8 CVEs)"; "2 acceptances end this month" | D5 |
-| With TAPPaaS | "31 packages in triage, oldest 6 days" | open and deferred items, grouped by package |
-| With upstream | "12 assessed, no fix published" | assessed items |
+| Update | "Update to 2.4.1 clears 14 CVEs in 3 components" | the site's scan against its channel's newest release record |
+| Coming | "2.5 on 23 Nov clears 9" | the candidate's record |
+| Your decision | "immich: assumes internal only, public here (ImageMagick, 8 CVEs)"; "2 acceptances end this month" | D5 |
+| With TAPPaaS | "31 components in triage, oldest 6 days" | open and deferred items |
+| With upstream | "12 components assessed, no fix published" | assessed items |
 
 Only the first and third need the operator. On a site that deploys TAPPaaS as shipped, "Your
 decision" is empty.
@@ -248,26 +245,32 @@ shown where the train runs):
 
 | Queue | A card says | Action |
 |---|---|---|
-| Move a pin | "karakeep 0.31.2 → 0.31.4 clears 9, adds 0, carries 41" | D8 |
-| Decide | "curl on network: 21 open (6 critical), all AV:N/UI:R" | one `assess` or one VEX statement for the group |
-| Review | auto-matched by a rule; carried inside a major; `reviewBy` within 14 days; upstream changed | tick, or re-decide |
+| Move a pin | "karakeep 0.31.2 → 0.31.4 clears 9, adds 0" | D8 |
+| Decide | "curl on network: 21 open (6 critical), all AV:N/UI:R, no record" | write the component record |
+| Review | matched by a rule and unread; a guard of D3 fired; `reviewBy` within 14 days | read and tick, or re-decide |
 | Deferred | due at the next boundary | fix, decide, or defer again with a note |
 
-**A baseline finding is shown once.** A CVE in a package that comes from the shared NixOS closure
-belongs to a `baseline` unit in the view. A module whose level is set only by baseline items
-shows "medium, from the baseline" and its health condition is derived from the baseline's, so it
-is not a root cause. The module's own packages and images stay its own. The score keeps counting
-the item in each module, because it is present in each.
+**A baseline component is shown once.** A component of `templates` appears as one card and one
+row, with the count of units that contain it. A module whose level is set only by baseline
+components shows "medium, from the baseline", and its health condition is derived from the
+baseline's, so it is not a root cause. The score keeps counting the item in each module, because
+it is present in each.
 
-**Sized against hrossen today:**
+**Sized against hrossen:**
 
 | | Now | With this ADR |
 |---|---|---|
-| Site-level root causes from CVEs | 29 | 5 to 8: the baseline, the firewall, the nodes as one, and the modules with their own items |
-| What to read to act | 24 unit rows, 1732 CVE rows | 14 Decide cards (31 by the nightly scan's count), 4 pin cards, under 10 Review cards |
-| Decisions to settle the firewall | 21 statements, per curl version | 1 assessment with a rule, reviewed every 90 days |
-| Decisions to move 22 units off medium | 3 statements × each sqlite version | 1 statement on `templates` |
-| Hand confirmations at a boundary | 91 | the major-version moves only; the rest reviewed after the fact |
+| What to read to act | 24 unit rows, 2414 CVE rows | about 40 Decide cards until the records exist, then the Review queue; a handful of pin cards |
+| Open CVEs behind those cards | 82 | the same 82, grouped: curl on the firewall 21, ImageMagick in immich 8, libheif in vllm-amd 8, qemu-guest-agent on unifi-os 6, expat in three places 4 each, sqlite once for the baseline |
+| Decisions to settle the firewall's curl | 21 statements, again at each curl version | 1 record with one rule, read again every 90 days |
+| Decisions to move 15 units off medium | 3 statements per sqlite version | 1 record on `templates` |
+| Hand-kept statements | 1708, a quarter replaced per boundary | about 400 component records; VEX generated |
+| Hand confirmations at a boundary | 91 | a review when a component changes major version |
+| Site-level root causes from CVEs | 29 | under 10: the baseline once, the firewall, the nodes, and the modules with components of their own |
+| Site decisions on a default deployment | none possible that change the score | none needed |
+
+The nightly scan and the rescan now give these same figures (D9); the lower figures in the
+as-built document's rescan column were the defect.
 
 ### D8. A daily check: would moving the pin help?
 
@@ -282,82 +285,93 @@ running guest and changes nothing in the repo.
 
 For each module it writes one proposal to `config/pin-candidates.json`:
 
-- **Move:** from → to, the CVEs it clears, the ones it adds, the decisions that carry
-  automatically and the ones that need a look, and whether it is a major.
-- **Nothing helps:** no candidate clears the open items. The proposal is a triage workbook for
-  them, grouped by package, each with its vector and, where an existing rule nearly fits, the
-  assessment it would take.
+- **Move:** from → to, the CVEs it clears and adds per component, whether a component leaves its
+  record's `versions`, and whether the move is patch-level (eligible for ADR-048's patch line) or
+  a minor or major (the train).
+- **Nothing helps:** no candidate clears the open items. The proposal is a draft component record
+  for each undecided component: its CVEs with their vectors, and the rule that would cover most
+  of them.
 
 A person approves. `tappaas-train.sh candidates apply <module>` writes the pin change to a branch
-and stops; the live test and the merge are the maintainer's, as ADR-028 D4 requires. A proposed
-statement or assessment is written with `cve-triage` by a person who has read it.
+and stops; the live test and the merge are the maintainer's, as ADR-028 D4 requires. A draft
+record becomes a record when a person has written its `use` statement.
 
 The check talks to the image registries and the nixpkgs channel. It does not touch Codeberg.
 
-### D9. Two defects to fix first
+### D9. Two defects, fixed first (built)
 
-Both make every number in the view unreliable, so they come before it:
+1. **The rescan now matches what the scan matched.** The stored inventory kept a package's name,
+   version and purl, and dropped its source package. Debian and Alpine file advisories under the
+   source package, so the rescan matched libtiff6 against advisories for `libtiff6` instead of
+   `tiff` and found nothing. The scan now keeps each package's source name, version and release
+   under trivy's own property names, and the rescan hands them back. An inventory taken before
+   the fix is not matched thinner: the last scan's result stands until the next full scan.
+2. **"New" means first seen.** `config/sbom/first-seen.json` records, per target, when each
+   critical/high CVE was first and last counted. A CVE is new once. One not counted for 30 days
+   is forgotten, so a regression is announced again.
 
-1. **The rescan must match what the scan matched.** On Debian and image targets the daily rescan
-   finds about a third of the nightly scan's findings. Whichever side is wrong, both must agree
-   on the same inventory, and a test must hold them to it.
-2. **"New" means first seen.** A ledger `config/sbom/first-seen.json` (target, CVE, package →
-   date) replaces the comparison with the previous file. A CVE is new once.
+Proved on hrossen on 2026-11-10 in a scratch copy of its configuration: the fixed scan and the
+fixed rescan of its inventory agree on all 37 targets (6213 findings, 191 critical/high CVEs, the
+same state for every item), the scan equals the live nightly scan, and with the ledger seeded
+from the site's two stored scans nothing is announced as new (the live nightly scan had announced
+361 keys, 109 of them open). Commit 17fe1acf; it takes effect on a site with the first full scan
+after the update.
 
 ## Consequences
 
 - **Good.**
-  - A reclassification is a record with a reason, an author and an end date, and it re-opens by
-    itself when upstream or the site's exposure changes.
-  - The number of decisions follows the number of packages and reasons, not CVEs times versions.
-  - A site that runs TAPPaaS as shipped has nothing to decide. One that does not is told exactly
-    which assumption it breaks.
+  - The number of decisions follows the number of components, not CVEs times versions.
+  - A reclassification is a record with a use statement, an author and an end date, and it
+    re-opens by itself when upstream or the site's exposure changes.
+  - A site that runs TAPPaaS as shipped has nothing to decide. One that does not is told which
+    assumption it breaks, and can accept what is left with a date.
   - The records are data with no code in them, so they can be delivered apart from releases.
 - **Cost.**
-  - A second file per module and a migration: 190 `exploitable` statements become assessments,
-    grouped by package and reason. 1708 statements gain a `versions` field.
+  - A migration: 1708 statements become about 400 component records. A tool groups them and
+    carries the per-CVE decisions over; each record's `use` statement needs a person. Until a
+    record has one, its migrated per-CVE decisions keep working and it is listed for review.
   - CVSS re-scoring in `lib/ts`, with the vectors kept by the scan.
   - A console page reorganised around queues.
   - A daily job that pulls image metadata and layers for up to 13 images when tags move.
 - **Risk.**
-  - **A coarse rule hides a real CVE.** A rule is limited to one module and one package, a
-    matched CVE is marked `auto` and queued for a read, and known-exploited overrides everything.
-  - **Automatic carries inside a major miss a change in reachability.** They are reviewed after
-    the fact; the statement's text and the version it moved from are in the queue.
+  - **A coarse rule underrates a real CVE.** D3.
   - **Acceptances pile up.** They end by date, are counted beside every score, and cannot be
     made without one.
-  - **Assumption checks are wrong.** A check that cannot be evaluated counts as failed.
+  - **The migration loses a decision.** The generated VEX is compared with the hand-kept files
+    before the switch; the scan must count the same items the day before and the day after.
 
 ## Phases
 
 | Phase | Content | Done when |
 |---|---|---|
-| P0 | D9: scan and rescan agree; the first-seen ledger | Two days on hrossen with the same counts from both runs and no repeated `cve-new` |
-| P1 | D2, D4: the scan keeps vectors, KEV and EPSS; `<module>-assess.json`; `cve-triage assess`; re-scoring; the `assessed` and `review` states; migration of the 190 rated statements | The firewall's curl items are one assessment and hrossen's site level follows from it |
-| P2 | D3: `versions` ranges, automatic carry inside a major in the `cve` phase, multi-CVE statements | A rehearsal boundary carries without a hand commit and lists what it carried |
-| P3 | D5: `assumes` evaluation, `health-manager accept`, the `accepted` state | A test module made public on hrossen turns its assessment into `review`; an acceptance survives an image bump |
-| P4 | D6: deferrals from `ack`; the record archives only used acks | The next boundary's gate lists an expired deferral |
-| P5 | D7: the queues in `report security` and the console; the baseline unit; derived health conditions | hrossen's page opens with the queues, and CVE root causes drop below 10 |
-| P6 | D8: `candidates` and `candidates apply` | A daily run on hrossen proposes a move for an image with a newer patch tag, with its cleared and added CVEs |
+| P0 | D9 | **Built.** Deployed with the next update of hrossen; two nights with the same counts from scan and rescan and no repeated `cve-new` |
+| P1 | D2: the scan keeps vectors, known-exploited and EPSS; the component key; `<module>-components.json`; `cve-triage component`; re-scoring; the states of D4 | The firewall's curl items are one record and hrossen's site level follows from it |
+| P2 | Migration of the 1708 statements; `cve-triage export`; the boundary's `cve` phase generates VEX | The scan counts the same items from the records as from the old files; a rehearsal boundary needs no carry commit |
+| P3 | D3: the guards, the `auto` state, the Review queue | A new CVE matching a rule is assessed the same night and listed unread; a known-exploited one is not lowered |
+| P4 | D5: `assumes` evaluation, `health-manager accept`, the `accepted` state in the score | A test module made public on hrossen turns its record into `review`; an acceptance lowers the level and survives an image bump |
+| P5 | D6: deferrals from `ack`; the record archives only used acks | The next boundary's gate lists an expired deferral |
+| P6 | D7: the queues in `report security` and the console; the baseline shown once; derived health conditions | hrossen's page opens with the queues |
+| P7 | D8: `candidates` and `candidates apply` | A daily run on hrossen proposes a patch-level image move with its cleared and added CVEs |
+
+## Settled in review
+
+Settled in v0.2 (operator, 2026-11-10): the scan/rescan defect is fixed before anything else; a
+site acceptance lowers that site's score; central decisions are per component, not per CVE and
+version; decisions reach production faster than code, through a separate feed (ADR-048).
 
 ## Open questions
 
-1. **Does a site acceptance lower the site's level?** Proposed: yes, with the count shown beside
-   it (D5). The alternative keeps the level central and makes acceptance a mail matter only,
-   which is what the unused health ack does today.
-2. **Are rules (`match`) acceptable**, or must every CVE be listed by hand? Proposed: rules,
-   inside one module and package, with a read-after queue. Without them the firewall is 21 entries
-   again at the next curl release.
-3. **Automatic carry inside a major for `code_not_reachable`** reverses ADR-045's "never
-   automatic". Proposed: yes, reviewed afterwards. The alternative keeps about 90 confirmations
-   per boundary.
-4. **Review period**: 90 days by default and 180 at most. With decisions per package the yearly
-   load is roughly 400 groups × 4 reads if nothing is merged further; is that acceptable, or
-   should deployment-based decisions run a year?
+Each has a proposed answer in the text; none is settled.
+
+3. **Version scope.** Proposed: a record's `use` statement holds inside the component's major
+   version, and a new major sends the record to Review. This replaces ADR-045's "a carry is never
+   automatic" with a review after a major move only.
+4. **Review period.** Proposed: 90 days by default, 180 at most, per component. With about 400
+   records that is roughly 1600 reads a year, most of them a glance at an unchanged `use`
+   statement. Should deployment-based records run a year?
 5. **Assessed and open at the same points** (20 and 8) in place of 25/20 and 10/8. It removes the
-   small penalty for analysing; it also means a confirmed critical and an unread one look alike.
-6. **Who may author a central decision?** Proposed: the deciders of this ADR, by commit, as now.
-   Contributors propose through a pull request. The security stream ADR depends on this answer,
-   because the feed's signature is this person's.
+   small penalty for analysing; it also means a confirmed critical and an unread one score alike.
+6. **Who may author a central decision?** Proposed: the deciders of this ADR, by commit, as now;
+   contributors through a pull request. ADR-048's feed is signed on their behalf.
 7. **`security` as one condition type** for CVE levels and for other security reasons (seen on
    unifi-os) belongs to the health review; this ADR only needs CVE conditions to be told apart.
