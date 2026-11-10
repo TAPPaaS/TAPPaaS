@@ -11,10 +11,11 @@ import { useEffect, useState } from "react";
 import { useRead, useVerb } from "../api";
 import { OperateButton, Step } from "../operate";
 import { HealthCondition, HealthObject, HealthStatus } from "../types";
-import { DetailsLinks, Dot, Level, ReadState, Section, Tag, when } from "../ui";
+import { DetailsLinks, Dot, Level, Link, ReadState, Section, Tag, when } from "../ui";
 import { ciDetails } from "../details";
 import { CiPanel } from "./CiPanel";
 import { ClassIcon } from "../moduleicon";
+import { PerfCharts } from "../perfpanel";
 
 const LEVEL: Record<HealthStatus, Level> = { ok: "pass", warning: "warn", critical: "fail", unknown: "skip" };
 const hm = (title: string, verb: string, id: string, extra: Partial<Step> = {}): Step => ({ title, bin: "health-manager", verb, fixed: [id], ...extra });
@@ -122,6 +123,9 @@ export function HealthPanel({ id, close, pick, showInTree }: { id: string; close
               </ul>
             </Section>
           ) : null}
+          <Section title="Performance" aside={<Link to={`/performance/browse?select=${encodeURIComponent(o.id)}`}>all of it</Link>}>
+            <PerfCharts key={o.id} id={o.id} ranges={["24h", "7d"]} pick={pick} max={3} />
+          </Section>
           {o.drift ? (
             <Section title="Drift — against its record">
               <pre className="output">{typeof o.drift === "string" ? o.drift : JSON.stringify(o.drift, null, 2)}</pre>
