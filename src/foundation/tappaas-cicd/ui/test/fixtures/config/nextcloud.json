@@ -65,5 +65,8 @@
         "internet"
       ]
     }
+  },
+  "performance": {
+    "level": "service"
   }
 }

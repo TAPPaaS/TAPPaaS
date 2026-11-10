@@ -26,6 +26,8 @@ import { Jobs, RESTART_MARKER, restartDue, takeRestartMarker } from "./jobs";
 import { KEY_FILE, LiteLLM } from "./litellm";
 import { Assistant } from "./assistant";
 import { lokiConfig } from "./assistant-tools";
+import { Perf } from "./perf";
+import { perfDeps } from "./perfwire";
 import { Conversations } from "./conversations";
 import { loadManifests, registeredManagers } from "./manifest";
 import { Reads } from "./reads";
@@ -304,6 +306,7 @@ async function serve(o: ServeOpts): Promise<number> {
     },
   });
   const healthLive = new HealthLive(reads.healthGraph, cmdb, log);
+  const perf = new Perf(perfDeps({ fx, configDir: o.configDir, stateDir: o.stateDir, home: process.env.HOME ?? "/home/tappaas", run, cmdb, reads, healthLive, manifests: () => server?.manifests ?? null, mgmtDomain: mgmtDomain() }));
   let assistant: Assistant | null = null;
   // This start runs the linked build under the unit's current definition: a
   // marker left for the previous process is spent.
@@ -323,6 +326,7 @@ async function serve(o: ServeOpts): Promise<number> {
     proposal: (me, c, p) => assistant?.proposal(me, c, p) ?? null,
     onWriteDone: (job) => {
       void reads.refreshAfterJob();
+      perf.refresh();
       if (job.bin === "backup-manager" && job.verb === "key") void reads.backupKeysChanged();
     },
     // A foundation module's test run as a job counts for its Setup step.
@@ -358,7 +362,7 @@ async function serve(o: ServeOpts): Promise<number> {
     },
     log,
   });
-  server = new ConsoleServer({ access, webDir: existsSync(webDir) ? webDir : null, mgmtDomain: mgmtDomain(), version: VERSION, log, home: process.env.CONSOLE_SECRETS_DIR ?? home, litellm, assistant, healthLive, runStdin: fx?.site.runStdin, onSetupClosed: () => void run(join(home, "bin", "install-access.sh"), ["close"]).then((r) => { if (r.rc !== 0) warn(`install-access.sh close failed: run it on the mothership (${r.stderr.trim()})`); }) }, reads, jobs);
+  server = new ConsoleServer({ access, webDir: existsSync(webDir) ? webDir : null, mgmtDomain: mgmtDomain(), version: VERSION, log, home: process.env.CONSOLE_SECRETS_DIR ?? home, litellm, assistant, healthLive, perf, runStdin: fx?.site.runStdin, onSetupClosed: () => void run(join(home, "bin", "install-access.sh"), ["close"]).then((r) => { if (r.rc !== 0) warn(`install-access.sh close failed: run it on the mothership (${r.stderr.trim()})`); }) }, reads, jobs);
   for (const l of listen) {
     await server.listen(l.host, l.port).catch((e: Error) => die(`listen ${l.host}:${l.port}: ${e.message}`));
     info(`console ${VERSION} listening on ${l.host}:${l.port}`);

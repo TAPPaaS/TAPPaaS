@@ -59,5 +59,10 @@
   },
   "primaryLocation": "knudanchersvej95",
   "locale": "en_US",
-  "keyboard": "dk"
+  "keyboard": "dk",
+  "size": "medium",
+  "performance": {
+    "level": "basic",
+    "retentionDays": 15
+  }
 }

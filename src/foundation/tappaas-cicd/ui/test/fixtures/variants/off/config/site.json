@@ -1,0 +1,64 @@
+{
+  "name": "rossen",
+  "displayName": "Rossen Production Cluster",
+  "owner": "rossen",
+  "email": "operator@example.org",
+  "version": "2.0",
+  "network": {
+    "isp": "Netnørden",
+    "publicIp": "auto"
+  },
+  "backup": {
+    "target": "backup.mgmt.internal",
+    "defaultSchedule": "daily"
+  },
+  "updateSchedule": {
+    "frequency": "daily",
+    "hour": 2
+  },
+  "automaticReboot": true,
+  "snapshotRetention": 5,
+  "repositories": [
+    {
+      "name": "TAPPaaS",
+      "url": "codeberg.org/TAPPaaS/TAPPaaS",
+      "branch": "adr-041",
+      "path": "/home/tappaas/TAPPaaS",
+      "managed": "full",
+      "catalog": "src/module-catalog.json"
+    },
+    {
+      "name": "Community",
+      "url": "codeberg.org/TAPPaaS/Community",
+      "branch": "main",
+      "path": "/home/tappaas/Community",
+      "managed": "full",
+      "catalog": "src/module-catalog.json"
+    }
+  ],
+  "defaultEnvironment": "rossen",
+  "channel": "unstable",
+  "ipv6": true,
+  "branding": {
+    "logo": "branding/rossen-logo.svg"
+  },
+  "locations": {
+    "knudanchersvej95": {
+      "displayName": "KnudAnchersVej95",
+      "country": "DK",
+      "city": "Rodovre",
+      "address": "Knud Anchers Vej 95",
+      "timezone": "Europe/Copenhagen"
+    },
+    "hareskov": {
+      "displayName": "Rasmus",
+      "kind": "remote",
+      "country": "DK",
+      "city": "Hareskov"
+    }
+  },
+  "primaryLocation": "knudanchersvej95",
+  "locale": "en_US",
+  "keyboard": "dk",
+  "size": "small"
+}

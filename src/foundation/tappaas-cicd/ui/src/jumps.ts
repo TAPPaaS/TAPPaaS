@@ -59,6 +59,14 @@ export function grafanaExplore(ctx: JumpContext, host: string): string | null {
   return `https://${g}/explore?schemaVersion=1&orgId=1&panes=${enc(JSON.stringify(panes))}`;
 }
 
+// Grafana Explore on one metrics query (the logging module's Prometheus, uid "prometheus").
+export function grafanaMetrics(ctx: JumpContext, expr: string, from = "now-24h"): string | null {
+  const g = publicName(ctx, "logging");
+  if (!g) return null;
+  const panes = { a: { datasource: "prometheus", queries: [{ refId: "A", expr, datasource: { type: "prometheus", uid: "prometheus" } }], range: { from, to: "now" } } };
+  return `https://${g}/explore?schemaVersion=1&orgId=1&panes=${enc(JSON.stringify(panes))}`;
+}
+
 function opnsense(ctx: JumpContext, path = "/"): string {
   return `https://firewall.${ctx.mgmtDomain}:8443${path}`;
 }

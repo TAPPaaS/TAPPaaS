@@ -15,6 +15,7 @@ import { Entry, envelope } from "./cache";
 import { SCHEMAS } from "./fields";
 import { HealthGraph, TREE_FACETS, healthEgo, healthPath, healthSummary, healthTree, moduleHealth, treeChildren, treePath, treeSearch } from "./health";
 import { HealthLive } from "./healthlive";
+import { Perf, isRange } from "./perf";
 import { JumpKind, jumpsFor } from "./jumps";
 import { Assistant, AssistantEvent } from "./assistant";
 import { LiteLLM } from "./litellm";
@@ -38,6 +39,7 @@ export interface ServerConfig {
   litellm?: LiteLLM | null; // the assistant's LiteLLM (ADR-034 D7); absent: no assistant
   assistant?: Assistant | null; // its agent loop (assistant.ts)
   healthLive?: HealthLive | null; // the health document's freshness and live feed (healthlive.ts)
+  perf?: Perf | null; // the performance reads (perf.ts, ADR-046 D7); absent: no Performance menu data
   onSetupClosed?: () => void; // the setup token is gone: close the install-LAN way in
 }
 
@@ -210,6 +212,8 @@ export class ConsoleServer {
       }
       case "cmdb":
         return this.cmdbApi(a, b, parts[3], parts.length, url, res);
+      case "performance":
+        return this.perfApi(a, b, parts.length, url, res);
       case "health": {
         if (a !== undefined) return this.healthApi(a, b, parts[3], parts.length, url, res, req);
         const h = await r.health.get();
@@ -500,6 +504,28 @@ export class ConsoleServer {
     }
     if (sub === "stream" && depth === 2 && req) return this.streamHealth(req, res);
     return sendJson(res, 404, { error: "health | health/tree | health/ego/<id> | health/object/<id> | health/roots | health/summary | health/stream" });
+  }
+
+  // ── performance (ADR-046 D7) ─────────────────────────────────────
+  //   GET /performance/overview            the site at a glance: USE, RED, the performance roots
+  //   GET /performance/levels              the cascade: site, environments, modules, with the cost
+  //   GET /performance/investigations      the timed raises in force and ended
+  //   GET /performance/ci/<id>?range=24h   a CI's numbers over 24h | 7d | 30d | 90d, with change markers
+  // Each a fixed query the server builds (perf.ts); the store's credential never leaves it.
+  private async perfApi(sub: string | undefined, id: string | undefined, depth: number, url: URL, res: ServerResponse): Promise<void> {
+    const p = this.cfg.perf;
+    const usage = "performance/overview | performance/levels | performance/investigations | performance/ci/<id>?range=24h|7d|30d|90d";
+    if (!p) return sendJson(res, 503, { error: "this console reads no performance data" });
+    if (depth === 2 && sub === "overview") return sendJson(res, 200, envelope(await p.overview.get()));
+    if (depth === 2 && sub === "levels") return sendJson(res, 200, envelope(await p.levels.get()));
+    if (depth === 2 && sub === "investigations") return sendJson(res, 200, envelope(await p.investigations.get()));
+    if (depth === 3 && sub === "ci" && id) {
+      if (!OBJECT_ID.test(id)) return sendJson(res, 400, { error: "not an object id" });
+      const range = url.searchParams.get("range") ?? "24h";
+      if (!isRange(range)) return sendJson(res, 400, { error: "range is 24h, 7d, 30d or 90d" });
+      return sendJson(res, 200, envelope(await p.ci(id, range)));
+    }
+    return sendJson(res, 404, { error: usage });
   }
 
   // ── a CI's panel (ADR-040 D10) ───────────────────────────────────

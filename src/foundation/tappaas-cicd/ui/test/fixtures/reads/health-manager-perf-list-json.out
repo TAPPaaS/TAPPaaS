@@ -1,0 +1,49 @@
+{
+  "now": "2026-11-01T08:54:11Z",
+  "investigations": [
+    {
+      "ci": { "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831", "class": "vm", "name": "identity" },
+      "level": "trace",
+      "resolution": "fine",
+      "from": "basic",
+      "by": "lars",
+      "note": "logins slow since the update",
+      "started": "2026-11-01T07:40:12Z",
+      "until": "2026-11-01T10:40:12Z",
+      "ended": null,
+      "endedHow": null,
+      "endedBy": null,
+      "change": 1901
+    }
+  ],
+  "history": [
+    {
+      "ci": { "id": "0a7d1804-da8c-415e-879c-b077276ae2cd", "class": "storage-pool", "name": "tankc1" },
+      "level": "basic",
+      "resolution": "fine",
+      "from": "basic",
+      "by": "lars",
+      "note": "watch the degraded pool",
+      "started": "2026-10-30T11:30:00Z",
+      "until": "2026-10-31T11:30:00Z",
+      "ended": "2026-10-30T19:02:40Z",
+      "endedHow": "stopped",
+      "endedBy": "lars",
+      "change": 1871
+    },
+    {
+      "ci": { "id": "f2d2826e-5c9f-4d41-9234-9b8fb8af8811", "class": "proxy-route", "name": "cloud.hrossen.dk" },
+      "level": "trace",
+      "resolution": "normal",
+      "from": "service",
+      "by": "lars",
+      "note": null,
+      "started": "2026-10-28T20:00:00Z",
+      "until": "2026-10-28T22:00:00Z",
+      "ended": "2026-10-28T22:00:00Z",
+      "endedHow": "expired",
+      "endedBy": null,
+      "change": 1702
+    }
+  ]
+}

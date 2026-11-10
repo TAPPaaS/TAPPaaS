@@ -28,6 +28,7 @@ export interface FixtureOptions {
   journal?: string | null; // appended with every call; null keeps none
   repoRoot?: string; // where `site-manager repository list` says the repository is
   phaseOf?: (argv: string[]) => CallKind | null; // from the manifests; else by the flags
+  overlay?: string; // a variant's reads/ answer before the fixtures' own
 }
 
 export interface FixtureSite {
@@ -72,7 +73,9 @@ export function fixtureSite(dir: string, opts: FixtureOptions = {}): FixtureSite
   const recorded = (argv: string[]): ExecResult | null => {
     // The inverse of the repository-list substitution below: a verb run at the
     // substituted root (git -C <root> …) is the recorded one.
-    const f = join(dir, "reads", fixtureSlug(opts.repoRoot ? argv.map((a) => (a === opts.repoRoot ? "/home/tappaas/TAPPaaS" : a)) : argv));
+    const slug = fixtureSlug(opts.repoRoot ? argv.map((a) => (a === opts.repoRoot ? "/home/tappaas/TAPPaaS" : a)) : argv);
+    const over = opts.overlay ? join(opts.overlay, "reads", slug) : null;
+    const f = over && existsSync(`${over}.out`) ? over : join(dir, "reads", slug);
     if (!opts.recorded || !existsSync(`${f}.out`)) return null;
     const rc = existsSync(`${f}.rc`) ? Number(readFileSync(`${f}.rc`, "utf8").trim()) : 0;
     let stdout = readFileSync(`${f}.out`, "utf8");
@@ -468,6 +471,9 @@ export function openFixtures(env: Record<string, string | undefined>, stateDir: 
   if (!existsSync(repo)) symlinkSync(real, repo);
   const configDir = join(stateDir, "config");
   copyConfig(join(dir, "config"), configDir, repo);
+  // A variant of the site: its config/ and reads/ over the fixtures' (the
+  // `off` site of variants/off: site.json small, no level, no investigation).
+  if (env.CONSOLE_FIXTURES_OVERLAY) copyConfig(join(env.CONSOLE_FIXTURES_OVERLAY, "config"), configDir, repo);
   const none = (f: string): string => join(stateDir, f);
   const defaults: Record<string, string> = {
     CONSOLE_REPO: repo,
@@ -485,7 +491,7 @@ export function openFixtures(env: Record<string, string | undefined>, stateDir: 
   for (const [k, v] of Object.entries(defaults)) env[k] ??= v;
   mkdirSync(env.CONSOLE_SECRETS_DIR as string, { recursive: true });
   const journal = env.CONSOLE_FIXTURES_JOURNAL ?? join(dir, "journal.jsonl");
-  const site = fixtureSite(dir, { recorded: true, journal, repoRoot: repo, phaseOf });
+  const site = fixtureSite(dir, { recorded: true, journal, repoRoot: repo, phaseOf, overlay: env.CONSOLE_FIXTURES_OVERLAY });
   const cmdb = new FixtureCmdb(capturedCmdb(dir, real));
   cmdb.onSweep = () => site.note("apply", ["cmdb", "sweep", "--json"]);
   return { dir, configDir, journal, site, cmdb, actor: env.CONSOLE_ACTOR ?? "operator" };
