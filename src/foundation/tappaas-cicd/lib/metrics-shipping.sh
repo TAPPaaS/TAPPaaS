@@ -539,7 +539,7 @@ render_metrics_alloy() {
     echo "// GENERATED on the mothership (lib/metrics-shipping.sh): ${host} at level ${level}, resolution ${res}."
     echo "// Rewritten on every level change; Alloy re-reads it. Do not edit here."
     if [[ "${level}" == off ]]; then
-        echo 'declare "pipeline" { }'
+        echo "${LOG_SHIPPING_PERF_DEFAULT}"
         return 0
     fi
     keep="${METRICS_KEEP_BASIC}"
@@ -624,6 +624,8 @@ EOF
 _ms_guest_transport() {
     local module="$1" cfg vmname zone
     log_shipping_wanted "${module}" || return 1
+    # A syslog sender (the firewall, a node) runs no Alloy of TAPPaaS's.
+    [[ -z "$(log_shipping_syslog_kind "${module}")" ]] || return 1
     cfg="$(_ls_config_dir)/${module}.json"
     if [[ "$(metrics_class_of "${module}")" == lxc ]]; then
         log_shipping_transport "${module}"; return
@@ -640,7 +642,9 @@ metrics_guest_render() {
     eff="$(metrics_effective "${module}")"
     host="$(jq -r '.vmname // empty' "$(_ls_config_dir)/${module}.json" 2>/dev/null)"
     lvl="$(jq -r .level <<<"${eff}")"
-    metrics_wanted || lvl=off
+    # The site's level decides only the site's default (and the Proxmox and PBS
+    # targets); a module or environment that sets its own collects regardless.
+    [[ -f "$(_ls_config_dir)/logging.json" ]] || lvl=off
     render_metrics_alloy "${host:-${module}}" "${lvl}" "$(jq -r .resolution <<<"${eff}")" "$(metrics_class_of "${module}")"
 }
 

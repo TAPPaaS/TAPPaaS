@@ -70,7 +70,9 @@ LOG_SHIPPING_QUERY_URL="${LOG_SHIPPING_QUERY_URL:-}"
 LOG_SHIPPING_HOST="${LOG_SHIPPING_HOST:-logging.mgmt.internal}"
 # The level-driven metrics pipeline (lib/metrics-shipping.sh writes it).
 LOG_SHIPPING_PERF_FILE="/var/lib/alloy-perf/perf.alloy"
-LOG_SHIPPING_PERF_DEFAULT='declare "pipeline" { }'
+# Alloy does not register an empty declare, and an import that defines nothing
+# stops Alloy at start: the empty pipeline takes one optional argument.
+LOG_SHIPPING_PERF_DEFAULT='declare "pipeline" { argument "off" { optional = true } }'
 # Units every TAPPaaS VM may have that write secrets: never shipped.
 LOG_SHIPPING_BASE_DROP="generate-.*-secrets.*"
 
@@ -370,7 +372,7 @@ render_logging_nix() {
   systemd.services.alloy.serviceConfig.ExecStartPre = [
     "+\${pkgs.writeShellScript "alloy-perf-default" ''
       install -d -m 0755 /var/lib/alloy-perf
-      [ -s ${LOG_SHIPPING_PERF_FILE} ] || echo 'declare "pipeline" { }' > ${LOG_SHIPPING_PERF_FILE}
+      [ -s ${LOG_SHIPPING_PERF_FILE} ] || echo '${LOG_SHIPPING_PERF_DEFAULT}' > ${LOG_SHIPPING_PERF_FILE}
     ''}"
   ];
 

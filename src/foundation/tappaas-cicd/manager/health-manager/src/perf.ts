@@ -142,7 +142,7 @@ export function perfRaise(ctx: PerfContext, req: RaiseRequest): RaiseRow {
   store.investigations.push(row);
   // The store first: the pipeline's render reads the raise from it.
   writeRaises(ctx.configDir, store, ctx.now);
-  ctx.say(`raised to ${row.level}, ${every(row.resolution)}, until ${row.until} (it was ${from})`);
+  ctx.say(`raised to ${row.level}${row.resolution === "fine" ? `, ${every("fine")}` : ""}, until ${row.until} (it was ${from})`);
   applyRow(ctx, module, ci.name);
   const inv: Record<string, unknown> = { level: row.level, resolution: row.resolution, from, by: row.by, started: row.started, until: row.until };
   if (row.note) inv.note = row.note;
