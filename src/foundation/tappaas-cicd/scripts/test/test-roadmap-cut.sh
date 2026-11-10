@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # test-roadmap-cut.sh — release/roadmap-cut.py moves what a release carries out of the waves.
 #
-# On a throwaway ROADMAP.md: the ✅ rows of a wave and of Future Work move into a new release
+# On a throwaway ROADMAP.md: the ✅ rows of a wave and of Parked move into a new release
 # section under their wave and group; a group with nothing open leaves the waves, and a wave with
 # no group left goes too; a `####` table that empties goes with its rows; `## Next release`
 # becomes the summary (or a factual line when empty) and is emptied; the promoted release gets
@@ -29,9 +29,9 @@ cat > "${F}" <<'EOF'
 
 old
 
-## Future Work — not yet in a wave
+## Parked — not now
 
-| # | Issue | Note |
+| # | Issue | Unpark when |
 |---|-------|------|
 | #50 | later | |
 | ✅ #51 | finished outside a wave | done |
@@ -104,8 +104,8 @@ rel="$(sed -n '/^## Release 2.1/,/^## Release 2.0/p' "${F}")"
 ck "the release keeps the wave and group headings"       yes "$(grep -q '^### Wave 1 — one' <<< "${rel}" && grep -q '^#### G1.1 Finished — Ease L · Risk H' <<< "${rel}" && echo yes || echo no)"
 ck "…the finished group's intent"                        yes "$(grep -q 'Finished intent.' <<< "${rel}" && echo yes || echo no)"
 ck "…and the sub-table under its own heading"            yes "$(grep -q '^##### Sub table' <<< "${rel}" && grep -q '| ✅ #12 | sub done' <<< "${rel}" && echo yes || echo no)"
-ck "Future Work's ✅ row moves too"                       yes "$(grep -q '| ✅ #51 | finished outside a wave' <<< "${rel}" && echo yes || echo no)"
-ck "…and its open row stays"                             yes "$(sed -n '/^## Future Work/,/^## Wave/p' "${F}" | grep -c '| #50 | later' >/dev/null && echo yes || echo no)"
+ck "Parked's ✅ row moves too, under its own heading"     yes "$(grep -q '^### Parked' <<< "${rel}" && grep -q '| ✅ #51 | finished outside a wave' <<< "${rel}" && echo yes || echo no)"
+ck "…and its open row stays"                             yes "$(sed -n '/^## Parked/,/^## Wave/p' "${F}" | grep -c '| #50 | later' >/dev/null && echo yes || echo no)"
 ck "At a glance is recomputed"                           yes "$(has "${F}" '| Wave | Group | Ease | Risk | released | done for 2.2 | open |')"
 cp "${F}" "${T}/once"
 python3 "${CUT}" --file "${F}" --version 2.1 --date 2026-10-09 --promoted 2.0 >/dev/null

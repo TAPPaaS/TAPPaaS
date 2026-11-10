@@ -8,7 +8,7 @@ tag already holds its own roadmap; nobody edits ROADMAP.md in the middle of a bo
     roadmap-cut.py --normalize [--check] [--file ROADMAP.md]
 
 A cut does, in ROADMAP.md:
-  - every ✅ row in a wave or in Future Work moves into a new `## Release <version>` section,
+  - every ✅ row in a wave or in Parked (Future Work before) moves into a new `## Release <version>` section,
     under its wave and group heading. Everything on main is what the boundary cuts, so a ticked
     row is in this release — nothing is guessed;
   - each group heading gets its counts again: `released: N · done for <next>: M · open: K`;
@@ -270,10 +270,11 @@ def run(text, version=None, date=None, promoted=None, normalize=False):
                 release_body += ["", "### Wave {} — {}".format(w["n"], WAVE_RE.match(w["head"]).group(2))] + wave_out
             if not w["groups"]:
                 report.append("Wave {} is complete and leaves the waves".format(w["n"]))
-        # Future Work's ticked rows
-        fw_rows, fw_hdr = [], None
+        # Parked's ticked rows (the section was Future Work before 2026-11-10)
+        fw_rows, fw_hdr, fw_name = [], None, "Parked"
         for idx, (h, b) in enumerate(sections):
-            if h and h.startswith("## Future Work"):
+            if h and (h.startswith("## Parked") or h.startswith("## Future Work")):
+                fw_name = h[3:].split(" — ")[0]
                 new_b, i = [], 0
                 while i < len(b):
                     if b[i].startswith("| ") and i + 1 < len(b) and SEP_RE.match(b[i + 1]):
@@ -288,14 +289,14 @@ def run(text, version=None, date=None, promoted=None, normalize=False):
                     i += 1
                 sections[idx] = (h, new_b)
         if fw_rows:
-            release_body += ["", "### Future Work", "", fw_hdr[0], fw_hdr[1]] + fw_rows
+            release_body += ["", "### " + fw_name, "", fw_hdr[0], fw_hdr[1]] + fw_rows
             moved_total += len(fw_rows)
         if moved_total == 0:
             report.append("no ✅ row to move: the release section says so")
         if not summary:
             summary = "{} issue{} done across {}.".format(
                 moved_total, "" if moved_total == 1 else "s",
-                ", ".join(carried) if carried else "Future Work") if moved_total else "No roadmap item done since the last release."
+                ", ".join(carried) if carried else fw_name) if moved_total else "No roadmap item done since the last release."
         head = ["## Release {} — staging {} · production at the next boundary".format(version, date), "",
                 "Tag `v{}`, cut into staging {} by a release-train boundary.".format(version, date), "",
                 summary]
