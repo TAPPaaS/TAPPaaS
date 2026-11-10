@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** (every open question closed, 2026-11-10) |
-| **Version** | 0.2 |
+| **Status** | **Proposed** (every open question closed, 2026-11-10; P1 built and live-tested on `adr-046`) |
+| **Version** | 0.3 |
 | **Date** | 2026-11-10 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | #927 (performance monitoring). Answers ADR-039 open question 1 (metrics, and whether a rule gains `source: metrics`). Fills ADR-040 D14's "metrics and traces are not collected today". Amends ADR-041 D1 (a `performance` condition type) and D3 (shipped rules for it). Related: ADR-007e (health as a lens), ADR-020 (declared fields), ADR-034 (console; Grafana kept for dashboards, A4), ADR-043 (internal CA), ADR-044 (site sizes), the logging module's v2 backlog ("no Prometheus yet"). |
-| **Changelog** | v0.2 (2026-11-10) — **every open question closed, and a Performance menu (operator):** D7 makes the console part of the solution: a Performance menu under Health with Overview, Browse, Levels and Investigations. O1 Prometheus; O2 `small` defaults to `off`; O3 the level is a module's declared field, the timed raise a health-manager verb, logging only renders; O4 `fine` may be standing, `trace` is timed only; O5 Proxmox and PBS push from the nodes, the API pull only as fallback; O6 static thresholds first; O7 Alloy's pipeline is a runtime file, no OS rebuild per level change; O8 foundation modules first. D1–D6 and the plan carry the answers; 90-day trends go to a second small Prometheus. · v0.1 (2026-11-10) — first draft, from the operator's direction of 2026-11-10: complement event-based health (operations and security events, CMDB associations, root cause and impact) with performance monitoring; decide what is realistic to monitor, how it is turned on and off, and how its level is set; tie it to traceability. |
+| **Changelog** | v0.3 (2026-11-10) — **from P1's live test on hrossen:** guests push OTLP, not `remote_write` (only OTLP shows the receiver who authenticated); identity labels come from the authenticated user and a CMDB identity map on the logging VM (D1, D4); the Proxmox cluster pushes with one credential, its node label trusted only among CMDB nodes (D1); PVE 9.2 uses its OpenTelemetry metric server, PBS 4.2 InfluxDB HTTP; `site.json` accepts `off`, `basic` and `service` only (O4). Measured at `basic` on 3 nodes and 22 guests: ~1.9 k series, ~190 MB RAM for both Prometheus instances. PVE pushes every 10 s; thinning to the level's resolution is open until Alloy's processor is stable. · v0.2 (2026-11-10) — **every open question closed, and a Performance menu (operator):** D7 makes the console part of the solution: a Performance menu under Health with Overview, Browse, Levels and Investigations. O1 Prometheus; O2 `small` defaults to `off`; O3 the level is a module's declared field, the timed raise a health-manager verb, logging only renders; O4 `fine` may be standing, `trace` is timed only; O5 Proxmox and PBS push from the nodes, the API pull only as fallback; O6 static thresholds first; O7 Alloy's pipeline is a runtime file, no OS rebuild per level change; O8 foundation modules first. D1–D6 and the plan carry the answers; 90-day trends go to a second small Prometheus. · v0.1 (2026-11-10) — first draft, from the operator's direction of 2026-11-10: complement event-based health (operations and security events, CMDB associations, root cause and impact) with performance monitoring; decide what is realistic to monitor, how it is turned on and off, and how its level is set; tie it to traceability. |
 
 TAPPaaS knows **whether** something is wrong: ADR-039 turns log lines into alerts, ADR-041 turns
 every check into a condition on a CMDB object, derives root causes along the relations and mails
@@ -69,10 +69,13 @@ performance its context (which change, which root cause), but neither replaces t
 The logging module provides two new services beside `logging:logs`:
 
 - **`logging:metrics`** — a time-series store on the logging VM (Prometheus, O1), receiving
-  pushes over Prometheus `remote_write` and OTLP, behind nginx with one credential per pushing
-  VM, the same pattern as Loki's tcp/3101: a VM can write series only under its own identity (the
-  identity labels are set from the credential, never trusted from the sender), and cannot read or
-  delete. Over TLS from the internal CA (ADR-043).
+  pushes over OTLP (guests) and the metric-server protocols of Proxmox and PBS, behind nginx with
+  one credential per pushing host, the same pattern as Loki's tcp/3101: a host can write series
+  only under its own identity (the identity labels are set from the authenticated user and the
+  CMDB, never trusted from the sender), and cannot read or delete. The Proxmox cluster, whose
+  metric server is one setting and whose nodes are one trust domain, pushes with one credential;
+  its `node` label is trusted only among the nodes the CMDB lists. Over TLS from the internal CA
+  (ADR-043).
 - **`logging:traces`** — a trace store (Grafana Tempo), installed but **idle** until some CI is at
   level `trace` (D3). Local filesystem storage, short retention.
 
@@ -184,9 +187,12 @@ Every level change — who, from what to what, until when — is a change on the
 Performance data is only useful if it can be traced to what it is about and to why it changed:
 
 1. **Identity.** Every series and every span carries the CI's OTel resource identity (ADR-040
-   D14). On OTLP ingest, `service.instance.id`, `service.name`, `service.namespace`,
-   `deployment.environment.name` and `tappaas.ci.id` are promoted to labels; on `remote_write`
-   Alloy sets the same labels from the CI id cmdb-controller wrote beside the push secret. A
+   D14). The logging VM sets `service.instance.id`, `service.name`, `service.namespace`,
+   `deployment.environment.name` and `tappaas.ci.id` as labels from the authenticated user and
+   the CMDB (an identity map the mothership renders from the CMDB onto the logging VM and Alloy
+   re-reads on change); a sender's own identity labels are overwritten. Guests push OTLP rather
+   than `remote_write` because only the OTLP path lets the receiver see who authenticated. A
+   series about a guest sent by its node carries the guest's identity. A
    series is never matched to a CI by host name. `cmdb resolve` maps any label set back to a CI.
 2. **Changes as annotations.** Every CMDB change that can move performance — an update to a new
    release, a `modify` of cores or memory, a reboot, a migration to another node, a level change
