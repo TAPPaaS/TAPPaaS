@@ -55,6 +55,8 @@ export interface PerfContext {
   cascade(module: string): { from: string; source: string } | null;
   /** Rewrite the module's pipeline; its output lines and success. */
   apply(module: string): { ok: boolean; lines: string[] };
+  /** Start or stop the trace store and the senders to match the raises (ADR-046 P6). */
+  traces?(): { ok: boolean; lines: string[] };
   /** Delete the CI's series from both stores. */
   purge(ciId: string): { ok: boolean; lines: string[] };
   say(line: string): void;
@@ -94,6 +96,12 @@ const every = (r: string): string => (r === "fine" ? "every 15 seconds" : "every
 const iso = (d: Date): string => d.toISOString().replace(/\.\d{3}Z$/, "Z");
 
 function applyRow(ctx: PerfContext, module: string | null, what: string): void {
+  // The trace store follows every raise to trace and its end, whatever the CI.
+  if (ctx.traces) {
+    const t = ctx.traces();
+    if (!t.ok) ctx.warn(`the trace store was not switched: ${t.lines.slice(-1)[0] ?? "no answer"}`);
+    else if (t.lines.some((l) => /^traces: Tempo/.test(l))) ctx.say(t.lines.find((l) => /^traces: Tempo/.test(l)) as string);
+  }
   if (!module) {
     ctx.say(`${what}: it runs no collector of its own; its numbers come from its node or the services on it`);
     return;

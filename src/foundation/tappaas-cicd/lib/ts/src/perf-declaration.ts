@@ -25,7 +25,7 @@ export interface PerfThreshold {
 
 export interface PerfDeclaration {
   exporters?: PerfExporter[];
-  traces?: { otlp: boolean; level?: "trace" };
+  traces?: { otlp: boolean; level?: "trace"; note?: string };
   thresholds?: PerfThreshold[];
 }
 
@@ -44,7 +44,14 @@ export function declares(perf: unknown): boolean {
 }
 
 // Findings for one module JSON: errors refuse the install, warnings do not.
-export function perfDeclarationFindings(module: { source?: string | null; performance?: unknown }): { errors: string[]; warnings: string[] } {
+// Software known not to emit OpenTelemetry spans, by the module that ships it
+// (ADR-046 P6): a declaration of traces.otlp there promises spans that never
+// come. Taken out when the software gains an OTLP exporter.
+export const NO_OTLP: Record<string, string> = {
+  identity: "authentik ships no OpenTelemetry exporter (Sentry only)",
+};
+
+export function perfDeclarationFindings(module: { name?: string | null; source?: string | null; performance?: unknown }): { errors: string[]; warnings: string[] } {
   const errors: string[] = [];
   const warnings: string[] = [];
   const p = module.performance;
@@ -89,6 +96,12 @@ export function perfDeclarationFindings(module: { source?: string | null; perfor
     const t = perf.traces as Record<string, unknown> | null;
     if (!t || typeof t !== "object" || typeof t.otlp !== "boolean") errors.push("performance.traces must be {\"otlp\": true|false}");
     else if (t.level !== undefined && t.level !== "trace") errors.push("performance.traces.level is trace: traces are collected only while an object is traced");
+    else {
+      for (const k of Object.keys(t)) if (!["otlp", "level", "note"].includes(k)) errors.push(`performance.traces.${k} is not a traces key (otlp, level, note)`);
+      if (t.note !== undefined && typeof t.note !== "string") errors.push("performance.traces.note is text");
+      const why = module.name ? NO_OTLP[module.name] : undefined;
+      if (t.otlp === true && why) warnings.push(`performance.traces.otlp is true, but ${why}: no spans will arrive — set it false until it does`);
+    }
   }
   if (perf.thresholds !== undefined) {
     if (!Array.isArray(perf.thresholds)) errors.push("performance.thresholds must be a list");

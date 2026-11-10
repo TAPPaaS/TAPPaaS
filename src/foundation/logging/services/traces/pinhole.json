@@ -1,0 +1,7 @@
+{
+  "_comment": "logging:traces (ADR-046 P6). The same push receiver as logging:metrics: per consumer VM, to this port only.",
+  "fromZones": "any",
+  "ports": [
+    { "port": 3120, "protocol": "TCP", "description": "Trace and metrics push-only receiver (OTLP), TLS" }
+  ]
+}

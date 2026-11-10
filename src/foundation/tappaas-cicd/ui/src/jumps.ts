@@ -70,6 +70,22 @@ export function grafanaDashboard(ctx: JumpContext, cls: string, labels: Record<s
   return `https://${g}/d/${uid}/?orgId=1&${vars}`;
 }
 
+// The CI's traces (ADR-046 D7, P6): Grafana's Explore on the Tempo data source,
+// a TraceQL search by the CI's id, the last hour. Null where Grafana is not
+// published, as for the dashboards.
+export function grafanaTraces(ctx: JumpContext, ciId: string): string | null {
+  const g = publicName(ctx, "logging");
+  if (!g || !/^[0-9a-f-]{36}$/.test(ciId)) return null;
+  const panes = {
+    t: {
+      datasource: "tempo",
+      queries: [{ refId: "A", datasource: { type: "tempo", uid: "tempo" }, queryType: "traceql", query: `{ resource.tappaas.ci.id = "${ciId}" }` }],
+      range: { from: "now-1h", to: "now" },
+    },
+  };
+  return `https://${g}/explore?schemaVersion=1&orgId=1&panes=${enc(JSON.stringify(panes))}`;
+}
+
 function opnsense(ctx: JumpContext, path = "/"): string {
   return `https://firewall.${ctx.mgmtDomain}:8443${path}`;
 }

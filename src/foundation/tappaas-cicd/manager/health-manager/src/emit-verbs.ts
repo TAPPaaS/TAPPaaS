@@ -286,6 +286,10 @@ export function livePerfContext(ctx: EmitContext): PerfContext {
       const r = captureResult(METRICS_TARGET(), ["guest", module, "apply"]);
       return { ok: r.ran && r.rc === 0, lines: r.ran ? outLines(r) : [`${METRICS_TARGET()} not found`] };
     },
+    traces: () => {
+      const r = captureResult(METRICS_TARGET(), ["traces", "apply"]);
+      return { ok: r.ran && r.rc === 0, lines: r.ran ? outLines(r) : [`${METRICS_TARGET()} not found`] };
+    },
     purge: (id) => {
       const r = captureResult(METRICS_TARGET(), ["purge", id]);
       return { ok: r.ran && r.rc === 0, lines: r.ran ? outLines(r) : [`${METRICS_TARGET()} not found`] };

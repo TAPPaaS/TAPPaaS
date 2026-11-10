@@ -266,6 +266,53 @@ EOF
   }
 }
 EOF
+    render_traces_identity "${map}"
+}
+
+# The spans' half (ADR-046 P6): the resource attributes a sender wrote about
+# identity go, then each host's CI is set from the host the logging VM wrote
+# (tappaas.host: the authenticated user, or "logging" for its own). service.name
+# stays the sender's: the software that made the span.
+render_traces_identity() {
+    local map="$1" n id ns
+    cat <<'EOF'
+
+declare "stamp_traces" {
+  argument "output" { }
+
+  otelcol.processor.transform "stamp" {
+    error_mode = "ignore"
+    trace_statements {
+      context    = "resource"
+      statements = [
+        `delete_key(attributes, "tappaas.ci.id")`,
+        `delete_key(attributes, "deployment.environment.name")`,
+        `delete_key(attributes, "service.namespace")`,
+        `delete_key(attributes, "host.id")`,
+        `set(attributes["host.name"], attributes["tappaas.host"])`,
+EOF
+    while IFS=$'\t' read -r n id; do
+        _ms_name_ok "${n}" && _ms_id_ok "${id}" || continue
+        ns="$(jq -r --arg id "${id}" '.ids[$id].ns // ""' <<<"${map}")"
+        _ms_name_ok "${ns}" || ns=""
+        printf '        `set(attributes["tappaas.ci.id"], "%s") where attributes["tappaas.host"] == "%s"`,\n' "${id}" "${n}"
+        printf '        `set(attributes["host.id"], "%s") where attributes["tappaas.host"] == "%s"`,\n' "${id}" "${n}"
+        [[ -n "${ns}" ]] && printf '        `set(attributes["deployment.environment.name"], "%s") where attributes["tappaas.host"] == "%s"`,\n' "${ns}" "${n}"
+        [[ -n "${ns}" ]] && printf '        `set(attributes["service.namespace"], "%s") where attributes["tappaas.host"] == "%s"`,\n' "${ns}" "${n}"
+    done < <(jq -r '.hosts // {} | to_entries[] | [.key, .value] | @tsv' <<<"${map}")
+    cat <<'EOF'
+      ]
+    }
+    output {
+      traces = argument.output.value
+    }
+  }
+
+  export "input" {
+    value = otelcol.processor.transform.stamp.input
+  }
+}
+EOF
 }
 
 # nginx map lines for InfluxDB senders (PBS): "Token <user>:<secret>" → user.
@@ -674,8 +721,12 @@ metrics_guest_render() {
 # apply_metrics_guest <module> — write the runtime file when it differs and
 # have Alloy re-read it. Prints "changed" or "unchanged" and the level.
 apply_metrics_guest() {
-    local module="$1" t file eff
-    t="$(_ms_guest_transport "${module}")" || { echo "${module} ships no logs here, so it has no Alloy to collect its own numbers"; return 0; }
+    local module="$1" t file eff tr
+    # A raise to trace (or its end) starts or stops Tempo and the senders.
+    if [[ "$(metrics_traces_state 2>/dev/null)" == stale ]]; then
+        tr="$(apply_metrics_traces 2>&1)" || echo "traces not switched: ${tr##*$'\n'}" >&2
+    fi
+    t="$(_ms_guest_transport "${module}")" || { echo "${module} ships no logs here, so it has no Alloy to collect its own numbers${tr:+; ${tr}}"; return 0; }
     file="$(metrics_guest_render "${module}")" || return 1
     eff="$(metrics_effective "${module}")"
     _ls_guest_root "${t}" <<EOF || return 1
@@ -690,6 +741,68 @@ systemctl reload alloy 2>/dev/null || systemctl try-restart alloy
 echo changed
 EOF
     echo "${module}: level $(jq -r .level <<<"${eff}") ($(jq -r 'if .raise then "raised until " + .raise.until else "from " + .source end' <<<"${eff}")), every $(jq -r 'if .resolution == "fine" then "15" else "60" end' <<<"${eff}") s"
+}
+
+# ── traces (ADR-046 D1, D3; P6) ──────────────────────────────────────
+# Tempo on the logging VM runs only while some CI is raised to trace; the
+# senders follow their own raise: Grafana (the logging CI) through a file its
+# tracing setting reads. Caddy on OPNsense and authentik emit no spans TAPPaaS
+# can switch on (os-caddy generates every site without a tracing option;
+# authentik ships no OpenTelemetry exporter).
+
+METRICS_GRAFANA_OTLP_FILE="/etc/tappaas-metrics/grafana-otlp-address"
+METRICS_GRAFANA_OTLP_ADDR="127.0.0.1:3127"
+
+# The CIs raised to trace now: module names, one a line.
+metrics_traced_modules() {
+    local f now
+    f="$(_ms_raises_file)"; [[ -s "${f}" ]] || return 0
+    now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    jq -r --arg now "${now}" '.investigations[]? | select((.ended // null) == null and .until > $now and .level == "trace") | (.module // .ci.name)' "${f}" 2>/dev/null | sort -u
+}
+
+# What the logging VM should run: "tempo=on|off grafana=on|off".
+_ms_traces_wanted() {
+    local mods tempo=off graf=off logging
+    mods="$(metrics_traced_modules)"
+    if [[ -f "$(_ls_config_dir)/logging.json" && -n "${mods}" ]]; then
+        tempo=on
+        logging="$(jq -r '.vmname // "logging"' "$(_ls_config_dir)/logging.json" 2>/dev/null || echo logging)"
+        grep -qxE "logging|${logging}" <<<"${mods}" && graf=on
+    fi
+    echo "tempo=${tempo} grafana=${graf}"
+}
+
+# in-sync | stale | unknown, and what runs.
+metrics_traces_state() {
+    local vm have want
+    [[ -f "$(_ls_config_dir)/logging.json" ]] || { echo absent; return 0; }
+    vm="$(_ls_logging_vm)"
+    have="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "${vm}" \
+        "printf 'tempo=%s grafana=%s' \"\$(systemctl is-active -q tempo && echo on || echo off)\" \"\$( [ -s ${METRICS_GRAFANA_OTLP_FILE} ] && echo on || echo off)\"" 2>/dev/null)" \
+        || { echo unknown; return 0; }
+    want="$(_ms_traces_wanted)"
+    [[ "${have}" == "${want}" ]] && echo in-sync || echo stale
+}
+
+# Start or stop Tempo and Grafana's spans to match the raises.
+apply_metrics_traces() {
+    local vm want tempo graf
+    [[ -f "$(_ls_config_dir)/logging.json" ]] || return 0
+    vm="$(_ls_logging_vm)"
+    want="$(_ms_traces_wanted)"
+    tempo="${want%% *}"; tempo="${tempo#tempo=}"
+    graf="${want##*grafana=}"
+    ssh -o BatchMode=yes -o ConnectTimeout=10 "${vm}" "
+        set -e
+        if [ '${tempo}' = on ]; then sudo systemctl start tempo; else sudo systemctl stop tempo; fi
+        want=''; [ '${graf}' = on ] && want='${METRICS_GRAFANA_OTLP_ADDR}'
+        have=\$(sudo cat ${METRICS_GRAFANA_OTLP_FILE} 2>/dev/null || true)
+        if [ \"\$have\" != \"\$want\" ]; then
+            printf '%s' \"\$want\" | sudo install -D -m 0644 /dev/stdin ${METRICS_GRAFANA_OTLP_FILE}
+            sudo systemctl restart grafana
+        fi" || return 1
+    echo "traces: Tempo ${tempo}, Grafana's spans ${graf}"
 }
 
 # ── purge (ADR-046 D3) ───────────────────────────────────────────────

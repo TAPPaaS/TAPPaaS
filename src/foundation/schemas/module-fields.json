@@ -322,6 +322,10 @@
           "required": ["otlp"],
           "properties": {
             "otlp": { "type": "boolean" },
+              "note": {
+                "type": "string",
+                "description": "Why, when otlp is false: what the software lacks."
+              },
             "level": { "type": "string", "enum": ["trace"] }
           }
         },

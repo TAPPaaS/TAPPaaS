@@ -64,6 +64,9 @@ The whole stack is declared in [`logging.nix`](logging.nix).
 | 3123 | TCP | Prometheus, 90-day trends (localhost only) | Grafana, the store's remote_write |
 | 3124 | TCP | Alloy's OTLP receiver (localhost only) | nginx |
 | 3125 | TCP | Alloy's InfluxDB receiver (localhost only) | nginx |
+| 3127 | TCP | Alloy's OTLP gRPC receiver (localhost only): this VM's own spans | Grafana |
+| 3200 | TCP | Tempo's API (localhost only), only while a CI is at trace | Grafana |
+| 4317 | TCP | Tempo's OTLP receiver (localhost only), only while a CI is at trace | this VM's Alloy |
 
 ## Label scheme
 
@@ -307,6 +310,35 @@ Prometheus on this VM. What is collected is the site's choice: `site.json`
   store RAM of the levels in force, from hrossen's measurements; logging's update
   warns when they do not fit the VM's memory or half its free disk over the
   retention. Removing logging (`delete.sh`) removes the Proxmox and PBS targets.
+- **Traces (`logging:traces`).** Grafana Tempo on this VM, local filesystem, 72
+  hours, localhost only (3200 API, 4317 OTLP from this VM's Alloy). **Idle**: no
+  unit wants it; the mothership starts it while some CI is raised to trace
+  (`health-manager perf <ci> --level trace --until <time>`; `--until` is required
+  and trace exists only this way) and stops it when the last such raise ends
+  (`tappaas-metrics-target.sh traces status|apply`, also run by every raise, its
+  expiry and `site apply`). Spans come in on the push port, `/v1/traces` on :3120,
+  with the same credential per host as metrics; Alloy writes the authenticated user
+  as `tappaas.host` (this VM's own, over the local gRPC receiver on 3127, are
+  `logging`), lifts it onto the resource, and the mothership's identity module
+  (`stamp_traces`) deletes what the sender said about `tappaas.ci.id`,
+  `deployment.environment.name`, `service.namespace`, `host.id` and sets them, and
+  `host.name`, from the CMDB; `service.name` stays the sender's software. Tail
+  sampling keeps every trace with an error, every one slower than a second, and a
+  tenth of the rest. Grafana's own spans are the switchable sender today: on while
+  the logging CI is raised to trace (`/etc/tappaas-metrics/grafana-otlp-address`,
+  Grafana restarted on a change), and its log lines then carry `traceID=`.
+- **Metric → trace → log.** Prometheus keeps exemplars (`exemplar-storage`) and
+  the Prometheus data source opens an exemplar's trace in Tempo; a Loki line with
+  `traceID=`/`"trace_id":` opens its trace (a derived field); a span opens its
+  host's logs around it and the CI's metrics (`tracesToLogsV2`, `tracesToMetrics`).
+  The console's CI panel links a CI at trace to Grafana's Explore on Tempo,
+  searching `{ resource.tappaas.ci.id = "<id>" }`.
+- **What cannot trace yet.** Caddy on OPNsense has the `tracing` handler, but
+  `os-caddy` generates every published site and has no option for it, and its
+  `caddy.d` extension adds only global options and sites of its own; authentik
+  (2026.8) ships no OpenTelemetry exporter, only Sentry. A trace raise on them is
+  recorded and starts Tempo, and nothing of theirs arrives; identity's
+  `traces.otlp` declaration waits for an authentik that exports OTLP.
 - **In Grafana:** data sources *Prometheus* and *Prometheus trends*, e.g.
   `proxmox_vm_cpu{service_name="nextcloud"}`,
   `tappaas_guest_memory_used_bytes{service_namespace="rossen"}`,

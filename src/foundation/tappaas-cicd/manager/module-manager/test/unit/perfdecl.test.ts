@@ -57,5 +57,15 @@ for (const m of ["identity", "logging"]) {
   check(declares(doc.performance) && f.errors.length === 0 && f.warnings.length === 0, `${m}.json's declaration is valid: ${f.errors.join("; ")}`);
 }
 
+// P6: traces.otlp where the software is known not to emit warns; a note is allowed.
+{
+  const t = (otlp: boolean, extra: Record<string, unknown> = {}) =>
+    perfDeclarationFindings({ name: "identity", source: "official", performance: { traces: { otlp, ...extra } } });
+  check(t(true).warnings.some((w) => /authentik ships no OpenTelemetry/.test(w)) && t(true).errors.length === 0, "identity declaring traces.otlp true warns, not refuses");
+  check(t(false, { note: "no exporter" }).warnings.length === 0 && t(false, { note: "no exporter" }).errors.length === 0, "false with a note is clean");
+  check(t(false, { colour: "red" }).errors.some((e) => /not a traces key/.test(e)), "an unknown traces key is refused");
+  check(perfDeclarationFindings({ name: "nextcloud", source: "official", performance: { traces: { otlp: true } } }).warnings.length === 0, "another module's otlp true is its own word");
+}
+
 console.log(`\nperfdecl: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exitCode = 1;

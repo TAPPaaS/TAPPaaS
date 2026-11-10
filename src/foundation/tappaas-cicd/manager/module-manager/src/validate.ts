@@ -136,7 +136,7 @@ export function validateModule(
 
   // A performance declaration (ADR-046 D5): foundation modules only, well formed.
   {
-    const f = perfDeclarationFindings({ source: m.source, performance: m.raw?.performance });
+    const f = perfDeclarationFindings({ name: m.name, source: m.source, performance: m.raw?.performance });
     for (const e of f.errors) err(e);
     for (const w of f.warnings) warn(w);
   }

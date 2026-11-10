@@ -21,7 +21,8 @@
   ],
   "provides": [
     "logs",
-    "metrics"
+    "metrics",
+    "traces"
   ],
   "identity": {
     "launchPath": "/login/generic_oauth",

@@ -98,8 +98,9 @@
       }
     ],
     "traces": {
-      "otlp": true,
-      "level": "trace"
+      "otlp": false,
+      "level": "trace",
+      "note": "authentik ships no OpenTelemetry exporter (Sentry only); set true when it exports OTLP"
     },
     "thresholds": [
       {

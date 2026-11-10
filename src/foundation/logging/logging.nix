@@ -57,6 +57,13 @@ let
   promPort          = 3122;    # Prometheus, localhost only
   promTrendsPort    = 3123;    # the 90-day trends Prometheus, localhost only
   otlpInternal      = 3124;    # Alloy's OTLP receiver, localhost only
+  otlpGrpcInternal  = 3127;    # the same over gRPC, localhost only: this VM's own senders (Grafana)
+  # Traces (logging:traces, ADR-046 D1, P6): Tempo, idle until a CI is raised
+  # to trace. Localhost only; the push comes through nginx :metricsPushPort.
+  tempoHttp         = 3200;    # Tempo's API (Grafana), localhost only
+  tempoGrpc         = 3205;    # Tempo's own gRPC, localhost only
+  tempoOtlp         = 4317;    # Tempo's OTLP receiver (Alloy), localhost only
+  grafanaOtlpFile   = "/etc/tappaas-metrics/grafana-otlp-address";
   influxInternal    = 3125;    # Alloy's InfluxDB receiver, localhost only
   identityFile      = "/etc/alloy-identity/identity.alloy";
   promEnvFile       = "/etc/tappaas-metrics/prometheus.env";
@@ -111,6 +118,29 @@ let
       }
       export "receiver" {
         value = prometheus.relabel.stamp.receiver
+      }
+    }
+
+    // Spans: the sender's own identity attributes go; none are set.
+    declare "stamp_traces" {
+      argument "output" { }
+      otelcol.processor.transform "stamp" {
+        error_mode = "ignore"
+        trace_statements {
+          context    = "resource"
+          statements = [
+            `delete_key(attributes, "tappaas.ci.id")`,
+            `delete_key(attributes, "deployment.environment.name")`,
+            `delete_key(attributes, "host.id")`,
+            `set(attributes["host.name"], attributes["tappaas.host"])`,
+          ]
+        }
+        output {
+          traces = argument.output.value
+        }
+      }
+      export "input" {
+        value = otelcol.processor.transform.stamp.input
       }
     }
   '';
@@ -738,8 +768,89 @@ in
         endpoint         = "127.0.0.1:${toString otlpInternal}"
         include_metadata = true
       }
+      // This VM's own senders (Grafana's tracing), with no credential: they
+      // are this VM, and get its host below.
+      grpc {
+        endpoint = "127.0.0.1:${toString otlpGrpcInternal}"
+      }
       output {
         metrics = [otelcol.processor.attributes.pushed_by.input]
+        traces  = [otelcol.processor.attributes.traced_by.input]
+      }
+    }
+
+    // ── Traces (logging:traces, ADR-046 D1, P6) ────────────────────────
+    // As for metrics: the sender is the authenticated user (X-Tappaas-Host),
+    // whatever its spans say; this VM's own, sent locally, are "logging".
+    otelcol.processor.attributes "traced_by" {
+      action {
+        key          = "tappaas.host"
+        from_context = "metadata.x-tappaas-host"
+        action       = "upsert"
+      }
+      action {
+        key    = "tappaas.host"
+        value  = "logging"
+        action = "insert"
+      }
+      output {
+        traces = [otelcol.processor.groupbyattrs.traced_by.input]
+      }
+    }
+
+    // The host onto the resource, where the identity goes.
+    otelcol.processor.groupbyattrs "traced_by" {
+      keys = ["tappaas.host"]
+      output {
+        traces = [identity.stamp_traces.spans.input]
+      }
+    }
+
+    identity.stamp_traces "spans" {
+      output = [otelcol.processor.tail_sampling.keep.input]
+    }
+
+    // Head-sampled to a tenth, errors and slow requests always kept: the
+    // decision waits for the whole trace (ADR-046 D3).
+    otelcol.processor.tail_sampling "keep" {
+      decision_wait = "10s"
+      policy {
+        name = "errors"
+        type = "status_code"
+        status_code {
+          status_codes = ["ERROR"]
+        }
+      }
+      policy {
+        name = "slow"
+        type = "latency"
+        latency {
+          threshold_ms = 1000
+        }
+      }
+      policy {
+        name = "a-tenth"
+        type = "probabilistic"
+        probabilistic {
+          sampling_percentage = 10
+        }
+      }
+      output {
+        traces = [otelcol.exporter.otlp.tempo.input]
+      }
+    }
+
+    // To Tempo, which runs only while a CI is raised to trace: while it is
+    // stopped there is nothing to send, and what arrives is refused.
+    otelcol.exporter.otlp "tempo" {
+      client {
+        endpoint = "127.0.0.1:${toString tempoOtlp}"
+        tls {
+          insecure = true
+        }
+      }
+      sending_queue {
+        queue_size = 500
       }
     }
 
@@ -864,6 +975,9 @@ in
     prometheus.remote_write "store" {
       endpoint {
         url = "http://127.0.0.1:${toString promPort}/api/v1/write"
+        // Exemplars (a histogram bucket's sample trace id) reach the store,
+        // which keeps them: metric → trace in Grafana (ADR-046 D4.4).
+        send_exemplars = true
       }
     }
   '';
@@ -898,6 +1012,8 @@ in
       # delete_series for --purge (ADR-046 D3); reached only through nginx's
       # :${toString metricsQueryPort}, behind the admin credential.
       "--web.enable-admin-api"
+      # A histogram bucket's sample trace id (ADR-046 D4.4).
+      "--enable-feature=exemplar-storage"
     ];
     globalConfig = { scrape_interval = "1m"; evaluation_interval = "1m"; };
     ruleFiles = [ trendRules ];
@@ -931,6 +1047,40 @@ in
       PrivateTmp = true;
     };
   };
+
+  # ============================================================================
+  # TEMPO — the trace store (logging:traces, ADR-046 D1, P6)
+  # ============================================================================
+  #
+  # Installed and idle: no unit wants it. The mothership starts it while some
+  # CI is raised to trace (health-manager perf <ci> --level trace --until …)
+  # and stops it when the last such raise ends (tappaas-metrics-target.sh
+  # traces apply). Local filesystem, 72 hours; localhost only.
+  services.tempo = {
+    enable = true;
+    settings = {
+      server = {
+        http_listen_address = "127.0.0.1";
+        http_listen_port = tempoHttp;
+        grpc_listen_address = "127.0.0.1";
+        grpc_listen_port = tempoGrpc;
+        log_level = "warn";
+      };
+      distributor.receivers.otlp.protocols.grpc.endpoint = "127.0.0.1:${toString tempoOtlp}";
+      storage.trace = {
+        backend = "local";
+        local.path = "/var/lib/tempo/traces";
+        wal.path = "/var/lib/tempo/wal";
+      };
+      compactor.compaction.block_retention = "72h";
+      usage_report.reporting_enabled = false;
+    };
+  };
+  systemd.services.tempo.wantedBy = lib.mkForce [ ];
+
+  # Grafana's own spans, while the logging CI is raised to trace: the
+  # mothership writes the local receiver's address to ${grafanaOtlpFile}
+  # (empty: off) and restarts Grafana when it changes.
 
   # ============================================================================
   # TLS — the certificate the site's internal CA signs for this VM (#787)
@@ -1081,6 +1231,17 @@ in
       onlySSL = true;
       sslCertificate = tlsCert;
       sslCertificateKey = tlsKey;
+      # Spans (logging:traces), the same credential and identity as metrics.
+      locations."= /v1/traces" = {
+        proxyPass = "http://127.0.0.1:${toString otlpInternal}";
+        extraConfig = ''
+          auth_basic "TAPPaaS trace push";
+          auth_basic_user_file /etc/loki-auth/push.htpasswd;
+          proxy_set_header X-Tappaas-Host $remote_user;
+          proxy_set_header Authorization "";
+          client_max_body_size 32m;
+        '';
+      };
       locations."= /v1/metrics" = {
         proxyPass = "http://127.0.0.1:${toString otlpInternal}";
         extraConfig = ''
@@ -1171,6 +1332,17 @@ in
         cookie_samesite = "lax";
       };
 
+      # Its own spans (ADR-046 P6), only while the logging CI is raised to
+      # trace: the address file is empty otherwise, which leaves tracing off.
+      "tracing.opentelemetry" = {
+        sampler_type = "const";
+        sampler_param = 1;
+      };
+      "tracing.opentelemetry.otlp" = {
+        address = "$__file{${grafanaOtlpFile}}";
+        propagation = "w3c";
+      };
+
       "auth.anonymous".enabled = false;
       analytics.reporting_enabled = false;
       analytics.check_for_updates = false;
@@ -1238,6 +1410,14 @@ in
           url = "http://127.0.0.1:${toString lokiInternal}";
           isDefault = true;
           editable = false;
+          # A trace id in a log line opens the trace (ADR-046 D4.4): Grafana's
+          # traceID=…, a JSON log's "traceID"/"trace_id".
+          jsonData.derivedFields = [{
+            name = "TraceID";
+            matcherRegex = "(?:traceID|trace_id|traceId)\"?[=:] ?\"?([0-9a-f]{16,32})";
+            url = "$$\${__value.raw}";
+            datasourceUid = "tempo";
+          }];
         } {
           # The metrics store (logging:metrics) and its 90-day trends.
           name = "Prometheus";
@@ -1246,6 +1426,8 @@ in
           access = "proxy";
           url = "http://127.0.0.1:${toString promPort}";
           editable = false;
+          # A bucket's exemplar opens its sample trace (ADR-046 D4.4).
+          jsonData.exemplarTraceIdDestinations = [{ name = "traceID"; datasourceUid = "tempo"; }];
         } {
           name = "Prometheus trends";
           uid = "prometheus-trends";
@@ -1253,6 +1435,30 @@ in
           access = "proxy";
           url = "http://127.0.0.1:${toString promTrendsPort}";
           editable = false;
+        } {
+          # The trace store (logging:traces): empty unless a CI is at trace.
+          name = "Tempo";
+          uid = "tempo";
+          type = "tempo";
+          access = "proxy";
+          url = "http://127.0.0.1:${toString tempoHttp}";
+          editable = false;
+          jsonData = {
+            # A span opens the logs of its host around it, and the metrics.
+            tracesToLogsV2 = {
+              datasourceUid = "loki";
+              spanStartTimeShift = "-5m";
+              spanEndTimeShift = "5m";
+              filterByTraceID = true;
+              tags = [{ key = "host.name"; value = "host"; }];
+            };
+            tracesToMetrics = {
+              datasourceUid = "prometheus";
+              tags = [{ key = "tappaas.ci.id"; value = "tappaas_ci_id"; }];
+            };
+            search.hide = false;
+            nodeGraph.enabled = true;
+          };
         }];
       };
 
@@ -1532,6 +1738,9 @@ in
     # The metrics store's retention until the mothership writes the site's.
     "d /etc/tappaas-metrics            0755 root     root     -"
     "f /etc/tappaas-metrics/prometheus.env 0644 root root     -   PROM_RETENTION=15d"
+    # Grafana's trace address (ADR-046 P6): empty, tracing off, until the
+    # mothership writes it for a raise to trace on the logging CI.
+    "f ${grafanaOtlpFile}  0644 root root     -"
     # nginx's own log directory, before anything starts — see logrotate-checkconf.
     "d /var/log/nginx                  0750 nginx    nginx    -"
   ];

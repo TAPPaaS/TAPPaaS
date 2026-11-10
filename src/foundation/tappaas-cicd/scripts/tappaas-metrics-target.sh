@@ -15,6 +15,10 @@
 #   site apply           all of it after a site-level change: the store's
 #                        identities and retention, the Proxmox and PBS targets,
 #                        every guest's pipeline.
+#   traces <status|apply>
+#                        Tempo on the logging VM, and the senders that can be
+#                        switched (Grafana's own spans), while a CI is raised
+#                        to trace; stopped when none is.
 #   cost                 what the site's levels cost the store, as JSON.
 #   purge <ci-id>        delete the CI's series from both Prometheus instances.
 #
@@ -36,13 +40,19 @@ set -uo pipefail
 . "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" 2>/dev/null || true
 
 usage() {
-    echo "Usage: $0 <pve|pbs|all> <status|apply> | caddy <status|apply> | guest <module> <status|apply> | site apply | cost | purge <ci-id>" >&2
+    echo "Usage: $0 <pve|pbs|all> <status|apply> | caddy <status|apply> | guest <module> <status|apply> | site apply | traces <status|apply> | cost | purge <ci-id>" >&2
     exit 64
 }
 
 what="${1:-}"
 case "${what}" in
     cost) metrics_cost; exit $? ;;
+    traces)
+        case "${2:-}" in
+            status) s="$(metrics_traces_state)"; echo "traces ${s} ($(_ms_traces_wanted))"; [[ "${s}" == in-sync || "${s}" == absent ]] && exit 0; [[ "${s}" == unknown ]] && exit 2; exit 3 ;;
+            apply) [[ "$(metrics_traces_state)" == in-sync ]] && { echo "traces: in sync ($(_ms_traces_wanted))"; exit 0; }; apply_metrics_traces; exit $? ;;
+            *) usage ;;
+        esac ;;
     site)
         [[ "${2:-}" == apply ]] || usage
         rc=0 n=0
@@ -51,6 +61,7 @@ case "${what}" in
             s="$("metrics_${t}_state")"
             case "${s}" in unwanted) "remove_metrics_${t}" >/dev/null || rc=1 ;; missing|stale) "apply_metrics_${t}" >/dev/null || rc=1 ;; esac
         done
+        [[ "$(metrics_traces_state)" == stale ]] && { apply_metrics_traces >/dev/null || rc=1; }
         # The firewall's Caddy metrics listener, while a published service is at service.
         if [[ -f "$(_ls_config_dir)/network.json" ]]; then
             case "$(caddy_metrics_state)" in unwanted) remove_caddy_metrics >/dev/null || rc=1 ;; missing|stale) apply_caddy_metrics >/dev/null || rc=1 ;; esac

@@ -29,7 +29,7 @@ function throws(f: () => unknown, re: RegExp, msg: string): void {
 const IDENTITY = { id: "7fa7910d-f316-43b7-8660-7ec3e5a27831", class: "vm", name: "identity", attributes: {} };
 const POOL = { id: "0a7d1804-da8c-415e-879c-b077276ae2cd", class: "storage-pool", name: "tankc1", attributes: {} };
 
-function fake(now: Date): PerfContext & { records: { verb: string; inv: unknown }[]; applied: string[]; purged: string[]; lines: string[] } {
+function fake(now: Date): PerfContext & { tracesCalls: number; records: { verb: string; inv: unknown }[]; applied: string[]; purged: string[]; lines: string[] } {
   const dir = mkdtempSync(join(tmpdir(), "perf-test-"));
   writeFileSync(join(dir, "identity.json"), JSON.stringify({ kind: "vm", environment: "mgmt" }));
   let change = 1900;
@@ -54,6 +54,11 @@ function fake(now: Date): PerfContext & { records: { verb: string; inv: unknown 
     apply: (m: string) => {
       c.applied.push(m);
       return { ok: true, lines: ["changed", `${m}: level x`] };
+    },
+    tracesCalls: 0,
+    traces: () => {
+      c.tracesCalls++;
+      return { ok: true, lines: ["traces: Tempo on, Grafana's spans off"] };
     },
     purge: (id: string) => {
       c.purged.push(id);
@@ -134,6 +139,16 @@ const at = (min: number): Date => new Date(T0.getTime() + min * 60000);
   const c2 = fake(T0);
   perfStop(c2, "identity", true);
   check(c2.purged[0] === IDENTITY.id && c2.records.length === 0, "stop --purge with nothing raised only purges");
+}
+
+
+// The trace store follows every raise and every end, a pool's too (ADR-046 P6).
+{
+  const c = fake(T0);
+  perfRaise(c, { ref: "tankc1", level: "trace", until: at(30).toISOString() });
+  check(c.tracesCalls === 1 && c.lines.some((l) => /^traces: Tempo on/.test(l)), "a raise to trace switches the trace store, even with no pipeline");
+  perfExpire({ ...c, now: at(31) });
+  check(c.tracesCalls === 2, "its expiry switches it again");
 }
 
 console.log(`perf.test: ${passed} passed, ${failed} failed`);

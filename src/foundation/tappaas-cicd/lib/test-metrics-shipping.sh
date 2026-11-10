@@ -80,7 +80,7 @@ grep -B3 'target_label  = "service_name"' "${A}" | grep -q 'regex         = "1;1
 grep -A3 'regex         = "1;150"' "${A}" | grep -q 'replacement   = "logging"' && ok || no "guest 150 is not named logging"
 grep -q 'replacement   = "mgmt"' "${A}" && ok || no "the namespace is missing"
 [[ "$(grep -c 'regex         = "backup"' "${A}")" -eq 5 ]] && ok || no "the PBS instance does not get its five labels"
-tail -12 "${A}" | grep -q 'regex  = "tappaas_node"' && ok || no "the node flag is not dropped at the end"
+sed '/^declare "stamp_traces"/,$d' "${A}" | tail -12 | grep -q 'regex  = "tappaas_node"' && ok || no "the node flag is not dropped at the end"
 # No nodes known: no cluster mapping, the cluster's pushes dropped all the same.
 render_metrics_identity '{"cluster":"pvecluster","nodes":[],"hosts":{},"guests":{},"ids":{}}' > "${T}/empty.alloy"
 grep -q 'pvecluster;' "${T}/empty.alloy" && no "an empty map maps the cluster" || ok
@@ -194,6 +194,39 @@ mv "${CONFIG_DIR}/logging.json" "${CONFIG_DIR}/logging.json.x"
 grep -q 'level off' <<<"$(metrics_guest_render web)" && ok || no "without logging the guest renders a pipeline"
 mv "${CONFIG_DIR}/logging.json.x" "${CONFIG_DIR}/logging.json"
 metrics_purge not-an-id 2>/dev/null && no "purge took something that is not a CI id" || ok
+
+
+# ── traces (P6) ──────────────────────────────────────────────────────
+# The spans' identity: the sender's identity attributes go first, then each
+# host's CI from tappaas.host; nothing that is not a plain name or id.
+render_metrics_identity "${map}" > "${T}/idt.alloy"
+TR="$(sed -n '/^declare "stamp_traces"/,$p' "${T}/idt.alloy")"
+grep -q 'otelcol.processor.transform "stamp"' <<<"${TR}" && grep -q 'export "input"' <<<"${TR}" && ok || no "no stamp_traces declare"
+[[ "$(grep -n 'delete_key(attributes, "tappaas.ci.id")' <<<"${TR}" | cut -d: -f1)" -lt "$(grep -n "set(attributes\[\"tappaas.ci.id\"\]" <<<"${TR}" | head -1 | cut -d: -f1)" ]] \
+    && ok || no "the sender's tappaas.ci.id is not deleted before the stamp"
+grep -qF "set(attributes[\"tappaas.ci.id\"], \"${N1}\") where attributes[\"tappaas.host\"] == \"tappaas1\"" <<<"${TR}" && ok || no "tappaas1's spans are not stamped"
+grep -qF "set(attributes[\"service.namespace\"], \"mgmt\") where attributes[\"tappaas.host\"] == \"backup\"" <<<"${TR}" && ok || no "the namespace is not set on spans"
+grep -q 'evil\|nocid' <<<"${TR}" && no "an unsafe host reached the span statements" || ok
+grep -q 'set(attributes\["service.name"\]' <<<"${TR}" && no "service.name is overwritten (it is the sender's software)" || ok
+[[ "$(tr -cd '{' <<<"${TR}" | wc -c)" -eq "$(tr -cd '}' <<<"${TR}" | wc -c)" ]] && ok || no "stamp_traces braces do not balance"
+# Which CIs are traced, and what the logging VM should run.
+now_plus2(){ date -u -d "@$(( $(date +%s) + $1 ))" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -r "$(( $(date +%s) + $1 ))" +%Y-%m-%dT%H:%M:%SZ; }
+echo '{"vmname":"logging"}' > "${CONFIG_DIR}/logging.json"
+rm -f "${CONFIG_DIR}/performance-raises.json"
+eq "$(_ms_traces_wanted)" "tempo=off grafana=off" "no raise: Tempo and the senders off"
+jq -n --arg u "$(now_plus2 900)" --arg p "$(now_plus2 -60)" '{investigations: [
+    {module: "identity", ci: {name: "identity"}, level: "trace", ended: null, until: $u},
+    {module: "web", ci: {name: "web"}, level: "service", ended: null, until: $u},
+    {module: "old", ci: {name: "old"}, level: "trace", ended: null, until: $p}], history: []}' > "${CONFIG_DIR}/performance-raises.json"
+eq "$(metrics_traced_modules | tr '\n' ' ')" "identity " "only an active raise to trace counts"
+eq "$(_ms_traces_wanted)" "tempo=on grafana=off" "a trace raise starts Tempo; Grafana only for the logging CI"
+jq --arg u "$(now_plus2 900)" '.investigations += [{module: "logging", ci: {name: "logging"}, level: "trace", ended: null, until: $u}]' \
+    "${CONFIG_DIR}/performance-raises.json" > "${T}/r.json" && mv "${T}/r.json" "${CONFIG_DIR}/performance-raises.json"
+eq "$(_ms_traces_wanted)" "tempo=on grafana=on" "a trace raise on the logging CI switches Grafana's spans on"
+mv "${CONFIG_DIR}/logging.json" "${CONFIG_DIR}/logging.json.x"
+eq "$(_ms_traces_wanted)" "tempo=off grafana=off" "without logging nothing runs"
+mv "${CONFIG_DIR}/logging.json.x" "${CONFIG_DIR}/logging.json"
+rm -f "${CONFIG_DIR}/performance-raises.json"
 
 echo "Results: ${pass} passed, ${fail} failed"
 [[ ${fail} -eq 0 ]]

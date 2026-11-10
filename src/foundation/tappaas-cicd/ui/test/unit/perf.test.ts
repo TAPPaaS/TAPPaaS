@@ -16,6 +16,7 @@ import {
 } from "../../src/perf";
 import { fixtureFetch, fixturePromClient, loadFixtureMetrics, valueAt } from "../../src/perffixture";
 import { hasVerb, sizeMB } from "../../src/perfwire";
+import { grafanaTraces } from "../../src/jumps";
 import { fmtValue, statusOf } from "../../web/src/perftypes";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
@@ -154,6 +155,7 @@ async function reads(): Promise<void> {
     envLevelSettable: () => false,
     prom: fixturePromClient(m, () => NOW, pw),
     grafana: (cls, l) => `grafana:${cls}:${JSON.stringify(l)}`,
+    traces: (ciId) => `traces:${ciId}`,
     now: () => NOW,
   });
 
@@ -187,8 +189,10 @@ async function reads(): Promise<void> {
   check(c.series.length === 5 && c.series.every((x) => x.points.length === 289), "a guest's five signals over 24 hours");
   check(c.annotations.some((a) => a.label.startsWith("perf identity --level trace")), "the raise itself is a marker");
   check(c.links.grafana === `grafana:vm:{"tappaas_ci_id":"${id}"}`, "the Grafana link: the class's dashboard at the CI");
+  check(c.links.traces === `traces:${id}`, "identity at trace: its traces link (P6)");
   const k = await perf.loadCi("5f045500-92a5-4342-8cf3-0a4183e7e8e2", "7d");
   check(k.links.rootCause?.label === "tankc1", "karakeep: its root cause linked");
+  check(k.links.traces === null, "karakeep is not at trace: no traces link");
   const d90 = await perf.loadCi(id, "90d");
   check(d90.series.find((x) => x.key === "vm.cpu")!.points.length === 361, "the 90-day trend");
   const route = await perf.loadCi("f2d2826e-5c9f-4d41-9234-9b8fb8af8811", "90d");
@@ -217,8 +221,19 @@ async function reads(): Promise<void> {
   check((await noStore.loadOverview()).store === "unreachable", "collecting but no store here: unreachable");
 }
 
+// The traces jump (P6): Grafana's Explore on Tempo, a TraceQL search by the CI.
+function tracesJump(): void {
+  const ctx = { topology: null, modules: [{ name: "logging", environment: "mgmt" }], environments: [{ name: "mgmt", domains: { primary: "hrossen.dk" } }], mgmtDomain: "mgmt.internal", pbsStore: "" };
+  const u = grafanaTraces(ctx as never, "7fa7910d-f316-43b7-8660-7ec3e5a27831");
+  const panes = u ? JSON.parse(decodeURIComponent(u.split("panes=")[1])) : null;
+  check(!!u && u.startsWith("https://logging.hrossen.dk/explore?") && panes?.t?.datasource === "tempo", `the traces link opens Explore on Tempo (${u})`);
+  check(panes?.t?.queries?.[0]?.query === '{ resource.tappaas.ci.id = "7fa7910d-f316-43b7-8660-7ec3e5a27831" }', "searching the CI's spans by its id");
+  check(grafanaTraces(ctx as never, "not-an-id") === null, "no link for something that is not a CI id");
+}
+
 void (async () => {
   units();
+  tracesJump();
   await store();
   await reads();
   done("perf");

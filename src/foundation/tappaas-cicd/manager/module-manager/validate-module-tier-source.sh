@@ -206,6 +206,10 @@ main() {
                      or ((.keep // []) | any(test("^[A-Za-z_:*][A-Za-z0-9_:*]*$") | not)) or ((.keep // []) | any(. == "*")))
                      | (.name // "?")] | join(", ")' "$TARGET" 2>/dev/null || echo "?")"
             [[ -z "$bad" ]] || lint_error "${base}: performance.exporters ${bad}: each needs a name, a port and a keep-list of metric names"
+            # Software known not to emit spans (lib/ts/src/perf-declaration.ts NO_OTLP).
+            if [[ "${base%.json}" == identity ]] && jq -e '.performance.traces.otlp == true' "$TARGET" >/dev/null 2>&1; then
+                lint_warn "${base}: performance.traces.otlp is true, but authentik ships no OpenTelemetry exporter (Sentry only): no spans will arrive — set it false until it does"
+            fi
         fi
     fi
 

@@ -408,6 +408,51 @@ check_metrics() {
         || check_fail "A guest series from tappaas-cicd was stored (${n:-query failed})"
 }
 
+check_traces() {
+    info "Check 12: The trace store runs only while a CI is raised to trace; a span's identity is the sender's"
+    # shellcheck source=../tappaas-cicd/lib/metrics-shipping.sh
+    . "${METRICS_SHIPPING_LIB:-/home/tappaas/bin/metrics-shipping.sh}"
+    local st want p="https://${VM_HOST}:3120" code pw tid now body got
+    declare -F metrics_traces_state >/dev/null || { info "  no trace store in this release of the library — skipped"; return 0; }
+    st="$(metrics_traces_state)"; want="$(_ms_traces_wanted)"
+    [[ "${st}" == in-sync ]] && check_pass "Tempo and the senders match the raises (${want})" \
+        || check_fail "Tempo and the senders do not match the raises (${st}; want ${want}) — tappaas-metrics-target.sh traces apply"
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 -X POST -H 'Content-Type: application/json' "${p}/v1/traces" --data '{}' 2>/dev/null || true)"
+    [[ "${code}" == "401" ]] && check_pass "Trace push without a credential refused (401)" \
+        || check_fail "Trace push without a credential got ${code:-no answer}, not 401"
+
+    # The deep check, only while Tempo runs: a span pushed with the mothership's
+    # credential that claims another CI. Its status is ERROR, so the sampling
+    # keeps it; stored, it carries tappaas-cicd's CI id and host.
+    [[ " ${*} " == *" --deep "* ]] || return 0
+    [[ "${want}" == tempo=on* ]] || { info "  no CI is raised to trace: the stored-span check needs one (health-manager perf <ci> --level trace --until 15m)"; return 0; }
+    pw="$(cat "${LOG_SHIPPING_CRED_DIR}/tappaas-cicd" 2>/dev/null)"
+    [[ -n "${pw}" ]] || { check_fail "No push credential for tappaas-cicd"; return; }
+    tid="$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+    now="$(date +%s)"
+    body="$(jq -nc --arg t "${tid}" --arg s "$(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n')" --arg a "${now}000000000" --arg b "$(( now + 1 ))000000000" '
+        {resourceSpans: [{resource: {attributes: [
+            {key: "service.name", value: {stringValue: "tappaas-test"}},
+            {key: "tappaas.ci.id", value: {stringValue: "spoofed"}},
+            {key: "host.name", value: {stringValue: "tappaas1"}}]},
+          scopeSpans: [{spans: [{traceId: $t, spanId: $s, name: "trace-check", kind: 2,
+            startTimeUnixNano: $a, endTimeUnixNano: $b, status: {code: 2, message: "test"}}]}]}]}')"
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 -u "tappaas-cicd:${pw}" -H 'Content-Type: application/json' \
+            -X POST "${p}/v1/traces" --data "${body}" 2>/dev/null || true)"
+    [[ "${code}" == "200" ]] && check_pass "Authenticated span push accepted" || { check_fail "Authenticated span push got ${code:-no answer}"; return; }
+    for _ in $(seq 12); do
+        sleep 5
+        # shellcheck disable=SC2086
+        got="$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" "curl -s --max-time 5 http://127.0.0.1:3200/api/traces/${tid}" 2>/dev/null \
+               | jq -r '[((.batches // .resourceSpans // .trace.resourceSpans // [])[]?).resource.attributes[]? | select(.key == "tappaas.ci.id" or .key == "host.name") | "\(.key)=\(.value.stringValue)"] | sort | join(" ")' 2>/dev/null)"
+        [[ -n "${got}" ]] && break
+    done
+    want="$(metrics_identity_json 2>/dev/null | jq -r '.hosts["tappaas-cicd"] // ""')"
+    [[ -n "${want}" && "${got}" == "host.name=tappaas-cicd tappaas.ci.id=${want}" ]] \
+        && check_pass "The span is stored as tappaas-cicd with its own CI id, not the CI and host it claimed" \
+        || check_fail "The test span reads '${got:-not found in Tempo}', want host.name=tappaas-cicd tappaas.ci.id=${want:-<its CI id>}"
+}
+
 main() {
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         usage
@@ -440,6 +485,7 @@ main() {
     check_alert_rules
     check_alert_delivery
     check_metrics "$@"
+    check_traces "$@"
 
     echo ""
     info "Results: ${PASS_COUNT} passed, ${FAIL_COUNT} failed"
