@@ -685,6 +685,33 @@ in
     '';
   };
 
+  # Alloy reads its TLS certificate when it starts; a reload (SIGHUP, what the
+  # delivery's try-reload-or-restart does) keeps the one it has. So Alloy notes
+  # the certificate it started with, and a new one on disk restarts it: the
+  # delivery after a placeholder boot, and every renewal. nginx re-reads its
+  # certificate on reload. The delivery rewrites the file each time, so the
+  # restart happens only when the certificate itself differs.
+  systemd.services.alloy.serviceConfig.ExecStartPost = [
+    "+${pkgs.writeShellScript "alloy-tls-stamp" ''
+      ${pkgs.coreutils}/bin/sha256sum ${tlsCert} > /run/alloy-tls-cert.sha256 2>/dev/null || true
+    ''}"
+  ];
+  systemd.paths.alloy-tls-cert = {
+    description = "Watch the TLS certificate Alloy serves";
+    wantedBy = [ "multi-user.target" ];
+    pathConfig.PathChanged = tlsCert;
+  };
+  systemd.services.alloy-tls-cert = {
+    description = "Restart Alloy when its TLS certificate changed";
+    serviceConfig.Type = "oneshot";
+    script = ''
+      if ! ${pkgs.coreutils}/bin/sha256sum --check --status /run/alloy-tls-cert.sha256 2>/dev/null; then
+        echo "TLS: a new certificate on disk; restarting Alloy to serve it"
+        ${pkgs.systemd}/bin/systemctl try-restart alloy.service
+      fi
+    '';
+  };
+
   # ============================================================================
   # NGINX — who may push, who may read (#165 §1)
   # ============================================================================
