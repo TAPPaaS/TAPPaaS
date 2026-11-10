@@ -202,6 +202,27 @@ for m in ("pvehost", "cluster", "network", "backup", "logging"):
             ck(got[k] == g[k], f"{r['title']}.{k}: {got[k]!r} != {g[k]!r}")
 ck(seen == set(gold), f"every core rule is in a module file ({sorted(set(gold) - seen)})")
 
+# ── source: metrics (ADR-046 D6) ────────────────────────────────────
+mr = {"name": "slow-logins", "title": "Logins slow", "kind": "state", "source": "metrics", "signal": "http_p95_seconds",
+      "above": 1.5, "window": 900, "summary": "The login page's p95 stayed over 1.5 s for 15 minutes.",
+      "mail": {"subject": "{state}: {title}", "body": "{summary}\n{query}"}}
+ck(ar.validate({"rules": [mr]}) == [], f"a metrics rule validates ({ar.validate({'rules': [mr]})})")
+bad = dict(mr, signal="made_up", above="1", match="x")
+errs = ar.validate({"rules": [bad]})
+ck(any("signal" in e for e in errs) and any("'above'" in e for e in errs) and any("'match' does not go" in e for e in errs), f"a bad metrics rule says why ({errs})")
+ck(any("'signal' goes with" in e for e in ar.validate({"rules": [dict(mr, source="logs", match="y")]})), "a signal on a log rule is refused")
+ck(any("label." in e for e in ar.validate({"rules": [dict(mr, mail={"body": "{label.x}"})]})), "a metrics rule has no captured labels")
+g = ar.render_group("identity", {"rules": [mr]}, lambda m: ["identity"])["rules"][0]
+ck(g["data"][0]["datasourceUid"] == "prometheus", "a metrics rule reads Prometheus")
+ck(g["data"][0]["model"]["expr"] == 'min_over_time((histogram_quantile(0.95, sum by (tappaas_ci_id, le) (rate(caddy_http_request_duration_seconds_bucket{tappaas_module=~"^(identity)$"}[5m]))))[900s:1m]) > 1.5',
+   f"held over the threshold for the window, on the module's routes ({g['data'][0]['model']['expr']})")
+ck(g["labels"] == {"kind": "state", "module": "identity", "source": "metrics"}, f"its labels ({g['labels']})")
+ck(g["data"][1]["model"]["reducer"] == "last" and g["data"][2]["model"]["conditions"][0]["evaluator"] == {"type": "gt", "params": [0]}, "delivery as a log rule's")
+ck(g["annotations"]["mailSubject"] == "{state}: {title}", "the mail unchanged")
+gm = ar.render_group("nextcloud", {"rules": [dict(mr, signal="memory_pressure_percent", above=20)]}, lambda m: ["nextcloud"])["rules"][0]
+ck('service_name=~"^(nextcloud)$"' in gm["data"][0]["model"]["expr"], "a guest signal: the module's guests by name")
+ck(ar.render_group("nextcloud", {"rules": [dict(mr, signal="memory_pressure_percent")]}, lambda m: [])["rules"] == [], "no guest in scope: no rule")
+
 print(f"alert-rules: {passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)
 PYEOF

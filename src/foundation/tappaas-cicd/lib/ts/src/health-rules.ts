@@ -2,7 +2,7 @@
 // and the one check of them. cmdb-controller refuses a metamodel/health-rules.json
 // that fails it at load; `health-manager rules check` runs the same check.
 
-export const CONDITION_TYPES = ["operational", "drift", "capacity", "security", "maintenance", "backup", "impact"] as const;
+export const CONDITION_TYPES = ["operational", "drift", "capacity", "performance", "security", "maintenance", "backup", "impact"] as const;
 export const CONDITION_STATUSES = ["ok", "warning", "critical", "unknown"] as const;
 export type ConditionType = (typeof CONDITION_TYPES)[number];
 export type ConditionStatus = (typeof CONDITION_STATUSES)[number];

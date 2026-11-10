@@ -16,7 +16,7 @@ import { ReadState, replacePath, when } from "../ui";
 import { HealthPanel } from "./HealthPanel";
 import { TreePane, useTree } from "./HealthTree";
 
-const CONDITION_TYPES = ["operational", "drift", "capacity", "security", "maintenance", "backup", "impact"];
+const CONDITION_TYPES = ["operational", "drift", "capacity", "performance", "security", "maintenance", "backup", "impact"];
 const STRONG = "var(--fail)";
 const THIN = "var(--slate-400)";
 const WEEK_HOURS = 168;

@@ -17,7 +17,7 @@ export type Status = "ok" | "warning" | "critical" | "unknown";
 // `unknown` ranks between ok and warning (D1).
 const RANK: Record<Status, number> = { ok: 0, unknown: 1, warning: 2, critical: 3 };
 
-export const CONDITION_TYPES = ["operational", "drift", "capacity", "security", "maintenance", "backup", "impact"];
+export const CONDITION_TYPES = ["operational", "drift", "capacity", "performance", "security", "maintenance", "backup", "impact"];
 
 // What the Health view needs of a relation type: the metamodel's words, so the
 // console hardcodes neither containment nor dependency (/v1/rules).

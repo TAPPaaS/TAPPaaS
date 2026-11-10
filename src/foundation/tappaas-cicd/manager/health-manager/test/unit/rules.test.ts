@@ -18,8 +18,11 @@ const model = shippedModel();
 const rule = (over: Record<string, unknown>) => ({ rules: [{ relation: "runs-on", source: { type: "operational", status: "critical" }, impact: "critical", ...over }] });
 
 check(checkRules({ rules: model.rules }, model).length === 0, "the shipped rules hold");
-check(model.rules.length === 7 && model.rules.every((r) => r.source.status === "critical"), "…seven, and a warning crosses nothing");
-check(model.rules.filter((r) => !r.dependant).every((r) => r.impact === "critical"), "…a critical crosses as critical");
+const ops = model.rules.filter((r) => r.source.type === "operational");
+check(ops.length === 7 && ops.every((r) => r.source.status === "critical"), "…seven operational, and an operational warning crosses nothing");
+check(ops.filter((r) => !r.dependant).every((r) => r.impact === "critical"), "…an operational critical crosses as critical");
+const perf = model.rules.filter((r) => r.source.type === "performance");
+check(perf.length === 4 && perf.every((r) => r.impact === "warning"), "…four performance rules (ADR-046 D6), each a warning impact");
 const ha = model.rules.find((r) => r.dependant);
 check(ha?.relation === "runs-on" && ha?.dependant?.haNode === true && ha?.impact === "warning", "…but to an HA-protected guest as a warning");
 check(ruleLine(ha!) === "operational critical crosses runs-on to a dependant with haNode set as warning impact", `…and reads so (${ruleLine(ha!)})`);
@@ -28,8 +31,9 @@ check(["runs-on", "depends-on", "member-of", "connects", "built-on"].every((t) =
 const req = (n: string) => model.relations.find((r) => r.name === n);
 check(req("built-on")?.dependant === "from" && req("built-on")?.required === true, "built-on: the pool is hurt when its disk fails");
 check(req("stored-on")?.dependant === "from" && req("stored-on")?.required === true, "stored-on: a guest or datastore is hurt when its pool fails");
-const so = model.rules.filter((r) => r.relation === "stored-on");
-check(so.length === 1 && so[0].source.status === "critical" && so[0].impact === "critical" && !so[0].dependant, "…crossed by an operational critical only, as critical");
+const so = model.rules.filter((r) => r.relation === "stored-on" && r.source.type === "operational");
+check(so.length === 1 && so[0].source.status === "critical" && so[0].impact === "critical" && !so[0].dependant, "…crossed by an operational critical as critical");
+check(model.rules.filter((r) => r.relation === "stored-on" && r.source.type === "performance").every((r) => r.to === "storage-pool" && r.impact === "warning"), "…and a slow pool's performance as a warning");
 check(req("runs-on")?.required === true && req("depends-on")?.required === true && req("allocated-to")?.required === true && req("backs-up")?.required === false, "required: runs-on, depends-on, allocated-to; not backs-up");
 check(req("allocated-to")?.dependant === "to" && req("runs-on")?.dependant === "from" && req("connects")?.dependant === "both", "each knows which end is hurt");
 check(ruleLine(model.rules[0]) === "operational critical crosses runs-on as critical impact", "a rule reads as a line");
@@ -50,7 +54,7 @@ check(checkRules(rule({ dependant: { haNod: true } }), withFields).some((p) => p
 
 const lines: string[] = [];
 const print = (l: string): void => void lines.push(l);
-check(cmdRules(["list"], model, print) === 0 && lines.length === 7, "rules list prints each");
+check(cmdRules(["list"], model, print) === 0 && lines.length === model.rules.length, "rules list prints each");
 lines.length = 0;
 check(cmdRules(["list", "--json"], model, print) === 0 && JSON.parse(lines.join("\n")).some((r: { dependant?: unknown }) => r.dependant), "rules list --json carries the dependant clause");
 const dir = mkdtempSync(join(tmpdir(), "hm-rules-"));

@@ -36,7 +36,7 @@
 // Exit codes: ok=0, error / failed-health-gate = 1.
 
 import { spawnGuarded } from "../../../lib/ts/src/exec";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
 import { hostname } from "os";
 import { join } from "path";
 import { defaultConfigDir, loadConfigModules, readModuleJson } from "./config";
@@ -59,6 +59,8 @@ import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../
 import { CmdbRefused, CmdbReport, CmdbUnavailable, cmdbQuery, cmdbRelations, cmdbRequest } from "../../../lib/ts/src/cmdb";
 import { pruneRefused } from "../../../lib/ts/src/cmdb-reporter";
 import { AssessIO, AssessResult, Timer, assess } from "./assess";
+import { Declared, horizonOf } from "./assess-performance";
+import { curlReader, metricsEndpoint } from "./metrics-read";
 import { CmdbItem, CmdbRel, SiteIndex } from "./assess-model";
 import { assessmentOf, readValidate } from "./assess-validate";
 import { readLastSweep } from "./cmdbsweep";
@@ -377,8 +379,35 @@ function assessIO(opts: Opts, client: ClusterClient, timed?: Timer): AssessIO {
     },
     cve: () => readStatus(join(sbomDir(opts.configDir), STATUS_FILE)),
     security: (scan) => loadSiteSecurity(opts.configDir, scan),
+    metrics: () => {
+      const ep = metricsEndpoint(opts.configDir);
+      return ep ? curlReader(ep) : null;
+    },
+    perfDeclared: () => perfDeclared(opts.configDir),
+    modules: () => new Set(instanceNames(opts.configDir)),
+    horizonDays: () => horizonOf(readModuleJson(join(opts.configDir, "site.json"))),
     write: writeAssessment,
   };
+}
+
+// The thresholds the foundation modules declare (ADR-046 D5): an instance's
+// config carries its module's `performance` block; any other source's is not read.
+function instanceNames(configDir: string): string[] {
+  try {
+    return readdirSync(configDir).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5));
+  } catch {
+    return [];
+  }
+}
+function perfDeclared(configDir: string): Declared[] {
+  const out: Declared[] = [];
+  for (const m of instanceNames(configDir)) {
+    const cfg = readModuleJson(join(configDir, `${m}.json`));
+    const p = (cfg?.performance ?? null) as { thresholds?: unknown } | null;
+    if (!cfg || (cfg.source ?? "official") !== "official" || !p || !Array.isArray(p.thresholds)) continue;
+    out.push({ module: m, thresholds: p.thresholds as Declared["thresholds"] });
+  }
+  return out;
 }
 
 function assessLine(r: AssessResult): string {

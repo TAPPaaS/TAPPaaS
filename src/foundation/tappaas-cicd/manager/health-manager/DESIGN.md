@@ -195,6 +195,29 @@ conditions'.
 a period. The store compares without the members marked `volatile` and rewrites a
 value that differs only there, which is why an unchanged site costs no rows.
 
+## Performance and trend capacity (ADR-046 D6, `assess-performance.ts`)
+
+`assess` reads the metrics store (logging's Prometheus on :3121, its trends under `/trends/`,
+the mothership's admin credential on curl's stdin; `metrics-read.ts`) when logging and the
+credential are here.
+
+- **`performance`**: each signal of `lib/ts/src/perf-signals.ts` with a threshold for the CI's
+  class (D6's defaults: pool write latency, guest CPU pressure — the steal it sees —, memory and
+  I/O pressure of guests and nodes, a route's p95 and 5xx ratio), a foundation module's declared
+  `performance.thresholds` over them on its guest and its routes. A level is entered once held
+  for the whole window (`min_over_time` over `for`) and left once under it for the window
+  (`max_over_time`). Reason `perf-<signal>`; a CI measured before with no numbers now is
+  `unknown` (`perf-no-numbers`), never critical. A store that does not answer judges nothing,
+  and what this source set stands (owner `performance`, not looked).
+- **trend `capacity`**: pools (Proxmox's storage numbers, by node and storage name), backup
+  datastores (PBS's) and node memory, "full in N days" from the last 7 days' slope; within the
+  site's `performance.capacityHorizonDays` (14) a warning (`capacity-trend`), beside the usage
+  thresholds.
+- **correlation**: `health-rules.json` crosses a pool's performance warning or critical over
+  `stored-on`, and a node's over `runs-on`, as a `warning` impact.
+- **mail**: a performance transition carries `digestOnly` after `silenced`, so the critical-root
+  mail never matches it and the daily digest does; symptoms are never mailed.
+
 ## State it reads
 
 - **Module config** `config/<module>.json` (vmid, node, zone, diskSize, vmname,

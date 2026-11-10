@@ -706,9 +706,13 @@ health-manager perf list [--json]
   `ci.name`, `started`, `until` or a level of `basic`/`service`/`trace` is dropped.
 
 **The condition (P4)** — a `performance` condition on the CI, as ADR-041's others: `{type:
-"performance", status, message, since, derived, rootCause[]}`; a symptom names its root in
-`rootCause` (`derived: true`). The Overview lists a CI with a non-derived `performance` condition
-as a root cause, Browse colours the tree by it, and a symptom's panel links its root.
+"performance", status, reason ("perf-<signal>", "perf-no-numbers"), message, since, lastChecked,
+source, derived, rootCause (an id or null), acknowledged, maintenance}`. A slow pool or a
+pressured node crosses `stored-on` / `runs-on` as an `impact` warning on what depends on it
+(`derived: true`, `rootCause` the pool's id), and the dependant's own `performance` condition, if
+any, is then `derived` with the same `rootCause`. The Overview lists a CI with a non-derived
+`performance` condition as a root cause with what it slows (its impacts), Browse colours the tree
+by the condition, and a symptom's panel links its root.
 
 ## The verb manifest
 

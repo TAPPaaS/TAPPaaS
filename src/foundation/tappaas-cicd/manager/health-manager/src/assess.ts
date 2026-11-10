@@ -24,6 +24,8 @@ import { CheckResult } from "./types";
 import { CmdbReport } from "../../../lib/ts/src/cmdb";
 import { CONDITION_TYPES, ConditionStatus } from "../../../lib/ts/src/health-rules";
 import { levelChanged } from "./events";
+import { Declared, PERF_OWNER, fromPerformance, fromTrends } from "./assess-performance";
+import { MetricsReader } from "./metrics-read";
 
 /** Everything assess reads and writes; tests stub it. */
 export interface AssessIO {
@@ -36,6 +38,11 @@ export interface AssessIO {
   alerts(): { open: AlertItem[] | null; recent: AlertItem[] }; // open null: Grafana did not answer
   cve(): ScanStatus | null;
   security?(scan: ScanStatus): SiteSecurity; // the scan's risk scores, placed by config/ (without: no zones)
+  // The metrics store (ADR-046 D6): null when logging or its credential is not here.
+  metrics?(): MetricsReader | null;
+  perfDeclared?(): Declared[]; // the foundation modules' declared thresholds
+  modules?(): Set<string>; // the instances, to tell a CI's module
+  horizonDays?(): number; // capacity: "full within" this many days is a warning
   write(report: CmdbReport): void;
 }
 
@@ -76,6 +83,7 @@ function ownerOf(reason: string): string {
   if (reason.startsWith("sweep-")) return "sweep";
   if (reason.startsWith("cve-")) return "cve";
   if (["pool-usage", "pool-state", "datastore-usage", "link-down", "vpn-handshake-stale", "certificate-expiry"].includes(reason)) return "thresholds";
+  if (reason.startsWith("perf-") || reason === "capacity-trend") return PERF_OWNER;
   if (OBSERVATION_REASONS.includes(reason)) return "observations";
   return Object.entries(GATES).find(([, g]) => g.reason === reason)?.[0] ?? reason;
 }
@@ -172,6 +180,14 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
   const ended = t("cmdb ended", () => io.ended());
   findings.push(...t("observations", () => fromObservations(idx, ended, nowMs)));
   ran.add("observations");
+  const reader = io.metrics ? t("metrics", () => io.metrics!()) : null;
+  if (reader) {
+    const p = t("performance", () => fromPerformance(idx, reader, io.perfDeclared?.() ?? [], io.modules?.() ?? new Set()));
+    const tr = t("trends", () => fromTrends(idx, reader, io.horizonDays?.() ?? 14));
+    findings.push(...p.findings, ...tr.findings);
+    // Both or neither: one owner takes back what either set.
+    if (p.looked && tr.looked) ran.add(PERF_OWNER);
+  }
   const scan = t("cve", () => io.cve());
   const sec = scan ? t("cve score", () => (io.security ? io.security(scan) : siteSecurity(scan, { placement: {}, zones: {} }))) : null;
   findings.push(...fromCve(scan, sec, nowMs, idx));

@@ -7,6 +7,10 @@
     { "relation": "member-of", "source": { "type": "operational", "status": "critical" }, "impact": "critical" },
     { "relation": "connects", "source": { "type": "operational", "status": "critical" }, "impact": "critical" },
     { "relation": "built-on", "source": { "type": "operational", "status": "critical" }, "impact": "critical", "description": "A failed disk takes its pool down; in a mirror or raidz vdev (a redundancy group) it degrades it until every member has failed." },
-    { "relation": "stored-on", "source": { "type": "operational", "status": "critical" }, "impact": "critical", "description": "A failed pool takes down the guests and datastores whose data is on it; a degraded pool (a warning) reaches none of them." }
+    { "relation": "stored-on", "source": { "type": "operational", "status": "critical" }, "impact": "critical", "description": "A failed pool takes down the guests and datastores whose data is on it; a degraded pool (a warning) reaches none of them." },
+    { "relation": "stored-on", "to": "storage-pool", "source": { "type": "performance", "status": "warning" }, "impact": "warning", "description": "A slow pool (ADR-046 D6) slows the guests and datastores whose data is on it: degraded, so \"six guests are slow\" derives to their pool." },
+    { "relation": "stored-on", "to": "storage-pool", "source": { "type": "performance", "status": "critical" }, "impact": "warning", "description": "A very slow pool degrades what is stored on it; it is not down, so the impact stays a warning." },
+    { "relation": "runs-on", "to": "machine", "source": { "type": "performance", "status": "warning" }, "impact": "warning", "description": "A node under CPU or memory pressure slows the guests on it." },
+    { "relation": "runs-on", "to": "machine", "source": { "type": "performance", "status": "critical" }, "impact": "warning", "description": "A node under heavy pressure degrades the guests on it; they still run." }
   ]
 }

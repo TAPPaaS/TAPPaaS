@@ -530,7 +530,8 @@ export class Perf {
     for (const n of g.nodes) {
       const own = perf(n).find((i) => !i.derived && i.rootCause.filter((r) => r !== n.id).length === 0);
       if (!own) continue;
-      const impacted = g.nodes.filter((x) => x.id !== n.id && perf(x).some((i) => i.rootCause.includes(n.id))).map((x) => ({ id: x.id, label: x.label, class: x.class }));
+      // What it slows: the impact derive gave them (and their own performance condition, derived from it).
+      const impacted = g.nodes.filter((x) => x.id !== n.id && x.issues.some((i) => (i.type === "impact" || i.type === "performance") && i.rootCause.includes(n.id))).map((x) => ({ id: x.id, label: x.label, class: x.class }));
       out.push({ id: n.id, class: n.class, label: n.label, status: own.status, message: own.message ?? own.reason, since: own.since, impacted });
     }
     return out.sort((a, b) => b.impacted.length - a.impacted.length || a.label.localeCompare(b.label));
@@ -593,7 +594,7 @@ export class Perf {
     if (!node) throw new Error(`no object ${id}`);
     const ref = (g ? perfCis(g, desc) : []).find((c) => c.id === id) ?? null;
     const level = this.levelOf(ref ?? { id, module: node.module, environment: node.environment }, e);
-    const perfIssue = node.issues.find((i) => i.type === "performance");
+    const perfIssue = node.issues.find((i) => i.type === "performance" && i.rootCause.length) ?? node.issues.find((i) => i.type === "impact");
     const rootId = perfIssue?.rootCause.find((r) => r !== id) ?? null;
     const rootNode = rootId ? g?.nodes.find((n) => n.id === rootId) ?? null : null;
     const now = this.d.now();

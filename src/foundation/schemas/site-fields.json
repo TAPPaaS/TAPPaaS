@@ -129,6 +129,14 @@
           "maximum": 365,
           "changeClass": "in-place",
           "changeNote": "The store restarts with the new retention at logging's next update or metrics reconcile; a shorter one deletes the older numbers."
+        },
+        "capacityHorizonDays": {
+          "description": "How far ahead a capacity projection warns: a pool, a backup datastore or a node's memory that will be full within this many days, at the last seven days' rate, is a capacity warning. Not set: 14.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365,
+          "changeClass": "in-place",
+          "changeNote": "Read by the next health-manager assess."
         }
       },
       "changeClass": "in-place"

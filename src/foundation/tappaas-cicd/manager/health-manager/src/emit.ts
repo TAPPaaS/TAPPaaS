@@ -264,6 +264,10 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
             impacted: (now[rootKey(o.id, type)] ?? now[rootKey(o.id, "")])?.impacted ?? "nothing",
             silenced: silenced(c, input.now),
             ...(t.after && levelRose(o.class, type, t.before, t.after) ? { levelUp: true as const } : {}),
+            // Performance is told in the daily digest (ADR-046 D6): after
+            // `silenced`, so the critical-root mail (which ends its match there)
+            // never fires for it, and the digest's match takes it.
+            ...(type === "performance" ? { digestOnly: true as const } : {}),
           };
         };
         const windowMs = BUCKETS * intervalMs;

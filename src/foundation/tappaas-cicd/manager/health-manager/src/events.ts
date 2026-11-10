@@ -36,6 +36,7 @@ export interface TransitionEvent {
   impacted: string; // on a root: what it impacts by class, "3 vm, 2 service"; else "nothing"
   silenced: boolean; // acknowledged or in maintenance: recorded, never mailed
   levelUp?: true; // a module's CVE risk level rose to high or critical (cve-level-up mails it)
+  digestOnly?: true; // a performance condition: told in the daily digest, never mailed on its own
 }
 
 // The CVE risk level a security condition's reason names (ADR-045 D4): 0 for

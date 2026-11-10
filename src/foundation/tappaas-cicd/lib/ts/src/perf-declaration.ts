@@ -6,6 +6,8 @@
 // Pure: the module JSON in, findings out. module-manager's `validate` and the
 // install-time lint (validate-module-tier-source.sh, the same rules in jq) use it.
 
+import { PERF_SIGNALS } from "./perf-signals";
+
 export interface PerfExporter {
   name: string;
   port: number;
@@ -95,6 +97,7 @@ export function perfDeclarationFindings(module: { source?: string | null; perfor
         const at = `performance.thresholds[${i}]`;
         const x = (th && typeof th === "object" ? th : {}) as Record<string, unknown>;
         if (typeof x.signal !== "string" || !SIGNAL.test(x.signal)) errors.push(`${at}.signal must name a signal such as http_p95_seconds`);
+        else if (!PERF_SIGNALS.some((s) => s.name === x.signal)) errors.push(`${at}.signal ${x.signal} is not a signal TAPPaaS measures (${PERF_SIGNALS.map((s) => s.name).join(", ")})`);
         const w = x.warning;
         const c = x.critical;
         if (w === undefined && c === undefined) errors.push(`${at} needs a warning or a critical value`);
