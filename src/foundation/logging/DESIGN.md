@@ -312,6 +312,34 @@ Prometheus on this VM. What is collected is the site's choice: `site.json`
   `tappaas_guest_memory_used_bytes{service_namespace="rossen"}`,
   `tappaas_node_psi_some_avg60{resource="io"}`.
 
+### The `service` level (ADR-046 P3)
+
+What `service` adds, each only while the object's module is at `service` (or traced):
+
+- **Published services, from Caddy.** OPNsense's Caddy has no metrics setting; two files in
+  its documented extension directory (`/usr/local/etc/caddy/caddy.d/tappaas-metrics.{global,conf}`)
+  turn on per-host counting and serve the numbers on the firewall's mgmt address, port 9180, to
+  the mothership only (`lib/service-metrics.sh`, `tappaas-metrics-target.sh caddy apply`; a
+  Caddyfile that does not validate with them takes them out again). The mothership's Alloy
+  scrapes them, keeps `caddy_http_request_duration_seconds_{bucket,count,sum}` for the routes at
+  `service`, moves the host to `tappaas_route`, buckets the status code (`5xx`) and drops every
+  other label.
+- **Black-box probes**: the same Alloy probes each of those routes over HTTPS once a minute
+  (`probe_success`, `probe_duration_seconds`, `probe_http_status_code`,
+  `probe_ssl_earliest_cert_expiry`); a redirect, 401 or 403 counts as answering.
+- **A module's own exporters**, as a foundation module declares them under `performance.exporters`
+  (`name`, `port`, `path`, `level`, `keep`): its guest's Alloy scrapes them on localhost and keeps
+  the listed names only. A module from any other source may not declare them (module-manager
+  refuses it). This VM's own exporters (Grafana, Loki, Alloy, both Prometheus) are scraped by its
+  receiver Alloy from `/etc/alloy-identity/self.alloy`, a module the mothership renders.
+- **Identity.** The controller's series about a route carry `tappaas_route`; the identity module
+  gives them the proxy-route CI's identity and `tappaas_module`, only when the mothership sent them.
+- **Dashboards.** Grafana provisions one dashboard per class from `dashboards.nix`
+  (`tappaas-node`, `tappaas-guest`, `tappaas-pool`, `tappaas-datastore`, `tappaas-service`; the
+  CI in the `ci` variable, a pool by `node` and `pool`), and one per declaring module
+  (`tappaas-mod-<module>`) from `/var/lib/grafana-tappaas/dashboards`, written by the mothership.
+  The console's Grafana link opens the class's dashboard at the CI.
+
 ## Useful Loki queries
 
 In Grafana's Explore tab, pick the **Loki** datasource:
