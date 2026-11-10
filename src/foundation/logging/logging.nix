@@ -1415,7 +1415,7 @@ in
           jsonData.derivedFields = [{
             name = "TraceID";
             matcherRegex = "(?:traceID|trace_id|traceId)\"?[=:] ?\"?([0-9a-f]{16,32})";
-            url = "$$\${__value.raw}";
+            url = "$\${__value.raw}";
             datasourceUid = "tempo";
           }];
         } {
