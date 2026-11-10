@@ -130,6 +130,23 @@ export function computePlan(site: Site, client: SiteClient, opts: ReconcileOpts)
     }
   }
 
+  // ── (1a') own concern: the cluster's external metric server (ADR-046 D1) ──
+  // Pointed at the logging VM's metrics store while the site's performance
+  // level is not off, removed when it is. One setting for the whole cluster.
+  if (scope !== "repositories") {
+    const ms = client.metricsTargetState ? client.metricsTargetState() : null;
+    if (ms !== null && ms !== "in-sync" && ms !== "absent") {
+      actions.push({
+        kind: "metrics-target",
+        target:
+          ms === "unwanted"
+            ? "cluster metric server → remove (the site's performance level is off)"
+            : `cluster metric server → push to the logging VM's metrics store (${ms === "missing" ? "not set" : "differs"})`,
+        apply: (c) => (c.applyMetricsTarget ? c.applyMetricsTarget() : 0),
+      });
+    }
+  }
+
   // ── (1b) own concern: converge repositories[] to live clones ──────────
   if (scope !== "nodes") for (const repo of site.repositories) {
     const branch = repo.branch ?? "stable";

@@ -1383,5 +1383,17 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   check(lsa?.effect === "read", "the manifest marks restore list-all a read");
 }
 
+
+// PBS's metric server (ADR-046 D1) follows the performance level.
+{
+  const job = { jobId: "j", vmids: [], storage: null, buckets: [], reachable: true };
+  for (const [st, n] of [["missing", 1], ["stale", 1], ["unwanted", 1], ["in-sync", 0], ["absent", 0]] as const) {
+    const plan = computePlan(FIX, job, st);
+    check(plan.actions.filter((a) => a.kind === "metrics-target").length === n, `PBS metric server ${st} → ${n} action(s)`);
+  }
+  check(!computePlan(FIX, job, null).actions.some((a) => a.kind === "metrics-target"), "an unreadable PBS metric server plans nothing");
+  check(computePlan(FIX, job, "unwanted").actions.some((a) => a.kind === "metrics-target" && a.target.includes("remove")), "level off → remove PBS's metric server");
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

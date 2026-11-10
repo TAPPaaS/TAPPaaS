@@ -497,6 +497,20 @@ else
     skip "lib/test-log-shipping.sh not found"
 fi
 
+# Test 9c1m: metrics shipping (ADR-046 P1) — the level, the identity module the
+# logging VM stamps series with, the Proxmox metric server's state. Offline.
+info "${BOLD}Test 9c1m: metrics shipping — level, identity, metric server state${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-metrics-shipping.sh" ]]; then
+    if ms_out="$("${SCRIPT_DIR}/lib/test-metrics-shipping.sh" 2>&1)"; then
+        pass "metrics-shipping: $(tail -1 <<< "${ms_out}")"
+    else
+        fail "metrics-shipping test failed"
+        sed 's/^/    /' <<< "${ms_out}"
+    fi
+else
+    skip "lib/test-metrics-shipping.sh not found"
+fi
+
 # Test 9c2: signed releases (ADR-033) — a staging/production checkout moves only to
 # a release tag signed by a key the last verified release lists. Temp repos and
 # throwaway keys only.

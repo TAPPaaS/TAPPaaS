@@ -131,7 +131,8 @@ export type SiteActionKind =
   | "checkout-repo"
   | "cascade-people"
   | "cascade-network"
-  | "cascade-environment";
+  | "cascade-environment"
+  | "metrics-target";
 
 export interface SiteAction {
   kind: SiteActionKind;
@@ -204,6 +205,13 @@ export interface SiteClient {
   // Fill a registered node's storagePools (used when its instance has [] but
   // the node reports pools — conservative: never overwrites a non-empty list).
   setNodePools(configDir: string, name: string, pools: string[]): void;
+  // The cluster's external metric server against the site's performance level
+  // (tappaas-metrics-target.sh pve status, ADR-046): in-sync | missing | stale
+  // | unwanted | absent; null when it cannot be read. Optional: a client without
+  // it plans nothing for metrics.
+  metricsTargetState?(): string | null;
+  // Converge it (… pve apply): set, update or remove. Returns the exit code.
+  applyMetricsTarget?(): number;
 
   // (2) --deep cascade — shell out to a dependent manager's `reconcile`.
   // `apply` toggles preview vs commit (maps to the manager's --apply/--dry-run).

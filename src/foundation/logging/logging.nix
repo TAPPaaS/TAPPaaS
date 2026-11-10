@@ -50,6 +50,71 @@ let
   alloyHttp         = 9080;
   retentionHours    = "720h";  # 30 days
 
+  # ── Metrics (logging:metrics, ADR-046 P1) ────────────────────────────────
+  # Everything from outside comes through nginx over TLS, as the logs do:
+  metricsPushPort   = 3120;    # nginx: push only (OTLP, InfluxDB), a credential per host
+  metricsQueryPort  = 3121;    # nginx: the Prometheus API, admin credential
+  promPort          = 3122;    # Prometheus, localhost only
+  promTrendsPort    = 3123;    # the 90-day trends Prometheus, localhost only
+  otlpInternal      = 3124;    # Alloy's OTLP receiver, localhost only
+  influxInternal    = 3125;    # Alloy's InfluxDB receiver, localhost only
+  identityFile      = "/etc/alloy-identity/identity.alloy";
+  promEnvFile       = "/etc/tappaas-metrics/prometheus.env";
+
+  # Trends: every 5 minutes, a recording rule per signal, sent to the second
+  # Prometheus, which keeps 90 days and nothing else. Gauges as their 5-minute
+  # mean, counters as their 5-minute rate. Named trend5m:<metric>:avg|rate.
+  trendGauges = [
+    "proxmox_node_cpustat_cpu" "proxmox_node_cpustat_avg1"
+    "proxmox_node_memory_memused" "proxmox_node_memory_memtotal" "proxmox_node_memory_arcsize"
+    "proxmox_vm_cpu" "proxmox_vm_mem" "proxmox_vm_maxmem" "proxmox_vm_disk" "proxmox_vm_maxdisk"
+    "proxmox_vm_pressurecpusome" "proxmox_vm_pressurememorysome" "proxmox_vm_pressureiosome"
+    "proxmox_storage_used" "proxmox_storage_total"
+    "tappaas_guest_memory_used_bytes" "tappaas_guest_memory_psi_some_avg60"
+    "tappaas_node_psi_some_avg60" "tappaas_node_psi_full_avg60"
+    "tappaas_zpool_read_wait_seconds" "tappaas_zpool_write_wait_seconds"
+  ];
+  trendCounters = [
+    "proxmox_vm_netin_total" "proxmox_vm_netout_total"
+    "proxmox_vm_diskread_total" "proxmox_vm_diskwrite_total"
+    "proxmox_node_network_receive_total" "proxmox_node_network_transmit_total"
+    "proxmox_node_cpustat_iowait_total" "proxmox_node_cpustat_steal_total"
+  ];
+  trendRules = pkgs.writeText "tappaas-trends.rules.yml" (builtins.toJSON {
+    groups = [{
+      name = "tappaas-trends";
+      interval = "5m";
+      rules = (map (m: { record = "trend5m:${m}:avg"; expr = "avg_over_time(${m}[5m])"; }) trendGauges)
+           ++ (map (m: { record = "trend5m:${m}:rate"; expr = "rate(${m}[5m])"; }) trendCounters);
+    }];
+  });
+  trendsConfig = pkgs.writeText "prometheus-trends.yml" (builtins.toJSON {
+    global = { scrape_interval = "5m"; };
+  });
+
+  # Until the mothership writes the real one (metrics_sync_logging): no
+  # identities, the cluster's pushes dropped, sender identity labels dropped.
+  defaultIdentity = pkgs.writeText "identity.alloy" ''
+    declare "stamp" {
+      argument "forward_to" { }
+      prometheus.relabel "stamp" {
+        forward_to = argument.forward_to.value
+        rule {
+          action = "labeldrop"
+          regex  = "tappaas_ci_id|service_instance_id|service_name|service_namespace|deployment_environment_name|instance|tappaas_node"
+        }
+        rule {
+          source_labels = ["vmid"]
+          regex         = ".+"
+          action        = "drop"
+        }
+      }
+      export "receiver" {
+        value = prometheus.relabel.stamp.receiver
+      }
+    }
+  '';
+
   # The site's own values, not ours to guess: update-os.sh deploys the module's
   # config beside this file as /etc/nixos/logging.json, so proxyDomain is
   # available declaratively (same idiom as nextcloud.nix, #508). A site that has
@@ -172,6 +237,8 @@ in
       pushTlsPort
       syslogOpnsenseTlsPort
       syslogProxmoxTlsPort
+      metricsPushPort        # metrics push (3120), TLS, a credential per host
+      metricsQueryPort       # metrics query (3121), TLS, admin credential — mgmt only
     ];
   };
 
@@ -651,7 +718,164 @@ in
         url = "http://127.0.0.1:${toString lokiInternal}/loki/api/v1/push"
       }
     }
+
+    // ── Metrics (logging:metrics, ADR-046 P1) ──────────────────────────
+    // nginx on :${toString metricsPushPort} checks the sender's credential and passes the
+    // user on as X-Tappaas-Host. OTLP comes from the Proxmox cluster's metric
+    // server, its nodes' sampler and (later) guests; InfluxDB line protocol
+    // from PBS.
+    otelcol.receiver.otlp "metrics" {
+      http {
+        endpoint         = "127.0.0.1:${toString otlpInternal}"
+        include_metadata = true
+      }
+      output {
+        metrics = [otelcol.processor.attributes.pushed_by.input]
+      }
+    }
+
+    otelcol.receiver.influxdb "metrics" {
+      endpoint         = "127.0.0.1:${toString influxInternal}"
+      include_metadata = true
+      output {
+        metrics = [otelcol.processor.attributes.pushed_by.input]
+      }
+    }
+
+    // A host writes as itself: `host` is the authenticated user, whatever the
+    // series said.
+    otelcol.processor.attributes "pushed_by" {
+      action {
+        key          = "host"
+        from_context = "metadata.x-tappaas-host"
+        action       = "upsert"
+      }
+      output {
+        metrics = [otelcol.exporter.prometheus.metrics.input]
+      }
+    }
+
+    // Stored as sent: Proxmox every 10 seconds, the sampler every minute.
+    // Alloy's interval processor would thin Proxmox to the basic level's
+    // minute, but it is experimental in this Alloy; not enabled.
+
+    // Names as the sender gives them (no unit suffixes), and no target_info:
+    // resource attributes are the sender's word, not the series' identity.
+    otelcol.exporter.prometheus "metrics" {
+      add_metric_suffixes = false
+      include_target_info = false
+      forward_to          = [prometheus.relabel.allow.receiver]
+    }
+
+    // What is kept (ADR-046 D2: cardinality bounded by design). Proxmox sends
+    // some thirty counters per guest disk; kept are bytes, operations and time
+    // for reads and writes of the real disks — throughput, IOPS and latency.
+    prometheus.relabel "allow" {
+      forward_to = [identity.stamp.metrics.receiver]
+      rule {
+        source_labels = ["__name__"]
+        regex         = "proxmox_vm_blockstat_(?:efidisk|pflash|tpmstate)[0-9]+_.*"
+        action        = "drop"
+      }
+      rule {
+        source_labels = ["__name__"]
+        regex         = "proxmox_vm_blockstat_[a-z]+[0-9]+_.*"
+        target_label  = "tappaas_keep"
+        replacement   = "blockstat"
+      }
+      rule {
+        source_labels = ["tappaas_keep", "__name__"]
+        separator     = ";"
+        regex         = "blockstat;proxmox_vm_blockstat_[a-z]+[0-9]+_(?:rd|wr)_(?:bytes|operations|total_time_ns)_total"
+        target_label  = "tappaas_keep"
+        replacement   = "yes"
+      }
+      rule {
+        source_labels = ["tappaas_keep"]
+        regex         = "blockstat"
+        action        = "drop"
+      }
+      rule {
+        action = "labeldrop"
+        regex  = "tappaas_keep"
+      }
+    }
+
+    // The CI identity of each series, from the module the mothership renders
+    // from the CMDB (lib/metrics-shipping.sh). Re-read when it changes.
+    import.file "identity" {
+      filename = "${identityFile}"
+    }
+
+    identity.stamp "metrics" {
+      forward_to = [prometheus.remote_write.store.receiver]
+    }
+
+    prometheus.remote_write "store" {
+      endpoint {
+        url = "http://127.0.0.1:${toString promPort}/api/v1/write"
+      }
+    }
   '';
+
+  # The identity module must exist before Alloy loads its config.
+  systemd.services.alloy.serviceConfig.ExecStartPre = [
+    "+${pkgs.writeShellScript "alloy-identity-default" ''
+      ${pkgs.coreutils}/bin/install -d -m 0755 /etc/alloy-identity
+      [ -s ${identityFile} ] || ${pkgs.coreutils}/bin/install -m 0644 ${defaultIdentity} ${identityFile}
+    ''}"
+  ];
+
+  # ============================================================================
+  # PROMETHEUS — the metrics store (logging:metrics, ADR-046 P1)
+  # ============================================================================
+  #
+  # Localhost only; Alloy writes into it by remote_write after stamping each
+  # series' identity, nginx's :${toString metricsQueryPort} is the way in for queries.
+  # Retention is the site's (performance.retentionDays, or by its size): the
+  # mothership writes it to ${promEnvFile} and restarts Prometheus when it
+  # changes, so no rebuild is needed for it. The remote_write and OTLP
+  # receivers are on for Alloy; nothing outside the VM reaches them.
+  services.prometheus = {
+    enable = true;
+    listenAddress = "127.0.0.1";
+    port = promPort;
+    extraFlags = [
+      "--storage.tsdb.retention.time=\${PROM_RETENTION}"
+      "--web.enable-remote-write-receiver"
+      "--web.enable-otlp-receiver"
+    ];
+    globalConfig = { scrape_interval = "1m"; evaluation_interval = "1m"; };
+    ruleFiles = [ trendRules ];
+    # Only the trends leave for the second Prometheus.
+    remoteWrite = [{
+      url = "http://127.0.0.1:${toString promTrendsPort}/api/v1/write";
+      write_relabel_configs = [{ source_labels = [ "__name__" ]; regex = "trend5m:.*"; action = "keep"; }];
+    }];
+  };
+  systemd.services.prometheus.serviceConfig.EnvironmentFile = promEnvFile;
+
+  # The trends: a second, small Prometheus that receives only the 5-minute
+  # recording rules and keeps them 90 days.
+  systemd.services.prometheus-trends = {
+    description = "Prometheus for 90-day trends (5-minute means from the metrics store)";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network.target" ];
+    serviceConfig = {
+      User = "prometheus";
+      Group = "prometheus";
+      StateDirectory = "prometheus-trends";
+      ExecStart = "${pkgs.prometheus}/bin/prometheus --config.file=${trendsConfig}"
+        + " --storage.tsdb.path=/var/lib/prometheus-trends --storage.tsdb.retention.time=90d"
+        + " --web.listen-address=127.0.0.1:${toString promTrendsPort} --web.enable-remote-write-receiver";
+      Restart = "always";
+      RestartSec = "5s";
+      NoNewPrivileges = true;
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      PrivateTmp = true;
+    };
+  };
 
   # ============================================================================
   # TLS — the certificate the site's internal CA signs for this VM (#787)
@@ -728,6 +952,14 @@ in
   # until the mothership writes them, rather than failing to start.
   services.nginx = {
     enable = true;
+    # InfluxDB senders (PBS) authenticate with a token, not basic auth: the
+    # mothership writes the token → user lines (metrics_sync_logging).
+    appendHttpConfig = ''
+      map $http_authorization $tappaas_influx_user {
+        default "";
+        include /etc/loki-auth/influx-tokens.map;
+      }
+    '';
     virtualHosts."loki-push" = {
       listen = [ { addr = "0.0.0.0"; port = pushPort; } ];
       locations."= /loki/api/v1/push" = {
@@ -781,6 +1013,66 @@ in
           auth_basic "TAPPaaS log store";
           auth_basic_user_file /etc/loki-auth/admin.htpasswd;
           client_max_body_size 16m;
+          proxy_read_timeout 300s;
+        '';
+      };
+    };
+    # ── Metrics (logging:metrics) — TLS only ────────────────────────────
+    # Push: a credential per host; the user becomes X-Tappaas-Host, which
+    # Alloy writes as the series' host. The sender's own Authorization never
+    # reaches Alloy.
+    virtualHosts."metrics-push" = {
+      listen = [ { addr = "0.0.0.0"; port = metricsPushPort; ssl = true; } ];
+      onlySSL = true;
+      sslCertificate = tlsCert;
+      sslCertificateKey = tlsKey;
+      locations."= /v1/metrics" = {
+        proxyPass = "http://127.0.0.1:${toString otlpInternal}";
+        extraConfig = ''
+          auth_basic "TAPPaaS metrics push";
+          auth_basic_user_file /etc/loki-auth/push.htpasswd;
+          proxy_set_header X-Tappaas-Host $remote_user;
+          proxy_set_header Authorization "";
+          client_max_body_size 32m;
+        '';
+      };
+      # PBS checks an InfluxDB server's health before it saves the target.
+      locations."= /health".extraConfig = ''
+        default_type application/json;
+        return 200 '{"name":"influxdb","status":"pass","message":"TAPPaaS metrics store"}';
+      '';
+      locations."= /ping".return = "204";
+      locations."= /api/v2/write" = {
+        proxyPass = "http://127.0.0.1:${toString influxInternal}";
+        extraConfig = ''
+          if ($tappaas_influx_user = "") { return 401; }
+          proxy_set_header X-Tappaas-Host $tappaas_influx_user;
+          proxy_set_header Authorization "";
+          client_max_body_size 32m;
+        '';
+      };
+      locations."/".return = "404";
+    };
+    # Query: the Prometheus APIs behind the admin credential; /trends/ is the
+    # 90-day instance.
+    virtualHosts."metrics-api" = {
+      listen = [ { addr = "0.0.0.0"; port = metricsQueryPort; ssl = true; } ];
+      onlySSL = true;
+      sslCertificate = tlsCert;
+      sslCertificateKey = tlsKey;
+      locations."/" = {
+        proxyPass = "http://127.0.0.1:${toString promPort}";
+        extraConfig = ''
+          auth_basic "TAPPaaS metrics store";
+          auth_basic_user_file /etc/loki-auth/admin.htpasswd;
+          proxy_read_timeout 300s;
+        '';
+      };
+      locations."/trends/" = {
+        proxyPass = "http://127.0.0.1:${toString promTrendsPort}/";
+        extraConfig = ''
+          auth_basic "TAPPaaS metrics store";
+          auth_basic_user_file /etc/loki-auth/admin.htpasswd;
           proxy_read_timeout 300s;
         '';
       };
@@ -890,6 +1182,21 @@ in
           access = "proxy";
           url = "http://127.0.0.1:${toString lokiInternal}";
           isDefault = true;
+          editable = false;
+        } {
+          # The metrics store (logging:metrics) and its 90-day trends.
+          name = "Prometheus";
+          uid = "prometheus";
+          type = "prometheus";
+          access = "proxy";
+          url = "http://127.0.0.1:${toString promPort}";
+          editable = false;
+        } {
+          name = "Prometheus trends";
+          uid = "prometheus-trends";
+          type = "prometheus";
+          access = "proxy";
+          url = "http://127.0.0.1:${toString promTrendsPort}";
           editable = false;
         }];
       };
@@ -1138,6 +1445,11 @@ in
     "d /etc/loki-auth                  0750 root     nginx    -"
     "f /etc/loki-auth/push.htpasswd    0640 root     nginx    -"
     "f /etc/loki-auth/admin.htpasswd   0640 root     nginx    -"
+    # InfluxDB tokens (PBS), written by the mothership; empty refuses all.
+    "f /etc/loki-auth/influx-tokens.map 0640 root    nginx    -"
+    # The metrics store's retention until the mothership writes the site's.
+    "d /etc/tappaas-metrics            0755 root     root     -"
+    "f /etc/tappaas-metrics/prometheus.env 0644 root root     -   PROM_RETENTION=15d"
     # nginx's own log directory, before anything starts — see logrotate-checkconf.
     "d /var/log/nginx                  0750 nginx    nginx    -"
   ];

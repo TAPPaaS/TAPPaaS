@@ -187,6 +187,26 @@ else
     warn "  could not write the credentials to ${VMNAME} — pushes and queries are refused until they are"
 fi
 
+# ── Metrics (logging:metrics) ────────────────────────────────────────
+# The store's identity module, PBS's token and the retention onto the VM, then
+# Proxmox's and PBS's metric servers pointed here — or removed, when the site's
+# performance level is off. The same as site-manager's and backup-manager's
+# reconcile do; here so a logging that arrives after them has the numbers.
+debug "Metrics: identities, retention and the Proxmox and PBS metric servers"
+# shellcheck source=../tappaas-cicd/lib/metrics-shipping.sh
+. /home/tappaas/bin/metrics-shipping.sh
+if _ms_out="$(metrics_sync_logging 2>&1)"; then
+    debug "  ${_ms_out//$'\n'/; }"
+else
+    warn "  could not write the metrics identities to ${VMNAME} — pushed numbers carry no identity until they are: ${_ms_out//$'\n'/; }"
+fi
+if _mt_out="$(/home/tappaas/bin/tappaas-metrics-target.sh all apply 2>&1)"; then
+    [[ -n "${_mt_out}" ]] && debug "  ${_mt_out//$'\n'/; }"
+    _sum_metrics="performance level $(metrics_level)"
+else
+    warn "  the Proxmox or PBS metric server is not set: ${_mt_out//$'\n'/; }"
+fi
+
 # ── Module alert rules (ADR-039) ─────────────────────────────────────
 # Each module's rules live in Grafana's database, not in this VM's build: put
 # every module's group back, so a rebuilt or restored Grafana has them without
@@ -207,4 +227,5 @@ _sum=""
 [[ -n "${_sum_from}" ]] && _sum="syslog from ${_sum_from}"
 [[ -n "${_sum_creds:-}" ]] && _sum+="${_sum:+, }credentials for ${_sum_creds} pushing hosts"
 [[ "${_sum_rules:-0}" -gt 0 ]] && _sum+="${_sum:+, }alert rules of ${_sum_rules} module(s)"
+[[ -n "${_sum_metrics:-}" ]] && _sum+="${_sum:+, }metrics at ${_sum_metrics}"
 [[ -n "${_sum}" ]] && info "  ${GN}✓${CL} logging: ${_sum}"

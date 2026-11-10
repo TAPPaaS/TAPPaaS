@@ -336,6 +336,64 @@ check_alert_delivery() {
 
 # ── Main ──────────────────────────────────────────────────────────────
 
+check_metrics() {
+    info "Check 11: The metrics store — both Prometheus instances, push and query need a credential, identity from the credential"
+    # shellcheck source=../tappaas-cicd/lib/metrics-shipping.sh
+    . "${METRICS_SHIPPING_LIB:-/home/tappaas/bin/metrics-shipping.sh}"
+    local q="https://${VM_HOST}:3121" p="https://${VM_HOST}:3120" code pw now body n id want
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "${q}/-/ready" 2>/dev/null || true)"
+    [[ "${code}" == "401" ]] && check_pass "Metrics query without a credential refused (401)" \
+        || check_fail "Metrics query without a credential got ${code:-no answer}, not 401"
+    code="$(metrics_curl_admin -s -o /dev/null -w '%{http_code}' --max-time 10 "${q}/-/ready" 2>/dev/null || true)"
+    [[ "${code}" == "200" ]] && check_pass "The metrics store is ready" || check_fail "The metrics store's ready check got ${code:-no answer}"
+    code="$(metrics_curl_admin -s -o /dev/null -w '%{http_code}' --max-time 10 "${q}/trends/-/ready" 2>/dev/null || true)"
+    [[ "${code}" == "200" ]] && check_pass "The 90-day trends store is ready" || check_fail "The trends store's ready check got ${code:-no answer}"
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 -X POST -H 'Content-Type: application/json' "${p}/v1/metrics" --data '{}' 2>/dev/null || true)"
+    [[ "${code}" == "401" ]] && check_pass "Metrics push without a credential refused (401)" \
+        || check_fail "Metrics push without a credential got ${code:-no answer}, not 401"
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 -X POST -H 'Authorization: Token nobody:wrong' "${p}/api/v2/write" --data 'm v=1' 2>/dev/null || true)"
+    [[ "${code}" == "401" ]] && check_pass "InfluxDB push with an unknown token refused (401)" \
+        || check_fail "InfluxDB push with an unknown token got ${code:-no answer}, not 401"
+
+    if [[ "$(metrics_level)" != off ]]; then
+        n="$(metrics_curl_admin -s --max-time 15 -G "${q}/api/v1/query" \
+                --data-urlencode 'query=count(count_over_time(proxmox_node_cpustat_cpu{tappaas_ci_id!=""}[5m]))' 2>/dev/null \
+             | jq -r '.data.result[0].value[1] // "0"' 2>/dev/null || echo 0)"
+        [[ "${n}" =~ ^[0-9]+$ && "${n}" -gt 0 ]] && check_pass "The nodes' numbers arrive with their identity (${n} nodes)" \
+            || check_fail "No node series with an identity in 5 min — tappaas-metrics-target.sh pve status"
+    fi
+
+    # The deep check: a push with the mothership's credential that claims to be
+    # another host, carries a CI id of its own and speaks about a guest. Stored
+    # as tappaas-cicd with its CMDB identity; the guest series dropped. The store
+    # takes one value a minute, so this waits up to 90 s.
+    [[ " ${*} " == *" --deep "* ]] || return 0
+    pw="$(cat "${LOG_SHIPPING_CRED_DIR}/tappaas-cicd" 2>/dev/null)"
+    [[ -n "${pw}" ]] || { check_fail "No push credential for tappaas-cicd — re-run update-module.sh logging"; return; }
+    now="$(date +%s)"
+    body="$(jq -nc --arg t "${now}000000000" '{resourceMetrics: [{resource: {attributes: []}, scopeMetrics: [{metrics: [
+        {name: "tappaas_test_push", gauge: {dataPoints: [{timeUnixNano: $t, asDouble: 1, attributes: [
+            {key: "host", value: {stringValue: "tappaas1"}}, {key: "tappaas_ci_id", value: {stringValue: "spoofed"}}]}]}},
+        {name: "tappaas_test_push_guest", gauge: {dataPoints: [{timeUnixNano: $t, asDouble: 1, attributes: [
+            {key: "vmid", value: {stringValue: "150"}}]}]}}]}]}]}')"
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 -u "tappaas-cicd:${pw}" -H 'Content-Type: application/json' \
+            -X POST "${p}/v1/metrics" --data "${body}" 2>/dev/null || true)"
+    [[ "${code}" == "200" ]] && check_pass "Authenticated metrics push accepted" || { check_fail "Authenticated metrics push got ${code:-no answer}"; return; }
+    want="$(metrics_identity_json 2>/dev/null | jq -r '.hosts["tappaas-cicd"] // ""')"
+    for _ in $(seq 18); do
+        id="$(metrics_curl_admin -s --max-time 10 -G "${q}/api/v1/query" --data-urlencode 'query=last_over_time(tappaas_test_push[5m])' 2>/dev/null \
+              | jq -r '.data.result[] | "\(.metric.host)/\(.metric.tappaas_ci_id // "")"' 2>/dev/null | head -1)"
+        [[ -n "${id}" ]] && break
+        sleep 5
+    done
+    if [[ "${id}" == "tappaas-cicd/${want}" && -n "${want}" ]]; then check_pass "The series is stored as host=tappaas-cicd with its own CI id, not the host and id it claimed"
+    else check_fail "The test series reads ${id:-nothing}, want tappaas-cicd/${want:-<its CI id>}"; fi
+    n="$(metrics_curl_admin -s --max-time 10 -G "${q}/api/v1/query" --data-urlencode 'query=count(last_over_time(tappaas_test_push_guest[5m]))' 2>/dev/null \
+         | jq -r '.data.result[0].value[1] // "0"' 2>/dev/null || echo "")"
+    [[ "${n}" == "0" ]] && check_pass "A guest's series from a host that is not a node is dropped" \
+        || check_fail "A guest series from tappaas-cicd was stored (${n:-query failed})"
+}
+
 main() {
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         usage
@@ -367,6 +425,7 @@ main() {
     check_loki_query
     check_alert_rules
     check_alert_delivery
+    check_metrics "$@"
 
     echo ""
     info "Results: ${PASS_COUNT} passed, ${FAIL_COUNT} failed"

@@ -22,6 +22,13 @@
 # Fields: kind vmid vm measured total available used cache maxmem resident
 #         oom_kills direct_reclaims alloc_stalls swap_in swap_out psi_some_avg60
 # Counters (oom_kills … swap_out) count from the guest's boot.
+#
+# Metrics (ADR-046 P1): while the site's performance level is not off, the
+# mothership writes /etc/pve/priv/tappaas-metrics.conf (url, auth), and each
+# pass also pushes the same numbers as OpenTelemetry metrics to the logging
+# VM's store, with the node's pressure (PSI) and its ZFS pools' wait times
+# beside them. The file is read every pass: removed, the pushes stop. The log
+# lines stay — guest-memory-report.sh reads them.
 
 use strict;
 use warnings;
@@ -30,9 +37,14 @@ use PVE::Cluster;
 use PVE::QemuServer;
 use PVE::QemuServer::Monitor qw(mon_cmd);
 use PVE::LXC;
+use PVE::INotify;
+use JSON;
+use LWP::UserAgent;
 
 $| = 1;
 my $INTERVAL = $ENV{TAPPAAS_GUEST_MEMORY_INTERVAL} || 60;
+my $METRICS_CONF = $ENV{TAPPAAS_METRICS_CONF} || '/etc/pve/priv/tappaas-metrics.conf';
+my @SAMPLES;    # this pass's guest samples, for the metrics push
 
 sub slurp {
     my ($path) = @_;
@@ -85,6 +97,7 @@ sub sample_qemu {
             $f{swap_out}        = $st->{'stat-swap-out'};
         }
         print logfmt(%f), "\n";
+        push @SAMPLES, {%f};
     }
 }
 
@@ -110,7 +123,83 @@ sub sample_lxc {
             $f{oom_kills} = $oom;
         }
         print logfmt(%f), "\n";
+        push @SAMPLES, {%f};
     }
+}
+
+# ── metrics ──────────────────────────────────────────────────────────
+
+sub metrics_conf {
+    my $s = slurp($METRICS_CONF) // return undef;
+    my %c = map { /^([a-z]+)=(.*)$/ ? ($1 => $2) : () } split /\n/, $s;
+    return ($c{url} && $c{auth}) ? \%c : undef;
+}
+
+# One OTLP data point: a double, its attributes as strings.
+sub dp {
+    my ($v, %a) = @_;
+    return { timeUnixNano => sprintf('%d000000000', time()), asDouble => $v + 0,
+             attributes => [ map { { key => $_, value => { stringValue => "$a{$_}" } } } sort keys %a ] };
+}
+
+# The node's own pressure: /proc/pressure/{cpu,memory,io}, some and full avg60.
+sub node_psi {
+    my ($node) = @_;
+    my (@some, @full);
+    for my $r (qw(cpu memory io)) {
+        my $s = slurp("/proc/pressure/$r") // next;
+        push @some, dp($1, node => $node, resource => $r) if $s =~ /^some .*avg60=([0-9.]+)/m;
+        push @full, dp($1, node => $node, resource => $r) if $s =~ /^full .*avg60=([0-9.]+)/m;
+    }
+    return (@some ? { name => 'tappaas_node_psi_some_avg60', gauge => { dataPoints => \@some } } : (),
+            @full ? { name => 'tappaas_node_psi_full_avg60', gauge => { dataPoints => \@full } } : ());
+}
+
+# Each ZFS pool's average total wait over one second (zpool iostat -l), in seconds.
+sub zpool_wait {
+    my ($node) = @_;
+    my (@r, @w);
+    open(my $fh, '-|', 'zpool', 'iostat', '-Hpl', '-y', '1', '1') or return ();
+    while (my $l = <$fh>) {
+        my @c = split /\t/, $l;
+        next unless @c >= 9;
+        push @r, dp($c[7] / 1e9, node => $node, pool => $c[0]) if $c[7] =~ /^[0-9]+$/;
+        push @w, dp($c[8] / 1e9, node => $node, pool => $c[0]) if $c[8] =~ /^[0-9]+$/;
+    }
+    close($fh);
+    return (@r ? { name => 'tappaas_zpool_read_wait_seconds',  gauge => { dataPoints => \@r } } : (),
+            @w ? { name => 'tappaas_zpool_write_wait_seconds', gauge => { dataPoints => \@w } } : ());
+}
+
+sub guest_metrics {
+    my ($node) = @_;
+    my %g = (used => 'used_bytes', total => 'total_bytes', available => 'available_bytes',
+             cache => 'cache_bytes', resident => 'resident_bytes', maxmem => 'max_bytes',
+             psi_some_avg60 => 'psi_some_avg60');
+    my %c = (oom_kills => 'oom_kills_total', direct_reclaims => 'direct_reclaims_total',
+             alloc_stalls => 'alloc_stalls_total', swap_in => 'swap_in_total', swap_out => 'swap_out_total');
+    my (%gp, %cp);
+    for my $s (@SAMPLES) {
+        my %a = (node => $node, vmid => $s->{vmid}, kind => $s->{kind});
+        for my $k (keys %g) { push @{$gp{$k}}, dp($s->{$k}, %a) if defined $s->{$k} && $s->{$k} =~ /^[0-9.]+$/; }
+        for my $k (keys %c) { push @{$cp{$k}}, dp($s->{$k}, %a) if defined $s->{$k} && $s->{$k} =~ /^[0-9.]+$/; }
+    }
+    return ((map { { name => "tappaas_guest_memory_$g{$_}", gauge => { dataPoints => $gp{$_} } } } sort keys %gp),
+            (map { { name => "tappaas_guest_$c{$_}",
+                     sum => { dataPoints => $cp{$_}, aggregationTemporality => 2, isMonotonic => JSON::true } } } sort keys %cp));
+}
+
+sub push_metrics {
+    my $c = metrics_conf() // return;
+    my $node = PVE::INotify::nodename();
+    my @m = (guest_metrics($node), node_psi($node), zpool_wait($node));
+    return unless @m;
+    my $body = encode_json({ resourceMetrics => [{
+        resource => { attributes => [ { key => 'service.name', value => { stringValue => 'tappaas-guest-memory' } } ] },
+        scopeMetrics => [{ scope => { name => 'tappaas-guest-memory' }, metrics => \@m }] }] });
+    my $ua = LWP::UserAgent->new(timeout => 10, ssl_opts => { verify_hostname => 1 });
+    my $r = $ua->post($c->{url}, 'Content-Type' => 'application/json', Authorization => $c->{auth}, Content => $body);
+    print STDERR "metrics push to $c->{url} failed: ", $r->status_line, "\n" unless $r->is_success;
 }
 
 # --once: one sample and exit (tests, and a quick look by hand).
@@ -121,6 +210,8 @@ while (1) {
     eval { PVE::Cluster::cfs_update(); 1 } or print STDERR "cfs_update failed: $@";
     eval { sample_qemu(); 1 } or print STDERR "qemu sample failed: $@";
     eval { sample_lxc(); 1 }  or print STDERR "lxc sample failed: $@";
+    eval { push_metrics(); 1 } or print STDERR "metrics push failed: $@";
+    @SAMPLES = ();
     last if $once;
     sleep($INTERVAL - (time() % $INTERVAL));
 }

@@ -20,7 +20,8 @@
     "identity:identity"
   ],
   "provides": [
-    "logs"
+    "logs",
+    "metrics"
   ],
   "identity": {
     "launchPath": "/login/generic_oauth",

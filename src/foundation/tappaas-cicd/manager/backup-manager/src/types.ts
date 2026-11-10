@@ -284,6 +284,12 @@ export interface Client {
   keyImport(src: string): void;
   keyStatus(json: boolean): void;
   keyStamp(dir: string, label: string | null): void;
+  // PBS's InfluxDB metric server against the site's performance level
+  // (tappaas-metrics-target.sh pbs, ADR-046): in-sync | missing | stale |
+  // unwanted | absent, null when it cannot be read; and converge it (throws on
+  // failure). Optional: a client without them plans nothing for metrics.
+  metricsTargetState?(): string | null;
+  applyMetricsTarget?(): void;
 }
 
 // ── Reconcile plan ────────────────────────────────────────────────────
@@ -291,7 +297,7 @@ export interface Client {
 // The manager RESOLVES the Site→Environment→Module policy; the controller OWNS
 // the PBS write (add-to-job / apply-schedule). Modelled as a preview/apply plan
 // matching the network-manager reconcile shape.
-export type ActionKind = "ensure-job-member" | "apply-schedule";
+export type ActionKind = "ensure-job-member" | "apply-schedule" | "metrics-target";
 
 export interface Action {
   kind: ActionKind;

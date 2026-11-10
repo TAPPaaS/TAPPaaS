@@ -272,6 +272,34 @@ const TAPPAAS: Repository = {
   );
 }
 
+
+// Metrics (ADR-046 D1): the cluster's metric server follows the performance level.
+{
+  const cloned = (c: FakeSiteClient) => c.clones.add(TAPPAAS.path!);
+  for (const [state, want] of [["missing", 1], ["stale", 1], ["unwanted", 1], ["in-sync", 0], ["absent", 0]] as const) {
+    const c = new FakeSiteClient();
+    cloned(c);
+    c.branches.set(TAPPAAS.path!, "stable");
+    c.metricsState = state;
+    const plan = computePlan(site([TAPPAAS]), c, { deep: false, apply: true, siteFile: "x" });
+    const n = plan.actions.filter((a) => a.kind === "metrics-target").length;
+    check(n === want, `metric server ${state} → ${want} action(s)`);
+    if (want) {
+      applyPlan(c, plan);
+      check(c.metricsApplied === 1, `metric server ${state}: apply converges it`);
+    }
+  }
+  const c = new FakeSiteClient();
+  c.metricsState = null;
+  const plan = computePlan(site([TAPPAAS]), c, { deep: false, apply: true, siteFile: "x", scope: "nodes" });
+  check(!plan.actions.some((a) => a.kind === "metrics-target"), "an unreadable metric server plans nothing");
+  c.metricsState = "unwanted";
+  const repos = computePlan(site([TAPPAAS]), c, { deep: false, apply: true, siteFile: "x", scope: "repositories" });
+  check(!repos.actions.some((a) => a.kind === "metrics-target"), "repository reconcile leaves the metric server alone");
+  const off = computePlan(site([TAPPAAS]), c, { deep: false, apply: true, siteFile: "x", scope: "nodes" });
+  check(off.actions.some((a) => a.kind === "metrics-target" && a.target.includes("remove")), "level off → remove");
+}
+
 console.log("");
 console.log(`reconcile.test: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

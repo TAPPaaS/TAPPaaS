@@ -1,0 +1,7 @@
+{
+  "_comment": "logging:metrics (ADR-046). A consumer in another zone gets a pinhole from its own VM to logging's push-only metrics receiver (TLS). fromZones: any, as for logging:logs: per consumer VM and to this port only; the query port 3121 stays mgmt-only.",
+  "fromZones": "any",
+  "ports": [
+    { "port": 3120, "protocol": "TCP", "description": "Metrics push-only receiver (OTLP, InfluxDB), TLS" }
+  ]
+}

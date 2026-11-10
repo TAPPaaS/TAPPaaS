@@ -38,6 +38,7 @@ const VALIDATE_SITE = (): string => process.env.SITE_VALIDATE_BIN ?? "validate-s
 // SITE_PEOPLE_BIN is the pre-#628 name of the override; honoured for one stable cycle.
 const IDENTITY_BIN = (): string => process.env.SITE_IDENTITY_BIN ?? process.env.SITE_PEOPLE_BIN ?? "identity-manager";
 const NETWORK_BIN = (): string => process.env.SITE_NETWORK_BIN ?? "network-manager";
+const METRICS_TARGET = (): string => process.env.SITE_METRICS_TARGET_BIN ?? "tappaas-metrics-target.sh";
 const MODULE_BIN = (): string => process.env.SITE_MODULE_BIN ?? "module-manager";
 // environment-manager exposes `reconcile <env> --deep` (verb-first, ADR-007).
 const ENVIRONMENT_BIN = (): string => process.env.SITE_ENVIRONMENT_BIN ?? "environment-manager";
@@ -116,6 +117,17 @@ export class CliSiteClient implements SiteClient {
     const reach = reachableNodes(defaultNodeCandidates(candidates));
     if (reach.length === 0) return null;
     return queryClusterNodes(reach[0]);
+  }
+
+  // The cluster's metric server (ADR-046): the script prints "pve <state>".
+  metricsTargetState(): string | null {
+    const r = captureResult(METRICS_TARGET(), ["pve", "status"]);
+    if (!r.ran) return null;
+    const s = r.stdout.trim().split(/\s+/)[1] ?? "";
+    return s === "" || s === "unknown" ? null : s;
+  }
+  applyMetricsTarget(): number {
+    return runStreaming(METRICS_TARGET(), ["pve", "apply"]);
   }
 
   // The node's tankXY pools (create-site.sh discovery: zpool list, tank*).

@@ -1,0 +1,6 @@
+{
+  "$schema": "../../../schemas/service-fields.json",
+  "service": "logging:metrics",
+  "description": "The consumer's numbers in the site's metrics store (Prometheus on the logging VM), pushed through logging's push-only receiver on tcp/3120 with the consumer's own credential; the series' identity is set from that credential. Switched by site.json performance.level.",
+  "fields": {}
+}

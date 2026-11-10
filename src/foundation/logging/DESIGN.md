@@ -58,6 +58,12 @@ The whole stack is declared in [`logging.nix`](logging.nix).
 | 1514 | TCP | Syslog ingest (RFC 5424) → `source=opnsense` | OPNsense firewall |
 | 1515 | TCP | Syslog ingest (RFC 5424) → `source=proxmox` | Proxmox nodes (rsyslog) |
 | 9080 | TCP | Alloy metrics and component UI (localhost only) | local |
+| 3120 | TCP | nginx (TLS) → Alloy → Prometheus: metrics push only, a credential per host — OTLP/HTTP at `/v1/metrics`, InfluxDB v2 at `/api/v2/write` | the Proxmox cluster's metric server and its nodes' sampler, PBS (`logging:metrics` pinhole for other zones) |
+| 3121 | TCP | nginx (TLS) → the Prometheus API, admin credential; `/trends/` is the 90-day instance | the mothership's tools — mgmt only |
+| 3122 | TCP | Prometheus, the metrics store (localhost only) | Grafana, this VM's Alloy |
+| 3123 | TCP | Prometheus, 90-day trends (localhost only) | Grafana, the store's remote_write |
+| 3124 | TCP | Alloy's OTLP receiver (localhost only) | nginx |
+| 3125 | TCP | Alloy's InfluxDB receiver (localhost only) | nginx |
 
 ## Label scheme
 
@@ -211,6 +217,66 @@ resolve every hour.
 No file, no Alloy: a module that does not declare `logging:logs`, or a site without
 logging, ships nothing. NixOS guests only for now.
 
+## Metrics — `logging:metrics`
+
+Numbers over time — CPU, memory, disk, network, pressure — beside the logs, in
+Prometheus on this VM. What is collected is the site's choice: `site.json`
+`performance.level` (`off` on a small site, `basic` on a medium or large one) and
+`performance.retentionDays` (7, 15 or 30 days by size).
+
+```
+ Proxmox cluster ─ metric server (OTLP/HTTPS, cluster credential) ─┐
+ nodes' sampler  ─ OTLP/HTTPS (cluster credential) ────────────────┤  nginx :3120
+ PBS             ─ metric server (InfluxDB v2, its token) ─────────┘  user → X-Tappaas-Host
+                                                                      │
+   Alloy: otlp / influxdb receiver → host := the user → prometheus exporter
+          → identity.stamp (from the CMDB) → remote_write
+                                                                      │
+   Prometheus :3122 (retention by site) ── 5-min recording rules ──► Prometheus :3123 (90 days)
+```
+
+- **Who pushes.** The cluster's *external metric server* (`/etc/pve/status.cfg`,
+  type `opentelemetry`, id `tappaas`) sends every node's and every guest's CPU,
+  memory, disk and network every 10 seconds, as `proxmox_node_*`, `proxmox_vm_*`,
+  `proxmox_storage_*`. The nodes' `tappaas-guest-memory` sampler (already there for
+  the logs) also pushes, once a minute, each guest's working set and pressure
+  (`tappaas_guest_memory_*`, `tappaas_guest_*_total`), the node's PSI
+  (`tappaas_node_psi_{some,full}_avg60{resource}`) and its ZFS pools' wait
+  (`tappaas_zpool_{read,write}_wait_seconds{pool}`); its config is
+  `/etc/pve/priv/tappaas-metrics.conf`, and without it the sampler only logs. PBS's
+  InfluxDB metric server (id `tappaas`) sends its host and datastore numbers.
+  `lib/metrics-shipping.sh` sets all three; `tappaas-metrics-target.sh <pve|pbs|all>
+  <status|apply>` is how logging's update, site-manager's reconcile (the cluster) and
+  backup-manager's reconcile (PBS) converge them, and level `off` removes them.
+- **Identity.** nginx passes the authenticated user on; Alloy writes it as `host`
+  over anything the sender said. Then a module the mothership renders from the CMDB
+  (`/etc/alloy-identity/identity.alloy`, re-read by Alloy when it changes) drops
+  whatever identity labels the sender wrote and sets `tappaas_ci_id`,
+  `service_instance_id` (both the CI id), `service_name` (the CI's name),
+  `service_namespace` and `deployment_environment_name` (its environment): by `host`
+  for what a host says about itself, by `vmid` for what a node says about a guest.
+  The cluster's credential (`pvecluster`) speaks for its nodes — the cluster is one
+  trust domain, each node root on the others, and its metric server is one setting
+  for all — so its series take `host` from their `node` label, only among the nodes
+  the CMDB knows; anything else it sends is dropped. Only a node may send series with
+  a `vmid`. A host the CMDB does not know keeps its `host` and no CI id.
+- **Credentials** are the logs' store (`~tappaas/.loki-push/<user>`, nginx's
+  `push.htpasswd`): one per pushing host, for both. PBS cannot send basic auth, so
+  its token (`<instance>:<secret>`) is matched by nginx against
+  `/etc/loki-auth/influx-tokens.map`, which therefore holds that one secret in clear
+  (root:nginx 0640, push only).
+- **Resolution.** Stored as sent: Proxmox every 10 s, the sampler every minute.
+- **Trends.** Recording rules every 5 minutes (`trend5m:<metric>:avg` for gauges,
+  `:rate` for counters, the list in `logging.nix`) go by remote_write to a second
+  Prometheus that keeps 90 days and nothing else.
+- **Retention** is a flag of Prometheus's: the mothership writes
+  `/etc/tappaas-metrics/prometheus.env` and restarts Prometheus when it changes, so
+  no rebuild is needed for it.
+- **In Grafana:** data sources *Prometheus* and *Prometheus trends*, e.g.
+  `proxmox_vm_cpu{service_name="nextcloud"}`,
+  `tappaas_guest_memory_used_bytes{service_namespace="rossen"}`,
+  `tappaas_node_psi_some_avg60{resource="io"}`.
+
 ## Useful Loki queries
 
 In Grafana's Explore tab, pick the **Loki** datasource:
@@ -362,6 +428,9 @@ expected and acceptable.
 - tcp/3101 needs the pushing VM's own credential and accepts pushes only. A VM can write
   lines under its own `host` and no other — the label is set from the credential — and
   cannot read or delete anything. A stolen credential lets its holder write as that VM.
+- tcp/3120 (metrics) needs a pushing host's credential, over TLS only, and accepts
+  pushes only; the series' identity is set from the credential and the CMDB (see
+  Metrics). tcp/3121 (metrics query) needs the admin credential, as 3100.
 - Credentials are HTTP basic auth over plain HTTP inside the site network: someone who
   can read traffic on the path can lift them. TLS would close that; it needs the TAPPaaS
   CA (the syslog-over-TLS issue).
@@ -419,7 +488,8 @@ Mitigations in place:
   6514/tcp; deprecate 1514/tcp once OPNsense is moved over.
 - **Automate OPNsense syslog target**: ✅ done in v1 — `syslog-manager` is wired into
   `update.sh` and runs on every install/update.
-- **No Prometheus / Alertmanager yet**: the same VM can host them when metrics-side
-  alerting is added.
+- **Metrics**: ✅ Prometheus (`logging:metrics`, see Metrics). Still open: the guests'
+  own Alloy pipeline and the levels per environment and module, the remote_write
+  ingest path with an identity, thresholds and alerting on metrics.
 - **A consumable logging service**: ✅ done — `logging:logs` (#770), see "Journal
   shipping from other VMs" above. Still open: Debian, HAOS, LXC and Windows guests.
