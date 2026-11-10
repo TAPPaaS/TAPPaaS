@@ -12,7 +12,9 @@ capabilities (4) — each made of **groups** of related issues. Two waves stand 
 **enterprise scale and tests (5)** — placement and resources beyond one node, and tests and
 sign-offs on real systems, kept apart from development and fixes — **site fabric and user
 experience (6)**, the switching fabric designed together with the physical view of the UI — and
-**enhance the stacks (7)**: new modules and significant upgrades.
+**enhance the stacks (7)**: new modules and significant upgrades — and **hosting and community
+modules (8)**: many instances of one module, modules from outside TAPPaaS, and a first install from
+anywhere.
 
 This file replaces the security & stability plan (2026-10-06) — kept, closed, as
 [docs/plans/security-and-stability-plan.md](docs/plans/security-and-stability-plan.md) — which was compiled
@@ -26,8 +28,8 @@ milestone keeps its old name. Which version reached which channel on which day i
 From the top:
 
 1. **Planning items still open** — decisions, gates and ADRs the waves wait on.
-2. **Future Work** — known, not yet in a wave.
-3. **The waves, latest first** — Wave 4 down to Wave 0, each group with its open issues.
+2. **Parked** — known work deliberately not planned, each with what would bring it back.
+3. **The waves, latest first** — Wave 8 down to Wave 0, each group with its open issues.
 4. **Next release** — what the next release will deliver, kept current as work lands.
 5. **The releases, newest first** — what shipped, grouped by the wave and group it came from.
 
@@ -105,6 +107,9 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 
 | Wave | Group | Ease | Risk | released | done for 2.5 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
+| 8 | G8.1 Containers as modules | H | M | – | – | 3 |
+| 8 | G8.2 Module contract for many instances | M | M | – | – | 5 |
+| 8 | G8.3 Install from anywhere | M | L | – | – | 3 |
 | 7 | G7.1 DevOps stack | H | M | 1 | – | 2 |
 | 7 | G7.2 New and reworked app modules | H | M | 4 | – | 1 |
 | 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | 15 | – | 12 |
@@ -112,18 +117,18 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 6 | G6.3 Data model | M | M | 9 | – | 2 |
 | 5 | G5.1 Satellite & off-site | H | M | 1 | – | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
-| 5 | G5.3 Enterprise scale | H | M | – | – | 2 |
-| 4 | G4.4 Storage & physical devices | H | L | 5 | – | 3 |
+| 5 | G5.3 Enterprise scale | H | M | – | – | 3 |
+| 4 | G4.4 Storage & physical devices | H | L | 5 | – | 4 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 7 | – | 2 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 32 | 2 | 2 |
 | 3 | ✅ G3.2 Identity & SSO wiring | M | L | 14 | – | – |
 | 3 | G3.3 App module fixes | L | L | 15 | – | 9 |
 | 3 | G3.4 AI stack maturity | M | M | 4 | 1 | 7 |
 | 3 | ✅ G3.5 Installer UX | L | L | 2 | 1 | – |
-| 2 | G2.1 Firewall exposure & rule order | M | H | 26 | – | 3 |
+| 2 | G2.1 Firewall exposure & rule order | M | H | 26 | – | 5 |
 | 2 | G2.2 DNS resolver robustness | L | M | 7 | 1 | 2 |
 | 1 | ✅ G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 27 | – | – |
-| 1 | G1.6 Secrets & privileged access | H | H | 4 | – | 1 |
+| 1 | G1.6 Secrets & privileged access | H | H | 4 | – | 4 |
 | 1 | ✅ G1.7 Parked for Erik discussion | – | – | 1 | 1 | – |
 
 ## Planning items still open
@@ -188,41 +193,62 @@ met gates are recorded in the releases that carried their waves.
 
 ---
 
-## Future Work — not yet in a wave
+## Parked — not now
 
-Known work that no wave holds yet. A ✅ row is done and ships with the next release. (Small
-items that belong to a group — FW #40, #157, #158, #162 — are rows in that group.)
+Known work that is deliberately not planned. Each row says what would bring it back into a wave.
+A ✅ row is done and ships with the next release.
 
-| # | Issue | Note |
+| # | Issue | Unpark when |
 |---|-------|------|
-| #39 | Power saving | Documentation |
-| #58 | Secrets management | One secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao behind it later. Out of G1.6 since 2026-10-02 (operator) |
-| #71 | TAPPaaS way to back up, export and restore user data inside a VM | Open: `backup:filesystem` does not solve it |
-| #89 | Manage binaries for TAPPaaS | |
-| #156 | pfSense `aliases.xml` import script | |
-| #223 | OPNsense 26.1 InterfaceAssignController may break on a future upgrade | Parked 2026-10-13 (agreed 2026-05-27): works on 26.1 as deployed; revisit when an upgrade breaks it. Parking lot on the forge |
-| #250 | `dependsOn` ownership for community modules | Option D, `dependsOn.sh`. Out of G1.3 since 2026-09-20 (operator) |
-| #294 | Zone-aligned VMID ranges | Renumbering means backup/restore to a new VMID. **Proposal:** new scheme for new installs and variants only; never renumber in place. Out of G1.7 since 2026-10-16 (operator) |
+| #223 | OPNsense 26.1 InterfaceAssignController may break on a future upgrade | an OPNsense upgrade breaks it: works on 26.1 as deployed (agreed 2026-05-27) |
+| #914 | switch-manager: observe mode for an existing switch controller (UniFi) | adopting an existing controller is rethought: it must change nothing on a running network |
+| #757 | `debianhost` over PXE (ADR-026 D8a) | a site needs a Debian host over PXE; `adopt` covers every known site |
+| #156 | pfSense `aliases.xml` import script | a site migrates from pfSense |
+| #678 | windows-server: time zone, keyboard and locale from the site | there is a Windows test site: its own time-zone vocabulary and a Windows test |
+| #71 | TAPPaaS way to back up, export and restore user data inside a VM | a design says what user data means for each module; `backup:filesystem` does not solve it |
+| #39 | Power saving | someone takes on the documentation |
+| #89 | Manage binaries for TAPPaaS | its scope is written down |
 | ✅ #464 | migrate-firewall-to-network: dry-run reports a step it cannot predict | **Closed 2026-11-09**: the firewall-to-network migration is over |
-| #678 | windows-server: time zone, keyboard and locale from the site | From G1.4: its own time-zone vocabulary and a Windows test |
-| #757 | `debianhost` over PXE (ADR-026 D8a) | `adopt` covers every known site |
-| #893 | Memory ballooning as an opt-in per module | A minimum memory per module (`balloon`), counted by the capacity check; not for passthrough VMs. First: is free-page reporting on? Opened 2026-10-27 |
-| #895 | Catalogue `vmidRange` for multi-instance modules | Proposal on the issue (2026-10-29): the range bounds `next_free_vmid`, which today counts upward into other modules' blocks. Settle with #294. From @AndreasJe (hosting) |
-| #897 | network:proxy: extra hostnames, redirects, wildcard routes | Design agreed on the issue (2026-10-30), no blockers, large. `proxyRoutes` entries take `name` or `domain`, with `aliases` (`mirror`, `redirect`); the environment's aliases applied by the same code. Certificates for a second DNS zone are the hard part, and hosting's preview needs them. First: does os-caddy have a redirect handler? Path routes to another module rejected. From @AndreasJe (hosting) |
-| #900 | cluster:ha for containers | `ct:` resources, restart-mode migration only, `pvesr` replication; refused with `bindMounts` or passthrough. From @AndreasJe (hosting) |
-| #896 | Module-supplied CT templates, hash-verified, placed on the node | **Rejected and closed 2026-10-31:** hosting uses the stock Debian template with signed repositories, so no unvalidated image runs |
-| #894 | cluster:lxc: volume mount points (`volumes`) for LXC modules | A volume (`mpN: <storage>:<size>`) instead of a bind mount, so a container with separate data keeps snapshot rollback in `module update`; size grow-only, storage from the module's placement. Small. From @AndreasJe (hosting) |
-| #898 | cluster:lxc linked clones (`ctclone`) | Ties a clone to the template's node and storage, against #900 and migration. An optimisation, not a need: @AndreasJe's narrow version is linked clones only on the template's node and storage, a full clone elsewhere, never with `cluster:ha` (hosting) |
-| #899 | schemas: module-owned config fields that validate | [ADR-038](docs/ADR/ADR-038%20-%20Component%20Declarations.md) Proposed v0.2, waiting for sign-off: reworked 2026-10-29 into ADR-035 D11 declarations (hosting's sites in `hosting-manager.json`), not fields in the module JSON. Parked 2026-10-31 for the operator's decision; @AndreasJe's five gaps on the issue go into the ADR when it is picked up (per-template options, values known only at runtime, rules across fields, `grow-only`, adding and removing list elements) |
-| #911 | network:rules: `egressPolicy: restricted`, a module's egress below its zone's `access-to` | Worth building; the proposal needs four changes. Module egress (band 7) runs before the zone baseline (band 8), so the block must come with passes for the gateway's DNS, NTP, DHCP and ICMP. Slots may be shared because all rules are passes, so the block needs a reserved last position and a pass through `rule_overlap.py`. Traffic within a zone probably never reaches the firewall, so sites in one zone may still reach each other, and `to: hosting` in the same zone would have no effect: test that first. IPv4 and IPv6 both; an unresolved host alias makes the block fail open; a restricted NixOS guest loses its package source. From @AndreasJe (hosting) |
-| #771 | NFS over TLS for `pvehost:nfs` | ADR-029 v0.7: OpenZFS `sharenfs` cannot carry `xprtsec` |
-| #787 | logging: TLS for syslog ingest and Loki's ports | **Built 2026-11-03** (`3dd1bec7`, `26901ab1`; ADR-043 step 6): every sender on TLS with the site CA, proven on lab2; live on hrossen. Close when the plain ports go, a release later |
-| #310 | Firewall API certificate verified, not skipped (`--no-ssl-verify`) | **Unblocked 2026-11-03:** the site CA exists (ADR-043), and `ca-manager cert to-firewall` already puts a certificate in the firewall's trust store. Next: a certificate for `firewall.mgmt.internal` on the API, and the controllers verify it. Rescoped 2026-10-08 out of G2.1 |
-| #914 | switch-manager: observe mode for an existing switch controller (UniFi) | **Parked 2026-11-04, to rethink.** Adopting a controller that already runs a network must change nothing on it; today interrogate types AP uplinks and parks free ports, and any later push trunks them to TAPPaaS's VLANs and removes undeclared SSIDs. Idea on the issue: a controller `observe` mode and hand-over per port |
-| #915 | First node's LAN uplink chosen on Day 1, not guessed; Hetzner design | The unattended install guesses the LAN port (first other port, no link check). Day 1's first-node step gets the LAN uplink: a physical port (link dots, Rescan) or "this machine alone". Hetzner: install over SSH and a routed or virtual-MAC WAN for one machine; several machines need an overlay over the vSwitch (MTU 1400) and an ADR |
-| #916 | Install from a Windows PC: the first node's install media and network boot | `bootstrap-tappaas.sh` runs on macOS and Linux only. Start with WSL2 + Docker Desktop for the build, the install and its log, the stick written by a Windows tool, no network boot on Windows; try WSL2 mirrored networking for PXE; a PowerShell port only if needed |
-| #926 | CrowdSec community blocklist as an opt-in per site | **Opened 2026-11-09.** Off by default: enrolling sends each local ban (attacker IP, scenario, time) to CrowdSec SAS, and shared reputation can block CGNAT and VPN users. #925 covers known-bad networks without sharing |
-| FW #83 | Reuse already-downloaded images | Out of G3.5 2026-11-09 (operator). The img download lives in a temp dir deleted on exit; reuse needs a cache location and a staleness policy for moving tags, a decision first |
+
+---
+
+## Wave 8 — hosting and community modules
+
+What a site needs to run many instances of one module and modules written outside TAPPaaS — hosting
+first — and a first install from wherever the operator sits. Not ordered by upgrade risk: a group
+lands when its first user needs it.
+
+### G8.1 Containers as modules — Ease H · Risk M · open: 3
+
+Containers as full modules: volumes that keep snapshot rollback, linked clones where they help, and high availability for containers.
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| #894 | cluster:lxc: volume mount points (`volumes`) for LXC modules | M | M | A volume (`mpN: <storage>:<size>`) instead of a bind mount, so a container with separate data keeps snapshot rollback in `module update`; size grow-only, storage from the module's placement. Small. From @AndreasJe (hosting) |
+| #898 | cluster:lxc linked clones (`ctclone`) | M | L | Ties a clone to the template's node and storage, against #900 and migration. An optimisation, not a need: @AndreasJe's narrow version is linked clones only on the template's node and storage, a full clone elsewhere, never with `cluster:ha` (hosting) |
+| #900 | cluster:ha for containers | H | M | `ct:` resources, restart-mode migration only, `pvesr` replication; refused with `bindMounts` or passthrough. From @AndreasJe (hosting) |
+
+### G8.2 Module contract for many instances — Ease M · Risk M · open: 5
+
+One contract for many instances of a module and for modules from outside TAPPaaS: a VMID range per module, zone-aligned ranges on new installs, who owns a module's dependencies, a module's own validated configuration, and proxy routes with extra hostnames, redirects and wildcards.
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| #895 | Catalogue `vmidRange` for multi-instance modules | L | L | Proposal on the issue (2026-10-29): the range bounds `next_free_vmid`, which today counts upward into other modules' blocks. Settle with #294. From @AndreasJe (hosting) |
+| #294 | Zone-aligned VMID ranges | M | L | Renumbering means backup/restore to a new VMID, so the new scheme is for new installs and variants only, never in place. Settle with #895 |
+| #250 | `dependsOn` ownership for community modules | M | L | Option D, `dependsOn.sh`. Out of G1.3 since 2026-09-20 (operator) |
+| #899 | schemas: module-owned config fields that validate | H | M | [ADR-038](docs/ADR/ADR-038%20-%20Component%20Declarations.md) Proposed v0.2, waiting for sign-off: reworked 2026-10-29 into ADR-035 D11 declarations (hosting's sites in `hosting-manager.json`), not fields in the module JSON. Parked 2026-10-31 for the operator's decision; @AndreasJe's five gaps on the issue go into the ADR when it is picked up (per-template options, values known only at runtime, rules across fields, `grow-only`, adding and removing list elements) |
+| #897 | network:proxy: extra hostnames, redirects, wildcard routes | H | M | Design agreed on the issue (2026-10-30), no blockers, large. `proxyRoutes` entries take `name` or `domain`, with `aliases` (`mirror`, `redirect`); the environment's aliases applied by the same code. Certificates for a second DNS zone are the hard part, and hosting's preview needs them. First: does os-caddy have a redirect handler? Path routes to another module rejected. From @AndreasJe (hosting) |
+
+### G8.3 Install from anywhere — Ease M · Risk L · open: 3
+
+A first install from wherever the operator sits: the first node's LAN uplink chosen on Day 1 instead of guessed, an install from a Windows PC, and downloaded images reused instead of fetched again.
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| #915 | First node's LAN uplink chosen on Day 1, not guessed; Hetzner design | M | L | The unattended install guesses the LAN port (first other port, no link check). Day 1's first-node step gets the LAN uplink: a physical port (link dots, Rescan) or "this machine alone". Hetzner: install over SSH and a routed or virtual-MAC WAN for one machine; several machines need an overlay over the vSwitch (MTU 1400) and an ADR |
+| FW #83 | Reuse already-downloaded images | L | L | Out of G3.5 2026-11-09 (operator). The img download lives in a temp dir deleted on exit; reuse needs a cache location and a staleness policy for moving tags, a decision first |
+| #916 | Install from a Windows PC: the first node's install media and network boot | H | L | `bootstrap-tappaas.sh` runs on macOS and Linux only. Start with WSL2 + Docker Desktop for the build, the install and its log, the stick written by a Windows tool, no network boot on Windows; try WSL2 mirrored networking for PXE; a PowerShell port only if needed |
 
 ---
 
@@ -320,28 +346,30 @@ How tests run — a `test` verb on the managers — and the module tests that st
 | #119 | openwebui test coverage | L | L | |
 | #409 | vllm-amd: `test-model.sh` drifted from the compose `update.sh` generates | L | L | |
 
-### G5.3 Enterprise scale — Ease H · Risk M · open: 2
+### G5.3 Enterprise scale — Ease H · Risk M · open: 3
 
-Placement and resources for a site of several nodes: guests placed and rebalanced by PVE 9.2's load balancer over a list of candidate nodes, falling back to a module's small values when no node can fit the full ones, and the boot mirror proven to survive a lost disk.
+Placement and resources for a site of several nodes: guests placed and rebalanced by PVE 9.2's load balancer over a list of candidate nodes, falling back to a module's small values when no node can fit the full ones, the boot mirror proven to survive a lost disk, and memory ballooning as an opt-in.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #922 | Boot mirror: health check for an unregistered ESP, and the mirror drills | M | L | **Opened 2026-11-09** from #403: health reports an `rpool` member with no registered ESP; boot with either disk detached; a disk replaced by the runbook |
 | #838 | Dynamic placement of workloads (PVE 9.2 CRS load balancer) | H | M | **Opened 2026-10-15.** Opt-in next to the fixed default: `HANode` as a list, an empty list = dynamic; CPU level (#827), capable nodes (#836). From #884: fall back to small values under constraint. ADR first |
+| #893 | Memory ballooning as an opt-in per module | M | M | A minimum memory per module (`balloon`), counted by the capacity check; not for passthrough VMs. First: is free-page reporting on? Opened 2026-10-27 |
 
 ## Wave 4 — additive capabilities
 
 New capabilities with low upgrade risk.
 
-### G4.4 Storage & physical devices — Ease H · Risk L · released: 5 · open: 3
+### G4.4 Storage & physical devices — Ease H · Risk L · released: 5 · open: 4
 
-Shared storage as a managed part of a site: the rest of the NFS service.
+Shared storage as a managed part of a site: the rest of the NFS service, NFS over TLS included.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #772 | ADR-029 NFS: remaining work packages from #766 | M | L | Export backup, NAS servers, storage zone, LXC consumers, quota health, `show`/`purge`. **2026-10-05:** ADR-029 v0.8 (shares by name, pending mounts, `subdir`) built, smoke-tested |
 | #863 | backup: spin down the tankb/tankc backup disks when idle | L | L | **Opened 2026-10-20:** the backup pools' spinning disks run 24/7 for about 30 minutes of writes a night; nothing sets a standby timer |
 | #864 | cluster: check SSD wear, and place the boot and Loki disks on purpose | M | L | **Opened 2026-10-20:** the PVE boot disk writes more than the VM pool (about 100 GB a day measured on hrossen) and nothing watches wear. ADR-042's disk CIs give wear a home |
+| #771 | NFS over TLS for `pvehost:nfs` | H | M | ADR-029 v0.7: OpenZFS `sharenfs` cannot carry `xprtsec` |
 
 ### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 7 · open: 2
 
@@ -367,7 +395,7 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | #907 | ADR needed: resource allocation — pools consumed by allocations (storage, RAM, CPU, addresses, VLANs) | H | M | **Opened 2026-10-29** from ADR-040 O10: IT4IT's Resource is consumed; ADR-040 leaves `pool` and `allocated-to` in the CMDB's model for it. Related: #838, #884, #833 |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
 
-### ✅ G3.2 Identity & SSO wiring — Ease M · Risk L · released: 14 · open: 0
+### ✅ G3.2 Identity & SSO wiring — Ease M · Risk L · released: 14
 
 Every app wired to the identity provider the same way: OIDC for Nextcloud and forgejo, a site-specific login page, logging's SSO dependency, a test for forward-auth, and Jellyfin behind forward-auth with Authentik sign-in.
 
@@ -419,15 +447,17 @@ A first install that is easier to get through: a first node that can be run agai
 
 Changes to live firewall and DNS behaviour on every installation. Restrictive defaults get harder to introduce the longer users rely on permissive ones, so they come early; every change shows its dry-run diff before `--apply`.
 
-### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 26 · open: 3
+### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 26 · open: 5
 
-Tighter firewall defaults that keep what modules need: the gateway, GUI/SSH and anti-spoofing rules, pinholes that nothing shadows, IPv6 in every zone policy, a reviewed tier model and rule creation, a rules manager that reports overlaps, covered pinholes and rule order, and IP blocklists from `site.json`. The NetBird rules are low priority until the NetBird decision.
+Tighter firewall defaults that keep what modules need: the gateway, GUI/SSH and anti-spoofing rules, pinholes that nothing shadows, IPv6 in every zone policy, a reviewed tier model and rule creation, a rules manager that reports overlaps, covered pinholes and rule order, IP blocklists from `site.json`, a module's egress narrower than its zone's, and CrowdSec's community list as an opt-in. The NetBird rules are low priority until the NetBird decision.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #385 | Persist the NetBird OPT1 pass rule | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision (*Decisions*). Land with #222 |
 | #222 | NetBird → srv floating rule is fragile | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision. The #816 review found no code that creates NetBird rules |
 | #925 | IP blocklists from `site.json`: URL-table alias, blocked in and out | M | M | **Opened 2026-11-09** from #157: `ipBlocklists` (Spamhaus DROP as the example, empty by default) as an alias, a WAN inbound and zone outbound block; lists stay their publishers' |
+| #911 | network:rules: `egressPolicy: restricted`, a module's egress below its zone's `access-to` | M | M | Worth building; the proposal needs four changes. Module egress (band 7) runs before the zone baseline (band 8), so the block must come with passes for the gateway's DNS, NTP, DHCP and ICMP. Slots may be shared because all rules are passes, so the block needs a reserved last position and a pass through `rule_overlap.py`. Traffic within a zone probably never reaches the firewall, so sites in one zone may still reach each other, and `to: hosting` in the same zone would have no effect: test that first. IPv4 and IPv6 both; an unresolved host alias makes the block fail open; a restricted NixOS guest loses its package source. From @AndreasJe (hosting) |
+| #926 | CrowdSec community blocklist as an opt-in per site | L | L | **Opened 2026-11-09.** Off by default: enrolling sends each local ban (attacker IP, scenario, time) to CrowdSec SAS, and shared reputation can block CGNAT and VPN users. #925 covers known-bad networks without sharing |
 
 ### G2.2 DNS resolver robustness — Ease L · Risk M · released: 7 · done for 2.5: 1 · open: 2
 
@@ -449,15 +479,18 @@ Everything that renames, re-schemas or rebuilds, landed while few installations 
 
 Backups where the operator chooses — a node, a managed machine, an external PBS or the satellite — encrypted, with every machine TAPPaaS manages a module (ADR-012, ADR-026).
 
-### G1.6 Secrets & privileged access — Ease H · Risk H · released: 4 · open: 1
+### G1.6 Secrets & privileged access — Ease H · Risk H · released: 4 · open: 4
 
-Least privilege on the platform: nodes hardened to the Proxmox guide, key-only SSH, encrypted backups, and a decided way for an AI agent to reach the mothership. Secrets management waits in Future Work.
+Least privilege on the platform: nodes hardened to the Proxmox guide, key-only SSH, encrypted backups, and a decided way for an AI agent to reach the mothership; the site's CA verified on the firewall API and on log ingest, and one way for every module to reach its secrets.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #142 | RFC: AI-agent access to cicd | H | L | Decision |
+| #787 | logging: TLS for syslog ingest and Loki's ports | L | L | **Built 2026-11-03** (`3dd1bec7`, `26901ab1`; ADR-043 step 6): every sender on TLS with the site CA, proven on lab2; live on hrossen. Close when the plain ports go, a release later |
+| #310 | Firewall API certificate verified, not skipped (`--no-ssl-verify`) | M | M | **Unblocked 2026-11-03:** the site CA exists (ADR-043), and `ca-manager cert to-firewall` already puts a certificate in the firewall's trust store. Next: a certificate for `firewall.mgmt.internal` on the API, and the controllers verify it. Rescoped 2026-10-08 out of G2.1 |
+| #58 | Secrets management | H | M | One secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao behind it later. Back from Future Work 2026-11-10 (operator) |
 
-### ✅ G1.7 Parked for Erik discussion · released: 1 · done for 2.5: 1 · open: 0
+### ✅ G1.7 Parked for Erik discussion · released: 1 · done for 2.5: 1
 
 Waiting on a conversation between Lars and @ErikDaniel007, not on work: the controller pattern.
 
