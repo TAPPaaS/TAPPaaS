@@ -125,7 +125,7 @@ p="$(render_metrics_alloy tappaas-cicd basic normal guest "${ctl}")"
 has "${p}" 'prometheus.exporter.unix' "at basic: the host's numbers"
 has "${p}" 'prometheus.exporter.blackbox "routes"' "and the probes"
 balanced "${p}" "the pipeline at basic"
-eq "$(render_metrics_alloy tappaas-cicd off normal guest "" | tail -1)" 'declare "pipeline" { }' "off and nothing extra: the empty pipeline"
+eq "$(render_metrics_alloy tappaas-cicd off normal guest "" | tail -1)" "${LOG_SHIPPING_PERF_DEFAULT}" "off and nothing extra: the empty pipeline"
 
 # ── identity for routes ──────────────────────────────────────────────
 map="$(jq -nc --arg r1 "${R1}" '{cluster:"pvecluster", nodes:[], hosts:{}, guests:{}, ids:{}, controller:"tappaas-cicd",

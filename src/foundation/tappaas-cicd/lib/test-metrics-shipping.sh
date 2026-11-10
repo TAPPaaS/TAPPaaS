@@ -174,7 +174,7 @@ eq "$(metrics_class_of ct1)/$(metrics_class_of web)" "lxc/guest" "a container's 
 # ── the guest pipeline ───────────────────────────────────────────────
 R="${T}/perf.alloy"
 render_metrics_alloy web off normal guest > "${R}"
-grep -q '^declare "pipeline" { }$' "${R}" && ! grep -q exporter "${R}" && ok || no "level off is not an empty pipeline"
+grep -q '^declare "pipeline" { argument "off" { optional = true } }$' "${R}" && ! grep -q exporter "${R}" && ok || no "level off is not an empty pipeline"
 render_metrics_alloy web basic normal guest > "${R}"
 grep -q 'scrape_interval = "60s"' "${R}" && grep -q 'username = "web"' "${R}" && grep -q 'endpoint = "https://logging.mgmt.internal:3120"' "${R}" && ok || no "basic: interval, username or endpoint wrong"
 grep -q 'node_netstat' "${R}" && no "basic carries the service keep-list" || ok

@@ -400,7 +400,6 @@ service_metrics_sync_logging() {
     # Dashboards of modules gone or no longer declaring.
     ssh -o BatchMode=yes -o ConnectTimeout=10 "${vm}" "cd ${SERVICE_DASH_DIR} 2>/dev/null && for f in tappaas-mod-*.json; do case ' ${names} ' in *\" \$f \"*) ;; *) [ -e \"\$f\" ] && sudo rm -f \"\$f\";; esac; done; true" || true
     level="$(service_metrics_level logging 2>/dev/null || echo off)"
-    metrics_wanted || level=off
     c="$(_ms_put "${vm}" "${SERVICE_SELF_FILE}" 0644 root:root "$(render_self_alloy "${level}")
 ")" || return 1
     [[ -n "${c}" ]] && echo "logging's own exporters: level ${level}"
@@ -429,8 +428,10 @@ _sm_caddy_files() {
         "	respond 403" "}"
 }
 
+# Wanted while logging is deployed and a route is at service: a module's own
+# level counts even on a site that is off.
 _sm_caddy_wanted() {
-    metrics_wanted || return 1
+    [[ -f "$(_ls_config_dir)/logging.json" ]] || return 1
     [[ "$(jq 'length' <<<"$(service_routes_wanted)")" -gt 0 ]]
 }
 
