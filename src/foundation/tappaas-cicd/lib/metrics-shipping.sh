@@ -459,4 +459,260 @@ remove_metrics_pbs() {
     echo "PBS pushes no metrics"
 }
 
+
+# ── the cascade (ADR-046 D3) ─────────────────────────────────────────
+# site → environment → module instance, most specific wins, then an active
+# timed raise (health-manager perf). A record that says trace is read as
+# service: trace exists only as a raise.
+
+METRICS_RAISES_FILE_NAME="performance-raises.json"
+_ms_raises_file() { echo "$(_ls_config_dir)/${METRICS_RAISES_FILE_NAME}"; }
+
+_ms_level_ok() { case "$1" in off|basic|service) return 0 ;; *) return 1 ;; esac; }
+_ms_standing() { local l="$1"; [[ "${l}" == trace ]] && l=service; _ms_level_ok "${l}" && echo "${l}"; }
+_ms_res_ok() { case "$1" in normal|fine) return 0 ;; *) return 1 ;; esac; }
+
+# A record's performance.<key>, flat or nested ("performance.level" in a
+# config written by hand is read too).
+_ms_rec() { jq -r --arg k "$2" '(.performance[$k] // .["performance." + $k]) // empty' "$1" 2>/dev/null || true; }
+
+# The active raise for a module instance, as JSON, or nothing.
+metrics_raise_of() {
+    local module="$1" f now
+    f="$(_ms_raises_file)"; [[ -s "${f}" ]] || return 0
+    now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    jq -c --arg m "${module}" --arg now "${now}" \
+        '[.investigations[]? | select(.module == $m and (.ended // null) == null and .until > $now)] | last // empty' "${f}" 2>/dev/null || true
+}
+
+# metrics_effective <module> → {"level","resolution","from","source","raise"}:
+# from/source the standing level and where it comes from (site, environment
+# <env>, module), raise the active raise or null.
+metrics_effective() {
+    local module="$1" cfg env l r src rl rr site raise
+    cfg="$(_ls_config_dir)"
+    site="$(_ms_site)"
+    l="$(_ms_standing "$(_ms_rec "${site}" level)")"; src="site"
+    [[ -n "${l}" ]] || { l="$(metrics_level 2>/dev/null)"; src="site (by size)"; }
+    r="$(_ms_rec "${site}" resolution)"; _ms_res_ok "${r}" || r=normal
+    env="$(jq -r '.environment // empty' "${cfg}/${module}.json" 2>/dev/null || true)"
+    if [[ -n "${env}" && -f "${cfg}/environments/${env}.json" ]]; then
+        rl="$(_ms_standing "$(_ms_rec "${cfg}/environments/${env}.json" level)")"
+        [[ -n "${rl}" ]] && { l="${rl}"; src="environment ${env}"; }
+        rr="$(_ms_rec "${cfg}/environments/${env}.json" resolution)"; _ms_res_ok "${rr}" && r="${rr}"
+    fi
+    if [[ -f "${cfg}/${module}.json" ]]; then
+        rl="$(_ms_standing "$(_ms_rec "${cfg}/${module}.json" level)")"
+        [[ -n "${rl}" ]] && { l="${rl}"; src="module"; }
+        rr="$(_ms_rec "${cfg}/${module}.json" resolution)"; _ms_res_ok "${rr}" && r="${rr}"
+    fi
+    raise="$(metrics_raise_of "${module}")"
+    jq -nc --arg l "${l}" --arg r "${r}" --arg src "${src}" --argjson raise "${raise:-null}" '
+        {from: $l, source: $src, raise: $raise,
+         level: (if $raise then $raise.level else $l end),
+         resolution: (if $raise and ($raise.resolution // "") == "fine" then "fine" else $r end)}'
+}
+
+# ── the guest's own view (ADR-046 D2, P2) ────────────────────────────
+# Alloy's prometheus.exporter.unix, a keep-list per class and level, pushed as
+# OTLP with the guest's push credential to the store. Rendered here, written to
+# the guest's runtime file (LOG_SHIPPING_PERF_FILE), which its Alloy re-reads.
+
+# The keep-lists (metric names; RE2, anchored by Alloy).
+METRICS_KEEP_BASIC='node_cpu_seconds_total|node_load(1|5|15)|node_memory_(MemTotal|MemAvailable|MemFree|Cached|Buffers|SwapTotal|SwapFree)_bytes|node_pressure_(cpu|memory|io)_(waiting|stalled)_seconds_total|node_filesystem_(avail|size)_bytes|node_filesystem_files(_free)?|node_disk_(read|written)_bytes_total|node_disk_(reads|writes)_completed_total|node_disk_io_time_seconds_total|node_network_(receive|transmit)_(bytes|errs|drop)_total|node_boot_time_seconds|node_procs_(running|blocked)|node_context_switches_total'
+METRICS_KEEP_SERVICE='node_netstat_Tcp_(CurrEstab|RetransSegs|InSegs|OutSegs|ActiveOpens|PassiveOpens)|node_sockstat_(TCP_inuse|TCP_tw|sockets_used)|node_vmstat_(pgmajfault|oom_kill)|node_filefd_allocated'
+# A container's /proc pressure and boot time are its node's: not its own.
+METRICS_DROP_LXC='node_pressure_.*|node_boot_time_seconds'
+
+# guest | lxc
+metrics_class_of() {
+    local cfg; cfg="$(_ls_config_dir)/$1.json"
+    if jq -e '.kind == "lxc" or ((.dependsOn // []) | index("cluster:lxc") != null)' "${cfg}" >/dev/null 2>&1; then echo lxc; else echo guest; fi
+}
+
+# render_metrics_alloy <host> <level> <resolution> <class> — the runtime file.
+render_metrics_alloy() {
+    local host="$1" level="$2" res="$3" class="${4:-guest}" keep interval=60s collectors
+    _ms_name_ok "${host}" || { echo "render_metrics_alloy: bad host '${host}'" >&2; return 1; }
+    [[ "${level}" == trace ]] && level=service
+    _ms_level_ok "${level}" || { echo "render_metrics_alloy: bad level '${level}'" >&2; return 1; }
+    echo "// GENERATED on the mothership (lib/metrics-shipping.sh): ${host} at level ${level}, resolution ${res}."
+    echo "// Rewritten on every level change; Alloy re-reads it. Do not edit here."
+    if [[ "${level}" == off ]]; then
+        echo 'declare "pipeline" { }'
+        return 0
+    fi
+    keep="${METRICS_KEEP_BASIC}"
+    collectors='"cpu", "loadavg", "meminfo", "pressure", "filesystem", "diskstats", "netdev", "stat"'
+    if [[ "${level}" == service ]]; then
+        keep+="|${METRICS_KEEP_SERVICE}"
+        collectors+=', "netstat", "sockstat", "vmstat", "filefd"'
+    fi
+    [[ "${res}" == fine ]] && interval=15s
+    cat <<EOF
+declare "pipeline" {
+  prometheus.exporter.unix "host" {
+    set_collectors = [${collectors}]
+    filesystem {
+      fs_types_exclude     = "^(tmpfs|devtmpfs|overlay|squashfs|nsfs|proc|sysfs|cgroup2?|autofs|ramfs|fuse\\\\..*|efivarfs|bpf|tracefs|debugfs|securityfs|pstore|configfs|binfmt_misc|mqueue|hugetlbfs)\$"
+      mount_points_exclude = "^/(dev|proc|run|sys|nix/store)(\$|/)"
+    }
+    netdev {
+      device_exclude = "^(lo|veth.*|docker.*|br-.*|cni.*|podman.*|virbr.*)\$"
+    }
+  }
+
+  prometheus.scrape "host" {
+    targets         = prometheus.exporter.unix.host.targets
+    scrape_interval = "${interval}"
+    job_name        = "node"
+    forward_to      = [prometheus.relabel.keep.receiver]
+  }
+
+  // The keep-list of the class and level: names only, no label carrying input.
+  prometheus.relabel "keep" {
+    forward_to = [otelcol.receiver.prometheus.perf.receiver]
+    rule {
+      source_labels = ["__name__"]
+      regex         = "${keep}"
+      action        = "keep"
+    }
+EOF
+    if [[ "${class}" == lxc ]]; then
+        cat <<EOF
+    rule {
+      source_labels = ["__name__"]
+      regex         = "${METRICS_DROP_LXC}"
+      action        = "drop"
+    }
+EOF
+    fi
+    cat <<EOF
+  }
+
+  otelcol.receiver.prometheus "perf" {
+    output {
+      metrics = [otelcol.exporter.otlphttp.perf.input]
+    }
+  }
+
+  local.file "push_secret" {
+    filename  = sys.env("CREDENTIALS_DIRECTORY") + "/loki-push"
+    is_secret = true
+  }
+
+  otelcol.auth.basic "perf" {
+    username = "${host}"
+    password = local.file.push_secret.content
+  }
+
+  // To the store's push receiver, as this guest (its logs credential): the
+  // store sets the series' identity from it.
+  otelcol.exporter.otlphttp "perf" {
+    client {
+      endpoint = "$(metrics_push_url)"
+      auth     = otelcol.auth.basic.perf.handler
+    }
+  }
+}
+EOF
+}
+
+# Where a guest is reached as root to write its runtime file: ssh:<host> for a
+# VM (NixOS or Debian), lxc:<node>:<vmid> for a container. rc 1 when it ships
+# no logs (no Alloy) or cannot be reached.
+_ms_guest_transport() {
+    local module="$1" cfg vmname zone
+    log_shipping_wanted "${module}" || return 1
+    cfg="$(_ls_config_dir)/${module}.json"
+    if [[ "$(metrics_class_of "${module}")" == lxc ]]; then
+        log_shipping_transport "${module}"; return
+    fi
+    vmname="$(jq -r '.vmname // empty' "${cfg}" 2>/dev/null)"
+    zone="$(jq -r '(.zone0 // (.config? // {} | to_entries[]?.value.zone0?)) // ""' "${cfg}" 2>/dev/null | head -1)"
+    _ms_name_ok "${vmname:-${module}}" || return 1
+    printf 'ssh:%s.%s.internal\n' "${vmname:-${module}}" "${zone:-mgmt}"
+}
+
+# The file a guest should have now, from the cascade and any raise.
+metrics_guest_render() {
+    local module="$1" eff host lvl
+    eff="$(metrics_effective "${module}")"
+    host="$(jq -r '.vmname // empty' "$(_ls_config_dir)/${module}.json" 2>/dev/null)"
+    lvl="$(jq -r .level <<<"${eff}")"
+    metrics_wanted || lvl=off
+    render_metrics_alloy "${host:-${module}}" "${lvl}" "$(jq -r .resolution <<<"${eff}")" "$(metrics_class_of "${module}")"
+}
+
+# apply_metrics_guest <module> — write the runtime file when it differs and
+# have Alloy re-read it. Prints "changed" or "unchanged" and the level.
+apply_metrics_guest() {
+    local module="$1" t file eff
+    t="$(_ms_guest_transport "${module}")" || { echo "${module} ships no logs here, so it has no Alloy to collect its own numbers"; return 0; }
+    file="$(metrics_guest_render "${module}")" || return 1
+    eff="$(metrics_effective "${module}")"
+    _ls_guest_root "${t}" <<EOF || return 1
+set -eu
+f=${LOG_SHIPPING_PERF_FILE}
+install -d -m 0755 \$(dirname "\$f")
+t=\$(mktemp)
+printf '%s' '$(printf '%s\n' "${file}" | base64 -w0)' | base64 -d > "\$t"
+if [ -f "\$f" ] && cmp -s "\$t" "\$f"; then rm -f "\$t"; echo unchanged; exit 0; fi
+install -m 0644 "\$t" "\$f"; rm -f "\$t"
+systemctl reload alloy 2>/dev/null || systemctl try-restart alloy
+echo changed
+EOF
+    echo "${module}: level $(jq -r .level <<<"${eff}") ($(jq -r 'if .raise then "raised until " + .raise.until else "from " + .source end' <<<"${eff}")), every $(jq -r 'if .resolution == "fine" then "15" else "60" end' <<<"${eff}") s"
+}
+
+# ── purge (ADR-046 D3) ───────────────────────────────────────────────
+# metrics_purge <ci-id> — the CI's series out of both stores (Prometheus'
+# delete_series, then clean_tombstones). Prints what each store said.
+metrics_purge() {
+    local id="$1" q code rc=0 base
+    _ms_id_ok "${id}" || { echo "metrics_purge: '${id}' is not a CI id" >&2; return 1; }
+    q="$(metrics_query_url)"
+    for base in "${q}" "${q}/trends"; do
+        code="$(metrics_curl_admin -s -o /dev/null -w '%{http_code}' --max-time 60 -X POST -G "${base}/api/v1/admin/tsdb/delete_series" \
+                --data-urlencode "match[]={tappaas_ci_id=\"${id}\"}" 2>/dev/null || true)"
+        if [[ "${code}" == 204 ]]; then
+            metrics_curl_admin -s -o /dev/null --max-time 120 -X POST "${base}/api/v1/admin/tsdb/clean_tombstones" 2>/dev/null || true
+        else
+            echo "${base}: delete_series answered ${code:-nothing}" >&2; rc=1
+        fi
+    done
+    return "${rc}"
+}
+
+# ── sizing (ADR-044, ADR-046 D3) ─────────────────────────────────────
+# Per-object cost of a level, from what hrossen measured (P1, P2): series, MB
+# of disk a day, MB of RAM in the store. A guest's own view comes on top of its
+# outside view; fine resolution is four times the samples (disk), not series.
+#   metrics_cost → {"series","diskMBPerDay","ramMB"} for the whole site now
+metrics_cost() {
+    local cfg n_nodes=0 n_guests=0 own_series=0 own_disk=0 m eff lvl res f
+    cfg="$(_ls_config_dir)"
+    [[ "$(metrics_level)" == off ]] && [[ -z "$(jq -r '.performance.level // empty' "${cfg}"/environments/*.json "${cfg}"/*.json 2>/dev/null | grep -v '^off$')" ]] \
+        && { jq -nc '{series: 0, diskMBPerDay: 0, ramMB: 0}'; return 0; }
+    n_nodes="$(get_all_node_hostnames 2>/dev/null | grep -c . || true)"
+    for f in "${cfg}"/*.json; do
+        m="$(basename "${f}" .json)"
+        jq -e '.kind == "vm" or .kind == "lxc"' "${f}" >/dev/null 2>&1 || continue
+        n_guests=$((n_guests + 1))
+        log_shipping_wanted "${m}" || continue
+        eff="$(metrics_effective "${m}")"; lvl="$(jq -r .level <<<"${eff}")"; res="$(jq -r .resolution <<<"${eff}")"
+        case "${lvl}" in basic) s=60 ;; service|trace) s=90 ;; *) s=0 ;; esac
+        own_series=$((own_series + s))
+        # 1.5 bytes a sample; 1440 samples a day at a minute, 5760 at 15 s.
+        if [[ "${res}" == fine ]]; then own_disk=$((own_disk + s * 5760 * 3 / 2)); else own_disk=$((own_disk + s * 1440 * 3 / 2)); fi
+    done
+    # Outside view, measured on hrossen: ~45 series a guest, ~200 a node
+    # (NICs and storages), PVE every 10 s.
+    jq -nc --argjson g "${n_guests}" --argjson n "${n_nodes}" --argjson os "${own_series}" --argjson od "${own_disk}" '
+        ($g * 45 + $n * 200) as $outside
+        | {series: ($outside + $os),
+           diskMBPerDay: ((($outside * 8640 * 1.5) + $od) / 1048576 | . * 10 | round / 10),
+           ramMB: (180 + (($outside + $os) / 1000 * 30) | round)}'
+}
+
 fi

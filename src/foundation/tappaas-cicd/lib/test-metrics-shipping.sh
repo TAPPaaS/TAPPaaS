@@ -146,5 +146,54 @@ eq "${h}" "pvecluster:$(cat "${LOG_SHIPPING_CRED_DIR}/pvecluster")" "the cluster
 # PBS's InfluxDB token line, for nginx's map.
 eq "$(_ms_influx_map)" "\"Token backup:$(cat "${LOG_SHIPPING_CRED_DIR}/backup")\" \"backup\";" "the PBS token maps to its instance"
 
+
+# ── the cascade (P2) ─────────────────────────────────────────────────
+mkdir -p "${CONFIG_DIR}/environments"
+echo '{"size":"medium"}' > "${CONFIG_DIR}/site.json"
+echo '{"name":"rossen"}' > "${CONFIG_DIR}/environments/rossen.json"
+echo '{"kind":"vm","vmname":"web","environment":"rossen","zone0":"srv"}' > "${CONFIG_DIR}/web.json"
+eff(){ metrics_effective web | jq -r "$1"; }
+eq "$(eff '.level + " " + .source')" "basic site (by size)" "nothing set: the site's default by size"
+echo '{"size":"medium","performance":{"level":"off"}}' > "${CONFIG_DIR}/site.json"
+eq "$(eff '.level + " " + .source')" "off site" "the site's level"
+echo '{"name":"rossen","performance":{"level":"service","resolution":"fine"}}' > "${CONFIG_DIR}/environments/rossen.json"
+eq "$(eff '.level + " " + .source + " " + .resolution')" "service environment rossen fine" "an environment overrides the site"
+echo '{"kind":"vm","vmname":"web","environment":"rossen","performance":{"level":"basic"}}' > "${CONFIG_DIR}/web.json"
+eq "$(eff '.level + " " + .source + " " + .resolution')" "basic module fine" "a module overrides its environment; its resolution inherits"
+echo '{"kind":"vm","vmname":"web","environment":"rossen","performance":{"level":"trace"}}' > "${CONFIG_DIR}/web.json"
+eq "$(eff .level)" service "a module record saying trace reads as service"
+now_plus(){ date -u -d "@$(( $(date +%s) + $1 ))" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -r "$(( $(date +%s) + $1 ))" +%Y-%m-%dT%H:%M:%SZ; }
+jq -n --arg u "$(now_plus 3600)" '{investigations: [{module: "web", level: "trace", resolution: "fine", ended: null, until: $u}], history: []}' > "${CONFIG_DIR}/performance-raises.json"
+eq "$(eff '.level + " " + .from + " " + (.raise.until != null | tostring)')" "trace service true" "an active raise wins and keeps where it came from"
+jq -n --arg u "$(now_plus -60)" '{investigations: [{module: "web", level: "trace", ended: null, until: $u}], history: []}' > "${CONFIG_DIR}/performance-raises.json"
+eq "$(eff '.level + " " + (.raise == null | tostring)')" "service true" "a raise past its time counts for nothing"
+rm -f "${CONFIG_DIR}/performance-raises.json"
+echo '{"kind":"lxc","vmname":"ct1","environment":"rossen"}' > "${CONFIG_DIR}/ct1.json"
+eq "$(metrics_class_of ct1)/$(metrics_class_of web)" "lxc/guest" "a container's class"
+
+# ── the guest pipeline ───────────────────────────────────────────────
+R="${T}/perf.alloy"
+render_metrics_alloy web off normal guest > "${R}"
+grep -q '^declare "pipeline" { }$' "${R}" && ! grep -q exporter "${R}" && ok || no "level off is not an empty pipeline"
+render_metrics_alloy web basic normal guest > "${R}"
+grep -q 'scrape_interval = "60s"' "${R}" && grep -q 'username = "web"' "${R}" && grep -q 'endpoint = "https://logging.mgmt.internal:3120"' "${R}" && ok || no "basic: interval, username or endpoint wrong"
+grep -q 'node_netstat' "${R}" && no "basic carries the service keep-list" || ok
+grep -q 'CREDENTIALS_DIRECTORY' "${R}" && ! grep -qiE 'password *= *"' "${R}" && ok || no "the push secret is not read from the credential"
+[[ "$(tr -cd '{' < "${R}" | wc -c)" -eq "$(tr -cd '}' < "${R}" | wc -c)" ]] && ok || no "basic pipeline braces do not balance"
+render_metrics_alloy web service fine lxc > "${R}"
+grep -q 'scrape_interval = "15s"' "${R}" && grep -q 'node_netstat' "${R}" && grep -q '"netstat"' "${R}" && ok || no "service/fine: interval or keep-list wrong"
+grep -q 'regex         = "node_pressure_.\*|node_boot_time_seconds"' "${R}" && ok || no "a container keeps its node's pressure"
+grep -q 'level service' <<<"$(render_metrics_alloy web trace normal guest)" && ok || no "trace does not render as service"
+render_metrics_alloy 'bad host' basic normal guest >/dev/null 2>&1 && no "a bad host was rendered" || ok
+render_metrics_alloy web loud normal guest >/dev/null 2>&1 && no "a bad level was rendered" || ok
+# The rendered file follows the cascade and switches off with the store.
+echo '{"size":"medium"}' > "${CONFIG_DIR}/site.json"
+echo '{"kind":"vm","vmname":"web","environment":"rossen","performance":{"level":"service"}}' > "${CONFIG_DIR}/web.json"
+grep -q 'level service, resolution fine' <<<"$(metrics_guest_render web)" && ok || no "the render does not follow the cascade"
+mv "${CONFIG_DIR}/logging.json" "${CONFIG_DIR}/logging.json.x"
+grep -q 'level off' <<<"$(metrics_guest_render web)" && ok || no "without logging the guest renders a pipeline"
+mv "${CONFIG_DIR}/logging.json.x" "${CONFIG_DIR}/logging.json"
+metrics_purge not-an-id 2>/dev/null && no "purge took something that is not a CI id" || ok
+
 echo "Results: ${pass} passed, ${fail} failed"
 [[ ${fail} -eq 0 ]]

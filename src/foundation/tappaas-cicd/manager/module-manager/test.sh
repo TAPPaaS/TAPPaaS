@@ -2217,6 +2217,53 @@ run_cset --check --set 'proxyAllowedZones=notjson'; _rc=$?
 [[ "${_rc}" -eq 3 ]] && unchanged && ok "--check still checks the value's type" || bad "--check type rc=${_rc}"
 rm -rf -- "${CDIR}"
 
+# ---------------------------------------------------------------------------
+# Unit: a key inside a declared object field (ADR-046: performance.level) —
+# written at its path, refused outside its enum, unset to inherit, and the
+# object (not the key) in the operator ledger, which the 3-way merge reads.
+# ---------------------------------------------------------------------------
+PDIR="$(mktemp -d "${TMPDIR:-/tmp}/modmgr-perf.XXXXXX")"
+mkdir -p "${PDIR}/config"
+cat > "${PDIR}/schema.json" <<'JSON'
+{ "fields": { "vmname": { "type": "string" }, "cores": { "type": "integer" },
+  "performance": { "type": "object", "usedBy": ["general"],
+    "properties": { "level": { "type": "string", "enum": ["off", "basic", "service"] },
+                    "resolution": { "type": "string", "enum": ["normal", "fine"] } } } } }
+JSON
+printf '{"vmname":"perftest","cores":2}\n' > "${PDIR}/config/perftest.json"
+run_pset() {
+    TAPPAAS_CONFIG="${PDIR}/config" TAPPAAS_SCHEMA_FILE="${PDIR}/schema.json" \
+        bash "$SETF" perftest "$@" > "${PDIR}/out" 2>&1
+}
+pcfg() { jq -c "$1" "${PDIR}/config/perftest.json"; }
+run_pset --set performance.level=service; _rc=$?
+[[ "${_rc}" -eq 0 && "$(pcfg '.performance')" == '{"level":"service"}' ]] \
+    && ok "--set performance.level=service writes performance: {level: service}" \
+    || bad "performance.level not written as a key of performance (rc=${_rc}): $(pcfg .) $(tail -1 "${PDIR}/out")"
+run_pset --set performance.resolution=fine
+[[ "$(pcfg '.performance')" == '{"level":"service","resolution":"fine"}' ]] \
+    && ok "a second key joins the object" || bad "performance.resolution: $(pcfg .performance)"
+jq -e 'index("performance") != null and (map(test("\\.")) | any | not)' "${PDIR}/config/perftest.json.operator" >/dev/null \
+    && ok "the ledger records performance, not performance.level" || bad "ledger: $(cat "${PDIR}/config/perftest.json.operator" 2>/dev/null)"
+cp "${PDIR}/config/perftest.json" "${PDIR}/before.json"
+run_pset --set performance.level=trace; _rc=$?
+[[ "${_rc}" -eq 3 ]] && cmp -s "${PDIR}/before.json" "${PDIR}/config/perftest.json" \
+    && ok "performance.level=trace is refused (exit 3), nothing written" || bad "trace: rc=${_rc}: $(pcfg .performance)"
+run_pset --set performance.colour=red; _rc=$?
+[[ "${_rc}" -ne 0 ]] || [[ "$(pcfg '.performance.colour // "none"')" == '"none"' ]] \
+    && ok "a key the object does not declare is not written as one" || bad "performance.colour written: $(pcfg .performance)"
+printf '{"vmname":"perftest","cores":2,"performance":{"level":"service","resolution":"fine"}}\n' > "${PDIR}/config/perftest.json"
+run_pset --unset performance.level; _rc=$?
+[[ "${_rc}" -eq 0 && "$(pcfg '.performance')" == '{"resolution":"fine"}' ]] \
+    && ok "--unset performance.level inherits again, the other key stays" || bad "unset level: rc=${_rc}: $(pcfg .) $(tail -1 "${PDIR}/out")"
+run_pset --unset performance.resolution
+[[ "$(pcfg 'has("performance")')" == "false" ]] \
+    && ok "unsetting the last key removes the object" || bad "empty performance left: $(pcfg .)"
+run_pset --unset performance.level; _rc=$?
+[[ "${_rc}" -eq 3 ]] && grep -q "already inherits" "${PDIR}/out" \
+    && ok "--unset of a key not set says it already inherits (exit 3)" || bad "unset unset key: rc=${_rc}: $(tail -1 "${PDIR}/out")"
+rm -rf -- "${PDIR}"
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 [[ "$FAIL" -eq 0 ]] || exit 1

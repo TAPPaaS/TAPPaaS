@@ -363,6 +363,20 @@ check_metrics() {
             || check_fail "No node series with an identity in 5 min — tappaas-metrics-target.sh pve status"
     fi
 
+    # --purge needs the admin API on both stores: a delete for an id nothing
+    # carries changes nothing and answers 204.
+    for base in "${q}" "${q}/trends"; do
+        code="$(metrics_curl_admin -s -o /dev/null -w '%{http_code}' --max-time 15 -X POST -G "${base}/api/v1/admin/tsdb/delete_series" \
+                --data-urlencode 'match[]={tappaas_ci_id="00000000-0000-0000-0000-000000000000"}' 2>/dev/null || true)"
+        [[ "${code}" == "204" ]] && check_pass "Series can be purged from ${base##*/} (admin API)" || check_fail "delete_series on ${base} got ${code:-no answer}, not 204"
+    done
+    # PBS's numbers carry the pbs_ prefix, never a bare measurement name.
+    if [[ "$(metrics_pbs_state 2>/dev/null)" == in-sync ]]; then
+        n="$(metrics_curl_admin -s --max-time 15 -G "${q}/api/v1/query" --data-urlencode 'query=count({__name__=~"pbs_.+"})' 2>/dev/null | jq -r '.data.result[0].value[1] // "0"' 2>/dev/null || echo 0)"
+        b="$(metrics_curl_admin -s --max-time 15 -G "${q}/api/v1/query" --data-urlencode 'query=count({__name__=~"cpustat_.+|memory_.+|datastore_.+"})' 2>/dev/null | jq -r '.data.result[0].value[1] // "0"' 2>/dev/null || echo 0)"
+        [[ "${n}" =~ ^[1-9] && "${b}" == "0" ]] && check_pass "PBS's numbers arrive as pbs_* (${n} series)" || check_fail "PBS series: ${n} as pbs_*, ${b} without the prefix"
+    fi
+
     # The deep check: a push with the mothership's credential that claims to be
     # another host, carries a CI id of its own and speaks about a guest. Stored
     # as tappaas-cicd with its CMDB identity; the guest series dropped. The store

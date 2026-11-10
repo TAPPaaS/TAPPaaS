@@ -91,6 +91,27 @@
       "changeClass": "in-place",
       "changeNote": "Applies to modules installed from now on, and to the modules already in the environment at their next update, for every sizing field the operator has not set by hand. Disks only grow."
     },
+    "performance": {
+      "description": "Performance monitoring for the environment's modules: what they collect of their own performance and how often, unless a module sets its own. Absent: the site's.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "description": "off, basic or service. Tracing is never a standing level: it is switched on for one object for a time (health-manager perf).",
+          "type": "string",
+          "enum": ["off", "basic", "service"],
+          "changeClass": "in-place"
+        },
+        "resolution": {
+          "description": "normal (once a minute) or fine (every 15 seconds: four times the samples).",
+          "type": "string",
+          "enum": ["normal", "fine"],
+          "changeClass": "in-place"
+        }
+      },
+      "changeClass": "in-place",
+      "changeNote": "Applied to the environment's modules at once: each guest's metrics pipeline is a file its Alloy re-reads, no rebuild."
+    },
     "backup": {
       "description": "Per-environment backup policy. null when not configured.",
       "type": [

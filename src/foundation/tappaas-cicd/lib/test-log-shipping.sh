@@ -28,7 +28,7 @@ render_logging_nix web dmz "${drop}" > "${T}/frag.nix" || no "render_logging_nix
 render_logging_alloy web dmz "${drop}" > "${T}/config.alloy" || no "render_logging_alloy failed"
 # The pipeline inside the fragment's '' string, Nix's common indentation removed.
 sed -n '/config.alloy".text = '"''"'$/,/^  '"''"';$/p' "${T}/frag.nix" | sed '1d;$d' | sed 's/^    //' > "${T}/nix-pipeline"
-grep -v '^//' "${T}/config.alloy" | sed '1{/^$/d;}' > "${T}/deb-pipeline"
+sed '1,3d' "${T}/config.alloy" > "${T}/deb-pipeline"
 if [[ -s "${T}/nix-pipeline" ]] && cmp -s "${T}/nix-pipeline" "${T}/deb-pipeline"; then ok; else
     no "the NixOS and Debian pipelines differ"; diff "${T}/nix-pipeline" "${T}/deb-pipeline" | head -20; fi
 grep -q 'secretd.service' "${T}/config.alloy" && ok || no "dropUnits missing from config.alloy"

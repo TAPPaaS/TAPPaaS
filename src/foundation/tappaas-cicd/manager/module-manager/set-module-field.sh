@@ -102,7 +102,19 @@ TARGET="${CONFIG_DIR}/${MODULE}.json"
 [[ -f "${TARGET}" ]] || { error "Module config not found: ${TARGET} — is '${MODULE}' deployed?"; exit 3; }
 
 field_type() {
-    jq -r --arg f "$1" '.fields[$f].type // "string"' "${SCHEMA_FILE}" 2>/dev/null || echo string
+    jq -r --arg f "$1" '(.fields[$f].type // (($f | split(".")) as $p | .fields[$p[0]].properties[$p[1]].type)) // "string"' "${SCHEMA_FILE}" 2>/dev/null || echo string
+}
+
+# A key inside a declared object field (performance.level): written at its
+# path, and removable (--unset) so the instance inherits again. Its allowed
+# values are the key's enum.
+sub_field() {
+    [[ "$1" == *.* ]] || return 1
+    jq -e --arg r "${1%%.*}" --arg k "${1#*.}" '.fields[$r].type == "object" and (.fields[$r].properties | has($k))' "${SCHEMA_FILE}" >/dev/null 2>&1
+}
+sub_enum_ok() {
+    jq -e --arg r "${1%%.*}" --arg k "${1#*.}" --arg v "$2" \
+        '(.fields[$r].properties[$k].enum // null) as $e | $e == null or ($e | index($v) != null)' "${SCHEMA_FILE}" >/dev/null 2>&1
 }
 
 # Gate every --unset BEFORE the first --set is written (#648): one modify either
@@ -118,6 +130,11 @@ if [[ ${#UNSETS[@]} -gt 0 ]]; then
     for field in "${UNSETS[@]}"; do
         [[ "${field}" != *"="* ]] \
             || { error "${SCRIPT_NAME}: '--unset ${field}' takes a field name, not field=value"; exit 3; }
+        if sub_field "${field}"; then
+            jq -e --arg a "${field%%.*}" --arg b "${field#*.}" '.[$a][$b] != null' >/dev/null <<< "${unset_flat}" \
+                || { error "${field} is not set in ${TARGET} — it already inherits"; exit 3; }
+            continue
+        fi
         jq -e --arg f "${field}" 'has($f)' >/dev/null <<< "${unset_flat}" \
             || { error "${field} is not in ${TARGET} — nothing to unset"; exit 3; }
         if jq -e --arg f "${field}" '.fields | has($f)' >/dev/null "${SCHEMA_FILE}" 2>/dev/null; then
@@ -182,6 +199,17 @@ for pair in "${PAIRS[@]}"; do
     value="${pair#*=}"
     [[ -n "${field}" && "${pair}" == *"="* ]] || { error "${SCRIPT_NAME}: '--set ${pair}' is not field=value"; refuse_or_fail; }
 
+    if sub_field "${field}"; then
+        sub_enum_ok "${field}" "${value}" \
+            || { error "${field} cannot be '${value}' — see: module-manager module fields ${MODULE}"; refuse_or_fail; }
+        write_field "${MODULE}" '.[$a] = ((.[$a] // {}) + {($b): $v})' --arg a "${field%%.*}" --arg b "${field#*.}" --arg v "${value}" \
+            || { error "failed to set ${field}"; exit 1; }
+        [[ "${CHECK}" -eq 1 ]] && continue
+        WROTE=1
+        info "  set ${field}=${value} in ${TARGET}"
+        continue
+    fi
+
     case "$(field_type "${field}")" in
         integer|number)
             [[ "${value}" =~ ^-?[0-9]+$ ]] \
@@ -222,6 +250,13 @@ fi
 
 if [[ ${#UNSETS[@]} -gt 0 ]]; then
     for field in "${UNSETS[@]}"; do
+        if sub_field "${field}"; then
+            # shellcheck disable=SC2016
+            jq_module_write "${MODULE}" 'del(.[$a][$b]) | if (.[$a] // {}) == {} then del(.[$a]) else . end' --arg a "${field%%.*}" --arg b "${field#*.}" \
+                || { error "failed to unset ${field}"; exit 1; }
+            info "  unset ${field} in ${TARGET} — it inherits again"
+            continue
+        fi
         # shellcheck disable=SC2016
         jq_module_write "${MODULE}" 'del(.[$f])' --arg f "${field}" \
             || { error "failed to unset ${field}"; exit 1; }
@@ -234,8 +269,10 @@ fi
 # config itself is written; the next update would then treat a field the
 # release newly defines as unchosen.
 LEDGER="${TARGET}.operator"
-set_names="$(for pair in "${PAIRS[@]}"; do printf '%s\n' "${pair%%=*}"; done | jq -R . | jq -sc .)"
-unset_names="$(for field in "${UNSETS[@]}"; do printf '%s\n' "${field}"; done | jq -R . | jq -sc 'map(select(. != ""))')"
+# A key inside an object field is the object's in the ledger: the merge keeps
+# or drops top-level fields. Unsetting one key leaves the object chosen.
+set_names="$(for pair in "${PAIRS[@]}"; do f="${pair%%=*}"; printf '%s\n' "${f%%.*}"; done | jq -R . | jq -sc .)"
+unset_names="$(for field in "${UNSETS[@]}"; do [[ "${field}" == *.* ]] || printf '%s\n' "${field}"; done | jq -R . | jq -sc 'map(select(. != ""))')"
 prev='[]'
 [[ -s "${LEDGER}" ]] && prev="$(jq -c 'if type == "array" then . else [] end' "${LEDGER}" 2>/dev/null || echo '[]')"
 if jq -n --argjson p "${prev}" --argjson a "${set_names}" --argjson d "${unset_names}" \

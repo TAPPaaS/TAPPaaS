@@ -738,7 +738,36 @@ in
       endpoint         = "127.0.0.1:${toString influxInternal}"
       include_metadata = true
       output {
-        metrics = [otelcol.processor.attributes.pushed_by.input]
+        metrics = [otelcol.processor.attributes.pushed_by_influx.input]
+      }
+    }
+
+    // PBS's line protocol names its measurements without a prefix (cpustat,
+    // memory, datastore …): they get pbs_, on a path of their own.
+    otelcol.processor.attributes "pushed_by_influx" {
+      action {
+        key          = "host"
+        from_context = "metadata.x-tappaas-host"
+        action       = "upsert"
+      }
+      output {
+        metrics = [otelcol.exporter.prometheus.influx.input]
+      }
+    }
+
+    otelcol.exporter.prometheus "influx" {
+      add_metric_suffixes = false
+      include_target_info = false
+      forward_to          = [prometheus.relabel.pbs_prefix.receiver]
+    }
+
+    prometheus.relabel "pbs_prefix" {
+      forward_to = [prometheus.relabel.allow.receiver]
+      rule {
+        source_labels = ["__name__"]
+        regex         = "(.+)"
+        target_label  = "__name__"
+        replacement   = "pbs_$1"
       }
     }
 
@@ -844,6 +873,9 @@ in
       "--storage.tsdb.retention.time=\${PROM_RETENTION}"
       "--web.enable-remote-write-receiver"
       "--web.enable-otlp-receiver"
+      # delete_series for --purge (ADR-046 D3); reached only through nginx's
+      # :${toString metricsQueryPort}, behind the admin credential.
+      "--web.enable-admin-api"
     ];
     globalConfig = { scrape_interval = "1m"; evaluation_interval = "1m"; };
     ruleFiles = [ trendRules ];
@@ -867,7 +899,8 @@ in
       StateDirectory = "prometheus-trends";
       ExecStart = "${pkgs.prometheus}/bin/prometheus --config.file=${trendsConfig}"
         + " --storage.tsdb.path=/var/lib/prometheus-trends --storage.tsdb.retention.time=90d"
-        + " --web.listen-address=127.0.0.1:${toString promTrendsPort} --web.enable-remote-write-receiver";
+        + " --web.listen-address=127.0.0.1:${toString promTrendsPort} --web.enable-remote-write-receiver"
+        + " --web.enable-admin-api";
       Restart = "always";
       RestartSec = "5s";
       NoNewPrivileges = true;

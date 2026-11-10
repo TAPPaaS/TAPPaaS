@@ -122,6 +122,9 @@ export const HELP: HelpSpec = {
         ["--updateHour <0-23>", "hour of the update window"],
         ["--healthAssessInterval <min>", "health.assessInterval — minutes between health-manager assess runs, 1-1440 (default 5)"],
         ["--alertsIncludeLines true|false", "alerts.includeLines — alert mails carry the log lines a rule asks for (default true)"],
+        ["--performanceLevel off|basic|service", "performance.level — what the site collects of how well it runs, unless an environment or module sets its own (default: off on a small site, else basic)"],
+        ["--performanceResolution normal|fine", "performance.resolution — once a minute, or every 15 seconds"],
+        ["--performanceRetentionDays <days>", "performance.retentionDays — how long the metrics store keeps the numbers, 1-365 (default 7, 15 or 30 by size)"],
         ["--check", "say what would change, in one line; write nothing."],
         ["--json", "with --check: the whole resulting site.json, for machines."],
       ],
@@ -781,6 +784,17 @@ function cmdSite(o: Opts): void {
     setRange("--diskAutoGrowPoolCeiling", ["diskAutoGrow", "poolCeiling"], 1, 100);
     setRange("--healthAssessInterval", ["health", "assessInterval"], 1, 1440);
     setBool("--alertsIncludeLines", ["alerts", "includeLines"]);
+    // ADR-046 D3: trace is never standing configuration.
+    {
+      const lv = o.flags.get("--performanceLevel");
+      if (lv === "trace") no("--performanceLevel: trace is not a standing level — raise one object for a time: health-manager perf <ci> --level trace --until <time>");
+      if (lv !== undefined && !["off", "basic", "service"].includes(lv)) no("--performanceLevel must be off, basic or service");
+      setStr("--performanceLevel", ["performance", "level"]);
+      const rs = o.flags.get("--performanceResolution");
+      if (rs !== undefined && !["normal", "fine"].includes(rs)) no("--performanceResolution must be normal or fine");
+      setStr("--performanceResolution", ["performance", "resolution"]);
+      setRange("--performanceRetentionDays", ["performance", "retentionDays"], 1, 365);
+    }
     setNum("--locationLatitude", placeAt("latitude"), -90, 90);
     setNum("--locationLongitude", placeAt("longitude"), -180, 180);
     setStr("--locationCity", placeAt("city"));
@@ -879,6 +893,13 @@ function cmdSite(o: Opts): void {
     }
     writeSite(siteFile, raw);
     info(`${GN}✓${CL} modified ${what} — run 'validate' to confirm`);
+    // ADR-046 D3: the level reaches the Proxmox and PBS metric servers and every
+    // guest's pipeline now, the retention the store — no rebuild.
+    if (changes.some((c) => c.startsWith("performance.")) && o.configDir === defaultConfigDir()) {
+      const r = spawnGuarded(process.env.SITE_METRICS_TARGET_BIN ?? "tappaas-metrics-target.sh", ["site", "apply"], { encoding: "utf8" });
+      if (r.status === 0) info(`  ${(r.stdout ?? "").trim().split("\n").pop() ?? "the performance level is applied"}`);
+      else warn("  the performance level is written but not applied everywhere yet — tappaas-metrics-target.sh site apply");
+    }
     // ADR-017 D2: a new schedule takes effect now — re-render the timer. Only
     // for the site's own config, never for a --config-dir copy.
     if ((freq !== undefined || wday !== undefined || hour !== undefined) && o.configDir === defaultConfigDir()) {

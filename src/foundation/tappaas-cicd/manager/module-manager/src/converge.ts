@@ -341,6 +341,25 @@ export function classifySet(
         continue;
       }
     }
+    // A key inside a declared object field (performance.level) is that field's:
+    // its owner and change class, its value one of the key's own.
+    const dot = req.field.indexOf(".");
+    const root = dot > 0 ? req.field.slice(0, dot) : req.field;
+    const rootSpec = schema[root] as ({ usedBy?: string[]; type?: string; properties?: Record<string, { enum?: unknown[] }> } | undefined);
+    const sub = dot > 0 && rootSpec?.type === "object" ? rootSpec.properties?.[req.field.slice(dot + 1)] : undefined;
+    if (dot > 0 && sub) {
+      if (req.value !== "" && Array.isArray(sub.enum) && !sub.enum.includes(req.value)) {
+        rejections.push({ field: req.field, reason: `must be one of ${sub.enum.join(", ")} (got '${req.value}')` });
+        continue;
+      }
+      const cls = moduleManifest?.[root]?.class;
+      if (!cls) {
+        rejections.push({ field: req.field, reason: `schemas/fields.json declares no change class for ${root} — what changing it costs is unknown` });
+      } else {
+        plan.push({ ...req, coordinate: "", class: "config-only", declared: cls, apply: moduleManifest?.[root]?.apply });
+      }
+      continue;
+    }
     const spec = schema[req.field];
     if (!spec) {
       rejections.push({
