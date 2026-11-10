@@ -272,6 +272,41 @@ Prometheus on this VM. What is collected is the site's choice: `site.json`
 - **Retention** is a flag of Prometheus's: the mothership writes
   `/etc/tappaas-metrics/prometheus.env` and restarts Prometheus when it changes, so
   no rebuild is needed for it.
+- **The level, per module.** `performance.level` (`off`, `basic`, `service`) and
+  `performance.resolution` (`normal`, `fine`) are set at three scopes, most specific
+  wins: `site.json` (`site-manager site modify --set performance.level=…`),
+  `config/environments/<env>.json` (`environment-manager modify <env> --set …`) and
+  the instance (`module-manager module modify <m> --set performance.level=…`,
+  `--unset performance.level` to inherit). On top, one CI can be raised for a time:
+  `health-manager perf <ci> --level basic|service|trace --until 2h` (`--until` is
+  required; `trace` exists only this way and reads as `service` until traces are
+  collected), `perf stop <ci> [--purge]`, `perf list [--json]`. Raises are kept in
+  `config/performance-raises.json` and recorded on the CI (`investigation`, set and
+  unset, each a CMDB change); `health-manager emit`, after every assess, ends those
+  past their time. `tappaas-metrics-target.sh guest <m> status` prints a module's
+  effective level and where it comes from.
+- **A guest's own view.** Every guest that ships its journal (`logging:logs`) runs
+  Alloy; its static config imports `/var/lib/alloy-perf/perf.alloy`, a runtime file
+  the mothership renders for the guest's effective level (`render_metrics_alloy`)
+  and Alloy re-reads when it changes. So adding the import is one OS rebuild per
+  guest; every level change after it is a file write, no rebuild. `off` is an empty
+  pipeline. `basic`: `prometheus.exporter.unix` (cpu, load, memory, pressure,
+  filesystems, disks, NICs) through a keep-list, every minute (15 s at `fine`),
+  pushed as OTLP to :3120 with the guest's own logs credential, so the store sets its
+  identity as for everything else. `service` adds TCP, socket, vmstat and file
+  handle counters. A container drops its node's pressure and boot time, which its
+  /proc shows. A guest that ships no logs has no Alloy and collects nothing of its
+  own; its node still reports its outside view. Deleting a guest's `logging:logs`
+  stops its own numbers with its client, and says so; its outside view stays.
+- **Purge.** `health-manager perf purge <ci>` (or `perf stop <ci> --purge`) deletes
+  the CI's series from both instances (`delete_series`, `clean_tombstones`; the admin
+  API is on, reached only through :3121 with the admin credential).
+- **PBS** names its measurements without a prefix; on their own path through Alloy
+  they become `pbs_*` (`pbs_cpustat_total`, `pbs_datastore_used`, …).
+- **Cost.** `tappaas-metrics-target.sh cost` estimates the series, disk a day and
+  store RAM of the levels in force, from hrossen's measurements; logging's update
+  warns when they do not fit the VM's memory or half its free disk over the
+  retention. Removing logging (`delete.sh`) removes the Proxmox and PBS targets.
 - **In Grafana:** data sources *Prometheus* and *Prometheus trends*, e.g.
   `proxmox_vm_cpu{service_name="nextcloud"}`,
   `tappaas_guest_memory_used_bytes{service_namespace="rossen"}`,
@@ -488,8 +523,9 @@ Mitigations in place:
   6514/tcp; deprecate 1514/tcp once OPNsense is moved over.
 - **Automate OPNsense syslog target**: ✅ done in v1 — `syslog-manager` is wired into
   `update.sh` and runs on every install/update.
-- **Metrics**: ✅ Prometheus (`logging:metrics`, see Metrics). Still open: the guests'
-  own Alloy pipeline and the levels per environment and module, the remote_write
-  ingest path with an identity, thresholds and alerting on metrics.
+- **Metrics**: ✅ Prometheus (`logging:metrics`, see Metrics), levels per site,
+  environment and module, timed raises, the guests' own view. Still open: the
+  published services' numbers and module exporters (`service`), traces, thresholds
+  and alerting on metrics, a remote_write path with an identity (guests push OTLP).
 - **A consumable logging service**: ✅ done — `logging:logs` (#770), see "Journal
   shipping from other VMs" above. Still open: Debian, HAOS, LXC and Windows guests.

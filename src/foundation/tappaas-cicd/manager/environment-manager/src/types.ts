@@ -43,6 +43,14 @@ export interface Environment {
   size?: EnvironmentSize;
   backup?: BackupPolicy | null;
   legal?: LegalMeta | null;
+  // ADR-046 D3: the performance level and resolution its modules inherit; a
+  // key absent: the site's.
+  performance?: PerformancePolicy;
+}
+
+export interface PerformancePolicy {
+  level?: "off" | "basic" | "service";
+  resolution?: "normal" | "fine";
 }
 
 // The loaded + indexed environment domain (keyed by environment name).

@@ -99,6 +99,26 @@ logs_apply_client() {
     fi
 }
 
+# The guest's own numbers (ADR-046 P2): the same Alloy client runs a
+# level-driven pipeline from a runtime file; write it for the level the cascade
+# and any raise give now. No change of level, no write.
+logs_apply_metrics() {
+    [[ -f "${METRICS_SHIPPING_LIB:-/home/tappaas/bin/metrics-shipping.sh}" ]] || return 0
+    # shellcheck source=../../../tappaas-cicd/lib/metrics-shipping.sh
+    . "${METRICS_SHIPPING_LIB:-/home/tappaas/bin/metrics-shipping.sh}"
+    [[ -n "$(log_shipping_syslog_kind "${CONSUMER}")" ]] && return 0
+    local out
+    if [[ "${DRY_RUN}" -eq 1 ]]; then
+        debug "  [dry-run] metrics pipeline on ${CONSUMER}: level $(metrics_effective "${CONSUMER}" | jq -r .level)"
+        return 0
+    fi
+    if out="$(apply_metrics_guest "${CONSUMER}" 2>&1)"; then
+        if [[ "${out}" == changed* ]]; then info "  ${GN}✓${CL} $(tail -1 <<<"${out}")"; else debug "  $(tail -1 <<<"${out}")"; fi
+    else
+        warn "  could not write ${CONSUMER}'s metrics pipeline — it keeps the level it had: $(tail -1 <<<"${out}")"
+    fi
+}
+
 # Take the client off again (delete). A guest already gone is not an error.
 logs_remove_client() {
     # shellcheck source=../../../tappaas-cicd/lib/log-shipping.sh

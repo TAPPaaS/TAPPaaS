@@ -116,6 +116,12 @@
           "changeClass": "in-place",
           "changeNote": "Applied by logging's update and by site-manager's and backup-manager's reconcile: the Proxmox and PBS metric servers are set or removed. Lowering the level stops collection at once; what was collected ages out with the retention."
         },
+        "resolution": {
+          "description": "normal (once a minute) or fine (every 15 seconds: four times the samples), for every module that does not set its own.",
+          "type": "string",
+          "enum": ["normal", "fine"],
+          "changeClass": "in-place"
+        },
         "retentionDays": {
           "description": "How many days the metrics store keeps the numbers. Not set: 7 on a small site, 15 on a medium, 30 on a large one. The 5-minute trends are kept 90 days whatever this says.",
           "type": "integer",

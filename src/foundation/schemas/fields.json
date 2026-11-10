@@ -84,6 +84,11 @@
       "apply": "none",
       "changeNote": "Applied by the satellite's own update.sh: its firewall and nginx re-provisioned with the new list (a restart of a few seconds for the relays). Inert while sshPort is off."
     },
+    "performance": {
+      "class": "in-place",
+      "apply": "none",
+      "changeNote": "Applied by the converge after `modify --set`: logging:logs' update writes the guest's metrics pipeline, a file its Alloy re-reads — no rebuild, no restart of anything but the pipeline. A guest that ships no logs has no Alloy and collects nothing of its own; its node still reports its outside view."
+    },
     "sshKeyOnly": {
       "class": "in-place",
       "apply": "none",

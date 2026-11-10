@@ -57,6 +57,15 @@ export function parseEnvironment(raw: unknown, fallbackName?: string): Environme
       schedule: typeof b.schedule === "string" ? b.schedule : null,
     };
   }
+  if (o.performance && typeof o.performance === "object") {
+    const p = o.performance as Record<string, unknown>;
+    const perf: NonNullable<Environment["performance"]> = {};
+    // trace is never standing configuration: a record that says it reads as service.
+    if (p.level === "off" || p.level === "basic" || p.level === "service") perf.level = p.level;
+    else if (p.level === "trace") perf.level = "service";
+    if (p.resolution === "normal" || p.resolution === "fine") perf.resolution = p.resolution;
+    if (perf.level || perf.resolution) env.performance = perf;
+  }
   if (o.legal === null) env.legal = null;
   else if (o.legal && typeof o.legal === "object") {
     const l = o.legal as Record<string, unknown>;
@@ -99,6 +108,7 @@ export function serializeEnvironment(env: Environment): string {
   if (env.size) out.size = env.size;
   if (env.backup !== undefined) out.backup = env.backup;
   if (env.legal !== undefined) out.legal = env.legal;
+  if (env.performance && (env.performance.level || env.performance.resolution)) out.performance = env.performance;
   return JSON.stringify(out, null, 2) + "\n";
 }
 

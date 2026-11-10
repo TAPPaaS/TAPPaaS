@@ -16,6 +16,10 @@ import { HealthEvent, Journal, systemJournal } from "./events";
 import { STATUS_FILE, readStatus, sbomDir } from "./security";
 import { SiteSecurity, loadSiteSecurity } from "./site-score";
 import { join } from "path";
+import { CmdbReport, cmdbReport } from "../../../lib/ts/src/cmdb";
+import { captureResult } from "../../../lib/ts/src/exec";
+import { changeJob } from "../../../lib/ts/src/job";
+import { PerfContext, PerfError, perfExpire, perfList, perfListLines, perfPurge, perfRaise, perfStop } from "./perf";
 
 const WHEN = "An ISO time, or from now: 30m, 2h, 7d.";
 
@@ -29,7 +33,8 @@ export const EMIT_HELP: HelpVerb[] = [
     details:
       "One event per condition transition since the last run, as a JSON line in the\n" +
       "journal, identifier tappaas-health; the ack, maintenance and rootcause events beside them.\n" +
-      "Tracks flapping, and ends acks and maintenance windows when they expire. Runs after every\n" +
+      "Tracks flapping, and ends acks, maintenance windows and performance investigations when they\n" +
+      "expire. Runs after every\n" +
       "assess (health-assess.timer). The cursor is config/.health-emit-cursor.",
   },
   {
@@ -56,6 +61,32 @@ export const EMIT_HELP: HelpVerb[] = [
   },
   { usage: "maintenance end <ci>", effect: { noPreview: "ends a maintenance window" }, details: "The work is done: the window closes early." },
   { usage: "maintenance cancel <ci>", effect: { noPreview: "cancels a maintenance window" }, details: "The work did not happen: the window is withdrawn." },
+  {
+    usage: "perf <ci> --level basic|service|trace [--resolution fine] --until <time> [--note <n>]",
+    effect: { noPreview: "raises the CI's performance level until the given time and records it in the CMDB" },
+    options: [
+      ["--level basic|service|trace", "What to collect for it until then: basic, service or trace (trace only this way)."],
+      ["--resolution fine", "Every 15 seconds instead of every minute: four times the samples."],
+      ["--until <time>", `When it ends (required). ${WHEN}`],
+      ["--note <n>", "Why, for the record."],
+    ],
+    details:
+      "Raises one CI's performance level for a time: an investigation. When it ends the CI falls back to the level its module, environment or site sets. On a CI already raised it replaces the raise (Extend is the same level with a later --until). Recorded as a change on the CI.",
+  },
+  {
+    usage: "perf stop <ci> [--purge]", effect: { noPreview: "ends the CI's performance raise and records it in the CMDB" },
+    options: [["--purge", "Also delete the CI's series from the metrics store and its trends."]],
+    details: "Ends the CI's investigation now: it falls back to its cascaded level at once. What was collected ages out with the retention.",
+  },
+  {
+    usage: "perf purge <ci>", effect: { noPreview: "deletes the CI's series from the metrics store" },
+    details: "Deletes everything the metrics store and its 90-day trends hold of the CI, for numbers that should not be kept. Its level is unchanged: what it collects from now on is stored again.",
+  },
+  {
+    usage: "perf list [--json]", effect: "read",
+    options: [["--json", "The investigations as JSON."]],
+    details: "The investigations in force and those of the last 90 days: CI, level, who, until when, how each ended.",
+  },
   {
     usage: "show <ci> [--json]", effect: "read",
     options: [["--json", "Print the object's conditions, root causes and impacts as JSON."]],
@@ -97,7 +128,7 @@ export const EMIT_HELP: HelpVerb[] = [
   },
 ];
 
-const VERBS = new Set(["emit", "ack", "unack", "maintenance", "show", "list", "roots", "history", "digest"]);
+const VERBS = new Set(["emit", "ack", "unack", "maintenance", "perf", "show", "list", "roots", "history", "digest"]);
 
 export interface EmitContext {
   cmdb: HealthCmdb;
@@ -107,6 +138,7 @@ export interface EmitContext {
   actor: string;
   sweep?: () => SweepRecord | null;
   security?: (configDir: string) => SiteSecurity | null;
+  perf?: PerfContext;
 }
 
 // The last scan's risk scores; null before the first scan.
@@ -125,7 +157,7 @@ export function parseWhen(v: string, now: Date, sign: 1 | -1): string {
 }
 
 function args(rest: string[]): { val: (f: string) => string | undefined; has: (f: string) => boolean; positional: string[] } {
-  const takes = new Set(["--type", "--note", "--until", "--since", "--status", "--class"]);
+  const takes = new Set(["--type", "--note", "--until", "--since", "--status", "--class", "--level", "--resolution"]);
   const positional: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     if (takes.has(rest[i])) i++;
@@ -176,7 +208,91 @@ function cmdEmit(ctx: EmitContext, rest: string[]): number {
   }
   if (a.has("--json")) info(JSON.stringify(events, null, 2));
   else info(`emit: ${events.length} event(s)`);
+  // Investigations past their time end here too, as acks do (ADR-046 D3).
+  if (ctx.perf) {
+    try {
+      perfExpire(ctx.perf);
+    } catch (e) {
+      warn(`emit: an expired investigation was not ended: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
   return 0;
+}
+
+function cmdPerf(ctx: EmitContext, rest: string[]): number {
+  const p = ctx.perf ?? livePerfContext(ctx);
+  const a = args(rest);
+  const [first, second] = a.positional;
+  try {
+    if (first === "list" && !second) {
+      const d = perfList(ctx.configDir, ctx.now);
+      return print(a.has("--json"), d, () => perfListLines(d));
+    }
+    if (first === "stop" && second && a.positional.length === 2) {
+      perfStop(p, second, a.has("--purge"));
+      return 0;
+    }
+    if (first === "purge" && second && a.positional.length === 2) {
+      const o = p.resolve(second);
+      perfPurge(p, o.id, o.name);
+      return 0;
+    }
+    if (!first || a.positional.length !== 1) die("perf: expected <ci> --level <l> --until <time>, stop <ci>, purge <ci> or list");
+    const until = a.val("--until");
+    perfRaise(p, { ref: first, level: a.val("--level") ?? "", resolution: a.val("--resolution"), until: until ? parseWhen(until, ctx.now, 1) : undefined, note: a.val("--note") });
+    return 0;
+  } catch (e) {
+    if (e instanceof PerfError) die(e.message);
+    throw e;
+  }
+}
+
+const METRICS_TARGET = (): string => process.env.HEALTH_METRICS_TARGET_BIN ?? "tappaas-metrics-target.sh";
+const outLines = (r: { stdout: string; stderr: string }): string[] =>
+  (r.stdout + "\n" + r.stderr).replace(/\x1b\[[0-9;]*m/g, "").split("\n").map((l) => l.trim()).filter(Boolean);
+
+/** The perf verbs against the live CMDB and the mothership's metrics script. */
+export function livePerfContext(ctx: EmitContext): PerfContext {
+  return {
+    configDir: ctx.configDir,
+    now: ctx.now,
+    actor: ctx.actor,
+    resolve: (ref) => ctx.cmdb.resolve(ref),
+    record: (ci, investigation, verb) => {
+      const report: CmdbReport = {
+        source: "health-manager",
+        kind: "change",
+        assessment: true,
+        verb,
+        ...changeJob(),
+        objects: [{ id: ci.id, class: ci.class, name: ci.name, attributes: { investigation } }],
+      };
+      const r = cmdbReport(report);
+      const change = r.delivered ? (r.result as { change?: unknown } | undefined)?.change : null;
+      if (!r.delivered && !r.off) warn(`the CMDB did not take the change now; it is spooled and recorded when the CMDB answers`);
+      return typeof change === "number" ? change : null;
+    },
+    cascade: (module) => {
+      const r = captureResult(METRICS_TARGET(), ["guest", module, "status"]);
+      if (!r.ran || r.rc !== 0) return null;
+      try {
+        const d = JSON.parse(r.stdout) as { from?: string; source?: string };
+        return d.from ? { from: d.from, source: d.source ?? "" } : null;
+      } catch {
+        return null;
+      }
+    },
+    apply: (module) => {
+      const r = captureResult(METRICS_TARGET(), ["guest", module, "apply"]);
+      return { ok: r.ran && r.rc === 0, lines: r.ran ? outLines(r) : [`${METRICS_TARGET()} not found`] };
+    },
+    purge: (id) => {
+      const r = captureResult(METRICS_TARGET(), ["purge", id]);
+      return { ok: r.ran && r.rc === 0, lines: r.ran ? outLines(r) : [`${METRICS_TARGET()} not found`] };
+    },
+    say: (l) => info(l),
+    warn: (l) => warn(l),
+  };
 }
 
 function cmdDigest(ctx: EmitContext, rest: string[]): number {
@@ -227,6 +343,8 @@ export function runEmitVerb(cmd: string, rest: string[], ctx: EmitContext): numb
       return told(unack(v, one(), a.val("--type")));
     case "maintenance":
       return cmdMaintenance(v, rest);
+    case "perf":
+      return cmdPerf(ctx, rest);
     case "show": {
       const objects = ctx.cmdb.objects();
       const o = ctx.cmdb.resolve(one());
@@ -256,5 +374,7 @@ export function runEmitVerb(cmd: string, rest: string[], ctx: EmitContext): numb
 }
 
 export function liveEmitContext(configDir: string): EmitContext {
-  return { cmdb: new LiveHealthCmdb(), journal: systemJournal, configDir, now: new Date(), actor: currentJob().actor };
+  const ctx: EmitContext = { cmdb: new LiveHealthCmdb(), journal: systemJournal, configDir, now: new Date(), actor: currentJob().actor };
+  ctx.perf = livePerfContext(ctx);
+  return ctx;
 }

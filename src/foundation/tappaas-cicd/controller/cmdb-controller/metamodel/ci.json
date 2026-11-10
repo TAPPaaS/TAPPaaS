@@ -14,6 +14,19 @@
         "description": { "type": "string", "description": "Free text." },
         "placeholder": { "type": "boolean", "derived": true, "description": "Set on an object made because a report named it by class and name before its owner reported it: a name and nothing else. Its owner's report merges into it and clears this." },
         "drift": { "type": "object", "derived": true, "description": "Set when an observation differs from the last with no change behind it (D6): since, source, the attributes with what they were and are. A change that touches the object clears it." },
+        "investigation": {
+          "type": "object",
+          "properties": {
+            "level": { "type": "string", "enum": ["basic", "service", "trace"] },
+            "resolution": { "type": "string", "enum": ["normal", "fine"] },
+            "from": { "type": "string", "description": "The level it would have without the raise (its cascade)." },
+            "by": { "type": "string" },
+            "note": { "type": "string" },
+            "started": { "type": "string" },
+            "until": { "type": "string" }
+          },
+          "description": "A timed raise of its performance level (ADR-046 D3): health-manager perf sets it and ends it (unset) when it is stopped or expires. Its history is the object's investigations; each change is a marker on its charts."
+        },
         "conditions": {
           "type": "array",
           "volatile": true,

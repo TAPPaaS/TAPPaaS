@@ -200,6 +200,23 @@ if _ms_out="$(metrics_sync_logging 2>&1)"; then
 else
     warn "  could not write the metrics identities to ${VMNAME} — pushed numbers carry no identity until they are: ${_ms_out//$'\n'/; }"
 fi
+# What the levels cost the store, against this VM (ADR-044 sizing): its RAM
+# beside Loki, Grafana and Alloy, and the days of retention on its disk.
+if _mc="$(metrics_cost 2>/dev/null)" && [[ -n "${_mc}" ]]; then
+    _mem="$(get_config_value 'memory' '4096')"
+    _ret="$(metrics_retention_days)"
+    _need_mb="$(jq -r '.ramMB' <<<"${_mc}")"
+    _disk_gb="$(jq -r --argjson d "${_ret}" '(.diskMBPerDay * $d / 1024 * 10 | round) / 10' <<<"${_mc}")"
+    _free_gb="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "tappaas@${VMNAME}.${ZONE0NAME}.internal" "df -BG --output=avail / | tail -1 | tr -dc 0-9" 2>/dev/null || echo "")"
+    debug "  metrics cost: $(jq -r '"\(.series) series, \(.diskMBPerDay) MB a day, about \(.ramMB) MB of RAM"' <<<"${_mc}") (${_disk_gb} GB over ${_ret} days)"
+    # Loki, Grafana and Alloy take about 1.4 GB on their own (measured on hrossen).
+    if [[ "${_mem}" =~ ^[0-9]+$ && "${_need_mb}" =~ ^[0-9]+$ ]] && (( _need_mb + 1400 > _mem )); then
+        warn "  the performance levels need about ${_need_mb} MB for the metrics store beside the logs; ${VMNAME} has ${_mem} MB — give it more (module-manager module modify ${VMNAME} --set memory=<MB>) or lower a level"
+    fi
+    if [[ "${_free_gb}" =~ ^[0-9]+$ ]] && awk -v n="${_disk_gb}" -v f="${_free_gb}" 'BEGIN{exit !(n > f/2)}'; then
+        warn "  ${_ret} days of numbers need about ${_disk_gb} GB; ${VMNAME} has ${_free_gb} GB free — grow its disk or shorten performance.retentionDays"
+    fi
+fi
 if _mt_out="$(/home/tappaas/bin/tappaas-metrics-target.sh all apply 2>&1)"; then
     [[ -n "${_mt_out}" ]] && debug "  ${_mt_out//$'\n'/; }"
     _sum_metrics="performance level $(metrics_level)"

@@ -279,6 +279,26 @@
       "example": true,
       "note": "Disruption is authorized iff '--allow-disruption' was passed (an operator, now: 'module-manager module update <m> --allow-disruption', or 'site-manager update --allow-disruption' for a run), OR rebootOk is true AND the scheduled run has automaticReboot. '--force' is a different lever: it proceeds past a refusal and never reboots. When a disruptive change is not authorized the converge applies everything else, prints a machine-parseable 'DEFERRED:' line and still exits 0; update-tappaas collects those into an end-of-sweep summary."
     },
+    "performance": {
+      "description": "Performance monitoring for this instance (ADR-046): what it collects of its own performance and how often. Set as performance.level (off, basic, service) and performance.resolution (normal, fine); a key absent inherits its environment's, then the site's. Tracing is never set here: it is switched on for one object for a time (health-manager perf).",
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["off", "basic", "service"]
+        },
+        "resolution": {
+          "type": "string",
+          "enum": ["normal", "fine"]
+        }
+      },
+      "example": { "level": "service" },
+      "note": "module-manager module modify <instance> --set performance.level=service; --unset performance.level to inherit again."
+    },
     "sshKeyOnly": {
       "description": "Key-only SSH on a machine TAPPaaS manages: sshd refuses password and keyboard-interactive logins for every user, and root logs in by key only — the settings the cluster nodes enforce. The console keeps the root password. Applied when the machine is adopted or provisioned and re-applied by every update, so a password login someone switches back on is closed again; test.sh asserts it from what sshd enforces. false returns the machine to its own sshd_config (TAPPaaS removes only the drop-in it wrote).",
       "type": "boolean",
