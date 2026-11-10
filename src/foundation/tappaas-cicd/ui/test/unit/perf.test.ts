@@ -153,7 +153,7 @@ async function reads(): Promise<void> {
     hasVerb: () => perfList !== null,
     envLevelSettable: () => false,
     prom: fixturePromClient(m, () => NOW, pw),
-    grafana: (e) => `grafana:${e}`,
+    grafana: (cls, l) => `grafana:${cls}:${JSON.stringify(l)}`,
     now: () => NOW,
   });
 
@@ -186,7 +186,7 @@ async function reads(): Promise<void> {
   check(c.level.level === "trace" && c.level.from === "investigation" && c.level.cascaded === "basic" && c.level.until === "2026-11-01T10:40:12Z", "identity: trace until its end, then basic");
   check(c.series.length === 5 && c.series.every((x) => x.points.length === 289), "a guest's five signals over 24 hours");
   check(c.annotations.some((a) => a.label.startsWith("perf identity --level trace")), "the raise itself is a marker");
-  check(c.links.grafana?.startsWith("grafana:") === true, "a Grafana link on its first signal");
+  check(c.links.grafana === `grafana:vm:{"tappaas_ci_id":"${id}"}`, "the Grafana link: the class's dashboard at the CI");
   const k = await perf.loadCi("5f045500-92a5-4342-8cf3-0a4183e7e8e2", "7d");
   check(k.links.rootCause?.label === "tankc1", "karakeep: its root cause linked");
   const d90 = await perf.loadCi(id, "90d");

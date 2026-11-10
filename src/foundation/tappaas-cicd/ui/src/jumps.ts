@@ -59,12 +59,15 @@ export function grafanaExplore(ctx: JumpContext, host: string): string | null {
   return `https://${g}/explore?schemaVersion=1&orgId=1&panes=${enc(JSON.stringify(panes))}`;
 }
 
-// Grafana Explore on one metrics query (the logging module's Prometheus, uid "prometheus").
-export function grafanaMetrics(ctx: JumpContext, expr: string, from = "now-24h"): string | null {
+// The shipped dashboard of a CI's class (logging's dashboards.nix), at that CI:
+// var-ci, or for a pool its node and name.
+const DASHBOARD: Record<string, string> = { machine: "tappaas-node", vm: "tappaas-guest", lxc: "tappaas-guest", "storage-pool": "tappaas-pool", datastore: "tappaas-datastore", "proxy-route": "tappaas-service" };
+export function grafanaDashboard(ctx: JumpContext, cls: string, labels: Record<string, string>): string | null {
   const g = publicName(ctx, "logging");
-  if (!g) return null;
-  const panes = { a: { datasource: "prometheus", queries: [{ refId: "A", expr, datasource: { type: "prometheus", uid: "prometheus" } }], range: { from, to: "now" } } };
-  return `https://${g}/explore?schemaVersion=1&orgId=1&panes=${enc(JSON.stringify(panes))}`;
+  const uid = DASHBOARD[cls];
+  if (!g || !uid) return null;
+  const vars = cls === "storage-pool" ? `var-node=${enc(labels.tappaas_ci_id ?? "")}&var-pool=${enc(labels.pool ?? "")}` : `var-ci=${enc(labels.tappaas_ci_id ?? "")}`;
+  return `https://${g}/d/${uid}/?orgId=1&${vars}`;
 }
 
 function opnsense(ctx: JumpContext, path = "/"): string {

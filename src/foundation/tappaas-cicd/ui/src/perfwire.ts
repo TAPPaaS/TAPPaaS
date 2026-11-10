@@ -9,7 +9,7 @@ import { Cached } from "./cache";
 import { Cmdb, CmdbHistory } from "./cmdb";
 import { FixtureMode } from "./fixtures";
 import { HealthLive } from "./healthlive";
-import { grafanaMetrics } from "./jumps";
+import { grafanaDashboard } from "./jumps";
 import { Manifests } from "./manifest";
 import { PerfDeps, PromClient, metricsConfig, promClient } from "./perf";
 import { fixturePromClient, loadFixtureMetrics } from "./perffixture";
@@ -90,8 +90,8 @@ export function perfDeps(w: PerfWire): PerfDeps {
       }
     },
     prom: store(w),
-    grafana: (expr) =>
-      grafanaMetrics({ topology: null, modules: r.modules.peek().value?.modules ?? [], environments: r.environments.peek().value ?? [], mgmtDomain: w.mgmtDomain, pbsStore: "" }, expr),
+    grafana: (cls, labels) =>
+      grafanaDashboard({ topology: null, modules: r.modules.peek().value?.modules ?? [], environments: r.environments.peek().value ?? [], mgmtDomain: w.mgmtDomain, pbsStore: "" }, cls, labels),
     now: () => Date.now(),
   };
 }

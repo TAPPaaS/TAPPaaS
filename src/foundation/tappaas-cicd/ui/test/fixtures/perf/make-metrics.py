@@ -63,6 +63,8 @@ for route, p95, err, rate in (("cloud.hrossen.dk", 640, 0.4, 3.2), ("identity.hr
     s("svc.p95", ci, p95, p95 * 0.35, p95 * 0.15, steps=[{"hoursAgo": 46, "add": p95 * 0.9}] if route == "cloud.hrossen.dk" else None)
     s("svc.errors", ci, err, err * 0.5, err * 0.4, mx=100)
     s("svc.rate", ci, rate, rate * 0.7, rate * 0.2)
+    s("svc.probe", ci, p95 * 0.3, p95 * 0.05, p95 * 0.05)
+    s("svc.up", ci, 0, 0, 0)
 
 doc = {"note": "Synthetic: written by make-metrics.py, read by src/perffixture.ts.", "measuredSeries": 2140, "series": series}
 json.dump(doc, open(os.path.join(HERE, "metrics.json"), "w"), indent=1)

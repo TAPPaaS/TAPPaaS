@@ -1314,6 +1314,24 @@
    "noise": 0.6400000000000001
   },
   {
+   "signal": "svc.probe",
+   "labels": {
+    "tappaas_ci_id": "f2d2826e-5c9f-4d41-9234-9b8fb8af8811"
+   },
+   "base": 192.0,
+   "daily": 32.0,
+   "noise": 32.0
+  },
+  {
+   "signal": "svc.up",
+   "labels": {
+    "tappaas_ci_id": "f2d2826e-5c9f-4d41-9234-9b8fb8af8811"
+   },
+   "base": 0,
+   "daily": 0,
+   "noise": 0
+  },
+  {
    "signal": "svc.p95",
    "labels": {
     "tappaas_ci_id": "50fc6a8d-90f0-4200-b999-842b74e5d83b"
@@ -1340,6 +1358,24 @@
    "base": 7.5,
    "daily": 5.25,
    "noise": 1.5
+  },
+  {
+   "signal": "svc.probe",
+   "labels": {
+    "tappaas_ci_id": "50fc6a8d-90f0-4200-b999-842b74e5d83b"
+   },
+   "base": 63.0,
+   "daily": 10.5,
+   "noise": 10.5
+  },
+  {
+   "signal": "svc.up",
+   "labels": {
+    "tappaas_ci_id": "50fc6a8d-90f0-4200-b999-842b74e5d83b"
+   },
+   "base": 0,
+   "daily": 0,
+   "noise": 0
   }
  ]
 }

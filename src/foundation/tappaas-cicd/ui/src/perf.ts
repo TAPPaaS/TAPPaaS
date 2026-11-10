@@ -82,6 +82,11 @@ export const SIGNALS: Signal[] = [
   { key: "svc.errors", classes: ["proxy-route"], label: "Errors (5xx)", unit: "%", lens: "red", level: "service", by: BY_CI,
     expr: (s) => `sum by (tappaas_ci_id) (rate(caddy_http_request_duration_seconds_count{${s},code=~"5.."}[5m])) / sum by (tappaas_ci_id) (rate(caddy_http_request_duration_seconds_count{${s}}[5m])) * 100`,
     trend: null, warning: 1, critical: 5, saturation: true },
+  // The same service probed from inside the site, once a minute (black-box, P3).
+  { key: "svc.probe", classes: ["proxy-route"], label: "Response time (probe)", unit: "ms", lens: "red", level: "service", by: BY_CI,
+    expr: (s) => `max by (tappaas_ci_id) (probe_duration_seconds{${s}}) * 1000`, trend: null, warning: 2000, critical: 8000, saturation: false },
+  { key: "svc.up", classes: ["proxy-route"], label: "Probe down", unit: "%", lens: "red", level: "service", by: BY_CI,
+    expr: (s) => `(1 - avg by (tappaas_ci_id) (avg_over_time(probe_success{${s}}[15m]))) * 100`, trend: null, warning: 5, critical: 50, saturation: true },
   { key: "svc.rate", classes: ["proxy-route"], label: "Requests", unit: "req/s", lens: "red", level: "service", by: BY_CI,
     expr: (s) => `sum by (tappaas_ci_id) (rate(caddy_http_request_duration_seconds_count{${s}}[5m]))`,
     trend: null, warning: null, critical: null, saturation: false },
@@ -405,7 +410,7 @@ export interface PerfDeps {
   hasVerb: (words: string[]) => boolean; // health-manager's manifest has it
   envLevelSettable: () => boolean; // environment-manager's fields know performance.level
   prom: PromClient | null;
-  grafana: (expr: string) => string | null;
+  grafana: (cls: string, labels: Labels) => string | null; // the class's shipped dashboard at the CI
   traces?: (id: string) => string | null; // Tempo's explore view, once logging:traces exists (P6)
   now: () => number;
 }
@@ -603,7 +608,7 @@ export class Perf {
     out.annotations = annotationsOf(h, now - spec.ms, now);
     const signals = signalsFor(node.class);
     if (!ref || !signals.length) return { ...out, note: `Nothing is measured for a ${node.class}: performance covers nodes, guests, storage pools and published services.` };
-    out.links.grafana = this.d.grafana(signals[0].expr(selectorOf(ref.labels)));
+    out.links.grafana = this.d.grafana(node.class, ref.labels);
     if (level.level === "trace") out.links.traces = this.d.traces?.(id) ?? null;
     if (level.level === "off" && !this.anyCollecting(e)) return { ...out, note: "This site collects no numbers: its level is off." };
     if (!this.d.prom) return { ...out, store: "unreachable", storeError: "The logging module or its admin credential is not on this machine, so the metrics store cannot be read." };
