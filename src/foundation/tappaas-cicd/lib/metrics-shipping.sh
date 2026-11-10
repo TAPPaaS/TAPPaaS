@@ -802,6 +802,9 @@ apply_metrics_traces() {
             printf '%s' \"\$want\" | sudo install -D -m 0644 /dev/stdin ${METRICS_GRAFANA_OTLP_FILE}
             sudo systemctl restart grafana
         fi" || return 1
+    # Logging's own scrapes follow its level, a raise included: at trace they
+    # take Grafana's histograms, whose exemplars carry its trace ids.
+    if declare -F service_metrics_sync_logging >/dev/null; then service_metrics_sync_logging >/dev/null 2>&1 || true; fi
     echo "traces: Tempo ${tempo}, Grafana's spans ${graf}"
 }
 
