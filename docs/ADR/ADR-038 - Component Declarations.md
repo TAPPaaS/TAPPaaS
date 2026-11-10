@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** |
-| **Version** | 0.2 |
-| **Date** | 2026-10-29 |
+| **Version** | 0.3 |
+| **Date** | 2026-11-10 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | #899 (configuration a Community module owns, validated by the platform). Amends [ADR-035](<ADR-035 - Pluggable Controllers and Managers.md>) D11 (a controller's or manager's own declarations live in `<name>.json`). Raised for @AndreasJe's hosting module (`hosting-manager`). |
-| **Changelog** | v0.2 (2026-10-29) — **reworked (operator):** v0.1 put a module's own fields into the module JSON under a key named after the module. That is what ADR-035 D11 rules out: the module JSON's fields are the platform's, and an application's declarations live in the component's own `<name>.json`. v0.2 keeps D11's file and adds what it left open: one schema format, validation by the platform, a copy per instance, change classes, the console. A module with no component of its own gets the same through its lifecycle scripts (D2). The module JSON, `check_json` and field composition are unchanged. · v0.1 (2026-10-29) — first draft (module-owned fields in the module JSON). |
+| **Changelog** | v0.3 (2026-11-10) — **open questions 1–3 answered (operator):** LiteLLM is taken to fit the subset, and a change to it is an issue if it does not (D1); a stack-wide controller or manager is a module of its own or lives in a module the stack always installs, with no stack-level copy (D2); `declaration set` keeps the file it replaced as `<name>.json.prev` (D5). @AndreasJe's review on #899 (2026-10-29) added as open questions 4–9, each with a recommendation. · v0.2 (2026-10-29) — **reworked (operator):** v0.1 put a module's own fields into the module JSON under a key named after the module. That is what ADR-035 D11 rules out: the module JSON's fields are the platform's, and an application's declarations live in the component's own `<name>.json`. v0.2 keeps D11's file and adds what it left open: one schema format, validation by the platform, a copy per instance, change classes, the console. A module with no component of its own gets the same through its lifecycle scripts (D2). The module JSON, `check_json` and field composition are unchanged. · v0.1 (2026-10-29) — first draft (module-owned fields in the module JSON). |
 
 ADR-035 D11 decided *where* a controller's or manager's own declarations live: in
 `<module>/<name>.json`, with the component's `schema.json`, not in the module JSON. This ADR
@@ -67,6 +67,10 @@ Nothing else (`$ref`, `oneOf`, `if`/`then`, `patternProperties`, formats). The s
 `ui/src/fieldmanifest.ts` already flattens for the environment and zone schemas, and what one
 validator can implement exactly; widening it later is additive.
 
+LiteLLM (#170), the other planned user, is taken to fit the subset. If its provider-specific
+settings turn out to need more — a discriminated object, a `kind` with properties per kind — that
+widening is a change to this ADR, raised as an issue when it is met.
+
 ### D2 — Who owns a declaration: a component, or the module itself
 
 - An **extended controller or a manager** (ADR-035 D1) that takes declarations has them as D11
@@ -76,6 +80,11 @@ validator can implement exactly; widening it later is additive.
   name in the verbs below is the module's name.
 
 Either way it is the same mechanism. A module never puts its own settings in the module JSON.
+
+- **A whole stack** has no declaration of its own. A controller or manager that serves a stack is
+  either a module of its own, or lives in a module the stack always installs; its declaration is
+  then that module's, per instance like any other. There is no stack-level copy and no other
+  mechanism for it.
 
 ### D3 — Every instance has its own copy, in `config/declarations/`
 
@@ -134,6 +143,8 @@ The change class gates it:
 | `manual` | written and reported; nothing is applied |
 
 If the apply fails, the file is put back as it was before `set`, as `modify` restores the config.
+A `set` that succeeds keeps the file it replaced as `config/declarations/<i>/<name>.json.prev`, one
+step back, so the operator can undo it; `unset` does the same.
 A manager's own verbs (`hosting-manager site add`) may write the same file; they validate through
 the same verb, so there is one rule whichever way the change arrives.
 
@@ -177,14 +188,43 @@ from its `--help --json`.
 
 ## Open questions
 
-1. **LiteLLM (#170).** The other planned D11 user. Do its models, teams and budgets fit the subset
-   without `oneOf` (a model's provider-specific settings)? If not, a discriminated object
-   (`"kind"` plus per-kind properties) may need to join the subset.
-2. **Declarations across instances.** A manager for a whole stack may want one declaration for the
-   stack rather than per instance. Is that the stack's first instance, or a `config/declarations/
-   _stack/<stack>/` copy?
-3. **History.** Should `declaration set` keep the previous file (`<name>.json.prev`) for an
-   operator's undo, beyond the rollback on a failed apply?
+1. **LiteLLM (#170)** *(closed 2026-11-10, operator)*. Do its models, teams and budgets fit the
+   subset without `oneOf`? **Decided:** assume they fit; if not, the widening is a change to this
+   ADR, raised as an issue (D1).
+2. **Declarations across instances** *(closed 2026-11-10, operator)*. One declaration for a whole
+   stack? **Decided:** no extra mechanism. A stack-wide controller is a module of its own, or lives
+   in a module the stack always installs, and its declaration is that module's (D2).
+3. **History** *(closed 2026-11-10, operator)*. Keep the previous file for an operator's undo?
+   **Decided:** yes, `<name>.json.prev`, one step back (D5).
+
+From @AndreasJe's review of v0.2 for hosting (#899, 2026-10-29): the subset covers hosting's shape
+(a `sites` array keyed by name, domain patterns, zone references, no secrets), with these gaps.
+
+4. **Options that depend on a choice.** A site's options depend on its template, so hosting needs
+   the discriminated object question 1 assumed LiteLLM can do without. **Recommendation:** add it
+   to the subset now, as one annotation rather than `oneOf`: an object with
+   `"discriminator": "template"` and `"variants": { "<value>": { "properties": … } }`, the
+   discriminator's value choosing which properties apply. Additive, one rule for the validator and
+   the console, and it covers LiteLLM's providers if they need it.
+5. **Values known only at runtime.** Templates can come from operator repositories, so the list of
+   templates and each one's options are not known at release time. **Recommendation:** the owning
+   manager may declare a `schema <instance> <name>` verb in its `--help --json` that returns enum
+   values and variant schemas at validate time; module-manager checks that what it returns is
+   itself in the subset, and falls back to the static schema when the verb fails.
+6. **Rules across fields.** Domains unique across sites and against other modules' `proxyDomain`;
+   a VMID inside its range. **Recommendation:** an optional owner hook, `validate <instance>` in its
+   `--help --json`, run after the schema check in D4; its refusal is the change's refusal, said in
+   the owner's words.
+7. **A `grow-only` change class.** Site disks grow, never shrink. **Recommendation:** yes, as the
+   field manifests already have it: a lower value is refused, a higher one applied in place.
+8. **Adding and removing list elements.** **Recommendation:** `declaration set sites[new].x=…`
+   adds an element, with every required property in the same call; `unset sites[name]` removes
+   one. An array whose elements stand for instances is annotated `"elements": "instances"`, and
+   removing one then needs `--force`, as deleting a module does.
+9. **One source for hosting.** Each website instance keeps its settings in its `declarations.json`
+   (D2) while `hosting-manager.json` holds the desired list. **Recommendation:** yes,
+   `hosting-manager.json` is the single source and hosting-manager writes each instance's
+   declaration through `declaration set`, which is what D5 says of a manager's own verbs.
 
 ## Implementation plan
 
@@ -193,8 +233,8 @@ from its `--help --json`.
   `references`). `--blueprint` checks schemas and release files.
 - **P2 — Per-instance copies.** Seed on install, three-way merge on update, keep or remove on delete,
   for D2's two owners.
-- **P3 — `module-manager declaration` verbs** with change classes, the owner's apply, rollback, and
-  `DEFERRED:` for unauthorized restarts.
+- **P3 — `module-manager declaration` verbs** with change classes, the owner's apply, rollback,
+  the `.prev` copy, and `DEFERRED:` for unauthorized restarts.
 - **P4 — Console.** The field manifest serves declarations; the module page renders forms and keyed
   tables, saving through `declaration set`.
 - **P5 — Hosting adopts it** (with @AndreasJe): `hosting-manager.json` and its schema; the module
