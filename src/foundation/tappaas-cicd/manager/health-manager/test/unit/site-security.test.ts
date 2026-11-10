@@ -208,18 +208,21 @@ console.log("rescan");
   const sb = sbomDir(dir);
   mkdirSync(sb, { recursive: true });
   const comps = (n: number): unknown[] => Array.from({ length: n }, (_, i) => ({ type: "library", name: `lib${i}`, version: "1.0", purl: `pkg:nix/lib${i}@1.0`, cpe: `cpe:2.3:a:lib${i}:lib${i}:1.0:*:*:*:*:*:*:*` }));
-  const deb = [{ type: "library", name: "libc6", version: "2.41-12", purl: "pkg:deb/debian/libc6@2.41-12?arch=amd64&distro=debian-13.7" },
+  const deb = [{ type: "library", name: "libc6", version: "2.41-12", purl: "pkg:deb/debian/libc6@2.41-12?arch=amd64&distro=debian-13.7",
+    properties: [{ name: "aquasecurity:trivy:SrcName", value: "glibc" }, { name: "aquasecurity:trivy:SrcVersion", value: "2.41" }, { name: "aquasecurity:trivy:SrcRelease", value: "12" }] },
     { type: "library", name: "requests", version: "2.0", purl: "pkg:pypi/requests@2.0" },
     { type: "library", name: "ffmpeg (in av)", version: "7.1", purl: "pkg:generic/ffmpeg@7.1", cpe: "cpe:2.3:a:ffmpeg:ffmpeg:7.1:*:*:*:*:*:*:*", properties: [{ name: "tappaas:bundled-in", value: "av" }] }];
   const prev = scan([
     target("immich", [], { layer: "nix" }),
     target("node:tappaas1", [], { layer: "debian", note: "debian 13.7; Proxmox packages not matched" }),
     target("firewall", [item("CVE-F", "open", "High")], { layer: "opnsense" }),
+    target("old-lxc", [item("CVE-OLD", "open", "High")], { layer: "debian", note: "debian 13.7" }),
     target("broken", [], { coverage: "fail", verdict: "failed", note: "unreachable", layer: "unknown" }),
   ], "2026-11-07T03:00:00.000Z");
   writeFileSync(join(sb, STATUS_FILE), JSON.stringify(prev));
   writeFileSync(join(sb, SITE_CDX_FILE), JSON.stringify({ bomFormat: "CycloneDX", components: [
-    { "bom-ref": "immich", components: comps(60) }, { "bom-ref": "node:tappaas1", components: deb }, { "bom-ref": "firewall", components: [{ name: "unbound", version: "1", purl: "pkg:generic/opnsense/unbound@1" }] },
+    { "bom-ref": "immich", components: comps(60) }, { "bom-ref": "node:tappaas1", components: deb },
+    { "bom-ref": "old-lxc", components: [{ type: "library", name: "libtiff6", version: "4.7.0-3", purl: "pkg:deb/debian/libtiff6@4.7.0-3?arch=amd64" }] }, { "bom-ref": "firewall", components: [{ name: "unbound", version: "1", purl: "pkg:generic/opnsense/unbound@1" }] },
   ] }));
   const calls: string[] = [];
   const sbomDocs: Record<string, unknown>[] = [];
@@ -251,6 +254,10 @@ console.log("rescan");
   check(by("immich").items?.some((i) => i.id === "CVE-N" && i.state === "open") === true, "a Nix target is matched again by grype from its stored inventory");
   check(by("node:tappaas1").items?.map((i) => i.id).sort().join() === "CVE-B,CVE-T", "an OS target by trivy offline, its bundled libraries by grype");
   check(by("firewall").items?.[0].id === "CVE-F", "the firewall stays as its last audit found it");
+  check(by("old-lxc").items?.[0].id === "CVE-OLD" && calls.filter((c) => c === "trivy-sbom").length === 1 && r.status.notes.some((n) => n.includes("no source packages")),
+    "an OS inventory without source packages is not matched thinner: the last scan stands, and the notes say so");
+  const libc = (sbomDocs[0] as { components: { name: string; properties?: { name: string; value: string }[] }[] }).components.find((c) => c.name === "libc6");
+  check(libc?.properties?.some((x) => x.name === "aquasecurity:trivy:SrcName" && x.value === "glibc") === true, "trivy is handed each package's source package, as it found it");
   check(by("broken").verdict === "failed", "a failed inventory stays failed");
   check(r.status.inventory === prev.generated && r.status.generated === "2026-11-08T03:00:00.000Z", "the status says when the inventory was taken and when it was matched");
   const doc = sbomDocs[0] as { components: { type: string; "bom-ref": string; purl?: string }[]; dependencies: { ref: string; dependsOn: string[] }[] };
@@ -260,7 +267,7 @@ console.log("rescan");
   check((trivySbomDoc([], null).components as unknown[]).length === 0, "no OS known: packages only");
   writeScan(dir, r.status, r.cdx);
   check(JSON.parse(readFileSync(join(sb, PREVIOUS_FILE), "utf8")).generated === prev.generated, "written like a scan: the last one becomes the previous");
-  check((JSON.parse(readFileSync(join(sb, SITE_CDX_FILE), "utf8")) as { components: unknown[] }).components.length === 3, "…the inventory itself unchanged");
+  check((JSON.parse(readFileSync(join(sb, SITE_CDX_FILE), "utf8")) as { components: unknown[] }).components.length === 4, "…the inventory itself unchanged");
   const none = runRescan({ configDir: mkdtempSync(join(tmpdir(), "hm-none-")), repoDir: dir }, io);
   check("error" in none, "no scan yet: the rescan says so");
 }

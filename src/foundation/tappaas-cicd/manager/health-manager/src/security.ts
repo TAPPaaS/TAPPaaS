@@ -90,7 +90,7 @@ export interface TargetStatus {
   critHighRisk?: string[]; // ids of those an `exploitable` statement analysed (RISK), still counted
   riskLevel?: string; // the worst risk-here among them
   critHighVex?: string[]; // Critical/High ids a VEX statement decided — not counted
-  new: string[]; // critHighKeys not present in the previous scan
+  new: string[]; // critHighKeys never counted on this target before (first-seen.json)
   items?: CveItem[]; // every CVE the risk score looks at, with its state (ADR-045 D1)
   newOpen?: string[]; // ids among `new` nobody has analysed (state open): what cve-new-critical mails
   os?: { family: string; name: string }; // what trivy detected: the rescan matches the inventory as this system
@@ -469,7 +469,9 @@ interface TrivyDoc {
   Metadata?: { OS?: { Family?: string; Name?: string } };
   Results?: {
     // A package's purl is `Identifier` (trivy >= 0.50); a vulnerability's, `PkgIdentifier`.
-    Packages?: { Name?: string; Version?: string; Release?: string; Identifier?: { PURL?: string }; PkgIdentifier?: { PURL?: string } }[];
+    Type?: string; // debian, alpine, npm, python-pkg, gobinary…
+    Packages?: { Name?: string; Version?: string; Release?: string; Identifier?: { PURL?: string }; PkgIdentifier?: { PURL?: string };
+      SrcName?: string; SrcVersion?: string; SrcRelease?: string; SrcEpoch?: number }[];
     Vulnerabilities?: {
       VulnerabilityID?: string;
       Severity?: string;
@@ -481,6 +483,33 @@ interface TrivyDoc {
   }[];
 }
 
+// What trivy needs to match a stored package the way it matched the system: a
+// distribution files its advisories under the SOURCE package (tiff, libheif,
+// sqlite3), and trivy takes a package without one as its own source — so
+// libtiff6, libheif1 and libsqlite3-0 matched nothing in the rescan. Measured on
+// hrossen 2026-11-10: a node's 80 critical/high were 22 in the rescan. Kept
+// under trivy's own CycloneDX property names, which `trivy sbom` reads back.
+export const TRIVY_PROP = "aquasecurity:trivy:";
+function trivyProps(type: string, p: { SrcName?: string; SrcVersion?: string; SrcRelease?: string; SrcEpoch?: number }): { name: string; value: string }[] {
+  const out: { name: string; value: string }[] = [];
+  const add = (k: string, v: string | number | undefined): void => {
+    if (v !== undefined && v !== "" && v !== 0) out.push({ name: `${TRIVY_PROP}${k}`, value: String(v) });
+  };
+  add("PkgType", type);
+  add("SrcName", p.SrcName);
+  add("SrcVersion", p.SrcVersion);
+  add("SrcRelease", p.SrcRelease);
+  add("SrcEpoch", p.SrcEpoch);
+  return out;
+}
+
+// An inventory of OS packages taken before the source package was kept: the
+// rescan cannot match it as the scan did, and must not pretend to.
+export function lacksSource(comps: Component[]): boolean {
+  const os = comps.filter((c) => /^pkg:(deb|apk|rpm)\//.test(c.purl));
+  return os.length > 0 && !os.some((c) => c.properties?.some((x) => x.name === `${TRIVY_PROP}SrcName`));
+}
+
 export function trivyParse(json: string): { family: string; osName: string; components: Component[]; findings: Finding[] } {
   const doc = JSON.parse(json) as TrivyDoc;
   const components: Component[] = [];
@@ -488,7 +517,8 @@ export function trivyParse(json: string): { family: string; osName: string; comp
   for (const res of doc.Results ?? []) {
     for (const p of res.Packages ?? []) {
       const version = p.Release ? `${p.Version ?? ""}-${p.Release}` : (p.Version ?? "");
-      components.push({ type: "library", name: p.Name ?? "", version, purl: p.Identifier?.PURL ?? p.PkgIdentifier?.PURL ?? "" });
+      const props = trivyProps(res.Type ?? "", p);
+      components.push({ type: "library", name: p.Name ?? "", version, purl: p.Identifier?.PURL ?? p.PkgIdentifier?.PURL ?? "", ...(props.length ? { properties: props } : {}) });
     }
     for (const v of res.Vulnerabilities ?? []) {
       findings.push({
@@ -795,12 +825,61 @@ export interface ScanDiff {
   newlyFailed: TargetStatus[];
 }
 
-export function diffScans(cur: ScanStatus, prev: ScanStatus | null): ScanDiff {
+// "New" is first seen, not "absent from the file the last run wrote": a scan
+// that saw less (a failed target, a rescan of a thinner inventory) made the next
+// one announce everything again — 418, 496 and 88 "new" CVEs on three hrossen
+// nights. The ledger holds, per target, when each critical/high key was first and
+// last counted. A key not counted for FORGET_DAYS is forgotten, so a CVE that
+// comes back after its fix was lost is new again.
+export const FIRST_SEEN_FILE = "first-seen.json";
+export const FORGET_DAYS = 30;
+export type FirstSeen = Record<string, Record<string, { first: string; last: string }>>;
+
+export function readFirstSeen(path: string): FirstSeen | null {
+  if (!existsSync(path)) return null;
+  try {
+    const d = JSON.parse(readFileSync(path, "utf8")) as FirstSeen;
+    return d && typeof d === "object" && !Array.isArray(d) ? d : null;
+  } catch {
+    return null;
+  }
+}
+
+// A site without a ledger yet: what its last scans counted has been seen — both
+// of them, since the last one may be the thinner rescan.
+export function seedFirstSeen(...scans: (ScanStatus | null)[]): FirstSeen {
+  const out: FirstSeen = {};
+  for (const s of scans) {
+    for (const t of s?.targets ?? []) {
+      const e = (out[t.id] ??= {});
+      for (const k of t.critHighKeys) e[k] ??= { first: s!.generated, last: s!.generated };
+    }
+  }
+  return out;
+}
+
+// The ledger after a scan: its keys seen now, the forgotten ones dropped. A
+// target whose scan failed counted nothing — its entries wait, untouched.
+export function noteSeen(seen: FirstSeen, cur: ScanStatus): FirstSeen {
+  const at = cur.generated;
+  const cutoff = Date.parse(at) - FORGET_DAYS * 86_400_000;
+  const out: FirstSeen = {};
+  for (const [id, keys] of Object.entries(seen)) out[id] = { ...keys };
+  for (const t of cur.targets) {
+    if (t.coverage !== "ok" || t.verdict === "failed") continue;
+    const e = (out[t.id] ??= {});
+    for (const k of t.critHighKeys) e[k] = { first: e[k]?.first ?? at, last: at };
+    for (const [k, v] of Object.entries(e)) if (Date.parse(v.last) < cutoff) delete e[k];
+  }
+  return out;
+}
+
+export function diffScans(cur: ScanStatus, prev: ScanStatus | null, seen: FirstSeen | null = null): ScanDiff {
   const prevById = new Map((prev?.targets ?? []).map((t) => [t.id, t]));
   const out: ScanDiff = { newAct: [], newlyFailed: [] };
   for (const t of cur.targets) {
     const p = prevById.get(t.id);
-    const before = new Set(p?.critHighKeys ?? []);
+    const before = seen ? new Set(Object.keys(seen[t.id] ?? {})) : new Set(p?.critHighKeys ?? []);
     t.new = t.critHighKeys.filter((k) => !before.has(k));
     const open = new Set((t.items ?? []).filter((i) => i.state === "open").map((i) => i.id));
     t.newOpen = [...new Set(t.new.map((k) => k.split(" ")[0]).filter((id) => open.has(id)))].sort();
@@ -1701,6 +1780,11 @@ export function runRescan(opts: RescanOpts, io: SecurityIO): { status: ScanStatu
         keep();
         continue;
       }
+      if (lacksSource(comps)) {
+        keep();
+        notes.push(`${t.name}: its inventory has no source packages (taken by an older scan); the last scan's result stands until the next full scan`);
+        continue;
+      }
       const bundled = comps.filter((c) => c.properties?.some((p) => p.name === "tappaas:bundled-in"));
       const plain = comps.filter((c) => !bundled.includes(c));
       const f = join(tmp, `${safe(t.id)}.cdx.json`);
@@ -1768,9 +1852,10 @@ export function writeScan(configDir: string, status: ScanStatus, cdx: Record<str
   mkdirGuarded(dir, { recursive: true });
   const cur = join(dir, STATUS_FILE);
   const prev = readStatus(cur);
-  const diff = diffScans(status, prev);
+  const seen = readFirstSeen(join(dir, FIRST_SEEN_FILE)) ?? seedFirstSeen(prev, readStatus(join(dir, PREVIOUS_FILE)));
+  const diff = diffScans(status, prev, seen);
   if (existsSync(cur)) renameGuarded(cur, join(dir, PREVIOUS_FILE));
-  for (const [file, doc] of [[SITE_CDX_FILE, cdx], [STATUS_FILE, status]] as const) {
+  for (const [file, doc] of [[SITE_CDX_FILE, cdx], [STATUS_FILE, status], [FIRST_SEEN_FILE, noteSeen(seen, status)]] as const) {
     writeFileGuarded(join(dir, `${file}.tmp`), JSON.stringify(doc, null, 1) + "\n");
     renameGuarded(join(dir, `${file}.tmp`), join(dir, file));
   }
