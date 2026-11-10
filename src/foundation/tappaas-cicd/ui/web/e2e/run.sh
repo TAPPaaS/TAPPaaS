@@ -150,8 +150,10 @@ if [[ "${UPDATE}" == 0 ]]; then
         fi
         build "${SRC}" "${TMP}/base-dist"
         serve "${SRC}" "${TMP}/base-dist"
-        # Every route at every viewport, whatever this run asks for.
-        capture "${SRC}" "${TMP}/base-shots" "" "${ALL_VPS[@]}" || { stop; echo "run.sh: the baseline capture at ${REF:0:12} failed" >&2; exit 1; }
+        # Every route the base has, at every viewport, whatever this run asks
+        # for: a route this change adds has no page there to wait for.
+        BASE_ROUTES="$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).map((r) => r.id).join(","))' "${SRC}/web/e2e/routes.json")"
+        capture "${SRC}" "${TMP}/base-shots" "${BASE_ROUTES}" "${ALL_VPS[@]}" || { stop; echo "run.sh: the baseline capture at ${REF:0:12} failed" >&2; exit 1; }
         stop
         store_baseline "${TMP}/base-shots" "${REF}" 1
         if [[ -n "${WT}" ]]; then git -C "${REPO}" worktree remove --force "${WT}"; WT=""; fi
