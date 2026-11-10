@@ -36,7 +36,7 @@ set -uo pipefail
 . "${TAPPAAS_BIN:-/home/tappaas/bin}/common-install-routines.sh" 2>/dev/null || true
 
 usage() {
-    echo "Usage: $0 <pve|pbs|all> <status|apply> | guest <module> <status|apply> | site apply | cost | purge <ci-id>" >&2
+    echo "Usage: $0 <pve|pbs|all> <status|apply> | caddy <status|apply> | guest <module> <status|apply> | site apply | cost | purge <ci-id>" >&2
     exit 64
 }
 
@@ -51,6 +51,10 @@ case "${what}" in
             s="$("metrics_${t}_state")"
             case "${s}" in unwanted) "remove_metrics_${t}" >/dev/null || rc=1 ;; missing|stale) "apply_metrics_${t}" >/dev/null || rc=1 ;; esac
         done
+        # The firewall's Caddy metrics listener, while a published service is at service.
+        if [[ -f "$(_ls_config_dir)/network.json" ]]; then
+            case "$(caddy_metrics_state)" in unwanted) remove_caddy_metrics >/dev/null || rc=1 ;; missing|stale) apply_caddy_metrics >/dev/null || rc=1 ;; esac
+        fi
         for f in "$(_ls_config_dir)"/*.json; do
             m="$(basename "${f}" .json)"
             jq -e '.kind == "vm" or .kind == "lxc"' "${f}" >/dev/null 2>&1 || continue
@@ -65,7 +69,23 @@ case "${what}" in
         [[ -n "${module}" && -f "$(_ls_config_dir)/${module}.json" ]] || { echo "no module '${module}' on this site" >&2; exit 64; }
         case "${verb}" in
             status) metrics_effective "${module}"; exit 0 ;;
-            apply)  apply_metrics_guest "${module}"; exit $? ;;
+            apply)
+                apply_metrics_guest "${module}"; rc=$?
+                # A published service follows its module's level (ADR-046 P3): the
+                # controller's Caddy scrape and probes, and the firewall's listener.
+                if [[ "${module}" != "${SERVICE_CONTROLLER}" ]] && jq -e --arg m "${module}" 'any(.[]; .module == $m)' <<<"$(service_routes_json)" >/dev/null 2>&1; then
+                    log_shipping_wanted "${SERVICE_CONTROLLER}" && { apply_metrics_guest "${SERVICE_CONTROLLER}" >/dev/null || rc=1; }
+                    if [[ -f "$(_ls_config_dir)/network.json" ]]; then
+                        case "$(caddy_metrics_state)" in unwanted) remove_caddy_metrics >/dev/null || rc=1 ;; missing|stale) apply_caddy_metrics >/dev/null || rc=1 ;; esac
+                    fi
+                fi
+                exit "${rc}" ;;
+            *) usage ;;
+        esac ;;
+    caddy)
+        case "${2:-}" in
+            status) caddy_metrics_state; exit 0 ;;
+            apply) case "$(caddy_metrics_state)" in unwanted) remove_caddy_metrics ;; missing|stale) apply_caddy_metrics ;; in-sync|absent) echo "caddy metrics: in sync" ;; *) echo "caddy metrics: the firewall did not answer" >&2; exit 2 ;; esac; exit $? ;;
             *) usage ;;
         esac ;;
     pve) targets=(pve) ;; pbs) targets=(pbs) ;; all) targets=(pve pbs) ;;

@@ -134,6 +134,10 @@ metrics_identity_json() {
                guests: ([$all[] | select((.class == "vm" or .class == "lxc") and ((.attributes.vmid // null) != null))
                          | {(.attributes.vmid | tostring): .id}] | add // {}),
                ids:    ([$all[] | {(.id): {name: .name, ns: ($envs[.name] // $def)}}] | add // {})}' <<<"${q}")" || out=""
+        # The published services (P3): the controller speaks for them.
+        if [[ -n "${out}" ]] && declare -F service_routes_json >/dev/null; then
+            out="$(jq -c --arg ctl "${SERVICE_CONTROLLER}" --argjson r "$(service_routes_json)" '. + {controller: $ctl, routes: $r}' <<<"${out}")" || out=""
+        fi
         if [[ -n "${out}" ]]; then
             (umask 077; printf '%s\n' "${out}" > "${METRICS_IDENTITY_CACHE}.tmp" && mv "${METRICS_IDENTITY_CACHE}.tmp" "${METRICS_IDENTITY_CACHE}") 2>/dev/null || true
             printf '%s\n' "${out}"; return 0
@@ -187,7 +191,7 @@ declare "stamp" {
     // What a sender says about identity never counts.
     rule {
       action = "labeldrop"
-      regex  = "tappaas_ci_id|service_instance_id|service_name|service_namespace|deployment_environment_name|instance|tappaas_node"
+      regex  = "tappaas_ci_id|service_instance_id|service_name|service_namespace|deployment_environment_name|instance|tappaas_node|tappaas_module"
     }
 EOF
     if [[ -n "${nodes}" ]]; then
@@ -248,6 +252,7 @@ EOF
         _ms_name_ok "${ns}" || ns=""
         _ms_stamp_rules '"tappaas_node", "vmid"' "1;${vmid}" "${id}" "${name}" "${ns}"
     done < <(jq -r '.guests // {} | to_entries[] | [.key, .value] | @tsv' <<<"${map}")
+    declare -F render_route_identity >/dev/null && render_route_identity "${map}"
     cat <<'EOF'
 
     rule {
@@ -311,6 +316,7 @@ metrics_sync_logging() {
     if [[ -n "${c}" ]]; then
         ssh -o BatchMode=yes -o ConnectTimeout=10 "${vm}" "sudo systemctl try-restart prometheus" || return 1
     fi
+    service_metrics_sync_logging || return 1
     echo "metrics: $(jq -r '(.hosts|length|tostring) + " hosts and " + (.guests|length|tostring) + " guests with an identity"' <<<"${map}"), retention ${retention} days"
 }
 
@@ -532,14 +538,23 @@ metrics_class_of() {
 
 # render_metrics_alloy <host> <level> <resolution> <class> — the runtime file.
 render_metrics_alloy() {
-    local host="$1" level="$2" res="$3" class="${4:-guest}" keep interval=60s collectors
+    local host="$1" level="$2" res="$3" class="${4:-guest}" extra="${5:-}" keep interval=60s collectors
     _ms_name_ok "${host}" || { echo "render_metrics_alloy: bad host '${host}'" >&2; return 1; }
     [[ "${level}" == trace ]] && level=service
     _ms_level_ok "${level}" || { echo "render_metrics_alloy: bad level '${level}'" >&2; return 1; }
     echo "// GENERATED on the mothership (lib/metrics-shipping.sh): ${host} at level ${level}, resolution ${res}."
     echo "// Rewritten on every level change; Alloy re-reads it. Do not edit here."
-    if [[ "${level}" == off ]]; then
+    if [[ "${level}" == off && -z "${extra}" ]]; then
         echo 'declare "pipeline" { }'
+        return 0
+    fi
+    # `extra`: further scrapes that forward to otelcol.receiver.prometheus.perf
+    # (lib/service-metrics.sh: a module's exporters, the controller's Caddy
+    # scrape and probes). They may run while the host's own level is off.
+    if [[ "${level}" == off ]]; then
+        echo 'declare "pipeline" {'
+        _ms_push_blocks "${host}"
+        printf '%s\n}\n' "${extra}"
         return 0
     fi
     keep="${METRICS_KEEP_BASIC}"
@@ -587,8 +602,15 @@ EOF
     }
 EOF
     fi
+    echo "  }"
+    _ms_push_blocks "${host}"
+    [[ -n "${extra}" ]] && printf '%s\n' "${extra}"
+    echo "}"
+}
+
+# The push half of a pipeline: OTLP to the store as this host.
+_ms_push_blocks() {
     cat <<EOF
-  }
 
   otelcol.receiver.prometheus "perf" {
     output {
@@ -602,7 +624,7 @@ EOF
   }
 
   otelcol.auth.basic "perf" {
-    username = "${host}"
+    username = "$1"
     password = local.file.push_secret.content
   }
 
@@ -614,7 +636,6 @@ EOF
       auth     = otelcol.auth.basic.perf.handler
     }
   }
-}
 EOF
 }
 
@@ -641,7 +662,9 @@ metrics_guest_render() {
     host="$(jq -r '.vmname // empty' "$(_ls_config_dir)/${module}.json" 2>/dev/null)"
     lvl="$(jq -r .level <<<"${eff}")"
     metrics_wanted || lvl=off
-    render_metrics_alloy "${host:-${module}}" "${lvl}" "$(jq -r .resolution <<<"${eff}")" "$(metrics_class_of "${module}")"
+    local extra=""
+    if metrics_wanted && declare -F render_service_blocks >/dev/null; then extra="$(render_service_blocks "${module}" "${lvl}")" || return 1; fi
+    render_metrics_alloy "${host:-${module}}" "${lvl}" "$(jq -r .resolution <<<"${eff}")" "$(metrics_class_of "${module}")" "${extra}"
 }
 
 # apply_metrics_guest <module> — write the runtime file when it differs and
@@ -714,5 +737,10 @@ metrics_cost() {
            diskMBPerDay: ((($outside * 8640 * 1.5) + $od) / 1048576 | . * 10 | round / 10),
            ramMB: (180 + (($outside + $os) / 1000 * 30) | round)}'
 }
+
+
+# The service level (ADR-046 P3): Caddy, probes, module exporters, dashboards.
+# shellcheck source=service-metrics.sh
+. "${SERVICE_METRICS_LIB:-$(dirname "${BASH_SOURCE[0]}")/service-metrics.sh}"
 
 fi

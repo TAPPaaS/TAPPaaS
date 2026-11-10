@@ -49,5 +49,65 @@
         "authentik-env-secrets-only.*"
       ]
     }
+  },
+  "performance": {
+    "exporters": [
+      {
+        "name": "authentik",
+        "port": 9301,
+        "path": "/metrics",
+        "level": "service",
+        "keep": [
+          "authentik_main_request_duration_seconds_*",
+          "authentik_flows_*",
+          "authentik_outposts_*",
+          "authentik_system_*",
+          "django_http_requests_total_by_view_transport_method_total",
+          "django_http_responses_total_by_status_view_method_total",
+          "django_http_requests_latency_seconds_by_view_method_*"
+        ]
+      },
+      {
+        "name": "postgres",
+        "port": 9187,
+        "level": "service",
+        "keep": [
+          "pg_up",
+          "pg_stat_database_numbackends",
+          "pg_stat_database_xact_commit",
+          "pg_stat_database_xact_rollback",
+          "pg_stat_database_blks_*",
+          "pg_stat_database_deadlocks",
+          "pg_database_size_bytes",
+          "pg_settings_max_connections"
+        ]
+      },
+      {
+        "name": "redis",
+        "port": 9121,
+        "level": "service",
+        "keep": [
+          "redis_up",
+          "redis_connected_clients",
+          "redis_memory_used_bytes",
+          "redis_commands_processed_total",
+          "redis_keyspace_hits_total",
+          "redis_keyspace_misses_total",
+          "redis_evicted_keys_total"
+        ]
+      }
+    ],
+    "traces": {
+      "otlp": true,
+      "level": "trace"
+    },
+    "thresholds": [
+      {
+        "signal": "http_p95_seconds",
+        "warning": 1.5,
+        "critical": 5,
+        "for": "15m"
+      }
+    ]
   }
 }

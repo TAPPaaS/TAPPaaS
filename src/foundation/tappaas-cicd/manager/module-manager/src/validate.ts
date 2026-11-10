@@ -32,6 +32,7 @@ import { moduleSourceOf } from "../../../lib/ts/src/instance";
 import { MODULE_STATUS_VALUES, ModuleConfig, ValidateFinding, ValidateReport } from "./types";
 import { moduleScope } from "../../../lib/ts/src/scope";
 import { locationFindings } from "./location";
+import { perfDeclarationFindings } from "../../../lib/ts/src/perf-declaration";
 
 export const VALID_SOURCES = ["official", "community", "private", "local"] as const;
 
@@ -132,6 +133,13 @@ export function validateModule(
   // storage:nfs (ADR-029 v0.9): a consumer's mounts checked against the shares
   // in config/shares.json and their grants — before any install runs.
   validateNfs(m, opts.fs, out);
+
+  // A performance declaration (ADR-046 D5): foundation modules only, well formed.
+  {
+    const f = perfDeclarationFindings({ source: m.source, performance: m.raw?.performance });
+    for (const e of f.errors) err(e);
+    for (const w of f.warnings) warn(w);
+  }
 
   // A machine's location names one of the site's (ADR-036 D2).
   if (opts.configDir) {

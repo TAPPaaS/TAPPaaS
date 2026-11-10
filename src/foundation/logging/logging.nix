@@ -115,6 +115,15 @@ let
     }
   '';
 
+  # Until the mothership writes logging's own scrapes (lib/service-metrics.sh):
+  # none.
+  selfFile = "/etc/alloy-identity/self.alloy";
+  defaultSelf = pkgs.writeText "self.alloy" ''
+    declare "scrape" {
+      argument "forward_to" { }
+    }
+  '';
+
   # The site's own values, not ours to guess: update-os.sh deploys the module's
   # config beside this file as /etc/nixos/logging.json, so proxyDomain is
   # available declaratively (same idiom as nextcloud.nix, #508). A site that has
@@ -840,6 +849,18 @@ in
       forward_to = [prometheus.remote_write.store.receiver]
     }
 
+    // This VM's own exporters (Grafana, Loki, Alloy, Prometheus) at level
+    // service, as logging's performance declaration lists them (ADR-046 D5):
+    // a module the mothership renders, empty below service. They carry this
+    // VM's host and go through the same allow-list and identity.
+    import.file "self" {
+      filename = "${selfFile}"
+    }
+
+    self.scrape "own" {
+      forward_to = [prometheus.relabel.allow.receiver]
+    }
+
     prometheus.remote_write "store" {
       endpoint {
         url = "http://127.0.0.1:${toString promPort}/api/v1/write"
@@ -852,6 +873,7 @@ in
     "+${pkgs.writeShellScript "alloy-identity-default" ''
       ${pkgs.coreutils}/bin/install -d -m 0755 /etc/alloy-identity
       [ -s ${identityFile} ] || ${pkgs.coreutils}/bin/install -m 0644 ${defaultIdentity} ${identityFile}
+      [ -s ${selfFile} ] || ${pkgs.coreutils}/bin/install -m 0644 ${defaultSelf} ${selfFile}
     ''}"
   ];
 
@@ -1234,6 +1256,30 @@ in
         }];
       };
 
+      # The shipped dashboards per class (node, guest, pool, datastore,
+      # published service; ADR-046 D7), and the ones the mothership renders from
+      # the modules' performance declarations (lib/service-metrics.sh) into a
+      # runtime directory, picked up within a minute without a rebuild.
+      dashboards.settings = {
+        apiVersion = 1;
+        providers = [{
+          name = "tappaas";
+          folder = "TAPPaaS";
+          type = "file";
+          disableDeletion = true;
+          allowUiUpdates = false;
+          options.path = import ./dashboards.nix { inherit pkgs; };
+        } {
+          name = "tappaas-modules";
+          folder = "TAPPaaS modules";
+          type = "file";
+          disableDeletion = false;
+          updateIntervalSeconds = 60;
+          allowUiUpdates = false;
+          options.path = "/var/lib/grafana-tappaas/dashboards";
+        }];
+      };
+
       # #126: the heartbeat above, one contact point (the mothership's
       # receiver), and a policy that sends everything there — the modules'
       # rules too (ADR-039) — grouped per rule and host, repeated at most every
@@ -1465,6 +1511,9 @@ in
   # ============================================================================
 
   systemd.tmpfiles.rules = [
+    # The module dashboards the mothership writes (lib/service-metrics.sh).
+    "d /var/lib/grafana-tappaas 0755 root root -"
+    "d /var/lib/grafana-tappaas/dashboards 0755 root root -"
     "d /var/lib/loki                   0700 loki     loki     -"
     "d /var/lib/loki/chunks            0700 loki     loki     -"
     "d /var/lib/loki/rules             0700 loki     loki     -"

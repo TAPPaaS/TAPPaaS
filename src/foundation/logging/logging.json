@@ -51,5 +51,66 @@
         "mgmt"
       ]
     }
+  },
+  "performance": {
+    "exporters": [
+      {
+        "name": "grafana",
+        "port": 3000,
+        "level": "service",
+        "keep": [
+          "grafana_http_request_duration_seconds_*",
+          "grafana_alerting_rule_evaluation_failures_total",
+          "grafana_alerting_rule_evaluations_total",
+          "grafana_stat_totals_dashboard"
+        ]
+      },
+      {
+        "name": "loki",
+        "port": 3102,
+        "level": "service",
+        "keep": [
+          "loki_request_duration_seconds_*",
+          "loki_distributor_lines_received_total",
+          "loki_distributor_bytes_received_total",
+          "loki_ingester_memory_streams",
+          "loki_discarded_samples_total"
+        ]
+      },
+      {
+        "name": "alloy",
+        "port": 9080,
+        "level": "service",
+        "keep": [
+          "alloy_component_controller_running_components",
+          "prometheus_remote_storage_samples_total",
+          "prometheus_remote_storage_samples_failed_total",
+          "prometheus_remote_storage_samples_pending",
+          "otelcol_receiver_accepted_metric_points_total",
+          "otelcol_receiver_refused_metric_points_total"
+        ]
+      },
+      {
+        "name": "prometheus",
+        "port": 3122,
+        "level": "service",
+        "keep": [
+          "prometheus_tsdb_head_series",
+          "prometheus_tsdb_head_samples_appended_total",
+          "prometheus_tsdb_storage_blocks_bytes",
+          "prometheus_tsdb_wal_storage_size_bytes",
+          "prometheus_tsdb_compactions_failed_total"
+        ]
+      },
+      {
+        "name": "prometheus-trends",
+        "port": 3123,
+        "level": "service",
+        "keep": [
+          "prometheus_tsdb_head_series",
+          "prometheus_tsdb_storage_blocks_bytes"
+        ]
+      }
+    ]
   }
 }

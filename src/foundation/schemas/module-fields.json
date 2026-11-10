@@ -294,10 +294,57 @@
         "resolution": {
           "type": "string",
           "enum": ["normal", "fine"]
+        },
+        "exporters": {
+          "description": "A foundation module's exporters (ADR-046 D5): scraped on its guest at their level (default service); only the metric names in keep leave the guest. A module from any other source may not declare them, until the format has settled.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "port", "keep"],
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,40}$" },
+              "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+              "path": { "type": "string", "pattern": "^/[A-Za-z0-9/_.-]{0,100}$", "default": "/metrics" },
+              "level": { "type": "string", "enum": ["basic", "service"], "default": "service" },
+              "keep": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "pattern": "^[A-Za-z_:*][A-Za-z0-9_:*]{0,120}$", "not": { "pattern": "^\\*+$" } }
+              }
+            }
+          }
+        },
+        "traces": {
+          "description": "Whether the module emits OpenTelemetry traces; collected only while one of its objects is traced.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["otlp"],
+          "properties": {
+            "otlp": { "type": "boolean" },
+            "level": { "type": "string", "enum": ["trace"] }
+          }
+        },
+        "thresholds": {
+          "description": "Static thresholds on the module's signals, held for a window (for) before its performance condition changes.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["signal"],
+            "anyOf": [{ "required": ["warning"] }, { "required": ["critical"] }],
+            "properties": {
+              "signal": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,60}$" },
+              "warning": { "type": "number" },
+              "critical": { "type": "number" },
+              "for": { "type": "string", "pattern": "^[0-9]+(s|m|h)$" }
+            }
+          }
         }
       },
+      "additionalProperties": false,
       "example": { "level": "service" },
-      "note": "module-manager module modify <instance> --set performance.level=service; --unset performance.level to inherit again."
+      "note": "module-manager module modify <instance> --set performance.level=service; --unset performance.level to inherit again. exporters, traces and thresholds are the module author's declaration, not set with --set; module-manager validate checks them (lib/ts/src/perf-declaration.ts)."
     },
     "sshKeyOnly": {
       "description": "Key-only SSH on a machine TAPPaaS manages: sshd refuses password and keyboard-interactive logins for every user, and root logs in by key only — the settings the cluster nodes enforce. The console keeps the root password. Applied when the machine is adopted or provisioned and re-applied by every update, so a password login someone switches back on is closed again; test.sh asserts it from what sshd enforces. false returns the machine to its own sshd_config (TAPPaaS removes only the drop-in it wrote).",

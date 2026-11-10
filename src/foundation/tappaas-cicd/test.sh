@@ -511,6 +511,20 @@ else
     skip "lib/test-metrics-shipping.sh not found"
 fi
 
+# Test 9c1s: the service level (ADR-046 P3) — Caddy and probes for the routes at
+# service, a module's declared exporters, route identity, dashboards. Offline.
+info "${BOLD}Test 9c1s: service metrics — routes, exporters, identity, dashboards${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-service-metrics.sh" ]]; then
+    if sm_out="$("${SCRIPT_DIR}/lib/test-service-metrics.sh" 2>&1)"; then
+        pass "service-metrics: $(tail -1 <<< "${sm_out}")"
+    else
+        fail "service-metrics test failed"
+        sed 's/^/    /' <<< "${sm_out}"
+    fi
+else
+    skip "lib/test-service-metrics.sh not found"
+fi
+
 # Test 9c2: signed releases (ADR-033) — a staging/production checkout moves only to
 # a release tag signed by a key the last verified release lists. Temp repos and
 # throwaway keys only.

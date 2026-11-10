@@ -63,7 +63,7 @@ A="${T}/identity.alloy"
 grep -q '^declare "stamp" {' "${A}" && grep -q 'export "receiver"' "${A}" && ok || no "no declare/export"
 # Braces balance (a cheap syntax check: no alloy here).
 [[ "$(tr -cd '{' < "${A}" | wc -c)" -eq "$(tr -cd '}' < "${A}" | wc -c)" ]] && ok || no "braces do not balance"
-grep -q 'regex  = "tappaas_ci_id|service_instance_id|service_name|service_namespace|deployment_environment_name|instance|tappaas_node"' "${A}" \
+grep -q 'regex  = "tappaas_ci_id|service_instance_id|service_name|service_namespace|deployment_environment_name|instance|tappaas_node|tappaas_module"' "${A}" \
     && ok || no "sender identity labels are not dropped first"
 [[ "$(grep -n 'labeldrop' "${A}" | head -1 | cut -d: -f1)" -lt "$(grep -n 'target_label  = "tappaas_ci_id"' "${A}" | head -1 | cut -d: -f1)" ]] \
     && ok || no "the drop does not come before the stamps"
