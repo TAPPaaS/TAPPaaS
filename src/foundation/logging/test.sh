@@ -336,8 +336,18 @@ check_alert_delivery() {
 
 # ── Main ──────────────────────────────────────────────────────────────
 
+# The metrics and trace stores arrive with the logging release that has them. An
+# update runs this test before the logging VM is rebuilt, so on the first update
+# the VM does not have them yet: that is skipped, not failed. A store that is
+# deployed but not answering still fails.
+metrics_store_deployed() {
+    # shellcheck disable=SC2086
+    ssh ${SSH_OPTS} "tappaas@${VM_HOST}" "systemctl cat prometheus.service >/dev/null 2>&1" 2>/dev/null
+}
+
 check_metrics() {
     info "Check 11: The metrics store — both Prometheus instances, push and query need a credential, identity from the credential"
+    metrics_store_deployed || { info "  the metrics store is not on this logging VM yet; it arrives with this update — skipped"; return 0; }
     # shellcheck source=../tappaas-cicd/lib/metrics-shipping.sh
     . "${METRICS_SHIPPING_LIB:-/home/tappaas/bin/metrics-shipping.sh}"
     local q="https://${VM_HOST}:3121" p="https://${VM_HOST}:3120" code pw now body n id want
@@ -414,6 +424,7 @@ check_traces() {
     . "${METRICS_SHIPPING_LIB:-/home/tappaas/bin/metrics-shipping.sh}"
     local st want p="https://${VM_HOST}:3120" code pw tid now body got
     declare -F metrics_traces_state >/dev/null || { info "  no trace store in this release of the library — skipped"; return 0; }
+    metrics_store_deployed || { info "  the trace store is not on this logging VM yet; it arrives with this update — skipped"; return 0; }
     st="$(metrics_traces_state)"; want="$(_ms_traces_wanted)"
     [[ "${st}" == in-sync ]] && check_pass "Tempo and the senders match the raises (${want})" \
         || check_fail "Tempo and the senders do not match the raises (${st}; want ${want}) — tappaas-metrics-target.sh traces apply"
