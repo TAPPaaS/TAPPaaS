@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** (every open question closed, 2026-11-10; P1–P6 built on the `adr-046-*` branches, live tests in progress) |
+| **Status** | **Proposed** (every open question closed, 2026-11-10; P1–P6 built, live-tested on the test site and merged to `main` 2026-11-11, not yet released) |
 | **Version** | 0.4 |
 | **Date** | 2026-11-10 |
 | **Author** | Lars Rossen |
