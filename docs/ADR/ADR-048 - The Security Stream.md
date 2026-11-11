@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** — every question settled with the operator; for his review |
-| **Version** | 0.3 |
+| **Version** | 0.4 |
 | **Date** | 2026-11-11 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | The delivery half of [ADR-047](<ADR-047 - CVE Decisions and the Daily Work.md>). Amends ADR-028 (private channels, a daily patch line, a public line 14 days behind), ADR-033 (subscriber tags, a second remote, a stream key for data) and ADR-045 (decisions no longer travel only with a release). |
-| **Changelog** | v0.1 (2026-11-10): first draft, a soft paywall over open development. v0.2 (2026-11-11): the operator's model, replacing it. **Development is private**: unstable and staging live on a server we run. **Production exists twice**: a subscriber line with daily bug, security and decision patches, and a public line that gets the same feature releases at the same boundaries and each patch 14 days later. Access by **per-site tokens** on that server. Both the decision feed and the patches are paid. A person signs every patch release. Canary: hrossen and makerfloss, two days. v0.3 (2026-11-11): **Proposed.** A fix for a known-exploited CVE goes to the public line at once. The licence stays plain MPL-2.0 and the embargo is practical only: no subscriber terms, no contributor agreement. The forge is Forgejo on a rented server, its own TAPPaaS site, administered by Lars, best effort. A lapsed token works for 14 more days. A production canary on the subscriber line joins the ring. The roadmap and the ADRs are published at once from private `main`. A bug fix enters the daily patch only with a `Patch:` trailer naming how it affects operation. |
+| **Changelog** | v0.1 (2026-11-10): first draft, a soft paywall over open development. v0.2 (2026-11-11): the operator's model, replacing it. **Development is private**: unstable and staging live on a server we run. **Production exists twice**: a subscriber line with daily bug, security and decision patches, and a public line that gets the same feature releases at the same boundaries and each patch 14 days later. Access by **per-site tokens** on that server. Both the decision feed and the patches are paid. A person signs every patch release. Canary: hrossen and makerfloss, two days. v0.3 (2026-11-11): **Proposed.** A fix for a known-exploited CVE goes to the public line at once. The licence stays plain MPL-2.0 and the embargo is practical only: no subscriber terms, no contributor agreement. The forge is Forgejo on a rented server, its own TAPPaaS site, administered by Lars, best effort. A lapsed token works for 14 more days. A production canary on the subscriber line joins the ring. The roadmap and the ADRs are published at once from private `main`. A bug fix enters the daily patch only with a `Patch:` trailer naming how it affects operation. v0.4 (2026-11-11): the production canary runs a separately signed **canary tag** that only canary-ring sites accept, signed in the same `sign-day` sitting (D4, D8). The two remaining choices are listed as deferred. No question is open. |
 
 A production site gets a fix or a CVE decision when the release that carries it reaches `stable`,
 up to four weeks after it was made. This ADR adds a daily stream of bug fixes, security patches
@@ -157,7 +157,7 @@ they do not pay. Every other patch waits its 14 days, a critical one included.
 
 The production canary is one of Lars's own production sites or a subscriber who agreed to it. It
 has `security.ring: canary` in its `site.json`, and the forge serves it each subscriber tag when
-gate 1 passes, two days before the others. Its operator reports a fault with
+gate 1 passes and its canary tag is signed, two days before the others. Its operator reports a fault with
 `tappaas-train fault`, or by telling a maintainer, who records it.
 
 **Signing, made cheap.** One sitting a day at most. `tappaas-train.sh sign-day` on the signer's
@@ -165,9 +165,9 @@ machine fetches every tag that waits, prints one screen for each (the commits, t
 the gates passed, the tree hash, for a public tag the embargo dates), and signs them after one
 confirmation. A typical day is one subscriber tag per line and, two weeks into the model, one
 public tag per line: two to four signatures from one command. The production canary takes a
-patch two days before its release tag exists; what it verifies in those two days is the one open
-question below, and the proposed answer adds a canary tag to the same sitting. The signature
-stays a person's
+patch two days before its release tag exists, so the sitting also signs a **canary tag** for each
+patch that passed gate 1 the day before (D8): one more signature per line on a patch day. The
+signature stays a person's
 statement about one commit, as ADR-033 has it; no automation key can sign a release.
 
 ### D5. The decision feed
@@ -291,11 +291,27 @@ sites say so.
 
 ### D8. What changes in the verifier and the train
 
+- **A canary tag is told from a release tag in two ways, and both must agree.** Its name is the
+  release tag's with `-rc` (`vX.Y.N+sK-rc`), which the release-tag pattern does not match. Its
+  signed message carries `ring: canary`; a release tag's carries `ring: release`. A name and a
+  message that disagree are refused. The signature and the signers are the same as for a release
+  tag (ADR-033 D2, D4): what differs is what the tag says, not who may say it.
+  - A site accepts a canary tag only when its own `site.json` has `security.ring: canary`. Every
+    other site refuses it, wherever it came from, and reports the refusal.
+  - A canary tag is never a base for trust: it cannot enrol or remove a signer, and it is not
+    recorded as the last verified release. The chain of ADR-033 D4 runs through release tags only.
+  - The release tag signed after the soak points at the same commit. A canary site moves to it
+    without a rebuild; the tree hash is the same.
+  - A canary tag whose patch is withdrawn after a fault has no release tag. The canary site goes
+    forward to the next canary or release tag; the ancestry rule holds, because a withdrawn patch
+    is reverted on `sub`, never rewound.
+  - Canary tags are served from a `canary` branch of `tappaas/production` and never reach
+    Codeberg.
 - Release tags match `vX.Y.N` and `vX.Y.N+sK`. A subscriber tag's message carries
   `embargoed: <patch ids>`; a public tag's `patches: <patch ids>`.
 - The ancestry rule accepts the two cross-line moves of D7 and no other.
 - `patch-scope` (paths) runs in the verifier for any tag that is not a feature release.
-- The train gains `patch-day`, `embargo-check`, `sign-day`, and the port. `tappaas-train patch`
+- The train gains `patch-day`, `embargo-check`, `sign-day` (release and canary tags), and the port. `tappaas-train patch`
   (ADR-028 D15) becomes `patch-day --expedite`.
 - The stream key is one line in `allowed_signers` with `namespaces="tappaas-decisions"`.
 
@@ -386,18 +402,16 @@ grace; one production canary on the subscriber line joins hrossen and makerfloss
 and the ADRs are published at once; the daily patch takes security fixes, decisions, and bug
 fixes marked as affecting operation, and cosmetic fixes wait for the release.
 
+Settled in v0.4 (operator, 2026-11-11): the production canary runs a separately signed canary
+tag that only canary-ring sites accept, signed in the same `sign-day` sitting as the rest.
+
 ## Open questions
 
-One point of design, found while settling the canary:
+None.
 
-1. **What the production canary verifies.** ADR-033 lets a production site run only a signed
-   release tag, and the signature is gate 3, after the canary's two days. Proposed: the patch is
-   signed as a **canary tag** (`vX.Y.N+sK-rc`) when gate 1 passes, which only a site with
-   `security.ring: canary` accepts, and signed again as the release tag after the soak. That is
-   one more signature per patch day, in the same sitting as the previous day's release tag. The
-   alternative is to let a canary site run an unsigned candidate, which weakens ADR-033 on a
-   production site.
+## Deferred
 
-Two choices are left to the day they are needed, and neither changes this ADR: which site is the
-production canary (one of Lars's own, or a named subscriber), and which rented server the forge
-runs on.
+Two choices are left to the day they are needed. Neither changes this ADR:
+
+- which site is the production canary: one of Lars's own production sites, or a named subscriber;
+- which rented server hosts the forge.
