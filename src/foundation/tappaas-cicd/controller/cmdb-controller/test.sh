@@ -749,6 +749,10 @@ out="$(sweep)"
 check "a leased address appearing is expected, reason lease; a reserved one is drift" "true lease|false null" \
     "$(jq -r '[.differences[] | select(.class == "address" and .attribute == null) | "\(.expected) \(.reason)"] | join("|")' <<<"${out}")"
 jq '.objects |= map(select(.class != "address"))' "${SW}/site.json" >"${SW}/s2" && cp "${SW}/s2" "${SW}/site.json"
+cmdb report --json >/dev/null <<<'{"source":"site-src","objects":[{"class":"address","name":"10.0.0.77","end":true},{"class":"address","name":"10.0.0.78","end":true}]}'
+out="$(sweep)"
+check "a leased address that went is expected too; a reserved one going is drift" "true lease|false null" \
+    "$(jq -r '[.differences[] | select(.class == "address" and .attribute == null) | "\(.expected) \(.reason)"] | join("|")' <<<"${out}")"
 
 # A discover source says which devices it reached: one it reported before and
 # not now is listed; a source that reached none of them has failed, whatever

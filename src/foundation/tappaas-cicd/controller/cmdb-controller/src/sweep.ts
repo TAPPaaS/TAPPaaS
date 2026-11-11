@@ -62,10 +62,12 @@ export interface Difference {
   owner?: string;
 }
 
-// An address with a live lease and no reservation: one a DHCP server handed out.
-async function leased(pg: Query, id: string): Promise<boolean> {
+// An address with a lease and no reservation: one a DHCP server handed out.
+// A live one by what it holds now; an ended one by what it last held.
+async function leased(pg: Query, id: string, ended = false): Promise<boolean> {
   const r = await pg(
-    `SELECT bool_or(name = 'leaseUntil') AS lease, bool_or(name = 'reservation') AS reserved FROM attribute WHERE object = $1 AND upper_inf(validity)`,
+    `SELECT bool_or(name = 'leaseUntil') AS lease, bool_or(name = 'reservation') AS reserved FROM attribute
+      WHERE object = $1 AND ${ended ? "NOT isempty(validity)" : "upper_inf(validity)"}`,
     [id],
   );
   return r.rows[0]?.lease === true && r.rows[0]?.reserved !== true;
@@ -503,6 +505,7 @@ export class Sweep {
     // The objects that appeared in this window and are expected (by their own
     // verb or as new): what a relation of theirs that appeared is part of.
     const appearedExpected = new Map<string, Pick<Difference, "verb" | "job">>();
+    const leases = new Set<string>(); // the leased addresses that came or went
 
     const objects = (await pg.query(
       `SELECT o.id, o.class, o.name, o.created, o.ended, o.seen, ${PLACEHOLDER("o")} AS placeholder FROM object o
@@ -520,8 +523,12 @@ export class Sweep {
         const part = await isNew.partOfNew(id);
         if (part) verdict = { expected: true, verb: part.origin.verb, job: part.origin.job, reason: "new", owner: part.owner };
       }
-      // A leased address appearing is what a DHCP server does: expected.
-      if (!ended && !verdict.expected && String(o.class) === "address" && (await leased((sql, params) => pg.query(sql, params), id))) verdict = { expected: true, reason: "lease" };
+      // A leased address appearing, or going when its lease ran out, is what a
+      // DHCP server does: expected, and so is its zone membership with it.
+      if (!verdict.expected && String(o.class) === "address" && (await leased((sql, params) => pg.query(sql, params), id, ended))) {
+        verdict = { expected: true, reason: "lease" };
+        leases.add(id);
+      }
       if (!ended && verdict.expected) appearedExpected.set(id, { verb: verdict.verb, job: verdict.job });
       out.push({
         kind: ended ? "gone" : "appeared",
@@ -618,7 +625,8 @@ export class Sweep {
       if (before !== undefined && after !== undefined && !byVerb && canon(withoutWords(before)) === canon(withoutWords(after))) {
         partOf = { expected: true, verb: null, job: null, reason: "words" };
       }
-      if (before === undefined && after !== undefined && !byVerb) {
+      if ((before === undefined || after === undefined) && (leases.has(from) || leases.has(to))) partOf = { expected: true, verb: null, job: null, reason: "lease" };
+      else if (before === undefined && after !== undefined && !byVerb) {
         const a = appearedExpected.get(from) ?? appearedExpected.get(to);
         if (a) partOf = { expected: true, verb: a.verb, job: a.job, reason: "new" };
         else if (first.had !== true) {
