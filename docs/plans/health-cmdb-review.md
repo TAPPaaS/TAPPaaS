@@ -427,3 +427,129 @@ the fault holds, concurrent writers, and the rule file against real event lines.
   no scratch directory was created there.
 - Counts of "lines matching the rule" were computed from the journal's event lines with the
   rule's conditions, not read from Grafana's alert history.
+
+## (d) After the review: re-check against main, fixes and status (2026-11-11)
+
+Fixed on branch `fix/health-review`, cut from `main` at `80946e7a` (which has ADR-046's performance
+monitoring), in ten commits. Unit suites: health-manager (all 35 files), module-manager,
+cmdb-controller's integration suite (196 checks), the receiver's (106) and the rule file's (201).
+
+### Re-check against main before changing anything
+
+Every finding still held on `80946e7a`. Line numbers had moved (`derive.ts` ancestor rule at
+326-346 → unchanged; `assess.ts` `ownerOf` at 210, `settle` at 235; `emit.ts` `kindOf` at 132; the
+receiver's burst at 791 → 790). ADR-046 added four interactions the review could not see:
+
+- **A performance warning crosses relations** (`runs-on` from a machine, `stored-on` from a pool,
+  as a warning). Together with `derive.ts`'s `open = roots.filter(s => !impacted.has(s.obj))`, a
+  slow node or pool removed every root on the guests it reached from `rootCauses`: a guest that
+  stopped on a busy node was mailed by nobody. Worse than L1, and new with ADR-046. Fixed with L1.
+- **The ancestor rule took performance in**: its candidate types are the rules' source types, so
+  a node's performance warning could become the "root" of unrelated performance warnings below.
+  Gone with the rule.
+- **`digestOnly` depended on key order** (S2): it worked only because it came after `silenced`,
+  ending the root-cause rule's match. The notice now leaves performance out by type.
+- **Performance's owner** (`performance`, set only when metrics and trends both looked) and its
+  `perf-no-numbers` unknown fit the stored owner and the ageing unchanged; the timed raise
+  (`investigation`) was already an attribute with one writer, the pattern S3 now follows.
+
+### Status per finding
+
+| Finding | Status | What was done |
+|---|---|---|
+| L1 ancestor rule | **fixed** | rule removed; a root is hidden only by a critical impact on its object; roots ordered critical first. The ADR-046 interaction above is fixed with it. |
+| L2 machine `depends-on` | **fixed** | an application's `depends-on` starts at the app (metamodel allows `app → service`); a module never depends on a service it provides (found live: `vm/network → network:proxy`); `complete` reports end the old relations; `rules check` and the sweep report cycles. |
+| L3 mail from transitions | **fixed** | `notices.ts`: one ALERT when a critical root enters the set, one RESOLVED when it leaves, saying why (recovered, eased, unchecked, retired, acknowledged, maintenance, symptom); delivered by emit through `site-notify.sh`, retried until sent; the two log rules removed. |
+| L4 two maintenance systems | **fixed** | the window files are the one model: assess silences what an open window covers and what runs on it; `health-manager maintenance` writes a window file; converge names the instance beside the host. |
+| L5 anonymous site critical | **fixed** | the fallback names its subject; a guest not in the CMDB is a `drift` warning `not-in-cmdb`. |
+| L6 stale observations | **fixed** | the store returns `seen` per source; a threshold or observation over an object nobody reported for 48 h is `unknown`; the sweep records `reached`/`missed` per source and fails a source that reached nothing. |
+| L7 frozen ok, frozen counts | **fixed** | derived conditions (owner `derive`) dropped before `settle`, messages recomputed; an ok its owner stopped confirming ages to unknown; one it no longer gives is dropped, and so is a legacy ok without an owner (230 on hrossen). |
+| L8 aggregates and noise as roots | **fixed** | zone and environment scores derived; a leased address appearing or going is expected; `roots` leads with critical and operational, silenced ones only with `--all`. |
+| L9 relations never stale | **fixed** for `depends-on` | reports may be `complete` for a relation type; module-manager uses it. Other n:m reporters (`provides`, `member-of`, `serves`) can adopt it the same way: not done here. |
+| L10 burst swallows hosts | **fixed** | a silent host after the burst's window is mailed on its own. |
+| L11 unknown reason | **fixed** | the owner is stored on the condition. |
+| L11 drift as old as the sweep | **fixed** | a `changed` attribute whose store drift mark a change cleared stops showing at the next assess. |
+| L11 placeholders | **fixed** | a placeholder nothing reported within its class's expiry is an orphan the sweep retires (15 on hrossen, from 2026-10-30). |
+| L11 node-down when removed | **fixed** | closed as "left the cluster". |
+| L11 concurrent writers | **fixed** | the ack verbs write `acknowledgements`, emit writes `flapping`; assess alone writes `conditions`. The timer's assess and the receiver's `assess --alert` can still overlap: two writers of the same projection from the same inputs, last one wins, nothing operator-set is lost. |
+| L11 `rootcause` events | **fixed** | no longer written. |
+| S1 two pipelines | **changed** | silencing is one model (window files) and correlation of conditions is health-manager's; the critical-root mail is emit's. The receiver keeps delivery, the heartbeat and watchdog, and its node-down and burst folding of Grafana's own `HostSilent` mails, which are not conditions and must work while the CMDB or assess is down: kept deliberately as the safety net. |
+| S2 regex over key order | **fixed** | the critical-root mail is no regex; the remaining rules are tested against `eventLine` output in `emit.test.ts` and `performance.test.ts`. |
+| S3 implicit state machine | **fixed** | one writer per attribute; the ack lifecycle and via-acks in `assess.ts` `stamp`/`viaAcks`, written down in health-manager's DESIGN. |
+| S4 duplicated logic | **partly** | rank shared (`assess-model.ts`); owner stored instead of the three tables (kept only as a fallback for old conditions); alert placement only in `alerts.ts` (`assess --alert`). **Deferred:** the console's own root-set computation in `ui/src/health.ts` (it reads the projected conditions, so it keeps working), and one TypeScript `Condition` type for both halves. |
+| S5 language split | unchanged | as the review judged it workable; the receiver lost its placement code. |
+| S6 tests | **fixed** | two independent faults, a cycle, a stale input, a retired root, a symptom becoming a root, a silence ending while the fault holds, concurrent writers, the rule file against real lines, and an assess→emit→notice run over the identity stop (`health-flow.test.ts`). |
+| S7 ADR drift | **fixed** | ADR-041 v1.6, ADR-040 v1.9, both DESIGNs and the README. The ADR now says what is not built (flagging a symptom that precedes its root; asset and switch impact by colour only) instead of claiming it. |
+
+### Live proof on hrossen (read-only, 2026-11-11)
+
+Compiled code in `~/tmp-health-proof` reading the live CMDB socket (queries only), then removed.
+Nothing else was running (pgrep before each step).
+
+- **2026-11-05 11:54, identity stopped.** As stored then: 14 roots led by `machine/tappaas3`
+  (impacts 2), identity's operational critical not among them, 80 objects with a critical impact.
+  The relations then hold one cycle through `machine/tappaas1` (its three `depends-on`). New derive
+  with the old relations: identity is the first root (critical), still 80 impacted (the cycle).
+  With `depends-on` as the new reporter puts it: **no cycle**, identity the first root, **23**
+  objects impacted — its real SSO consumers (nextcloud, forgejo, immich, …), not tappaas1, the
+  pools, the firewall or the controllers. **L1 and L2 do not reproduce.**
+- **Notices over 11:34–12:19** (every 5 minutes, new derive): `ALERT vm/identity` at 11:54,
+  `RESOLVED vm/identity (recovered)` at 11:59; also `vm/logging` capacity critical 11:34 → 11:39.
+  Nothing left open. **L3 does not reproduce.**
+- **Stale observations today:** 20 cabled ports judged, all green before; 4 are `unknown` now,
+  "not observed since 2026-10-30T12:58"; 52 judgements over stale inputs in all (the four
+  switches and their ports, an SSID, a test environment). 15 live placeholders.
+- **`assess --dry-run` in health-assess.service's context** (`tappaas-unit-run.sh --unit
+  health-assess.service`): exit 0, 402 objects, 627 conditions, every one with an owner, 0 aged
+  "not checked" (after the legacy-ok fix; 233 before it), 44 roots. It read the window directory
+  inside the unit's sandbox.
+- **`converge_open_maintenance` in update-tappaas.service's context**: writes the window
+  (`restart-identity`, scope `identity`) into a scratch directory.
+
+Not provable without deploying: emit's delivery (it mails and moves the cursor), and the site's
+first run of the new assess (it rewrites conditions).
+
+### Overlap with other work
+
+- `design/cve-vex`: `health-manager/src/security.ts` is untouched here. Zone and environment
+  scores are made derived in `derive.ts`, not in the scoring; ADR-047 D7's "a module's CVE
+  condition is derived when only baseline components set its level" would mark the module's
+  condition `derived` the same way and needs no change here. `assess-sources.ts` `fromCve` is
+  unchanged.
+- The console (`ui/`) is untouched: it reads the conditions, which keep their shape (acks and
+  flapping projected). An ack from the console shows on the condition at the next assess.
+
+### Deploy and verify (for Lars)
+
+Deploy: push `fix/health-review` (or merge it to main and push), then update tappaas-cicd on
+hrossen so the OS rebuild picks up `tappaas-cicd.nix` (health-assess.service now has
+`/var/lib/tappaas` writable, needed for emit's notices), the cmdb-controller, health-manager and
+module-manager builds, the receiver and the rule file.
+
+Expect on the first runs:
+
+- the first emit mails one ALERT per current critical root cause that is not silenced (none or
+  very few on hrossen today: `vm/network`'s critical is a CVE level, which is no notice);
+- the next nightly sweep retires the 15 old placeholders, lists dependency cycles (expect none
+  after module-manager's next report), and records `reached`/`missed` per source: the four
+  switches not reported since 2026-10-30 show as missed by switch-manager (a source failure if it
+  reaches none);
+- the switch ports and the four switches go `unknown` ("not observed since"), 230 legacy ok
+  conditions disappear, and the Grafana rule group `module-tappaas-cicd` loses
+  `HealthRootCause` and `HealthRootRecovered`.
+
+Verify:
+
+1. `journalctl -u health-assess --since -10min` — assess and emit exit 0; no "read-only file
+   system" from site-notify.sh.
+2. `health-manager roots` — critical first; `health-manager rules check` — "no dependency cycle".
+3. `cmdb relations --type depends-on --json | jq '[.[] | select(.from.class == "machine")] | length'`
+   — 0 after module-manager's next report.
+4. `health-manager list --status unknown` — the stale ports, "not observed since 2026-10-30".
+5. A planned restart: `health-manager maintenance <guest> --until 30m --note test`, stop the guest,
+   `assess`: its condition shows `maintenance`, no mail; `maintenance end <guest>` with the guest
+   still stopped: one ALERT on the next run; start it: one RESOLVED (recovered).
+6. Ack a critical root: one RESOLVED "(acknowledged)"; `unack`: one new ALERT.
+7. `site-notify.sh --list-open` — the `health-root:` keys match `jq .notices
+   ~/config/.health-emit-cursor`.
+8. After the next sweep: `cmdb sweep --last` shows `reached`, any `missed`, any `cycle`.
