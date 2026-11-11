@@ -141,7 +141,7 @@ export function fromSweep(rec: SweepRecord | null, nowMs: number, idx: SiteIndex
   for (const s of (rec.sources ?? []).filter((x) => !x.ok)) onSite("critical", "sweep-source-failed", `source ${s.source} failed`);
   for (const d of rec.differences ?? []) {
     if (d.expected) continue; // a verb's change, new (part of what a verb made) or words (a relation's required/redundancyGroup): not drift
-    const members = d.kind === "cycle" && Array.isArray(d.after) ? `: ${(d.after as string[]).join(", ")}` : "";
+    const members = d.kind === "cycle" && Array.isArray(d.after) ? `: ${(d.after as string[]).join(", ")}` : d.kind === "unread" && typeof d.after === "string" ? `: ${d.after}` : "";
     const message = `${d.class}/${d.name}: ${WORD[d.kind] ?? `drift: ${d.kind}`}${d.attribute ? ` ${d.attribute}` : ""}${members}`;
     const status: ConditionStatus = d.kind === "missing" ? "critical" : "warning";
     const o = idx.named(d.name, [d.class]) ?? site;

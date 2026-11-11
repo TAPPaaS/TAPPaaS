@@ -352,6 +352,7 @@ export class Sweep {
 
     d.log(`sweep: asking every source${since ? ` (the last sweep: ${since})` : " (the first: this one is the baseline)"}`);
     const sources = await (d.rescanAll ?? (async () => (await rescan(d.log, rescanSources(), { discover: true })).asked))();
+    await this.reach(sources, started);
     await this.store.expire(now());
     // What a retired object left behind is retired with it (D7), as a change,
     // so the differences below list it as expected.
@@ -362,6 +363,7 @@ export class Sweep {
     const differences: Difference[] = since ? await this.sinceLast(since, until) : [];
     differences.push(...(await this.fromDesired(started, d.differ ?? moduleDiffer)));
     differences.push(...(await this.cycles()));
+    differences.push(...this.missedDevices(sources));
     differences.sort((a, b) => a.class.localeCompare(b.class) || a.name.localeCompare(b.name) || (a.attribute ?? "").localeCompare(b.attribute ?? ""));
 
     const counts: SweepCounts = {
@@ -415,6 +417,39 @@ export class Sweep {
     );
     d.log(`sweep ${id}: ${status} — ${JSON.stringify(counts)}`);
     return { id, time: until, since, counts, status, exitCode, sources, differences };
+  }
+
+  // Which devices each source reached (the store's per-source sighting): a
+  // source that ran and reached none of what it reported before has failed,
+  // however it exited; one that missed some says which. A device is a physical
+  // object that is not a part (a port, a disk follow theirs).
+  private async reach(sources: RescanResult[], started: string): Promise<void> {
+    for (const s of sources) {
+      if (!s.ok) continue;
+      const rows = (
+        await this.store.pg.query(
+          `SELECT o.class, o.name, (o.seen->>$1) AS at FROM object o JOIN class c ON c.name = o.class
+            WHERE o.ended IS NULL AND o.seen ? $1 AND c.physical AND o.class NOT IN ('port', 'disk')
+            ORDER BY o.class, o.name`,
+          [s.source],
+        )
+      ).rows;
+      const t0 = Date.parse(started);
+      s.reached = rows.filter((r) => Date.parse(String(r.at)) >= t0).length;
+      s.missed = rows.filter((r) => Date.parse(String(r.at)) < t0).map((r) => `${String(r.class)}/${String(r.name)}`);
+      if (s.reached === 0 && s.missed.length) Object.assign(s, { ok: false, error: `reached none of the ${s.missed.length} device(s) it reported before` });
+    }
+  }
+
+  private missedDevices(sources: RescanResult[]): Difference[] {
+    return sources
+      .filter((s) => s.ok && s.missed?.length)
+      .flatMap((s) =>
+        s.missed!.map((m) => {
+          const slash = m.indexOf("/");
+          return { kind: "unread" as const, class: m.slice(0, slash), name: m.slice(slash + 1), source: s.source, attribute: null, before: null, after: `not reached by ${s.source}`, expected: false };
+        }),
+      );
   }
 
   // A dependency cycle over required relations: a failure on one reaches all

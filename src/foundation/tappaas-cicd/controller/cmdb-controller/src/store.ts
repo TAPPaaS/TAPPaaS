@@ -56,6 +56,10 @@ export interface Report {
   assessment?: boolean;
   objects?: ReportObject[];
   relations?: ReportRelation[];
+  // The report names every relation of `type` from `from` (ADR-040 D4): an
+  // open one it does not name has ended, and is closed. One an operator
+  // recorded is left alone.
+  complete?: { type: string; from: Ref }[];
 }
 
 export interface Problem {
@@ -272,6 +276,8 @@ export class Store {
       run.prescan(objects);
       for (let i = 0; i < objects.length; i++) await run.object(i, objects[i]);
       for (let i = 0; i < relations.length; i++) await run.relation(i, relations[i]);
+      const complete = Array.isArray(r.complete) ? r.complete : [];
+      for (let i = 0; i < complete.length; i++) await run.complete(i, complete[i]);
       if (run.problems.length) {
         throw new ReportError(run.problems.some((p) => p.candidates || /conflict|immutable|matches/.test(p.error)) ? 409 : 422, run.problems);
       }
@@ -468,7 +474,7 @@ export class Store {
     const limit = Number.isInteger(body.limit) ? Number(body.limit) : 10000;
     const rows = (
       await this.pg.query(
-        `SELECT o.id, o.class, o.name, o.display_name, o.created, o.ended, o.last_seen, o.recorded, c.physical
+        `SELECT o.id, o.class, o.name, o.display_name, o.created, o.ended, o.last_seen, o.seen, o.recorded, c.physical
            FROM object o JOIN class c ON c.name = o.class
           WHERE ${conds.join(" AND ")}
           ORDER BY o.class, o.name LIMIT ${limit}`,
@@ -486,6 +492,7 @@ export class Store {
       created: r.created,
       ended: r.ended,
       lastSeen: r.last_seen,
+      seen: r.seen ?? {}, // when each source last reported it
       attributes: Object.fromEntries((attrs.get(String(r.id)) ?? []).map((a) => [a.name, a.value])),
     }));
   }
@@ -884,6 +891,7 @@ class ReportRun {
   problems: Problem[] = [];
   touched = new Set<string>();
   relationIds = new Set<number>();
+  private named = new Set<string>(); // type|from|to of every relation this report put
   drift = false;
   results: ReportResult["objects"] = [];
   private refs = new Map<string, Target>();
@@ -1507,5 +1515,21 @@ class ReportRun {
       return;
     }
     await this.putRelation(r.type, from.id, to.id, isObj(r.attributes) ? r.attributes : {}, this.allRecorded || r.recorded === true);
+    this.named.add(`${r.type}|${from.id}|${to.id}`);
+  }
+
+  /** A complete statement: close what the report no longer names. */
+  async complete(i: number, c: { type: string; from: Ref }): Promise<void> {
+    const at = `complete[${i}]`;
+    if (!isObj(c) || typeof c.type !== "string" || !this.mm.relationEnds(c.type).length) return this.problem(at, "a complete names a relation type and a from");
+    const from = await this.target(`${at}.from`, c.from, null);
+    if (!from) return;
+    const open = (await this.q("SELECT id, to_object FROM relation WHERE type = $1 AND from_object = $2 AND upper_inf(validity) AND NOT recorded", [c.type, from.id])).rows;
+    for (const x of open) {
+      if (this.named.has(`${c.type}|${from.id}|${String(x.to_object)}`)) continue;
+      await this.closeRelation(Number(x.id));
+      this.touched.add(from.id);
+      this.touched.add(String(x.to_object));
+    }
   }
 }

@@ -26,6 +26,8 @@ export interface RescanResult {
   error?: string;
   stderr?: string; // the last lines it wrote, when it failed
   fallback?: boolean; // its report verb does not know --discover (D15): asked plainly
+  reached?: number; // the sweep: the devices it reported this time
+  missed?: string[]; // the sweep: the devices it reported before and not this time ("class/name")
 }
 
 export interface CommandResult {

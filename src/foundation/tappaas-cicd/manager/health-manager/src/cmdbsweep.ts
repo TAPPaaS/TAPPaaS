@@ -24,7 +24,7 @@ export interface SweepDifference {
 export interface SweepRecord {
   time: string;
   counts: { expected: number; new?: number; words?: number; drift: number; desired: number; unmanaged: number; missing: number; unread: number; cycles?: number; sourcesFailed: number };
-  sources?: { source: string; ok: boolean }[];
+  sources?: { source: string; ok: boolean; reached?: number; missed?: string[] }[];
   differences?: SweepDifference[];
 }
 

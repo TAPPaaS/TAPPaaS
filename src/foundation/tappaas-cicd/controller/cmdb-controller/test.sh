@@ -572,6 +572,17 @@ check "every field a discover report sends is declared" "true" "$(jq -r '.delive
 out="$(cmdb report --json <<<'{"source":"switch-manager","objects":[{"class":"port","name":"p1","attributes":{"asset":"deep-srv","link":"down","seen":[],"poe":{"draw":0}}},{"class":"device","name":"sw9","attributes":{"uptime":200,"clients":[{"mac":"bb"}]}}]}')"
 check "what moves on every read is no drift" "0" "$(jq '[.result.objects[].drift[]] | length' <<<"${out}")"
 
+echo "== a complete report closes what it no longer names =="
+cmdb report --json >/dev/null <<<'{"source":"module-manager","objects":[{"ref":"a","class":"vm","name":"cp-app"},{"ref":"s1","class":"service","name":"cp:one","attributes":{"onNode":{"ref":"a"}}},{"ref":"s2","class":"service","name":"cp:two","attributes":{"onNode":{"ref":"a"}}},{"ref":"s3","class":"service","name":"cp:three","attributes":{"onNode":{"ref":"a"}}}],"relations":[{"type":"depends-on","from":{"ref":"a"},"to":{"ref":"s1"}},{"type":"depends-on","from":{"ref":"a"},"to":{"ref":"s2"}}]}'
+cmdb report --json >/dev/null <<<'{"source":"recorded","relations":[{"type":"depends-on","from":{"class":"vm","name":"cp-app"},"to":{"class":"service","name":"cp:three"}}]}'
+check "before: two observed dependencies and a recorded one" "cp:one,cp:three,cp:two" \
+    "$(cmdb relations --type depends-on --json | jq -r '[.[] | select(.from.name == "cp-app") | .to.name] | sort | join(",")')"
+cmdb report --json >/dev/null <<<'{"source":"module-manager","objects":[{"ref":"a","class":"vm","name":"cp-app"}],"relations":[{"type":"depends-on","from":{"ref":"a"},"to":{"class":"service","name":"cp:one"}}],"complete":[{"type":"depends-on","from":{"ref":"a"}}]}'
+check "a complete report ends the dependency it dropped; an operator's recorded one stays" "cp:one,cp:three" \
+    "$(cmdb relations --type depends-on --json | jq -r '[.[] | select(.from.name == "cp-app") | .to.name] | sort | join(",")')"
+check "an object's query row says when each source last saw it" "true" \
+    "$(cmdb query vm --json | jq -r '.[] | select(.name == "cp-app") | .seen["module-manager"] != null')"
+
 echo "== the discovery sweep (D15) =="
 # A clean store and config/ of its own: the fixture site. The sources are stubs
 # that report from files the test rewrites, module-manager drift a stub too, the
@@ -726,6 +737,20 @@ check "…counted, and the sweep warns" "1 1" "$(jq -r '"\(.counts.cycles) \(.ex
 cmdb report --json >/dev/null <<<'{"source":"module-manager","relations":[{"type":"depends-on","from":{"class":"machine","name":"cy-node"},"to":{"class":"service","name":"cy:svc"},"end":true}]}'
 out="$(sweep)"
 check "…and is gone once the relation ends" "0" "$(jq -r '.counts.cycles' <<<"${out}")"
+
+# A discover source says which devices it reached: one it reported before and
+# not now is listed; a source that reached none of them has failed, whatever
+# it exited with.
+jq '.objects += [{"class":"server","name":"dev-1"},{"class":"server","name":"dev-2"}]' "${SW}/site.json" >"${SW}/s2" && cp "${SW}/s2" "${SW}/site.json"
+out="$(sweep)"
+check "a source that reached its devices: reached 2, none missed" "2 0" "$(jq -r '.sources[] | select(.source == "site-src") | "\(.reached) \(.missed | length)"' <<<"${out}")"
+jq '.objects |= map(select(.name != "dev-2"))' "${SW}/site.json" >"${SW}/s2" && cp "${SW}/s2" "${SW}/site.json"
+out="$(sweep)"
+check "a device it no longer reached is a difference of its own; the source stays ok" "unread not reached by site-src true true" \
+    "$(jq -r '[.differences[] | select(.name == "dev-2")][0] | "\(.kind) \(.after) \(.expected == false)"' <<<"${out}") $(jq -r '.sources[] | select(.source == "site-src") | .ok' <<<"${out}")"
+jq '.objects |= map(select(.class != "server"))' "${SW}/site.json" >"${SW}/s2" && cp "${SW}/s2" "${SW}/site.json"
+out="$(sweep)"
+check "a source that ran and reached none of its devices has failed" "false 2" "$(jq -r '"\(.sources[] | select(.source == "site-src") | .ok) \(.exitCode)"' <<<"${out}")"
 
 echo "== the store's invariant =="
 _ov="$(sql "INSERT INTO attribute (object, name, value, source, validity)

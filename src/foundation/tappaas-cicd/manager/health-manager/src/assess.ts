@@ -12,13 +12,13 @@
 // flappingHeld). Maintenance is the open window's that covers the object.
 
 import { AlertItem } from "./alerts";
-import { CmdbItem, CmdbRel, Condition, RootCause, RANK, SOURCE, SiteIndex, conditionsOf, failing } from "./assess-model";
+import { CmdbItem, CmdbRel, Condition, DERIVED, RootCause, RANK, SOURCE, SiteIndex, conditionsOf, failing, isDerivedKind } from "./assess-model";
 import { OBSERVATION_REASONS, fromObservations } from "./assess-observations";
 import { Finding, GATES, fromAlerts, fromCve, fromGates, fromSweep, fromThresholds } from "./assess-sources";
-import { SweepRecord } from "./cmdbsweep";
+import { SWEEP_MAX_AGE_MS, SweepRecord } from "./cmdbsweep";
 import { derive } from "./derive";
 import { RulesDoc } from "./rules";
-import { ScanStatus } from "./security";
+import { STALE_DAYS, ScanStatus } from "./security";
 import { SiteSecurity, siteSecurity } from "./site-score";
 import { CheckResult } from "./types";
 import { CmdbReport } from "../../../lib/ts/src/cmdb";
@@ -78,8 +78,9 @@ export interface AssessResult {
   report: CmdbReport | null; // null: nothing to write
 }
 
-// The source that raised a reason: the one that can take it back. A pool's usage
-// is a threshold's too, and that one runs every time.
+// The source that raised a reason, for a condition stored before the owner
+// was: the one that can take it back. A pool's usage is a threshold's too, and
+// that one runs every time.
 function ownerOf(reason: string): string {
   if (reason.startsWith("alert-")) return "alerts";
   if (reason.startsWith("sweep-")) return "sweep";
@@ -88,6 +89,36 @@ function ownerOf(reason: string): string {
   if (reason.startsWith("perf-") || reason === "capacity-trend") return PERF_OWNER;
   if (OBSERVATION_REASONS.includes(reason)) return "observations";
   return Object.entries(GATES).find(([, g]) => g.reason === reason)?.[0] ?? reason;
+}
+const owner = (c: Condition): string => c.owner ?? ownerOf(c.reason);
+
+// How long a judgement holds without its owner looking again. Past it an ok,
+// or a failure (after a day at least), is unknown: nobody knows any more.
+export const HOUR = 3600 * 1000;
+const UNCHECKED_AFTER: Record<string, number> = { sweep: SWEEP_MAX_AGE_MS + HOUR, cve: (STALE_DAYS + 1) * 24 * HOUR };
+export const maxAge = (own: string, failingToo: boolean): number => Math.max(UNCHECKED_AFTER[own] ?? HOUR, failingToo ? 24 * HOUR : 0);
+// An unknown nobody has looked at for a week is no judgement at all: dropped.
+const FORGET_UNKNOWN_MS = 7 * 24 * HOUR;
+
+// An input not observed for this long is stale: a judgement over it is unknown.
+// Two nightly discoveries: what the 5-minute refresh reports is never this old.
+export const STALE_INPUT_MS = 48 * HOUR;
+
+/** When a source last reported the object; null when none ever did. */
+export function observedAt(o: CmdbItem): number | null {
+  const ts = [...Object.values(o.seen ?? {}), ...(o.lastSeen ? [o.lastSeen] : [])].map((t) => Date.parse(t)).filter((t) => !Number.isNaN(t));
+  return ts.length ? Math.max(...ts) : null;
+}
+
+/** A judgement over an object whose observations are stale is unknown. */
+export function staleToUnknown(fs: Finding[], idx: SiteIndex, nowMs: number): Finding[] {
+  return fs.map((f) => {
+    const o = idx.byId.get(f.object);
+    const at = o ? observedAt(o) : null;
+    if (at === null || nowMs - at <= STALE_INPUT_MS || f.status === "unknown") return f;
+    const was = f.status === "ok" ? "" : `; it was ${f.status}: ${f.message}`;
+    return { ...f, status: "unknown", reason: "not-observed", message: `not observed since ${new Date(at).toISOString()}${was}` };
+  });
 }
 
 function worstOf(fs: Finding[]): Finding {
@@ -101,11 +132,12 @@ function worstOf(fs: Finding[]): Finding {
 
 const blank = (f: Finding, now: string): Condition => ({
   type: f.type, status: f.status, reason: f.reason, message: f.message,
-  since: now, lastChecked: now, source: SOURCE, derived: false, rootCause: null, acknowledged: null, maintenance: null,
+  since: now, lastChecked: now, source: SOURCE, owner: f.owner, derived: false, rootCause: null, acknowledged: null, maintenance: null,
 });
 
 /** What each object's source conditions are now: `fresh` over what was stored. */
 export function settle(priorOf: (id: string) => Condition[], ids: Iterable<string>, findings: Finding[], looked: (owner: string, id: string) => boolean, now: string): Map<string, Condition[]> {
+  const nowMs = Date.parse(now);
   const by = new Map<string, Map<string, Finding[]>>();
   for (const f of findings) {
     if (!by.has(f.object)) by.set(f.object, new Map());
@@ -116,15 +148,26 @@ export function settle(priorOf: (id: string) => Condition[], ids: Iterable<strin
   for (const id of new Set([...ids, ...by.keys()])) {
     const cs: Condition[] = [];
     const fresh = by.get(id) ?? new Map<string, Finding[]>();
-    const prior = priorOf(id).filter((c) => c.type !== "impact" && c.reason !== "roll-up" && c.reason !== "follows");
+    // What derive computes is computed again, whole: none of it is carried.
+    // Nor is an ok that only an explained symptom ever had.
+    const prior = priorOf(id).filter((c) => !isDerivedKind(c) && !(c.derived && c.status === "ok"));
     for (const p of prior) {
       const fs = fresh.get(p.type);
-      const again = !failing(p) || looked(ownerOf(p.reason), id);
+      const own = owner(p);
+      const again = looked(own, id);
       if (fs) {
         const f = worstOf(fs);
-        cs.push(!again && RANK[f.status] < RANK[p.status] ? { ...p } : { ...blank(f, now), since: p.since });
-      } else if (failing(p) && again) cs.push({ ...p, status: "ok", reason: "ok", message: "", lastChecked: now });
-      else cs.push({ ...p });
+        cs.push(!again && failing(p) && RANK[f.status] < RANK[p.status] ? { ...p } : { ...blank(f, now), since: p.since });
+      } else if (again) {
+        // Its owner looked and has nothing to say: a failure is over, and an ok
+        // or unknown nobody gives any more is no judgement.
+        if (failing(p)) cs.push({ ...p, owner: own, status: "ok", reason: "ok", message: "", lastChecked: now });
+      } else {
+        const age = nowMs - Date.parse(p.lastChecked);
+        if (p.status !== "unknown" && age > maxAge(own, failing(p))) {
+          cs.push({ ...p, owner: own, status: "unknown", reason: "not-checked", message: `not checked since ${p.lastChecked}${p.message ? `; it was ${p.status}: ${p.message}` : ""}` });
+        } else if (!(p.status === "unknown" && age > FORGET_UNKNOWN_MS)) cs.push({ ...p });
+      }
       fresh.delete(p.type);
     }
     for (const fs of fresh.values()) cs.push(blank(worstOf(fs), now));
@@ -146,7 +189,8 @@ function stamp(c: Condition, p: Condition | undefined, now: string, nowMs: numbe
   return {
     ...c,
     since: held ? p.since : now,
-    message: held ? p.message : c.message,
+    // A derived message (a roll-up's count) is recomputed every run.
+    message: held && c.owner !== DERIVED ? p.message : c.message,
     acknowledged: ack,
     maintenance: mnt,
     ...(p.flapping !== undefined ? { flapping: p.flapping } : {}),
@@ -179,10 +223,10 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
   const rec = t("sweep", () => io.sweep());
   findings.push(...fromSweep(rec, nowMs, idx));
   ran.add("sweep");
-  findings.push(...t("thresholds", () => fromThresholds(idx, nowMs)));
+  findings.push(...t("thresholds", () => staleToUnknown(fromThresholds(idx, nowMs), idx, nowMs)));
   ran.add("thresholds");
   const ended = t("cmdb ended", () => io.ended());
-  findings.push(...t("observations", () => fromObservations(idx, ended, nowMs)));
+  findings.push(...t("observations", () => staleToUnknown(fromObservations(idx, ended, nowMs), idx, nowMs)));
   ran.add("observations");
   const reader = io.metrics ? t("metrics", () => io.metrics!()) : null;
   if (reader) {
@@ -220,9 +264,10 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
     const byType = new Map(prior.map((c) => [c.type as string, c]));
     const made = d.conditions.get(o.id) ?? [];
     const next = made.map((c) => stamp(c, byType.get(c.type), time, nowMs, windows.get(o.id)));
-    // What was impact or a roll-up and no longer is: over, not gone.
+    // What was a failing impact or roll-up and no longer is: over, not gone.
+    // One that was ok already is simply not computed any more.
     for (const p of prior) {
-      if (next.some((c) => c.type === p.type) || !p.derived) continue;
+      if (next.some((c) => c.type === p.type) || !p.derived || !failing(p)) continue;
       next.push(stamp({ ...p, status: "ok", reason: "ok", message: "", rootCause: null, lastChecked: time }, p, time, nowMs, windows.get(o.id)));
     }
     next.sort((x, y) => typeOrder(x) - typeOrder(y));

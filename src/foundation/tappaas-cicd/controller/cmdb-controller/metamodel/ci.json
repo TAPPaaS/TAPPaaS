@@ -40,10 +40,11 @@
               "since": { "type": "string", "description": "When the status or reason last changed." },
               "lastChecked": { "type": "string", "volatile": true, "description": "When it was last confirmed: rewritten in place, never history." },
               "source": { "type": "string" },
+              "owner": { "type": "string", "description": "The source that raised it, which alone takes it back: a gate, alerts, sweep, thresholds, observations, cve, performance; derive for impact, roll-ups and follows." },
               "derived": { "type": "boolean", "description": "It follows from another object's failure (rootCause), or is a roll-up: not a failure of its own." },
               "rootCause": { "type": ["string", "null"], "description": "The id of the object it follows from." },
               "acknowledged": { "type": ["object", "null"], "properties": { "by": { "type": "string" }, "note": { "type": "string" }, "until": { "type": "string" }, "sticky": { "type": "boolean" } }, "description": "An operator's acknowledgement: it keeps its status and stops counting." },
-              "maintenance": { "type": ["object", "null"], "properties": { "until": { "type": "string" }, "note": { "type": "string" } }, "description": "A maintenance window: transitions are recorded, not counted." },
+              "maintenance": { "type": ["object", "null"], "properties": { "until": { "type": "string" }, "note": { "type": "string" }, "by": { "type": "string" } }, "description": "The open maintenance window that covers the object (health-manager assess, from the window files): transitions are recorded, not counted." },
               "flapping": { "description": "health-manager emit's: assess carries it over." },
               "flappingHeld": { "description": "health-manager emit's: assess carries it over." }
             }

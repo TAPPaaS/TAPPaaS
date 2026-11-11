@@ -114,6 +114,9 @@ function fixture(): string {
   const sso = one("service", "identity:sso")?.ref;
   check(rel("depends-on", bk?.ref, sso), "an application's dependency is on the app");
   check(!rel("depends-on", m?.ref, sso), "…never on its host, where the service may run");
+  const complete = (r.complete ?? []) as Obj[];
+  check(complete.some((c) => c.type === "depends-on" && c.from?.ref === id?.ref) && complete.some((c) => c.type === "depends-on" && c.from?.ref === bk?.ref), "the report is complete for each instance's depends-on: a dropped dependency ends");
+  check(complete.some((c) => c.type === "depends-on" && c.from?.ref === m?.ref), "…and for an application's host, so a dependency an earlier release put there ends");
 
   const sm = one("manager", "site-manager");
   check(sm?.attributes?.onNode?.ref === one("vm", "tappaas-cicd")?.ref && sm?.attributes?.version === "1.2.0", "a manager runs on the instance that brings it");

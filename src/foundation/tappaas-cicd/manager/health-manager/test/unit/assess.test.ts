@@ -88,7 +88,7 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check((io.written[0].objects ?? []).every((o) => typeof o.id === "string"), "…naming its objects by id");
   check(Object.keys(GATES).length === 20, "every gate that is no source of its own is mapped");
   const cs = got(r, nc, "operational")!;
-  check(Object.keys(cs).sort().join() === "acknowledged,derived,lastChecked,maintenance,message,reason,rootCause,since,source,status,type", "a condition has D1's fields");
+  check(Object.keys(cs).sort().join() === "acknowledged,derived,lastChecked,maintenance,message,owner,reason,rootCause,since,source,status,type", "a condition has D1's fields, and the owner that takes it back");
   const a = (io.written[0].objects ?? []).find((o) => o.id === site.id)?.attributes as { rootCauses: unknown[]; assessment: { time: string; gates: unknown[] } };
   check(Array.isArray(a.rootCauses) && a.assessment.gates.length === 16 && a.assessment.time === NOW.toISOString(), "the site carries the root causes and the run");
 }
@@ -313,6 +313,75 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check(all.objects.every((o) => o.conditions.every((c) => c.maintenance !== null)), "a site window covers every object");
   io.windows = () => [w(["network"], inSec(30))];
   check(got(assess(io, {}, NOW), nc, "operational")?.maintenance === null, "a window on another guest covers nothing here");
+}
+
+// ── ageing: stale inputs, unconfirmed oks, frozen counts ──
+{
+  // Switch ports last reported eleven days ago: their link is no judgement.
+  const s = fresh();
+  const p2 = obj("port", "nic0");
+  const items = [...s.items.filter((o) => o.id !== port.id), { ...port, attributes: { link: "up" }, lastSeen: "2026-10-19T12:58:00.000Z", seen: { "switch-manager": "2026-10-19T12:58:00.000Z" } }, { ...p2, attributes: { link: "up" }, lastSeen: NOW.toISOString() }];
+  const rels = [...s.rels, rel("connects", port, p2)];
+  const io = new StubIO(items, rels);
+  const r = assess(io, {}, NOW);
+  check(got(r, port, "operational")?.status === "unknown" && got(r, port, "operational")?.reason === "not-observed", "a port last observed eleven days ago is unknown, not green");
+  check(/not observed since 2026-10-19/.test(got(r, port, "operational")?.message ?? ""), "…and says since when");
+  check(got(r, p2, "operational")?.status === "ok", "the other end, observed now, is judged");
+  // The reverse: a port last seen down before its switch went away.
+  const items2 = items.map((o) => ({ ...o, attributes: o.id === port.id ? { link: "down" } : { ...o.attributes, conditions: undefined } }));
+  const down = got(assess(new StubIO(items2, rels), {}, NOW), port, "operational");
+  check(down?.status === "unknown" && /it was critical/.test(down?.message ?? ""), "a stale port that was down is unknown too, saying what it was");
+}
+{
+  // An ok whose owner stops looking ages to unknown; one it no longer gives goes.
+  const s = fresh();
+  const io = new StubIO(s.items, s.rels);
+  const mod = { kind: "module" as const, name: "nextcloud" };
+  io.checks = () => [gate("disk-threshold", "pass", [], { judged: [mod] })];
+  check(got(assess(io, {}, NOW), nc, "capacity")?.status === "ok", "a gate's ok is stored");
+  io.checks = () => [];
+  check(got(assess(io, {}, later(30)), nc, "capacity")?.status === "ok", "the gate did not run: the ok holds a while");
+  const aged = got(assess(io, {}, later(90)), nc, "capacity");
+  check(aged?.status === "unknown" && aged?.reason === "not-checked" && aged?.owner === "disk-threshold", "…and after an hour nobody confirmed is unknown, owned still");
+  io.checks = () => [gate("disk-threshold", "pass", [], { judged: [mod] })];
+  check(got(assess(io, {}, later(95)), nc, "capacity")?.status === "ok", "the gate looks again: ok");
+  // A failure the gate cannot see (an unreachable guest) holds for a day.
+  io.checks = () => [gate("disk-threshold", "fail", [], { findings: [{ status: "fail", text: "full", subject: mod }], judged: [mod] })];
+  assess(io, {}, later(100));
+  io.checks = () => [gate("disk-threshold", "fail", [], { judged: [] })];
+  check(got(assess(io, {}, later(300)), nc, "capacity")?.status === "critical", "a failure its gate could not look at stands for hours");
+  check(got(assess(io, {}, later(100 + 25 * 60)), nc, "capacity")?.status === "unknown", "…and is unknown after a day unchecked");
+}
+{
+  // A condition whose reason no table knows (stored by a later release) is
+  // taken back by the owner stored with it.
+  const s = fresh();
+  const vm = s.items.find((o) => o.id === nc.id)!;
+  vm.attributes.conditions = [cond("capacity", "critical", "disk-renamed", { owner: "disk-threshold" })];
+  const io = new StubIO(s.items, s.rels);
+  const mod = { kind: "module" as const, name: "nextcloud" };
+  io.checks = () => [gate("disk-threshold", "pass", [], { judged: [mod] })];
+  check(got(assess(io, {}, NOW), nc, "capacity")?.status === "ok", "a renamed reason clears: the owner is on the condition");
+}
+{
+  // A roll-up's count is recomputed every run, and an ok one is not carried.
+  const s = fresh();
+  const io = new StubIO(s.items, s.rels);
+  const mod = { kind: "module" as const, name: "nextcloud" };
+  io.checks = () => [gate("disk-threshold", "fail", [], { findings: [{ status: "fail", text: "full", subject: mod }], judged: [mod] })];
+  const one = got(assess(io, {}, NOW), site, "capacity");
+  const net2 = { kind: "module" as const, name: "network" };
+  io.checks = () => [gate("disk-threshold", "fail", [], { findings: [{ status: "fail", text: "full", subject: mod }, { status: "fail", text: "full", subject: net2 }], judged: [mod, net2] })];
+  const two = got(assess(io, {}, later(5)), site, "capacity");
+  check(one?.status === "critical" && two?.status === "critical" && one.message !== two.message, `a roll-up's count follows its members (${one?.message} → ${two?.message})`);
+  io.checks = () => [gate("disk-threshold", "pass", [], { judged: [mod, net2] })];
+  const ok1 = got(assess(io, {}, later(10)), site, "capacity");
+  const ok2 = got(assess(io, {}, later(15)), site, "capacity");
+  check(/^1 of/.test(ok1?.message ?? "") && ok2?.derived === true && ok2.owner === "derive", `…and drops when members recover, owned by derive (${ok1?.message})`);
+  const vm = s.items.find((o) => o.id === nc.id)!;
+  vm.attributes.conditions = [];
+  s.items.find((o) => o.id === net.id)!.attributes.conditions = [];
+  check(got(assess(io, {}, later(20)), site, "drift")?.message !== "3 of 3 ok" , "a roll-up nobody computes is not carried as a judgement of its own");
 }
 
 // ── what the operator set ──

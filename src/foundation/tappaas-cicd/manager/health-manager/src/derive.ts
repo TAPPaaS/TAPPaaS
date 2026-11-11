@@ -27,7 +27,7 @@
 // A cable has no direction, so two ports that each see the link down reach each
 // other: the one whose transition came first is the root.
 
-import { CmdbItem, CmdbRel, Condition, RANK, RootCause, SOURCE, failing, silenced } from "./assess-model";
+import { CmdbItem, CmdbRel, Condition, DERIVED, RANK, RootCause, SOURCE, failing, silenced } from "./assess-model";
 import { RulesDoc } from "./rules";
 import { ConditionStatus, FOLLOWS, HealthRule, dependantMatches } from "../../../lib/ts/src/health-rules";
 
@@ -205,7 +205,7 @@ function rollUp(own: Condition[], members: Condition[][], now: string, nowMs: nu
     out.set(type, {
       type, status: worst, reason: worst === "ok" ? "ok" : "roll-up",
       message: `${n} of ${counted.length} members ${worst}`,
-      since: now, lastChecked: now, source: SOURCE, derived: true, rootCause: null,
+      since: now, lastChecked: now, source: SOURCE, owner: DERIVED, derived: true, rootCause: null,
       acknowledged: had?.acknowledged ?? null, maintenance: had?.maintenance ?? null,
     });
   }
@@ -239,7 +239,7 @@ function follow(objects: CmdbItem[], out: Map<string, Condition[]>, relations: C
     const src = byId.get(up)!;
     out.set(id, [...(out.get(id) ?? []), {
       type: "operational", status, reason: "follows", message: `follows ${src.class} ${src.name}`,
-      since: now, lastChecked: now, source: SOURCE, derived: true, rootCause: failing({ status }) ? worst.rootCause ?? up : null,
+      since: now, lastChecked: now, source: SOURCE, owner: DERIVED, derived: true, rootCause: failing({ status }) ? worst.rootCause ?? up : null,
       acknowledged: null, maintenance: null,
     }]);
   };
@@ -301,7 +301,7 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
       message: part
         ? `${count(part.down)} of ${count(part.of)} in ${part.group} down: ${label(part.member)}${part.member === root.obj ? "" : ` (${label(root.obj)})`}: ${root.cond.message}`
         : `${label(root.obj)}: ${root.cond.message}`,
-      since: now, lastChecked: now, source: SOURCE, derived: true, rootCause: root.obj,
+      since: now, lastChecked: now, source: SOURCE, owner: DERIVED, derived: true, rootCause: root.obj,
       acknowledged: null, maintenance: null,
     }]);
   }
