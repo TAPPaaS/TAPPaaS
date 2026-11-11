@@ -362,6 +362,16 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check(got(assess(io, {}, later(100 + 25 * 60)), nc, "capacity")?.status === "unknown", "…and is unknown after a day unchecked");
 }
 {
+  // An ok stored before the owner was (reason "ok" names nobody), that no
+  // source gives any more, goes: it is not aged into an unknown.
+  const s = fresh();
+  s.items.find((o) => o.id === nc.id)!.attributes.conditions = [cond("drift", "ok", "ok", { lastChecked: "2026-10-01T00:00:00.000Z" })];
+  s.items.find((o) => o.id === cluster.id)!.attributes.conditions = [cond("capacity", "ok", "ok", { lastChecked: "2026-10-01T00:00:00.000Z", message: "3 of 3 ok" })];
+  const r = assess(new StubIO(s.items, s.rels), {}, NOW);
+  check(got(r, nc, "drift") === undefined || got(r, nc, "drift")?.status !== "unknown", "a legacy ok nobody gives is dropped, not unknown");
+  check(got(r, cluster, "capacity")?.message !== "3 of 3 ok", "…and a frozen roll-up count with it");
+}
+{
   // A condition whose reason no table knows (stored by a later release) is
   // taken back by the owner stored with it.
   const s = fresh();

@@ -50,7 +50,7 @@ function fixture(): string {
   const w = (f: string, v: unknown): void => writeFileSync(join(cfg, `${f}.json`), JSON.stringify(v));
   w("site", { name: "hrossen" });
   w("tappaas1", { kind: "machine", moduleSource: src("pvehost", ["nfs"]), version: "0.3.0", address: "tappaas1.mgmt.internal", environment: "mgmt", stack: "foundation" });
-  w("cluster", { kind: "application", moduleSource: src("cluster", ["vm", "ha"]), version: "0.8.0", stack: "foundation" });
+  w("cluster", { kind: "application", moduleSource: src("cluster", ["vm", "ha"]), version: "0.8.0", stack: "foundation", dependsOn: ["cluster:ha"] });
   w("backup", { kind: "application", moduleSource: src("backup", ["vm"]), version: "0.4.0", node: "tappaas1", dependsOn: ["identity:sso"] });
   w("tappaas-cicd", { kind: "vm", moduleSource: src("tappaas-cicd"), version: "1.2.0", vmid: 110, node: "tappaas1", environment: "mgmt" });
   w("identity", { kind: "vm", moduleSource: src("identity", ["sso"]), version: "0.5.2", vmid: 140, node: "tappaas1", environment: "mgmt", dependsOn: ["cluster:vm", "backup:vm", "nowhere:x"] });
@@ -114,6 +114,7 @@ function fixture(): string {
   const sso = one("service", "identity:sso")?.ref;
   check(rel("depends-on", bk?.ref, sso), "an application's dependency is on the app");
   check(!rel("depends-on", m?.ref, sso), "…never on its host, where the service may run");
+  check(!(r.relations ?? []).some((x: Obj) => x.type === "depends-on" && x.from?.ref === cl?.ref), "a module never depends on a service it provides itself");
   const complete = (r.complete ?? []) as Obj[];
   check(complete.some((c) => c.type === "depends-on" && c.from?.ref === id?.ref) && complete.some((c) => c.type === "depends-on" && c.from?.ref === bk?.ref), "the report is complete for each instance's depends-on: a dropped dependency ends");
   check(complete.some((c) => c.type === "depends-on" && c.from?.ref === m?.ref), "…and for an application's host, so a dependency an earlier release put there ends");

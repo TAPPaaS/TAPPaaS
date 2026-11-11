@@ -151,6 +151,9 @@ export function moduleObservation(configDir: string, guests: RunningGuest[]): Cm
     for (const dep of m.dependsOn ?? []) {
       const list = b.services.get(dep);
       if (!list) continue;
+      // A module that provides the service itself does not depend on it: that
+      // would be a dependency cycle of one.
+      if (list.some((x) => x.provider === m.name)) continue;
       b.relations.push({ type: "depends-on", from, to: { ref: providerOf(list, dep.split(":")[0]) } });
     }
   }

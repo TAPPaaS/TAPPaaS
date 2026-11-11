@@ -162,6 +162,10 @@ export function settle(priorOf: (id: string) => Condition[], ids: Iterable<strin
         // Its owner looked and has nothing to say: a failure is over, and an ok
         // or unknown nobody gives any more is no judgement.
         if (failing(p)) cs.push({ ...p, owner: own, status: "ok", reason: "ok", message: "", lastChecked: now });
+      } else if (!p.owner && p.status === "ok") {
+        // An ok stored before conditions carried their owner, that no source
+        // gives now: "ok" names nobody who could confirm it, so it is no
+        // judgement (absent reads as ok, and nothing is told).
       } else {
         const age = nowMs - Date.parse(p.lastChecked);
         if (p.status !== "unknown" && age > maxAge(own, failing(p))) {
