@@ -23,7 +23,8 @@ import { closeSync, existsSync, openSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 import { cloneObjects, endedBeforeEmit, reconcileAcks, silenced } from "./ack";
 import { Condition, HealthCmdb, HealthObject, Period, RootEntry, Status, conditionsOf, rootsOf, rootsOfSite, worse } from "./emit-cmdb";
-import { EventKind, HealthEvent, Journal, RootCauseEvent, TransitionEvent, eventLine, levelChanged, levelRose } from "./events";
+import { EventKind, HealthEvent, Journal, TransitionEvent, eventLine, levelChanged, levelRose } from "./events";
+import { Deliver, Notice, NoticeEvent, NoticePlan, closeMail, noticeKey, openMail, planNotices, siteNotify, wantedNotices } from "./notices";
 import { renameGuarded, simulating, unlinkGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 
 export const CURSOR_FILE = ".health-emit-cursor";
@@ -52,12 +53,13 @@ export interface Cursor {
   time: string;
   change: number | null;
   roots: Record<string, RootSeen>; // by <ci>:<type>
+  notices?: Record<string, Notice>; // the critical-root notices open (notices.ts), by <ci>:<type>
 }
 
 export function readCursor(configDir: string): Cursor | null {
   try {
     const c = JSON.parse(readFileSync(join(configDir, CURSOR_FILE), "utf8")) as Cursor;
-    return typeof c.time === "string" && !Number.isNaN(Date.parse(c.time)) ? { time: c.time, change: c.change ?? null, roots: c.roots ?? {} } : null;
+    return typeof c.time === "string" && !Number.isNaN(Date.parse(c.time)) ? { time: c.time, change: c.change ?? null, roots: c.roots ?? {}, notices: c.notices ?? {} } : null;
   } catch {
     return null;
   }
@@ -144,6 +146,7 @@ export interface EmitInput {
 export interface EmitResult {
   events: HealthEvent[];
   cursor: Cursor;
+  notices: NoticePlan; // what runEmit delivers: notices to open, and to close
 }
 
 const rootKey = (id: string, type: string | undefined): string => `${id}:${type ?? ""}`;
@@ -168,17 +171,6 @@ function rootSet(objects: HealthObject[], roots: RootEntry[]): Record<string, Ro
       .map((x) => x.id)
       .sort();
     out[rootKey(r.id, r.type)] = { ci: r.id, class: o?.class ?? "", name: o?.name ?? "", type: r.type ?? "", symptoms, impacted: byClass(symptoms, objects) };
-  }
-  return out;
-}
-
-function rootEvents(was: Record<string, RootSeen>, now: Record<string, RootSeen>, at: string): RootCauseEvent[] {
-  const out: RootCauseEvent[] = [];
-  for (const [k, r] of Object.entries(now)) {
-    if (was[k]?.symptoms.join() !== r.symptoms.join()) out.push({ event: "rootcause", ...r, impacted: r.impacted ?? "nothing", cleared: false, at });
-  }
-  for (const [k, r] of Object.entries(was)) {
-    if (!now[k]) out.push({ event: "rootcause", ...r, symptoms: [], impacted: "nothing", cleared: true, at });
   }
   return out;
 }
@@ -294,8 +286,12 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
     correlate(told);
   }
 
-  const events: HealthEvent[] = [...gone, ...r.events, ...told, ...rootEvents(seen, now, at)];
-  return { events, cursor: { time: at, change, roots: now }, writes: dirty, objects };
+  // The critical-root notices, from the set as it is now (after the acks above).
+  const impactedOf = (k: string): string => now[k]?.impacted ?? now[`${k.slice(0, k.lastIndexOf(":"))}:`]?.impacted ?? "nothing";
+  const notices = planNotices(cursor?.notices ?? {}, wantedNotices(objects, roots, impactedOf, input.now), objects, roots, input.now);
+
+  const events: HealthEvent[] = [...gone, ...r.events, ...told];
+  return { events, cursor: { time: at, change, roots: now, notices: cursor?.notices ?? {} }, notices, writes: dirty, objects };
 }
 
 /** One run: under a lock, as the timer and the alert receiver may overlap. false
@@ -324,12 +320,34 @@ export function withEmitLock(configDir: string, fn: () => void): boolean {
   return true;
 }
 
+/** Deliver the plan's notices; the cursor's open notices as they are after it.
+ *  One that did not go out is tried again on the next run. */
+export function deliverNotices(plan: NoticePlan, open: Record<string, Notice>, deliver: Deliver, at: string): { open: Record<string, Notice>; events: NoticeEvent[] } {
+  const next = { ...open };
+  const events: NoticeEvent[] = [];
+  const base = (n: Omit<Notice, "opened">) => ({ event: "notice" as const, ci: n.ci, class: n.class, name: n.name, type: n.type, reason: n.reason, message: n.message, impacted: n.impacted });
+  for (const c of plan.close) {
+    const sent = deliver(closeMail(c.notice, c.why, c.detail), noticeKey(c.notice), true);
+    if (sent) delete next[c.notice.key];
+    events.push({ ...base(c.notice), phase: "close", why: c.why, ...(c.detail ? { detail: c.detail } : {}), sent, at });
+  }
+  for (const n of plan.open) {
+    const sent = deliver(openMail(n), noticeKey(n), false);
+    if (sent) next[n.key] = { ...n, opened: at };
+    events.push({ ...base(n), phase: "open", sent, at });
+  }
+  return { open: next, events };
+}
+
 /** Write what the run changed, tell it, and only then move the cursor: a crash
- *  between the two tells an event twice rather than never. */
-export function runEmit(cmdb: HealthCmdb, journal: Journal, configDir: string, input: Omit<EmitInput, "intervalMin">): HealthEvent[] {
+ *  between the two tells an event twice rather than never. A notice is
+ *  delivered before the cursor records it open, for the same reason. */
+export function runEmit(cmdb: HealthCmdb, journal: Journal, configDir: string, input: Omit<EmitInput, "intervalMin">, deliver: Deliver = siteNotify): HealthEvent[] {
   const r = emit(cmdb, readCursor(configDir), { ...input, intervalMin: assessInterval(configDir) });
   for (const o of r.objects) if (r.writes.has(o.id)) cmdb.write(o, conditionsOf(o), { kind: "observation" });
-  journal(r.events.map(eventLine));
-  writeCursor(configDir, r.cursor);
-  return r.events;
+  const n = deliverNotices(r.notices, r.cursor.notices ?? {}, deliver, r.cursor.time);
+  const events: HealthEvent[] = [...r.events, ...n.events];
+  journal(events.map(eventLine));
+  writeCursor(configDir, { ...r.cursor, notices: n.open });
+  return events;
 }

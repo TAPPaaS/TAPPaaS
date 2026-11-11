@@ -208,11 +208,10 @@ const writeWait = (min: number, max: number): { has: string; samples: Sample[] }
     JSON.stringify({ event: "transition", id: "x", ci: "c", class: "storage-pool", name: "tankc1", type, from, to, reason: "r", message: "m", kind, rootCause: null, correlated: [], since: "t", at: "t", flapping: false, root, symptoms: 2, impacted: "2 vm", silenced: false, ...extra });
   const perfCrit = line("performance", "ok", "critical", "causal", true, { digestOnly: true });
   const opCrit = line("operational", "ok", "critical", "causal", true);
-  check(m("health-root-cause").test(opCrit) && !m("health-root-cause").test(perfCrit), "a critical performance root is not mailed at once");
+  check(!m("health-daily-digest").test(opCrit) && !rules.some((r) => r.name === "health-root-cause"), "a critical root is no log rule: emit mails it, and leaves performance out (notices.ts)");
   check(m("health-daily-digest").test(perfCrit), "…it is in the daily digest");
   check(m("health-daily-digest").test(line("performance", "ok", "warning", "causal", true, { digestOnly: true })), "a warning performance root: the digest too");
-  check(!m("health-root-recovered").test(line("performance", "critical", "ok", "recovery", true, { digestOnly: true })) && m("health-root-recovered").test(line("operational", "critical", "ok", "recovery", true)), "its recovery is not mailed either");
-  check(!m("health-daily-digest").test(line("performance", "ok", "warning", "symptom", false, { digestOnly: true })) && !m("health-root-cause").test(line("impact", "ok", "critical", "symptom", false)), "a symptom is never mailed");
+  check(!m("health-daily-digest").test(line("performance", "ok", "warning", "symptom", false, { digestOnly: true })) , "a symptom is never in the digest");
 }
 
 console.log(`\nperformance: ${passed} passed, ${failed} failed`);

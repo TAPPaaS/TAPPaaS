@@ -32,7 +32,9 @@ export const EMIT_HELP: HelpVerb[] = [
     ],
     details:
       "One event per condition transition since the last run, as a JSON line in the\n" +
-      "journal, identifier tappaas-health; the ack, maintenance and rootcause events beside them.\n" +
+      "journal, identifier tappaas-health; the ack and maintenance events beside them. Mails a\n" +
+      "critical root cause itself (site-notify.sh): one notice when it becomes one, one RESOLVED\n" +
+      "when it stops being one, saying why.\n" +
       "Tracks flapping, and ends acks, maintenance windows and performance investigations when they\n" +
       "expire. Runs after every\n" +
       "assess (health-assess.timer). The cursor is config/.health-emit-cursor.",

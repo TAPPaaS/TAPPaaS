@@ -6,9 +6,10 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { ack, endedBeforeEmit, maintenanceStart, maintenanceStop, reconcileAcks, silenced, unack } from "../../src/ack";
 import { Condition, HealthCmdb, HealthObject, Period, conditionsOf, splitRef } from "../../src/emit-cmdb";
-import { Cursor, assessInterval, byClass, emit, flapPercent, flappingNow, readCursor, runEmit, transitions, withEmitLock } from "../../src/emit";
+import { Cursor, assessInterval, byClass, deliverNotices, emit, flapPercent, flappingNow, readCursor, runEmit, transitions, withEmitLock } from "../../src/emit";
 import { historyLines, historyRows, listLines, listRows, rootDocs, rootLines, showDoc, showLines } from "../../src/emit-read";
-import { AckEvent, HealthEvent, MaintenanceEvent, RootCauseEvent, TransitionEvent, eventLine } from "../../src/events";
+import { AckEvent, HealthEvent, MaintenanceEvent, TransitionEvent, eventLine } from "../../src/events";
+import { planNotices } from "../../src/notices";
 import { EMIT_HELP, EmitContext, parseWhen, runEmitVerb } from "../../src/emit-verbs";
 
 // test.sh turns the CMDB off for the verbs under test; this one is a stub.
@@ -142,19 +143,92 @@ console.log("emit: kinds");
   check(of("vm2", "capacity")?.kind === "symptom", "failing and no root: a symptom");
   check(of("node1", "operational")!.correlated.includes(of("vm1", "impact")!.id), "the root lists its symptoms' events");
   check(of("vm1", "impact")!.correlated.includes(of("node1", "operational")!.id), "the symptom lists the root's event");
-  const rc = r.events.filter((e): e is RootCauseEvent => e.event === "rootcause");
-  check(rc.length === 1 && rc[0].ci === "node1" && rc[0].symptoms.join() === "vm1", "one rootcause event, with the symptoms' ids");
-  check(rc[0].impacted === "1 vm" && of("node1", "operational")?.impacted === "1 vm", "…and the root's consequence by class, on both events");
+  const op = r.notices.open;
+  check(op.length === 1 && op[0].ci === "node1" && op[0].type === "operational", "one notice to open, for the critical root");
+  check(op[0].impacted === "1 vm" && of("node1", "operational")?.impacted === "1 vm", "…with the root's consequence by class, as on its event");
+  check(!r.events.some((e) => (e as { event: string }).event === "rootcause"), "no rootcause events: nothing reads them");
   check(of("vm1", "impact")?.impacted === "nothing", "a symptom impacts nothing");
   check(/"symptoms":1,"impacted":"1 vm","silenced":false/.test(eventLine(of("node1", "operational")!)), "the journal line carries it beside the symptom count");
   check(r.cursor.change === 8, "the cursor moves to the last change read");
-  const again = emit(s, r.cursor, { now: NOW, intervalMin: 5 });
+  const delivered = deliverNotices(r.notices, {}, () => true, r.cursor.time);
+  const again = emit(s, { ...r.cursor, notices: delivered.open }, { now: NOW, intervalMin: 5 });
   check(transitionsIn(again.events).length === 0, "nothing is told twice");
-  check(again.events.filter((e) => e.event === "rootcause").length === 0, "the same set of roots is told once");
+  check(again.notices.open.length === 0 && again.notices.close.length === 0, "an open notice is not opened again");
   const line = eventLine(of("node1", "operational")!);
   check(/"kind":"causal".*"silenced":false/.test(line), "the journal line has kind before silenced (the rule reads them so)");
   const f = JSON.parse(line) as Record<string, unknown>;
   check(["ci", "class", "name", "type", "from", "to", "reason", "message", "kind", "rootCause", "correlated", "since", "at", "flapping"].every((k) => k in f), "every field of D4 is on the line");
+}
+
+console.log("emit: notices follow the root-cause set");
+{
+  const sent: { subject: string; key: string; resolve: boolean }[] = [];
+  const ok = (m: { subject: string }, key: string, resolve: boolean): boolean => (sent.push({ subject: m.subject, key, resolve }), true);
+  // A guest that stays down after its node came back: a symptom becomes a root
+  // without any status change of its own, and is mailed.
+  const s = nodeDown();
+  const first = emit(s, cursor(5, 6), { now: NOW, intervalMin: 5 });
+  let open = deliverNotices(first.notices, {}, ok, NOW.toISOString()).open;
+  s.all[0].attributes.conditions = [cond("operational", "ok", T(1))];
+  s.all[1].attributes.conditions = [cond("operational", "critical", T(-3))];
+  s.all[3].attributes.rootCauses = [{ id: "vm1", type: "operational", impactedCount: 0 }];
+  const later = emit(s, { ...first.cursor, notices: open }, { now: new Date(NOW.getTime() + 120000), intervalMin: 5 });
+  check(later.notices.open.length === 1 && later.notices.open[0].ci === "vm1", "a symptom that becomes a root, its status unchanged, opens a notice");
+  check(later.notices.close.length === 1 && later.notices.close[0].why === "recovered", "…and the node's closes, recovered");
+  sent.length = 0;
+  open = deliverNotices(later.notices, open, ok, T(2)).open;
+  check(sent.length === 2 && sent.some((x) => x.resolve && x.key === "health-root:node1:operational" && x.subject.includes("(recovered)")), "the close is a RESOLVED on the alert's key, saying why");
+  // Eased to a warning: closed, saying so (the old rule never sent this one).
+  s.all[1].attributes.conditions = [cond("operational", "warning", T(3))];
+  const eased = emit(s, { ...later.cursor, notices: open }, { now: new Date(NOW.getTime() + 240000), intervalMin: 5 }).notices;
+  check(eased.close.length === 1 && eased.close[0].why === "eased", "a root that eases to a warning closes its notice: eased");
+  // Acknowledged while it holds: closed, acknowledged.
+  s.all[1].attributes.conditions = [cond("operational", "critical", T(-3), { acknowledged: { by: "lars", note: "known", until: null } })];
+  const acked = emit(s, { ...later.cursor, notices: open }, { now: new Date(NOW.getTime() + 240000), intervalMin: 5 }).notices;
+  check(acked.close.length === 1 && acked.close[0].why === "acknowledged" && acked.open.length === 0, "an acknowledged root closes its notice and opens none");
+  // A silence that ends while the fault holds: a notice again.
+  s.all[1].attributes.conditions = [cond("operational", "critical", T(-3), { maintenance: { until: T(-1), note: "restart" } })];
+  const ended = emit(s, { ...later.cursor, notices: {} }, { now: NOW, intervalMin: 5 }).notices;
+  check(ended.open.length === 1 && ended.open[0].ci === "vm1", "a maintenance window that ended with the fault still there opens a notice");
+  // Flapping holds the notice as it is.
+  s.all[1].attributes.conditions = [cond("operational", "warning", T(3), { flapping: true })];
+  const flap = planNotices(open, new Map(), s.objects(), [], NOW);
+  check(flap.close.length === 0, "a flapping root neither closes nor opens its notice");
+  s.all[1].attributes.conditions = [cond("operational", "warning", T(3))];
+  check(planNotices(open, new Map(), s.objects(), [], NOW).close.length === 1, "…once it stops flapping, the close goes");
+  // A delivery that fails is tried again: not recorded open, and a close stays open.
+  const failed = deliverNotices(later.notices, {}, () => false, T(2));
+  check(Object.keys(failed.open).length === 0 && failed.events.every((e) => !e.sent), "an undelivered notice is not recorded open");
+  const kept = deliverNotices({ open: [], close: later.notices.close }, { "node1:operational": first.notices.open[0] as never }, () => false, T(2));
+  check("node1:operational" in kept.open, "an undelivered close stays open, to be tried again");
+}
+{
+  // Not a notice of its own: performance, a module's CVE level, a zone's score, a warning.
+  const objs = [
+    object("perf", "vm", [cond("performance", "critical", T(-3), { reason: "perf-cpu" })]),
+    object("cve", "vm", [cond("security", "critical", T(-3), { reason: "cve-critical" })]),
+    object("zone", "zone", [cond("security", "critical", T(-3), { reason: "cve-critical" })]),
+    object("warn", "vm", [cond("operational", "warning", T(-3))]),
+    object("site1", "site", []),
+  ];
+  objs[4].attributes.rootCauses = ["perf:performance", "cve:security", "zone:security", "warn:operational"].map((k) => ({ id: k.split(":")[0], type: k.split(":")[1] }));
+  const r = emit(new Stub(objs), cursor(5, 6), { now: NOW, intervalMin: 5 });
+  check(r.notices.open.length === 0, "performance, CVE levels, zone scores and warnings are no notice of their own");
+}
+{
+  // The rules that stay on log lines, against the lines emit writes (S2).
+  const rules = JSON.parse(readFileSync(join(__dirname, "../../../../../../../tappaas-cicd-alerts.json"), "utf8")) as { rules: { name: string; match: string }[] };
+  const has = (n: string): boolean => rules.rules.some((x) => x.name === n);
+  check(!has("health-root-cause") && !has("health-root-recovered"), "the critical-root mail is no log rule any more: emit sends it");
+  const digest = new RegExp(rules.rules.find((x) => x.name === "health-daily-digest")!.match);
+  const s = nodeDown();
+  const ev = transitionsIn(emit(s, cursor(5, 6), { now: NOW, intervalMin: 5 }).events);
+  const root = ev.find((e) => e.ci === "node1")!;
+  check(!digest.test(eventLine(root)), "the digest's match does not take a critical root");
+  check(digest.test(eventLine({ ...root, to: "warning" })), "…it takes a warning root");
+  check(!digest.test(eventLine({ ...root, to: "warning", silenced: true })), "…not a silenced one");
+  check(digest.test(eventLine({ ...root, type: "performance", digestOnly: true })), "…and a performance root, digest only");
+  check(!digest.test(eventLine({ ...root, to: "warning", kind: "symptom" })), "…never a symptom");
 }
 
 console.log("emit: a root's consequence by class");
@@ -170,8 +244,9 @@ console.log("emit: a root's consequence by class");
   const root = transitionsIn(r.events).find((e) => e.ci === "node1");
   check(root?.symptoms === 3 && root?.impacted === "2 vm, 1 service", `a root's transition: the count and the classes (${root?.symptoms}: ${root?.impacted})`);
   check(r.cursor.roots["node1:operational"]?.impacted === "2 vm, 1 service", "…kept with the roots told");
-  const cleared = emit(new Stub([object("site1", "site", [])]), r.cursor, { now: new Date(NOW.getTime() + 60000), intervalMin: 5 }).events.find((e): e is RootCauseEvent => e.event === "rootcause");
-  check(cleared?.cleared === true && cleared.impacted === "nothing", "a cleared root impacts nothing");
+  const open = deliverNotices(r.notices, {}, () => true, r.cursor.time).open;
+  const gone = emit(new Stub([object("site1", "site", [])]), { ...r.cursor, notices: open }, { now: new Date(NOW.getTime() + 60000), intervalMin: 5 }).notices;
+  check(gone.close.length === 1 && gone.close[0].why === "retired", "a root that is no longer in the CMDB closes its notice: retired");
 }
 
 console.log("emit: recovery of a root");
@@ -184,12 +259,11 @@ console.log("emit: recovery of a root");
   s.all[3].attributes.rootCauses = [];
   s.past = JSON.parse(JSON.stringify(s.all)) as HealthObject[];
   const later = new Date(NOW.getTime() + 2 * 60000);
-  const r = emit(s, first.cursor, { now: later, intervalMin: 5 });
+  const open = deliverNotices(first.notices, {}, () => true, first.cursor.time).open;
+  const r = emit(s, { ...first.cursor, notices: open }, { now: later, intervalMin: 5 });
   const e = transitionsIn(r.events).find((x) => x.ci === "node1")!;
   check(e.kind === "recovery" && e.root === true, "a recovery of what was a root says so, though it is a root no more");
-  check(/"kind":"recovery".*"root":true.*"silenced":false/.test(eventLine(e)), "…in the order the rule reads");
-  const rc = r.events.filter((x): x is RootCauseEvent => x.event === "rootcause");
-  check(rc.length === 1 && rc[0].cleared, "the root leaves the set: one rootcause event");
+  check(r.notices.close.length === 1 && r.notices.close[0].why === "recovered", "the root leaves the set: its notice closes, recovered");
 }
 
 console.log("emit: the first run and --since");
@@ -197,13 +271,16 @@ console.log("emit: the first run and --since");
   const dir = mkdtempSync(join(tmpdir(), "health-emit-"));
   const s = nodeDown();
   const lines: string[] = [];
-  const es = runEmit(s, (l) => lines.push(...l), dir, { now: NOW });
-  check(transitionsIn(es).length === 0 && lines.length === 1, "the first run tells only the current roots");
+  const mails: string[] = [];
+  const es = runEmit(s, (l) => lines.push(...l), dir, { now: NOW }, (m) => (mails.push(m.subject), true));
+  check(transitionsIn(es).length === 0 && lines.length === 1 && JSON.parse(lines[0]).event === "notice", "the first run tells only the current roots: one notice");
+  check(mails.length === 1 && mails[0].startsWith("ALERT: critical root cause node1"), `…mailed directly (${mails[0]})`);
+  check(readCursor(dir)?.notices?.["node1:operational"]?.opened === NOW.toISOString(), "…and recorded open in the cursor");
   check(readCursor(dir)?.time === NOW.toISOString(), "and leaves a cursor");
   writeFileSync(join(dir, "site.json"), JSON.stringify({ health: { assessInterval: 15 } }));
   check(assessInterval(dir) === 15, "the interval is site.json's");
   check(assessInterval(mkdtempSync(join(tmpdir(), "health-emit-"))) === 5, "default 5");
-  const again = runEmit(s, () => undefined, dir, { now: NOW, since: T(-10) });
+  const again = runEmit(s, () => undefined, dir, { now: NOW, since: T(-10) }, () => true);
   check(transitionsIn(again).length > 0, "--since tells again from that time");
   check(JSON.parse(readFileSync(join(dir, ".health-emit-cursor"), "utf8")).change === 8, "the cursor file holds the change id");
   let inner = true;

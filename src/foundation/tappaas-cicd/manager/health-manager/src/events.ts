@@ -7,6 +7,7 @@
 
 import { spawnGuarded } from "../../../lib/ts/src/exec";
 import { Status } from "./emit-cmdb";
+import type { NoticeEvent } from "./notices";
 
 export const IDENTIFIER = "tappaas-health";
 
@@ -90,19 +91,7 @@ export interface MaintenanceEvent {
   at: string;
 }
 
-export interface RootCauseEvent {
-  event: "rootcause";
-  ci: string;
-  class: string;
-  name: string;
-  type: string;
-  symptoms: string[];
-  impacted: string; // the symptoms by class, "3 vm, 2 service"
-  cleared: boolean;
-  at: string;
-}
-
-export type HealthEvent = TransitionEvent | AckEvent | MaintenanceEvent | RootCauseEvent;
+export type HealthEvent = TransitionEvent | AckEvent | MaintenanceEvent | NoticeEvent;
 
 export type Journal = (lines: string[]) => void;
 
