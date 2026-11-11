@@ -5,8 +5,8 @@
 import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { checkRules, cmdRules, ruleLine } from "../../src/rules";
-import { shippedModel } from "./assess-fixture";
+import { checkRules, cmdRules, cycleProblems, ruleLine } from "../../src/rules";
+import { obj, rel, shippedModel } from "./assess-fixture";
 
 let passed = 0;
 let failed = 0;
@@ -70,6 +70,27 @@ try {
 let threw = false;
 try { cmdRules(["nope"], model, print); } catch { threw = true; }
 check(threw, "another verb is refused");
+
+// ── dependency cycles (the identity stop of 2026-11-05) ──
+{
+  const m1 = obj("machine", "tappaas1");
+  const vm = obj("vm", "identity");
+  const svc = obj("service", "identity:identity");
+  const app = obj("app", "console");
+  const port1 = obj("port", "p1");
+  const port2 = obj("port", "p2");
+  const acyclic = [rel("runs-on", vm, m1), rel("runs-on", svc, vm), rel("runs-on", app, m1), rel("depends-on", app, svc), rel("connects", port1, port2)];
+  check(cycleProblems(acyclic, model).length === 0, "an app that depends on a service on its own host: no cycle (a cable's two ends are none either)");
+  const cyclic = [...acyclic, rel("depends-on", m1, svc)];
+  const found = cycleProblems(cyclic, model);
+  check(found.length === 1 && found[0].includes("machine/tappaas1") && found[0].includes("vm/identity") && found[0].includes("service/identity:identity"), `a machine that depends on a service on its own guest is a cycle (${found[0]})`);
+  const lines: string[] = [];
+  check(cmdRules(["check"], model, (l) => lines.push(l), () => cyclic) === 1 && lines.some((l) => l.includes("cycle")), "rules check fails on it");
+  const ok: string[] = [];
+  check(cmdRules(["check"], model, (l) => ok.push(l), () => acyclic) === 0 && ok[0].includes("no dependency cycle"), "…and passes without it");
+  const optional = [...acyclic, { ...rel("depends-on", m1, svc), attributes: { required: false } }];
+  check(cycleProblems(optional, model).length === 0, "an optional relation closes no cycle");
+}
 
 console.log(`\nResults: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

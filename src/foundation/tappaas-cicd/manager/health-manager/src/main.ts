@@ -879,7 +879,7 @@ export function run(argv: string[], client: ClusterClient): number {
       case "assess":
         return cmdAssess(opts, client);
       case "rules":
-        return cmdRules(opts.rest, readRules(), info);
+        return cmdRules(opts.rest, readRules(), info, () => cmdbRelations({}) as unknown as CmdbRel[]);
       // end ADR-041 assess verbs
       default:
         usage();

@@ -23,12 +23,12 @@ export interface SweepDifference {
 
 export interface SweepRecord {
   time: string;
-  counts: { expected: number; new?: number; words?: number; drift: number; desired: number; unmanaged: number; missing: number; unread: number; sourcesFailed: number };
+  counts: { expected: number; new?: number; words?: number; drift: number; desired: number; unmanaged: number; missing: number; unread: number; cycles?: number; sourcesFailed: number };
   sources?: { source: string; ok: boolean }[];
   differences?: SweepDifference[];
 }
 
-export const WORD: Record<string, string> = { missing: "desired without actual", unmanaged: "actual without desired", desired: "differs from desired", unread: "could not be compared" };
+export const WORD: Record<string, string> = { missing: "desired without actual", unmanaged: "actual without desired", desired: "differs from desired", unread: "could not be compared", cycle: "a dependency cycle over required relations" };
 const MAX_ROWS = 20;
 
 /** The gate over a record. Pure: null is no record at all. */
@@ -45,14 +45,15 @@ export function checkCmdbSweep(rec: SweepRecord | null, now: number): CheckResul
   for (const d of rec.differences ?? []) {
     if (d.expected) continue;
     const word = WORD[d.kind] ?? `drift: ${d.kind}`;
-    rows.push({ status: d.kind === "missing" ? "fail" : "warn", text: `${`${d.class}/${d.name}`.padEnd(28)}${word}${d.attribute ? ` ${d.attribute}` : ""}` });
+    const members = d.kind === "cycle" && Array.isArray(d.after) ? `: ${(d.after as string[]).join(", ")}` : "";
+    rows.push({ status: d.kind === "missing" ? "fail" : "warn", text: `${`${d.class}/${d.name}`.padEnd(28)}${word}${d.attribute ? ` ${d.attribute}` : ""}${members}` });
   }
   rows.sort((a, b) => (a.status === b.status ? 0 : a.status === "fail" ? -1 : 1));
-  const summary = `${c.drift} drift, ${c.desired} from desired, ${c.unmanaged} unmanaged, ${c.missing} missing, ${c.sourcesFailed} source(s) failed`;
+  const summary = `${c.drift} drift, ${c.desired} from desired, ${c.unmanaged} unmanaged, ${c.missing} missing, ${c.cycles ? `${c.cycles} dependency cycle(s), ` : ""}${c.sourcesFailed} source(s) failed`;
   const shown = rows.slice(0, MAX_ROWS);
   if (rows.length > shown.length) shown.push({ status: "warn", text: `… and ${rows.length - shown.length} more — cmdb sweep --last` });
   if (c.missing || c.sourcesFailed) return { name, status: "fail", detail: `${summary} (${rec.time})`, rows: shown };
-  if (c.drift || c.desired || c.unmanaged || c.unread) return { name, status: "warn", detail: `${summary} (${rec.time})`, rows: shown };
+  if (c.drift || c.desired || c.unmanaged || c.unread || c.cycles) return { name, status: "warn", detail: `${summary} (${rec.time})`, rows: shown };
   return { name, status: "pass", detail: `the site is what config/ says: ${c.expected} expected change(s)${c.new ? `, ${c.new} of them new` : ""}${c.words ? `, ${c.words} relation word(s)` : ""} (${rec.time})` };
 }
 

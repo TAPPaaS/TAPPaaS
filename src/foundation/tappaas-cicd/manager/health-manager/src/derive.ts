@@ -9,11 +9,11 @@
 //   derived    its own condition of the travelling type, failing no worse than
 //              what reached it, is the same failure seen from below: `derived`,
 //              and it does not count. A worse one is its own.
-//   root       a failing, non-derived condition on an object nothing reached,
-//              and no ancestor explains (below).
-//   ancestor   a failing ancestor no rule crosses from (a warning) is the root of
-//              two or more failing dependants, lowest first, then earliest. Those
-//              keep their own failure: a critical is not silenced by a warning.
+//   root       a failing, non-derived condition that no other failure explains,
+//              on an object no critical impact has reached. A
+//              failure that reaches an object explains only its own type there:
+//              a slow node (a performance warning) does not explain a guest that
+//              stopped, and a warning never takes a critical's place as root.
 //   follows    an object nothing judges takes its parent's colour (FOLLOWS):
 //              `derived`, so never a failure or a root of its own.
 //   group      relations of one `redundancyGroup` (its name, site-wide) are
@@ -169,22 +169,6 @@ const count = (n: number): string => WORDS[n] ?? String(n);
 
 const earlier = (a: Seed, b: Seed): number => Date.parse(a.cond.since) - Date.parse(b.cond.since) || a.obj.localeCompare(b.obj);
 
-// The objects under each of `ids` along required relations, whatever rules say.
-function dependantsOf(id: string, edges: Edge[]): Set<string> {
-  const seen = new Set<string>();
-  const todo = [id];
-  while (todo.length) {
-    const p = todo.pop()!;
-    for (const e of edges) {
-      if (e.required && e.prov === p && !seen.has(e.dep) && e.dep !== id) {
-        seen.add(e.dep);
-        todo.push(e.dep);
-      }
-    }
-  }
-  return seen;
-}
-
 const isA = (o: CmdbItem, anc: string, model: RulesDoc): boolean => (model.ancestors[o.class] ?? [o.class]).includes(anc);
 
 // Who a collection or a place is the sum of.
@@ -322,32 +306,21 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
     }]);
   }
 
-  // Root causes: what is left, unless a common ancestor explains it.
-  const open = roots.filter((s) => !impacted.has(s.obj));
-  const taken = new Set<Seed>();
-  const under = new Map<Seed, number>();
-  const types = new Set(model.rules.map((r) => r.source.type as string));
-  const candidates = open
-    .filter((s) => types.has(s.cond.type))
-    .map((s) => {
-      const below = dependantsOf(s.obj, edges);
-      return { s, covers: open.filter((x) => x !== s && x.cond.type === s.cond.type && below.has(x.obj)) };
-    })
-    .filter((c) => c.covers.length >= 2)
-    .sort((a, b) => a.covers.length - b.covers.length || earlier(a.s, b.s));
-  for (const { s, covers } of candidates) {
-    const fresh = covers.filter((x) => !taken.has(x));
-    if (fresh.length < 2) continue;
-    for (const x of fresh) {
-      taken.add(x);
-      x.cond.rootCause = s.obj;
-    }
-    under.set(s, fresh.length);
+  // Root causes: every root, unless a critical impact reached its object (a
+  // guest with a full disk on a node that is down). One that a warning reached
+  // (a slow node, a group partly down) stays a root: a failure of its own.
+  const covered = (s: Seed): Seed | null => {
+    const hit = impacted.get(s.obj);
+    return hit && hit.root !== s && hit.status === "critical" ? hit.root : null;
+  };
+  for (const s of roots) {
+    const by = covered(s);
+    if (by) s.cond.rootCause = by.obj;
   }
-  const rootCauses = open
-    .filter((s) => !taken.has(s))
-    .sort((a, b) => (impactCount.get(b) ?? 0) + (under.get(b) ?? 0) - (impactCount.get(a) ?? 0) - (under.get(a) ?? 0) || earlier(a, b))
-    .map((s) => ({ id: s.obj, type: s.cond.type as string, impactedCount: (impactCount.get(s) ?? 0) + (under.get(s) ?? 0) }));
+  const rootCauses = roots
+    .filter((s) => !covered(s))
+    .sort((a, b) => RANK[b.cond.status] - RANK[a.cond.status] || (impactCount.get(b) ?? 0) - (impactCount.get(a) ?? 0) || earlier(a, b))
+    .map((s) => ({ id: s.obj, type: s.cond.type as string, impactedCount: impactCount.get(s) ?? 0 }));
 
   follow(objects, out, relations, model, now);
 

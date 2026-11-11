@@ -25,6 +25,7 @@ import { spawn } from "child_process";
 import { RescanResult, runCommand, rescan, rescanSources } from "./rescan";
 import { CONTROLLER_SOURCE, ChangeEvent, DEPENDENCY_WORDS, Store } from "./store";
 import { Query } from "./pg";
+import { CycleRelation, dependencyCycles } from "../../../lib/ts/src/health-rules";
 
 type Obj = Record<string, unknown>;
 
@@ -35,7 +36,8 @@ export type DifferenceKind =
   | "desired" // ADR-020's differ: the record says one thing, the plane another
   | "unmanaged" // actual without desired
   | "missing" // desired without actual
-  | "unread"; // the differ could not read this module
+  | "unread" // the differ could not read this module
+  | "cycle"; // required relations that reach back to where they started
 
 export interface Difference {
   kind: DifferenceKind;
@@ -77,6 +79,7 @@ export interface SweepCounts {
   unmanaged: number;
   missing: number;
   unread: number;
+  cycles?: number; // dependency cycles over required relations
   sourcesFailed: number;
 }
 
@@ -358,6 +361,7 @@ export class Sweep {
 
     const differences: Difference[] = since ? await this.sinceLast(since, until) : [];
     differences.push(...(await this.fromDesired(started, d.differ ?? moduleDiffer)));
+    differences.push(...(await this.cycles()));
     differences.sort((a, b) => a.class.localeCompare(b.class) || a.name.localeCompare(b.name) || (a.attribute ?? "").localeCompare(b.attribute ?? ""));
 
     const counts: SweepCounts = {
@@ -369,9 +373,10 @@ export class Sweep {
       unmanaged: differences.filter((x) => x.kind === "unmanaged").length,
       missing: differences.filter((x) => x.kind === "missing").length,
       unread: differences.filter((x) => x.kind === "unread").length,
+      cycles: differences.filter((x) => x.kind === "cycle").length,
       sourcesFailed: sources.filter((s) => !s.ok).length,
     };
-    const exitCode: 0 | 1 | 2 = counts.missing || counts.sourcesFailed ? 2 : counts.drift || counts.desired || counts.unmanaged || counts.unread ? 1 : 0;
+    const exitCode: 0 | 1 | 2 = counts.missing || counts.sourcesFailed ? 2 : counts.drift || counts.desired || counts.unmanaged || counts.unread || counts.cycles ? 1 : 0;
     const status = exitCode === 2 ? "critical" : exitCode === 1 ? "warning" : "healthy";
 
     const body = { since, counts, status, exitCode, sources, differences };
@@ -410,6 +415,23 @@ export class Sweep {
     );
     d.log(`sweep ${id}: ${status} — ${JSON.stringify(counts)}`);
     return { id, time: until, since, counts, status, exitCode, sources, differences };
+  }
+
+  // A dependency cycle over required relations: a failure on one reaches all
+  // of them and comes back, so one stopped guest would take its own host.
+  // Listed on the member that sorts first, naming the others.
+  private async cycles(): Promise<Difference[]> {
+    const rels = (await this.store.relations({})) as unknown as CycleRelation[];
+    const meta = [...new Map(this.store.mm.relations.map((r) => [r.name, { name: r.name, dependant: r.dependant, required: r.required }])).values()];
+    const label = new Map<string, { class: string; name: string }>();
+    for (const r of rels) for (const e of [r.from, r.to]) label.set(e.id, { class: String(e.class), name: String(e.name) });
+    return dependencyCycles(rels, meta).map((c) => {
+      const first = label.get(c[0])!;
+      return {
+        kind: "cycle" as const, class: first.class, name: first.name, id: c[0], source: CONTROLLER_SOURCE, attribute: null,
+        before: null, after: c.map((id) => `${label.get(id)?.class}/${label.get(id)?.name}`), expected: false,
+      };
+    });
   }
 
   // Step 2: every attribute and relation whose value at the last sweep is not

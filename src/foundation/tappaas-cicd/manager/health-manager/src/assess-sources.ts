@@ -125,7 +125,7 @@ export function fromAlerts(alerts: AlertItem[], idx: SiteIndex): Finding[] {
 }
 
 // ── the sweep's lists (ADR-040 D15) ──────────────────────────────────
-const WORD: Record<string, string> = { missing: "desired without actual", unmanaged: "actual without desired", desired: "differs from desired", unread: "could not be compared" };
+const WORD: Record<string, string> = { missing: "desired without actual", unmanaged: "actual without desired", desired: "differs from desired", unread: "could not be compared", cycle: "a dependency cycle over required relations" };
 
 export function fromSweep(rec: SweepRecord | null, nowMs: number, idx: SiteIndex): Finding[] {
   const out: Finding[] = [];
@@ -141,7 +141,8 @@ export function fromSweep(rec: SweepRecord | null, nowMs: number, idx: SiteIndex
   for (const s of (rec.sources ?? []).filter((x) => !x.ok)) onSite("critical", "sweep-source-failed", `source ${s.source} failed`);
   for (const d of rec.differences ?? []) {
     if (d.expected) continue; // a verb's change, new (part of what a verb made) or words (a relation's required/redundancyGroup): not drift
-    const message = `${d.class}/${d.name}: ${WORD[d.kind] ?? `drift: ${d.kind}`}${d.attribute ? ` ${d.attribute}` : ""}`;
+    const members = d.kind === "cycle" && Array.isArray(d.after) ? `: ${(d.after as string[]).join(", ")}` : "";
+    const message = `${d.class}/${d.name}: ${WORD[d.kind] ?? `drift: ${d.kind}`}${d.attribute ? ` ${d.attribute}` : ""}${members}`;
     const status: ConditionStatus = d.kind === "missing" ? "critical" : "warning";
     const o = idx.named(d.name, [d.class]) ?? site;
     if (o) out.push({ object: o.id, type: "drift", status, reason: `sweep-${d.kind}`, message, owner: "sweep" });

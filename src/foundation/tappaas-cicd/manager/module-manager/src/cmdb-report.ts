@@ -137,11 +137,12 @@ export function moduleObservation(configDir: string, guests: RunningGuest[]): Cm
   const mods = listModules(configDir).filter((m) => m.status !== "archived");
   const b = build(configDir, mods, guests);
 
-  // depends-on: a node (an application's host) on the service it needs.
+  // depends-on: the node, or the application, that needs the service. Never an
+  // application's host: the host would then depend on services that run on it.
   for (const m of mods) {
     const host = b.hostRef.get(m.name);
     if (!host) continue;
-    const from = typeof host === "string" ? { ref: host } : host;
+    const from = m.kind === "application" ? { ref: nodeRef(m.name) } : typeof host === "string" ? { ref: host } : host;
     for (const dep of m.dependsOn ?? []) {
       const list = b.services.get(dep);
       if (!list) continue;

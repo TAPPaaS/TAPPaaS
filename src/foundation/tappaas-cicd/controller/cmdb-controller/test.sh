@@ -715,6 +715,18 @@ out="$(sweep)"
 check "an observed change of the cable, the words kept, is drift" "changed false null" \
     "$(jq -r '.differences[] | select(.name == "w1" and ((.attribute // "") | startswith("→connects"))) | "\(.kind) \(.expected) \(.reason)"' <<<"${out}")"
 
+# A dependency cycle over required relations: a machine that depends on a
+# service its own guest runs (the identity stop of 2026-11-05). Not expected,
+# whatever reported it: the sweep warns, naming every member.
+cmdb report --json >/dev/null <<<'{"source":"module-manager","objects":[{"ref":"m","class":"machine","name":"cy-node"},{"ref":"v","class":"vm","name":"cy-vm","attributes":{"onNode":{"ref":"m"}}},{"ref":"s","class":"service","name":"cy:svc","attributes":{"onNode":{"ref":"v"}}}],"relations":[{"type":"depends-on","from":{"ref":"m"},"to":{"ref":"s"}}]}'
+out="$(sweep)"
+check "a dependency cycle is a difference of its own, not expected" "cycle false 3" \
+    "$(jq -r '[.differences[] | select(.kind == "cycle")][0] | "\(.kind) \(.expected) \(.after | length)"' <<<"${out}")"
+check "…counted, and the sweep warns" "1 1" "$(jq -r '"\(.counts.cycles) \(.exitCode)"' <<<"${out}")"
+cmdb report --json >/dev/null <<<'{"source":"module-manager","relations":[{"type":"depends-on","from":{"class":"machine","name":"cy-node"},"to":{"class":"service","name":"cy:svc"},"end":true}]}'
+out="$(sweep)"
+check "…and is gone once the relation ends" "0" "$(jq -r '.counts.cycles' <<<"${out}")"
+
 echo "== the store's invariant =="
 _ov="$(sql "INSERT INTO attribute (object, name, value, source, validity)
             SELECT object, name, value, 'test', tstzrange(lower(validity) - interval '1 hour', NULL) FROM attribute
