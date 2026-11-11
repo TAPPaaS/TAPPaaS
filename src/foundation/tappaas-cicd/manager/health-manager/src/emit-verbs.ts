@@ -47,19 +47,19 @@ export const EMIT_HELP: HelpVerb[] = [
       ["--until <time>", `When it ends (default: when the condition recovers). ${WHEN}`],
       ["--sticky", "Keep it through status changes, until the condition is ok; without this the next status change ends it."],
     ],
-    details: "The condition keeps its status and stops counting for validate, mails and the Overview. On a\nroot cause its impact conditions are silenced with it, while the root's ack holds.",
+    details: "The condition keeps its status and stops counting for validate, mails and the Overview. On a\nroot cause its impact conditions are silenced with it, while the root's ack holds. Written to the\nobject's acknowledgements; the conditions show it from the next assess.",
   },
   {
     usage: "unack <ci> [--type <t>]", effect: { noPreview: "ends acknowledgements in the CMDB" },
     options: [["--type <t>", "This condition only (default: all of the object's)."]],
   },
   {
-    usage: "maintenance <ci> --until <time> --note <n>", effect: { noPreview: "opens a maintenance window in the CMDB" },
+    usage: "maintenance <ci> --until <time> --note <n>", effect: { noPreview: "opens a maintenance window (a file the alert receiver reads too)" },
     options: [
       ["--until <time>", `When the window ends (required). ${WHEN}`],
       ["--note <n>", "Why (required)."],
     ],
-    details: "Transitions on the object are recorded and told, never mailed or counted.",
+    details: "From the next assess, transitions on the object and on what runs on it are recorded and told,\nnever mailed or counted. The window is a file in /var/lib/tappaas/maintenance.",
   },
   { usage: "maintenance end <ci>", effect: { noPreview: "ends a maintenance window" }, details: "The work is done: the window closes early." },
   { usage: "maintenance cancel <ci>", effect: { noPreview: "cancels a maintenance window" }, details: "The work did not happen: the window is withdrawn." },

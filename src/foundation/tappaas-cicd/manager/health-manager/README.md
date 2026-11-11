@@ -537,8 +537,8 @@ journalctl -t tappaas-health --since today -o cat | jq -r 'select(.event == "tra
 | `transition` | `id`, `ci`, `class`, `name`, `type`, `from`, `to`, `reason`, `message`, `kind`, `rootCause`, `correlated[]`, `since`, `at`, `flapping`, `root`, `symptoms`, `impacted`, `silenced` |
 | `flapping` | the same, with `phase` `start` or `end` |
 | `ack`, `unack` | `ci`, `class`, `name`, `type`, `by`, `note`, `sticky`, `until`, `why`, `symptoms[]` (ids), `at` |
-| `maintenance` | `phase` `start`, `end` or `cancel`, `ci`, `class`, `name`, `by`, `note`, `until`, `why`, `at` |
-| `rootcause` | `ci`, `class`, `name`, `type`, `symptoms[]` (ids), `impacted`, `cleared`, `at`; once per change of a root's set |
+| `maintenance` | a window opening or ending: `phase` `start` or `end`, `ci` (its scope), `class` `window`, `name`, `note`, `until`, `why` (`expired`, or `operator` when closed early), `at` |
+| `notice` | a critical-root notice: `phase` `open` or `close`, `ci`, `class`, `name`, `type`, `reason`, `message`, `impacted`, `why` and `detail` on a close, `sent`, `at` |
 
 - `kind`: `recovery` on a return to ok; `symptom` for an `impact` or derived condition; `causal`
   when the object is in the site's `rootCauses` for that type; any other failure is a `symptom`.
@@ -548,11 +548,13 @@ journalctl -t tappaas-health --since today -o cat | jq -r 'select(.event == "tra
 - `correlated` lists the events of the same run with the same root.
 - **Flapping** is judged over the last 20 assess intervals, each changed or not, the oldest
   weighted 0.8 and the newest 1.15: above 30 % it starts, below 25 % it ends. While it flaps one
-  `flapping` start, at the worse status, and one end replace the transitions; the condition
-  carries `flapping: true` and `flappingHeld`.
+  `flapping` start, at the worse status, and one end replace the transitions. emit keeps it in the
+  object's `flapping` attribute; assess shows it on the condition as `flapping: true` and
+  `flappingHeld`, and a flapping root's notice stays as it is.
 
-The cursor is `config/.health-emit-cursor`: the CMDB change id read up to, the time, and the roots
-last told. Without one, a run tells only the current roots and starts from there. `--since` tells
+The cursor is `config/.health-emit-cursor`: the CMDB change id read up to, the time, the roots
+last told, the critical-root notices open and the maintenance windows told open. Without one, a
+run opens a notice for each current critical root and starts from there. `--since` tells
 a period again, mails included. Runs overlap under `config/.health-emit.lock`; a run that finds it
 held leaves the work to the next. A CMDB that does not answer tells nothing, moves no cursor and
 exits 0.
@@ -563,24 +565,30 @@ wrote, and the console reads the conditions, or these lines through Loki.
 ### `ack`, `unack`
 
 An acknowledged condition keeps its status and stops counting for `validate`, mails and the
-Overview. Without `--type`, every condition of the object that is not ok. It ends at `--until`, on
-a return to ok, and at the next status change unless `--sticky`; emit tells the `unack` with its
-`why`. An ack on a root cause (its condition of the type in `rootCauses`) silences every `impact`
-condition naming that root, as an ack with `via: [<root ids>]`, while the root's holds: a symptom
-that gets a root of its own is heard again, and `unack` restores them. Written as a change, with
-the console's job id. Like any change on an object, it clears the object's drift mark (ADR-040 D6).
+Overview. Without `--type`, every condition of the object that is not ok. The verb writes the
+operator's word into the object's `acknowledgements` attribute (never `conditions`), and assess
+shows it on the condition from its next run, so an ack made while assess runs is not lost. It ends
+at `--until`, on a return to ok, and at the next status change unless `--sticky`; emit tells the
+`unack` with its `why`. An ack on a root cause (its condition of the type in `rootCauses`) silences
+every `impact` condition naming that root, as an ack with `via: [<root ids>]`, while the root's
+holds; `unack` restores them. A critical root that is acknowledged closes its notice
+(`acknowledged`); one whose ack ends while the fault holds opens a new one. Written as a change,
+with the console's job id. Like any change on an object, it clears the object's drift mark.
 
 ### `maintenance`
 
-A window on every condition of the object, and on any that appears during it: transitions are told
-with `silenced: true`. It ends at `--until`, or by `maintenance end` (done early) or `cancel`
-(withdrawn). An object with no conditions yet is refused: run `assess` first.
+Opens a window for the object: a file in `/var/lib/tappaas/maintenance`, the kind the update
+opens before a restart and the alert receiver reads. While it is open, assess puts every condition
+of the object, and of everything that runs on it, in maintenance: transitions are told with
+`silenced: true`, and a critical root in it is no notice. It ends at `--until`, or by `maintenance
+end` (done early) or `cancel` (withdrawn); emit tells it opening and ending.
 
 ### `show`, `list`, `roots`, `history`
 
 `show`: an object's conditions, since when, its root cause or what it impacts, its acks. `list`: a
 row per condition, worst first, everything not ok unless `--status` says otherwise. `roots`: the
-site's root causes, most impact first, each with its objects. `history`: an object's transitions,
+site's root causes, critical first, operational before the other kinds, then most impact, each
+with its objects; a silenced one only with `--all`. `history`: an object's transitions,
 from the CMDB's attribute history. Each takes `--json`.
 
 ### The timer and the hooks
@@ -594,21 +602,28 @@ the setting:
 sudo systemctl start update-tappaas-schedule.service
 ```
 
-`tappaas-alert-receiver` runs `assess --only <ci>` and `emit` for each ALERT or RESOLVED it gets,
-on a worker thread, placing the alert as `alerts` does; one about no known object assesses the site.
+`tappaas-alert-receiver` runs `assess --alert <host>,<module>` and `emit` for each ALERT or
+RESOLVED it gets, on a worker thread; `assess` places the alert as `alerts` does, and one about no
+known object assesses the site.
 
-`tappaas-cicd-alerts.json` holds the three rules over these lines, and over `cmdb sweep`'s.
-`HealthRootCause` mails a causal event that is not silenced and whose status is **critical**, with
-what it impacts by class (`impacts: 3 vm, 2 service`), except a module whose CVE risk rose to critical, which
-`CveLevelUp` mails instead; `HealthRootRecovered` mails the RESOLVED of a critical root's recovery.
-`HealthDailyDigest` collects the rest once a day: a warning that became a root cause, and every
-sweep difference nothing explains (drift, unmanaged, missing, differing from `config/`) — one mail
-while the last 24 hours hold any such line, none on a quiet day. `health-manager digest` writes
-the mail: what is new since the last one, what is still open, what cleared. With something new it
-is an ALERT, else a STATUS; a known warning stops counting with `ack`, and a sweep's addresses are
-one count, never a finding. Nothing mails a symptom. All are `event` rules: a log
-rule's own resolve follows its window, not the recovery, so the RESOLVED is a mail of its own and
-not a reply to the ALERT. Which events leave the site is the rule file's choice (ADR-039 D1).
+**A critical root cause is mailed by `emit` itself**, from the root-cause set, through
+`site-notify.sh` on this host (no log rule, so the mail does not wait for the logging VM). One
+ALERT when it becomes a critical root cause, with what it impacts by class (`impacts: 3 vm, 2
+service`) — by its own transition or without one, as a guest that stays down after its node came
+back. One RESOLVED, threaded under it, when it stops being one, for any reason, saying which:
+recovered, eased to a warning, no longer checked, retired from the CMDB, acknowledged, in
+maintenance, or now explained by another root. One that could not be sent is tried again on the
+next run. Not mailed on its own: a warning root, a performance root, a module's CVE level
+(`CveLevelUp` mails it), a zone's or environment's score.
+
+`tappaas-cicd-alerts.json` holds the rules over these lines, and over `cmdb sweep`'s.
+`HealthDailyDigest` collects the rest once a day: a warning or a performance root, and every
+sweep difference nothing explains (drift, unmanaged, missing, differing from `config/`, a device a
+source missed, a dependency cycle) — one mail while the last 24 hours hold any such line, none on a
+quiet day. `health-manager digest` writes the mail: what is new since the last one, what is still
+open, what cleared. With something new it is an ALERT, else a STATUS; a known warning stops
+counting with `ack`, and a sweep's addresses are one count, never a finding. Nothing mails a
+symptom. Which events leave the site is the rule file's choice.
 
 ## Reports to the CMDB
 
@@ -635,21 +650,34 @@ A condition is written in ADR-041 D1's shape, one per type per object:
 { "type": "operational", "status": "critical", "reason": "guest-stopped",
   "message": "not running", "since": "2026-10-30T02:14:00.000Z",
   "lastChecked": "2026-10-30T08:00:00.000Z", "source": "health-manager",
-  "derived": false, "rootCause": null, "acknowledged": null, "maintenance": null }
+  "owner": "service-liveness", "derived": false, "rootCause": null,
+  "acknowledged": null, "maintenance": null }
 ```
 
 - **Worst wins** over the sources for one type. A finding about something the
-  CMDB does not have lands on the `site` object, so nothing a gate said is lost.
+  CMDB does not have lands on the `site` object, naming its subject, so nothing a
+  gate said is lost; a guest the cluster runs and the CMDB lacks is a `drift`
+  warning (`not-in-cmdb`) there, not an outage.
+- **`owner`** is the source that raised it, and only that source takes it back.
 - **`since`** is when status or reason last changed. Unchanged, only
   `lastChecked` moves, and the message stays the one of the transition.
 - **A failure stands until the source that raised it has looked again.** A gate
   that skipped, a guest it could not reach, or Grafana not answering takes
-  nothing back, and `lastChecked` shows how old the verdict is.
-- **What the operator set is kept:** `acknowledged` until its `until`, and a
-  plain one until the status changes, a sticky one until ok; `maintenance` until
-  its `until`.
-- `--only <ci>` (the alert receiver's call) runs no gate: the other sources
-  speak for that one object, and impact and root causes are worked out again.
+  nothing back, and `lastChecked` shows how old the verdict is — for a day: then
+  it is `unknown`, "not checked since …". An ok its owner has not confirmed for an
+  hour is `unknown` too (the sweep's after 49 hours); one its owner no longer
+  gives is dropped.
+- **A judgement over an object no source reported for 48 hours is `unknown`**,
+  "not observed since …": a switch that died does not leave its ports green.
+- **Impact, roll-ups and follows are recomputed whole** every run, counts too.
+- **The operator's word is the object's `acknowledgements`** (the ack verbs write
+  it, assess shows it on the condition from the next run): a plain ack holds until
+  its `until` or the status changes, a sticky one until ok. A root's ack silences
+  its impacts. **`maintenance`** is the open window that covers the object: the
+  update's, or `health-manager maintenance`'s, in `/var/lib/tappaas/maintenance`.
+- `--only <ci>` runs no gate: the other sources speak for that one object, and
+  impact and root causes are worked out again. `--alert <host>,<module>` is the
+  same for what an alert is about (the alert receiver's call).
 - `--timing` prints each phase's duration on stderr as it ends, so stdout (and
   `--json`) stays the result: the CMDB reads (`cmdb objects`, `cmdb relations`,
   `cmdb ended`), every gate on its own line (`gate <name>`) and `gates` for all of
