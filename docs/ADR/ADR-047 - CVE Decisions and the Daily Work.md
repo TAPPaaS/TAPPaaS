@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Draft** — for the operator's review |
-| **Version** | 0.3 |
+| **Status** | **Proposed** — every question settled with the operator; for his review |
+| **Version** | 0.4 |
 | **Date** | 2026-11-11 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | Amends ADR-045 (D1 states, D2 lifecycle, D5 gate) and ADR-011 §8 (VEX). Built on the measurement in [`docs/plans/cve-as-built.md`](../plans/cve-as-built.md). Delivery to production is [ADR-048](<ADR-048 - The Security Stream.md>). |
-| **Changelog** | v0.1 (2026-11-10): first draft. v0.2 (2026-11-10): the operator's answers. Central decisions are **per component**, not per CVE and version: the component record replaces the assessment file, and VEX is generated from it (D2, D3). A site acceptance **lowers the site's score** (D5). Decisions reach production **faster than code** (ADR-048). The scan/rescan defect and "new means first seen" are **built** (D9); every figure is re-sized against the corrected scan. v0.3 (2026-11-11): the operator's answers to the open questions. **A decision is a reclassification** (D4): every CVE has an effective level, the same as upstream, lower, or none, and is scored by that level alone; the separate points for analysed and unanalysed items go. An unread CVE differs from a confirmed one in the view, not in points. The in-between level is expressed in VEX as `exploitable` with a TAPPaaS rating. Version scope settled: automatic inside a major, Review at a new major. Review period settled: 90 days (180 at most) for records grounded in how the code is used, one year for records grounded in how TAPPaaS is deployed. Authors as proposed. The condition-type question goes to the health review. |
+| **Changelog** | v0.1 (2026-11-10): first draft. v0.2 (2026-11-10): the operator's answers. Central decisions are **per component**, not per CVE and version: the component record replaces the assessment file, and VEX is generated from it (D2, D3). A site acceptance **lowers the site's score** (D5). Decisions reach production **faster than code** (ADR-048). The scan/rescan defect and "new means first seen" are **built** (D9); every figure is re-sized against the corrected scan. v0.3 (2026-11-11): the operator's answers to the open questions. **A decision is a reclassification** (D4): every CVE has an effective level, the same as upstream, lower, or none, and is scored by that level alone; the separate points for analysed and unanalysed items go. An unread CVE differs from a confirmed one in the view, not in points. The in-between level is expressed in VEX as `exploitable` with a TAPPaaS rating. Version scope settled: automatic inside a major, Review at a new major. Review period settled: 90 days (180 at most) for records grounded in how the code is used, one year for records grounded in how TAPPaaS is deployed. Authors as proposed. The condition-type question goes to the health review. v0.4 (2026-11-11): **Proposed.** The single points table is 20 / 8 / 3 / 1, so levels stay where they are today and fall as decisions are made. No question is open. |
 
 ADR-045 gave CVEs a lifecycle and a score. Running it for one boundary showed that the records
 are the wrong size for daily work: a VEX statement is one CVE at one version, a site ack is a
@@ -202,7 +202,7 @@ CVE has no vector, the TAPPaaS rating has `method: other`, a level and the justi
 
 | Effective level | critical | high | medium | low | none |
 |---|---|---|---|---|---|
-| Points | 25 | 10 | 3 | 1 | 0 |
+| Points | 20 | 8 | 3 | 1 | 0 |
 
 ADR-045's rules stay: only the highest category with an item counts, each further item at half
 the one before, the bands 0 / 7 / 16 / 30, the zone multipliers. As in ADR-045, a CVE whose
@@ -224,11 +224,14 @@ confirmed ones have the same score and level, and read differently at a glance: 
 work for the maintainers, the second is the true state until upstream fixes it. The site, zone
 and environment rows carry the same split: "critical · set by network (7 unread)".
 
-**What the single table changes on hrossen.** An unread critical counts 25 where it counted 20,
-an unread high 10 where it counted 8. Three unread highs now reach high (17.5); under ADR-045
-they stayed medium (14). The 15 units whose only open items are the baseline's three sqlite
-highs would read high until that one component is decided. That is the intended effect of "not
-read is not better than read", and it is the one calibration left to confirm (open questions).
+**What the single table changes.** The weights are ADR-045's for an unanalysed item, now for
+every counted CVE. A level that rests on unread CVEs stays exactly where it is today: hrossen's
+15 baseline-only units stay medium (8 + 4 + 2 = 14), the firewall stays critical. A level that
+rests on confirmed items counts a little less than under ADR-045 (a critical 20 where it was 25,
+a high 8 where it was 10): karakeep's four confirmed highs read medium (15) where they read high
+(18.75). So nothing rises on the day this is deployed, and every level can only fall as
+components are decided. One confirmed critical is still high, and critical in the management
+zone.
 
 ### D5. The site layer: assumptions and acceptances
 
@@ -427,10 +430,8 @@ Central decisions are authored by the deciders of this ADR, by commit; contribut
 through a pull request. Whether `security` should be one condition type for CVE levels and for
 other security reasons is the health review's question.
 
+Settled in v0.4 (operator, 2026-11-11): the single points table is 20 / 8 / 3 / 1 / 0.
+
 ## Open questions
 
-1. **The points for the single table.** Proposed: 25 / 10 / 3 / 1, ADR-045's weights for an
-   analysed item, now for every counted CVE. On hrossen that moves the 15 baseline-only units
-   from medium to high until sqlite is decided. The alternative, 20 / 8 / 3 / 1, leaves today's
-   unread levels where they are and lowers confirmed ones: karakeep's four confirmed highs would
-   read medium (15) where they read high (18.75).
+None.

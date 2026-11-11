@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Draft** — for the operator's review |
-| **Version** | 0.2 |
+| **Status** | **Proposed** — every question settled with the operator; for his review |
+| **Version** | 0.3 |
 | **Date** | 2026-11-11 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | The delivery half of [ADR-047](<ADR-047 - CVE Decisions and the Daily Work.md>). Amends ADR-028 (private channels, a daily patch line, a public line 14 days behind), ADR-033 (subscriber tags, a second remote, a stream key for data) and ADR-045 (decisions no longer travel only with a release). |
-| **Changelog** | v0.1 (2026-11-10): first draft, a soft paywall over open development. v0.2 (2026-11-11): the operator's model, replacing it. **Development is private**: unstable and staging live on a server we run. **Production exists twice**: a subscriber line with daily bug, security and decision patches, and a public line that gets the same feature releases at the same boundaries and each patch 14 days later. Access by **per-site tokens** on that server. Both the decision feed and the patches are paid. A person signs every patch release. Canary: hrossen and makerfloss, two days. |
+| **Changelog** | v0.1 (2026-11-10): first draft, a soft paywall over open development. v0.2 (2026-11-11): the operator's model, replacing it. **Development is private**: unstable and staging live on a server we run. **Production exists twice**: a subscriber line with daily bug, security and decision patches, and a public line that gets the same feature releases at the same boundaries and each patch 14 days later. Access by **per-site tokens** on that server. Both the decision feed and the patches are paid. A person signs every patch release. Canary: hrossen and makerfloss, two days. v0.3 (2026-11-11): **Proposed.** A fix for a known-exploited CVE goes to the public line at once. The licence stays plain MPL-2.0 and the embargo is practical only: no subscriber terms, no contributor agreement. The forge is Forgejo on a rented server, its own TAPPaaS site, administered by Lars, best effort. A lapsed token works for 14 more days. A production canary on the subscriber line joins the ring. The roadmap and the ADRs are published at once from private `main`. A bug fix enters the daily patch only with a `Patch:` trailer naming how it affects operation. |
 
 A production site gets a fix or a CVE decision when the release that carries it reaches `stable`,
 up to four weeks after it was made. This ADR adds a daily stream of bug fixes, security patches
@@ -47,19 +47,41 @@ on every fix and every decision, and nothing else.
 
 ### D2. What a patch may be
 
-A patch is a commit from `main` that the release line may take between boundaries:
+A patch is a commit from `main` that a release line takes between boundaries. Three kinds
+qualify:
 
-| Kind | Examples | Commit types |
+| Kind | Examples | How it is recognised |
 |---|---|---|
-| Security | a nixpkgs lock move inside the same NixOS release; an image pin inside the same minor | `build(pin)`, `fix` |
-| Decisions | component records (ADR-047) | `chore(vex)` |
-| Bug fix | a corrected script, a manager fix, a failing check | `fix` |
+| Security | a nixpkgs lock move inside the same NixOS release; an image pin inside the same minor; a code fix for a vulnerability | commit type `build(pin)`, or a `fix` with `Patch: security` |
+| Decisions | component records (ADR-047) | commit type `chore(vex)` |
+| Bug fix that affects operation | a backup that does not run, an update that fails, a service that does not start, a check that reports wrongly | a `fix` with a `Patch:` trailer |
 
-Never on a patch line: `feat` commits, a migration, a change to a configuration schema, a new
-module, a new NixOS release, a minor or major version of an image. `tappaas-train.sh patch-scope`
-refuses a patch that carries one, by commit type and by a list of paths that only a release may
-touch (`migrations/`, `fields.json`, `module-catalog.json`, `flake.nix`). The site's verifier
-applies the path list too, so a mistake in the release tooling cannot put a migration on a patch.
+**The marker is a commit trailer** on the `fix` commit on `main`:
+
+```
+fix(backup): pull job skipped when the buddy answers late
+
+Patch: operation
+```
+
+| `Patch:` value | Means | From ADR-028 D12 |
+|---|---|---|
+| `data` | data is lost, or a backup believed to exist does not | data safety |
+| `security` | a vulnerability in TAPPaaS's own code or configuration | security |
+| `service` | a service is down or cannot start | service down |
+| `operation` | an update, a test, a check or an operator path fails or misleads | disruption |
+
+The author sets it; the maintainer who runs the patch day reads the list of marked commits and
+can drop one. **A `fix` without the trailer is cosmetic by definition and waits for the
+release**: wording, layout, a log line, a refactor that fixes nothing an operator meets. The
+commit-message hook accepts the trailer beside the three body lines and refuses any other value.
+
+Never on a patch line, marked or not: `feat` commits, a migration, a change to a configuration
+schema, a new module, a new NixOS release, a minor or major version of an image.
+`tappaas-train.sh patch-scope` refuses a patch that carries one, by commit type, by the trailer,
+and by a list of paths that only a release may touch (`migrations/`, `fields.json`,
+`module-catalog.json`, `flake.nix`). The site's verifier applies the path list too, so a mistake
+in the release tooling cannot put a migration on a patch.
 
 ### D3. One release, two branches: how the lines stay the same
 
@@ -77,8 +99,9 @@ The rules that keep them from drifting:
 2. **A patch leaves the embargo in the order it entered.** Fourteen days after its subscriber
    release, the oldest embargoed patch is cherry-picked from `sub` onto `rel`, `rel` is merged
    back into `sub`, and both are tagged: public `vX.Y.(N+1)` and subscriber `vX.Y.(N+1)+s(K-1)`.
-   The merge changes no file. The boundary's release-fault ports (below) are the one case taken
-   out of order; the check covers them like any other.
+   The merge changes no file. Two cases are taken out of order, and the check covers them like
+   any other: the boundary's release-fault ports (below), and a fix for a known-exploited CVE,
+   which is ported the day it is released to subscribers (D4).
 3. **The check.** `tappaas-train.sh embargo-check` computes, for every line: the tree of `sub`
    must equal the tree of `rel` with the embargoed patches applied in order, and when no patch is
    under embargo the two trees must be identical. It runs before every tag on either branch. A
@@ -109,29 +132,42 @@ A release line was cut from `main` 14 days before it becomes production, so ever
 | nightly | the staging site (hrossen) | scan, rescan, `candidates` (ADR-047 D8) |
 | morning | a maintainer | the queues; fixes, pin moves and records are pushed to private `main` |
 | on that push | the build | the **decision feed** (D5): lint, sign, gate, publish to subscribers the same day |
-| the same day | `tappaas-train.sh patch-day` | picks the day's patch commits onto `sub/X.Y` for each line in service; `patch-scope`; `embargo-check` |
+| the same day | `tappaas-train.sh patch-day` | picks the day's qualifying commits (D2) onto `sub/X.Y` for each line in service; `patch-scope`; `embargo-check` |
 | **gate 1**, hours | hrossen | every NixOS module's system is built from each patched line; the canary guest is deployed from it and its module test runs; a moved image runs its module's test |
-| **gate 2**, two days | hrossen and makerfloss | both run the patched staging line. The patch moves on unless `tappaas-train fault` records a fault against it |
+| **gate 2**, two days | hrossen, makerfloss and the production canary | hrossen and makerfloss run the patched staging line, the production canary the patched subscriber line. The patch moves on unless `tappaas-train fault` records a fault against it |
 | **gate 3**, a signature | a maintainer with a release key | `vX.Y.N+sK` on each line; subscribers get it that night |
 | 14 days after gate 3 | the forge, then a maintainer | the port of D3, `embargo-check`, a signature on the public tag, a push to Codeberg |
 
 So a fix written on day 0 is on subscriber production on day 2 and on public production on day
 16. Days with no patch commit produce nothing.
 
-**Known-exploited, the same day.** A CVE on the known-exploited list, or a critical one reachable
-from the network on a default deployment, skips gate 2: `patch-day --expedite --why "security:
-…"`. Gate 1 and the signature stay.
+**Known-exploited: the same day, and for everyone.** A fix for a CVE on the known-exploited
+list skips gate 2 and the embargo: `patch-day --expedite --why "security: …"`. Gate 1 and the
+signatures stay. It is tagged on `sub` and ported to `rel` in the same sitting, so subscriber and
+public production get it the same day. Nobody is left open to an attack in progress because
+they do not pay. Every other patch waits its 14 days, a critical one included.
 
-**The canary ring does not run the production line.** hrossen follows unstable and makerfloss
-staging. A production-line patch is proved by gate 1 (built for every module, deployed to the
-canary guest from that line) and soaked as the same commits on the staging line. That is weaker
-than a site living on the production line for two days, and it is what two sites allow.
+**The canary ring.** Three sites, two days:
+
+| Site | Runs | Shows |
+|---|---|---|
+| hrossen | unstable; gate 1 builds and deploys each patched line there | the patch builds for every module and a guest takes it |
+| makerfloss | the patched staging line | the patch under real use on the next release |
+| the production canary | the patched subscriber line, one tag ahead of the other subscribers | the patch under real use on the release production runs |
+
+The production canary is one of Lars's own production sites or a subscriber who agreed to it. It
+has `security.ring: canary` in its `site.json`, and the forge serves it each subscriber tag when
+gate 1 passes, two days before the others. Its operator reports a fault with
+`tappaas-train fault`, or by telling a maintainer, who records it.
 
 **Signing, made cheap.** One sitting a day at most. `tappaas-train.sh sign-day` on the signer's
 machine fetches every tag that waits, prints one screen for each (the commits, the scope check,
 the gates passed, the tree hash, for a public tag the embargo dates), and signs them after one
 confirmation. A typical day is one subscriber tag per line and, two weeks into the model, one
-public tag per line: two to four signatures from one command. The signature stays a person's
+public tag per line: two to four signatures from one command. The production canary takes a
+patch two days before its release tag exists; what it verifies in those two days is the one open
+question below, and the proposed answer adds a canary tag to the same sitting. The signature
+stays a person's
 statement about one commit, as ADR-033 has it; no automation key can sign a release.
 
 ### D5. The decision feed
@@ -167,13 +203,29 @@ ADR-047's component records, delivered as data the day they are made.
 | GitHub mirror | push mirror of Codeberg | unchanged, and it mirrors only Codeberg. It must never be pointed at the forge. Subscriber tags (`+sK`) never reach Codeberg, so they never reach GitHub |
 | Images on GitHub Releases | built at releases | unchanged. Images change at feature releases, which both lines get on the same day, so they stay public |
 | Documentation site | built from the repository | built from public `stable` at each public release. It describes what the public can run. A preview for unreleased work is served from the forge to maintainers and contributors |
-| ADRs and the roadmap | on `main`, public at once | in the repository, so public with the release. An open question asks whether the roadmap should be published apart |
+| ADRs and the roadmap | on `main`, public at once | **still public at once**, through the `design` branch below |
 | `channels.json` | declares unstable, staging, production | the public repository declares production only. The forge's repositories declare all three, and the subscriber line |
+
+**Plans and design stay public in real time.** Only code and patches are delayed. `ROADMAP.md`
+and `docs/ADR/` are written on private `main` as today, and published on every merge:
+
+- A push to private `main` that touches `ROADMAP.md` or `docs/ADR/**` starts a job on the forge
+  (a path-filtered trigger). It copies exactly those paths to a `design` branch and pushes that
+  branch to Codeberg. `design` has a history of its own and holds nothing else, so no code can
+  leave by it; the job refuses a commit that would add any other path.
+- The documentation site builds its roadmap and ADR pages from `design`, and everything else
+  from public `stable`. An ADR can therefore describe something whose code is still four weeks
+  from the public line; the page says which release carries it.
+- One limit: an ADR or a roadmap line does not describe an unfixed vulnerability in detail
+  before its patch is public. It names the work ("harden the pull path") and the detail follows
+  with the patch.
+- Codeberg issues stay the public tracker, so a plan and its discussion stay in one public place.
 
 **Outside contributors.**
 
 - **Regular contributors** get an account on the forge and work against private `main` as today.
-  They see embargoed patches, so they sign the contributor agreement (D9) first.
+  They see patches before the public does and are asked to keep the embargo. That is a request
+  between colleagues, not a licence term (D9).
 - **A pull request on Codeberg** is made against public `stable`, which is weeks behind `main`.
   A maintainer ports it to private `main`, with the author kept on the commit. It appears on
   Codeberg with the release that contains it. This is slower for the contributor than today and
@@ -185,8 +237,10 @@ ADR-047's component records, delivered as data the day they are made.
 ### D7. The forge: tokens on a server we run
 
 **What it is.** A Forgejo instance, installed as a TAPPaaS site of its own (the `forgejo` and
-`woodpecker` modules, identity, backup), on a rented server. Not hrossen: the product must not
-depend on the test system. It holds:
+`woodpecker` modules, identity, backup), on a rented server, administered by Lars. Not hrossen:
+the product must not depend on the test system. Availability is best effort: there is no second
+server and no on-call. That is acceptable because no site needs the forge to keep running (see
+"When the forge is down"). It holds:
 
 | Repository | Readable by | Content |
 |---|---|---|
@@ -209,19 +263,23 @@ A subscriber can read `tappaas/production` and nothing else. Development is not 
 
 **Revocation and figures.** Disabling the account ends access at once. The forge's access log
 gives, per site: last fetch, the tag it fetched, and so which sites are behind. A small licence
-service beside Forgejo holds `site → token → paid until` and disables accounts when a
-subscription ends, after a grace period.
+service beside Forgejo holds `site → token → paid until` and disables an account 14 days after
+its subscription ended.
 
 **When a subscription lapses**, the site falls back to the public line without the operator
 doing anything, and without ever going backwards:
 
-1. The forge answers the site's fetch with "subscription ended" (a status the site can tell from
-   an outage). The site raises a `subscription` warning and stops asking for the feed.
-2. The site keeps the subscriber tag it runs. It paid for those patches.
-3. Each night it looks at the public line. It moves there when a public tag exists whose base
+1. **Grace, 14 days.** From the day the subscription ends the token still works. The forge adds
+   "subscription ended on <date>, access until <date>" to its answers, and the site raises a
+   `subscription` warning that says so.
+2. **The token is disabled.** The forge answers the site's fetch with "subscription ended" (a
+   status the site can tell from an outage). The site stops asking for the feed.
+3. The site keeps the subscriber tag it runs. It paid for those patches.
+4. Each night it looks at the public line. It moves there when a public tag exists whose base
    release is the same or newer **and** whose tag message lists every patch its own tag held
    under embargo (D3 rule 4). That is at most 14 days later, or at the next boundary.
-4. From then on it follows Codeberg as any free site.
+5. From then on it follows Codeberg as any free site. Renewing at any point returns it to the
+   subscriber line.
 
 A public tag is not a git descendant of a subscriber tag, so ADR-033's "never backwards" rule
 gains this one case: a move from a subscriber tag to a public tag that contains all its patches.
@@ -241,48 +299,26 @@ sites say so.
   (ADR-028 D15) becomes `patch-day --expedite`.
 - The stream key is one line in `allowed_signers` with `namespaces="tappaas-decisions"`.
 
-### D9. The licence
+### D9. The licence: plain MPL-2.0, a practical embargo
 
-The repository is MPL-2.0. "Paying customers only, public after 14 days" is compatible with it
-under conditions, and they differ by how hard the paywall must be.
+Everything stays MPL-2.0, for subscribers and for the public. There are no subscriber terms and
+no contributor agreement.
 
-**What MPL-2.0 requires, and does not.**
-
-- It requires that whoever receives the software can get its source under MPL. Subscribers
-  receive source. It does not require publishing to the public, and it sets no deadline. A
-  14-day delay before public release breaks nothing.
-- It gives every recipient the right to pass the software on, and it forbids a licensee from
-  restricting that right for others. Under plain MPL a subscriber may publish a patch on the day
-  they receive it, and a subscription contract that forbids it would be asking them to give up a
-  right the licence grants.
-
-**So there are two ways to run the embargo.**
-
-| | **A. Plain MPL** | **B. Subscriber terms during the embargo** |
-|---|---|---|
-| Patches reach subscribers under | MPL-2.0 | a subscriber licence: use on the subscribed sites, no redistribution until public release; MPL-2.0 from that day |
-| The embargo holds because | subscribers have little reason to leak, and the token ends if they do | the licence says so |
-| Needs | nothing | every copyright holder's agreement to distribute their contribution under the subscriber terms for 14 days |
-| Weakness | one subscriber can lawfully publish everything daily | the agreements; and it applies only to what TAPPaaS owns |
-
-For B, three things have to hold:
-
-1. **Rights in all of the code.** Lars, Erik and Andreas have commits in the tree, and those
-   contributions came in under MPL. Each has to agree, in writing, that TAPPaaS may distribute
-   their past and future contributions under the subscriber terms for the embargo period.
-   Without that, B covers only the parts whose author agreed.
-2. **A contributor agreement from now on**, signed before a forge account or a merged pull
-   request: MPL inbound, plus that same right.
-3. **Third-party parts keep their own licences.** Modules that carry others' code (the tree has
-   third-party licence and authors files under some modules) are outside the subscriber terms. A
-   patch that only moves a lock or a pin points at upstream's public fix, which nobody can
-   embargo anyway.
-
-Either way: what is embargoed is our work (the triage, the tested and signed patch). The
-upstream CVE and the upstream fix are public from the first minute.
-
-This section is an engineer's reading of the licence. A lawyer should confirm it before the
-first subscription is sold.
+- **MPL-2.0 requires** that whoever receives the software can get its source under MPL.
+  Subscribers receive source. It does not require publishing to the public and sets no deadline,
+  so a 14-day delay before the public release breaks nothing.
+- **MPL-2.0 lets every recipient pass the software on.** A subscriber may lawfully publish a
+  patch on the day they receive it. Nothing in the subscription says otherwise, and nothing may.
+- **So the embargo is practical, not legal.** It holds because the patches are served only to
+  tokens, because a subscriber gains nothing by republishing, and because the public gets the
+  same patch 14 days later anyway. A leak costs 14 days on that patch and nothing else.
+- **What a subscription buys is a service**: the triage done, the patch built, tested on three
+  sites, signed and delivered daily, and the decision feed. It does not buy exclusive rights to
+  code.
+- **Contributions** come in under MPL-2.0 as today. No rights beyond the licence are needed from
+  Erik, Andreas or anyone else, because nothing is distributed under other terms.
+- **Upstream is never embargoed.** A CVE and its upstream fix are public from the first minute;
+  what waits 14 days is our work on top of them.
 
 ## Consequences
 
@@ -298,17 +334,19 @@ first subscription is sold.
   - Moving development off Codeberg: accounts, CI, the docs build, the mirror's source, every
     session's and contributor's remotes.
   - Two branches and two tag series per release, a daily patch routine and a daily signature.
-  - Open development ends. Outside contributions get slower.
+  - Open development of code ends; plans and design stay open. Outside contributions get slower.
 - **Risk.**
   - **A patch breaks production.** Gate 1 builds every module; gate 2 is two days on two sites;
     the way back is the previous tag by an operator command.
   - **The lines drift.** `embargo-check` before every tag.
-  - **The embargo leaks.** D9. The design assumes it can and still works: a leak gives the public
-    early what it gets on day 14.
-  - **The public is left exposed for 14 days to something subscribers have had fixed.** See the
-    first open question.
-  - **The forge is the single way to patches for subscribers.** Signed content limits what a
-    compromise can do; an outage delays patches and breaks nothing.
+  - **The embargo leaks.** It lawfully can (D9). A leak gives the public early what it gets on
+    day 14.
+  - **The public waits 14 days for a fix subscribers have.** Never for a known-exploited CVE
+    (D4). For the rest, the upstream fix and advisory are public, the Debian half of every site
+    patches itself, and today the same fix waits up to four weeks.
+  - **The forge is the single way to patches for subscribers, on best effort.** Signed content
+    limits what a compromise can do; an outage delays patches and breaks nothing. A
+    known-exploited fix also goes to Codeberg, so it is reachable with the forge down.
 
 ## Alternatives considered
 
@@ -326,12 +364,11 @@ first subscription is sold.
 
 | Phase | Content | Done when |
 |---|---|---|
-| S0 | The licence: D9 decided, the agreements signed, a lawyer's confirmation | Path A or B is chosen in writing |
-| S1 | The forge as a TAPPaaS site; development, CI and the docs preview move there; Codeberg becomes the publication repository; the mirror and the docs site build from it | A boundary runs from the forge and Codeberg receives only `stable` and its tags |
+| S1 | The forge as a TAPPaaS site; development, CI and the docs preview move there; Codeberg becomes the publication repository; the `design` branch and its job; the mirror and the docs site build from Codeberg | A boundary runs from the forge; Codeberg receives only `stable`, its tags and `design`; an ADR merged to private `main` is on the docs site the same hour |
 | S2 | `rel/` and `sub/` branches, `+sK` tags, `patch-scope`, `embargo-check`, the port, the verifier's cross-line rule | A rehearsal line takes three patches, ports them in order, and the check stops a deliberately wrong port |
-| S3 | `patch-day`, gates 1 and 2, `sign-day`, `--expedite` | A fix pushed in the morning is on a subscribed test site two days later with one signing command |
+| S3 | The `Patch:` trailer and the hook; `patch-day`; gates 1 and 2 with the production canary; `sign-day`; `--expedite` with its same-day public port | A marked fix pushed in the morning is on the canary that day and on a subscribed test site two days later with one signing command; an unmarked fix is left for the release |
 | S4 | The decision feed: builder, stream key, site verification, fallback | hrossen applies a feed and refuses a replayed and an expired one |
-| S5 | Tokens: accounts, `site-manager subscription`, the licence service, lapse and fallback | A lapsed test site holds its tag, then joins the public line by itself when the public tag covers its patches |
+| S5 | Tokens: accounts, `site-manager subscription`, the licence service, the 14-day grace, lapse and fallback | A lapsed test site warns for 14 days, holds its tag, then joins the public line by itself when the public tag covers its patches |
 
 ## Settled in review
 
@@ -341,20 +378,26 @@ boundaries; per-site tokens on a server we run, with fallback to the public line
 subscription lapses; the feed and the patches both paid; a person signs each patch release with a
 release key; the canary ring is hrossen and makerfloss for two days.
 
+Settled in v0.3 (operator, 2026-11-11): a fix for a known-exploited CVE goes to the public line
+at once, every other patch waits 14 days; the licence is plain MPL-2.0 with a practical embargo,
+no subscriber terms and no contributor agreement; the forge is Forgejo on a rented server, its
+own TAPPaaS site, administered by Lars, best effort; a lapsed token is disabled after 14 days of
+grace; one production canary on the subscriber line joins hrossen and makerfloss; the roadmap
+and the ADRs are published at once; the daily patch takes security fixes, decisions, and bug
+fixes marked as affecting operation, and cosmetic fixes wait for the release.
+
 ## Open questions
 
-1. **Does a known-exploited fix go to the public line at once?** As decided, the public waits 14
-   days for every patch. For a CVE that is being exploited and is reachable on a default
-   deployment, that means knowingly leaving free sites open for two weeks. Proposed: these, and
-   only these, are ported at once.
-2. **Licence path A or B** (D9), and whether Erik and Andreas agree to B.
-3. **Where the forge runs**, who else has administrative access, and what availability it must
-   have.
-4. **Grace period** when a subscription ends, before the token is disabled.
-5. **A production-line canary.** hrossen and makerfloss run unstable and staging. Should one
-   subscribed production site join the ring?
-6. **The roadmap and the ADRs** become public four weeks late with the code. Publish the roadmap
-   apart, on the docs site?
-7. **Bug fixes in the paid stream.** Every `fix` commit is a candidate for the daily patch. That
-   is more change on production than security alone. Should a bug fix need a severity to qualify,
-   or does every fix go?
+One point of design, found while settling the canary:
+
+1. **What the production canary verifies.** ADR-033 lets a production site run only a signed
+   release tag, and the signature is gate 3, after the canary's two days. Proposed: the patch is
+   signed as a **canary tag** (`vX.Y.N+sK-rc`) when gate 1 passes, which only a site with
+   `security.ring: canary` accepts, and signed again as the release tag after the soak. That is
+   one more signature per patch day, in the same sitting as the previous day's release tag. The
+   alternative is to let a canary site run an unsigned candidate, which weakens ADR-033 on a
+   production site.
+
+Two choices are left to the day they are needed, and neither changes this ADR: which site is the
+production canary (one of Lars's own, or a named subscriber), and which rented server the forge
+runs on.
