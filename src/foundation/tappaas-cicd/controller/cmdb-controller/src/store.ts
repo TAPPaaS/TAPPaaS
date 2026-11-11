@@ -644,8 +644,6 @@ export class Store {
     }));
   }
 
-  /** Every period of every attribute and relation of an object, and the
-   *  reports that wrote them; with at, the object as it was then. */
   /** Every period of one attribute, on any object, that was in force at or
    *  after `since` (the newest first): what a CI carried and when, with the
    *  change that ended it — e.g. the investigations that have ended, read back
@@ -680,6 +678,8 @@ export class Store {
     }));
   }
 
+  /** Every period of every attribute and relation of an object, and the
+   *  reports that wrote them; with at, the object as it was then. */
   async history(ref: string, cls: string | null, at: string | null): Promise<Obj> {
     if (at !== null) {
       if (Number.isNaN(Date.parse(at))) throw new HttpError(400, `at ${at} is not a date`);
