@@ -646,6 +646,40 @@ export class Store {
 
   /** Every period of every attribute and relation of an object, and the
    *  reports that wrote them; with at, the object as it was then. */
+  /** Every period of one attribute, on any object, that was in force at or
+   *  after `since` (the newest first): what a CI carried and when, with the
+   *  change that ended it — e.g. the investigations that have ended, read back
+   *  when the file that listed them is gone. */
+  async periods(attribute: string, since: string | null): Promise<Obj[]> {
+    if (!attribute) throw new HttpError(400, "periods names an attribute");
+    if (since !== null && Number.isNaN(Date.parse(since))) throw new HttpError(400, `since ${since} is not a date`);
+    const rows = (
+      await this.pg.query(
+        `SELECT o.id, o.class, o.name, a.value, a.source, a.change,
+                lower(a.validity) AS "from", upper(a.validity) AS "to",
+                e.id AS ended_change, e.verb AS ended_verb, e.actor AS ended_actor
+           FROM attribute a JOIN object o ON o.id = a.object
+           LEFT JOIN LATERAL (
+             SELECT c.id, c.verb, c.actor FROM change c
+              WHERE NOT upper_inf(a.validity) AND c.time = upper(a.validity) AND c.objects @> ARRAY[a.object]
+              ORDER BY c.id DESC LIMIT 1) e ON true
+          WHERE a.name = $1 AND NOT isempty(a.validity)
+            AND ($2::timestamptz IS NULL OR upper_inf(a.validity) OR upper(a.validity) >= $2::timestamptz)
+          ORDER BY lower(a.validity) DESC, o.name`,
+        [attribute, since === null ? null : new Date(since).toISOString()],
+      )
+    ).rows;
+    return rows.map((r) => ({
+      object: { id: r.id, class: r.class, name: r.name },
+      value: r.value,
+      source: r.source,
+      change: r.change,
+      from: r.from,
+      to: r.to,
+      ended: r.ended_change === null ? null : { change: r.ended_change, verb: r.ended_verb, actor: r.ended_actor },
+    }));
+  }
+
   async history(ref: string, cls: string | null, at: string | null): Promise<Obj> {
     if (at !== null) {
       if (Number.isNaN(Date.parse(at))) throw new HttpError(400, `at ${at} is not a date`);

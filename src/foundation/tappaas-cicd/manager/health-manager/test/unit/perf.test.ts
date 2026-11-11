@@ -128,6 +128,32 @@ const at = (min: number): Date => new Date(T0.getTime() + min * 60000);
   check(perfList(c.configDir, at(91 * 1440)).history.length === 0, "history keeps 90 days");
 }
 
+// The raises file gone (hrossen 2026-11-10: a teardown removed it): the ended
+// raises are read back from the CMDB's `investigation` periods, the file wins
+// where it still lists one, and a CMDB that does not answer leaves the file alone.
+{
+  const dir = mkdtempSync(join(tmpdir(), "perf-test-"));
+  const now = new Date("2026-11-11T02:00:00Z");
+  const COTURN = { id: "33394b2f-6716-4deb-aefd-76295bd61baa", class: "vm", name: "coturn" };
+  const periods = [
+    { object: COTURN, value: { level: "trace", resolution: "normal", from: "basic", by: "tappaas", started: "2026-11-10T22:14:00Z", until: "2026-11-10T22:18:52Z" }, from: "2026-11-10T22:14:00.312Z", to: "2026-11-10T22:21:04.118Z", ended: { change: 89302, verb: "perf coturn expired", actor: null } },
+    { object: POOL, value: { level: "basic", from: "off", by: "lars", started: "2026-11-09T10:00:00Z", until: "2026-11-09T12:00:00Z" }, from: "2026-11-09T10:00:00Z", to: "2026-11-09T10:30:00Z", ended: { change: 88000, verb: "perf stop tankc1", actor: "lars" } },
+    { object: COTURN, value: null, from: "2026-11-10T22:21:04.118Z", to: null, ended: null },
+  ];
+  const before = perfList(dir, now);
+  check(before.history.length === 0, "without the CMDB's record the file alone lists nothing (the bug)");
+  const d = perfList(dir, now, () => periods);
+  check(d.history.length === 2 && d.investigations.length === 0, `both ended raises are history (${d.history.length})`);
+  const h = d.history[0];
+  check(h.ci.name === "coturn" && h.level === "trace" && h.ended === "2026-11-10T22:21:04Z" && h.endedHow === "expired" && h.endedBy === null && h.change === 89302, "coturn's trace raise: expired at 22:21, by nobody");
+  check(d.history[1].endedHow === "stopped" && d.history[1].endedBy === "lars", "a stopped one names who stopped it");
+  check(perfList(dir, now, () => { throw new Error("down"); }).history.length === 0, "a CMDB that does not answer: the file alone");
+  // The file still listing it: one row, the file's.
+  writeFileSync(join(dir, "performance-raises.json"), JSON.stringify({ investigations: [], history: [{ ci: COTURN, module: "coturn", level: "trace", resolution: "normal", from: "basic", by: "tappaas", note: "from the file", started: "2026-11-10T22:14:00Z", until: "2026-11-10T22:18:52Z", ended: "2026-11-10T22:18:52Z", endedHow: "expired", endedBy: null, change: 89302 }] }));
+  const both = perfList(dir, now, () => periods);
+  check(both.history.filter((r) => r.ci.name === "coturn").length === 1 && both.history.find((r) => r.ci.name === "coturn")?.note === "from the file", "the file's row wins over the CMDB's");
+}
+
 // A CI with no collector of its own (a pool): recorded, nothing to rewrite. Purge.
 {
   const c = fake(T0);

@@ -206,14 +206,57 @@ export function perfExpire(ctx: PerfContext): RaiseRow[] {
   return due;
 }
 
-/** `perf list --json`: the console's contract. A raise past its time reads as history (expired). */
-export function perfList(configDir: string, now: Date): { now: string; investigations: Omit<RaiseRow, "module">[]; history: Omit<RaiseRow, "module">[] } {
+/** One period of a CI's `investigation` attribute in the CMDB (GET /v1/periods). */
+export interface InvestigationPeriod {
+  object: { id: string; class: string; name: string };
+  value: unknown;
+  from: string;
+  to: string | null;
+  ended: { change: number; verb: string | null; actor: string | null } | null;
+}
+
+/** A raise as the CMDB recorded it: the attribute's value while it was set, ended by the change that unset it. */
+export function raiseFromPeriod(p: InvestigationPeriod): RaiseRow | null {
+  const v = (p.value && typeof p.value === "object" ? p.value : null) as Record<string, unknown> | null;
+  if (!v || !LEVELS.includes(v.level as RaiseLevel) || typeof v.until !== "string" || Number.isNaN(Date.parse(v.until))) return null;
+  const verb = p.ended?.verb ?? "";
+  const how: RaiseRow["endedHow"] = p.to === null ? null : /^perf stop\b/.test(verb) ? "stopped" : /expired$/.test(verb) || Date.parse(p.to) >= Date.parse(v.until) ? "expired" : "stopped";
+  return {
+    ci: { id: p.object.id, class: p.object.class, name: p.object.name },
+    module: null,
+    level: v.level as RaiseLevel,
+    resolution: v.resolution === "fine" ? "fine" : "normal",
+    from: typeof v.from === "string" ? v.from : "basic",
+    by: typeof v.by === "string" ? v.by : p.ended?.actor ?? "?",
+    note: typeof v.note === "string" ? v.note : null,
+    started: typeof v.started === "string" ? v.started : iso(new Date(p.from)),
+    until: iso(new Date(v.until)),
+    ended: p.to === null ? null : iso(new Date(p.to)),
+    endedHow: how,
+    endedBy: how === "stopped" ? p.ended?.actor ?? null : null,
+    change: p.ended?.change ?? null,
+  };
+}
+
+/** `perf list --json`: the console's contract. A raise past its time reads as history (expired).
+ *  The file is the working copy; the CMDB keeps every investigation as its CI's
+ *  `investigation` attribute, so what the file no longer lists (it was lost,
+ *  restored, or removed) is read back from there. */
+export function perfList(configDir: string, now: Date, periods?: (since: string) => InvestigationPeriod[] | null): { now: string; investigations: Omit<RaiseRow, "module">[]; history: Omit<RaiseRow, "module">[] } {
   const s = readRaises(configDir);
-  const strip = ({ module: _m, ...r }: RaiseRow): Omit<RaiseRow, "module"> => r;
-  const live = s.investigations.filter((r) => r.ended === null && Date.parse(r.until) > now.getTime());
-  const lapsed = s.investigations.filter((r) => !live.includes(r)).map((r) => ({ ...r, ended: r.ended ?? r.until, endedHow: r.endedHow ?? ("expired" as const) }));
   const cut = now.getTime() - KEEP_MS;
-  const history = [...lapsed, ...s.history].filter((r) => Date.parse(r.ended ?? r.until) >= cut).sort((a, b) => (b.ended ?? b.until).localeCompare(a.ended ?? a.until));
+  const known = new Set([...s.investigations, ...s.history].map((r) => `${r.ci.id}|${r.started}`));
+  let recorded: RaiseRow[] = [];
+  try {
+    recorded = (periods?.(new Date(cut).toISOString()) ?? []).map(raiseFromPeriod).filter((r): r is RaiseRow => r !== null && !known.has(`${r.ci.id}|${r.started}`));
+  } catch {
+    recorded = []; // the CMDB did not answer: the file alone
+  }
+  const strip = ({ module: _m, ...r }: RaiseRow): Omit<RaiseRow, "module"> => r;
+  const pending = [...s.investigations, ...recorded.filter((r) => r.ended === null)];
+  const live = pending.filter((r) => r.ended === null && Date.parse(r.until) > now.getTime());
+  const lapsed = pending.filter((r) => !live.includes(r)).map((r) => ({ ...r, ended: r.ended ?? r.until, endedHow: r.endedHow ?? ("expired" as const) }));
+  const history = [...lapsed, ...s.history, ...recorded.filter((r) => r.ended !== null)].filter((r) => Date.parse(r.ended ?? r.until) >= cut).sort((a, b) => (b.ended ?? b.until).localeCompare(a.ended ?? a.until));
   return { now: iso(now), investigations: live.sort((a, b) => b.started.localeCompare(a.started)).map(strip), history: history.map(strip) };
 }
 

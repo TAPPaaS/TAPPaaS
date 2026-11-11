@@ -8,7 +8,8 @@
 // rewrites one, and drops an ack or window that has ended; here they are read,
 // changed and written back whole.
 
-import { cmdbQuery, cmdbReport, cmdbRequest, cmdbShow, objectPath } from "../../../lib/ts/src/cmdb";
+import { cmdbPeriods, cmdbQuery, cmdbReport, cmdbRequest, cmdbShow, objectPath } from "../../../lib/ts/src/cmdb";
+import type { InvestigationPeriod } from "./perf";
 import { changeJob } from "../../../lib/ts/src/job";
 
 const SOURCE = "health-manager";
@@ -81,6 +82,8 @@ export interface HealthCmdb {
   objectsOfClass(cls: string): HealthObject[]; // subclasses too
   resolve(ref: string): HealthObject;
   periods(id: string): Period[];
+  /** Every period of the `investigation` attribute since a time; null when the CMDB has no such read. */
+  investigations?(since: string): InvestigationPeriod[] | null;
   write(o: HealthObject, conditions: Condition[], meta: WriteMeta): void;
 }
 
@@ -126,6 +129,15 @@ export class LiveHealthCmdb implements HealthCmdb {
   periods(id: string): Period[] {
     const h = cmdbRequest("GET", objectPath(id, "history", {})) as { attributes: Period[] };
     return h.attributes.filter((a) => a.name === "conditions");
+  }
+
+  // A controller without the periods route (404) has no record to read back.
+  investigations(since: string): InvestigationPeriod[] | null {
+    try {
+      return cmdbPeriods("investigation", since) as InvestigationPeriod[];
+    } catch {
+      return null;
+    }
   }
 
   // An assessment: the object by id, no sighting, so a write here neither holds

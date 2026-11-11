@@ -233,6 +233,22 @@ export function cmdbRelations(query: CmdbRelationQuery, o: CmdbOptions = {}): Ob
   return cmdbRequest("POST", "/v1/relations", query, o) as Obj[];
 }
 
+export interface CmdbPeriod {
+  object: { id: string; class: string; name: string };
+  value: unknown;
+  source: string;
+  change: number | null;
+  from: string;
+  to: string | null; // null: still in force
+  ended: { change: number; verb: string | null; actor: string | null } | null;
+}
+
+/** Every period of one attribute on any object, in force at or after `since`, the newest first. */
+export function cmdbPeriods(attribute: string, since?: string, o: CmdbOptions = {}): CmdbPeriod[] {
+  const qs = `attribute=${encodeURIComponent(attribute)}${since ? `&since=${encodeURIComponent(since)}` : ""}`;
+  return cmdbRequest("GET", `/v1/periods?${qs}`, undefined, o) as CmdbPeriod[];
+}
+
 /** One object by id or name (class-qualified where a name is not unique). */
 export function cmdbShow(ref: string, opts: { class?: string; at?: string } = {}, o: CmdbOptions = {}): Obj {
   return cmdbRequest("GET", objectPath(ref, "", opts), undefined, o) as Obj;

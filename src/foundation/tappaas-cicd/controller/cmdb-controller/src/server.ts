@@ -11,7 +11,8 @@
 //   GET  /v1/objects/<id|name>[?class=&at=]          show
 //   GET  /v1/objects/<id|name>/history[?class=&at=]  every period; or as of a time
 //   GET  /v1/objects/<id|name>/impact[?hops=&direction=]
-//   POST /v1/resolve                       OpenTelemetry resource attributes → object
+//   GET  /v1/periods?attribute=<name>[&since=]  every period of one attribute, any object
+//   POST /v1/resolve                      OpenTelemetry resource attributes → object
 //   POST /v1/sweep                         the discovery sweep; GET: the last record
 //   POST /v1/rescan                        ask every cmdbSource component to report again
 //   GET  /v1/classes, /v1/classes/<name>   the metamodel
@@ -169,6 +170,9 @@ export class Api {
       if (sub === "impact") {
         return send(res, 200, { ok: true, data: await s.impact(ref, q("class"), Number(q("hops") ?? "2"), q("direction") ?? "both") });
       }
+    }
+    if (method === "GET" && what === "periods" && !ref) {
+      return send(res, 200, { ok: true, data: await s.periods(q("attribute") ?? "", q("since")) });
     }
     if (method === "POST" && what === "resolve" && !ref) {
       const body = (await readBody(req)) as Obj;

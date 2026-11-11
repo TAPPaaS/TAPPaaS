@@ -700,7 +700,9 @@ health-manager perf list [--json]
 }
 ```
 
-  `investigations` the raises in force, `history` those ended in the last 90 days, newest first;
+  `investigations` the raises in force, `history` those ended in the last 90 days, newest first
+  — from `config/performance-raises.json`, and from the CMDB's periods of each CI's
+  `investigation` attribute (`GET /v1/periods`) for what the file no longer lists;
   `from` the cascaded level it raised from; `endedHow` `expired` or `stopped`. A row in
   `investigations` whose `until` has passed is shown as history (expired); a row missing `ci.id`,
   `ci.name`, `started`, `until` or a level of `basic`/`service`/`trace` is dropped.

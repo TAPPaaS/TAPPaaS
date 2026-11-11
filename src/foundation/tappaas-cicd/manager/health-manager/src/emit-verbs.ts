@@ -225,7 +225,7 @@ function cmdPerf(ctx: EmitContext, rest: string[]): number {
   const [first, second] = a.positional;
   try {
     if (first === "list" && !second) {
-      const d = perfList(ctx.configDir, ctx.now);
+      const d = perfList(ctx.configDir, ctx.now, ctx.cmdb.investigations ? (since) => ctx.cmdb.investigations!(since) : undefined);
       return print(a.has("--json"), d, () => perfListLines(d));
     }
     if (first === "stop" && second && a.positional.length === 2) {

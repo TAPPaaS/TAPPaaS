@@ -244,6 +244,20 @@ check "the server as of the first report had the first cpu" "E5-2680v4" "$(cmdb 
 check "a query as of then sees the first cpu" "E5-2680v4" "$(cmdb query server --at "${T1b}" --json | jq -r '.[0].attributes.cpu')"
 check "drift on the server: what cpu was, from whom" "E5-2680v4 health-manager" "$(cmdb show srv-01 --json | jq -r '"\(.drift.attributes.cpu.was) \(.drift.source)"')"
 cmdb history srv-01 >"${T}/hist.txt" 2>&1 && grep -q "E5-2690v4" "${T}/hist.txt" && ok "cmdb history prints a table" || bad "history text: $(head -3 "${T}/hist.txt")"
+# An investigation set and ended: its periods, any object, with the change that ended it.
+cmdb report --json >/dev/null <<JSON
+{ "source": "health-manager", "kind": "change", "verb": "perf nextcloud --level trace", "actor": "lars", "time": "${T1b}",
+  "objects": [ { "class": "vm", "name": "nextcloud", "attributes": { "investigation": { "level": "trace", "until": "${T2}" } } } ] }
+JSON
+cmdb report --json >/dev/null <<JSON
+{ "source": "health-manager", "kind": "change", "verb": "perf nextcloud expired", "time": "${T2}",
+  "objects": [ { "class": "vm", "name": "nextcloud", "attributes": { "investigation": null } } ] }
+JSON
+check "periods: the investigation that ended, with the change that ended it" "vm/nextcloud trace ${T1b} ${T2} perf nextcloud expired" \
+    "$(curl -s --unix-socket "${CMDB_SOCKET}" "http://cmdb/v1/periods?attribute=investigation" | jq -r '[.data[] | select(.value != null) | "\(.object.class)/\(.object.name) \(.value.level) \(.from) \(.to) \(.ended.verb)"] | join("|")')"
+check "periods: since after its end leaves it out" "0" \
+    "$(curl -s --unix-socket "${CMDB_SOCKET}" "http://cmdb/v1/periods?attribute=investigation&since=${T3}" | jq '[.data[] | select(.value != null)] | length')"
+check "periods: no attribute named is a 400" "400" "$(curl -s -o /dev/null -w '%{http_code}' --unix-socket "${CMDB_SOCKET}" "http://cmdb/v1/periods")"
 cat >"${T}/r3.json" <<JSON
 { "source": "asset-manager", "kind": "change", "verb": "asset modify", "job": "J-1", "actor": "lars", "time": "${T3}",
   "objects": [ { "class": "server", "name": "srv-01", "attributes": { "assetTag": "T-0001" } },
