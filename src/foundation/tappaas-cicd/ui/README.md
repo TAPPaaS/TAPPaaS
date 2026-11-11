@@ -629,7 +629,7 @@ refreshing, error}` with the types of `web/src/perftypes.ts`:
 | `GET performance/overview` | `PerfOverview`: the site's level and where it comes from, the store's state (`off` \| `on` \| `unreachable`), the `performance` root causes the CMDB carries with what they slow, the eight most saturated resources (USE) and published services (RED), each with its 24 h sparkline and last change; `basicCost` when the site is off |
 | `GET performance/levels` | `PerfLevels`: the cascade as rows (site, environments, modules), each `{level, set, from, resolution, cost}`, the total against the logging VM's memory and disk, `measuredSeries` the store holds |
 | `GET performance/investigations` | `PerfInvestigations`: `health-manager perf list --json`, checked against the contract below |
-| `GET performance/ci/<id>?range=24h\|7d\|30d\|90d` | `PerfCi`: the CI's effective level, its class's signals over the range (24 h and 7 d from the store, 30 d and 90 d from the 5-minute trends), the CMDB changes in the range as markers, links to Grafana and its root cause |
+| `GET performance/ci/<id>?range=24h\|7d\|30d\|90d` | `PerfCi`: the CI's effective level, its class's signals over the range (24 h and 7 d from the store, 30 d and 90 d from the 5-minute trends), the CMDB changes in the range as markers, links to Grafana and its root cause. The signal its own `performance` condition names (reason `perf-<signal>`) is `judged`, at the condition's status when that is worse than its line: a short list of charts always leads with it |
 
 **The store** is asked by the server only, with the queries `src/perf.ts`'s signal catalogue
 builds; no PromQL comes from a request and the credential never leaves the server. It is the

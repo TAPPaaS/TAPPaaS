@@ -40,7 +40,8 @@ export interface PerfSeries {
   critical: number | null;
   points: PerfPoint[];
   now: number | null; // the last value
-  status: PerfStatus;
+  status: PerfStatus; // its line, or its performance condition's when that names it
+  judged?: boolean; // the signal its performance condition names: always charted
 }
 
 // One row of the Overview's lists.
@@ -181,3 +182,16 @@ export function fmtSeries(n: number): string {
 
 export const statusOf = (v: number | null, warning: number | null, critical: number | null): PerfStatus =>
   v === null || !Number.isFinite(v) ? "unknown" : critical !== null && v >= critical ? "critical" : warning !== null && v >= warning ? "warning" : "ok";
+
+/** The charts a short list shows (the CI panel's `max`): the signal its
+ *  performance condition names first, then what is over its line, then the
+ *  catalogue's order; only series with numbers. Without a max, all of them. */
+export function chartsShown(series: PerfSeries[], max?: number): PerfSeries[] {
+  const rank: Record<PerfStatus, number> = { critical: 0, warning: 1, ok: 2, unknown: 3 };
+  const withNumbers = series.map((s, i) => ({ s, i })).filter((x) => x.s.points.length);
+  if (!max) return withNumbers.map((x) => x.s);
+  return withNumbers
+    .sort((a, b) => Number(!!b.s.judged) - Number(!!a.s.judged) || rank[a.s.status] - rank[b.s.status] || a.i - b.i)
+    .slice(0, max)
+    .map((x) => x.s);
+}

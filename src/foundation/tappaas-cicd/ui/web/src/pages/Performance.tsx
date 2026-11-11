@@ -16,6 +16,7 @@ import { OperateButton } from "../operate";
 import { Sparkline } from "../perfchart";
 import { PerfCharts, PerfLevelVerbs, levelLine } from "../perfpanel";
 import { PerfCost, PerfInvestigation, PerfInvestigations, PerfLevelRow, PerfLevels, PerfOverview, PerfTop, RANGES, fmtSeries, fmtSize, fmtValue } from "../perftypes";
+import { performanceRoots } from "../perfroots";
 import { investigateStep, levelStep, stopStep, usePerfVerbs } from "../perfverbs";
 import { Dot, Level, Link, ReadState, Section, Tag, navigate, replacePath, when } from "../ui";
 import { TreePane, useTree, Matches } from "./HealthTree";
@@ -141,7 +142,8 @@ const phone = (): boolean => window.matchMedia(PHONE_QUERY).matches;
 function BrowseTab() {
   const tree = useTree();
   const ov = useRead<PerfOverview>("performance/overview", 60_000).env?.data;
-  const rootIds = useMemo(() => new Set((ov?.roots ?? []).map((x) => x.id)), [ov]);
+  // The roots from their performance condition, not the object's worst one.
+  const roots = useMemo(() => performanceRoots(ov?.roots ?? [], tree.doc?.roots ?? []), [ov, tree.doc]);
   const [selected, setSelected] = useState<string | null>(() => new URLSearchParams(window.location.search).get("select"));
   const [sheet, setSheet] = useState(false);
   const go = useCallback((id: string) => {
@@ -168,7 +170,7 @@ function BrowseTab() {
         <button className="btn health-sheet-btn" onClick={() => setSheet(!sheet)}>Tree</button>
       </div>
       <div className="health-view perf-browse">
-        <TreePane m={tree} selected={selected} select={go} chooseRoot={go} filters={NO_FILTERS} open={sheet} lens="performance" rootsOf={(x) => rootIds.has(x.id)} />
+        <TreePane m={tree} selected={selected} select={go} chooseRoot={go} filters={NO_FILTERS} open={sheet} lens="performance" roots={roots} />
         <div className="perf-browse-main">
           {selected ? <BrowseObject id={selected} pick={go} /> : <p className="muted">Pick an object in the tree.</p>}
         </div>

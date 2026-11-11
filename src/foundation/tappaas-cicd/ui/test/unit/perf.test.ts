@@ -12,12 +12,13 @@ import { capturedCmdb, repoAbove } from "../../src/fixtures";
 import { HealthGraph, buildHealth } from "../../src/health";
 import {
   MEASURED_SERIES, Perf, PerfDeps, RANGE, SIGNALS, SITE_WIDE, annotationsOf, costOf, environmentScope, moduleScope, parseInvestigations,
-  perfCis, selectorOf, siteLevel, totalCost,
+  judgedBy, perfCis, selectorOf, siteLevel, totalCost,
 } from "../../src/perf";
 import { fixtureFetch, fixturePromClient, loadFixtureMetrics, valueAt } from "../../src/perffixture";
 import { hasVerb, sizeMB } from "../../src/perfwire";
 import { grafanaTraces } from "../../src/jumps";
-import { fmtValue, statusOf } from "../../web/src/perftypes";
+import { chartsShown, fmtValue, statusOf } from "../../web/src/perftypes";
+import { performanceRoots } from "../../web/src/perfroots";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -168,7 +169,17 @@ async function reads(): Promise<void> {
   const perf = new Perf(deps(join(FIX, "config"), readFileSync(join(FIX, "reads", "health-manager-perf-list-json.out"), "utf8")));
   const o = await perf.loadOverview();
   check(o.level === "basic" && o.levelFrom === "site" && o.store === "on", "the overview: basic, set in the site's record, the store answering");
-  check(o.roots.length === 1 && o.roots[0].label === "tankc1" && o.roots[0].impacted.map((x) => x.label).sort().join(",") === "Karakeep,Project N.O.M.A.D.", "the performance root cause and what it slows");
+  check(o.roots.length === 2 && o.roots[0].label === "tankc1" && o.roots[0].impacted.map((x) => x.label).sort().join(",") === "Karakeep,Project N.O.M.A.D.", "the performance root causes, the one that slows most first, and what it slows");
+  // Bug (hrossen 2026-11-11): Browse named coturn's root by its worst condition, its security score.
+  const COTURN = "33394b2f-6716-4deb-aefd-76295bd61baa";
+  // The health document as the console reads it: the CMDB's query leaves ended objects out.
+  const healthRoots = buildHealth({ objects: site.objects.filter((x) => !(x as unknown as { ended?: unknown }).ended), relations: site.relations, classes: site.classes, relationTypes: site.relationTypes, modules: modules.map((x) => x.name), now: NOW }).roots;
+  const healthRoot = healthRoots.find((r) => r.id === COTURN);
+  check(healthRoot?.type === "security" && healthRoot.message === "score 14, medium: 3 high", "the fixture: coturn's health root names its security condition (the bug's input)");
+  const browse = performanceRoots(o.roots, healthRoots);
+  const cot = browse.find((r) => r.id === COTURN);
+  check(browse.length === 2 && cot?.type === "performance" && cot.message === "coturn: CPU pressure (steal) 0.4 %, over 0.0 % for 2 min (coturn's threshold)" && cot.since === "2026-11-01T08:40:00.000Z", "Browse lists coturn by its performance condition: its line and since");
+  check(browse[0].id === o.roots[0].id && browse.find((r) => r.label === "tankc1")?.impactedCount === 2, "in the overview's order, with what the performance root slows");
   check(o.saturated[0]?.ci.label === "tankc1" && o.saturated[0].status === "warning" && o.saturated[0].spark.length === 289, "the most saturated: tankc1's write latency, with its 24 hours");
   check(new Set(o.saturated.map((x) => x.ci.id)).size === o.saturated.length && o.saturated.length <= 8, "one row per object, eight at most");
   check(!o.saturated.some((x) => x.ci.label === "deconz-test"), "the test environment is off: nothing of it");
@@ -186,7 +197,16 @@ async function reads(): Promise<void> {
   const id = "7fa7910d-f316-43b7-8660-7ec3e5a27831";
   const c = await perf.loadCi(id, "24h");
   check(c.level.level === "trace" && c.level.from === "investigation" && c.level.cascaded === "basic" && c.level.until === "2026-11-01T10:40:12Z", "identity: trace until its end, then basic");
-  check(c.series.length === 5 && c.series.every((x) => x.points.length === 289), "a guest's five signals over 24 hours");
+  check(c.series.length === 6 && c.series.every((x) => x.points.length === 289), "a guest's six signals over 24 hours");
+  check(c.series.some((x) => x.key === "vm.cpu_pressure" && x.label === "CPU pressure (steal)"), "CPU pressure (steal) is among a guest's signals");
+  // Bug (hrossen 2026-11-11): coturn breached CPU pressure (its declared 0 %), and the panel's three charts left it out.
+  const ct = await perf.loadCi(COTURN, "24h");
+  const cp = ct.series.find((x) => x.key === "vm.cpu_pressure");
+  check(cp?.judged === true && cp.status === "warning" && statusOf(cp.now, cp.warning, cp.critical) === "ok", "coturn's CPU pressure: under the default line, warning by its performance condition, and marked as the judged signal");
+  const three = chartsShown(ct.series, 3);
+  check(three[0]?.key === "vm.cpu_pressure" && three.length === 3, "the panel's three charts lead with the breached signal");
+  check(chartsShown(ct.series).map((x) => x.key).join(",") === ct.series.filter((x) => x.points.length).map((x) => x.key).join(","), "without a max: every signal with numbers, in the catalogue's order");
+  check(judgedBy({ judged: "pool_write_latency_seconds" }, { reason: "perf-pool-write-latency-seconds" }) && !judgedBy({ judged: "io_pressure_percent" }, { reason: "perf-cpu-pressure-percent" }) && !judgedBy({}, { reason: "perf-x" }), "a condition names its signal by its reason");
   check(c.annotations.some((a) => a.label.startsWith("perf identity --level trace")), "the raise itself is a marker");
   check(c.links.grafana === `grafana:vm:{"tappaas_ci_id":"${id}"}`, "the Grafana link: the class's dashboard at the CI");
   check(c.links.traces === `traces:${id}`, "identity at trace: its traces link (P6)");

@@ -27,6 +27,13 @@ import {
 // CI (the fixture store looks queries up by it).
 export type Labels = Record<string, string>;
 export const SITE_WIDE = 'tappaas_ci_id!=""';
+const RANK_STATUS: Record<PerfStatus, number> = { ok: 0, unknown: 1, warning: 2, critical: 3 };
+
+/** The signal a performance condition names: its reason is perf-<health-manager signal>, dashes for underscores. */
+export function judgedBy(s: Pick<Signal, "judged">, issue: { reason: string | null } | undefined): boolean {
+  return !!s.judged && !!issue?.reason && issue.reason === `perf-${s.judged.replace(/_/g, "-")}`;
+}
+
 export function selectorOf(l: Labels): string {
   return Object.keys(l).sort().map((k) => `${k}="${l[k].replace(/["\\]/g, "")}"`).join(",");
 }
@@ -44,6 +51,7 @@ export interface Signal {
   warning: number | null;
   critical: number | null;
   saturation: boolean; // ranks in the Overview's USE list
+  judged?: string; // the health-manager signal (perf-signals.ts) its performance condition names
 }
 
 const BY_CI = ["tappaas_ci_id"];
@@ -59,32 +67,33 @@ export const SIGNALS: Signal[] = [
     expr: (s) => `sum by (tappaas_ci_id) (proxmox_node_memory_memused{${s}}) / sum by (tappaas_ci_id) (proxmox_node_memory_memtotal{${s}}) * 100`,
     trend: (s) => `sum by (tappaas_ci_id) (trend5m:proxmox_node_memory_memused:avg{${s}}) / sum by (tappaas_ci_id) (trend5m:proxmox_node_memory_memtotal:avg{${s}}) * 100`,
     warning: 90, critical: 97, saturation: true },
-  { key: "node.mem_pressure", classes: ["machine"], label: "Memory pressure", unit: "%", lens: "use", level: "basic", by: BY_CI, ...gauge("tappaas_node_psi_some_avg60", "max", "tappaas_ci_id", ',resource="memory"'), warning: 10, critical: 25, saturation: true },
-  { key: "node.io_pressure", classes: ["machine"], label: "I/O pressure", unit: "%", lens: "use", level: "basic", by: BY_CI, ...gauge("tappaas_node_psi_some_avg60", "max", "tappaas_ci_id", ',resource="io"'), warning: 20, critical: 40, saturation: true },
+  { key: "node.mem_pressure", classes: ["machine"], label: "Memory pressure", unit: "%", lens: "use", level: "basic", by: BY_CI, ...gauge("tappaas_node_psi_some_avg60", "max", "tappaas_ci_id", ',resource="memory"'), warning: 10, critical: 25, saturation: true, judged: "node_memory_pressure_percent" },
+  { key: "node.io_pressure", classes: ["machine"], label: "I/O pressure", unit: "%", lens: "use", level: "basic", by: BY_CI, ...gauge("tappaas_node_psi_some_avg60", "max", "tappaas_ci_id", ',resource="io"'), warning: 20, critical: 40, saturation: true, judged: "node_io_pressure_percent" },
   { key: "vm.cpu", classes: ["vm", "lxc"], label: "CPU used, of its cores", unit: "%", lens: "use", level: "basic", by: BY_CI, ...gauge("proxmox_vm_cpu", "avg", "tappaas_ci_id", "", " * 100"), warning: 90, critical: 98, saturation: true },
+  { key: "vm.cpu_pressure", classes: ["vm", "lxc"], label: "CPU pressure (steal)", unit: "%", lens: "use", level: "basic", by: BY_CI, ...gauge("proxmox_vm_pressurecpusome", "max"), warning: 20, critical: 50, saturation: true, judged: "cpu_pressure_percent" },
   { key: "vm.memory", classes: ["vm", "lxc"], label: "Memory working set", unit: "%", lens: "use", level: "basic", by: BY_CI,
     expr: (s) => `sum by (tappaas_ci_id) (tappaas_guest_memory_used_bytes{${s}}) / sum by (tappaas_ci_id) (proxmox_vm_maxmem{${s}}) * 100`,
     trend: (s) => `sum by (tappaas_ci_id) (trend5m:tappaas_guest_memory_used_bytes:avg{${s}}) / sum by (tappaas_ci_id) (trend5m:proxmox_vm_maxmem:avg{${s}}) * 100`,
     warning: 90, critical: 97, saturation: true },
-  { key: "vm.mem_pressure", classes: ["vm", "lxc"], label: "Memory pressure", unit: "%", lens: "use", level: "basic", by: BY_CI, ...gauge("proxmox_vm_pressurememorysome", "max"), warning: 10, critical: 25, saturation: true },
-  { key: "vm.io_pressure", classes: ["vm", "lxc"], label: "I/O pressure", unit: "%", lens: "use", level: "basic", by: BY_CI, ...gauge("proxmox_vm_pressureiosome", "max"), warning: 20, critical: 40, saturation: true },
+  { key: "vm.mem_pressure", classes: ["vm", "lxc"], label: "Memory pressure", unit: "%", lens: "use", level: "basic", by: BY_CI, ...gauge("proxmox_vm_pressurememorysome", "max"), warning: 10, critical: 25, saturation: true, judged: "memory_pressure_percent" },
+  { key: "vm.io_pressure", classes: ["vm", "lxc"], label: "I/O pressure", unit: "%", lens: "use", level: "basic", by: BY_CI, ...gauge("proxmox_vm_pressureiosome", "max"), warning: 20, critical: 40, saturation: true, judged: "io_pressure_percent" },
   { key: "vm.disk_write", classes: ["vm", "lxc"], label: "Disk writes", unit: "MB/s", lens: "use", level: "basic", by: BY_CI,
     expr: (s) => `sum by (tappaas_ci_id) (rate(proxmox_vm_diskwrite_total{${s}}[5m])) / 1e6`,
     trend: (s) => `sum by (tappaas_ci_id) (trend5m:proxmox_vm_diskwrite_total:rate{${s}}) / 1e6`,
     warning: null, critical: null, saturation: false },
   // A pool's numbers come from its node's sampler: the node's identity and the pool's name.
-  { key: "pool.write_wait", classes: ["storage-pool"], label: "Write latency", unit: "ms", lens: "use", level: "basic", by: BY_POOL, ...gauge("tappaas_zpool_write_wait_seconds", "max", "tappaas_ci_id, pool", "", " * 1000"), warning: 25, critical: 100, saturation: true },
-  { key: "pool.read_wait", classes: ["storage-pool"], label: "Read latency", unit: "ms", lens: "use", level: "basic", by: BY_POOL, ...gauge("tappaas_zpool_read_wait_seconds", "max", "tappaas_ci_id, pool", "", " * 1000"), warning: 25, critical: 100, saturation: true },
+  { key: "pool.write_wait", classes: ["storage-pool"], label: "Write latency", unit: "ms", lens: "use", level: "basic", by: BY_POOL, ...gauge("tappaas_zpool_write_wait_seconds", "max", "tappaas_ci_id, pool", "", " * 1000"), warning: 25, critical: 100, saturation: true, judged: "pool_write_latency_seconds" },
+  { key: "pool.read_wait", classes: ["storage-pool"], label: "Read latency", unit: "ms", lens: "use", level: "basic", by: BY_POOL, ...gauge("tappaas_zpool_read_wait_seconds", "max", "tappaas_ci_id, pool", "", " * 1000"), warning: 25, critical: 100, saturation: true, judged: "pool_read_latency_seconds" },
   // A published service, the user's view: Caddy's per-host numbers, stamped with the route's CI (P3).
   { key: "svc.p95", classes: ["proxy-route"], label: "Response time (p95)", unit: "ms", lens: "red", level: "service", by: BY_CI,
     expr: (s) => `histogram_quantile(0.95, sum by (tappaas_ci_id, le) (rate(caddy_http_request_duration_seconds_bucket{${s}}[5m]))) * 1000`,
-    trend: null, warning: 1500, critical: 5000, saturation: true },
+    trend: null, warning: 1500, critical: 5000, saturation: true, judged: "http_p95_seconds" },
   { key: "svc.errors", classes: ["proxy-route"], label: "Errors (5xx)", unit: "%", lens: "red", level: "service", by: BY_CI,
     expr: (s) => `sum by (tappaas_ci_id) (rate(caddy_http_request_duration_seconds_count{${s},code=~"5.."}[5m])) / sum by (tappaas_ci_id) (rate(caddy_http_request_duration_seconds_count{${s}}[5m])) * 100`,
-    trend: null, warning: 1, critical: 5, saturation: true },
+    trend: null, warning: 1, critical: 5, saturation: true, judged: "http_5xx_ratio" },
   // The same service probed from inside the site, once a minute (black-box, P3).
   { key: "svc.probe", classes: ["proxy-route"], label: "Response time (probe)", unit: "ms", lens: "red", level: "service", by: BY_CI,
-    expr: (s) => `max by (tappaas_ci_id) (probe_duration_seconds{${s}}) * 1000`, trend: null, warning: 2000, critical: 8000, saturation: false },
+    expr: (s) => `max by (tappaas_ci_id) (probe_duration_seconds{${s}}) * 1000`, trend: null, warning: 2000, critical: 8000, saturation: false, judged: "probe_seconds" },
   { key: "svc.up", classes: ["proxy-route"], label: "Probe down", unit: "%", lens: "red", level: "service", by: BY_CI,
     expr: (s) => `(1 - avg by (tappaas_ci_id) (avg_over_time(probe_success{${s}}[15m]))) * 100`, trend: null, warning: 5, critical: 50, saturation: true },
   { key: "svc.rate", classes: ["proxy-route"], label: "Requests", unit: "req/s", lens: "red", level: "service", by: BY_CI,
@@ -608,6 +617,8 @@ export class Perf {
     const h = await this.d.history(id).catch(() => null);
     out.annotations = annotationsOf(h, now - spec.ms, now);
     const signals = signalsFor(node.class);
+    // Its own performance condition over its line: that signal is charted, at that status.
+    const breach = node.issues.find((i) => i.type === "performance" && (i.status === "warning" || i.status === "critical"));
     if (!ref || !signals.length) return { ...out, note: `Nothing is measured for a ${node.class}: performance covers nodes, guests, storage pools and published services.` };
     out.links.grafana = this.d.grafana(node.class, ref.labels);
     if (level.level === "trace") out.links.traces = this.d.traces?.(id) ?? null;
@@ -619,7 +630,9 @@ export class Perf {
         const r = q ? await this.d.prom!.range(q(selectorOf(ref.labels)), now - spec.ms, now, spec.stepS, spec.trends) : [];
         const pts = points(r[0]);
         const last = pts.length ? pts[pts.length - 1].v : null;
-        return { key: s.key, label: s.label, unit: s.unit, lens: s.lens, warning: s.warning, critical: s.critical, points: pts, now: last, status: statusOf(last, s.warning, s.critical) as PerfStatus };
+        const measured = statusOf(last, s.warning, s.critical) as PerfStatus;
+        const judged = judgedBy(s, breach);
+        return { key: s.key, label: s.label, unit: s.unit, lens: s.lens, warning: s.warning, critical: s.critical, points: pts, now: last, status: judged && RANK_STATUS[breach!.status as PerfStatus] > RANK_STATUS[measured] ? (breach!.status as PerfStatus) : measured, ...(judged ? { judged: true } : {}) };
       }));
       out.store = "on";
       if (out.series.every((s) => !s.points.length)) {

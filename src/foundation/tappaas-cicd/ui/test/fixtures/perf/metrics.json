@@ -149,6 +149,16 @@
    "max": 100
   },
   {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb"
+   },
+   "base": 1.25,
+   "daily": 0.2,
+   "noise": 0.15,
+   "max": 100
+  },
+  {
    "signal": "vm.mem_pressure",
    "labels": {
     "tappaas_ci_id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb"
@@ -195,6 +205,16 @@
    "base": 58.5,
    "daily": 2,
    "noise": 1,
+   "max": 100
+  },
+  {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "33394b2f-6716-4deb-aefd-76295bd61baa"
+   },
+   "base": 0.4,
+   "daily": 0.2,
+   "noise": 0.15,
    "max": 100
   },
   {
@@ -247,6 +267,16 @@
    "max": 100
   },
   {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "739cfe3b-9fc8-448b-b10b-39f4aea69229"
+   },
+   "base": 1.7,
+   "daily": 0.2,
+   "noise": 0.15,
+   "max": 100
+  },
+  {
    "signal": "vm.mem_pressure",
    "labels": {
     "tappaas_ci_id": "739cfe3b-9fc8-448b-b10b-39f4aea69229"
@@ -293,6 +323,16 @@
    "base": 69.0,
    "daily": 2,
    "noise": 1,
+   "max": 100
+  },
+  {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "2514781a-ecfd-4e95-904b-a7b540c29a5b"
+   },
+   "base": 1.0999999999999999,
+   "daily": 0.2,
+   "noise": 0.15,
    "max": 100
   },
   {
@@ -345,6 +385,16 @@
    "max": 100
   },
   {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "7fa7910d-f316-43b7-8660-7ec3e5a27831"
+   },
+   "base": 0.5,
+   "daily": 0.2,
+   "noise": 0.15,
+   "max": 100
+  },
+  {
    "signal": "vm.mem_pressure",
    "labels": {
     "tappaas_ci_id": "7fa7910d-f316-43b7-8660-7ec3e5a27831"
@@ -391,6 +441,16 @@
    "base": 79.5,
    "daily": 2,
    "noise": 1,
+   "max": 100
+  },
+  {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "813802d8-e8ed-4a4b-aeb0-444e501571d9"
+   },
+   "base": 1.5499999999999998,
+   "daily": 0.2,
+   "noise": 0.15,
    "max": 100
   },
   {
@@ -443,6 +503,16 @@
    "max": 100
   },
   {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "8efd3a92-3e11-4aa4-a2ff-ba32e72ebf4b"
+   },
+   "base": 0.95,
+   "daily": 0.2,
+   "noise": 0.15,
+   "max": 100
+  },
+  {
    "signal": "vm.mem_pressure",
    "labels": {
     "tappaas_ci_id": "8efd3a92-3e11-4aa4-a2ff-ba32e72ebf4b"
@@ -489,6 +559,16 @@
    "base": 51.5,
    "daily": 2,
    "noise": 1,
+   "max": 100
+  },
+  {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "5f045500-92a5-4342-8cf3-0a4183e7e8e2"
+   },
+   "base": 0.35,
+   "daily": 0.2,
+   "noise": 0.15,
    "max": 100
   },
   {
@@ -544,6 +624,16 @@
    "base": 76.0,
    "daily": 2,
    "noise": 1,
+   "max": 100
+  },
+  {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "a7aa4262-bff0-4e17-bf25-faef94fc9178"
+   },
+   "base": 1.4,
+   "daily": 0.2,
+   "noise": 0.15,
    "max": 100
   },
   {
@@ -602,6 +692,16 @@
    "max": 100
   },
   {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0"
+   },
+   "base": 0.8,
+   "daily": 0.2,
+   "noise": 0.15,
+   "max": 100
+  },
+  {
    "signal": "vm.mem_pressure",
    "labels": {
     "tappaas_ci_id": "bc7dbd7f-0b26-4bb1-bc71-f774b0e9a6a0"
@@ -648,6 +748,16 @@
    "base": 48.0,
    "daily": 2,
    "noise": 1,
+   "max": 100
+  },
+  {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "ebf1c948-fb06-4806-b502-234fdf036669"
+   },
+   "base": 0.2,
+   "daily": 0.2,
+   "noise": 0.15,
    "max": 100
   },
   {
@@ -700,6 +810,16 @@
    "max": 100
   },
   {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "29b608bb-c548-4588-addb-fcf3f238d271"
+   },
+   "base": 1.25,
+   "daily": 0.2,
+   "noise": 0.15,
+   "max": 100
+  },
+  {
    "signal": "vm.mem_pressure",
    "labels": {
     "tappaas_ci_id": "29b608bb-c548-4588-addb-fcf3f238d271"
@@ -746,6 +866,16 @@
    "base": 58.5,
    "daily": 2,
    "noise": 1,
+   "max": 100
+  },
+  {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "a622e38b-1338-4e7c-8342-2daac8441522"
+   },
+   "base": 0.6499999999999999,
+   "daily": 0.2,
+   "noise": 0.15,
    "max": 100
   },
   {
@@ -798,6 +928,16 @@
    "max": 100
   },
   {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "9498d7a1-d225-48a9-94bd-7335701a50e7"
+   },
+   "base": 1.7,
+   "daily": 0.2,
+   "noise": 0.15,
+   "max": 100
+  },
+  {
    "signal": "vm.mem_pressure",
    "labels": {
     "tappaas_ci_id": "9498d7a1-d225-48a9-94bd-7335701a50e7"
@@ -844,6 +984,16 @@
    "base": 69.0,
    "daily": 2,
    "noise": 1,
+   "max": 100
+  },
+  {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "62395b44-9ccc-4900-a908-84e4ffa5371c"
+   },
+   "base": 1.0999999999999999,
+   "daily": 0.2,
+   "noise": 0.15,
    "max": 100
   },
   {
@@ -902,6 +1052,16 @@
    "max": 100
   },
   {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e"
+   },
+   "base": 0.5,
+   "daily": 0.2,
+   "noise": 0.15,
+   "max": 100
+  },
+  {
    "signal": "vm.mem_pressure",
    "labels": {
     "tappaas_ci_id": "384e7fd1-9575-48db-ac85-e2c7435e0a4e"
@@ -948,6 +1108,16 @@
    "base": 79.5,
    "daily": 2,
    "noise": 1,
+   "max": 100
+  },
+  {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "6da7a770-a531-4469-b125-9f5fd7568ea2"
+   },
+   "base": 1.5499999999999998,
+   "daily": 0.2,
+   "noise": 0.15,
    "max": 100
   },
   {
@@ -1000,6 +1170,16 @@
    "max": 100
   },
   {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "697258f6-ec9e-448a-a64d-1545d8a6a2eb"
+   },
+   "base": 0.95,
+   "daily": 0.2,
+   "noise": 0.15,
+   "max": 100
+  },
+  {
    "signal": "vm.mem_pressure",
    "labels": {
     "tappaas_ci_id": "697258f6-ec9e-448a-a64d-1545d8a6a2eb"
@@ -1046,6 +1226,16 @@
    "base": 51.5,
    "daily": 2,
    "noise": 1,
+   "max": 100
+  },
+  {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "26a3e31f-14af-4907-b48f-0b35944152d0"
+   },
+   "base": 0.35,
+   "daily": 0.2,
+   "noise": 0.15,
    "max": 100
   },
   {
@@ -1104,6 +1294,16 @@
    "max": 100
   },
   {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "d8ad20d4-199b-4be6-8a4f-de02dacf86ee"
+   },
+   "base": 1.4,
+   "daily": 0.2,
+   "noise": 0.15,
+   "max": 100
+  },
+  {
    "signal": "vm.mem_pressure",
    "labels": {
     "tappaas_ci_id": "d8ad20d4-199b-4be6-8a4f-de02dacf86ee"
@@ -1156,6 +1356,16 @@
    "base": 62.0,
    "daily": 2,
    "noise": 1,
+   "max": 100
+  },
+  {
+   "signal": "vm.cpu_pressure",
+   "labels": {
+    "tappaas_ci_id": "3b16e766-0e8a-416a-89dc-a50437ce7519"
+   },
+   "base": 0.8,
+   "daily": 0.2,
+   "noise": 0.15,
    "max": 100
   },
   {

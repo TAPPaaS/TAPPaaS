@@ -46,6 +46,8 @@ for o in live:
         s("vm.memory", ci, 86, 3, 1.5, steps=[{"hoursAgo": 20, "add": 6}], mx=100)
     else:
         s("vm.memory", ci, 48 + k * 3.5, 2, 1, mx=100)
+    # CPU pressure (steal): low everywhere; coturn breaches only its own declared line (0 %).
+    s("vm.cpu_pressure", ci, 0.4 if o["name"] == "coturn" else 0.2 + k * 0.15, 0.2, 0.15, mx=100)
     s("vm.mem_pressure", ci, 0.4 + k * 0.2, 0.3, 0.3, mx=100)
     s("vm.io_pressure", ci, 1 + k * 0.4, 0.8, 0.6, steps=[{"hoursAgo": 46, "add": 22 if o["name"] in ("karakeep", "nomad") else 6}] if on3 else None, mx=100)
     s("vm.disk_write", ci, 0.6 + k * 0.5, 0.4, 0.3)

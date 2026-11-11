@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useRead } from "./api";
 import { OperateButton } from "./operate";
 import { Chart, Markers } from "./perfchart";
-import { PerfCi, PerfEffective, PerfInvestigations, PerfRange } from "./perftypes";
+import { PerfCi, PerfEffective, PerfInvestigations, PerfRange, chartsShown } from "./perftypes";
 import { investigateStep, stopStep, usePerfVerbs } from "./perfverbs";
 import { ReadState, when } from "./ui";
 
@@ -44,9 +44,7 @@ export function PerfCharts({ id, ranges, pick, max }: { id: string; ranges: Perf
   const [range, setRange] = useState<PerfRange>(ranges[0]);
   const r = useRead<PerfCi>(`performance/ci/${encodeURIComponent(id)}?range=${range}`, 120_000);
   const d = r.env?.data;
-  // A short list leads with what is over its line.
-  const rank = { critical: 0, warning: 1, ok: 2, unknown: 3 } as const;
-  const shown = d ? d.series.filter((s) => s.points.length).map((s, i) => ({ s, i })).sort((a, b) => (max ? rank[a.s.status] - rank[b.s.status] : 0) || a.i - b.i).map((x) => x.s).slice(0, max ?? 99) : [];
+  const shown = d ? chartsShown(d.series, max) : [];
   return (
     <div className="perf-ci">
       <ReadState env={r.env} failure={r.failure} what="its numbers" />

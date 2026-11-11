@@ -166,7 +166,7 @@ export function Matches({ q, selected, select, lens }: { q: string; selected: st
   );
 }
 
-export function TreePane({ m, selected, select, chooseRoot, filters, open, lens, rootsOf }: { m: TreeModel; selected: string | null; select: (id: string) => void; chooseRoot: (id: string) => void; filters: Filters; open: boolean; lens?: string; rootsOf?: (r: HealthRoot) => boolean }) {
+export function TreePane({ m, selected, select, chooseRoot, filters, open, lens, roots: given }: { m: TreeModel; selected: string | null; select: (id: string) => void; chooseRoot: (id: string) => void; filters: Filters; open: boolean; lens?: string; roots?: HealthRoot[] }) {
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
   useEffect(() => {
@@ -174,7 +174,8 @@ export function TreePane({ m, selected, select, chooseRoot, filters, open, lens,
     return () => clearTimeout(t);
   }, [text]);
   const doc = m.doc;
-  const roots = (doc?.roots ?? []).filter((r) => !rootsOf || rootsOf(r));
+  // A lens lists its own roots (Performance: from the performance condition).
+  const roots = given ?? doc?.roots ?? [];
   return (
     <div className={`health-side${open ? " health-side-open" : ""}`}>
       <input className="ht-search" type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder="Find an object" aria-label="find an object in the CMDB" />
