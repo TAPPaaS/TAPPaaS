@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Draft** — for the operator's review |
-| **Version** | 0.2 |
-| **Date** | 2026-11-10 |
+| **Version** | 0.3 |
+| **Date** | 2026-11-11 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | Amends ADR-045 (D1 states, D2 lifecycle, D5 gate) and ADR-011 §8 (VEX). Built on the measurement in [`docs/plans/cve-as-built.md`](../plans/cve-as-built.md). Delivery to production is [ADR-048](<ADR-048 - The Security Stream.md>). |
-| **Changelog** | v0.1 (2026-11-10): first draft. v0.2 (2026-11-10): the operator's answers. Central decisions are **per component**, not per CVE and version: the component record replaces the assessment file, and VEX is generated from it (D2, D3). A site acceptance **lowers the site's score** (D5). Decisions reach production **faster than code** (ADR-048). The scan/rescan defect and "new means first seen" are **built** (D9); every figure is re-sized against the corrected scan. |
+| **Changelog** | v0.1 (2026-11-10): first draft. v0.2 (2026-11-10): the operator's answers. Central decisions are **per component**, not per CVE and version: the component record replaces the assessment file, and VEX is generated from it (D2, D3). A site acceptance **lowers the site's score** (D5). Decisions reach production **faster than code** (ADR-048). The scan/rescan defect and "new means first seen" are **built** (D9); every figure is re-sized against the corrected scan. v0.3 (2026-11-11): the operator's answers to the open questions. **A decision is a reclassification** (D4): every CVE has an effective level, the same as upstream, lower, or none, and is scored by that level alone; the separate points for analysed and unanalysed items go. An unread CVE differs from a confirmed one in the view, not in points. The in-between level is expressed in VEX as `exploitable` with a TAPPaaS rating. Version scope settled: automatic inside a major, Review at a new major. Review period settled: 90 days (180 at most) for records grounded in how the code is used, one year for records grounded in how TAPPaaS is deployed. Authors as proposed. The condition-type question goes to the health review. |
 
 ADR-045 gave CVEs a lifecycle and a score. Running it for one boundary showed that the records
 are the wrong size for daily work: a VEX statement is one CVE at one version, a site ack is a
@@ -93,33 +93,39 @@ ImageMagick and use it differently. What they share through the baseline is deci
       "why": "The attacker has to control a mirror or sit on the management path." }
   ],
   "cves": {
-    "CVE-2026-86413": { "decision": "assessed", "rule": "r1", "read": "larsrossen 2026-11-10" },
-    "CVE-2026-94265": { "decision": "not_affected", "justification": "code_not_reachable",
+    "CVE-2026-86413": { "rule": "r1", "read": "larsrossen 2026-11-10" },
+    "CVE-2026-94265": { "level": "none", "state": "not_affected", "justification": "code_not_reachable",
                          "why": "HTTP/3 is not built into the firewall's curl." },
-    "CVE-2026-97001": { "decision": "assessed", "rating": "high", "why": "…" }
+    "CVE-2026-97001": { "level": "high", "why": "No vector published. Needs a hostile mirror; the effect is code execution as root." },
+    "CVE-2026-87866": { "level": "same", "why": "Reachable from the WAN side through the captive portal's fetch." }
   },
-  "author": "larsrossen", "decided": "2026-11-10", "reviewBy": "2027-02-08",
-  "basis": { "CVE-2026-86413": { "severity": "Critical", "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H", "kev": false } }
+  "author": "larsrossen", "decided": "2026-11-10", "reviewBy": "2027-11-10",
+  "basis": { "CVE-2026-86413": { "severity": "Critical", "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:H/I:H/A:H", "kev": false } }
 }
 ```
 
 - **`use`** is the standing statement: how this module uses this component. It is mandatory, at
   least 80 characters, and shown wherever a decision from this record is shown.
-- **`reason`** from a fixed list (`internal-only`, `client-only`, `admin-input-only`,
-  `local-access-required`, `feature-disabled`, `mitigated-by-rule`, `data-not-sensitive`,
-  `not-used`, `other`). The view groups by it.
+- **`reason`** from a fixed list, in two groups. Grounded in **how the code is used**:
+  `not-used`, `feature-disabled`, `client-only`, `admin-input-only`. Grounded in **how TAPPaaS
+  is deployed**: `internal-only`, `local-access-required`, `mitigated-by-rule`,
+  `data-not-sensitive`. And `other`, which counts as the first group. The view groups by it, and
+  the review period follows from it.
 - **`assumes`**: what must be true at a site for the record to hold (D5).
 - **`versions`**: which versions of the component the `use` statement holds for (D3).
-- **`rules`**: a contextual severity for every CVE of this component whose upstream CVSS vector
-  matches. `modified` holds CVSS environmental metrics; the contextual severity is the upstream
+- **`rules`**: a reclassification for every CVE of this component whose upstream CVSS vector
+  matches. `modified` holds CVSS environmental metrics; the effective level is the upstream
   vector re-scored with them, so it is computed, checkable, and moves when upstream changes the
-  vector. A rule can only re-rate. It can never say "not affected".
-- **`cves`**: what has been decided for a CVE by name. `not_affected`, `false_positive` and
-  `resolved` exist only here, each added by a person with a justification. An `assessed` entry
-  either confirms a rule's result (`rule` and `read`) or sets its own (`modified`, or a plain
-  `rating` where the CVE has no usable vector, as with VuXML entries).
-- **`author`, `decided`, `reviewBy`**: `reviewBy` is mandatory, at most 180 days ahead, 90 by
-  default. It is the component's date, not each CVE's.
+  vector. A rule can lower a level or leave it. It can never set it to none.
+- **`cves`**: the reclassification of a CVE by name (D4). `level: none` exists only here, each
+  added by a person with a VEX state and a justification. Another entry confirms a rule's result
+  (`rule` and `read`), sets its own (`modified`, or a plain `level` where the CVE has no usable
+  vector, as with VuXML entries), or confirms the upstream level (`same`).
+- **`author`, `decided`, `reviewBy`**: `reviewBy` is mandatory and is the component's date, not
+  each CVE's. A record grounded in how the code is used is reviewed after 90 days by default and
+  180 at most: code changes under it. A record grounded in how TAPPaaS is deployed runs one
+  year, and must carry `assumes`: the deployment it rests on is checked on every site at every
+  scan (D5), so the date is a backstop.
 - **`basis`**: what upstream said when each CVE was decided, written by the tool.
 
 `cve-triage.sh component <module> <source> …` creates and edits records. Before it writes, it
@@ -127,7 +133,8 @@ prints every CVE on the last scan that the record would cover and what each woul
 
 **VEX is generated.** `<module>-vex.json` stays, as CycloneDX, for anyone who wants the standard
 format. It is written by `cve-triage.sh export` from the component records and the versions the
-channels ship, at each feed build and each boundary. Nobody edits it. The boundary's "gone" and
+channels ship, at each feed build and each boundary, one statement per CVE as D4 shows. Nobody
+edits it. The boundary's "gone" and
 "carried" bookkeeping (ADR-045 D2) goes away with the hand-kept statements.
 
 **The scan keeps the CVSS vector, the known-exploited flag and the EPSS score** of each finding.
@@ -141,35 +148,87 @@ guards, from the structure outward:
 | Guard | What it catches |
 |---|---|
 | **A rule re-rates, it never hides.** Only a named CVE can be `not_affected`. | A blanket "this component does not matter". The CVE stays on the page at its contextual severity. |
-| **A matched CVE is `auto` until read.** It sits in the maintainers' Review queue with its description and the rule that caught it. Unread after 14 days, it counts at its upstream severity again. | A CVE that fits the rule's vector and not its reasoning. |
+| **A matched CVE is marked "by rule" until read.** It sits in the maintainers' Review queue with its description and the rule that caught it. Unread after 14 days, it counts at its upstream severity again. | A CVE that fits the rule's vector and not its reasoning. |
 | **Known-exploited overrides everything.** The CVE counts at its upstream severity at once and raises `cve-new-critical`. An EPSS above 10 % sends it to Review. | A CVE the rule underrated and attackers did not. |
 | **Upstream changed its mind.** The vector or severity differs from `basis`: back to Review. | A decision made on an early, wrong advisory. |
 | **`assumes` is checked on every site, every scan** (D5). | A site that deploys the module differently from what the `use` statement describes. |
-| **`versions` ends.** A new major version of the component sends the whole record to Review; inside the range nothing is asked. | A `use` statement that a rewrite of the component made untrue. |
-| **`reviewBy`.** The record is listed 14 days before the date, and stops applying 14 days after it. | A `use` statement that stopped being true while nobody looked. |
+| **`versions` ends.** Inside the component's major version the record carries on by itself and nothing is asked. A new major sends the whole record to Review. | A `use` statement that a rewrite of the component made untrue. |
+| **`reviewBy`** (90 to 180 days, or a year: D2). The record is listed 14 days before the date, and stops applying 14 days after it. | A `use` statement that stopped being true while nobody looked. |
 
 Two more are cheap and visible. The release notes and the console show, per component, how many
 CVEs a rule re-rated and from what to what, so "21 CVEs, 6 critical to high, by one rule" is in
 front of every reader. And a rule is limited to environmental metrics: it cannot lower a CVE by
 more than the CVSS arithmetic allows for the stated change in exposure.
 
-When any guard fires, the affected CVEs are in state `review` (D4): counted at their upstream
-severity, with the old decision attached. Three of the guards (upstream change, version, date)
+When any guard fires, the affected CVEs are marked `review` (D4): their effective level is the
+upstream level again, with the old decision attached. Three of the guards (upstream change, version, date)
 leave the old result in force for 14 days so a date does not turn a site critical overnight.
 
-### D4. States
+### D4. A decision is a reclassification
 
-| State | Meaning | Counts as |
+Every CVE has two levels: the **upstream level** (what the advisory says) and the **effective
+level** (what it is in a TAPPaaS deployment). A central decision is the step from one to the
+other. It has three possible outcomes, and all three are VEX:
+
+| Outcome | Effective level | In the record | In the generated VEX (CycloneDX) |
+|---|---|---|---|
+| **None** | none | `level: none` with a state and a justification | `analysis.state`: `not_affected` with `justification` (`code_not_reachable`, …), `false_positive`, or `resolved`; `analysis.detail`: the `use` statement and the `why` |
+| **Lower** | low, medium or high, below upstream | a rule's `modified` metrics, or `modified` or `level` by name | `analysis.state: exploitable`, and a `ratings[]` entry from TAPPaaS carrying the environmental vector |
+| **Same** | the upstream level | `level: same` | `analysis.state: exploitable`, and a TAPPaaS rating equal to upstream's, with the reason it stands |
+| not yet decided | the upstream level | no entry | `analysis.state: in_triage`, no TAPPaaS rating |
+
+The in-between case, a critical that counts as high on the firewall:
+
+```json
+{ "id": "CVE-2026-86413",
+  "affects": [{ "ref": "pkg:generic/opnsense/curl@8.21.0" }],
+  "ratings": [
+    { "source": { "name": "NVD" }, "method": "CVSSv31", "severity": "critical", "score": 9.6,
+      "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:H/I:H/A:H" },
+    { "source": { "name": "TAPPaaS" }, "method": "CVSSv31", "severity": "high", "score": 8.8,
+      "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:H/I:H/A:H/MAV:A",
+      "justification": "client-only: the attacker has to control a mirror or sit on the management path." } ],
+  "analysis": { "state": "exploitable",
+    "detail": "network/opnsense:curl. Outbound only. The firewall's update job and an administrator fetch firmware, packages and lists from the configured mirrors. Reclassified by rule r1; read by larsrossen 2026-11-10; review by 2027-11-10." } }
+```
+
+`exploitable` is CycloneDX's word for "affected, and counted". The TAPPaaS rating beside the
+upstream one is the reclassification: the same vector with the environmental metrics added, the
+score and level that follow from it, and the reason. A consumer that reads only `analysis.state`
+sees an affected component; one that reads ratings sees both levels and why they differ. Where a
+CVE has no vector, the TAPPaaS rating has `method: other`, a level and the justification.
+
+**The score counts the effective level, and nothing else.** One table replaces ADR-045's two:
+
+| Effective level | critical | high | medium | low | none |
+|---|---|---|---|---|---|
+| Points | 25 | 10 | 3 | 1 | 0 |
+
+ADR-045's rules stay: only the highest category with an item counts, each further item at half
+the one before, the bands 0 / 7 / 16 / 30, the zone multipliers. As in ADR-045, a CVE whose
+upstream level is medium or low and that nobody has reclassified is listed and not counted.
+
+Whether somebody has read a CVE no longer changes its points. It changes **what the view says**:
+
+| Mark | Meaning | Shown as |
 |---|---|---|
-| decided | named `not_affected`, `false_positive` or `resolved` | 0 |
-| **assessed** (was `risk`) | a contextual severity applies, by rule or by name | that severity |
-| **accepted** (new) | the site accepted it (D5) | 0 in the level; listed and counted beside the score |
-| **deferred** (new) | centrally known and put off with a note (D6) | its upstream severity |
-| **review** (was `carried`) | a decision exists and a guard of D3 fired, or a site assumption fails | its upstream severity, with the old decision attached |
-| open | critical/high, nobody has looked | its upstream severity |
+| **unread** | the effective level is upstream's because nobody has decided | a hollow level badge; in the maintainers' Decide queue; a unit row reads "high · 3 unread"; new ones are mailed (`cve-new-critical`) |
+| **by rule** | a rule set the level and no person has read this CVE yet | the level badge with "by rule"; in the Review queue; back to unread after 14 days |
+| **confirmed** | a person decided: none, lower or same | a solid badge with the reason code; the row expands to the `use` statement, the `why`, the author and the date |
+| **deferred** | known and put off with a note until a date (D6) | hollow, with the note and the date |
+| **review** | a decision existed and a guard of D3 fired, or a site assumption fails | hollow, with the old decision and what changed |
+| **accepted** | this site accepted it (D5) | struck through, counted beside the score: "high · 2 accepted"; no points |
 
-Points, bands and zone multipliers are ADR-045's. One proposed change is an open question:
-assessed and open items scoring the same points.
+So a unit that is high because of three unread CVEs and one that is high because of three
+confirmed ones have the same score and level, and read differently at a glance: the first is
+work for the maintainers, the second is the true state until upstream fixes it. The site, zone
+and environment rows carry the same split: "critical · set by network (7 unread)".
+
+**What the single table changes on hrossen.** An unread critical counts 25 where it counted 20,
+an unread high 10 where it counted 8. Three unread highs now reach high (17.5); under ADR-045
+they stayed medium (14). The 15 units whose only open items are the baseline's three sqlite
+highs would read high until that one component is decided. That is the intended effect of "not
+read is not better than read", and it is the one calibration left to confirm (open questions).
 
 ### D5. The site layer: assumptions and acceptances
 
@@ -201,9 +260,9 @@ scan picks it up. A check that cannot be evaluated counts as failed.
   cover future ones.
 - Keyed by component, CVE and unit. No version: it survives version moves, rescans and upgrades.
 - `until` is mandatory, at most one year.
-- **It lowers the site's score.** An accepted item leaves the level of its unit and of the zone,
-  environment and site above. The row reads "high, 2 accepted" so the acceptance stays visible
-  and counted.
+- **It lowers the site's score.** An accepted item has no points on that site, for its unit and
+  for the zone, environment and site above. The row reads "high · 2 accepted" so the acceptance
+  stays visible and counted.
 - It ends, and says so in the digest, when: `until` passes; the CVE becomes known-exploited; the
   upstream severity rises; or a central decision now covers the CVE (archived as superseded).
 - `health-manager ack --type security` remains what it is: quiet mail for one CI.
@@ -235,7 +294,7 @@ site → zone → module table underneath as the detail. A card is a component, 
 | Coming | "2.5 on 23 Nov clears 9" | the candidate's record |
 | Your decision | "immich: assumes internal only, public here (ImageMagick, 8 CVEs)"; "2 acceptances end this month" | D5 |
 | With TAPPaaS | "31 components in triage, oldest 6 days" | open and deferred items |
-| With upstream | "12 components assessed, no fix published" | assessed items |
+| With upstream | "12 components confirmed, no fix published" | confirmed items that still count |
 
 Only the first and third need the operator. On a site that deploys TAPPaaS as shipped, "Your
 decision" is empty.
@@ -345,9 +404,9 @@ after the update.
 | Phase | Content | Done when |
 |---|---|---|
 | P0 | D9 | **Built.** Deployed with the next update of hrossen; two nights with the same counts from scan and rescan and no repeated `cve-new` |
-| P1 | D2: the scan keeps vectors, known-exploited and EPSS; the component key; `<module>-components.json`; `cve-triage component`; re-scoring; the states of D4 | The firewall's curl items are one record and hrossen's site level follows from it |
+| P1 | D2: the scan keeps vectors, known-exploited and EPSS; the component key; `<module>-components.json`; `cve-triage component`; re-scoring; the reclassification outcomes and marks of D4, the single points table | The firewall's curl items are one record and hrossen's site level follows from it |
 | P2 | Migration of the 1708 statements; `cve-triage export`; the boundary's `cve` phase generates VEX | The scan counts the same items from the records as from the old files; a rehearsal boundary needs no carry commit |
-| P3 | D3: the guards, the `auto` state, the Review queue | A new CVE matching a rule is assessed the same night and listed unread; a known-exploited one is not lowered |
+| P3 | D3: the guards, the "by rule" mark, the Review queue | A new CVE matching a rule is reclassified the same night and listed "by rule"; a known-exploited one is not lowered |
 | P4 | D5: `assumes` evaluation, `health-manager accept`, the `accepted` state in the score | A test module made public on hrossen turns its record into `review`; an acceptance lowers the level and survives an image bump |
 | P5 | D6: deferrals from `ack`; the record archives only used acks | The next boundary's gate lists an expired deferral |
 | P6 | D7: the queues in `report security` and the console; the baseline shown once; derived health conditions | hrossen's page opens with the queues |
@@ -359,19 +418,19 @@ Settled in v0.2 (operator, 2026-11-10): the scan/rescan defect is fixed before a
 site acceptance lowers that site's score; central decisions are per component, not per CVE and
 version; decisions reach production faster than code, through a separate feed (ADR-048).
 
+Settled in v0.3 (operator, 2026-11-11): a decision is a reclassification, to the same level, a
+lower one, or none, and a CVE is scored by its effective level alone; an unread CVE differs from
+a confirmed one in the view, not in points. A record carries on inside the component's major
+version and goes to Review at a new major. Review after 90 days (180 at most) for records
+grounded in how the code is used, one year for records grounded in how TAPPaaS is deployed.
+Central decisions are authored by the deciders of this ADR, by commit; contributors propose them
+through a pull request. Whether `security` should be one condition type for CVE levels and for
+other security reasons is the health review's question.
+
 ## Open questions
 
-Each has a proposed answer in the text; none is settled.
-
-3. **Version scope.** Proposed: a record's `use` statement holds inside the component's major
-   version, and a new major sends the record to Review. This replaces ADR-045's "a carry is never
-   automatic" with a review after a major move only.
-4. **Review period.** Proposed: 90 days by default, 180 at most, per component. With about 400
-   records that is roughly 1600 reads a year, most of them a glance at an unchanged `use`
-   statement. Should deployment-based records run a year?
-5. **Assessed and open at the same points** (20 and 8) in place of 25/20 and 10/8. It removes the
-   small penalty for analysing; it also means a confirmed critical and an unread one score alike.
-6. **Who may author a central decision?** Proposed: the deciders of this ADR, by commit, as now;
-   contributors through a pull request. ADR-048's feed is signed on their behalf.
-7. **`security` as one condition type** for CVE levels and for other security reasons (seen on
-   unifi-os) belongs to the health review; this ADR only needs CVE conditions to be told apart.
+1. **The points for the single table.** Proposed: 25 / 10 / 3 / 1, ADR-045's weights for an
+   analysed item, now for every counted CVE. On hrossen that moves the 15 baseline-only units
+   from medium to high until sqlite is decided. The alternative, 20 / 8 / 3 / 1, leaves today's
+   unread levels where they are and lowers confirmed ones: karakeep's four confirmed highs would
+   read medium (15) where they read high (18.75).
