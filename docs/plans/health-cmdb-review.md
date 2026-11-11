@@ -431,8 +431,9 @@ the fault holds, concurrent writers, and the rule file against real event lines.
 ## (d) After the review: re-check against main, fixes and status (2026-11-11)
 
 Fixed on branch `fix/health-review`, cut from `main` at `80946e7a` (which has ADR-046's performance
-monitoring), in ten commits. Unit suites: health-manager (all 35 files), module-manager,
-cmdb-controller's integration suite (196 checks), the receiver's (106) and the rule file's (201).
+monitoring). Suites green: health-manager's `test.sh` (33 unit files), module-manager's (277),
+cmdb-controller's integration suite (196), the receiver's (106), the rule file's (201); the
+console compiles.
 
 ### Re-check against main before changing anything
 
