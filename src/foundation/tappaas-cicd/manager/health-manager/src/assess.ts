@@ -12,7 +12,7 @@
 // flappingHeld). Maintenance is the open window's that covers the object.
 
 import { AlertItem } from "./alerts";
-import { CmdbItem, CmdbRel, Condition, DERIVED, RootCause, RANK, SOURCE, SiteIndex, conditionsOf, failing, isDerivedKind } from "./assess-model";
+import { Acknowledged, CmdbItem, CmdbRel, Condition, DERIVED, RootCause, RANK, SOURCE, SiteIndex, conditionsOf, failing, isDerivedKind } from "./assess-model";
 import { OBSERVATION_REASONS, fromObservations } from "./assess-observations";
 import { Finding, GATES, fromAlerts, fromCve, fromGates, fromSweep, fromThresholds } from "./assess-sources";
 import { SWEEP_MAX_AGE_MS, SweepRecord } from "./cmdbsweep";
@@ -176,26 +176,59 @@ export function settle(priorOf: (id: string) => Condition[], ids: Iterable<strin
   return out;
 }
 
-// What the operator set, across a change of status; since, across none. The
-// maintenance is the window's that covers the object now (windows.ts), never
-// carried over: a window that closed silences nothing.
-function stamp(c: Condition, p: Condition | undefined, now: string, nowMs: number, window: Window | undefined): Condition {
+// What the operator and emit keep, each in an attribute of its own (one writer
+// each, so nothing they write is lost to a run of this one):
+//   acknowledgements  the ack and unack verbs: per type, the operator's last
+//                     word ({ ack | null, at }). A word newer than the one this
+//                     condition last took (operatorAt) is taken: an ack set, or
+//                     cleared. From then on the ack's own lifecycle holds: it
+//                     ends at its until, on a change of status (not sticky), or
+//                     at ok (sticky).
+//   flapping          emit's: per type, what it holds while the condition flaps.
+// Both are projected onto the condition here, so every reader reads one shape.
+export interface OperatorWord { ack: Acknowledged | null; at: string }
+export const acksOf = (o: CmdbItem): Record<string, OperatorWord> => (o.attributes.acknowledgements as Record<string, OperatorWord> | undefined) ?? {};
+export const flapsOf = (o: CmdbItem): Record<string, { held: ConditionStatus }> => (o.attributes.flapping as Record<string, { held: ConditionStatus }> | undefined) ?? {};
+
+// Since, across no change of status; the maintenance of the open window that
+// covers the object (windows.ts), never carried over.
+function stamp(c: Condition, p: Condition | undefined, now: string, nowMs: number, window: Window | undefined, word: OperatorWord | undefined, flap: { held: ConditionStatus } | undefined): Condition {
   const mnt = window ? asMaintenance(window) : null;
-  if (!p) return { ...c, maintenance: mnt };
-  const held = p.status === c.status && p.reason === c.reason;
+  const held = !!p && p.status === c.status && p.reason === c.reason;
   const until = (w: { until: string | null } | null): boolean => w !== null && (!w.until || Date.parse(w.until) > nowMs);
-  let ack = c.acknowledged ?? p.acknowledged ?? null;
-  if (!until(ack) || (ack && !held && (!ack.sticky || c.status === "ok"))) ack = null;
+  const fresh = !!word && word.at > (p?.operatorAt ?? "");
+  let ack = fresh ? word!.ack : p?.acknowledged?.via ? null : p?.acknowledged ?? null;
+  // The lifecycle: a word just taken holds as given; one carried ends as Nagios's does.
+  if (!until(ack) || (ack && !fresh && p && !held && (!ack.sticky || c.status === "ok")) || (ack && c.status === "ok" && !fresh)) ack = null;
+  const operatorAt = fresh ? word!.at : p?.operatorAt;
   return {
     ...c,
-    since: held ? p.since : now,
+    since: p ? (held ? p.since : now) : c.since,
     // A derived message (a roll-up's count) is recomputed every run.
-    message: held && c.owner !== DERIVED ? p.message : c.message,
+    message: held && c.owner !== DERIVED ? p!.message : c.message,
     acknowledged: ack,
     maintenance: mnt,
-    ...(p.flapping !== undefined ? { flapping: p.flapping } : {}),
-    ...(p.flappingHeld !== undefined ? { flappingHeld: p.flappingHeld } : {}),
+    ...(operatorAt ? { operatorAt } : {}),
+    ...(flap ? { flapping: true, flappingHeld: flap.held } : {}),
   };
+}
+
+// An impact is silenced while every root it names holds an ack of its own on
+// the condition that makes it a root; it carries that ack with `via`.
+function viaAcks(next: Map<string, Condition[]>, roots: RootCause[]): void {
+  const rootAck = (id: string): Acknowledged | null => {
+    const entries = roots.filter((r) => r.id === id);
+    const own = (next.get(id) ?? []).find((c) => c.acknowledged && !c.acknowledged.via && entries.some((r) => r.type === c.type));
+    return entries.length && own ? own.acknowledged : null;
+  };
+  for (const cs of next.values()) {
+    for (const c of cs) {
+      if (c.type !== "impact" || c.status === "ok" || (c.acknowledged && !c.acknowledged.via)) continue;
+      const rs = c.rootCause ? [c.rootCause] : [];
+      const acks = rs.map(rootAck);
+      c.acknowledged = rs.length && acks.every(Boolean) ? { ...acks[0]!, sticky: true, via: rs } : null;
+    }
+  }
 }
 
 const typeOrder = (c: Condition): number => CONDITION_TYPES.indexOf(c.type);
@@ -259,19 +292,30 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
   const windows = windowOf(io.windows?.() ?? [], objects, relations, nowMs);
   const result: AssessResult = { time, objects: [], rootCauses: d.rootCauses, transitions: [], report: null };
   const reported: NonNullable<CmdbReport["objects"]> = [];
+  const nextOf = new Map<string, Condition[]>();
   for (const o of objects) {
     const prior = priorOf(o.id);
     const byType = new Map(prior.map((c) => [c.type as string, c]));
     const made = d.conditions.get(o.id) ?? [];
-    const next = made.map((c) => stamp(c, byType.get(c.type), time, nowMs, windows.get(o.id)));
+    const words = acksOf(o);
+    const flaps = flapsOf(o);
+    const st = (c: Condition, p: Condition | undefined): Condition => stamp(c, p, time, nowMs, windows.get(o.id), words[c.type], flaps[c.type]);
+    const next = made.map((c) => st(c, byType.get(c.type)));
     // What was a failing impact or roll-up and no longer is: over, not gone.
     // One that was ok already is simply not computed any more.
     for (const p of prior) {
       if (next.some((c) => c.type === p.type) || !p.derived || !failing(p)) continue;
-      next.push(stamp({ ...p, status: "ok", reason: "ok", message: "", rootCause: null, lastChecked: time }, p, time, nowMs, windows.get(o.id)));
+      next.push(st({ ...p, status: "ok", reason: "ok", message: "", rootCause: null, lastChecked: time }, p));
     }
     next.sort((x, y) => typeOrder(x) - typeOrder(y));
-    if (!next.length) continue;
+    if (next.length) nextOf.set(o.id, next);
+  }
+  viaAcks(nextOf, d.rootCauses);
+  for (const o of objects) {
+    const next = nextOf.get(o.id);
+    if (!next) continue;
+    const prior = priorOf(o.id);
+    const byType = new Map(prior.map((c) => [c.type as string, c]));
     result.objects.push({ id: o.id, class: o.class, name: o.name, conditions: next });
     for (const c of next) {
       const p = byType.get(c.type);

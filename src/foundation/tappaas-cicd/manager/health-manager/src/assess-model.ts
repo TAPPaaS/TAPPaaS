@@ -21,8 +21,9 @@ export interface Condition {
   rootCause: string | null;
   acknowledged: Acknowledged | null;
   maintenance: Maintenance | null;
-  flapping?: unknown; // emit's, carried over as they are
-  flappingHeld?: unknown;
+  flapping?: boolean; // emit's (its `flapping` attribute), projected by assess
+  flappingHeld?: ConditionStatus;
+  operatorAt?: string; // the operator's last word on it (acknowledgements) that assess took
 }
 
 export interface CmdbItem {

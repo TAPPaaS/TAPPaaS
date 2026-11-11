@@ -384,6 +384,71 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check(got(assess(io, {}, later(20)), site, "drift")?.message !== "3 of 3 ok" , "a roll-up nobody computes is not carried as a judgement of its own");
 }
 
+// ── the operator's word and emit's flapping: attributes of their own ──
+{
+  const s = fresh();
+  const vm = s.items.find((o) => o.id === nc.id)!;
+  const io = new StubIO(s.items, s.rels);
+  const mod = { kind: "module" as const, name: "nextcloud" };
+  const fail = (st: "fail" | "warn" | "pass"): void => void (io.checks = () => [gate("disk-threshold", st, [], { findings: st === "pass" ? [] : [{ status: st, text: "t", subject: mod }], judged: [mod] })]);
+  fail("fail");
+  assess(io, {}, NOW);
+  const say = (ack: Record<string, unknown> | null, at: string): void => void (vm.attributes.acknowledgements = { capacity: { ack, at } });
+  say({ by: "lars", note: "known", until: null, sticky: false, at: later(1).toISOString() }, later(1).toISOString());
+  const taken = got(assess(io, {}, later(2)), nc, "capacity");
+  check(taken?.acknowledged?.by === "lars" && taken.operatorAt === later(1).toISOString(), "assess takes the operator's word onto the condition");
+  check(got(assess(io, {}, later(3)), nc, "capacity")?.acknowledged?.by === "lars", "…and keeps it");
+  fail("warn");
+  check(got(assess(io, {}, later(4)), nc, "capacity")?.acknowledged === null, "a plain ack ends with the status, the word staying as it was");
+  check(got(assess(io, {}, later(5)), nc, "capacity")?.acknowledged === null, "…and is not taken again");
+  say({ by: "lars", note: "k", until: null, sticky: true, at: later(6).toISOString() }, later(6).toISOString());
+  assess(io, {}, later(7));
+  fail("fail");
+  check(got(assess(io, {}, later(8)), nc, "capacity")?.acknowledged?.sticky === true, "a sticky ack lasts across a change of status");
+  fail("pass");
+  check((got(assess(io, {}, later(9)), nc, "capacity")?.acknowledged ?? null) === null, "…and ends at ok");
+  fail("fail");
+  say({ by: "lars", note: "k", until: later(20).toISOString(), sticky: false, at: later(10).toISOString() }, later(10).toISOString());
+  check(got(assess(io, {}, later(11)), nc, "capacity")?.acknowledged !== null, "an ack with an until holds before it");
+  check(got(assess(io, {}, later(21)), nc, "capacity")?.acknowledged === null, "…and ends at it");
+  say({ by: "lars", note: "again", until: null, sticky: false, at: later(22).toISOString() }, later(22).toISOString());
+  assess(io, {}, later(23));
+  say(null, later(24).toISOString());
+  check(got(assess(io, {}, later(25)), nc, "capacity")?.acknowledged === null, "unack: the word without an ack clears it");
+  // Concurrent writers: an ack written while assess runs is not lost.
+  const racer = new StubIO(s.items, s.rels);
+  racer.checks = io.checks;
+  const objects = racer.objects.bind(racer);
+  racer.objects = () => {
+    const read = objects().map((o) => ({ ...o, attributes: { ...o.attributes } }));
+    // the operator acks after assess read the CMDB, before it writes
+    say({ by: "ops", note: "during", until: null, sticky: false, at: later(26).toISOString() }, later(26).toISOString());
+    return read;
+  };
+  assess(racer, {}, later(27));
+  check((vm.attributes.acknowledgements as Record<string, { ack: { by: string } }>).capacity.ack.by === "ops", "an ack made during an assess run survives it: assess never writes the operator's attribute");
+  check(got(assess(io, {}, later(28)), nc, "capacity")?.acknowledged?.by === "ops", "…and the next run takes it");
+  // Flapping is emit's attribute, projected.
+  vm.attributes.flapping = { capacity: { held: "critical" } };
+  const f = got(assess(io, {}, later(29)), nc, "capacity");
+  check(f?.flapping === true && f.flappingHeld === "critical", "emit's flapping is projected onto the condition");
+  vm.attributes.flapping = {};
+  check(got(assess(io, {}, later(30)), nc, "capacity")?.flapping === undefined, "…and goes when emit ends it");
+}
+{
+  // A root's ack silences its impact, via; a second root hears it again.
+  const s = fresh();
+  const io = new StubIO(s.items, s.rels);
+  const node = { kind: "node" as const, name: "tappaas1" };
+  io.checks = () => [gate("pulse", "fail", [], { findings: [{ status: "fail", text: "offline", subject: node }], judged: [node] })];
+  assess(io, {}, NOW);
+  s.items.find((o) => o.id === m1.id)!.attributes.acknowledgements = { operational: { ack: { by: "lars", note: "n", until: null, sticky: false, at: later(1).toISOString() }, at: later(1).toISOString() } };
+  const r = assess(io, {}, later(2));
+  check(got(r, nc, "impact")?.acknowledged?.via?.[0] === m1.id, "a root's ack silences its impact, via the root");
+  s.items.find((o) => o.id === m1.id)!.attributes.acknowledgements = { operational: { ack: null, at: later(3).toISOString() } };
+  check(got(assess(io, {}, later(4)), nc, "impact")?.acknowledged === null, "…and the impact is heard again when the root is unacknowledged");
+}
+
 // ── what the operator set ──
 {
   const s = fresh();
@@ -394,11 +459,13 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   io.checks = () => [gate("disk-threshold", "fail", [], { findings: [{ status: "fail", text: "t", subject: mod }], judged: [mod] })];
   const r = assess(io, {}, NOW);
   check(got(r, nc, "capacity")?.acknowledged?.by === "lars", "an acknowledgement survives a run");
-  vm.attributes.conditions = [cond("capacity", "critical", "disk-full", { flapping: true, flappingHeld: "critical", acknowledged: { by: "lars", note: "n", until: null, sticky: false, at: T0, via: ["machine/x"] } })];
+  vm.attributes.conditions = [cond("capacity", "critical", "disk-full", { acknowledged: { by: "lars", note: "n", until: null, sticky: false, at: T0 } })];
+  vm.attributes.flapping = { capacity: { held: "critical" } };
   const kept = got(assess(io, {}, NOW), nc, "capacity")!;
-  check(kept.flapping === true && kept.flappingHeld === "critical" && kept.acknowledged?.at === T0 && kept.acknowledged?.via?.[0] === "machine/x", "emit's members survive a run");
+  check(kept.flapping === true && kept.flappingHeld === "critical" && kept.acknowledged?.at === T0, "an ack set before the attribute existed, and emit's flapping, survive a run");
   io.checks = () => [gate("disk-threshold", "pass", [], { judged: [mod] })];
   check(got(assess(io, {}, later(1)), nc, "capacity")?.flapping === true, "…also across a change of status");
+  vm.attributes.flapping = {};
   io.checks = () => [gate("disk-threshold", "fail", [], { findings: [{ status: "fail", text: "t", subject: mod }], judged: [mod] })];
   vm.attributes.conditions = [cond("capacity", "critical", "disk-full", { acknowledged: { by: "lars", note: "n", until: null, sticky: false } })];
   check(got(r, nc, "capacity")?.maintenance === null, "…a window past its until does not");

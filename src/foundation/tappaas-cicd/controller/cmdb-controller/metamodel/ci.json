@@ -27,6 +27,16 @@
           },
           "description": "A timed raise of its performance level (ADR-046 D3): health-manager perf sets it and ends it (unset) when it is stopped or expires. Its history is the object's investigations; each change is a marker on its charts."
         },
+        "acknowledgements": {
+          "type": "object",
+          "volatile": true,
+          "description": "The operator's last word per condition type: { <type>: { ack: {by, note, until, sticky, at} | null, at } }. health-manager ack and unack are its only writers; assess takes a word newer than a condition's operatorAt and keeps the ack's lifecycle on the condition."
+        },
+        "flapping": {
+          "type": "object",
+          "volatile": true,
+          "description": "health-manager emit's, its only writer: per condition type that flaps, the status held while it does ({ <type>: { held } }). assess projects it onto the condition."
+        },
         "conditions": {
           "type": "array",
           "volatile": true,
@@ -45,11 +55,12 @@
               "rootCause": { "type": ["string", "null"], "description": "The id of the object it follows from." },
               "acknowledged": { "type": ["object", "null"], "properties": { "by": { "type": "string" }, "note": { "type": "string" }, "until": { "type": "string" }, "sticky": { "type": "boolean" } }, "description": "An operator's acknowledgement: it keeps its status and stops counting." },
               "maintenance": { "type": ["object", "null"], "properties": { "until": { "type": "string" }, "note": { "type": "string" }, "by": { "type": "string" } }, "description": "The open maintenance window that covers the object (health-manager assess, from the window files): transitions are recorded, not counted." },
-              "flapping": { "description": "health-manager emit's: assess carries it over." },
-              "flappingHeld": { "description": "health-manager emit's: assess carries it over." }
+              "flapping": { "description": "emit's flapping attribute, projected by assess." },
+              "flappingHeld": { "description": "emit's flapping attribute, projected by assess." },
+              "operatorAt": { "type": "string", "description": "The operator's last word (acknowledgements) assess took for it." }
             }
           },
-          "description": "Its health, one per kind, as Kubernetes gives a resource's status.conditions. health-manager assess is the only writer. Volatile: never drift. Every change but lastChecked opens a new period, so its history is the object's health history."
+          "description": "Its health, one per kind, as Kubernetes gives a resource's status.conditions. health-manager assess is the only writer; acknowledgements and flapping are projected onto it. Volatile: never drift. Every change but lastChecked opens a new period, so its history is the object's health history."
         }
       }
     },

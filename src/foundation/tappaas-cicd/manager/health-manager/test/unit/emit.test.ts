@@ -4,8 +4,8 @@
 import { mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { ack, endedBeforeEmit, maintenanceStart, maintenanceStop, reconcileAcks, silenced, unack } from "../../src/ack";
-import { Condition, HealthCmdb, HealthObject, Period, conditionsOf, splitRef } from "../../src/emit-cmdb";
+import { ack, endedBeforeEmit, maintenanceStart, maintenanceStop, unack } from "../../src/ack";
+import { Condition, HealthCmdb, HealthObject, Period, splitRef } from "../../src/emit-cmdb";
 import { readWindows } from "../../src/windows";
 import { Cursor, assessInterval, byClass, deliverNotices, windowEvents, emit, flapPercent, flappingNow, readCursor, runEmit, transitions, withEmitLock } from "../../src/emit";
 import { historyLines, historyRows, listLines, listRows, rootDocs, rootLines, showDoc, showLines } from "../../src/emit-read";
@@ -38,7 +38,7 @@ const cond = (type: string, status: Condition["status"], since: string, more: Pa
 const object = (id: string, cls: string, conditions: Condition[]): HealthObject => ({ id, class: cls, name: id, attributes: { conditions } });
 
 class Stub implements HealthCmdb {
-  written: { id: string; kind: string; verb?: string; conditions: Condition[] }[] = [];
+  written: { id: string; kind: string; verb?: string; attributes: Record<string, unknown> }[] = [];
   history = new Map<string, Period[]>();
   past: HealthObject[] = [];
   constructor(public all: HealthObject[]) {}
@@ -57,10 +57,11 @@ class Stub implements HealthCmdb {
   periods(id: string): Period[] {
     return this.history.get(id) ?? [];
   }
-  write(o: HealthObject, conditions: Condition[], meta: { kind: string; verb?: string }): void {
-    this.written.push({ id: o.id, kind: meta.kind, verb: meta.verb, conditions });
+  write(o: HealthObject, attributes: Record<string, unknown>, meta: { kind: string; verb?: string }): void {
+    if ("conditions" in attributes) throw new Error("emit and the verbs never write conditions");
+    this.written.push({ id: o.id, kind: meta.kind, verb: meta.verb, attributes });
     const stored = this.all.find((x) => x.id === o.id);
-    if (stored) stored.attributes.conditions = conditions;
+    if (stored) Object.assign(stored.attributes, JSON.parse(JSON.stringify(attributes)));
   }
 }
 
@@ -320,9 +321,8 @@ console.log("flapping");
   check(ts.length === 1 && ts[0].event === "flapping" && ts[0].phase === "start", "one flapping start replaces the storm");
   check(ts[0].to === "critical" && ts[0].flapping, "held at the worse value");
   check(ts[0].kind === "causal", "and mailed once, as a root's");
-  const c = conditionsOf(r.objects[0])[0];
-  check(c.flapping === true && c.flappingHeld === "critical" && r.writes.has("sw1"), "kept on the condition");
-  s.write(r.objects[0], [c], { kind: "observation" });
+  check(r.objects[0].attributes.flapping?.operational?.held === "critical" && r.writes.has("sw1"), "kept in emit's own attribute");
+  s.write(r.objects[0], { flapping: r.objects[0].attributes.flapping }, { kind: "observation" });
   ps.push(period([cond("operational", "ok", T(-1))], T(-1), 20));
   const held = emit(s, r.cursor, { now: NOW, intervalMin: 5 });
   check(transitionsIn(held.events).length === 0, "while flapping, a transition tells nothing");
@@ -331,7 +331,7 @@ console.log("flapping");
   const end = emit(s, held.cursor, { now: quiet, intervalMin: 5 });
   const e = transitionsIn(end.events);
   check(e.length === 1 && e[0].phase === "end" && !e[0].flapping && e[0].from === "critical", "it ends by itself, from the held status");
-  check(conditionsOf(end.objects[0])[0].flapping === false && end.writes.has("sw1"), "and the flag goes");
+  check(!end.objects[0].attributes.flapping?.operational && end.writes.has("sw1"), "and the flag goes");
 }
 
 console.log("ack and unack");
@@ -343,44 +343,21 @@ console.log("ack and unack");
   const a = es.find((e): e is AckEvent => e.event === "ack")!;
   check(a.by === "lars" && a.symptoms.join() === "vm1", "the ack event names who and the symptoms");
   check(journal.length === 1 && JSON.parse(journal[0]).event === "ack", "the verb tells its event");
-  check(s.written.every((w) => w.kind === "change" && w.verb === "ack"), "written as changes");
-  const node = s.all[0];
-  const vm = s.all[1];
-  const impact = (): Condition => conditionsOf(vm).find((c) => c.type === "impact")!;
-  check(silenced(conditionsOf(node)[0], NOW), "the root is silenced");
-  check(impact().acknowledged?.via?.join() === "node1" && silenced(impact(), NOW), "its impact condition with it");
-  check(impact().acknowledged?.sticky === true, "sticky, so assess leaves it to emit");
-  check(!conditionsOf(vm).find((c) => c.type === "operational")!.acknowledged, "not the guest's other condition");
-
-  // A symptom that gets a root of its own is heard again.
-  impact().rootCause = ["node1", "switch1"];
-  const objects = s.objects();
-  reconcileAcks(objects, [{ id: "node1", type: "operational" }, { id: "switch1", type: "operational" }], NOW);
-  check(!conditionsOf(objects[1]).find((c) => c.type === "impact")!.acknowledged, "a second root hears the symptom again");
-  impact().rootCause = "node1";
-
+  check(s.written.length === 1 && s.written[0].kind === "change" && s.written[0].verb === "ack" && Object.keys(s.written[0].attributes).join() === "acknowledgements", "written as a change of the acknowledgements attribute only, never conditions");
+  const word = s.all[0].attributes.acknowledgements?.operational;
+  check(word?.ack?.by === "lars" && word.at === NOW.toISOString(), "the operator's word, per type");
+  // The conditions show it once assess took it: here, as assess would.
+  s.all[0].attributes.conditions![0].acknowledged = word!.ack;
   unack(ctx, "node1");
-  check(!conditionsOf(node)[0].acknowledged, "unack ends the root's");
-  check(!impact().acknowledged, "and restores the symptom");
+  check(s.all[0].attributes.acknowledgements?.operational?.ack === null, "unack is a word of its own: no ack");
   let thrown = false;
   try {
+    s.all[0].attributes.conditions![0].acknowledged = null;
     unack(ctx, "node1");
   } catch {
     thrown = true;
   }
   check(thrown, "unack of nothing is refused");
-}
-
-console.log("acks end by themselves");
-{
-  const mk = (a: Partial<Condition>, status: Condition["status"] = "critical", since = T(-30)): HealthObject[] => [object("x", "vm", [cond("operational", status, since, a)])];
-  const by = { by: "lars", at: T(-20) };
-  const run = (o: HealthObject[]): HealthEvent[] => reconcileAcks(o, [], NOW).events;
-  check((run(mk({ acknowledged: { ...by, until: T(-1) } }))[0] as AckEvent).why === "expired", "at its until");
-  check((run(mk({ acknowledged: { ...by, sticky: true } }, "ok"))[0] as AckEvent).why === "recovered", "on a return to ok, sticky too");
-  check((run(mk({ acknowledged: by }, "warning", T(-5)))[0] as AckEvent).why === "changed", "not sticky: at the next status change");
-  check(run(mk({ acknowledged: { ...by, sticky: true } }, "warning", T(-5))).length === 0, "sticky: not at a status change");
-  check(run(mk({ acknowledged: { ...by, until: T(10) } })).length === 0, "before its until, nothing");
 }
 
 console.log("what assess ended before emit ran");
@@ -470,7 +447,8 @@ console.log("the verbs");
   check(quiet(() => runEmitVerb("list", ["--class", "vm", "--json"], ctx)) === 0 && (JSON.parse(out.join("")) as { class: string }[]).every((r) => r.class === "vm"), "list --class");
   check(quiet(() => runEmitVerb("show", ["node1"], ctx)) === 0 && out[0].startsWith("machine/node1"), "show");
   check(quiet(() => runEmitVerb("history", ["node1", "--since", "1h", "--json"], ctx)) === 0 && (JSON.parse(out.join("")) as unknown[]).length === 1, "history --since 1h");
-  check(quiet(() => runEmitVerb("ack", ["node1", "--note", "known", "--until", "2h"], ctx)) === 0 && conditionsOf(s.all[0])[0].acknowledged?.until === T(120), "ack --until 2h");
+  check(quiet(() => runEmitVerb("ack", ["node1", "--note", "known", "--until", "2h"], ctx)) === 0 && s.all[0].attributes.acknowledgements?.operational?.ack?.until === T(120), "ack --until 2h");
+  s.all[0].attributes.conditions![0].acknowledged = s.all[0].attributes.acknowledgements!.operational.ack; // as assess takes it
   check(quiet(() => runEmitVerb("unack", ["node1"], ctx)) === 0, "unack");
   check(quiet(() => runEmitVerb("maintenance", ["vm2", "--until", "1h", "--note", "x"], ctx)) === 0 && readWindows(WINDOWS).length === 1, "maintenance <ci>");
   check(quiet(() => runEmitVerb("maintenance", ["end", "vm2"], ctx)) === 0 && readWindows(WINDOWS).length === 0, "maintenance end <ci>");

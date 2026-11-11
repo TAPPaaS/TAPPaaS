@@ -21,8 +21,8 @@
 
 import { closeSync, existsSync, openSync, readFileSync, statSync } from "fs";
 import { join } from "path";
-import { cloneObjects, endedBeforeEmit, reconcileAcks, silenced } from "./ack";
-import { Condition, HealthCmdb, HealthObject, Period, RootEntry, Status, conditionsOf, rootsOf, rootsOfSite, worse } from "./emit-cmdb";
+import { cloneObjects, endedBeforeEmit, silenced } from "./ack";
+import { Condition, Flaps, HealthCmdb, HealthObject, Period, RootEntry, Status, conditionsOf, rootsOf, rootsOfSite, worse } from "./emit-cmdb";
 import { EventKind, HealthEvent, Journal, MaintenanceEvent, TransitionEvent, eventLine, levelChanged, levelRose } from "./events";
 import { Window, isOpen, readWindows } from "./windows";
 import { Deliver, Notice, NoticeEvent, NoticePlan, closeMail, noticeKey, openMail, planNotices, siteNotify, wantedNotices } from "./notices";
@@ -232,8 +232,8 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
   const from = input.since ?? cursor?.time;
   const before = from ? cmdb.objects(from) : [];
   const gone = endedBeforeEmit(before, objects, input.now);
-  const r = reconcileAcks(objects, roots, input.now);
-  const dirty = new Set(r.dirty);
+  const dirty = new Set<string>();
+  const flapsOf = (o: HealthObject): Flaps => (o.attributes.flapping ??= {});
   const told: TransitionEvent[] = [];
   let change = cursor?.change ?? null;
 
@@ -242,11 +242,12 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
     const isNew = (t: Transition): boolean =>
       input.since !== undefined || cursor?.change === null || cursor === null ? Date.parse(t.at) > fromMs : t.change > cursor.change!;
     for (const o of candidates(objects, before, fromMs)) {
+      const flaps = flapsOf(o);
       const periods = cmdb.periods(o.id);
       for (const p of periods) change = Math.max(change ?? 0, Number(p.change));
       const all = transitions(periods);
       const conds = conditionsOf(o);
-      for (const type of new Set([...all.map((t) => t.type), ...conds.filter((c) => c.flapping).map((c) => c.type)])) {
+      for (const type of new Set([...all.map((t) => t.type), ...Object.keys(flaps)])) {
         const ofType = all.filter((t) => t.type === type);
         const fresh = ofType.filter(isNew);
         const c = conds.find((x) => x.type === type);
@@ -286,20 +287,25 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
         };
         const windowMs = BUCKETS * intervalMs;
         const recent = ofType.filter((t) => Date.parse(t.at) > input.now.getTime() - windowMs);
-        const was = c?.flapping === true;
+        // Its own attribute is what emit holds; the condition's copy is assess's projection.
+        const was = !!flaps[type] || c?.flapping === true;
         const flapping = c ? flappingNow(was, flapPercent(recent.map((t) => Date.parse(t.at)), input.now.getTime(), intervalMs)) : false;
         if (c && !was && flapping && fresh.length) {
           const held = recent.reduce<Status>((w, t) => worse(worse(w, t.from), t.to), "ok");
+          flaps[type] = { held };
           c.flapping = true;
           c.flappingHeld = held;
           dirty.add(o.id);
           told.push(event({ from: fresh[0].from, to: held, at, after: c }, { event: "flapping", phase: "start", flapping: true }));
-        } else if (c && was && !flapping) {
-          const held = c.flappingHeld ?? c.status;
-          c.flapping = false;
-          delete c.flappingHeld;
+        } else if (was && !flapping) {
+          const held = flaps[type]?.held ?? c?.flappingHeld ?? c?.status ?? "ok";
+          delete flaps[type];
+          if (c) {
+            c.flapping = false;
+            delete c.flappingHeld;
+          }
           dirty.add(o.id);
-          told.push(event({ from: held, to: c.status, at, after: c }, { event: "flapping", phase: "end" }));
+          told.push(event({ from: held, to: c?.status ?? "ok", at, after: c }, { event: "flapping", phase: "end" }));
         } else if (!was) {
           for (const t of fresh) told.push(event(t, {}));
         }
@@ -314,7 +320,7 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
 
   const w = windowEvents(cursor?.windows ?? {}, input.windows ?? [], input.now);
 
-  const events: HealthEvent[] = [...gone, ...r.events, ...w.events, ...told];
+  const events: HealthEvent[] = [...gone, ...w.events, ...told];
   return { events, cursor: { time: at, change, roots: now, notices: cursor?.notices ?? {}, windows: w.seen }, notices, writes: dirty, objects };
 }
 
@@ -368,7 +374,7 @@ export function deliverNotices(plan: NoticePlan, open: Record<string, Notice>, d
  *  delivered before the cursor records it open, for the same reason. */
 export function runEmit(cmdb: HealthCmdb, journal: Journal, configDir: string, input: Omit<EmitInput, "intervalMin">, deliver: Deliver = siteNotify): HealthEvent[] {
   const r = emit(cmdb, readCursor(configDir), { windows: readWindows(), ...input, intervalMin: assessInterval(configDir) });
-  for (const o of r.objects) if (r.writes.has(o.id)) cmdb.write(o, conditionsOf(o), { kind: "observation" });
+  for (const o of r.objects) if (r.writes.has(o.id)) cmdb.write(o, { flapping: o.attributes.flapping ?? {} }, { kind: "observation" });
   const n = deliverNotices(r.notices, r.cursor.notices ?? {}, deliver, r.cursor.time);
   const events: HealthEvent[] = [...r.events, ...n.events];
   journal(events.map(eventLine));
