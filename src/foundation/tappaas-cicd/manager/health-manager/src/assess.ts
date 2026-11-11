@@ -7,9 +7,9 @@
 // gate that skipped, or a guest it could not reach, leaves the failure standing
 // with its old lastChecked. A condition whose status and reason hold keeps its
 // since and message, and only lastChecked moves, which the store rewrites in
-// place. What the operator set — acknowledged, maintenance — is carried over: a
-// plain acknowledgement ends when the status changes, a sticky one at ok. So is
-// what emit keeps on a condition (flapping, flappingHeld).
+// place. An acknowledgement is carried over: a plain one ends when the status
+// changes, a sticky one at ok. So is what emit keeps on a condition (flapping,
+// flappingHeld). Maintenance is the open window's that covers the object.
 
 import { AlertItem } from "./alerts";
 import { CmdbItem, CmdbRel, Condition, RootCause, RANK, SOURCE, SiteIndex, conditionsOf, failing } from "./assess-model";
@@ -26,6 +26,7 @@ import { CONDITION_TYPES, ConditionStatus } from "../../../lib/ts/src/health-rul
 import { levelChanged } from "./events";
 import { Declared, PERF_OWNER, fromPerformance, fromTrends } from "./assess-performance";
 import { MetricsReader } from "./metrics-read";
+import { Window, asMaintenance, windowOf } from "./windows";
 
 /** Everything assess reads and writes; tests stub it. */
 export interface AssessIO {
@@ -43,6 +44,7 @@ export interface AssessIO {
   perfDeclared?(): Declared[]; // the foundation modules' declared thresholds
   modules?(): Set<string>; // the instances, to tell a CI's module
   horizonDays?(): number; // capacity: "full within" this many days is a warning
+  windows?(): Window[]; // the maintenance windows (windows.ts): what they cover is in maintenance
   write(report: CmdbReport): void;
 }
 
@@ -131,14 +133,16 @@ export function settle(priorOf: (id: string) => Condition[], ids: Iterable<strin
   return out;
 }
 
-// What the operator set, across a change of status; since, across none.
-function stamp(c: Condition, p: Condition | undefined, now: string, nowMs: number): Condition {
-  if (!p) return c;
+// What the operator set, across a change of status; since, across none. The
+// maintenance is the window's that covers the object now (windows.ts), never
+// carried over: a window that closed silences nothing.
+function stamp(c: Condition, p: Condition | undefined, now: string, nowMs: number, window: Window | undefined): Condition {
+  const mnt = window ? asMaintenance(window) : null;
+  if (!p) return { ...c, maintenance: mnt };
   const held = p.status === c.status && p.reason === c.reason;
   const until = (w: { until: string | null } | null): boolean => w !== null && (!w.until || Date.parse(w.until) > nowMs);
   let ack = c.acknowledged ?? p.acknowledged ?? null;
   if (!until(ack) || (ack && !held && (!ack.sticky || c.status === "ok"))) ack = null;
-  const mnt = until(c.maintenance ?? p.maintenance ?? null) ? c.maintenance ?? p.maintenance ?? null : null;
   return {
     ...c,
     since: held ? p.since : now,
@@ -208,17 +212,18 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
   const model = t("rules", () => io.rules());
   const d = t("derive", () => derive(objects, source, relations, model, time));
 
+  const windows = windowOf(io.windows?.() ?? [], objects, relations, nowMs);
   const result: AssessResult = { time, objects: [], rootCauses: d.rootCauses, transitions: [], report: null };
   const reported: NonNullable<CmdbReport["objects"]> = [];
   for (const o of objects) {
     const prior = priorOf(o.id);
     const byType = new Map(prior.map((c) => [c.type as string, c]));
     const made = d.conditions.get(o.id) ?? [];
-    const next = made.map((c) => stamp(c, byType.get(c.type), time, nowMs));
+    const next = made.map((c) => stamp(c, byType.get(c.type), time, nowMs, windows.get(o.id)));
     // What was impact or a roll-up and no longer is: over, not gone.
     for (const p of prior) {
       if (next.some((c) => c.type === p.type) || !p.derived) continue;
-      next.push(stamp({ ...p, status: "ok", reason: "ok", message: "", rootCause: null, lastChecked: time }, p, time, nowMs));
+      next.push(stamp({ ...p, status: "ok", reason: "ok", message: "", rootCause: null, lastChecked: time }, p, time, nowMs, windows.get(o.id)));
     }
     next.sort((x, y) => typeOrder(x) - typeOrder(y));
     if (!next.length) continue;

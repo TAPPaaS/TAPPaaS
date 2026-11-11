@@ -101,7 +101,9 @@ converge_open_maintenance() {
     case "${module}" in
         network|firewall) scope="site" ;;
         *) host="$(jq -r '[.. | objects | .vmname? // empty] | first // empty' "${CONFIG_DIR:-/home/tappaas/config}/${module}.json" 2>/dev/null || true)"
-           scope="${host:-${module}}" ;;
+           # The host for the receiver, the instance for the CMDB's CI.
+           scope="${host:-${module}}"
+           [[ -n "${host}" && "${host}" != "${module}" ]] && scope="${host},${module}" ;;
     esac
     "${mw}" open --name "restart-${module}" --scope "${scope}" --minutes 60 \
         --reason "${module} restarted by its update" >/dev/null 2>&1 \

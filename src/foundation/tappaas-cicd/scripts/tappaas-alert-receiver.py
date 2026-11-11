@@ -580,6 +580,17 @@ def node_back_mail(node, state, incident):
     return f"RESOLVED: node {node} is back", "\n".join(lines) + "\n"
 
 
+def node_left_mail(node, incident):
+    """The RESOLVED for a node down that is no longer in the cluster at all:
+    removed, not back. (subject, body)"""
+    lines = [f"Node {node} is no longer a member of the cluster (down since {incident.get('since', '?')}).",
+             "It was removed, not brought back: its incident is closed.", ""]
+    if incident.get("guests"):
+        lines += ["The guests it ran:"] + [f"  {g}" for g in incident["guests"]] + [""]
+    lines += ["Sent by the logging module's alert rules through tappaas-alert-receiver."]
+    return f"RESOLVED: node {node} left the cluster", "\n".join(lines) + "\n"
+
+
 def _incident_path(args, node):
     return f"{args.node_down_dir}/{re.sub(r'[^A-Za-z0-9_.-]', '-', node)}.json"
 
@@ -628,9 +639,10 @@ def fold_node_down(args, payload):
         if state is None:
             return payload  # cannot tell: every host is mailed on its own
         offline = offline_nodes(state)
+        members = {n.get("name") for n in state.get("nodes", [])}
         for node, inc in incidents.items():
             if node not in offline:
-                subject, body = node_back_mail(node, state, inc)
+                subject, body = node_back_mail(node, state, inc) if node in members else node_left_mail(node, inc)
                 ok, out = notify(args, subject, body, key=f"grafana:NodeDown:{node}", resolve=True)
                 print(f"{'sent' if ok else 'NOT sent'}: {subject}" + (f" — {out}" if out and not ok else ""), flush=True)
                 if ok:
@@ -788,12 +800,17 @@ def fold_quiet(args, payload):
             if not _is_silent(a):
                 keep.append(a)
                 continue
-            if b.get("open"):
+            # A burst takes the hosts that fall silent within its window; one
+            # that falls silent later is a fault of its own, mailed as usual.
+            if b.get("open") and now - b.get("mailed", b.get("since", now)) <= args.burst_window:
                 if host not in b["members"]:
                     b["members"].append(host)
                     changed = True
                 print(f"folded: HostSilent on {host} into the silent burst", flush=True)
                 breadcrumb(args, f"alert folded into the silent burst: HostSilent on {host}")
+                continue
+            if b.get("open"):
+                keep.append(a)
                 continue
             recent[host] = now
             changed = True

@@ -65,6 +65,7 @@ import { CmdbItem, CmdbRel, SiteIndex } from "./assess-model";
 import { assessmentOf, readValidate } from "./assess-validate";
 import { readLastSweep } from "./cmdbsweep";
 import { cmdRules, readRules } from "./rules";
+import { readWindows } from "./windows";
 import { cmdScore } from "./score-verb";
 // ── ADR-041 emit half ──
 import { EMIT_HELP, liveEmitContext, runEmitVerb } from "./emit-verbs";
@@ -386,6 +387,7 @@ function assessIO(opts: Opts, client: ClusterClient, timed?: Timer): AssessIO {
     perfDeclared: () => perfDeclared(opts.configDir),
     modules: () => new Set(instanceNames(opts.configDir)),
     horizonDays: () => horizonOf(readModuleJson(join(opts.configDir, "site.json"))),
+    windows: () => readWindows(),
     write: writeAssessment,
   };
 }

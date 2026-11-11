@@ -59,6 +59,7 @@ export class StubIO implements AssessIO {
   scan: ReturnType<AssessIO["cve"]> = null;
   security?: AssessIO["security"];
   metrics?: AssessIO["metrics"];
+  windows?: AssessIO["windows"];
   retired: CmdbItem[] = [];
 
   constructor(

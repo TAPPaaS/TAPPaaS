@@ -6,7 +6,7 @@ import { CheckSubject } from "./types";
 import { ConditionStatus, ConditionType } from "../../../lib/ts/src/health-rules";
 
 export interface Acknowledged { by: string; note: string; until: string | null; sticky: boolean; at?: string; via?: string[] }
-export interface Maintenance { until: string | null; note: string }
+export interface Maintenance { until: string | null; note: string; by?: string }
 
 export interface Condition {
   type: ConditionType;

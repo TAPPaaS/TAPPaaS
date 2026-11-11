@@ -247,6 +247,12 @@ jq '.nodes |= map(if .name == "tappaas2" then .online = false else . end)' "${TM
 ck "the cluster cannot be asked: the host is mailed on its own, as before" "ALERT: HostSilent on forgejo" \
    "$(post rotated "$(wh firing state HostSilent forgejo)" >/dev/null; tail -1 "${TMP}/subjects")"
 rm -f "${TMP}/cluster-fails"
+# A node down that is then removed from the cluster: closed as left, not back.
+post rotated "$(wh firing state HostSilent tappaas2)" >/dev/null
+jq '.nodes |= map(select(.name != "tappaas2"))' "${TMP}/cluster.json" > "${TMP}/c2" && mv "${TMP}/c2" "${TMP}/cluster.json"
+post rotated "$(wh resolved state HostSilent tappaas2)" >/dev/null
+ck "a node that left the cluster closes its incident as left, not back" "RESOLVED: node tappaas2 left the cluster" "$(grep 'RESOLVED: node tappaas2 left' "${TMP}/subjects")"
+ck "…and the incident is gone" "no" "$([[ -e "${TMP}/node-down/tappaas2.json" ]] && echo yes || echo no)"
 
 # The health hook (ADR-041 D2): every alert, ALERT or RESOLVED, assesses what it
 # is about and then emits; the worker runs apart from the webhook.
@@ -352,6 +358,13 @@ post "${TOKEN}" "$(wh firing state HostSilent jellyfin)" >/dev/null
 sleep 1.5
 ck "a host silent later joins the open notice" "0" "$(grep -c 'HostSilent on jellyfin' "${TMP}/subjects")"
 ck "…and is listed in it" "true" "$(jq -r '.members | index("jellyfin") != null' "${TMP}/burst2.json")"
+# Past the burst window, a host that falls silent is a fault of its own.
+jq '.mailed -= 120' "${TMP}/burst2.json" > "${TMP}/b2" && mv "${TMP}/b2" "${TMP}/burst2.json"
+post "${TOKEN}" "$(wh firing state HostSilent immich)" >/dev/null
+for _ in $(seq 1 40); do grep -q 'HostSilent on immich' "${TMP}/subjects" && break; sleep 0.1; done
+ck "a host silent after the burst's window is mailed on its own" "1" "$(grep -c 'HostSilent on immich' "${TMP}/subjects")"
+ck "…and does not join the burst" "false" "$(jq -r '.members | index("immich") != null' "${TMP}/burst2.json")"
+post "${TOKEN}" "$(wh resolved state HostSilent immich)" >/dev/null
 for h in nextcloud identity litellm; do post "${TOKEN}" "$(wh resolved state HostSilent "${h}")" >/dev/null; done
 ck "not all back: no RESOLVED yet" "0" "$(grep -c 'log again' "${TMP}/subjects")"
 post "${TOKEN}" "$(wh resolved state HostSilent jellyfin)" >/dev/null

@@ -6,7 +6,8 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { ack, endedBeforeEmit, maintenanceStart, maintenanceStop, reconcileAcks, silenced, unack } from "../../src/ack";
 import { Condition, HealthCmdb, HealthObject, Period, conditionsOf, splitRef } from "../../src/emit-cmdb";
-import { Cursor, assessInterval, byClass, deliverNotices, emit, flapPercent, flappingNow, readCursor, runEmit, transitions, withEmitLock } from "../../src/emit";
+import { readWindows } from "../../src/windows";
+import { Cursor, assessInterval, byClass, deliverNotices, windowEvents, emit, flapPercent, flappingNow, readCursor, runEmit, transitions, withEmitLock } from "../../src/emit";
 import { historyLines, historyRows, listLines, listRows, rootDocs, rootLines, showDoc, showLines } from "../../src/emit-read";
 import { AckEvent, HealthEvent, MaintenanceEvent, TransitionEvent, eventLine } from "../../src/events";
 import { planNotices } from "../../src/notices";
@@ -14,6 +15,9 @@ import { EMIT_HELP, EmitContext, parseWhen, runEmitVerb } from "../../src/emit-v
 
 // test.sh turns the CMDB off for the verbs under test; this one is a stub.
 delete process.env.TAPPAAS_CMDB;
+// The maintenance windows: a directory of the test's own.
+const WINDOWS = mkdtempSync(join(tmpdir(), "health-windows-"));
+process.env.TAPPAAS_MAINTENANCE_DIR = WINDOWS;
 
 let passed = 0;
 let failed = 0;
@@ -390,29 +394,32 @@ console.log("what assess ended before emit ran");
   check((ended(was({ acknowledged: { ...by, sticky: true } }), now("ok", T(-2)))[0] as AckEvent).why === "recovered", "one ended by recovery");
   check(ended(was({ acknowledged: by }), now()).length === 0, "the operator's unack told its own");
   check(ended(was({ acknowledged: { ...by, via: ["r"] } }), now("ok")).length === 0, "a root's ack on a symptom is not told apart");
-  check((ended(was({ maintenance: { until: T(-1) } }), now())[0] as MaintenanceEvent).phase === "end", "a window past its until is told");
-  check(ended(was({ maintenance: { until: T(30) } }), now()).length === 0, "one ended early was the operator's");
 }
 
 console.log("maintenance");
 {
   const s = nodeDown();
-  const j: string[] = [];
-  const ctx = { cmdb: s, journal: (l: string[]) => void j.push(...l), now: NOW, actor: "lars" };
+  const ctx = { cmdb: s, journal: () => undefined, now: NOW, actor: "lars" };
   const es = maintenanceStart(ctx, "vm2", T(60), "disk swap");
-  check((es.at(-1) as MaintenanceEvent).phase === "start", "start is told");
-  check(silenced(conditionsOf(s.all[2])[0], NOW), "a condition in a window is silenced");
-  s.all[2].attributes.conditions!.push(cond("backup", "warning", T(0)));
-  const r = reconcileAcks(s.all, [], NOW);
-  check(conditionsOf(s.all[2])[1].maintenance?.until === T(60) && r.dirty.has("vm2"), "one that appears joins the window");
-  const expired = reconcileAcks(s.objects(), [], new Date(NOW.getTime() + 3600001));
-  check(expired.events.length === 1 && (expired.events[0] as MaintenanceEvent).phase === "end", "it ends at its until, once");
-  check((maintenanceStop(ctx, "vm2", "cancel").at(-1) as MaintenanceEvent).phase === "cancel", "cancel is told");
-  check(!conditionsOf(s.all[2])[0].maintenance, "and closes it");
-  // A transition in a window is told, and silenced.
-  maintenanceStart(ctx, "node1", T(60), "reboot");
+  check((es.at(-1) as MaintenanceEvent).phase === "start", "start is printed");
+  const ws = readWindows(WINDOWS);
+  check(ws.length === 1 && Array.isArray(ws[0].scope) && ws[0].scope[0] === "vm2" && ws[0].until * 1000 === Date.parse(T(60)) && ws[0].reason === "disk swap", "it is a window file the receiver reads too, scoped to the CI");
+  const opened = windowEvents({}, ws, NOW);
+  check(opened.events.length === 1 && opened.events[0].phase === "start" && opened.events[0].name === ws[0].name, "emit tells it opened, once");
+  check(windowEvents(opened.seen, ws, NOW).events.length === 0, "…and not again");
+  const over = windowEvents(opened.seen, ws, new Date(NOW.getTime() + 3600001));
+  check(over.events.length === 1 && over.events[0].phase === "end" && over.events[0].why === "expired", "it ends at its until, once");
+  check((maintenanceStop(ctx, "vm2", "cancel").at(-1) as MaintenanceEvent).phase === "cancel", "cancel is printed");
+  check(readWindows(WINDOWS).length === 0, "…and removes the window");
+  const closed = windowEvents(opened.seen, [], NOW);
+  check(closed.events[0]?.why === "operator", "emit tells a window closed early as the operator's");
+  let threw = false;
+  try { maintenanceStop(ctx, "vm2", "end"); } catch { threw = true; }
+  check(threw, "ending a window that is not open is refused");
+  // A transition in a window (assess put the condition in maintenance) is told, silenced.
+  s.all[0].attributes.conditions = [cond("operational", "critical", T(-3), { maintenance: { until: T(60), note: "reboot" } })];
   const t = transitionsIn(emit(s, cursor(5, 6), { now: NOW, intervalMin: 5 }).events).find((e) => e.ci === "node1")!;
-  check(t.kind === "causal" && t.silenced && !/"kind":"causal".*"silenced":false/.test(eventLine(t)), "a window's transition is recorded, and the rule does not match it");
+  check(t.kind === "causal" && t.silenced, "a window's transition is recorded, silenced");
 }
 
 console.log("show, list, roots, history");
@@ -465,8 +472,8 @@ console.log("the verbs");
   check(quiet(() => runEmitVerb("history", ["node1", "--since", "1h", "--json"], ctx)) === 0 && (JSON.parse(out.join("")) as unknown[]).length === 1, "history --since 1h");
   check(quiet(() => runEmitVerb("ack", ["node1", "--note", "known", "--until", "2h"], ctx)) === 0 && conditionsOf(s.all[0])[0].acknowledged?.until === T(120), "ack --until 2h");
   check(quiet(() => runEmitVerb("unack", ["node1"], ctx)) === 0, "unack");
-  check(quiet(() => runEmitVerb("maintenance", ["vm2", "--until", "1h", "--note", "x"], ctx)) === 0 && !!conditionsOf(s.all[2])[0].maintenance, "maintenance <ci>");
-  check(quiet(() => runEmitVerb("maintenance", ["end", "vm2"], ctx)) === 0 && !conditionsOf(s.all[2])[0].maintenance, "maintenance end <ci>");
+  check(quiet(() => runEmitVerb("maintenance", ["vm2", "--until", "1h", "--note", "x"], ctx)) === 0 && readWindows(WINDOWS).length === 1, "maintenance <ci>");
+  check(quiet(() => runEmitVerb("maintenance", ["end", "vm2"], ctx)) === 0 && readWindows(WINDOWS).length === 0, "maintenance end <ci>");
   check(quiet(() => runEmitVerb("emit", ["--json"], ctx)) === 0 && Array.isArray(JSON.parse(out.join(""))), "emit --json");
   check(parseWhen("30m", NOW, -1) === T(-30), "a span back");
   check(EMIT_HELP.every((v) => v.effect !== undefined), "every verb declares its effect");

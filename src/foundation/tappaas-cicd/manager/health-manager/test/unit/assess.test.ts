@@ -3,6 +3,7 @@
 // the CVE scan; what changes since and what only lastChecked; a failure held
 // until its source looks again; the report's shape; validate over the result.
 
+import { Window } from "../../src/windows";
 import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -290,6 +291,28 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check(r2.transitions.some((t) => t.id === site.id && t.from === "critical" && t.to === "warning"), "…a transition");
   io.checks = () => [gate("service-liveness", "skip")];
   check(got(assess(io, {}, later(10)), site, "operational")?.reason === "roll-up", "…and it stays over when the gate later skips");
+}
+
+// ── maintenance windows: the update's, the receiver's, the conditions' ──
+{
+  const s = fresh();
+  const io = new StubIO(s.items, s.rels);
+  const mod = { kind: "module" as const, name: "nextcloud" };
+  io.checks = () => [gate("service-liveness", "fail", [], { findings: [{ status: "fail", text: "not running", subject: mod }], judged: [mod] })];
+  const inSec = (min: number): number => Math.floor(NOW.getTime() / 1000) + min * 60;
+  const w = (scope: Window["scope"], until: number): Window => ({ name: "restart-x", scope, until, reason: "x restarted by its update" });
+  io.windows = () => [w(["tappaas1"], inSec(60))];
+  const r = assess(io, {}, NOW);
+  check(got(r, nc, "operational")?.maintenance?.note === "x restarted by its update", "a window on a node covers the guests that run on it");
+  check(got(r, nc, "operational")?.maintenance?.until === new Date(inSec(60) * 1000).toISOString(), "…until the window's end");
+  check(got(r, m1, "drift") === undefined || got(r, m1, "drift")?.maintenance !== null, "…and the node itself");
+  io.windows = () => [w(["nextcloud"], inSec(-1))];
+  check(got(assess(io, {}, NOW), nc, "operational")?.maintenance === null, "a window that has ended silences nothing, though the fault holds");
+  io.windows = () => [w("site", inSec(30))];
+  const all = assess(io, {}, NOW);
+  check(all.objects.every((o) => o.conditions.every((c) => c.maintenance !== null)), "a site window covers every object");
+  io.windows = () => [w(["network"], inSec(30))];
+  check(got(assess(io, {}, NOW), nc, "operational")?.maintenance === null, "a window on another guest covers nothing here");
 }
 
 // ── what the operator set ──

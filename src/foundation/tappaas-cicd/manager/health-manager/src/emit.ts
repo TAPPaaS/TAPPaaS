@@ -23,7 +23,8 @@ import { closeSync, existsSync, openSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 import { cloneObjects, endedBeforeEmit, reconcileAcks, silenced } from "./ack";
 import { Condition, HealthCmdb, HealthObject, Period, RootEntry, Status, conditionsOf, rootsOf, rootsOfSite, worse } from "./emit-cmdb";
-import { EventKind, HealthEvent, Journal, TransitionEvent, eventLine, levelChanged, levelRose } from "./events";
+import { EventKind, HealthEvent, Journal, MaintenanceEvent, TransitionEvent, eventLine, levelChanged, levelRose } from "./events";
+import { Window, isOpen, readWindows } from "./windows";
 import { Deliver, Notice, NoticeEvent, NoticePlan, closeMail, noticeKey, openMail, planNotices, siteNotify, wantedNotices } from "./notices";
 import { renameGuarded, simulating, unlinkGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 
@@ -54,12 +55,13 @@ export interface Cursor {
   change: number | null;
   roots: Record<string, RootSeen>; // by <ci>:<type>
   notices?: Record<string, Notice>; // the critical-root notices open (notices.ts), by <ci>:<type>
+  windows?: Record<string, { until: number; reason: string; scope: string }>; // the maintenance windows told open
 }
 
 export function readCursor(configDir: string): Cursor | null {
   try {
     const c = JSON.parse(readFileSync(join(configDir, CURSOR_FILE), "utf8")) as Cursor;
-    return typeof c.time === "string" && !Number.isNaN(Date.parse(c.time)) ? { time: c.time, change: c.change ?? null, roots: c.roots ?? {}, notices: c.notices ?? {} } : null;
+    return typeof c.time === "string" && !Number.isNaN(Date.parse(c.time)) ? { time: c.time, change: c.change ?? null, roots: c.roots ?? {}, notices: c.notices ?? {}, windows: c.windows ?? {} } : null;
   } catch {
     return null;
   }
@@ -141,6 +143,26 @@ export interface EmitInput {
   now: Date;
   intervalMin: number;
   since?: string; // --since: everything after this, whatever the cursor says
+  windows?: Window[]; // the maintenance windows (windows.ts); runEmit reads them
+}
+
+/** A window that opened or ended since the last run, told once each. */
+export function windowEvents(was: NonNullable<Cursor["windows"]>, windows: Window[], now: Date): { events: MaintenanceEvent[]; seen: NonNullable<Cursor["windows"]> } {
+  const at = now.toISOString();
+  const seen: NonNullable<Cursor["windows"]> = {};
+  const events: MaintenanceEvent[] = [];
+  const scopeOf = (w: Window): string => (w.scope === "site" ? "site" : w.scope.join(","));
+  const ev = (phase: "start" | "end", name: string, w: { until: number; reason: string; scope: string }, why: "operator" | "expired"): MaintenanceEvent => ({
+    event: "maintenance", phase, ci: w.scope, class: "window", name, by: "", note: w.reason, until: new Date(w.until * 1000).toISOString(), why, at,
+  });
+  for (const w of windows.filter((x) => isOpen(x, now.getTime()))) {
+    seen[w.name] = { until: w.until, reason: w.reason, scope: scopeOf(w) };
+    if (!was[w.name]) events.push(ev("start", w.name, seen[w.name], "operator"));
+  }
+  for (const [name, w] of Object.entries(was)) {
+    if (!seen[name]) events.push(ev("end", name, w, w.until * 1000 <= now.getTime() ? "expired" : "operator"));
+  }
+  return { events, seen };
 }
 
 export interface EmitResult {
@@ -290,8 +312,10 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
   const impactedOf = (k: string): string => now[k]?.impacted ?? now[`${k.slice(0, k.lastIndexOf(":"))}:`]?.impacted ?? "nothing";
   const notices = planNotices(cursor?.notices ?? {}, wantedNotices(objects, roots, impactedOf, input.now), objects, roots, input.now);
 
-  const events: HealthEvent[] = [...gone, ...r.events, ...told];
-  return { events, cursor: { time: at, change, roots: now, notices: cursor?.notices ?? {} }, notices, writes: dirty, objects };
+  const w = windowEvents(cursor?.windows ?? {}, input.windows ?? [], input.now);
+
+  const events: HealthEvent[] = [...gone, ...r.events, ...w.events, ...told];
+  return { events, cursor: { time: at, change, roots: now, notices: cursor?.notices ?? {}, windows: w.seen }, notices, writes: dirty, objects };
 }
 
 /** One run: under a lock, as the timer and the alert receiver may overlap. false
@@ -343,7 +367,7 @@ export function deliverNotices(plan: NoticePlan, open: Record<string, Notice>, d
  *  between the two tells an event twice rather than never. A notice is
  *  delivered before the cursor records it open, for the same reason. */
 export function runEmit(cmdb: HealthCmdb, journal: Journal, configDir: string, input: Omit<EmitInput, "intervalMin">, deliver: Deliver = siteNotify): HealthEvent[] {
-  const r = emit(cmdb, readCursor(configDir), { ...input, intervalMin: assessInterval(configDir) });
+  const r = emit(cmdb, readCursor(configDir), { windows: readWindows(), ...input, intervalMin: assessInterval(configDir) });
   for (const o of r.objects) if (r.writes.has(o.id)) cmdb.write(o, conditionsOf(o), { kind: "observation" });
   const n = deliverNotices(r.notices, r.cursor.notices ?? {}, deliver, r.cursor.time);
   const events: HealthEvent[] = [...r.events, ...n.events];
