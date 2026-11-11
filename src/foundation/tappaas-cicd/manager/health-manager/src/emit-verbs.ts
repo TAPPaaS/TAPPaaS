@@ -105,9 +105,9 @@ export const EMIT_HELP: HelpVerb[] = [
     ],
   },
   {
-    usage: "roots [--json]", effect: "read",
-    options: [["--json", "Print the root causes as JSON."]],
-    details: "The current root causes (the site object's rootCauses), most impact first, each with what it impacts.",
+    usage: "roots [--all] [--json]", effect: "read",
+    options: [["--all", "Also the acknowledged ones and those in maintenance."], ["--json", "Print the root causes as JSON."]],
+    details: "The current root causes (the site object's rootCauses): critical first, operational before the other kinds, then most impact; each with what it impacts. A silenced one is left out without --all.",
   },
   {
     usage: "history <ci> [--since <time>] [--json]", effect: "read",
@@ -366,7 +366,7 @@ export function runEmitVerb(cmd: string, rest: string[], ctx: EmitContext): numb
     }
     case "roots": {
       const objects = ctx.cmdb.objects();
-      const d = rootDocs(objects, rootsOfSite(objects));
+      const d = rootDocs(objects, rootsOfSite(objects), ctx.now, a.has("--all"));
       return print(json, d, () => rootLines(d));
     }
     case "digest":

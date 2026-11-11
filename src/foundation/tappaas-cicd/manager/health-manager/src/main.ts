@@ -42,7 +42,7 @@ import { join } from "path";
 import { defaultConfigDir, loadConfigModules, readModuleJson } from "./config";
 import { CliClusterClient } from "./client";
 import { checkUpdateCapacity, probeTarget, runHealthGates } from "./checks";
-import { ALERTS_LOG, alertLine, fetchGrafanaAlerts, filterAlerts, openAlerts, recentEvents } from "./alerts";
+import { ALERTS_LOG, alertLine, fetchGrafanaAlerts, filterAlerts, openAlerts, recentEvents, placeAlert } from "./alerts";
 import { checkRoom } from "./room";
 import { nodeGuests } from "./guests";
 import { reachLines, runVlanReach, writeReach } from "./vlanreach";
@@ -201,7 +201,8 @@ export const HELP: HelpSpec = {
     {
       usage: "assess [--only <ci>] [--json] [--dry-run] [--timing] [--threshold PCT] [--memory-threshold PCT] [--config-dir DIR]", effect: "read",
       options: [
-        ["--only <ci>", "One object, by id or name: alerts, sweep, thresholds and the scan speak for it and no gate runs; impact and root causes are worked out again. The alert receiver's call."],
+        ["--only <ci>", "One object, by id or name: alerts, sweep, thresholds and the scan speak for it and no gate runs; impact and root causes are worked out again."],
+        ["--alert <host>[,<module>]", "--only for what an alert is about: the instance whose host it is, else the rule's module; neither is the whole site. The alert receiver's call."],
         ["--json", "Print the objects' conditions, the root causes and the transitions."],
         ["--dry-run", "Work it all out and write nothing."],
         ["--timing", "Print each phase's duration on stderr as it ends: the CMDB reads, every gate, the alerts, sweep and scan, the working out and the write."],
@@ -426,6 +427,15 @@ export function cmdAssess(opts: Opts, client: ClusterClient, io?: (timed?: Timer
     return i < 0 ? undefined : opts.rest[i + 1];
   };
   if (opts.rest.includes("--only") && !val("--only")) die("assess: --only needs an object");
+  if (opts.rest.includes("--alert") && !val("--alert")) die("assess: --alert needs <host>[,<module>]");
+  // --alert: what an alert is about, placed as `health-manager alerts` places
+  // it; nothing placed is the whole site.
+  let only = val("--only");
+  const alert = val("--alert");
+  if (alert && !only) {
+    const [host, module = ""] = alert.split(",");
+    only = placeAlert(host, module, opts.configDir)?.name;
+  }
   if (cmdbOff()) {
     info("assess: the CMDB is off here (TAPPAAS_CMDB=off) — nothing to write");
     return 0;
@@ -437,7 +447,7 @@ export function cmdAssess(opts: Opts, client: ClusterClient, io?: (timed?: Timer
     : undefined;
   let r: AssessResult;
   try {
-    r = assess((io ?? ((t) => assessIO(opts, client, t)))(timed), { only: val("--only"), dryRun: opts.rest.includes("--dry-run"), timed }, new Date());
+    r = assess((io ?? ((t) => assessIO(opts, client, t)))(timed), { only, dryRun: opts.rest.includes("--dry-run"), timed }, new Date());
   } catch (e) {
     if (!(e instanceof CmdbUnavailable)) throw e;
     warn(`assess: nothing assessed, the CMDB did not answer (${e.message}) — the next run writes`);

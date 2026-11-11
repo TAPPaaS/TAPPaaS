@@ -81,8 +81,19 @@ export function fromGates(checks: CheckResult[], idx: SiteIndex): { findings: Fi
     };
     for (const r of gateRows(c)) {
       const status = r.status === "skip" && g.skip ? g.skip : STATUS[r.status];
-      const o = place(r.subject) ?? (status === "critical" || status === "warning" ? idx.site : null);
-      if (o) add(o, status, tidy(r.text));
+      const placed = place(r.subject);
+      if (placed) {
+        add(placed, status, tidy(r.text));
+        continue;
+      }
+      if ((status !== "critical" && status !== "warning") || !idx.site) continue;
+      // What the CMDB cannot place lands on the site, naming its subject. A
+      // guest the cluster runs and the CMDB does not have is for discovery to
+      // find, not a site outage.
+      const who = r.subject ? `${r.subject.kind} ${r.subject.name}: ` : "";
+      if (r.subject && (r.subject.kind === "module" || r.subject.kind === "node") && g.reason === "guest-stopped") {
+        out.push({ object: idx.site.id, type: "drift", status: "warning", reason: "not-in-cmdb", message: `${who}in the cluster, not in the CMDB (${tidy(r.text)})`, owner: c.name });
+      } else add(idx.site, status, `${who}${tidy(r.text)}`);
     }
     for (const s of c.judged ?? []) {
       const o = place(s);
@@ -141,6 +152,12 @@ export function fromSweep(rec: SweepRecord | null, nowMs: number, idx: SiteIndex
   for (const s of (rec.sources ?? []).filter((x) => !x.ok)) onSite("critical", "sweep-source-failed", `source ${s.source} failed`);
   for (const d of rec.differences ?? []) {
     if (d.expected) continue; // a verb's change, new (part of what a verb made) or words (a relation's required/redundancyGroup): not drift
+    // An attribute that drifted and that a change has since put right: the
+    // store cleared the object's drift, so the night's record is over for it.
+    if (d.kind === "changed" && d.attribute && !d.attribute.startsWith("→")) {
+      const o = idx.named(d.name, [d.class]);
+      if (o && !o.attributes.drift) continue;
+    }
     const members = d.kind === "cycle" && Array.isArray(d.after) ? `: ${(d.after as string[]).join(", ")}` : d.kind === "unread" && typeof d.after === "string" ? `: ${d.after}` : "";
     const message = `${d.class}/${d.name}: ${WORD[d.kind] ?? `drift: ${d.kind}`}${d.attribute ? ` ${d.attribute}` : ""}${members}`;
     const status: ConditionStatus = d.kind === "missing" ? "critical" : "warning";

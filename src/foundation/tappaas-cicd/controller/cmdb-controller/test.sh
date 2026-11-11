@@ -462,6 +462,11 @@ cmdb report --json >/dev/null <<JSON
   "relations": [ { "type": "backs-up", "from": { "class": "datastore", "name": "ph-ds" }, "to": { "class": "vm", "name": "ph-old" } } ] }
 JSON
 check "a placeholder has not been seen, so it does not expire" "null" "$(cmdb show vm/ph-old --json | jq -r '.attributes.stage.value')"
+_far="$(date -u -d '+30 days' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v+30d +%Y-%m-%dT%H:%M:%SZ)"
+_orph() { curl -s --unix-socket "${CMDB_SOCKET}" -X POST -H 'Content-Type: application/json' -d "$1" http://cmdb/v1/retire; }
+check "…but one nothing reported within its class's expiry is an orphan, retired by the sweep" "yes" \
+    "$(_orph "{\"orphans\":true,\"now\":\"${_far}\"}" | jq -r 'if ([.data.retire[] | select(.name == "ph-old" and (.reason | startswith("a placeholder")))] | length) == 1 then "yes" else "no" end')"
+check "…not before" "0" "$(_orph "{\"orphans\":true,\"now\":\"${OLD}\"}" | jq '[.data.retire[] | select(.name == "ph-old")] | length')"
 refuse "a reference to a class that does not exist is refused" 4 "no class nope" \
     '{"source":"t","objects":[{"class":"zone","name":"z9"}],"relations":[{"type":"serves","from":{"class":"nope","name":"x"},"to":{"class":"environment","name":"e"}}]}'
 
@@ -737,6 +742,13 @@ check "…counted, and the sweep warns" "1 1" "$(jq -r '"\(.counts.cycles) \(.ex
 cmdb report --json >/dev/null <<<'{"source":"module-manager","relations":[{"type":"depends-on","from":{"class":"machine","name":"cy-node"},"to":{"class":"service","name":"cy:svc"},"end":true}]}'
 out="$(sweep)"
 check "…and is gone once the relation ends" "0" "$(jq -r '.counts.cycles' <<<"${out}")"
+
+# A leased address appearing is expected; a reserved one appearing is not.
+jq '.objects += [{"class":"address","name":"10.0.0.77","attributes":{"ip":"10.0.0.77","leaseUntil":"2026-12-01T00:00:00Z"}},{"class":"address","name":"10.0.0.78","attributes":{"ip":"10.0.0.78","leaseUntil":"2026-12-01T00:00:00Z","reservation":"aa:bb:cc:dd:ee:ff"}}]' "${SW}/site.json" >"${SW}/s2" && cp "${SW}/s2" "${SW}/site.json"
+out="$(sweep)"
+check "a leased address appearing is expected, reason lease; a reserved one is drift" "true lease|false null" \
+    "$(jq -r '[.differences[] | select(.class == "address" and .attribute == null) | "\(.expected) \(.reason)"] | join("|")' <<<"${out}")"
+jq '.objects |= map(select(.class != "address"))' "${SW}/site.json" >"${SW}/s2" && cp "${SW}/s2" "${SW}/site.json"
 
 # A discover source says which devices it reached: one it reported before and
 # not now is listed; a source that reached none of them has failed, whatever

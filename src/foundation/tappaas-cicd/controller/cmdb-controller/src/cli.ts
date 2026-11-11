@@ -139,6 +139,8 @@ function sweepText(d: Obj): string {
         ? `new${x.verb || x.owner ? ` (${[x.owner ? `of ${String(x.owner)}` : "", x.verb ? String(x.verb) : ""].filter(Boolean).join(", ")})` : ""}`
         : x.reason === "words"
           ? "expected (words: required, redundancyGroup)"
+          : x.reason === "lease"
+            ? "expected (a lease)"
           : `expected${x.verb ? ` (${String(x.verb)})` : ""}`
       : ["changed", "appeared", "gone"].includes(String(x.kind)) ? "DRIFT" : "";
     lines.push(`  ${KIND_WORD[String(x.kind)] ?? String(x.kind)}${what ? ` ${what}` : ""}  [${String(x.source)}]${verdict ? ` ${verdict}` : ""}`);

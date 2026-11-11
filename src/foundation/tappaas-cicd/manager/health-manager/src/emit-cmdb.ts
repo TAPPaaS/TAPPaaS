@@ -10,11 +10,14 @@
 import { cmdbPeriods, cmdbQuery, cmdbReport, cmdbRequest, cmdbShow, objectPath } from "../../../lib/ts/src/cmdb";
 import type { InvestigationPeriod } from "./perf";
 import { changeJob } from "../../../lib/ts/src/job";
+import { RANK } from "./assess-model";
+import type { ConditionStatus } from "../../../lib/ts/src/health-rules";
 
 const SOURCE = "health-manager";
 
-export type Status = "ok" | "warning" | "critical" | "unknown";
-const RANK: Record<Status, number> = { ok: 0, unknown: 1, warning: 2, critical: 3 };
+// One status and one rank for every reader (assess-model.ts holds them).
+export type Status = ConditionStatus;
+export { RANK };
 
 export const worse = (a: Status, b: Status): Status => (RANK[b] > RANK[a] ? b : a);
 

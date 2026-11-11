@@ -262,9 +262,9 @@ hooked() {  # hooked <webhook>: the calls it makes, one line
     for _ in $(seq 1 20); do grep -q '^emit' "${TMP}/health-calls" && break; sleep 0.1; done
     paste -sd'|' - < "${TMP}/health-calls"
 }
-ck "an alert assesses its object, then emits" "assess --only shop|emit" "$(hooked "$(wh firing state HostSilent site1)")"
-ck "…a RESOLVED too" "assess --only shop|emit" "$(hooked "$(wh resolved state HostSilent site1)")"
-ck "an alert about no known object assesses the site" "assess|emit" "$(hooked "$(wh firing event Oom elsewhere)")"
+ck "an alert assesses what it is about (placed by health-manager), then emits" "assess --alert site1,|emit" "$(hooked "$(wh firing state HostSilent site1)")"
+ck "…a RESOLVED too" "assess --alert site1,|emit" "$(hooked "$(wh resolved state HostSilent site1)")"
+ck "an alert with neither host nor module assesses the site" "assess|emit" "$(hooked "$(wh firing event Oom '')")"
 ck "health-manager's own rule runs nothing" "" "$(hooked "$(wh firing event HealthRootCause tappaas-cicd)")"
 
 # The daily digest: health-manager writes the mail, and hears what went out.

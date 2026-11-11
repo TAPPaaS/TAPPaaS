@@ -310,9 +310,24 @@ export class Store {
    *  relation to it, D5) and with no such relation open, the last one to an
    *  object that has ended — a pool of a node removed before a node's end
    *  took its pools with it. Nothing can find them again. */
-  async orphans(): Promise<RetireCandidate[]> {
+  async orphans(now: Date = new Date()): Promise<RetireCandidate[]> {
+    // A placeholder (made for a reference to something not reported yet) that
+    // no owner reported within its class's expiry never will be: it goes too.
+    const expiries: Record<string, number> = {};
+    for (const c of this.mm.classes.keys()) expiries[c] = this.mm.expirySeconds(c) ?? 7 * 86400;
+    const stale = (
+      await this.pg.query(
+        `SELECT o.id, o.class, o.name, e.value::double precision AS secs FROM object o
+           JOIN jsonb_each_text($1::jsonb) e ON e.key = o.class
+          WHERE o.ended IS NULL
+            AND EXISTS (SELECT 1 FROM attribute ph WHERE ph.object = o.id AND ph.name = 'placeholder' AND upper_inf(ph.validity))
+            AND o.created + make_interval(secs => e.value::double precision) < $2::timestamptz
+          ORDER BY o.class, o.name, o.id`,
+        [expiries, now.toISOString()],
+      )
+    ).rows.map((r) => ({ id: String(r.id), class: String(r.class), name: String(r.name), reason: `a placeholder nothing reported within ${Math.round(Number(r.secs) / 86400)} day(s)` }));
     const keyed = this.mm.keyedOn();
-    if (!keyed.length) return [];
+    if (!keyed.length) return stale;
     const rows = (
       await this.pg.query(
         `SELECT DISTINCT o.id, o.class, o.name, t.class AS on_class, t.name AS on_name, t.id AS on_id
@@ -327,7 +342,7 @@ export class Store {
         [JSON.stringify(keyed)],
       )
     ).rows;
-    return rows.map((r) => ({ id: String(r.id), class: String(r.class), name: String(r.name), reason: `its ${String(r.on_class)} ${String(r.on_name)} is retired`, on: String(r.on_id) }));
+    return [...stale, ...rows.filter((r) => !stale.some((x) => x.id === String(r.id))).map((r) => ({ id: String(r.id), class: String(r.class), name: String(r.name), reason: `its ${String(r.on_class)} ${String(r.on_name)} is retired`, on: String(r.on_id) }))];
   }
 
   /** Retire live CIs (D7): by id, or the orphans. A preview unless apply;
@@ -338,7 +353,8 @@ export class Store {
     const apply = body.apply === true;
     const ids = Array.isArray(body.ids) ? body.ids.map(String) : [];
     if (!ids.length && body.orphans !== true) throw new HttpError(400, "retire: name ids, or orphans: true");
-    const want: RetireCandidate[] = body.orphans === true ? await this.orphans() : [];
+    const at = typeof body.now === "string" && !Number.isNaN(Date.parse(body.now)) ? new Date(body.now) : new Date();
+    const want: RetireCandidate[] = body.orphans === true ? await this.orphans(at) : [];
     for (const id of ids) {
       if (!UUID_RE.test(id)) throw new HttpError(400, `retire: ${id} is not an id`);
       const r = (await this.pg.query("SELECT id, class, name, ended FROM object WHERE id = $1", [id])).rows[0];

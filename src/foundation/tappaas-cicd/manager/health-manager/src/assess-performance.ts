@@ -18,7 +18,7 @@
 // Pure over a MetricsReader; a store that does not answer gives no findings,
 // and assess then leaves what this source set standing (not looked).
 
-import { CmdbItem, Condition, SiteIndex, conditionsOf } from "./assess-model";
+import { CmdbItem, Condition, RANK, SiteIndex, conditionsOf } from "./assess-model";
 import { Finding } from "./assess-sources";
 import { MetricsReader, Sample } from "./metrics-read";
 import { ConditionStatus } from "../../../lib/ts/src/health-rules";
@@ -47,7 +47,6 @@ export interface Declared {
   thresholds: { signal: string; warning?: number; critical?: number; for?: string }[];
 }
 
-const RANK: Record<ConditionStatus, number> = { ok: 0, unknown: 1, warning: 2, critical: 3 };
 const levelOf = (v: number, t: Threshold): ConditionStatus => (v >= t.critical ? "critical" : v >= t.warning ? "warning" : "ok");
 
 /** The thresholds for one CI: the class's defaults, a declaration of its module over them. */

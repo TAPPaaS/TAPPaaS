@@ -58,8 +58,17 @@ export interface Difference {
   // "words": a relation whose ends and type stay and whose only change is its
   // dependency words (required, redundancyGroup): words a report classifies
   // the relation with, not an observation that differs, so never drift.
-  reason?: "new" | "words";
+  reason?: "new" | "words" | "lease";
   owner?: string;
+}
+
+// An address with a live lease and no reservation: one a DHCP server handed out.
+async function leased(pg: Query, id: string): Promise<boolean> {
+  const r = await pg(
+    `SELECT bool_or(name = 'leaseUntil') AS lease, bool_or(name = 'reservation') AS reserved FROM attribute WHERE object = $1 AND upper_inf(validity)`,
+    [id],
+  );
+  return r.rows[0]?.lease === true && r.rows[0]?.reserved !== true;
 }
 
 // What makes something a part of its owner, for "new" (from → to: the part
@@ -511,6 +520,8 @@ export class Sweep {
         const part = await isNew.partOfNew(id);
         if (part) verdict = { expected: true, verb: part.origin.verb, job: part.origin.job, reason: "new", owner: part.owner };
       }
+      // A leased address appearing is what a DHCP server does: expected.
+      if (!ended && !verdict.expected && String(o.class) === "address" && (await leased((sql, params) => pg.query(sql, params), id))) verdict = { expected: true, reason: "lease" };
       if (!ended && verdict.expected) appearedExpected.set(id, { verb: verdict.verb, job: verdict.job });
       out.push({
         kind: ended ? "gone" : "appeared",

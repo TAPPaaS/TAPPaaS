@@ -3,10 +3,9 @@
 // and its table apart, so a test can read either.
 
 import { silenced } from "./ack";
-import { Condition, HealthObject, Period, RootEntry, Status, conditionsOf, rootsOf } from "./emit-cmdb";
+import { Condition, HealthObject, Period, RANK, RootEntry, Status, conditionsOf, rootsOf } from "./emit-cmdb";
 import { transitions } from "./emit";
 
-const RANK: Record<Status, number> = { ok: 0, unknown: 1, warning: 2, critical: 3 };
 
 const flags = (c: Condition, now: Date): string =>
   [c.acknowledged ? (c.acknowledged.via ? "ack(root)" : "ack") : "", c.maintenance && silenced(c, now) ? "maintenance" : "", c.flapping ? "flapping" : "", c.derived ? "derived" : ""]
@@ -106,14 +105,20 @@ export interface RootDoc {
   impacted: { id: string; class: string; name: string }[];
 }
 
-export function rootDocs(objects: HealthObject[], roots: RootEntry[]): RootDoc[] {
+/** The roots worth reading first: critical before warning, operational before
+ *  the other kinds, then by what they impact. A silenced root (acknowledged, in
+ *  maintenance) is left out; `silenced` keeps them. */
+export function rootDocs(objects: HealthObject[], roots: RootEntry[], now: Date = new Date(), withSilenced = false): RootDoc[] {
+  const condOf = (r: RootEntry): Condition | undefined => conditionsOf(objects.find((x) => x.id === r.id) ?? ({ attributes: {} } as HealthObject)).find((c) => c.type === r.type);
   return roots
+    .filter((r) => withSilenced || !silenced(condOf(r), now))
     .map((r) => {
       const o = objects.find((x) => x.id === r.id);
       const impacted = impactedBy(objects, r.id).map(named);
-      return { id: r.id, class: o?.class ?? "", name: o?.name ?? r.id, type: r.type ?? "", impactedCount: r.impactedCount ?? impacted.length, impacted };
+      return { id: r.id, class: o?.class ?? "", name: o?.name ?? r.id, type: r.type ?? "", impactedCount: r.impactedCount ?? impacted.length, impacted, status: condOf(r)?.status ?? "unknown" };
     })
-    .sort((a, b) => b.impactedCount - a.impactedCount);
+    .sort((a, b) => RANK[b.status] - RANK[a.status] || Number(b.type === "operational") - Number(a.type === "operational") || b.impactedCount - a.impactedCount)
+    .map(({ status: _, ...d }) => d);
 }
 
 export function rootLines(docs: RootDoc[]): string[] {

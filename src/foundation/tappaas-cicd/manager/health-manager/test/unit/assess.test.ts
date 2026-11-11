@@ -83,7 +83,7 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check(got(r, peer, "operational")?.reason === "pulse", "pulse: operational on the backup-peer");
   check(got(r, net, "operational")?.reason === "ipv6-egress", "ipv6-egress: operational on the network vm");
   check(got(r, pool, "capacity")?.reason === "pool-usage", "storage-pools: capacity on the pool, found on its node");
-  check(got(r, site, "maintenance")?.message === "the keys changed", "what the CMDB does not have lands on the site");
+  check(got(r, site, "maintenance")?.message === "module ghost: the keys changed", "what the CMDB does not have lands on the site, naming its subject");
   check(io.written.length === 1 && io.written[0].source === "health-manager" && io.written[0].assessment === true, "one report, an assessment, from health-manager");
   check((io.written[0].objects ?? []).every((o) => typeof o.id === "string"), "…naming its objects by id");
   check(Object.keys(GATES).length === 20, "every gate that is no source of its own is mapped");
@@ -168,6 +168,14 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check(got(r, net, "drift")?.status === "critical", "…missing is critical");
   check(got(r, m1, "drift") === undefined, "…an expected change is nothing");
   check(got(r, site, "drift")?.status === "critical" && /gone|switch-manager/.test(got(r, site, "drift")!.message), "a source that failed, or what has no object: on the site");
+  // A changed attribute the store still marks as drift shows; once a change
+  // put it right (the store cleared the drift), it does not wait for the night.
+  const rec = io.sweepRecord!;
+  io.sweepRecord = { ...rec, differences: [{ kind: "changed", class: "vm", name: "nextcloud", attribute: "cores", expected: false }] };
+  s.items.find((o) => o.id === nc.id)!.attributes.drift = { since: T0, attributes: { cores: { was: 4, now: 6 } } };
+  check(got(assess(io, {}, later(1)), nc, "drift")?.reason === "sweep-changed", "a drifted attribute the store still marks is drift");
+  delete s.items.find((o) => o.id === nc.id)!.attributes.drift;
+  check(got(assess(io, {}, later(2)), nc, "drift")?.status === "ok", "…and is over once a change cleared it, before the next sweep");
   io.sweepRecord = null;
   check(got(assess(io, {}, later(5)), site, "drift")?.reason === "sweep-none", "no sweep at all is critical on the site");
 }
@@ -220,7 +228,8 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check(got(r, m1, "security")?.status === "ok", "…nothing counted is ok on the node");
   check(got(r, net, "security")?.reason === "cve-scan-failed", "…a failed image is its module's warning");
   check(got(r, zr, "security")?.reason === "cve-high" && got(r, zr, "security")?.message.includes("×1") === true, "the zone has its own score, with its multiplier");
-  check(got(r, env, "security")?.reason === "cve-high" && got(r, env, "security")?.derived === false, "…and the environment its own, not a roll-up");
+  check(got(r, env, "security")?.reason === "cve-high" && got(r, env, "security")?.derived === true && got(r, env, "security")?.owner === "cve", "…and the environment its own score, not a roll-up; derived from its modules, so never a root");
+  check(!r.rootCauses.some((x) => x.id === env.id || x.id === zr.id), "…neither the zone nor the environment is a root cause");
 
   // The same critical in the management zone: ×2, critical there; the module stays high.
   io.scan = scan([target("nextcloud", "watch", []), target("node:tappaas1", "watch", [crit("CVE-2")], "debian")]);
@@ -228,7 +237,7 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check(got(r2, m1, "security")?.status === "warning" && got(r2, m1, "security")?.reason === "cve-high", "a node's own level: high");
   check(got(r2, zm, "security")?.status === "critical" && got(r2, zm, "security")?.reason === "cve-critical", "…the management zone ×2: critical");
   check(got(r2, nc, "security")?.status === "ok", "a module whose CVEs went is ok again");
-  check(got(r2, env, "security")?.status === "ok" && got(r2, env, "security")?.derived === false, "the environment follows its own zones, not its node member's level");
+  check(got(r2, env, "security")?.status === "ok" && got(r2, env, "security")?.owner === "cve", "the environment follows its own zones, not its node member's level");
 
   // A level change inside warning is a transition: medium → high.
   io.scan = scan([target("nextcloud", "watch", [high("CVE-3")])]);
@@ -283,14 +292,14 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   const ghost = { kind: "module" as const, name: "ghost" };
   io.checks = () => [gate("service-liveness", "fail", [], { findings: [{ status: "fail", text: "not running", subject: ghost }], judged: [mod] })];
   const r1 = assess(io, {}, NOW);
-  check(got(r1, site, "operational")?.status === "critical" && got(r1, site, "operational")?.reason === "guest-stopped", "a failure about something the CMDB does not have is the site's");
+  const d1 = got(r1, site, "drift");
+  check(d1?.status === "warning" && d1.reason === "not-in-cmdb" && d1.message.startsWith("module ghost: in the cluster, not in the CMDB"), "a guest the CMDB does not have is a discovery finding on the site, named, not a site outage");
+  check(got(r1, site, "operational")?.reason !== "guest-stopped", "…the site's operational is not taken by it");
   io.checks = () => [gate("service-liveness", "pass", [], { judged: [mod] })];
   const r2 = assess(io, {}, later(5));
-  const c2 = got(r2, site, "operational")!;
-  check(c2.reason === "roll-up" && c2.status === "warning", "the gate ran again without it: the site's own failure is over, though the site is in no judged list; its members' roll-up remains");
-  check(r2.transitions.some((t) => t.id === site.id && t.from === "critical" && t.to === "warning"), "…a transition");
+  check(got(r2, site, "drift")?.reason !== "not-in-cmdb", "the gate ran again without it: the finding is over, though the site is in no judged list");
   io.checks = () => [gate("service-liveness", "skip")];
-  check(got(assess(io, {}, later(10)), site, "operational")?.reason === "roll-up", "…and it stays over when the gate later skips");
+  check(got(assess(io, {}, later(10)), site, "drift")?.reason !== "not-in-cmdb", "…and it stays over when the gate later skips");
 }
 
 // ── maintenance windows: the update's, the receiver's, the conditions' ──

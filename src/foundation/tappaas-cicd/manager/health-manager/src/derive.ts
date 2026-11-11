@@ -195,7 +195,7 @@ function rollUp(own: Condition[], members: Condition[][], now: string, nowMs: nu
   const types = new Set(members.flat().map((c) => c.type));
   for (const type of types) {
     const mine = out.get(type);
-    if (type === "security" && OWN_SECURITY.has(cls) && mine && !mine.derived) continue;
+    if (type === "security" && OWN_SECURITY.has(cls) && mine && mine.owner !== DERIVED) continue;
     const counted = members.flatMap((m) => m.filter((c) => c.type === type && !silenced(c, nowMs)));
     if (!counted.length) continue;
     const worst = counted.reduce<ConditionStatus>((w, c) => (RANK[c.status] > RANK[w] ? c.status : w), "ok");
@@ -253,8 +253,11 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
   const out = new Map<string, Condition[]>();
   for (const [id, cs] of source) out.set(id, cs.map((c) => ({ ...c, derived: false, rootCause: null })));
 
+  // A zone's or an environment's CVE score is the sum of its modules': derived,
+  // never a root (the module that set it is).
+  for (const [obj, cs] of out) for (const c of cs) if (c.type === "security" && OWN_SECURITY.has(byId.get(obj)?.class ?? "")) c.derived = true;
   const seeds: Seed[] = [];
-  for (const [obj, cs] of out) for (const cond of cs) if (failing(cond) && cond.type !== "impact") seeds.push({ obj, cond });
+  for (const [obj, cs] of out) for (const cond of cs) if (failing(cond) && cond.type !== "impact" && !cond.derived) seeds.push({ obj, cond });
   const { crossed, softer, partial } = spread(seeds, edges, model, (id) => byId.get(id)?.attributes);
   const reached = new Map(seeds.map((s) => [s, reach(stateOf(s.obj, s.cond.type, s.cond.status), crossed)]));
 
