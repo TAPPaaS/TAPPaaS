@@ -13,7 +13,7 @@
 
 import { BASELINE_CLASS, BASELINE_NAME } from "./baseline-ci";
 import { AlertItem } from "./alerts";
-import { CmdbItem, SiteIndex } from "./assess-model";
+import { CmdbItem, Hits, SiteIndex } from "./assess-model";
 import { POOL_FAIL, POOL_WARN } from "./checks";
 import { SWEEP_MAX_AGE_MS, SweepRecord } from "./cmdbsweep";
 import { STALE_DAYS, ScanStatus } from "./security";
@@ -30,6 +30,8 @@ export interface Finding {
   reason: string; // "ok" when it is
   message: string;
   owner: string; // the gate or source, which alone can take a failure back
+  hits?: Hits; // the events behind it (the SIEM's)
+  heldUntil?: string; // when its hold ends, or "ack"
   labels?: Record<string, string>; // what the source says beside it, for a classify record to read: an alert's labels; { setBy: "baseline" } on a CVE level the NixOS baseline sets
 }
 

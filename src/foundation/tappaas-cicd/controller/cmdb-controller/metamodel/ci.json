@@ -61,7 +61,10 @@
               "rule": { "type": "string", "description": "The health record that decided a derived condition." },
               "raw": { "type": "object", "description": "Re-rated by a health record: the status its source gave, since when, and the record." },
               "quieted": { "type": "object", "description": "Quieted by a health record: the record and since when; via, the root whose quiet it shares." },
-              "aggregate": { "type": "boolean", "description": "A sum of others by a health record: derived, never a root." }
+              "aggregate": { "type": "boolean", "description": "A sum of others by a health record: derived, never a root." },
+              "hits": { "type": "object", "properties": { "count": { "type": "number" }, "first": { "type": "string" }, "last": { "type": "string" }, "alerts": { "type": "array" } }, "description": "The events behind it, from its source: how many, the first and the last, the alert rules they came from." },
+              "heldUntil": { "type": "string", "description": "When its hold ends, or ack: held until acknowledged." },
+              "heldBy": { "type": "string", "description": "The health record that set its hold." }
             }
           },
           "description": "Its health, one per kind, as Kubernetes gives a resource's status.conditions. health-manager assess is the only writer; acknowledgements and flapping are projected onto it. Volatile: never drift. Every change but lastChecked opens a new period, so its history is the object's health history."

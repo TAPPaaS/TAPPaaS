@@ -105,14 +105,14 @@ export function fromSiem(items: SiemItem[], idx: SiteIndex, nowMs: number, rate:
     if (Number.isNaN(lastMs) || nowMs - lastMs > SIEM_MAX_AGE_MS) continue;
     const o = (e.ci ? idx.byId.get(e.ci) : undefined) ?? (e.subject ? idx.resolve(e.subject) : null) ?? idx.site;
     if (!o) continue;
-    const hits = e.count === 1 ? "1 hit" : `${e.count} hits`;
     const extra = Object.entries(e.labels).filter(([k]) => k !== "type" && k !== "level").map(([k, v]) => `${k} ${v}`).join(", ");
     const base: Finding = {
       object: o.id,
       type: "threat",
       status: e.level as ConditionStatus,
       reason: `siem-${kebab(e.alertname)}`,
-      message: `${e.alertname}${e.host ? ` on ${e.host}` : ""}: ${hits}, first ${e.first}, last ${e.last}${extra ? ` (${extra})` : ""}`,
+      // The count, first and last hit are fields (hits), not words here.
+      message: `${e.alertname}${e.host ? ` on ${e.host}` : ""}${extra ? ` (${extra})` : ""}`,
       owner: SIEM_OWNER,
       labels: { ...e.labels, alertname: e.alertname, level: e.level, count: String(e.count), first: e.first, last: e.last },
     };
@@ -120,7 +120,10 @@ export function fromSiem(items: SiemItem[], idx: SiteIndex, nowMs: number, rate:
     const status = r.status === "critical" || r.status === "warning" ? r.status : null;
     const hold = r.hold ?? (status ? DEFAULT_HOLD[status] : DEFAULT_HOLD.warning);
     const still = held(hold, lastMs, nowMs, securityAckAt(o));
-    out.push(still ? base : { ...base, status: "ok", reason: "ok", message: "" });
+    // The hits and the hold as fields: the message keeps what it said when the
+    // condition opened, these move with every hit.
+    const heldUntil = hold === "until-ack" ? "ack" : new Date(lastMs + durationMs(hold)).toISOString();
+    out.push(still ? { ...base, hits: { count: e.count, first: e.first, last: e.last, alerts: [e.alertname] }, heldUntil } : { ...base, status: "ok", reason: "ok", message: "" });
   }
   return out;
 }

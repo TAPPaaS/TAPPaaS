@@ -303,9 +303,10 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
         // Its own attribute is what emit holds; the condition's copy is assess's projection.
         const was = !!flaps[type] || c?.flapping === true;
         const flapping = c ? flappingNow(was, flapPercent(recent.map((t) => Date.parse(t.at)), input.now.getTime(), intervalMs)) : false;
+        const hits = recent.length ? { count: recent.length, first: recent.map((t) => t.at).sort()[0], last: recent.map((t) => t.at).sort().pop()! } : undefined;
         if (c && !was && flapping && fresh.length) {
           const held = recent.reduce<Status>((w, t) => worse(worse(w, t.from), t.to), "ok");
-          flaps[type] = { held };
+          flaps[type] = { held, ...(hits ? { hits } : {}) };
           c.flapping = true;
           c.flappingHeld = held;
           dirty.add(o.id);
@@ -321,6 +322,10 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
           told.push(event({ from: held, to: c?.status ?? "ok", at, after: c }, { event: "flapping", phase: "end" }));
         } else if (!was) {
           for (const t of fresh) told.push(event(t, {}));
+        } else if (flaps[type] && hits && JSON.stringify(flaps[type].hits) !== JSON.stringify(hits)) {
+          // Still flapping: the count moves with the window.
+          flaps[type] = { ...flaps[type], hits };
+          dirty.add(o.id);
         }
       }
     }

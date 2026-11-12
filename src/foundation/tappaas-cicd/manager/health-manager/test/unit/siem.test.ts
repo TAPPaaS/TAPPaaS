@@ -61,7 +61,8 @@ console.log("== warning: 24 h from the last hit ==");
   io.hits = [hit("SshBruteForce", "warning", T)];
   let c = run(io, T + H);
   check(c?.status === "warning" && c.owner === "siem" && c.reason === "siem-ssh-brute-force", "a warning hit is a threat warning on its CI, owned by siem");
-  check(!!c?.message.includes("7 hits"), "one finding with the count");
+  check(c?.hits?.count === 7 && c.hits.alerts?.join() === "SshBruteForce" && !c.message.includes("hits"), "one finding with the count, as a field, not in the message");
+  check(c?.heldUntil === new Date(T + 24 * H).toISOString() && c.heldBy === "core.classify.siem-warning", "…held for a day from the last hit, by the warning record");
   c = run(io, T + 23 * H);
   check(c?.status === "warning", "still held after 23 h");
   io.hits = [hit("SshBruteForce", "warning", T + 22 * H)];
@@ -76,7 +77,7 @@ console.log("== critical: until acknowledged ==");
   const io = fresh();
   io.hits = [hit("LoginAfterBruteForce", "critical", T)];
   let c = run(io, T + H);
-  check(c?.status === "critical", "a critical hit is critical");
+  check(c?.status === "critical" && c.heldUntil === "ack" && c.heldBy === "core.classify.siem-critical", "a critical hit is critical, held until acknowledged");
   c = run(io, T + 10 * 24 * H);
   check(c?.status === "critical", "still critical ten days later, unacknowledged");
   // The ack verb's word, as ack.ts writes it.

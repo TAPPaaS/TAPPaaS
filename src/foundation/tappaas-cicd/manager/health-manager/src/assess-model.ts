@@ -7,6 +7,9 @@ import { ConditionStatus, ConditionType } from "../../../lib/ts/src/health-rules
 
 export interface Acknowledged { by: string; note: string; until: string | null; sticky: boolean; at?: string; via?: string[] }
 export interface Maintenance { until: string | null; note: string; by?: string }
+/** What a source that counts events saw (ADR-041 D1): how many, the first and the
+ *  last, and the alert rules they came from. */
+export interface Hits { count: number; first: string; last: string; alerts?: string[] }
 
 export interface Condition {
   type: ConditionType;
@@ -28,6 +31,9 @@ export interface Condition {
   raw?: { status: ConditionStatus; since: string; rule: string }; // re-rated by a classify record: what the source said, since when
   quieted?: { rule: string; since: string; via?: string[] }; // quieted by a classify record (or with the only root it names)
   aggregate?: boolean; // a sum of others (a classify record): derived, never a root
+  hits?: Hits; // the events behind it, from its source (the SIEM's hits)
+  heldUntil?: string; // when its hold ends, or "ack": held until acknowledged
+  heldBy?: string; // the classify record that set the hold
 }
 
 export interface CmdbItem {

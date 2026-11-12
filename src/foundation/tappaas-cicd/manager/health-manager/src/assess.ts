@@ -12,7 +12,7 @@
 // flappingHeld). Maintenance is the open window's that covers the object.
 
 import { AlertItem } from "./alerts";
-import { Acknowledged, CmdbItem, CmdbRel, Condition, DERIVED, RootCause, RANK, SOURCE, SiteIndex, conditionsOf, failing, isDerivedKind } from "./assess-model";
+import { Acknowledged, CmdbItem, Hits, CmdbRel, Condition, DERIVED, RootCause, RANK, SOURCE, SiteIndex, conditionsOf, failing, isDerivedKind } from "./assess-model";
 import { OBSERVATION_REASONS, fromObservations } from "./assess-observations";
 import { Finding, GATES, fromAlerts, fromCve, fromGates, fromSweep, fromThresholds } from "./assess-sources";
 import { SWEEP_MAX_AGE_MS, SweepRecord } from "./cmdbsweep";
@@ -131,7 +131,13 @@ function worstOf(fs: Classified[]): Classified {
   const top = fs.reduce((w, f) => (rank(f) > rank(w) ? f : w));
   if (top.status === "ok") return top;
   const same = [...new Set(fs.filter((f) => f.status === top.status && f.reason === top.reason).map((f) => f.message).filter(Boolean))];
-  return { ...top, message: same.join("; ") };
+  // The hits of every finding at its status from the same source add up; the
+  // longest hold wins ("ack" over any time).
+  const counted = fs.filter((f) => f.status === top.status && f.owner === top.owner && f.hits);
+  const hits = counted.length > 1 ? counted.map((f) => f.hits!).reduce((a, b) => ({ count: a.count + b.count, first: a.first < b.first ? a.first : b.first, last: a.last > b.last ? a.last : b.last, alerts: [...new Set([...(a.alerts ?? []), ...(b.alerts ?? [])])] })) : top.hits;
+  const holds = counted.map((f) => f.heldUntil).filter((h): h is string => !!h);
+  const heldUntil = holds.includes("ack") ? "ack" : holds.sort().pop() ?? top.heldUntil;
+  return { ...top, message: same.join("; "), ...(hits ? { hits } : {}), ...(heldUntil ? { heldUntil } : {}) };
 }
 
 const blank = (f: Classified, now: string): Condition => ({
@@ -140,6 +146,9 @@ const blank = (f: Classified, now: string): Condition => ({
   ...(f.raw ? { raw: { ...f.raw, since: now } } : {}),
   ...(f.quieted ? { quieted: { rule: f.quieted, since: now } } : {}),
   ...(f.aggregate ? { aggregate: true } : {}),
+  ...(f.hits ? { hits: f.hits } : {}),
+  ...(f.heldUntil ? { heldUntil: f.heldUntil } : {}),
+  ...(f.heldBy ? { heldBy: f.heldBy } : {}),
 });
 
 // A fresh finding over the stored condition: since, and the source's own since
@@ -209,11 +218,11 @@ export function settle(priorOf: (id: string) => Condition[], ids: Iterable<strin
 // Both are projected onto the condition here, so every reader reads one shape.
 export interface OperatorWord { ack: Acknowledged | null; at: string }
 export const acksOf = (o: CmdbItem): Record<string, OperatorWord> => (o.attributes.acknowledgements as Record<string, OperatorWord> | undefined) ?? {};
-export const flapsOf = (o: CmdbItem): Record<string, { held: ConditionStatus }> => (o.attributes.flapping as Record<string, { held: ConditionStatus }> | undefined) ?? {};
+export const flapsOf = (o: CmdbItem): Record<string, { held: ConditionStatus; hits?: Hits }> => (o.attributes.flapping as Record<string, { held: ConditionStatus; hits?: Hits }> | undefined) ?? {};
 
 // Since, across no change of status; the maintenance of the open window that
 // covers the object (windows.ts), never carried over.
-function stamp(c: Condition, p: Condition | undefined, now: string, nowMs: number, cov: Covered | undefined, word: OperatorWord | undefined, flap: { held: ConditionStatus } | undefined): Condition {
+function stamp(c: Condition, p: Condition | undefined, now: string, nowMs: number, cov: Covered | undefined, word: OperatorWord | undefined, flap: { held: ConditionStatus; hits?: Hits } | undefined): Condition {
   // A threat critical from a hit is told inside a window too (ADR-050 D12):
   // an attacker does not keep to the update window.
   const window: Window | undefined = c.type === "threat" && c.owner === SIEM_OWNER && c.status === "critical" ? undefined : coveredBy(c, cov);
@@ -233,7 +242,7 @@ function stamp(c: Condition, p: Condition | undefined, now: string, nowMs: numbe
     acknowledged: ack,
     maintenance: mnt,
     ...(operatorAt ? { operatorAt } : {}),
-    ...(flap ? { flapping: true, flappingHeld: flap.held } : {}),
+    ...(flap ? { flapping: true, flappingHeld: flap.held, ...(flap.hits && !c.hits ? { hits: flap.hits } : {}) } : {}),
   };
 }
 

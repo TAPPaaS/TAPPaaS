@@ -64,7 +64,8 @@ export interface RootEntry {
 // The operator's last word per condition type (the ack verbs), and what emit
 // holds while a condition flaps: attributes of their own, one writer each.
 export interface OperatorWord { ack: Ack | null; at: string }
-export type Flaps = Record<string, { held: Status }>;
+// hits: the transitions in the window while it flaps, projected onto the condition by assess.
+export type Flaps = Record<string, { held: Status; hits?: { count: number; first: string; last: string } }>;
 
 export interface HealthObject {
   id: string;
