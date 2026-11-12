@@ -6,6 +6,11 @@
       "when": { "edge": { "attr": { "redundancyGroup": { "exists": true } } } },
       "groupBy": { "edgeAttr": "redundancyGroup" },
       "steps": [ { "down": 1, "as": "warning", "reason": "redundancy-degraded" },
-                 { "down": "all", "as": "rule" } ] }
+                 { "down": "all", "as": "rule" } ] },
+    { "id": "core.combine.many-providers-degraded", "kind": "combine", "enabled": false,
+      "description": "Three or more of what a module depends on degraded at once is an outage for it.",
+      "when": { "relation": "depends-on" },
+      "groupBy": "dependant",
+      "steps": [ { "down": 1, "as": "rule" }, { "down": 3, "as": "critical" } ] }
   ]
 }

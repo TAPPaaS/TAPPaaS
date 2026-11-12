@@ -13,7 +13,7 @@ import { readFileSync } from "fs";
 import { HealthRecord, Problem, canonical, checkSet, flatten, originOf, recordHash, recordsOf, ruleSetHash } from "../../../lib/ts/src/health-records";
 import { RulesDoc, modelInfo } from "./rules";
 import { RuleStore, healthDir, mergeReleases, releases, reportedClasses, who } from "./rulestore";
-import { Snapshot, diffLines, diffSim, simulate } from "./rules-tools";
+import { Snapshot, diffLines, diffSim, simulate, telling, tellingLines } from "./rules-tools";
 import { runScenarios } from "./scenarios";
 import { sentence } from "./rule-text";
 
@@ -157,7 +157,8 @@ export function cmdRulesWrite(rest: string[], env: RulesEnv, print: (l: string) 
     if (env.snapshot && !same(was, is)) {
       const snap = env.snapshot();
       const d = diffSim(simulate(snap, model(was), now, []), simulate(snap, model(is), now, []), snap.objects);
-      lines.push("on the site as it is now:", ...diffLines(d).map((l) => `  ${l}`));
+      const t = tellingLines(telling(snap, model(was), now), telling(snap, model(is), now), snap.objects);
+      lines.push("on the site as it is now:", ...[...diffLines(d).filter((l) => l !== "no difference" || !t.length), ...t].map((l) => `  ${l}`));
     }
     if (problems.length || (failing.length && !force)) {
       for (const l of lines) print(l);

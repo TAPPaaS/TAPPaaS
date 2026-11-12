@@ -9,7 +9,9 @@ import { currentJob } from "../../../lib/ts/src/job";
 import { VerbContext, ack, maintenanceStart, maintenanceStop, unack } from "./ack";
 import { SweepRecord, readLastSweep } from "./cmdbsweep";
 import { DigestRules, buildDigest, readSeen, writeSeen } from "./digest";
-import { RuleStore, healthDir } from "./rulestore";
+import { RuleStore, healthDir, siteRecords } from "./rulestore";
+import { CORE_NOTIFY, NotifyRules, notifyOf } from "./notices";
+import { readRules } from "./rules";
 import { HealthCmdb, LiveHealthCmdb, rootsOfSite } from "./emit-cmdb";
 import { runEmit, withEmitLock } from "./emit";
 import { historyLines, historyRows, listLines, listRows, rootDocs, rootLines, showDoc, showLines } from "./emit-read";
@@ -197,7 +199,7 @@ function cmdEmit(ctx: EmitContext, rest: string[]): number {
   let events: HealthEvent[] = [];
   try {
     const ran = withEmitLock(ctx.configDir, () => {
-      events = runEmit(ctx.cmdb, ctx.journal, ctx.configDir, { now: ctx.now, ...(s ? { since: parseWhen(s, ctx.now, -1) } : {}) });
+      events = runEmit(ctx.cmdb, ctx.journal, ctx.configDir, { now: ctx.now, ...(s ? { since: parseWhen(s, ctx.now, -1) } : {}), notify: notifyRules(ctx.configDir) });
     });
     if (!ran) {
       info("emit: another run holds the lock");
@@ -302,6 +304,19 @@ export function livePerfContext(ctx: EmitContext): PerfContext {
   };
 }
 
+/** The notify records the site runs, and the classes' ancestors (the core
+ *  records, with no ancestors, when neither is to be had). */
+function notifyRules(configDir: string): NotifyRules {
+  const recs = siteRecords(configDir);
+  let ancestors: Record<string, string[]> = {};
+  try {
+    ancestors = readRules().ancestors;
+  } catch {
+    // the CMDB is down: classes match by name only
+  }
+  return { records: recs.records.length ? recs.records : CORE_NOTIFY, ancestors };
+}
+
 /** The rules for the digest: the site's last assessment's, and the installed set's pending and held. */
 function digestRules(objects: { class: string; attributes: Record<string, unknown> }[], configDir: string): DigestRules | null {
   const site = objects.find((o) => o.class === "site");
@@ -321,7 +336,11 @@ function cmdDigest(ctx: EmitContext, rest: string[]): number {
   }
   const objects = ctx.cmdb.objects();
   const rows = listRows(objects, rootsOfSite(objects), {});
-  const doc = buildDigest(rows, (ctx.sweep ?? readLastSweep)(), readSeen(ctx.configDir), (ctx.security ?? readSecurity)(ctx.configDir), digestRules(objects, ctx.configDir));
+  // A root its notify record tells nowhere is left out; so is what is quiet.
+  const rules = notifyRules(ctx.configDir);
+  const byId = new Map(objects.map((o) => [o.id, o]));
+  const told = rows.filter((r) => !r.quieted && (!byId.has(r.id) || notifyOf(byId.get(r.id)!, r, rules) !== "none"));
+  const doc = buildDigest(told, (ctx.sweep ?? readLastSweep)(), readSeen(ctx.configDir), (ctx.security ?? readSecurity)(ctx.configDir), digestRules(objects, ctx.configDir));
   info(rest.includes("--json") ? JSON.stringify(doc, null, 2) : `Subject: ${doc.subject}\n\n${doc.body}`);
   return 0;
 }

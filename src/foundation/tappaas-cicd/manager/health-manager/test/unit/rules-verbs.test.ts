@@ -133,6 +133,24 @@ try {
   run("merge", "--apply");
   check(!store().state.origins.core && store().active().some((r) => r.enabled !== false), "…and on again; it stays as set across a merge");
 
+  // The preview lists what would go quiet, and roots no longer told at once.
+  const q = join(tmp, "quiet.json");
+  writeFileSync(q, JSON.stringify({ records: [
+    { id: "site.classify.quiet-n1", kind: "classify", when: { finding: { reason: "node-down" }, object: { name: "tappaas1" } }, quiet: true },
+  ] }));
+  const pq = run("add", q, "--force");
+  check(pq.out.some((l) => l.includes("would go quiet: machine tappaas1 operational (site.classify.quiet-n1)")), `add a quiet record: the preview names what would go quiet (${pq.out.filter((l) => l.includes("quiet")).join(" | ")})`);
+  const n = join(tmp, "none.json");
+  writeFileSync(n, JSON.stringify({ records: [
+    { id: "site.notify.n1-none", kind: "notify", when: { object: { name: "tappaas1" } }, notify: "none", overrides: ["core.notify.critical-root", "core.notify.root"] },
+  ] }));
+  const pn = run("add", n, "--force");
+  check(pn.out.some((l) => l.includes("machine tappaas1 operational: told at once → nowhere")), "add a notify none record: the preview names the root no longer told");
+  const bad = join(tmp, "bad.json");
+  writeFileSync(bad, JSON.stringify({ records: [{ id: "site.classify.quiet-all", kind: "classify", when: { finding: { status: "warning" } }, quiet: true }] }));
+  const pb = run("add", bad, "--apply", "--force");
+  check(pb.rc === 1 && pb.out.some((l) => l.includes("names a reason, a label or an object")), "a quiet record that names nothing it is about: refused");
+
   const show: string[] = [];
   cmdRulesWrite(["show", "core.propagate.runs-on.down-ha"], env, (l) => show.push(l));
   check(show[0].startsWith("core.propagate.runs-on.down-ha (core)") && show.some((l) => l.includes("state: edited")) && show.some((l) => l.includes("decides")), "show: the record, its state, what it decides now");

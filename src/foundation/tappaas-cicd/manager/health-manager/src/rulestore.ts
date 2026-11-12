@@ -291,6 +291,17 @@ export function reportedClasses(configDir: string): Map<string, string[]> {
   return out;
 }
 
+/** The records a site runs: the installed set once a merge has run, else the
+ *  core records of the release (before the first merge); null when neither reads. */
+export function siteRecords(configDir: string): { records: HealthRecord[]; scenarios: Scenario[]; lastMerge?: State["lastMerge"]; problem?: string } {
+  const store = RuleStore.read(healthDir(configDir));
+  if (store.installed) return { records: store.active(), scenarios: store.allScenarios(), ...(store.state.lastMerge ? { lastMerge: store.state.lastMerge } : {}) };
+  const dir = coreReleaseDir(configDir);
+  const core = dir ? readCoreRelease(dir) : null;
+  if (!core || core.problems.length) return { records: [], scenarios: [], problem: `none installed in ${healthDir(configDir)}, and the release's core records ${dir ? `at ${dir} do not read (${core?.problems.join("; ")})` : "were not found (no tappaas-cicd instance in config/)"}` };
+  return { records: core.records, scenarios: core.scenarios };
+}
+
 // ── reach ─────────────────────────────────────────────────────────────
 
 /** The most objects one failure a propagate record matches can impact, with

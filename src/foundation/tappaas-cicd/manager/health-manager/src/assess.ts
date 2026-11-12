@@ -17,6 +17,7 @@ import { OBSERVATION_REASONS, fromObservations } from "./assess-observations";
 import { Finding, GATES, fromAlerts, fromCve, fromGates, fromSweep, fromThresholds } from "./assess-sources";
 import { SWEEP_MAX_AGE_MS, SweepRecord } from "./cmdbsweep";
 import { derive } from "./derive";
+import { Classified, classify } from "./classify";
 import { RulesDoc } from "./rules";
 import { STALE_DAYS, ScanStatus } from "./security";
 import { SiteSecurity, siteSecurity } from "./site-score";
@@ -121,7 +122,7 @@ export function staleToUnknown(fs: Finding[], idx: SiteIndex, nowMs: number): Fi
   });
 }
 
-function worstOf(fs: Finding[]): Finding {
+function worstOf(fs: Classified[]): Classified {
   // unknown is no judgement: below ok here, between ok and warning on the object.
   const rank = (f: Finding): number => (f.status === "unknown" ? -1 : RANK[f.status]);
   const top = fs.reduce((w, f) => (rank(f) > rank(w) ? f : w));
@@ -130,15 +131,28 @@ function worstOf(fs: Finding[]): Finding {
   return { ...top, message: same.join("; ") };
 }
 
-const blank = (f: Finding, now: string): Condition => ({
+const blank = (f: Classified, now: string): Condition => ({
   type: f.type, status: f.status, reason: f.reason, message: f.message,
   since: now, lastChecked: now, source: SOURCE, owner: f.owner, derived: false, rootCause: null, acknowledged: null, maintenance: null,
+  ...(f.raw ? { raw: { ...f.raw, since: now } } : {}),
+  ...(f.quieted ? { quieted: { rule: f.quieted, since: now } } : {}),
+  ...(f.aggregate ? { aggregate: true } : {}),
 });
 
+// A fresh finding over the stored condition: since, and the source's own since
+// under a re-rating, and since when it is quiet, carried while they hold.
+function over(f: Classified, p: Condition, now: string): Condition {
+  const c = { ...blank(f, now), since: p.since };
+  if (c.raw && p.raw?.status === c.raw.status) c.raw.since = p.raw.since;
+  else if (c.raw && !p.raw && p.status === c.raw.status) c.raw.since = p.since;
+  if (c.quieted && p.quieted?.rule === c.quieted.rule) c.quieted.since = p.quieted.since;
+  return c;
+}
+
 /** What each object's source conditions are now: `fresh` over what was stored. */
-export function settle(priorOf: (id: string) => Condition[], ids: Iterable<string>, findings: Finding[], looked: (owner: string, id: string) => boolean, now: string): Map<string, Condition[]> {
+export function settle(priorOf: (id: string) => Condition[], ids: Iterable<string>, findings: Classified[], looked: (owner: string, id: string) => boolean, now: string): Map<string, Condition[]> {
   const nowMs = Date.parse(now);
-  const by = new Map<string, Map<string, Finding[]>>();
+  const by = new Map<string, Map<string, Classified[]>>();
   for (const f of findings) {
     if (!by.has(f.object)) by.set(f.object, new Map());
     const m = by.get(f.object)!;
@@ -147,7 +161,7 @@ export function settle(priorOf: (id: string) => Condition[], ids: Iterable<strin
   const out = new Map<string, Condition[]>();
   for (const id of new Set([...ids, ...by.keys()])) {
     const cs: Condition[] = [];
-    const fresh = by.get(id) ?? new Map<string, Finding[]>();
+    const fresh = by.get(id) ?? new Map<string, Classified[]>();
     // What derive computes is computed again, whole: none of it is carried.
     // Nor is an ok that only an explained symptom ever had.
     const prior = priorOf(id).filter((c) => !isDerivedKind(c) && !(c.derived && c.status === "ok"));
@@ -157,7 +171,7 @@ export function settle(priorOf: (id: string) => Condition[], ids: Iterable<strin
       const again = looked(own, id);
       if (fs) {
         const f = worstOf(fs);
-        cs.push(!again && failing(p) && RANK[f.status] < RANK[p.status] ? { ...p } : { ...blank(f, now), since: p.since });
+        cs.push(!again && failing(p) && RANK[f.status] < RANK[p.status] ? { ...p } : over(f, p, now));
       } else if (again) {
         // Its owner looked and has nothing to say: a failure is over, and an ok
         // or unknown nobody gives any more is no judgement.
@@ -236,6 +250,23 @@ function viaAcks(next: Map<string, Condition[]>, roots: RootCause[]): void {
   }
 }
 
+// An impact whose only root is quiet is quiet with it: what a quieted failure
+// reaches is still marked, quietly.
+function viaQuiet(next: Map<string, Condition[]>, roots: RootCause[]): void {
+  const rootQuiet = (id: string): Condition["quieted"] => {
+    const entries = roots.filter((r) => r.id === id);
+    return (next.get(id) ?? []).find((c) => c.quieted && !c.quieted.via && entries.some((r) => r.type === c.type))?.quieted;
+  };
+  for (const cs of next.values()) {
+    for (const c of cs) {
+      if (c.type !== "impact" || c.status === "ok" || !c.rootCause) continue;
+      const q = rootQuiet(c.rootCause);
+      if (q) c.quieted = { rule: q.rule, since: q.since, via: [c.rootCause] };
+      else if (c.quieted?.via) delete c.quieted;
+    }
+  }
+}
+
 const typeOrder = (c: Condition): number => CONDITION_TYPES.indexOf(c.type);
 
 // The parts history keeps: everything but lastChecked.
@@ -304,7 +335,10 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
     const judged = g.unjudged.get(owner);
     return !judged || judged.has(id) || id === idx.site?.id;
   };
-  const scoped = only ? findings.filter((f) => f.object === only.id) : findings;
+  // classify: what each failing finding becomes under the records.
+  const ruleConflicts = new Set<string>();
+  const classified = t("classify", () => classify(findings, idx.byId, model.records, model.ancestors, priorOf, nowMs, ruleConflicts));
+  const scoped = only ? classified.filter((f) => f.object === only.id) : classified;
   const source = t("settle", () => settle(priorOf, objects.map((o) => o.id), scoped, looked, time));
 
   // An open window covers what its object would impact under the rules: one
@@ -334,6 +368,7 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
     if (next.length) nextOf.set(o.id, next);
   }
   viaAcks(nextOf, d.rootCauses);
+  viaQuiet(nextOf, d.rootCauses);
   for (const o of objects) {
     const next = nextOf.get(o.id);
     if (!next) continue;

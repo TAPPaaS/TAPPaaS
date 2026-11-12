@@ -77,7 +77,7 @@ const rels = [rel("runs-on", guest, node), rel("runs-on", ha, node), rel("runs-o
   const io = new StubIO([site, node, guest], [rel("runs-on", guest, node)]);
   const r = assess(io, {}, NOW);
   const stamp = (r.report?.objects?.find((o) => o.id === site.id)?.attributes as { assessment?: { rules?: { hash: string; records: Record<string, string>; changed?: string[] } } }).assessment?.rules;
-  check(/^[0-9a-f]{64}$/.test(stamp?.hash ?? "") && Object.keys(stamp?.records ?? {}).length === model.records.length && !stamp?.changed, "the site's assessment carries the rule-set hash and each record's");
+  check(/^[0-9a-f]{64}$/.test(stamp?.hash ?? "") && Object.keys(stamp?.records ?? {}).length === model.records.filter((x) => x.enabled !== false).length && !stamp?.changed, "the site's assessment carries the rule-set hash and each record's");
   io.model = { ...io.model, records: io.model.records.map((x) => (x.id === "core.follow.port" ? { ...x, enabled: false } : x)) };
   const r2 = assess(io, {}, NOW);
   const s2 = (r2.report?.objects?.find((o) => o.id === site.id)?.attributes as { assessment?: { rules?: { hash: string; changed?: string[] } } }).assessment?.rules;

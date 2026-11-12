@@ -12,6 +12,8 @@ import { RulesDoc } from "./rules";
 import { sentence } from "./rule-text";
 import { ConditionStatus, ConditionType } from "../../../lib/ts/src/health-rules";
 import { HealthRecord } from "../../../lib/ts/src/health-records";
+import { Classified, classify } from "./classify";
+import { NotifyRules, notifyOf } from "./notices";
 
 export interface Snapshot { objects: CmdbItem[]; relations: CmdbRel[] }
 
@@ -154,6 +156,52 @@ export function diffSim(before: SimResult, after: SimResult, objects: CmdbItem[]
   const ids = new Set([...Object.keys(before.colours), ...Object.keys(after.colours)]);
   const colours = [...ids].sort().map((id) => ({ id, label: label(byId.get(id), id), from: before.colours[id] ?? "ok", to: after.colours[id] ?? "ok" })).filter((c) => c.from !== c.to);
   return { rootsNew: after.roots.filter((r) => !b.has(key(r))), rootsGone: before.roots.filter((r) => !a.has(key(r))), colours };
+}
+
+/** What the classify and notify records decide on the site as it is: per
+ *  stored failing condition the record that quiets or re-rates it, and per root
+ *  how it is told. A label a record reads is not stored with the condition: such
+ *  a record is decided at the next assess. */
+export function telling(snap: Snapshot, model: RulesDoc, now: string): { quiet: Map<string, string>; rated: Map<string, string>; told: Map<string, string> } {
+  const byId = new Map(snap.objects.map((o) => [o.id, o]));
+  const findings: Classified[] = [];
+  for (const o of snap.objects) {
+    for (const c of conditionsOf(o)) {
+      if (isDerivedKind(c) || c.derived || !failing({ status: c.raw?.status ?? c.status })) continue;
+      findings.push({ object: o.id, type: c.type, status: c.raw?.status ?? c.status, reason: c.reason, message: c.message, owner: c.owner ?? "" });
+    }
+  }
+  const out = classify(findings, byId, model.records, model.ancestors, () => [], Date.parse(now));
+  const quiet = new Map<string, string>(), rated = new Map<string, string>();
+  for (const f of out) {
+    const k = `${f.object}|${f.type}`;
+    if (f.quieted) quiet.set(k, f.quieted);
+    if (f.raw) rated.set(k, `${f.status} by ${f.raw.rule}`);
+  }
+  const d = derive(snap.objects, snapshotSource(snap.objects), snap.relations, model, now);
+  const told = new Map<string, string>();
+  const rules: NotifyRules = { records: model.records, ancestors: model.ancestors };
+  for (const r of d.rootCauses) {
+    const o = byId.get(r.id);
+    const c = d.conditions.get(r.id)?.find((x) => x.type === r.type);
+    if (o && c) told.set(`${r.id}|${r.type}`, notifyOf(o as never, c as never, rules));
+  }
+  return { quiet, rated, told };
+}
+
+/** The difference in what is quiet, re-rated and told, as lines. */
+export function tellingLines(before: ReturnType<typeof telling>, after: ReturnType<typeof telling>, objects: CmdbItem[]): string[] {
+  const byId = new Map(objects.map((o) => [o.id, o]));
+  const name = (k: string): string => { const [id, type] = k.split("|"); return `${label(byId.get(id), id)} ${type}`; };
+  const out: string[] = [];
+  for (const [k, r] of after.quiet) if (!before.quiet.has(k)) out.push(`would go quiet: ${name(k)} (${r})`);
+  for (const [k] of before.quiet) if (!after.quiet.has(k)) out.push(`heard again: ${name(k)}`);
+  for (const [k, r] of after.rated) if (before.rated.get(k) !== r) out.push(`rated ${r}: ${name(k)}`);
+  for (const [k, w] of after.told) {
+    const was = before.told.get(k);
+    if (was && was !== w) out.push(`${name(k)}: told ${was === "at-once" ? "at once" : was === "digest" ? "in the digest" : "nowhere"} → ${w === "at-once" ? "at once" : w === "digest" ? "in the digest" : "nowhere"}`);
+  }
+  return out;
 }
 
 export function simLines(r: SimResult): string[] {

@@ -29,6 +29,7 @@ export interface Finding {
   reason: string; // "ok" when it is
   message: string;
   owner: string; // the gate or source, which alone can take a failure back
+  labels?: Record<string, string>; // what the source says beside it (an alert's labels): what a classify record may read
 }
 
 // Each gate's condition: the type it feeds and the reason a failure carries. The
@@ -107,8 +108,6 @@ export function fromGates(checks: CheckResult[], idx: SiteIndex): { findings: Fi
 }
 
 // ── alerts (ADR-039 D8, ADR-040 D14) ─────────────────────────────────
-// The rules that say something is exposed; every other alert is operational.
-const SECURITY_ALERTS = new Set(["RootKeyChanged", "FirewallCertChanged"]);
 // The rules over health-manager's own events: they report conditions, they are not one. As one, the
 // digest's firing was a new warning, which kept the digest firing the next day.
 // The two CVE rules (ADR-045 D4) tell what the security condition already holds.
@@ -125,11 +124,14 @@ export function fromAlerts(alerts: AlertItem[], idx: SiteIndex): Finding[] {
     if (!o) continue;
     out.push({
       object: o.id,
-      type: SECURITY_ALERTS.has(a.alertname) ? "security" : "operational",
-      status: "warning", // the mail went; a rule never fails the site (ADR-039 D8)
+      // As the source sees it; the classify records say what it becomes (an
+      // operational warning, a security one for what says something is exposed).
+      type: "operational",
+      status: "warning",
       reason: `alert-${kebab(a.alertname)}`,
       message: `${a.alertname}${a.host ? ` on ${a.host}` : ""} since ${a.since}`,
       owner: "alerts",
+      labels: { ...a.labels, alertname: a.alertname },
     });
   }
   return out;

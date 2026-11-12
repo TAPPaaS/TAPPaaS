@@ -796,6 +796,24 @@ given), a file of extra records, or a record taken out, and prints the roots and
 what they impact, or with `--diff` the difference from now: roots that appear or go,
 objects whose colour changes. Neither writes anything.
 
+**What a finding becomes** is the `classify` records': the shipped ones make every
+open alert an operational warning, and the two that say something is exposed
+(`RootKeyChanged`, `FirewallCertChanged`) security warnings. A site record may
+re-rate a failing finding (the condition then carries `raw`: what its source said,
+since when, and the record) or quiet it (`quieted`: the record and since when; it
+is kept, fails nothing, is told nowhere, and what it impacts is quiet with it).
+The source still clears either. `list` flags them; `roots --all` shows a quiet root.
+
+**How a root is told** is the `notify` records': shipped, a critical root is
+mailed at once, and a warning, a performance root, a module's CVE level and what is
+about the site, a zone or an environment go to the daily digest. A record may tell
+a warning root at once (its mail says "root cause", not "critical root cause"), or a
+root nowhere. A notice closes when its root no longer wants one; besides recovered,
+eased, unchecked, retired, acknowledged, maintenance, symptom and digest it may
+close as quiet (a record quieted it) or rules (the rules changed). The digest leaves
+out a quiet condition and a root told nowhere. The preview of a write lists the
+conditions that would go quiet or be re-rated and the roots told differently.
+
 Each assess run records the rule set it used on the site's `assessment.rules`: the
 SHA-256 over the active records, each record's own hash, and, when the set differs
 from the last run's, the records that changed. A derived condition carries `rule`:

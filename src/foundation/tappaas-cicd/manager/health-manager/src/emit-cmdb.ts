@@ -50,6 +50,8 @@ export interface Condition {
   maintenance?: Maintenance | null;
   flapping?: boolean;
   flappingHeld?: Status; // the status told while it flaps
+  quieted?: { rule: string; since: string; via?: string[] } | null; // quiet by a health record: kept, never told
+  raw?: { status: Status; since: string; rule: string } | null; // re-rated by a health record
 }
 
 export interface RootEntry {

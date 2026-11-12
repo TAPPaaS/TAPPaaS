@@ -67,7 +67,7 @@ import { readLastSweep } from "./cmdbsweep";
 import { RulesDoc, cmdRules, readRules } from "./rules";
 import { moduleOfLocation, moduleSourceOf } from "../../../lib/ts/src/instance";
 import { cmdRulesWrite } from "./rules-verbs";
-import { RuleStore, coreReleaseDir, healthDir, readCoreRelease, reportedClasses } from "./rulestore";
+import { RuleStore, healthDir, reportedClasses, siteRecords } from "./rulestore";
 import { readWindows } from "./windows";
 import { cmdScore } from "./score-verb";
 // ── ADR-041 emit half ──
@@ -219,10 +219,11 @@ export const HELP: HelpSpec = {
         "stands until the source that raised it has looked again.",
     },
     {
-      usage: "rules list|check|explain|simulate [<object>] [--kind K] [--origin O] [--file F] [--fail O[:T[:S]]]... [--with F] [--without ID]... [--diff] [--json|--markdown]", effect: "read",
+      usage: "rules list|show|diff|check|explain|simulate|scenario list [<id>|<object>] [--kind K] [--origin O] [--state S] [--file F] [--fail O[:T[:S]]]... [--with F] [--without ID]... [--diff] [--json|--markdown]", effect: "read",
       options: [
         ["--kind K", "list: only records of this kind (classify, propagate, combine, explain, follow, rollup, notify)."],
         ["--origin O", "list: only records released by core, a module, or the site."],
+        ["--state S", "list: only rules edited here, pending a decision, held, disabled or deleted."],
         ["--file F", "check: this candidate file with the rules in use."],
         ["--json", "Print the records, or the problems."],
         ["--markdown", "list: the records by kind, one line each, as the rule language's README shows them."],
@@ -232,6 +233,20 @@ export const HELP: HelpSpec = {
         ["--diff", "simulate: print what changes from now: roots that appear or go, objects whose colour changes."],
       ],
       details: "The health records that decide how a failure spreads, what explains what, who follows whom and how collections sum up; one sentence each. check refuses a record it cannot place, two records that decide one case differently, and a set under which a contract scenario no longer holds, and exits 1. explain <object> shows how each of its conditions came about, hop by hop, with the record that decided it. simulate runs the derivation on the site as it is with extra failures or changed records. Neither writes.",
+    },
+    {
+      usage: "rules add|edit|enable|disable|delete|restore|take|keep|accept|merge|scenario retire|scenario restore [<id>|<file>] [--set path=value]... [--unset path]... [--file F] [--field F] [--origin O] [--note N] [--apply] [--force]", effect: { apply: "--apply" },
+      options: [
+        ["--apply", "Write it; without, print what would change (the records, the check, the scenarios, and on the site as it is: roots, colours, what goes quiet, how roots are told)."],
+        ["--force", "Write it though a contract scenario no longer holds; the rule's note records it."],
+        ["--set path=value", "edit: set a field of the record (as.status=warning, when.dependant.zone=dmz); repeatable."],
+        ["--unset path", "edit: remove a field; repeatable."],
+        ["--file F", "add: the site's own records; edit: the record whole."],
+        ["--field F", "take: one field from the release, not the whole record."],
+        ["--origin O", "enable/disable: every rule of a module; merge: only this origin (repeatable)."],
+        ["--note N", "Why: kept with the rule's local state; scenario retire needs it."],
+      ],
+      details: "Change what this site runs, kept in config/health/: an update merges each release per rule, never changes a rule edited here and never brings back one deleted here. merge is what the update and module install, update and delete run. An apply that changes the active set recalculates health at once.",
     },
     // ── end ADR-041 assess ──
     {
@@ -363,12 +378,9 @@ const gates = (opts: Opts, client: ClusterClient, timed?: Timer): HealthReport =
  *  with what a reader needs of the metamodel from the CMDB. */
 function rulesModel(configDir: string): RulesDoc {
   const meta = readRules();
-  const store = RuleStore.read(healthDir(configDir));
-  if (store.installed) return { relations: meta.relations, ancestors: meta.ancestors, fields: meta.fields, records: store.active(), scenarios: store.allScenarios(), ...(store.state.lastMerge ? { lastMerge: store.state.lastMerge } : {}) };
-  const dir = coreReleaseDir(configDir);
-  const core = dir ? readCoreRelease(dir) : null;
-  if (!core || core.problems.length) throw new Error(`no health records: none installed in ${healthDir(configDir)}, and the release's core records ${dir ? `at ${dir} do not read (${core?.problems.join("; ")})` : "were not found (no tappaas-cicd instance in config/)"}`);
-  return { relations: meta.relations, ancestors: meta.ancestors, fields: meta.fields, records: core.records, scenarios: core.scenarios };
+  const s = siteRecords(configDir);
+  if (s.problem) throw new Error(`no health records: ${s.problem}`);
+  return { relations: meta.relations, ancestors: meta.ancestors, fields: meta.fields, records: s.records, scenarios: s.scenarios, ...(s.lastMerge ? { lastMerge: s.lastMerge } : {}) };
 }
 
 /** Health under the rules now in force, at once: assess, then emit, as the

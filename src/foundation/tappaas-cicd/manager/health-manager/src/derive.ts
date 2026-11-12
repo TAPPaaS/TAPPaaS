@@ -285,7 +285,8 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
   };
 
   const out = new Map<string, Condition[]>();
-  for (const [id, cs] of source) out.set(id, cs.map((c) => ({ ...c, derived: false, rootCause: null })));
+  // A sum of others (a classify record said so) is derived from the start.
+  for (const [id, cs] of source) out.set(id, cs.map((c) => ({ ...c, derived: c.aggregate === true, rootCause: null })));
   // A roll-up record that keeps an object's own condition of a type ("own")
   // makes that condition a sum of others: derived, never a root.
   const rollupFor = (o: { id: string; class: string }, type?: string): Rollup | null =>

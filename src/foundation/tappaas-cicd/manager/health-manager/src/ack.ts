@@ -23,7 +23,7 @@ import { join } from "path";
 const liveUntil = (until: string | null | undefined, now: Date): boolean => !until || Date.parse(until) > now.getTime();
 
 export const silenced = (c: Condition | undefined, now: Date): boolean =>
-  !!c && ((!!c.acknowledged && liveUntil(c.acknowledged.until, now)) || (!!c.maintenance && liveUntil(c.maintenance.until, now)));
+  !!c && ((!!c.acknowledged && liveUntil(c.acknowledged.until, now)) || (!!c.maintenance && liveUntil(c.maintenance.until, now)) || !!c.quieted);
 
 const clone = (objects: HealthObject[]): HealthObject[] =>
   objects.map((o) => ({ ...o, attributes: { ...o.attributes, ...(o.attributes.conditions ? { conditions: o.attributes.conditions.map((c) => ({ ...c })) } : {}) } }));

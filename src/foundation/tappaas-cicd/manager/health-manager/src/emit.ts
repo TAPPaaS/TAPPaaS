@@ -25,7 +25,7 @@ import { cloneObjects, endedBeforeEmit, silenced } from "./ack";
 import { Condition, Flaps, HealthCmdb, HealthObject, Period, RootEntry, Status, conditionsOf, rootsOf, rootsOfSite, worse } from "./emit-cmdb";
 import { EventKind, HealthEvent, Journal, MaintenanceEvent, TransitionEvent, eventLine, levelChanged, levelRose } from "./events";
 import { Window, isOpen, readWindows } from "./windows";
-import { Deliver, Notice, NoticeEvent, NoticePlan, closeMail, noticeKey, openMail, planNotices, siteNotify, wantedNotices } from "./notices";
+import { Deliver, Notice, NoticeEvent, NoticePlan, closeMail, noticeKey, openMail, planNotices, siteNotify, wantedNotices, NotifyRules } from "./notices";
 import { renameGuarded, simulating, unlinkGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 
 export const CURSOR_FILE = ".health-emit-cursor";
@@ -146,6 +146,7 @@ export interface EmitInput {
   intervalMin: number;
   since?: string; // --since: everything after this, whatever the cursor says
   windows?: Window[]; // the maintenance windows (windows.ts); runEmit reads them
+  notify?: NotifyRules; // the notify records the site runs; without, the core ones
 }
 
 /** A window that opened or ended since the last run, told once each. */
@@ -328,9 +329,9 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
 
   // The critical-root notices, from the set as it is now (after the acks above).
   const impactedOf = (k: string): string => now[k]?.impacted ?? now[`${k.slice(0, k.lastIndexOf(":"))}:`]?.impacted ?? "nothing";
-  const want = wantedNotices(objects, roots, impactedOf, input.now);
+  const want = wantedNotices(objects, roots, impactedOf, input.now, input.notify);
   if (hash) for (const n of want.values()) n.rules = hash.slice(0, 8);
-  const notices = { ...planNotices(cursor?.notices ?? {}, want, objects, roots, input.now), ...(byRules ? { byRules: true } : {}) };
+  const notices = { ...planNotices(cursor?.notices ?? {}, want, objects, roots, input.now, input.notify, byRules), ...(byRules ? { byRules: true } : {}) };
 
   const w = windowEvents(cursor?.windows ?? {}, input.windows ?? [], input.now);
 
