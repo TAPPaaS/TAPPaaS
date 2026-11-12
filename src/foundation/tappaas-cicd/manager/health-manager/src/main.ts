@@ -58,11 +58,12 @@ import { CheckResult, CheckStatus, ClusterClient, HealthReport } from "./types";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
 import { CmdbRefused, CmdbReport, CmdbUnavailable, cmdbQuery, cmdbRelations, cmdbRequest } from "../../../lib/ts/src/cmdb";
-import { pruneRefused } from "../../../lib/ts/src/cmdb-reporter";
+import { printOrSend, pruneRefused } from "../../../lib/ts/src/cmdb-reporter";
 import { AssessIO, AssessResult, Timer, assess } from "./assess";
 import { Declared, horizonOf } from "./assess-performance";
 import { curlReader, metricsEndpoint } from "./metrics-read";
-import { CmdbItem, CmdbRel, SiteIndex } from "./assess-model";
+import { CmdbItem, CmdbRel, SOURCE, SiteIndex } from "./assess-model";
+import { buildBaselineReport } from "./baseline-ci";
 import { assessmentOf, readValidate } from "./assess-validate";
 import { readLastSweep } from "./cmdbsweep";
 import { RulesDoc, cmdRules, readRules } from "./rules";
@@ -592,6 +593,11 @@ function cmdReportHealth(opts: Opts, client: ClusterClient): number {
     }
   }
   const json = opts.rest.includes("--json");
+  // The NixOS baseline's CI first, so the assessment below can place its finding on it.
+  if (!json) {
+    const base = buildBaselineReport(loadComponents(opts.configDir, process.env.TAPPAAS_REPO ?? "/home/tappaas/TAPPaaS").records, SOURCE);
+    if (base.objects.length) printOrSend(base, false);
+  }
   try {
     const r = assess(assessIO(opts, client), { dryRun: json }, new Date(), from);
     if (json) process.stdout.write(JSON.stringify(r.report, null, 1) + "\n");

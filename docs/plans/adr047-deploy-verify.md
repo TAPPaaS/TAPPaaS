@@ -88,21 +88,33 @@ The acceptance check found that an accepted row hidden behind another row of
 the same CVE (jellyfin's own glibc and the baseline's) ended as "gone" at the
 same scan; fixed on the branch after the deploy, so it needs the next deploy.
 
+## The NixOS baseline CI, deployed on hrossen 2026-11-12
+
+Main at d25735c4, OS rebuilt (the CMDB loads the new class at start; the
+console builds the new symbol). The first sweep created the one
+`nixos-baseline` CI with 15 templates/* components and listed it once as
+"appeared" (a drift warning on it until the next sweep, which does not list
+it); its `cve-baseline` condition is a security root and in the digest's NEW.
+
 ## What is not done
 
 - Units set only by the baseline: the cve source labels their finding
-  `labels.setBy = baseline` and adds one site finding, reason `cve-baseline`.
-  Making the labelled ones derived (never a root) is ADR-049's
-  `core.classify.cve-baseline`, agreed with the ADR-049 session; until that
-  lands they are roots as today. The health store keeps one security
-  condition per object and stores no labels, so the site's `cve-baseline`
-  finding is hidden under the site's own roll-up until then.
+  `labels.setBy = baseline`; ADR-049's `core.classify.cve-baseline` makes them
+  derived (never a root) once that branch is deployed. The baseline's own
+  finding, reason `cve-baseline`, is on the `nixos-baseline` CI, which
+  `health-manager report` creates from the templates/* component records when
+  the CMDB sweep runs it; until the first sweep after the deploy it falls back
+  to the site, where the site's roll-up hides it. Check after the deploy:
+  `cmdb query nixos-baseline` shows one CI, and
+  `health-manager list --type security` shows its condition. The console's
+  class symbol for it needs the web dist rebuilt.
+- Known-exploited CVEs: brotli (CVE-2026-111497) reopens judgements made
+  before it was listed; each needs a person to read it again
+  (`cve-triage.sh read …`). redis (CVE-2022-0543) is a recorded false
+  positive, which a listing does not reopen.
 - The U/R/C/V/A column counts the row a CVE is shown by: an acceptance of a
   row hidden behind another row of the same CVE lowers the score but shows
   as 0 accepted; `health-manager accept --list` shows it.
-- Known-exploited CVEs: on hrossen today brotli (CVE-2026-111497) and redis
-  (CVE-2022-0543) reopen judgements made before they were listed. Each needs a
-  person to read it again (`cve-triage.sh read …`) or a new decision.
 - The release preview applies named component decisions but not CVSS rules
   (the preview has no vectors): an item only a rule lowers still counts at its
   upstream level in the preview's gate. Conservative; noted in ADR-047.
