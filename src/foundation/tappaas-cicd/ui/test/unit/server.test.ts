@@ -154,6 +154,10 @@ async function main(): Promise<void> {
   check(r.status === 200 && r.body.includes("<title>console"), "a client route answers index.html");
   r = await call("GET", "/assets/app-1234.js");
   check(r.status === 200 && /javascript/.test(r.headers["content-type"] ?? "") && /immutable/.test(r.headers["cache-control"] ?? ""), "hashed assets are long-cached");
+  r = await call("GET", "/assets");
+  check(r.status === 200 && r.body.includes("<title>console") && r.headers["cache-control"] === "no-cache", "the Assets page's route is the page, never long-cached: a deploy reaches it");
+  r = await call("GET", "/assets/srv-01");
+  check(r.status === 200 && r.body.includes("<title>console") && r.headers["cache-control"] === "no-cache", "…nor an asset's page");
   r = await call("GET", "/assets/missing.js");
   check(r.status === 404, "a missing asset is 404, not index.html");
   r = await call("GET", "/assets/..%2f..%2f..%2fetc%2fpasswd");
