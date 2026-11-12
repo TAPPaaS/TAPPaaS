@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed**: every question settled with the operator; for sign-off |
-| **Version** | 0.5 |
+| **Status** | **Accepted** (operator, 2026-11-12; no question open). Layer 1 (P0–P4) is this iteration; the Wazuh module is future work |
+| **Version** | 1.0 |
 | **Date** | 2026-11-12 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | #843 (a SIEM for TAPPaaS); the basis for #886 (the console's security view). Settles the SIEM part of ADR-040 O6. Would amend ADR-039 (a `type` label on security rules), ADR-041 and ADR-049 (security conditions that age out), and ADR-011 (a Windows layer, with the future Wazuh work). Analysis: [`docs/plans/siem-analysis.md`](../plans/siem-analysis.md). |
-| **Changelog** | v0.5 (2026-11-12): D12, the ageing of security conditions, approved by the operator as proposed. No question is open. · v0.4 (2026-11-12): Suricata alerts first; IPS later on the WAN only (D5, operator). Only D12 is left for review. · v0.3 (2026-11-12): **operator's answers**: layer 1 is off at `small` (D1, D11); security streams kept 90 days at medium and 180 at large (D2); the security part rides on `logging:logs`, no new service (D9); host bouncers are future work, off-site lookups off by default, event management parked. **D12 proposes how a security condition ages.** Open: Suricata IDS or IPS. · v0.2 (2026-11-12): **operator's decisions**: this iteration builds layer 1 only, and the Wazuh module is future work (D1, Phases); security streams are kept 90 days (D2). The Sigma claim is corrected: Sigma gives about a third of the rules, the platform-specific rules are TAPPaaS's own (D3, Consequences). · v0.1 (2026-11-12): first draft from the analysis. Two layers: detection on the existing logging stack at every size, with Wazuh as an optional module at medium and large. |
+| **Changelog** | v1.0 (2026-11-12): **Accepted** by the operator. Implementation starts with P0. · v0.5 (2026-11-12): D12, the ageing of security conditions, approved by the operator as proposed. No question is open. · v0.4 (2026-11-12): Suricata alerts first; IPS later on the WAN only (D5, operator). Only D12 is left for review. · v0.3 (2026-11-12): **operator's answers**: layer 1 is off at `small` (D1, D11); security streams kept 90 days at medium and 180 at large (D2); the security part rides on `logging:logs`, no new service (D9); host bouncers are future work, off-site lookups off by default, event management parked. **D12 proposes how a security condition ages.** Open: Suricata IDS or IPS. · v0.2 (2026-11-12): **operator's decisions**: this iteration builds layer 1 only, and the Wazuh module is future work (D1, Phases); security streams are kept 90 days (D2). The Sigma claim is corrected: Sigma gives about a third of the rules, the platform-specific rules are TAPPaaS's own (D3, Consequences). · v0.1 (2026-11-12): first draft from the analysis. Two layers: detection on the existing logging stack at every size, with Wazuh as an optional module at medium and large. |
 
 TAPPaaS collects every guest's journal, the firewall log and the nodes' audit log in Loki. It
 alerts on single lines, bans abusive clients of published names with CrowdSec, and scans for

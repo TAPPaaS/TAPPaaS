@@ -4,7 +4,7 @@ Analysis for [#843](https://codeberg.org/TAPPaaS/TAPPaaS/issues/843) (*Create a 
 TAPPaaS*), with [#886](https://codeberg.org/TAPPaaS/TAPPaaS/issues/886) (the console's security
 view) as its first consumer. Written 2026-11-12. This is analysis only: no code was written, and
 no live system was read or changed. The decision it argues for is drafted as
-[ADR-050](<../ADR/ADR-050 - Security Monitoring.md>) (Proposed).
+[ADR-050](<../ADR/ADR-050 - Security Monitoring.md>), Accepted by the operator on 2026-11-12.
 
 Sources:
 
