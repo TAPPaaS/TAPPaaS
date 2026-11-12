@@ -1,0 +1,51 @@
+[
+  {
+    "field": "as",
+    "released": "{\"status\":\"critical\"}",
+    "here": "{\"status\":\"critical\"}",
+    "now": "{\"status\":\"critical\"}",
+    "mark": ""
+  },
+  {
+    "field": "description",
+    "released": "\"A failed pool takes down the guests and datastores whose data is on it; a degraded pool reaches none of them.\"",
+    "here": "\"A failed pool takes down the guests and datastores whose data is on it; a degraded pool reaches none of them.\"",
+    "now": "\"A failed pool takes down the guests and datastores whose data is on it; a degraded pool reaches none of them.\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.propagate.stored-on.down\"",
+    "here": "\"core.propagate.stored-on.down\"",
+    "now": "\"core.propagate.stored-on.down\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"propagate\"",
+    "here": "\"propagate\"",
+    "now": "\"propagate\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.status",
+    "released": "\"critical\"",
+    "here": "\"critical\"",
+    "now": "\"critical\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.type",
+    "released": "\"operational\"",
+    "here": "\"operational\"",
+    "now": "\"operational\"",
+    "mark": ""
+  },
+  {
+    "field": "when.relation",
+    "released": "\"stored-on\"",
+    "here": "\"stored-on\"",
+    "now": "\"stored-on\"",
+    "mark": ""
+  }
+]

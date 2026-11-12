@@ -1,11 +1,20 @@
-// rules.ts — the correlation rules as health-manager reads them (ADR-041 D3):
-// `metamodel/health-rules.json`, served by cmdb-controller with what a reader
-// needs of the metamodel. `rules list` shows them; `rules check` validates them,
-// or a candidate file, by the check the controller applies at load.
+// rules.ts — the health records as health-manager reads them, and the verbs
+// over them: `rules list` (one sentence per record) and `rules check` (the
+// static check: schema, names, conflicts; and the dependency cycles in the
+// CMDB's relations).
+//
+// The records and what a reader needs of the metamodel (relation types and
+// their dependant ends, class ancestors, attributes) come from cmdb-controller.
 
 import { readFileSync } from "fs";
 import { cmdbRequest } from "../../../lib/ts/src/cmdb";
-import { CycleRelation, HealthRule, checkHealthRules, dependencyCycles } from "../../../lib/ts/src/health-rules";
+import { CycleRelation, dependencyCycles } from "../../../lib/ts/src/health-rules";
+import { HealthRecord, KINDS, ModelInfo, Problem, anchorProblem, checkSet, originOf, recordsOf } from "../../../lib/ts/src/health-records";
+import { sentence } from "./rule-text";
+import { Scenario, runScenarios } from "./scenarios";
+import { Snapshot, decisions, diffLines, diffSim, explainLines, explainObject, parseFailure, simLines, simulate } from "./rules-tools";
+import { RuleStore } from "./rulestore";
+import { stateLine } from "./rules-verbs";
 
 export interface RelationMeta {
   name: string;
@@ -14,30 +23,26 @@ export interface RelationMeta {
 }
 
 export interface RulesDoc {
-  rules: HealthRule[];
+  records: HealthRecord[];
   relations: RelationMeta[];
   ancestors: Record<string, string[]>;
-  fields?: string[]; // every attribute some class declares: what a `dependant` clause may name
+  fields?: string[]; // every attribute some class declares
+  scenarios?: Scenario[]; // the contract scenarios shipped beside the records
+  lastMerge?: { ok: boolean; problems: string[]; at: string }; // the last merge, when it did not hold
+}
+
+/** What the verbs that read the site need, beyond the records. */
+export interface RulesSite {
+  snapshot?: () => Snapshot;
+  now?: () => string;
+  retired?: Set<string>; // contract scenarios the site retired
+  store?: RuleStore; // the installed set: its local state, for list --state
+  reports?: Map<string, string[]>; // the classes each module's components report (anchoring)
 }
 
 export const readRules = (): RulesDoc => cmdbRequest("GET", "/v1/rules") as RulesDoc;
 
-export function ruleLine(r: HealthRule): string {
-  const ends = r.from || r.to ? ` (${r.from ?? "any"} → ${r.to ?? "any"})` : "";
-  const dep = Object.entries(r.dependant ?? {}).map(([k, v]) => (v === true ? `${k} set` : `${k}=${String(v)}`));
-  const when = dep.length ? ` to a dependant with ${dep.join(", ")}` : "";
-  return `${r.source.type} ${r.source.status} crosses ${r.relation}${ends}${when} as ${r.impact} impact`;
-}
-
-/** What is wrong with a rules document, against the model the service gave. */
-export function checkRules(doc: unknown, model: RulesDoc): string[] {
-  return checkHealthRules(doc, {
-    relations: model.relations.map((r) => r.name),
-    dependants: model.relations.filter((r) => r.dependant).map((r) => r.name),
-    classes: Object.keys(model.ancestors),
-    fields: model.fields,
-  });
-}
+export const modelInfo = (m: RulesDoc): ModelInfo => ({ relations: m.relations, ancestors: m.ancestors, fields: m.fields });
 
 /** The dependency cycles in the CMDB's relations, one line each: a failure in
  *  one would reach all of them and back. */
@@ -47,24 +52,130 @@ export function cycleProblems(relations: CycleRelation[], model: RulesDoc): stri
   return dependencyCycles(relations, model.relations).map((c) => `a dependency cycle over required relations: ${c.map((id) => label.get(id) ?? id).join(", ")}`);
 }
 
-/** `rules list|check [--file F] [--json]`. Returns the exit code. Without
- *  --file, check also reads the relations (when given) for dependency cycles. */
-export function cmdRules(rest: string[], model: RulesDoc, print: (l: string) => void, relations?: () => CycleRelation[]): number {
+const flag = (args: string[], name: string): string | undefined => {
+  const at = args.indexOf(name);
+  if (at < 0) return undefined;
+  if (!args[at + 1] || args[at + 1].startsWith("--")) throw new Error(`rules: ${name} needs a value`);
+  return args[at + 1];
+};
+
+/** The records in the README's block: by kind, one line each with its id. */
+export function markdownList(recs: HealthRecord[]): string[] {
+  const out: string[] = [];
+  for (const k of KINDS) {
+    const of = recs.filter((r) => r.kind === k);
+    if (!of.length) continue;
+    out.push(`**${k}**`, "");
+    for (const r of of) out.push(`- \`${r.id}\`${r.enabled === false ? " (off until a site turns it on)" : ""}: ${sentence(r)}.`);
+    out.push("");
+  }
+  return out;
+}
+
+const problemLine = (p: Problem): string => `${p.level}: ${p.id}: ${p.message}`;
+
+/** `rules list [--kind K] [--origin O] [--json|--markdown]` and
+ *  `rules check [--file F] [--json]`. Returns the exit code. Without --file,
+ *  check also reads the relations (when given) for dependency cycles. */
+export function cmdRules(rest: string[], model: RulesDoc, print: (l: string) => void, relations?: () => CycleRelation[], site: RulesSite = {}): number {
   const [verb, ...args] = rest;
   const json = args.includes("--json");
-  if (verb === "list") {
-    if (json) print(JSON.stringify(model.rules, null, 2));
-    else for (const r of model.rules) print(ruleLine(r));
+  const now = (): string => site.now?.() ?? new Date().toISOString();
+  const snap = (): Snapshot => {
+    if (!site.snapshot) throw new Error(`rules ${verb}: needs the CMDB`);
+    return site.snapshot();
+  };
+  if (verb === "explain") {
+    const ref = args.find((a) => !a.startsWith("--"));
+    if (!ref) throw new Error("rules explain: name an object");
+    const s = snap();
+    const x = explainObject(s, model, now(), ref);
+    if (json) print(JSON.stringify({ object: { id: x.object.id, class: x.object.class, name: x.object.name }, conditions: x.conditions }, null, 2));
+    else for (const l of explainLines(x, s.objects)) print(l);
     return 0;
   }
-  if (verb !== "check") throw new Error("rules: expected 'list' or 'check'");
-  const at = args.indexOf("--file");
-  if (at >= 0 && !args[at + 1]) throw new Error("rules check: --file needs a path");
-  const doc: unknown = at >= 0 ? JSON.parse(readFileSync(args[at + 1], "utf8")) : { rules: model.rules };
-  const wrong = checkRules(doc, model);
-  if (at < 0 && relations) wrong.push(...cycleProblems(relations(), model));
-  if (json) print(JSON.stringify({ ok: wrong.length === 0, problems: wrong }, null, 2));
-  else if (wrong.length) for (const w of wrong) print(w);
-  else print(`${(doc as { rules: unknown[] }).rules.length} rule(s) hold${at < 0 && relations ? "; no dependency cycle" : ""}`);
-  return wrong.length ? 1 : 0;
+  if (verb === "simulate") {
+    const fails = args.flatMap((a, i) => (args[i - 1] === "--fail" ? [parseFailure(a)] : []));
+    const withFile = flag(args, "--with");
+    const without = args.flatMap((a, i) => (args[i - 1] === "--without" ? [a] : []));
+    const extra = withFile ? recordsOf(JSON.parse(readFileSync(withFile, "utf8")), withFile).records : [];
+    if (!fails.length && !withFile && !without.length) throw new Error("rules simulate: give --fail <object>[:type[:status]], --with F or --without <id>");
+    const s = snap();
+    const t = now();
+    const after = simulate(s, model, t, fails, { with: extra, without });
+    if (args.includes("--diff")) {
+      const d = diffSim(simulate(s, model, t, []), after, s.objects);
+      if (json) print(JSON.stringify(d, null, 2));
+      else for (const l of diffLines(d)) print(l);
+    } else if (json) print(JSON.stringify({ roots: after.roots, colours: after.colours }, null, 2));
+    else for (const l of simLines(after)) print(l);
+    return 0;
+  }
+  if (verb === "list") {
+    const kind = flag(args, "--kind");
+    const origin = flag(args, "--origin");
+    const state = flag(args, "--state");
+    const st = site.store;
+    if (state && !["edited", "pending", "held", "disabled", "deleted"].includes(state)) throw new Error("rules list: --state is edited, pending, held, disabled or deleted");
+    // Deleted rules are not in the set: they are listed from what was released.
+    const deleted = st ? Object.entries(st.state.rules).filter(([, v]) => v.local === "deleted").map(([id]) => st.baseOf(id)).filter((r): r is HealthRecord => !!r) : [];
+    const pool = state === "deleted" ? deleted : model.records;
+    const inState = (r: HealthRecord): boolean => {
+      if (!state || state === "deleted") return true;
+      if (state === "disabled") return r.enabled === false;
+      if (!st) return false;
+      if (state === "edited") return ["edited", "added"].includes(st.localOf(r.id) ?? "");
+      if (state === "pending") return st.pending(r.id);
+      return !!st.state.rules[r.id]?.held;
+    };
+    // How many cases each record decides on the site now: one derivation.
+    let fired: Map<string, number> | null = null;
+    if (site.snapshot && !args.includes("--markdown")) {
+      const snap = site.snapshot();
+      const sim = simulate(snap, model, now(), []);
+      fired = sim.derivation.trace.fired;
+      // classify and notify: the stored findings each classifies, the roots each tells.
+      for (const [id, n] of decisions(snap, model, now(), sim.derivation.rootCauses)) fired.set(id, (fired.get(id) ?? 0) + n);
+    }
+    const recs = pool.filter((r) => (!kind || r.kind === kind) && (!origin || originOf(r.id) === origin) && inState(r));
+    const note = (r: HealthRecord): string => (st ? stateLine(st, r.id) : "") || "";
+    if (json) print(JSON.stringify(recs.map((r) => ({ ...r, origin: originOf(r.id), sentence: sentence(r), state: note(r) || (state === "deleted" ? "deleted" : ""), ...(fired ? { decidesNow: fired.get(r.id) ?? 0 } : {}) })), null, 2));
+    else if (args.includes("--markdown")) for (const l of markdownList(recs)) print(l);
+    else for (const r of recs) print(`${r.id}${r.enabled === false ? " [off]" : ""}${note(r) ? ` [${note(r)}]` : ""}${fired ? ` (decides ${fired.get(r.id) ?? 0})` : ""}: ${sentence(r)}`);
+    return 0;
+  }
+  if (verb !== "check") throw new Error("rules: expected list, check, explain or simulate");
+  const file = flag(args, "--file");
+  let recs = model.records;
+  const problems: Problem[] = [];
+  if (file) {
+    const got = recordsOf(JSON.parse(readFileSync(file, "utf8")), file);
+    problems.push(...got.problems);
+    // A candidate file is checked with the rules in use, except those it replaces.
+    const ids = new Set(got.records.map((r) => r?.id));
+    recs = [...model.records.filter((r) => !ids.has(r.id)), ...got.records];
+    // A module's file: each record of that origin, anchored at the module's own end.
+    const origin = flag(args, "--origin");
+    if (origin) {
+      for (const r of got.records) {
+        if (typeof r?.id !== "string" || originOf(r.id) !== origin) problems.push({ level: "error", id: String(r?.id), message: `a ${origin} record's id starts with ${origin}.` });
+        else {
+          const a = anchorProblem(r, origin, site.reports?.get(origin) ?? [], model.ancestors);
+          if (a) problems.push({ level: "error", id: r.id, message: a });
+        }
+      }
+    }
+  }
+  problems.push(...checkSet(recs, modelInfo(model)));
+  // The contract scenarios: a set that passes every static check can still
+  // stop naming a dead node as a root.
+  if (!problems.some((p) => p.level === "error")) {
+    for (const f of runScenarios(model.scenarios ?? [], { ...model, records: recs }, site.retired)) problems.push({ level: "error", id: f.id, message: `the scenario no longer holds: ${f.problems.join("; ")}` });
+  }
+  const cycles = !file && relations ? cycleProblems(relations(), model) : [];
+  const errors = problems.filter((p) => p.level === "error");
+  if (json) print(JSON.stringify({ ok: errors.length === 0, problems: [...problems.map(problemLine), ...cycles] }, null, 2));
+  else if (problems.length || cycles.length) for (const l of [...problems.map(problemLine), ...cycles]) print(l);
+  if (!json && !errors.length) print(`${recs.length} record(s) hold${!file && relations ? cycles.length ? "" : "; no dependency cycle" : ""}`);
+  return errors.length || cycles.length ? 1 : 0;
 }

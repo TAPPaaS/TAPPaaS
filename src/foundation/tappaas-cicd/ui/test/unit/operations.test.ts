@@ -97,6 +97,8 @@ function grouping(): void {
     obj("s1", "vm", "s1", [cond("impact", "critical", { derived: true, rootCause: "s" })]),
     obj("b1", "vm", "b1", [cond("impact", "critical", { derived: true, rootCause: "b" })]),
     obj("b2", "vm", "b2", [cond("impact", "critical", { derived: true, rootCause: "b" })]),
+    // health-manager's root causes, as the site records them: the console computes none.
+    { ...obj("site", "site", "home", []), attributes: { rootCauses: [{ id: "b", type: "operational", impactedCount: 2 }, { id: "s", type: "operational", impactedCount: 1 }] } },
   ]);
   const tg = groupEvents(two, openEvents(two));
   check(tg[0].root === "b" && tg[0].impact.count === 2 && tg[1].root === "s", "more impact first among equals");

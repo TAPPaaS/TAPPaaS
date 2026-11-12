@@ -1,0 +1,22 @@
+{
+  "object": {
+    "id": "d66c7bca-55fd-4f14-827c-f37c2f41f9b3",
+    "class": "vm",
+    "name": "tvbase-zcnode"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "critical",
+      "reason": "sweep-missing",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

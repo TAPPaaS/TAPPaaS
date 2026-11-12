@@ -1,0 +1,47 @@
+{
+  "object": {
+    "id": "b3eb7524-92fa-4664-9703-c5f04287dc9e",
+    "class": "environment",
+    "name": "test"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "capacity",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "maintenance",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "backup",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "security",
+      "status": "warning",
+      "reason": "roll-up",
+      "how": "roll-up",
+      "rule": "core.rollup.environment-score",
+      "ruleText": "an environment's security is its own, not a sum of its members"
+    }
+  ]
+}

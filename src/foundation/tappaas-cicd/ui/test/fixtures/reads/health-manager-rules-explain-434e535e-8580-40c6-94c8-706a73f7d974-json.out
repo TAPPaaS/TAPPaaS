@@ -1,0 +1,35 @@
+{
+  "object": {
+    "id": "434e535e-8580-40c6-94c8-706a73f7d974",
+    "class": "vm",
+    "name": "test-deb-vlannode"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "critical",
+      "reason": "sweep-missing",
+      "how": "root",
+      "impacts": 0
+    },
+    {
+      "type": "capacity",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "maintenance",
+      "status": "warning",
+      "reason": "reboot-pending",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

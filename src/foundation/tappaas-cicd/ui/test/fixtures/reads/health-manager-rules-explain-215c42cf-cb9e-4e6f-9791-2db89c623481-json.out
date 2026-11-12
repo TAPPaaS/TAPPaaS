@@ -1,0 +1,15 @@
+{
+  "object": {
+    "id": "215c42cf-cb9e-4e6f-9791-2db89c623481",
+    "class": "location",
+    "name": "t"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+[
+  {
+    "field": "as",
+    "released": "{\"status\":\"critical\"}",
+    "here": "{\"status\":\"critical\"}",
+    "now": "{\"status\":\"critical\"}",
+    "mark": ""
+  },
+  {
+    "field": "description",
+    "released": "\"What depends on a service that is down is down too.\"",
+    "here": "\"What depends on a service that is down is down too.\"",
+    "now": "\"What depends on a service that is down is down too.\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.propagate.depends-on.down\"",
+    "here": "\"core.propagate.depends-on.down\"",
+    "now": "\"core.propagate.depends-on.down\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"propagate\"",
+    "here": "\"propagate\"",
+    "now": "\"propagate\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.status",
+    "released": "\"critical\"",
+    "here": "\"critical\"",
+    "now": "\"critical\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.type",
+    "released": "\"operational\"",
+    "here": "\"operational\"",
+    "now": "\"operational\"",
+    "mark": ""
+  },
+  {
+    "field": "when.relation",
+    "released": "\"depends-on\"",
+    "here": "\"depends-on\"",
+    "now": "\"depends-on\"",
+    "mark": ""
+  }
+]

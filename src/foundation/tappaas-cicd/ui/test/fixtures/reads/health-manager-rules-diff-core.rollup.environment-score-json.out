@@ -1,0 +1,44 @@
+[
+  {
+    "field": "description",
+    "released": "\"An environment's security is its own risk score, not the worst of its members; the modules that set it are the roots.\"",
+    "here": "\"An environment's security is its own risk score, not the worst of its members; the modules that set it are the roots.\"",
+    "now": "\"An environment's security is its own risk score, not the worst of its members; the modules that set it are the roots.\"",
+    "mark": ""
+  },
+  {
+    "field": "fn",
+    "released": "\"own\"",
+    "here": "\"own\"",
+    "now": "\"own\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.rollup.environment-score\"",
+    "here": "\"core.rollup.environment-score\"",
+    "now": "\"core.rollup.environment-score\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"rollup\"",
+    "here": "\"rollup\"",
+    "now": "\"rollup\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.type",
+    "released": "\"security\"",
+    "here": "\"security\"",
+    "now": "\"security\"",
+    "mark": ""
+  },
+  {
+    "field": "when.object.class",
+    "released": "{\"isA\":[\"environment\"]}",
+    "here": "{\"isA\":[\"environment\"]}",
+    "now": "{\"isA\":[\"environment\"]}",
+    "mark": ""
+  }
+]

@@ -1,0 +1,51 @@
+[
+  {
+    "field": "description",
+    "released": null,
+    "here": "\"The root key on the cluster was rotated on purpose.\"",
+    "now": null,
+    "mark": "here"
+  },
+  {
+    "field": "id",
+    "released": null,
+    "here": "\"site.classify.quiet-root-key\"",
+    "now": null,
+    "mark": "here"
+  },
+  {
+    "field": "kind",
+    "released": null,
+    "here": "\"classify\"",
+    "now": null,
+    "mark": "here"
+  },
+  {
+    "field": "quiet",
+    "released": null,
+    "here": "true",
+    "now": null,
+    "mark": "here"
+  },
+  {
+    "field": "when.finding.labels.alertname",
+    "released": null,
+    "here": "\"RootKeyChanged\"",
+    "now": null,
+    "mark": "here"
+  },
+  {
+    "field": "when.finding.source",
+    "released": null,
+    "here": "\"alerts\"",
+    "now": null,
+    "mark": "here"
+  },
+  {
+    "field": "when.object.name",
+    "released": null,
+    "here": "\"cluster\"",
+    "now": null,
+    "mark": "here"
+  }
+]

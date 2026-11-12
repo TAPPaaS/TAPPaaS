@@ -1,0 +1,44 @@
+[
+  {
+    "field": "description",
+    "released": "\"An asset nothing judges takes the colour of the node it is allocated to.\"",
+    "here": "\"An asset nothing judges takes the colour of the node it is allocated to.\"",
+    "now": "\"An asset nothing judges takes the colour of the node it is allocated to.\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.follow.asset\"",
+    "here": "\"core.follow.asset\"",
+    "now": "\"core.follow.asset\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"follow\"",
+    "here": "\"follow\"",
+    "now": "\"follow\"",
+    "mark": ""
+  },
+  {
+    "field": "relation",
+    "released": "\"allocated-to\"",
+    "here": "\"allocated-to\"",
+    "now": "\"allocated-to\"",
+    "mark": ""
+  },
+  {
+    "field": "types",
+    "released": "[\"operational\"]",
+    "here": "[\"operational\"]",
+    "now": "[\"operational\"]",
+    "mark": ""
+  },
+  {
+    "field": "when.object.class",
+    "released": "{\"isA\":[\"asset\"]}",
+    "here": "{\"isA\":[\"asset\"]}",
+    "now": "{\"isA\":[\"asset\"]}",
+    "mark": ""
+  }
+]

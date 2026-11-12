@@ -77,7 +77,7 @@ export interface CmdbReport {
   relations?: CmdbRelation[];
   // Every relation of `type` from `from` is in this report: the store closes an
   // open one it does not name (an operator's recorded one stays).
-  complete?: { type: string; from: CmdbRelation["from"] }[];
+  complete?: { type: string; from: CmdbRelation["from"]; toClass?: string }[];
 }
 
 export interface ReportOutcome {

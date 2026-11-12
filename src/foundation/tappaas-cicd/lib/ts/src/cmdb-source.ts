@@ -58,6 +58,7 @@ export interface Change {
   verb: string; // the verb as typed: "environment add prod"
   objects: CmdbObject[];
   relations?: CmdbRelation[];
+  complete?: NonNullable<CmdbReport["complete"]>; // relations of a type the change names whole
   configDir?: string;
 }
 
@@ -65,7 +66,7 @@ export interface Change {
  *  TAPPAAS_CMDB=off. Returns the report it made (null when none). */
 export function reportChange(c: Change, env: Record<string, string | undefined> = process.env): CmdbReport | null {
   if (c.objects.length === 0) return null;
-  return deliver({ source: c.source, kind: "change", verb: c.verb, ...changeJob(env), objects: c.objects, relations: c.relations }, c.configDir, env);
+  return deliver({ source: c.source, kind: "change", verb: c.verb, ...changeJob(env), objects: c.objects, relations: c.relations, ...(c.complete?.length ? { complete: c.complete } : {}) }, c.configDir, env);
 }
 
 /** Report what a validate or reconcile read anyway, as a side effect (D4):

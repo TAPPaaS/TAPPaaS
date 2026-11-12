@@ -1,0 +1,20 @@
+{
+  "description": "Who a collection or a place is the sum of, and how. A roll-up reads its members as they are before any roll-up, is never a root and never spreads.",
+  "records": [
+    { "id": "core.rollup.site", "kind": "rollup", "description": "The site is the worst of everything on it that is not itself a sum.",
+      "when": { "object": { "class": "site" } }, "members": "all", "fn": "worst" },
+    { "id": "core.rollup.collection", "kind": "rollup", "description": "A cluster, an environment or a group is the worst of its members and what serves it.",
+      "when": { "object": { "class": "collection" } },
+      "members": [ { "relations": ["member-of", "serves"], "walk": "inbound" } ], "fn": "worst" },
+    { "id": "core.rollup.place", "kind": "rollup", "description": "A room or a rack is the worst of what is placed in it and the nodes its assets are allocated to.",
+      "when": { "object": { "class": "place" } },
+      "members": [ { "relations": ["placed-in", "at"], "walk": "inbound", "transitive": true },
+                   { "relations": ["allocated-to"], "walk": "outbound" } ], "fn": "worst" },
+    { "id": "core.rollup.environment-score", "kind": "rollup",
+      "description": "An environment's security is its own risk score, not the worst of its members; the modules that set it are the roots.",
+      "when": { "object": { "class": "environment" }, "condition": { "type": "security" } }, "fn": "own" },
+    { "id": "core.rollup.zone-score", "kind": "rollup",
+      "description": "A zone's security is its own risk score, the sum of its modules': never a root.",
+      "when": { "object": { "class": "zone" }, "condition": { "type": "security" } }, "fn": "own" }
+  ]
+}

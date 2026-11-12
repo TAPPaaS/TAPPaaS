@@ -1,0 +1,50 @@
+{
+  "id": "core.combine.many-providers-degraded",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "depends-on relations count together per dependant: 1 down: the rule's impact; 3 down: a critical",
+  "record": {
+    "id": "core.combine.many-providers-degraded",
+    "kind": "combine",
+    "enabled": false,
+    "description": "Three or more of what a module depends on degraded at once is an outage for it.",
+    "when": {
+      "relation": "depends-on"
+    },
+    "groupBy": "dependant",
+    "steps": [
+      {
+        "down": 1,
+        "as": "rule"
+      },
+      {
+        "down": 3,
+        "as": "critical"
+      }
+    ]
+  },
+  "released": {
+    "id": "core.combine.many-providers-degraded",
+    "kind": "combine",
+    "enabled": false,
+    "description": "Three or more of what a module depends on degraded at once is an outage for it.",
+    "when": {
+      "relation": "depends-on"
+    },
+    "groupBy": "dependant",
+    "steps": [
+      {
+        "down": 1,
+        "as": "rule"
+      },
+      {
+        "down": 3,
+        "as": "critical"
+      }
+    ]
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": null
+}

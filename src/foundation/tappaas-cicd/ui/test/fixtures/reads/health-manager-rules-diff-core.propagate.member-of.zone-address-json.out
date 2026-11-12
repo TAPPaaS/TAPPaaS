@@ -1,0 +1,65 @@
+[
+  {
+    "field": "as",
+    "released": "{\"status\":\"critical\"}",
+    "here": "{\"status\":\"critical\"}",
+    "now": "{\"status\":\"critical\"}",
+    "mark": ""
+  },
+  {
+    "field": "description",
+    "released": "\"An address in a zone that is down is cut off with it. What else is in a zone is the network module's to say.\"",
+    "here": "\"An address in a zone that is down is cut off with it. What else is in a zone is the network module's to say.\"",
+    "now": "\"An address in a zone that is down is cut off with it. What else is in a zone is the network module's to say.\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.propagate.member-of.zone-address\"",
+    "here": "\"core.propagate.member-of.zone-address\"",
+    "now": "\"core.propagate.member-of.zone-address\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"propagate\"",
+    "here": "\"propagate\"",
+    "now": "\"propagate\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.status",
+    "released": "\"critical\"",
+    "here": "\"critical\"",
+    "now": "\"critical\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.type",
+    "released": "\"operational\"",
+    "here": "\"operational\"",
+    "now": "\"operational\"",
+    "mark": ""
+  },
+  {
+    "field": "when.dependant.class",
+    "released": "{\"isA\":[\"address\"]}",
+    "here": "{\"isA\":[\"address\"]}",
+    "now": "{\"isA\":[\"address\"]}",
+    "mark": ""
+  },
+  {
+    "field": "when.provider.class",
+    "released": "{\"isA\":[\"zone\"]}",
+    "here": "{\"isA\":[\"zone\"]}",
+    "now": "{\"isA\":[\"zone\"]}",
+    "mark": ""
+  },
+  {
+    "field": "when.relation",
+    "released": "\"member-of\"",
+    "here": "\"member-of\"",
+    "now": "\"member-of\"",
+    "mark": ""
+  }
+]

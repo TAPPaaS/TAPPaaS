@@ -1,0 +1,35 @@
+{
+  "object": {
+    "id": "a22b6d04-ee84-4197-a2e4-4a126b256fc9",
+    "class": "vm",
+    "name": "test-deb-n3noha"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "critical",
+      "reason": "sweep-missing",
+      "how": "root",
+      "impacts": 0
+    },
+    {
+      "type": "capacity",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "maintenance",
+      "status": "warning",
+      "reason": "reboot-pending",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

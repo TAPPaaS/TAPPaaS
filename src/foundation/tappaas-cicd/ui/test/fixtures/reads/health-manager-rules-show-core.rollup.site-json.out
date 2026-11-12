@@ -1,0 +1,34 @@
+{
+  "id": "core.rollup.site",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "a site is the worst of everything that is not a sum",
+  "record": {
+    "id": "core.rollup.site",
+    "kind": "rollup",
+    "description": "The site is the worst of everything on it that is not itself a sum.",
+    "when": {
+      "object": {
+        "class": "site"
+      }
+    },
+    "members": "all",
+    "fn": "worst"
+  },
+  "released": {
+    "id": "core.rollup.site",
+    "kind": "rollup",
+    "description": "The site is the worst of everything on it that is not itself a sum.",
+    "when": {
+      "object": {
+        "class": "site"
+      }
+    },
+    "members": "all",
+    "fn": "worst"
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 32,
+  "local": null
+}

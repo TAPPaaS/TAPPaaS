@@ -728,6 +728,7 @@ export interface HealthIssue {
   acknowledged: boolean;
   maintenance: boolean;
   flapping: boolean;
+  quiet?: string; // the health rule that quieted it
 }
 
 export interface HealthView {
@@ -886,6 +887,63 @@ export interface HealthCondition extends HealthIssue {
   lastChecked: string | null;
   ack: { by?: string; note?: string; until?: string | null; sticky?: boolean } | null;
   window: { until?: string | null; note?: string } | null;
+  quieted?: { rule: string; since?: string; via?: string[] };
+  raw?: { status: HealthStatus; since?: string; rule: string };
+  rule?: string;
+}
+
+/** health-manager rules list --json: one installed rule. */
+export interface HealthRule {
+  id: string;
+  kind: "classify" | "propagate" | "combine" | "explain" | "follow" | "rollup" | "notify";
+  description?: string;
+  when: Record<string, unknown>;
+  enabled?: boolean;
+  overrides?: string[];
+  origin: string;
+  sentence: string;
+  state: string;
+  decidesNow?: number;
+  [outcome: string]: unknown;
+}
+
+export interface HealthRules {
+  records: HealthRule[];
+  scenarios: { id: string; description: string; retired?: { by: string; at: string; note: string }; upstream?: string }[];
+  installed: boolean;
+}
+
+/** health-manager rules show --json and diff --json. */
+export interface HealthRuleDetail {
+  show: {
+    id: string;
+    origin: string;
+    state: string;
+    sentence: string;
+    record: HealthRule | null;
+    released: HealthRule | null;
+    overrides: string[];
+    overriddenBy: string[];
+    decidesNow?: number;
+    local: { local?: string; by?: string; at?: string; note?: string; upstream?: string; held?: { why: string; detail: string } } | null;
+  };
+  diff: { field: string; released: string | null; here: string | null; now: string | null; mark: "here" | "upstream" | "both" | "" }[];
+}
+
+/** health-manager rules explain <ci> --json. */
+export interface HealthWhy {
+  object: { id: string; class: string; name: string };
+  conditions: {
+    type: string;
+    status: HealthStatus;
+    reason: string;
+    how: "root" | "derived" | "covered" | "impact" | "follows" | "roll-up" | "ok";
+    rootCause?: string;
+    rule?: string;
+    ruleText?: string;
+    impacts?: number;
+    path?: { from: string; to: string; relation?: string; status: string; type: string; rule: string; lost: { id: string; by: string; why: string }[] }[];
+  }[];
 }
 
 export interface HealthObject {

@@ -1,0 +1,52 @@
+{
+  "id": "core.propagate.member-of.group-down",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "a critical operational failure on a group crosses member-of to an user as a critical impact",
+  "record": {
+    "id": "core.propagate.member-of.group-down",
+    "kind": "propagate",
+    "description": "A user in a group that is down is cut off with it.",
+    "when": {
+      "relation": "member-of",
+      "provider": {
+        "class": "group"
+      },
+      "dependant": {
+        "class": "user"
+      },
+      "condition": {
+        "type": "operational",
+        "status": "critical"
+      }
+    },
+    "as": {
+      "status": "critical"
+    }
+  },
+  "released": {
+    "id": "core.propagate.member-of.group-down",
+    "kind": "propagate",
+    "description": "A user in a group that is down is cut off with it.",
+    "when": {
+      "relation": "member-of",
+      "provider": {
+        "class": "group"
+      },
+      "dependant": {
+        "class": "user"
+      },
+      "condition": {
+        "type": "operational",
+        "status": "critical"
+      }
+    },
+    "as": {
+      "status": "critical"
+    }
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": null
+}

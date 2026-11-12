@@ -54,7 +54,8 @@ build() { # build <existing-registry-json>
                 name, kind, module: "tappaas-cicd", repository: $repo,
                 source: ($dir + "/" + .path), language, package,
                 manifest: (.manifest // null), aliases: (.aliases // []), plugsInto: (.plugsInto // []),
-                cmdbSource: (.cmdbSource // false), instances: [] } ]
+                cmdbSource: (.cmdbSource // false), instances: [] }
+                + (if .reports then { reports: .reports, reportsFor: (.reportsFor // "tappaas-cicd") } else {} end) ]
             + [ ($old.components // [])[] | select(.module != "tappaas-cicd") ]
           ) }'
 }

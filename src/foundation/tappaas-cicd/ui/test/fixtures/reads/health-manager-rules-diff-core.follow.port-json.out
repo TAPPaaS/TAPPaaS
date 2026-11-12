@@ -1,0 +1,44 @@
+[
+  {
+    "field": "description",
+    "released": "\"A port nothing judges takes its device's colour.\"",
+    "here": "\"A port nothing judges takes its device's colour.\"",
+    "now": "\"A port nothing judges takes its device's colour.\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.follow.port\"",
+    "here": "\"core.follow.port\"",
+    "now": "\"core.follow.port\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"follow\"",
+    "here": "\"follow\"",
+    "now": "\"follow\"",
+    "mark": ""
+  },
+  {
+    "field": "relation",
+    "released": "\"part-of\"",
+    "here": "\"part-of\"",
+    "now": "\"part-of\"",
+    "mark": ""
+  },
+  {
+    "field": "types",
+    "released": "[\"operational\"]",
+    "here": "[\"operational\"]",
+    "now": "[\"operational\"]",
+    "mark": ""
+  },
+  {
+    "field": "when.object.class",
+    "released": "{\"isA\":[\"port\"]}",
+    "here": "{\"isA\":[\"port\"]}",
+    "now": "{\"isA\":[\"port\"]}",
+    "mark": ""
+  }
+]

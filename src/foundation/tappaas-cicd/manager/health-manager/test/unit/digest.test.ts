@@ -88,5 +88,17 @@ check(readSeen(dir) === null, "no record: null");
 writeSeen(dir, { at: AT, keys: ["k"] });
 check(readSeen(dir)?.keys[0] === "k", "the record reads back");
 
+// The health rules: told once each, recorded silently the first time.
+{
+  const r0 = buildDigest([], null, null, null, { records: { "core.a": "h1", "core.b": "h2" }, pending: [], held: [] });
+  check(!r0.body.includes("HEALTH RULES") && r0.keys.includes("rule:core.a@h1"), "the first digest that knows the rules records them, telling nothing");
+  const seen = { at: "2026-11-12T06:00:00.000Z", keys: r0.keys };
+  const r1 = buildDigest([], null, seen, null, { records: { "core.a": "h9", "site.c": "h3" }, pending: ["core.a"], held: ["mod.x"] });
+  check(r1.body.includes("HEALTH RULES") && r1.body.includes("changed: core.a") && r1.body.includes("added: site.c") && r1.body.includes("removed or off: core.b"), "a change, an addition and a removal are told under their own heading");
+  check(r1.body.includes("pending (edited here, changed upstream): core.a") && r1.body.includes("held: mod.x") && r1.word === "STATUS", "…pending and held rules once, and none of it makes an ALERT");
+  const r2 = buildDigest([], null, { at: "2026-11-13T06:00:00.000Z", keys: r1.keys }, null, { records: { "core.a": "h9", "site.c": "h3" }, pending: ["core.a"], held: ["mod.x"] });
+  check(!r2.body.includes("HEALTH RULES") && !r2.body.includes("CLEARED"), "the next day: nothing repeated, nothing cleared");
+}
+
 console.log(`\n── ${pass} passed, ${fail} failed ──`);
 process.exit(fail ? 1 : 0);

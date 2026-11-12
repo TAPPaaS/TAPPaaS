@@ -15,7 +15,7 @@
 //                             conditions; exit 1 on one that counts, ADR-041 D2)
 //   health-manager assess [--only <ci>] [--json] [--dry-run] [--timing]
 //                            (writes the conditions; the only writer, ADR-041)
-//   health-manager rules list|check [--file F]
+//   health-manager rules list|check|explain|simulate
 //   health-manager update-os <name> <vmid> <node>        (special action; shells
 //                            out to update-os.sh — see the update-os case)
 //   health-manager reboot <module>                       (special action; the
@@ -36,7 +36,7 @@
 //
 // Exit codes: ok=0, error / failed-health-gate = 1.
 
-import { spawnGuarded } from "../../../lib/ts/src/exec";
+import { simulating, spawnGuarded } from "../../../lib/ts/src/exec";
 import { readFileSync, readdirSync } from "fs";
 import { hostname } from "os";
 import { join } from "path";
@@ -66,7 +66,10 @@ import { CmdbItem, CmdbRel, SOURCE, SiteIndex } from "./assess-model";
 import { buildBaselineReport } from "./baseline-ci";
 import { assessmentOf, readValidate } from "./assess-validate";
 import { readLastSweep } from "./cmdbsweep";
-import { cmdRules, readRules } from "./rules";
+import { RulesDoc, cmdRules, readRules } from "./rules";
+import { moduleOfLocation, moduleSourceOf } from "../../../lib/ts/src/instance";
+import { cmdRulesWrite } from "./rules-verbs";
+import { RuleStore, healthDir, reportedClasses, siteRecords } from "./rulestore";
 import { readWindows } from "./windows";
 import { cmdScore } from "./score-verb";
 import { cmdAccept, cmdCve, cmdUnaccept } from "./cve-verb";
@@ -252,12 +255,56 @@ export const HELP: HelpSpec = {
         "stands until the source that raised it has looked again.",
     },
     {
-      usage: "rules list|check [--file F] [--json]", effect: "read",
+      usage: "rules list|show|diff|check|explain|simulate [<target>] [--kind K] [--origin O] [--state S] [--file F] [--fail O[:T[:S]]]... [--with F] [--without ID]... [--diff] [--json|--markdown]", effect: "read",
       options: [
-        ["--file F", "check: this candidate file instead of the rules in use."],
-        ["--json", "Print the rules, or the problems."],
+        ["--kind K", "list: only records of this kind (classify, propagate, combine, explain, follow, rollup, notify)."],
+        ["--origin O", "list: only records released by core, a module, or the site; check --file: the module the file is of."],
+        ["--state S", "list: only rules edited here, pending a decision, held, disabled or deleted."],
+        ["--file F", "check: this candidate file with the rules in use."],
+        ["--fail O[:T[:S]]", "simulate: fail this object (operational critical unless a type and status are given); repeatable."],
+        ["--with F", "simulate: add the records of this file, replacing any of the same id."],
+        ["--without ID", "simulate: take this record out; repeatable."],
+        ["--diff", "simulate: print what changes from now: roots that appear or go, objects whose colour changes."],
+        ["--json", "Print the records, the problems, the explanation or the result as JSON."],
+        ["--markdown", "list: the records by kind, one line each, as the rule language's README shows them."],
       ],
-      details: "The correlation rules of metamodel/health-rules.json. check exits 1 on a rule it cannot place.",
+      details: "The health records that decide what a finding becomes, how a failure spreads, what explains what, who follows whom, how collections sum up and how a root cause is told; one sentence each. show <id> and diff <id> one rule: its state, what it decides now, and edited here against released. check refuses a record it cannot place, two records that decide one case differently, and a set under which a contract scenario no longer holds, and exits 1. explain <object> shows how each of its conditions came about, hop by hop, with the record that decided it. simulate runs the derivation on the site as it is with extra failures or changed records. None writes.",
+    },
+    {
+      usage: "rules scenario list [--json]", effect: "read",
+      options: [["--json", "Print the contract scenarios and their state as JSON."]],
+      details: "The contract scenarios shipped beside the rules, and those this site retired.",
+    },
+    {
+      usage: "rules add|edit|enable|disable|delete|restore|take|keep|accept [<target>] [--set path=value]... [--unset path]... [--file F] [--field F] [--origin O] [--note N] [--apply] [--force]", effect: { apply: "--apply" },
+      options: [
+        ["--set path=value", "edit: set a field of the record (as.status=warning, when.dependant.zone=dmz); repeatable."],
+        ["--unset path", "edit: remove a field; repeatable."],
+        ["--file F", "add: the site's own records; edit: the record whole."],
+        ["--field F", "take: one field from the release, not the whole record."],
+        ["--origin O", "enable/disable: every rule of a module, as local state."],
+        ["--note N", "Why: kept with the rule's local state."],
+        ["--apply", "Write it; without, print what would change (the records, the check, the scenarios, and on the site as it is: roots, colours, what goes quiet, how roots are told)."],
+        ["--force", "Write it though a contract scenario no longer holds; the rule's note records it."],
+      ],
+      details: "Change what this site runs, kept in config/health/: an update never changes a rule edited here and never brings back one deleted here. delete is undone by restore; take takes the release (or one field), keep keeps the edit and marks it reviewed, accept runs a held rule. An apply that changes the active set recalculates health at once.",
+    },
+    {
+      usage: "rules merge [--origin O]... [--apply]", effect: { apply: "--apply" },
+      options: [
+        ["--origin O", "Only this origin: core, or a module; repeatable."],
+        ["--apply", "Write it; without, print what the merge would do."],
+      ],
+      details: "Merge the released rules into what this site runs, per rule: what the update and module install, update and delete run.",
+    },
+    {
+      usage: "rules scenario retire|restore <id> [--note N] [--apply] [--force]", effect: { apply: "--apply" },
+      options: [
+        ["--note N", "retire: why this site no longer holds to it (needed)."],
+        ["--apply", "Write it; without, print what would change."],
+        ["--force", "Write it though another contract scenario no longer holds."],
+      ],
+      details: "Retire a contract scenario this site no longer holds to, or take it back: local state an update keeps.",
     },
     // ── end ADR-041 assess ──
     {
@@ -388,6 +435,30 @@ const gates = (opts: Opts, client: ClusterClient, timed?: Timer): HealthReport =
   });
 
 // ── ADR-041 D2, D3: assess, rules, validate as a read ─────────────────
+
+/** The health records this site runs: config/health/rules/ once a merge has
+ *  installed them, else the core records as released (before the first merge),
+ *  with what a reader needs of the metamodel from the CMDB. */
+function rulesModel(configDir: string): RulesDoc {
+  const meta = readRules();
+  const s = siteRecords(configDir);
+  if (s.problem) throw new Error(`no health records: ${s.problem}`);
+  return { relations: meta.relations, ancestors: meta.ancestors, fields: meta.fields, records: s.records, scenarios: s.scenarios, ...(s.lastMerge ? { lastMerge: s.lastMerge } : {}) };
+}
+
+/** Health under the rules now in force, at once: assess, then emit, as the
+ *  alert receiver runs them. */
+function recalculate(): void {
+  // A simulated run (the console's simulate mode, a scratch test) changes no health.
+  if (simulating()) return info("rules: simulated — health is not recalculated");
+  for (const verb of ["assess", "emit"]) {
+    const r = spawnGuarded(process.execPath, [process.argv[1], verb], { encoding: "utf8", stdio: "inherit", timeout: 600_000 });
+    if (r.error || r.status !== 0) {
+      warn(`rules: health-manager ${verb} did not finish (${r.error?.message ?? `exit ${r.status}`}); the next run picks the new rules up`);
+      return;
+    }
+  }
+}
 const cmdbOff = (): boolean => (process.env.TAPPAAS_CMDB ?? "").toLowerCase() === "off";
 
 // A report that is not worth keeping: conditions are now, and a spooled one would
@@ -413,7 +484,7 @@ function assessIO(opts: Opts, client: ClusterClient, timed?: Timer): AssessIO {
     objects: () => cmdbQuery({ class: "object", limit: 100000 }) as unknown as CmdbItem[],
     ended: () => (cmdbQuery({ class: "ci", includeEnded: true, limit: 100000 }) as unknown as (CmdbItem & { ended?: string | null })[]).filter((o) => o.ended),
     relations: () => cmdbRelations({}) as unknown as CmdbRel[],
-    rules: readRules,
+    rules: () => rulesModel(opts.configDir),
     sweep: readLastSweep,
     gates: () => gates(opts, client, timed).checks,
     alerts: () => {
@@ -427,7 +498,6 @@ function assessIO(opts: Opts, client: ClusterClient, timed?: Timer): AssessIO {
       return ep ? curlReader(ep) : null;
     },
     perfDeclared: () => perfDeclared(opts.configDir),
-    modules: () => new Set(instanceNames(opts.configDir)),
     horizonDays: () => horizonOf(readModuleJson(join(opts.configDir, "site.json"))),
     windows: () => readWindows(),
     write: writeAssessment,
@@ -449,7 +519,9 @@ function perfDeclared(configDir: string): Declared[] {
     const cfg = readModuleJson(join(configDir, `${m}.json`));
     const p = (cfg?.performance ?? null) as { thresholds?: unknown } | null;
     if (!cfg || (cfg.source ?? "official") !== "official" || !p || !Array.isArray(p.thresholds)) continue;
-    out.push({ module: m, thresholds: p.thresholds as Declared["thresholds"] });
+    // By the module's catalog name: what a CI's module attribute says.
+    const src = moduleSourceOf(cfg);
+    out.push({ module: src ? moduleOfLocation(src) : m, thresholds: p.thresholds as Declared["thresholds"] });
   }
   return out;
 }
@@ -967,7 +1039,15 @@ export function run(argv: string[], client: ClusterClient): number {
       case "assess":
         return cmdAssess(opts, client);
       case "rules":
-        return cmdRules(opts.rest, readRules(), info, () => cmdbRelations({}) as unknown as CmdbRel[]);
+      {
+        const snapshot = (): { objects: CmdbItem[]; relations: CmdbRel[] } => ({ objects: (cmdbQuery({ class: "object", limit: 100000 }) as unknown as CmdbItem[]).filter((o) => o.attributes.placeholder !== true), relations: cmdbRelations({}) as unknown as CmdbRel[] });
+        const meta = readRules();
+        const reachHold = (readModuleJson(join(opts.configDir, "site.json"))?.health as { rules?: { reachHold?: number } } | undefined)?.rules?.reachHold;
+        const wrote = cmdRulesWrite(opts.rest, { configDir: opts.configDir, meta, snapshot, now: () => new Date().toISOString(), recalc: recalculate, ...(typeof reachHold === "number" ? { reachHold } : {}) }, info);
+        if (wrote !== null) return wrote;
+        const store = RuleStore.read(healthDir(opts.configDir));
+        return cmdRules(opts.rest, rulesModel(opts.configDir), info, () => cmdbRelations({}) as unknown as CmdbRel[], { snapshot, store, retired: store.retired(), reports: reportedClasses(opts.configDir) });
+      }
       // end ADR-041 assess verbs
       default:
         usage();

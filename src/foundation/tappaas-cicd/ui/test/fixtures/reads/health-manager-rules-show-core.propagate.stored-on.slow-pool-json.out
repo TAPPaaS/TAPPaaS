@@ -1,0 +1,52 @@
+{
+  "id": "core.propagate.stored-on.slow-pool",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "a warning or critical performance failure on a storage-pool crosses stored-on to its dependant as a warning impact",
+  "record": {
+    "id": "core.propagate.stored-on.slow-pool",
+    "kind": "propagate",
+    "description": "A slow pool slows what is stored on it; it is not down, so the impact stays a warning.",
+    "when": {
+      "relation": "stored-on",
+      "provider": {
+        "class": "storage-pool"
+      },
+      "condition": {
+        "type": "performance",
+        "status": [
+          "warning",
+          "critical"
+        ]
+      }
+    },
+    "as": {
+      "status": "warning"
+    }
+  },
+  "released": {
+    "id": "core.propagate.stored-on.slow-pool",
+    "kind": "propagate",
+    "description": "A slow pool slows what is stored on it; it is not down, so the impact stays a warning.",
+    "when": {
+      "relation": "stored-on",
+      "provider": {
+        "class": "storage-pool"
+      },
+      "condition": {
+        "type": "performance",
+        "status": [
+          "warning",
+          "critical"
+        ]
+      }
+    },
+    "as": {
+      "status": "warning"
+    }
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": null
+}

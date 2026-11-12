@@ -1,0 +1,51 @@
+[
+  {
+    "field": "description",
+    "released": "\"A disk nothing judges takes its asset's colour.\"",
+    "here": "\"A disk nothing judges takes its asset's colour.\"",
+    "now": "\"A disk nothing judges takes its asset's colour.\"",
+    "mark": ""
+  },
+  {
+    "field": "enabled",
+    "released": null,
+    "here": "false",
+    "now": null,
+    "mark": "here"
+  },
+  {
+    "field": "id",
+    "released": "\"core.follow.disk\"",
+    "here": "\"core.follow.disk\"",
+    "now": "\"core.follow.disk\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"follow\"",
+    "here": "\"follow\"",
+    "now": "\"follow\"",
+    "mark": ""
+  },
+  {
+    "field": "relation",
+    "released": "\"part-of\"",
+    "here": "\"part-of\"",
+    "now": "\"part-of\"",
+    "mark": ""
+  },
+  {
+    "field": "types",
+    "released": "[\"operational\"]",
+    "here": "[\"operational\"]",
+    "now": "[\"operational\"]",
+    "mark": ""
+  },
+  {
+    "field": "when.object.class",
+    "released": "{\"isA\":[\"disk\"]}",
+    "here": "{\"isA\":[\"disk\"]}",
+    "now": "{\"isA\":[\"disk\"]}",
+    "mark": ""
+  }
+]

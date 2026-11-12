@@ -1,0 +1,10 @@
+{
+  "description": "The network module's health records: how a zone's failure reaches what is in it. network-manager reports the zones.",
+  "records": [
+    { "id": "network.propagate.zone-down", "kind": "propagate",
+      "description": "A zone that is down cuts off every node and application in it.",
+      "when": { "relation": "member-of", "provider": { "class": "zone" }, "dependant": { "class": ["node", "app"] },
+                "condition": { "type": "operational", "status": "critical" } },
+      "as": { "status": "critical" } }
+  ]
+}

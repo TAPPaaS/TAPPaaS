@@ -1,0 +1,38 @@
+{
+  "id": "core.follow.port",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "a port nothing judges takes the operational colour of what it is part-of",
+  "record": {
+    "id": "core.follow.port",
+    "kind": "follow",
+    "description": "A port nothing judges takes its device's colour.",
+    "when": {
+      "object": {
+        "class": "port"
+      }
+    },
+    "relation": "part-of",
+    "types": [
+      "operational"
+    ]
+  },
+  "released": {
+    "id": "core.follow.port",
+    "kind": "follow",
+    "description": "A port nothing judges takes its device's colour.",
+    "when": {
+      "object": {
+        "class": "port"
+      }
+    },
+    "relation": "part-of",
+    "types": [
+      "operational"
+    ]
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": null
+}

@@ -1,0 +1,60 @@
+{
+  "object": {
+    "id": "b090efc7-4700-40c0-b91a-d6b30d1c6369",
+    "class": "site",
+    "name": "rossen"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "critical",
+      "reason": "guest-stopped",
+      "how": "root",
+      "impacts": 0
+    },
+    {
+      "type": "capacity",
+      "status": "critical",
+      "reason": "disk-full",
+      "how": "root",
+      "impacts": 0
+    },
+    {
+      "type": "maintenance",
+      "status": "warning",
+      "reason": "reboot-pending",
+      "how": "root",
+      "impacts": 0
+    },
+    {
+      "type": "backup",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "critical",
+      "reason": "roll-up",
+      "how": "roll-up",
+      "rule": "core.rollup.site",
+      "ruleText": "a site is the worst of everything that is not a sum"
+    },
+    {
+      "type": "security",
+      "status": "warning",
+      "reason": "roll-up",
+      "how": "roll-up",
+      "rule": "core.rollup.site",
+      "ruleText": "a site is the worst of everything that is not a sum"
+    },
+    {
+      "type": "performance",
+      "status": "warning",
+      "reason": "roll-up",
+      "how": "roll-up",
+      "rule": "core.rollup.site",
+      "ruleText": "a site is the worst of everything that is not a sum"
+    }
+  ]
+}

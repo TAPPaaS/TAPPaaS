@@ -1,0 +1,23 @@
+{
+  "object": {
+    "id": "497776a1-5426-49c6-bf30-0f9f5127a9ff",
+    "class": "zone",
+    "name": "testAllowA"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "warning",
+      "reason": "zone-no-interface",
+      "how": "root",
+      "impacts": 0
+    },
+    {
+      "type": "drift",
+      "status": "critical",
+      "reason": "sweep-missing",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

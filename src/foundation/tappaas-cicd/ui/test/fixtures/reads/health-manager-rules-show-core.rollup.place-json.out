@@ -1,0 +1,64 @@
+{
+  "id": "core.rollup.place",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "a place is the worst of what is placed-in or at it, all the way, then allocated-to from it",
+  "record": {
+    "id": "core.rollup.place",
+    "kind": "rollup",
+    "description": "A room or a rack is the worst of what is placed in it and the nodes its assets are allocated to.",
+    "when": {
+      "object": {
+        "class": "place"
+      }
+    },
+    "members": [
+      {
+        "relations": [
+          "placed-in",
+          "at"
+        ],
+        "walk": "inbound",
+        "transitive": true
+      },
+      {
+        "relations": [
+          "allocated-to"
+        ],
+        "walk": "outbound"
+      }
+    ],
+    "fn": "worst"
+  },
+  "released": {
+    "id": "core.rollup.place",
+    "kind": "rollup",
+    "description": "A room or a rack is the worst of what is placed in it and the nodes its assets are allocated to.",
+    "when": {
+      "object": {
+        "class": "place"
+      }
+    },
+    "members": [
+      {
+        "relations": [
+          "placed-in",
+          "at"
+        ],
+        "walk": "inbound",
+        "transitive": true
+      },
+      {
+        "relations": [
+          "allocated-to"
+        ],
+        "walk": "outbound"
+      }
+    ],
+    "fn": "worst"
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 51,
+  "local": null
+}

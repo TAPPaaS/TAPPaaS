@@ -8,7 +8,7 @@ import { transitions } from "./emit";
 
 
 const flags = (c: Condition, now: Date): string =>
-  [c.acknowledged ? (c.acknowledged.via ? "ack(root)" : "ack") : "", c.maintenance && silenced(c, now) ? "maintenance" : "", c.flapping ? "flapping" : "", c.derived ? "derived" : ""]
+  [c.acknowledged ? (c.acknowledged.via ? "ack(root)" : "ack") : "", c.maintenance && silenced(c, now) ? "maintenance" : "", c.quieted ? `quiet by ${c.quieted.rule}${c.quieted.via ? " (root)" : ""}` : "", c.raw ? `rated ${c.status} by ${c.raw.rule}, source ${c.raw.status}` : "", c.flapping ? "flapping" : "", c.derived ? "derived" : ""]
     .filter(Boolean)
     .join(",");
 

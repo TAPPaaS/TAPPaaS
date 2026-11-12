@@ -431,6 +431,13 @@ instance — refined by the live cluster where it answers — as one observation
 `dependsOn` that an installed instance provides. An archived instance is not
 reported.
 
+Every CI of an instance (its node or app, its services, the managers and
+controllers it brings) carries `module`: the catalog name of the module it is an
+instance of (`identity` for the instance `identity-test`). What a health rule
+selects by module reads this. A node and an app are `member-of` the zone of their
+record (`zone0`); the report names each one's zone whole, so a changed or dropped
+`zone0` ends the old membership and leaves the node's cluster and environment alone.
+
 Changes: `add`, `add-stack`, `adopt`, `modify`/`update`, `delete`, `migrate`,
 `suspend`/`resume` report every instance whose config/<name>.json they wrote
 (an archived or removed one ends), after they succeed. `update` and `modify`
@@ -448,6 +455,17 @@ the CMDB cannot take is spooled in `config/.cmdb-spool/` (lib/ts `cmdb.ts`)
 and never fails the verb; `TAPPAAS_CMDB=off` turns reporting off (the tests
 do). The tests check every payload against cmdb-controller's metamodel
 (`lib/ts/test/cmdb-check.ts`).
+
+## Health rules
+
+A module may ship `<module>-health.json` beside its JSON (the module template's
+README says when and how). `install-module.sh` refuses one that does not hold
+(`health-manager rules check --file … --origin <module>`). After a successful
+install, update or delete, module-manager runs `health-manager rules merge
+--origin <module> --apply`: the module's released rules are merged into what the
+site runs, a rule the operator edited or deleted is kept as they left it, and once
+no instance of the module is left its released rules go. A merge that does not
+hold is told as drift on the site and never fails the verb.
 
 ## Underlying scripts
 

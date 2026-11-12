@@ -1,0 +1,36 @@
+{
+  "id": "core.notify.critical-root",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "a root cause with a critical condition is told at once",
+  "record": {
+    "id": "core.notify.critical-root",
+    "kind": "notify",
+    "description": "A critical root cause is mailed at once.",
+    "when": {
+      "condition": {
+        "status": "critical"
+      }
+    },
+    "notify": "at-once"
+  },
+  "released": {
+    "id": "core.notify.critical-root",
+    "kind": "notify",
+    "description": "A critical root cause is mailed at once.",
+    "when": {
+      "condition": {
+        "status": "critical"
+      }
+    },
+    "notify": "at-once"
+  },
+  "overrides": [],
+  "overriddenBy": [
+    "core.notify.performance",
+    "core.notify.cve-level",
+    "core.notify.site-own"
+  ],
+  "decidesNow": 0,
+  "local": null
+}

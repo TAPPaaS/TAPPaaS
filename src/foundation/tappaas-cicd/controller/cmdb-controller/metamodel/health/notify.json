@@ -1,0 +1,23 @@
+{
+  "description": "How a root cause is told: at once (a notice, one ALERT and one RESOLVED, and a line in the daily digest), in the digest only, or not at all. Only a root is ever told; never a symptom, nor one acknowledged, in maintenance or quiet.",
+  "records": [
+    { "id": "core.notify.root", "kind": "notify",
+      "description": "A root cause is in the daily digest.",
+      "when": { "condition": { "status": ["warning", "critical"] } }, "notify": "digest" },
+    { "id": "core.notify.critical-root", "kind": "notify",
+      "description": "A critical root cause is mailed at once.",
+      "when": { "condition": { "status": "critical" } }, "notify": "at-once" },
+    { "id": "core.notify.performance", "kind": "notify",
+      "description": "Performance is trend, not outage: the digest.",
+      "when": { "condition": { "type": "performance" } }, "notify": "digest",
+      "overrides": ["core.notify.critical-root"] },
+    { "id": "core.notify.cve-level", "kind": "notify",
+      "description": "A module's CVE level, and the NixOS baseline's, is mailed when it rises, by its own event.",
+      "when": { "condition": { "type": "security", "reason": ["cve-medium", "cve-high", "cve-critical", "cve-baseline"] } }, "notify": "digest",
+      "overrides": ["core.notify.critical-root"] },
+    { "id": "core.notify.site-own", "kind": "notify",
+      "description": "What is about the site, a zone or an environment as a whole is told in the digest.",
+      "when": { "object": { "class": ["site", "zone", "environment"] } }, "notify": "digest",
+      "overrides": ["core.notify.critical-root"] }
+  ]
+}

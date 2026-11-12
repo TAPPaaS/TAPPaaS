@@ -1,0 +1,10 @@
+{
+  "description": "An example of a module's health records. A module needs this file only when its failures reach other modules, or others' reach it, differently from the standard rules. Delete it otherwise.",
+  "records": [
+    { "id": "template.propagate.cache-down", "kind": "propagate",
+      "description": "Without its cache the module still answers, only slower: a cache that is down degrades it, it does not take it down.",
+      "when": { "relation": "depends-on", "provider": { "name": "redis" }, "dependant": { "module": "template" },
+                "condition": { "type": "operational", "status": "critical" } },
+      "as": { "status": "warning" } }
+  ]
+}

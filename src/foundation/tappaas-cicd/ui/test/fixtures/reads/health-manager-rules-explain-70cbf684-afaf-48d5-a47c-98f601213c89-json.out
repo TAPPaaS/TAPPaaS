@@ -1,0 +1,62 @@
+{
+  "object": {
+    "id": "70cbf684-afaf-48d5-a47c-98f601213c89",
+    "class": "site",
+    "name": "t"
+  },
+  "conditions": [
+    {
+      "type": "drift",
+      "status": "critical",
+      "reason": "sweep-missing",
+      "how": "root",
+      "impacts": 0
+    },
+    {
+      "type": "backup",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "operational",
+      "status": "warning",
+      "reason": "roll-up",
+      "how": "roll-up",
+      "rule": "core.rollup.site",
+      "ruleText": "a site is the worst of everything that is not a sum"
+    },
+    {
+      "type": "maintenance",
+      "status": "warning",
+      "reason": "roll-up",
+      "how": "roll-up",
+      "rule": "core.rollup.site",
+      "ruleText": "a site is the worst of everything that is not a sum"
+    },
+    {
+      "type": "security",
+      "status": "warning",
+      "reason": "roll-up",
+      "how": "roll-up",
+      "rule": "core.rollup.site",
+      "ruleText": "a site is the worst of everything that is not a sum"
+    },
+    {
+      "type": "capacity",
+      "status": "unknown",
+      "reason": "roll-up",
+      "how": "roll-up",
+      "rule": "core.rollup.site",
+      "ruleText": "a site is the worst of everything that is not a sum"
+    },
+    {
+      "type": "performance",
+      "status": "warning",
+      "reason": "roll-up",
+      "how": "roll-up",
+      "rule": "core.rollup.site",
+      "ruleText": "a site is the worst of everything that is not a sum"
+    }
+  ]
+}

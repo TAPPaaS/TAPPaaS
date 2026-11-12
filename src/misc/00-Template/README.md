@@ -214,6 +214,39 @@ is a worked example.
 }
 ```
 
+### myModule-health.json (optional)
+
+TAPPaaS works out which failure is a root cause and what it impacts from
+**health rules**: how a failure travels along the relations between modules, what
+explains what, how a group of relations backs each other up. The standard rules
+cover the common cases (a node down takes its guests down, a service down takes
+down what depends on it), so most modules need no file of their own.
+
+A module ships `<module>-health.json` beside its JSON when its failures reach
+others, or others' reach it, differently: a dependency it can live without, a
+cluster that loses quorum at half its nodes. See [`template-health.json`](./template-health.json)
+and the rule language in [Health Rules](../../foundation/tappaas-cicd/controller/cmdb-controller/metamodel/health/README.md).
+
+- **Anchored at your own end.** Every record names your module on one side:
+  `"module": "<your module>"` on the provider or the dependant (or the object), or a
+  class your module's managers report. You can say how your failures hurt others
+  and how others' failures hurt you, not how a third module's hurt a fourth.
+- **Ids** start with your module's name: `<module>.<kind>.<name>`.
+- **Reach.** At install the rules are tried on the site: the most objects one
+  failure a record matches can impact. An app module's record that reaches more
+  than the site allows (a quarter of its CIs, unless the site says otherwise) is
+  installed held until the operator accepts it. A foundation module's runs, with
+  its reach shown.
+- **Try it first.** `health-manager rules check --file <module>-health.json --origin <module>`
+  checks it; `health-manager rules simulate --fail <object> --with <module>-health.json --diff`
+  shows what it would change on the site as it is now.
+- **What happens on the site.** install, update and delete merge the file into what
+  the site runs. An update never changes or removes a rule the operator edited,
+  and never brings back one they deleted.
+- **Say what each record does** in your module's README, under "Health rules".
+
+Install refuses a file that does not hold.
+
 ### myModule.nix
 
 NixOS configuration file for NixOS-based modules.

@@ -47,6 +47,9 @@ export interface Condition {
   acknowledged?: Acknowledged | null;
   maintenance?: { until?: string | null; note?: string } | null;
   flapping?: boolean;
+  quieted?: { rule: string; since?: string; via?: string[] } | null; // quiet by a health rule: kept, told nowhere
+  raw?: { status: Status; since?: string; rule: string } | null; // re-rated by a health rule: what its source said
+  rule?: string | null; // the health rule that decided a derived condition
 }
 
 // What a page shows of a condition.
@@ -61,6 +64,7 @@ export interface Issue {
   acknowledged: boolean;
   maintenance: boolean;
   flapping: boolean;
+  quiet?: string; // the health rule that quieted it (or its only root)
 }
 
 export interface HealthView {
@@ -182,10 +186,11 @@ export function issueOf(c: Condition, rootsAcked: Set<string>, now: number): Iss
     acknowledged: ownAck || byRoot,
     maintenance: !!c.maintenance && holds(c.maintenance.until, now),
     flapping: c.flapping === true,
+    ...(c.quieted?.rule ? { quiet: c.quieted.rule } : {}),
   };
 }
 
-const silenced = (i: Issue): boolean => i.acknowledged || i.maintenance;
+const silenced = (i: Issue): boolean => i.acknowledged || i.maintenance || !!i.quiet;
 
 // Of two equally bad conditions the object's own comes first, then the impact
 // that explains it; a derived one ("not running", of course) says the least.
@@ -320,8 +325,9 @@ export function buildHealth(i: BuildInput): HealthGraph {
   const nodeOf = new Map(nodes.map((n) => [n.id, n]));
   const impactedBy = new Map<string, string[]>();
   for (const n of nodes) for (const r of n.rootCause) impactedBy.set(r, [...(impactedBy.get(r) ?? []), n.id]);
-  // The site's record is the list; a root only a symptom names counts too.
-  const ids = [...new Set([...recorded.map((r) => r.id).filter((x): x is string => typeof x === "string"), ...impactedBy.keys()])].filter((id) => nodeOf.has(id));
+  // The site's record is the list: health-manager decides the roots under the
+  // rules the site runs, and the console computes none of its own.
+  const ids = [...new Set(recorded.map((r) => r.id).filter((x): x is string => typeof x === "string"))].filter((id) => nodeOf.has(id));
   const roots: HealthRoot[] = ids.map((id) => {
     const n = nodeOf.get(id)!;
     n.isRoot = true;
@@ -931,7 +937,7 @@ export function healthObject(show: CmdbShow, periods: CmdbAttributePeriod[], cha
     label: show.displayName || show.name,
     module: n?.module ?? null,
     view: conditions.length ? viewOf(issues) : NO_CONDITION,
-    conditions: conditions.map((c, i) => ({ ...issues[i], source: c.source ?? null, lastChecked: c.lastChecked ?? null, ack: c.acknowledged ?? null, window: c.maintenance ?? null })),
+    conditions: conditions.map((c, i) => ({ ...issues[i], source: c.source ?? null, lastChecked: c.lastChecked ?? null, ack: c.acknowledged ?? null, window: c.maintenance ?? null, ...(c.quieted ? { quieted: c.quieted } : {}), ...(c.raw ? { raw: c.raw } : {}), ...(c.rule ? { rule: c.rule } : {}) })),
     drift: show.drift ?? null,
     relations: show.relations.map((r) => ({ id: String(r.id), type: r.type, direction: r.direction, other: { ...r.other, status: nodeOf.get(r.other.id)?.status ?? null } })),
     history: conditionHistory(periods),

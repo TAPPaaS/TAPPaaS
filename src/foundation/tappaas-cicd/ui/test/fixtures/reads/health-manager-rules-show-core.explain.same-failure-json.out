@@ -1,0 +1,32 @@
+{
+  "id": "core.explain.same-failure",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "a failure of the same type reaching an object with a condition of its own explains it: derived",
+  "record": {
+    "id": "core.explain.same-failure",
+    "kind": "explain",
+    "description": "A failure that reaches an object explains its own condition of the same type.",
+    "when": {
+      "cause": {
+        "sameType": true
+      }
+    },
+    "effect": "derived"
+  },
+  "released": {
+    "id": "core.explain.same-failure",
+    "kind": "explain",
+    "description": "A failure that reaches an object explains its own condition of the same type.",
+    "when": {
+      "cause": {
+        "sameType": true
+      }
+    },
+    "effect": "derived"
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": null
+}

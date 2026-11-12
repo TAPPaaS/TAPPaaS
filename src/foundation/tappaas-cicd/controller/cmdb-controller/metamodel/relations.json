@@ -54,11 +54,11 @@
       "ends": [["port", "port"], ["port", "ssid"]]
     },
     "member-of": {
-      "description": "A node in a cluster or an environment; a user in a group; an address in a zone.",
+      "description": "A node in a cluster or an environment; a user in a group; an address in a zone; a node or an application in its zone (the zone0 of its record).",
       "tree": "from",
       "dependant": "from", "required": true,
       "cardinality": "n:m",
-      "ends": [["node", "cluster"], ["node", "environment"], ["user", "group"], ["address", "zone"]]
+      "ends": [["node", "cluster"], ["node", "environment"], ["user", "group"], ["address", "zone"], ["node", "zone"], ["app", "zone"]]
     },
     "depends-on": {
       "description": "A node, or an application, depends on a service (the module's dependsOn). An application's dependencies are its own, never its host's.",

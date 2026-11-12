@@ -991,6 +991,33 @@ export class Reads {
 
   // health-manager roots --json; the graph's own list when the verb cannot
   // answer (a site that has not installed it).
+  // The health rules (ADR-049): what the site runs, one rule, and why a CI's
+  // conditions are what they are. Read on demand: health-manager decides, the
+  // console only shows (it computes no root of its own).
+  async healthRules(): Promise<{ records: Record<string, unknown>[]; scenarios: Record<string, unknown>[]; installed: boolean }> {
+    const records = await runJson<Record<string, unknown>[]>(this.cfg.run, "health-manager", ["rules", "list", "--json"], { timeoutMs: 2 * MIN });
+    let scenarios: Record<string, unknown>[] = [];
+    let installed = true;
+    try {
+      scenarios = await runJson<Record<string, unknown>[]>(this.cfg.run, "health-manager", ["rules", "scenario", "list", "--json"], { timeoutMs: MIN });
+    } catch {
+      installed = false; // no merge has run yet: the release's core records run
+    }
+    return { records, scenarios, installed };
+  }
+
+  async healthRule(id: string): Promise<{ show: Record<string, unknown>; diff: Record<string, unknown>[] }> {
+    const [show, diff] = await Promise.all([
+      runJson<Record<string, unknown>>(this.cfg.run, "health-manager", ["rules", "show", id, "--json"], { timeoutMs: 2 * MIN }),
+      runJson<Record<string, unknown>[]>(this.cfg.run, "health-manager", ["rules", "diff", id, "--json"], { timeoutMs: MIN }).catch(() => []),
+    ]);
+    return { show, diff };
+  }
+
+  async healthWhy(id: string): Promise<Record<string, unknown>> {
+    return runJson<Record<string, unknown>>(this.cfg.run, "health-manager", ["rules", "explain", id, "--json"], { timeoutMs: 2 * MIN });
+  }
+
   async healthRoots(): Promise<{ roots: unknown[]; from: "health-manager" | "graph"; error: string | null }> {
     try {
       return { roots: await this.cmdbClient().roots(), from: "health-manager", error: null };

@@ -1,0 +1,35 @@
+{
+  "object": {
+    "id": "0a7d1804-da8c-415e-879c-b077276ae2cd",
+    "class": "storage-pool",
+    "name": "tankc1"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "warning",
+      "reason": "pool-state",
+      "how": "root",
+      "impacts": 0
+    },
+    {
+      "type": "drift",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "capacity",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "performance",
+      "status": "warning",
+      "reason": "threshold",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

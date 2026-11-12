@@ -12,6 +12,7 @@ import { CmdbQuery, cmdbQuery } from "../../../lib/ts/src/cmdb";
 import { CmdbBatch, ipv4In, ipv4Offset } from "../../../lib/ts/src/cmdb-reporter";
 import { ExecResult, captureResult } from "../../../lib/ts/src/exec";
 import { zoneEnvironments } from "./serves";
+import { moduleOfLocation, moduleSourceOf } from "../../../lib/ts/src/instance";
 import { Zone, ZonesDoc } from "./types";
 
 export const SOURCE = "network-manager";
@@ -166,7 +167,20 @@ function zonesOfCidrs(zones: ZonesDoc, cidrs: string[]): string[] {
   return [...out].sort();
 }
 
-/** One proxy route per Caddy handler; its host is a public DNS name. */
+/** The catalog name of the module an instance belongs to (its source
+ *  directory's name), or the instance's name when its config says none. */
+export function catalogModule(configDir: string, instance: string): string {
+  try {
+    const raw = JSON.parse(readFileSync(join(configDir, `${instance}.json`), "utf8")) as Record<string, unknown>;
+    const src = moduleSourceOf(raw);
+    return src ? moduleOfLocation(src) : instance;
+  } catch {
+    return instance;
+  }
+}
+
+/** One proxy route per Caddy handler; its host is a public DNS name. Both
+ *  carry the module the route was declared by. */
 export function putRoutes(b: CmdbBatch, s: NetSources, caddy: CaddyDoc): void {
   const domains = new Map(caddy.domains.map((d) => [d.uuid, d]));
   const acls = new Map(caddy.accessLists.map((a) => [a.uuid, a]));
@@ -175,6 +189,8 @@ export function putRoutes(b: CmdbBatch, s: NetSources, caddy: CaddyDoc): void {
     if (!host) continue;
     const path = h.path ?? "";
     const acl = h.access_list_uuid ? acls.get(h.access_list_uuid) : undefined;
+    const module = routeModule(h.description ?? domains.get(h.domain_uuid)?.description);
+    const catalog = module ? catalogModule(s.configDir, module) : undefined;
     const ref = b.put("proxy-route", `${host}${path}`, {
       host,
       path: path || undefined,
@@ -182,9 +198,9 @@ export function putRoutes(b: CmdbBatch, s: NetSources, caddy: CaddyDoc): void {
       gate: h.forward_auth === true,
       allowedZones: acl && !acl.invert ? zonesOfCidrs(s.zones, acl.client_ips ?? []) : undefined,
       description: h.description || undefined,
+      module: catalog,
     });
-    b.put("dns-name", host, { fqdn: host, public: true });
-    const module = routeModule(h.description ?? domains.get(h.domain_uuid)?.description);
+    b.put("dns-name", host, { fqdn: host, public: true, module: catalog });
     if (module) for (const p of provides(s.configDir, module)) b.relate("serves", ref, { class: "service", name: `${module}:${p}` });
   }
 }

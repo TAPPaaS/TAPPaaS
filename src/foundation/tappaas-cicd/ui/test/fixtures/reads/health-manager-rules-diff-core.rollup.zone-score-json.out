@@ -1,0 +1,44 @@
+[
+  {
+    "field": "description",
+    "released": "\"A zone's security is its own risk score, the sum of its modules': never a root.\"",
+    "here": "\"A zone's security is its own risk score, the sum of its modules': never a root.\"",
+    "now": "\"A zone's security is its own risk score, the sum of its modules': never a root.\"",
+    "mark": ""
+  },
+  {
+    "field": "fn",
+    "released": "\"own\"",
+    "here": "\"own\"",
+    "now": "\"own\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.rollup.zone-score\"",
+    "here": "\"core.rollup.zone-score\"",
+    "now": "\"core.rollup.zone-score\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"rollup\"",
+    "here": "\"rollup\"",
+    "now": "\"rollup\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.type",
+    "released": "\"security\"",
+    "here": "\"security\"",
+    "now": "\"security\"",
+    "mark": ""
+  },
+  {
+    "field": "when.object.class",
+    "released": "{\"isA\":[\"zone\"]}",
+    "here": "{\"isA\":[\"zone\"]}",
+    "now": "{\"isA\":[\"zone\"]}",
+    "mark": ""
+  }
+]

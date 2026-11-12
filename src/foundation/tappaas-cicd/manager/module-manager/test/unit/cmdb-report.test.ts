@@ -51,9 +51,10 @@ function fixture(): string {
   w("site", { name: "hrossen" });
   w("tappaas1", { kind: "machine", moduleSource: src("pvehost", ["nfs"]), version: "0.3.0", address: "tappaas1.mgmt.internal", environment: "mgmt", stack: "foundation" });
   w("cluster", { kind: "application", moduleSource: src("cluster", ["vm", "ha"]), version: "0.8.0", stack: "foundation", dependsOn: ["cluster:ha"] });
-  w("backup", { kind: "application", moduleSource: src("backup", ["vm"]), version: "0.4.0", node: "tappaas1", dependsOn: ["identity:sso"] });
+  w("backup", { kind: "application", moduleSource: src("backup", ["vm"]), version: "0.4.0", node: "tappaas1", dependsOn: ["identity:sso"], zone0: "srv" });
   w("tappaas-cicd", { kind: "vm", moduleSource: src("tappaas-cicd"), version: "1.2.0", vmid: 110, node: "tappaas1", environment: "mgmt" });
-  w("identity", { kind: "vm", moduleSource: src("identity", ["sso"]), version: "0.5.2", vmid: 140, node: "tappaas1", environment: "mgmt", dependsOn: ["cluster:vm", "backup:vm", "nowhere:x"] });
+  w("identity", { kind: "vm", moduleSource: src("identity", ["sso"]), version: "0.5.2", vmid: 140, node: "tappaas1", environment: "mgmt", dependsOn: ["cluster:vm", "backup:vm", "nowhere:x"], zone0: "mgmt" });
+  w("identity-test", { kind: "vm", moduleSource: src("identity", ["sso"]), version: "0.5.2", vmid: 141, node: "tappaas1", environment: "mgmt" });
   w("nextcloud", { kind: "vm", moduleSource: src("nextcloud"), version: "2.0.0", vmid: 200, node: "tappaas1", environment: "hrossen", dependsOn: ["cluster:vm"] });
   w("old", { kind: "vm", moduleSource: src("old"), version: "1.0", vmid: 300, status: "archived" });
   w("control-plane", {
@@ -98,6 +99,12 @@ function fixture(): string {
   check(one("vm", "nextcloud")?.attributes?.stage === "created", "a configured guest the cluster does not run is created");
   check(id?.attributes?.state === "running" && one("vm", "nextcloud")?.attributes?.state === "stopped", "a guest's run state, for the topology");
   check(!objs.some((o) => o.name === "old"), "an archived instance is not reported");
+  check(id?.attributes?.module === "identity" && one("vm", "identity-test")?.attributes?.module === "identity", "a CI's module is the catalog name, not the instance (identity-test is of identity)");
+  check(one("app", "backup")?.attributes?.module === "backup" && one("service", "identity:sso", (o) => o.attributes?.provider === "identity")?.attributes?.module === "identity" && one("manager", "site-manager")?.attributes?.module === "tappaas-cicd", "…on its app, its services and the control plane's managers too");
+  const zoneRel = (from: string | undefined, zone: string): boolean => (r.relations ?? []).some((x: Obj) => x.type === "member-of" && x.from?.ref === from && x.to?.ref !== undefined && x.to.ref === one("zone", zone)?.ref);
+  check(zoneRel(id?.ref, "mgmt") && zoneRel(one("app", "backup")?.ref, "srv"), "a node and an app are member-of the zone of their record");
+  const completes: Obj[] = r.complete ?? [];
+  check(completes.some((c) => c.type === "member-of" && c.from?.ref === id?.ref && c.toClass === "zone") && completes.some((c) => c.type === "member-of" && c.from?.ref === one("vm", "identity-test")?.ref && c.toClass === "zone"), "…named whole, so a changed or dropped zone ends the old one, and only the zone");
 
   const cl = one("app", "cluster");
   check(cl?.attributes?.onNode?.ref === m?.ref && cl?.attributes?.version === "0.8.0", "an application without a node is an app on the primary node");

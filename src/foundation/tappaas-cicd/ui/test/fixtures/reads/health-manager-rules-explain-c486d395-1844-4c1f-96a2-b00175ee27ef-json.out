@@ -1,0 +1,23 @@
+{
+  "object": {
+    "id": "c486d395-1844-4c1f-96a2-b00175ee27ef",
+    "class": "zone",
+    "name": "testPinhole"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "warning",
+      "reason": "zone-no-interface",
+      "how": "root",
+      "impacts": 0
+    },
+    {
+      "type": "drift",
+      "status": "critical",
+      "reason": "sweep-missing",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

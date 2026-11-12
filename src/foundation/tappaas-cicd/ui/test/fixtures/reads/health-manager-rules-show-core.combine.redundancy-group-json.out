@@ -1,0 +1,66 @@
+{
+  "id": "core.combine.redundancy-group",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "relations with redundancyGroup count together by redundancyGroup: 1 down: a warning (redundancy-degraded); all down: the rule's impact",
+  "record": {
+    "id": "core.combine.redundancy-group",
+    "kind": "combine",
+    "description": "Relations in one redundancy group: one down degrades the dependant, all down is the failure itself.",
+    "when": {
+      "edge": {
+        "attr": {
+          "redundancyGroup": {
+            "exists": true
+          }
+        }
+      }
+    },
+    "groupBy": {
+      "edgeAttr": "redundancyGroup"
+    },
+    "steps": [
+      {
+        "down": 1,
+        "as": "warning",
+        "reason": "redundancy-degraded"
+      },
+      {
+        "down": "all",
+        "as": "rule"
+      }
+    ]
+  },
+  "released": {
+    "id": "core.combine.redundancy-group",
+    "kind": "combine",
+    "description": "Relations in one redundancy group: one down degrades the dependant, all down is the failure itself.",
+    "when": {
+      "edge": {
+        "attr": {
+          "redundancyGroup": {
+            "exists": true
+          }
+        }
+      }
+    },
+    "groupBy": {
+      "edgeAttr": "redundancyGroup"
+    },
+    "steps": [
+      {
+        "down": 1,
+        "as": "warning",
+        "reason": "redundancy-degraded"
+      },
+      {
+        "down": "all",
+        "as": "rule"
+      }
+    ]
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 16,
+  "local": null
+}

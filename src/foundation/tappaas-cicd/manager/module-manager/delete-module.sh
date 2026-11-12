@@ -279,6 +279,17 @@ release_machine_dns() {
     fi
 }
 
+
+# The module's health rules: merged into what the site runs; once no instance
+# of the module is left its released rules go, and a rule the site edited stays
+# as the site's. Never stops the delete.
+health_rules_merge() {
+    local mod="$1"
+    command -v health-manager >/dev/null 2>&1 || return 0
+    health-manager rules merge --origin "${mod}" --apply >/dev/null 2>&1 \
+        || warn "  the health rules of ${mod} did not merge cleanly — health-manager rules merge --origin ${mod} shows why"
+}
+
 main() {
     local module=""
 
@@ -636,6 +647,11 @@ main() {
     module-manager report --end "${module}" --config-dir "${CONFIG_DIR}" >/dev/null 2>&1 \
         || warn "  could not report the end of '${module}' to the CMDB"
 
+    # The module the instance belongs to, while its config still says so: its
+    # health rules go once no instance of it is left (after Step 6).
+    local health_origin
+    health_origin="$(basename "$(jq -r '.moduleSource // .location // empty' "${CONFIG_DIR}/${module}.json" 2>/dev/null || true)")"
+
     # ── Step 6: Archive (keep config) or Remove (delete config) ──────
     local config_orig="${CONFIG_DIR}/${module}.json.orig"
 
@@ -649,6 +665,8 @@ main() {
         fi
 
         echo ""
+        [[ -n "${health_origin}" ]] && health_rules_merge "${health_origin}"
+
         info "${GN}${BOLD}╔══════════════════════════════════════════════╗${CL}"
         info "${GN}${BOLD}║  Module '${module}' archived (VM removed, restorable)${CL}"
         info "${GN}${BOLD}╚══════════════════════════════════════════════╝${CL}"
@@ -692,6 +710,8 @@ main() {
 
     # ── Done ─────────────────────────────────────────────────────────
     echo ""
+    [[ -n "${health_origin}" ]] && health_rules_merge "${health_origin}"
+
     info "${GN}${BOLD}╔══════════════════════════════════════════════╗${CL}"
     info "${GN}${BOLD}║  Module '${module}' deleted successfully        ${CL}"
     info "${GN}${BOLD}╚══════════════════════════════════════════════╝${CL}"

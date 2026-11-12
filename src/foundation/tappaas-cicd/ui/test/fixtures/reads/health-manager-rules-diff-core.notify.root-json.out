@@ -1,0 +1,37 @@
+[
+  {
+    "field": "description",
+    "released": "\"A root cause is in the daily digest.\"",
+    "here": "\"A root cause is in the daily digest.\"",
+    "now": "\"A root cause is in the daily digest.\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.notify.root\"",
+    "here": "\"core.notify.root\"",
+    "now": "\"core.notify.root\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"notify\"",
+    "here": "\"notify\"",
+    "now": "\"notify\"",
+    "mark": ""
+  },
+  {
+    "field": "notify",
+    "released": "\"digest\"",
+    "here": "\"digest\"",
+    "now": "\"digest\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.status",
+    "released": "[\"warning\",\"critical\"]",
+    "here": "[\"warning\",\"critical\"]",
+    "now": "[\"warning\",\"critical\"]",
+    "mark": ""
+  }
+]

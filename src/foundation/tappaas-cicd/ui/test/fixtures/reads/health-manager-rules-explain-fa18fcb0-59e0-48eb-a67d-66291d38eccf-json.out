@@ -1,0 +1,22 @@
+{
+  "object": {
+    "id": "fa18fcb0-59e0-48eb-a67d-66291d38eccf",
+    "class": "device",
+    "name": "crs-b"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "warning",
+      "reason": "vlan-undeclared",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+[
+  {
+    "field": "as",
+    "released": "{\"status\":\"critical\"}",
+    "here": "{\"status\":\"critical\"}",
+    "now": "{\"status\":\"critical\"}",
+    "mark": ""
+  },
+  {
+    "field": "description",
+    "released": "\"A node in a cluster or an environment that is down is cut off with it.\"",
+    "here": "\"A node in a cluster or an environment that is down is cut off with it.\"",
+    "now": "\"A node in a cluster or an environment that is down is cut off with it.\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.propagate.member-of.down\"",
+    "here": "\"core.propagate.member-of.down\"",
+    "now": "\"core.propagate.member-of.down\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"propagate\"",
+    "here": "\"propagate\"",
+    "now": "\"propagate\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.status",
+    "released": "\"critical\"",
+    "here": "\"critical\"",
+    "now": "\"critical\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.type",
+    "released": "\"operational\"",
+    "here": "\"operational\"",
+    "now": "\"operational\"",
+    "mark": ""
+  },
+  {
+    "field": "when.dependant.class",
+    "released": "{\"isA\":[\"node\"]}",
+    "here": "{\"isA\":[\"node\"]}",
+    "now": "{\"isA\":[\"node\"]}",
+    "mark": ""
+  },
+  {
+    "field": "when.provider.class",
+    "released": "{\"isA\":[\"cluster\",\"environment\"]}",
+    "here": "{\"isA\":[\"cluster\",\"environment\"]}",
+    "now": "{\"isA\":[\"cluster\",\"environment\"]}",
+    "mark": ""
+  },
+  {
+    "field": "when.relation",
+    "released": "\"member-of\"",
+    "here": "\"member-of\"",
+    "now": "\"member-of\"",
+    "mark": ""
+  }
+]

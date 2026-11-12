@@ -1,0 +1,51 @@
+[
+  {
+    "field": "as",
+    "released": "{\"status\":\"critical\"}",
+    "here": "{\"status\":\"critical\"}",
+    "now": "{\"status\":\"critical\"}",
+    "mark": ""
+  },
+  {
+    "field": "description",
+    "released": "\"A failed disk takes its pool down; in a mirror or raidz vdev the group rule degrades it first.\"",
+    "here": "\"A failed disk takes its pool down; in a mirror or raidz vdev the group rule degrades it first.\"",
+    "now": "\"A failed disk takes its pool down; in a mirror or raidz vdev the group rule degrades it first.\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.propagate.built-on.down\"",
+    "here": "\"core.propagate.built-on.down\"",
+    "now": "\"core.propagate.built-on.down\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"propagate\"",
+    "here": "\"propagate\"",
+    "now": "\"propagate\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.status",
+    "released": "\"critical\"",
+    "here": "\"critical\"",
+    "now": "\"critical\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.type",
+    "released": "\"operational\"",
+    "here": "\"operational\"",
+    "now": "\"operational\"",
+    "mark": ""
+  },
+  {
+    "field": "when.relation",
+    "released": "\"built-on\"",
+    "here": "\"built-on\"",
+    "now": "\"built-on\"",
+    "mark": ""
+  }
+]

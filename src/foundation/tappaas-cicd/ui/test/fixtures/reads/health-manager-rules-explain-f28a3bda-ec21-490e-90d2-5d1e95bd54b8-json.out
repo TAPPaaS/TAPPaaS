@@ -1,0 +1,22 @@
+{
+  "object": {
+    "id": "f28a3bda-ec21-490e-90d2-5d1e95bd54b8",
+    "class": "device",
+    "name": "testcore"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "critical",
+      "reason": "sweep-missing",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

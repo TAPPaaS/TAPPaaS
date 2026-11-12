@@ -1,0 +1,58 @@
+{
+  "id": "core.follow.disk",
+  "origin": "core",
+  "state": "edited",
+  "sentence": "a disk nothing judges takes the operational colour of what it is part-of",
+  "record": {
+    "id": "core.follow.disk",
+    "kind": "follow",
+    "description": "A disk nothing judges takes its asset's colour.",
+    "when": {
+      "object": {
+        "class": "disk"
+      }
+    },
+    "relation": "part-of",
+    "types": [
+      "operational"
+    ],
+    "enabled": false
+  },
+  "released": {
+    "id": "core.follow.disk",
+    "kind": "follow",
+    "description": "A disk nothing judges takes its asset's colour.",
+    "when": {
+      "object": {
+        "class": "disk"
+      }
+    },
+    "relation": "part-of",
+    "types": [
+      "operational"
+    ]
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": {
+    "local": "edited",
+    "by": "lars",
+    "at": "2026-11-01T09:00:00.000Z",
+    "editedFrom": {
+      "id": "core.follow.disk",
+      "kind": "follow",
+      "description": "A disk nothing judges takes its asset's colour.",
+      "when": {
+        "object": {
+          "class": "disk"
+        }
+      },
+      "relation": "part-of",
+      "types": [
+        "operational"
+      ]
+    },
+    "note": "disks report their own state here; written with --force over scenario core.scenario.ha-guest"
+  }
+}

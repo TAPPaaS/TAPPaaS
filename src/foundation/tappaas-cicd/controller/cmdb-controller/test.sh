@@ -550,8 +550,7 @@ check "…and it was rewritten in place" "2026-10-30T03:00:00Z" "$(cmdb show "${
 check "an assessment is no sighting: lastSeen stands" "${_seen}" "$(cmdb show "${_pid}" --json | jq -r '.lastSeen')"
 refuse "an assessment names objects by id" 4 "by id" \
     '{"source":"health-manager","assessment":true,"objects":[{"class":"zone","name":"nope","attributes":{"conditions":[]}}]}'
-check "the rules are served: runs-on's dependant, the shipped set" "from 11" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '"\(.data.relations[] | select(.name == "runs-on") | .dependant) \(.data.rules | length)"')"
-check "…a rule's dependant clause, and the attributes one may name" "true true" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '"\(any(.data.rules[]; .dependant.haNode == true)) \(.data.fields | index("haNode") != null)"')"
+check "what a health record reader needs is served: runs-on's dependant, the attributes one may name; the records are not" "from true null" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '"\(.data.relations[] | select(.name == "runs-on") | .dependant) \(.data.fields | index("haNode") != null) \(.data.records)"')"
 check "the containment is served: each relation type's tree end" "to from both null" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '[.data.relations[] | select(.name == ("allocated-to", "runs-on", "connects", "depends-on")) | .tree | tostring] | join(" ")')"
 refuse "a pool needs its node" 4 "no key" '{"source":"t","objects":[{"class":"storage-pool","name":"tanka1"}]}'
 cmdb report --json >/dev/null <<<'{"source":"module-manager","objects":[{"class":"service","name":"nextcloud:web","attributes":{"onNode":"tappaas1","version":"1"}}]}'
@@ -593,6 +592,11 @@ check "before: two observed dependencies and a recorded one" "cp:one,cp:three,cp
 cmdb report --json >/dev/null <<<'{"source":"module-manager","objects":[{"ref":"a","class":"vm","name":"cp-app"}],"relations":[{"type":"depends-on","from":{"ref":"a"},"to":{"class":"service","name":"cp:one"}}],"complete":[{"type":"depends-on","from":{"ref":"a"}}]}'
 check "a complete report ends the dependency it dropped; an operator's recorded one stays" "cp:one,cp:three" \
     "$(cmdb relations --type depends-on --json | jq -r '[.[] | select(.from.name == "cp-app") | .to.name] | sort | join(",")')"
+cmdb report --json >/dev/null <<<'{"source":"module-manager","objects":[{"ref":"a","class":"vm","name":"cp-app","attributes":{"module":"cp"}},{"ref":"z1","class":"zone","name":"cpz1"},{"ref":"z2","class":"zone","name":"cpz2"},{"ref":"c","class":"cluster","name":"cpc"}],"relations":[{"type":"member-of","from":{"ref":"a"},"to":{"ref":"z1"}},{"type":"member-of","from":{"ref":"a"},"to":{"ref":"c"}}]}'
+cmdb report --json >/dev/null <<<'{"source":"module-manager","objects":[{"ref":"a","class":"vm","name":"cp-app"}],"relations":[{"type":"member-of","from":{"ref":"a"},"to":{"class":"zone","name":"cpz2"}}],"complete":[{"type":"member-of","from":{"ref":"a"},"toClass":"zone"}]}'
+check "a complete report for one target class: the node's zone moves, its cluster stays" "cpc,cpz2" \
+    "$(cmdb relations --type member-of --json | jq -r '[.[] | select(.from.name == "cp-app") | .to.name] | sort | join(",")')"
+check "…and a CI carries the module it belongs to" "cp" "$(cmdb query vm --json | jq -r '.[] | select(.name == "cp-app") | .attributes.module')"
 check "an object's query row says when each source last saw it" "true" \
     "$(cmdb query vm --json | jq -r '.[] | select(.name == "cp-app") | .seen["module-manager"] != null')"
 

@@ -1,0 +1,51 @@
+[
+  {
+    "field": "description",
+    "released": "\"Three or more of what a module depends on degraded at once is an outage for it.\"",
+    "here": "\"Three or more of what a module depends on degraded at once is an outage for it.\"",
+    "now": "\"Three or more of what a module depends on degraded at once is an outage for it.\"",
+    "mark": ""
+  },
+  {
+    "field": "enabled",
+    "released": "false",
+    "here": "false",
+    "now": "false",
+    "mark": ""
+  },
+  {
+    "field": "groupBy",
+    "released": "\"dependant\"",
+    "here": "\"dependant\"",
+    "now": "\"dependant\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.combine.many-providers-degraded\"",
+    "here": "\"core.combine.many-providers-degraded\"",
+    "now": "\"core.combine.many-providers-degraded\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"combine\"",
+    "here": "\"combine\"",
+    "now": "\"combine\"",
+    "mark": ""
+  },
+  {
+    "field": "steps",
+    "released": "[{\"as\":\"rule\",\"down\":1},{\"as\":\"critical\",\"down\":3}]",
+    "here": "[{\"as\":\"rule\",\"down\":1},{\"as\":\"critical\",\"down\":3}]",
+    "now": "[{\"as\":\"rule\",\"down\":1},{\"as\":\"critical\",\"down\":3}]",
+    "mark": ""
+  },
+  {
+    "field": "when.relation",
+    "released": "\"depends-on\"",
+    "here": "\"depends-on\"",
+    "now": "\"depends-on\"",
+    "mark": ""
+  }
+]

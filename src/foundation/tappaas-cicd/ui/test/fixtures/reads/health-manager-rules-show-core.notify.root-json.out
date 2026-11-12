@@ -1,0 +1,38 @@
+{
+  "id": "core.notify.root",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "a root cause with a warning or critical condition is told in the daily digest",
+  "record": {
+    "id": "core.notify.root",
+    "kind": "notify",
+    "description": "A root cause is in the daily digest.",
+    "when": {
+      "condition": {
+        "status": [
+          "warning",
+          "critical"
+        ]
+      }
+    },
+    "notify": "digest"
+  },
+  "released": {
+    "id": "core.notify.root",
+    "kind": "notify",
+    "description": "A root cause is in the daily digest.",
+    "when": {
+      "condition": {
+        "status": [
+          "warning",
+          "critical"
+        ]
+      }
+    },
+    "notify": "digest"
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": null
+}

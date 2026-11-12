@@ -11,7 +11,7 @@
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import { Query } from "./pg";
-import { HealthRule, checkHealthRules } from "../../../lib/ts/src/health-rules";
+import { HealthRecord, checkSet, recordsOf } from "../../../lib/ts/src/health-records";
 
 export const FIELD_TYPES = ["string", "integer", "number", "boolean", "array", "object", "relation"] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
@@ -96,7 +96,8 @@ function isObj(v: unknown): v is Obj {
 export class Metamodel {
   readonly classes = new Map<string, ClassDef>();
   readonly relations: RelationEnd[] = [];
-  readonly rules: HealthRule[] = []; // the correlation rules (ADR-041 D3), checked at load
+  readonly records: HealthRecord[] = []; // the core health records (metamodel/health/), checked at load
+  readonly scenarios: unknown[] = []; // the contract scenarios beside them (metamodel/health/scenarios/), run by health-manager
   private fieldCache = new Map<string, Map<string, FieldDef>>();
 
   // ── reading the files ────────────────────────────────────────────────
@@ -105,7 +106,6 @@ export class Metamodel {
     if (!existsSync(dir)) throw new Error(`no metamodel directory at ${dir}`);
     const mm = new Metamodel();
     const files = readdirSync(dir).filter((f) => f.endsWith(".json")).sort();
-    const ruleDocs: [string, Obj][] = [];
     for (const f of files) {
       let doc: unknown;
       try {
@@ -116,22 +116,43 @@ export class Metamodel {
       if (!isObj(doc)) throw new Error(`metamodel/${f}: expected a JSON object`);
       if (isObj(doc.classes)) mm.addClasses(f, doc.classes);
       if (isObj(doc.relations)) mm.addRelations(f, doc.relations);
-      if (Array.isArray(doc.rules)) {
-        ruleDocs.push([f, doc]);
-        mm.rules.push(...(doc.rules as HealthRule[]));
-      }
     }
     mm.check();
-    const model = {
-      relations: [...new Set(mm.relations.map((r) => r.name))],
-      dependants: [...new Set(mm.relations.filter((r) => r.dependant).map((r) => r.name))],
-      classes: [...mm.classes.keys()],
+    // The core health records: metamodel/health/*.json, one file per kind.
+    const hdir = join(dir, "health");
+    if (existsSync(hdir)) {
+      for (const f of readdirSync(hdir).filter((x) => x.endsWith(".json")).sort()) {
+        let doc: unknown;
+        try {
+          doc = JSON.parse(readFileSync(join(hdir, f), "utf8"));
+        } catch (e) {
+          throw new Error(`metamodel/health/${f}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        const got = recordsOf(doc, f);
+        if (got.problems.length) throw new Error(`metamodel/health/${f}: ${got.problems.map((p) => p.message).join("; ")}`);
+        mm.records.push(...got.records);
+      }
+      const sdir = join(hdir, "scenarios");
+      if (existsSync(sdir)) {
+        for (const f of readdirSync(sdir).filter((x) => x.endsWith(".json")).sort()) {
+          let doc: unknown;
+          try {
+            doc = JSON.parse(readFileSync(join(sdir, f), "utf8"));
+          } catch (e) {
+            throw new Error(`metamodel/health/scenarios/${f}: ${e instanceof Error ? e.message : String(e)}`);
+          }
+          if (!isObj(doc) || !Array.isArray(doc.scenarios)) throw new Error(`metamodel/health/scenarios/${f}: expected { scenarios: [...] }`);
+          mm.scenarios.push(...doc.scenarios);
+        }
+      }
+    }
+    const info = {
+      relations: [...new Map(mm.relations.map((r) => [r.name, { name: r.name, dependant: r.dependant }])).values()],
+      ancestors: Object.fromEntries([...mm.classes.keys()].map((c) => [c, mm.ancestors(c)])),
       fields: [...new Set([...mm.classes.keys()].flatMap((c) => [...mm.fields(c).keys()]))],
     };
-    for (const [f, doc] of ruleDocs) {
-      const wrong = checkHealthRules(doc, model);
-      if (wrong.length) throw new Error(`metamodel/${f}: ${wrong.join("; ")}`);
-    }
+    const wrong = checkSet(mm.records, info).filter((p) => p.level === "error");
+    if (wrong.length) throw new Error(`metamodel/health: ${wrong.map((p) => `${p.id}: ${p.message}`).join("; ")}`);
     return mm;
   }
 

@@ -59,6 +59,8 @@ const TYPES: Record<string, string> = {
 
 // A CMDB object's id, the only thing of a request that reaches its API.
 const OBJECT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// A health record's id: <origin>.<kind>.<name>.
+const RULE_ID = /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9_-]*)+$/;
 const CI_NAME = /^[^\x00-\x1f]{1,200}$/; // an object's name: a module, an asset tag, <device>:<port>
 const CLASS_NAME = /^[a-z][a-z0-9-]{0,63}$/;
 const ASSET_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/; // an asset's own name: srv-01, dsk-03
@@ -456,6 +458,9 @@ export class ConsoleServer {
   //   GET /health/roots                   health-manager roots, else the document's
   //   GET /health/summary                 the worst per page: counts, types, Attention
   //   GET /health/stream                  what moved, as server-sent events
+  //   GET /health/rules                   health-manager rules list and scenario list
+  //   GET /health/rules/<id>              one rule: rules show and rules diff
+  //   GET /health/why/<id>                rules explain: how each condition came about
   private async healthApi(sub: string, id: string | undefined, tail: string | undefined, depth: number, url: URL, res: ServerResponse, req?: IncomingMessage): Promise<void> {
     const r = this.reads;
     const failed = (e: Error): void => sendJson(res, 200, { data: null, at: null, ageSeconds: null, refreshing: false, error: e.message });
@@ -503,7 +508,17 @@ export class ConsoleServer {
       return sendJson(res, 200, { ...envelope(g), data: healthSummary(g.value) });
     }
     if (sub === "stream" && depth === 2 && req) return this.streamHealth(req, res);
-    return sendJson(res, 404, { error: "health | health/tree | health/ego/<id> | health/object/<id> | health/roots | health/summary | health/stream" });
+    const now = (d: unknown): void => sendJson(res, 200, { data: d, at: new Date().toISOString(), ageSeconds: 0, refreshing: false, error: null });
+    if (sub === "rules" && depth === 2) return r.healthRules().then(now, failed);
+    if (sub === "rules" && depth === 3 && id) {
+      if (!RULE_ID.test(id)) return sendJson(res, 400, { error: "not a rule id" });
+      return r.healthRule(id).then(now, failed);
+    }
+    if (sub === "why" && depth === 3 && id) {
+      if (!OBJECT_ID.test(id)) return sendJson(res, 400, { error: "not an object id" });
+      return r.healthWhy(id).then(now, failed);
+    }
+    return sendJson(res, 404, { error: "health | health/tree | health/ego/<id> | health/object/<id> | health/roots | health/summary | health/stream | health/rules[/<id>] | health/why/<id>" });
   }
 
   // ── performance (ADR-046 D7) ─────────────────────────────────────

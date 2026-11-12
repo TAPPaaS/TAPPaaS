@@ -1,0 +1,37 @@
+[
+  {
+    "field": "description",
+    "released": "\"A critical root cause is mailed at once.\"",
+    "here": "\"A critical root cause is mailed at once.\"",
+    "now": "\"A critical root cause is mailed at once.\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.notify.critical-root\"",
+    "here": "\"core.notify.critical-root\"",
+    "now": "\"core.notify.critical-root\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"notify\"",
+    "here": "\"notify\"",
+    "now": "\"notify\"",
+    "mark": ""
+  },
+  {
+    "field": "notify",
+    "released": "\"at-once\"",
+    "here": "\"at-once\"",
+    "now": "\"at-once\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.status",
+    "released": "\"critical\"",
+    "here": "\"critical\"",
+    "now": "\"critical\"",
+    "mark": ""
+  }
+]

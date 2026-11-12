@@ -6,7 +6,7 @@
 
 import { CmdbItem, Condition } from "../../src/assess-model";
 import { derive } from "../../src/derive";
-import { T0, cond, obj, rel, shippedModel } from "./assess-fixture";
+import { T0, cond, fromLegacy, obj, rel, shippedModel } from "./assess-fixture";
 import { ConditionType } from "../../../../lib/ts/src/health-rules";
 
 let passed = 0;
@@ -75,7 +75,7 @@ const rels = [
     shippedModel([{ relation: "runs-on", source: { type: "operational", status: "critical" }, dependant: { haNode: "tappaas9" }, impact: "warning" }]), now);
   check(at(eq.conditions, haVm, "impact")?.status === "warning", "the shipped clause matches any value set");
   const neq = derive([node, haVm], src([node, [cond("operational", "critical")]]), [rel("runs-on", haVm, node)],
-    { ...shippedModel(), rules: shippedModel().rules.filter((x) => !x.dependant).concat([{ relation: "runs-on", source: { type: "operational", status: "critical" }, dependant: { haNode: "tappaas9" }, impact: "warning" }]) }, now);
+    { ...shippedModel(), records: shippedModel().records.filter((x) => x.id !== "core.propagate.runs-on.down-ha").concat([fromLegacy({ relation: "runs-on", source: { type: "operational", status: "critical" }, dependant: { haNode: "tappaas9" }, impact: "warning" })]) }, now);
   check(at(neq.conditions, haVm, "impact")?.status === "critical", "a clause naming a value matches only that value");
 }
 
@@ -306,6 +306,61 @@ const rels = [
 
   const viaDisk = derive(sobjs, src([disk, [cond("operational", "critical", "smart")]]), srels, shippedModel(), now);
   check(at(viaDisk.conditions, ds, "impact")?.status === "critical" && at(viaDisk.conditions, ds, "impact")?.rootCause === disk.id, "a single-disk pool's disk failed: the datastore impacted through the pool, the disk the root");
+}
+
+// ── P0: an impact names the root that gave its worst status ──
+{
+  const m = obj("machine", "tappaas1");
+  const tank = obj("storage-pool", "tank");
+  const g = obj("vm", "nextcloud");
+  const r = [rel("runs-on", g, m), rel("stored-on", g, tank)];
+  const run = (mSince: string, pSince: string, poolDown = true): ReturnType<typeof derive> => derive([m, tank, g], src(
+    [m, [cond("performance", "warning", "cpu-pressure", { since: mSince })]],
+    ...(poolDown ? [[tank, [cond("operational", "critical", "pool-state", { since: pSince })]] as [CmdbItem, Condition[]]] : []),
+    [g, [cond("capacity", "critical", "disk-full", { since: "2026-10-30T03:00:00.000Z" })]],
+  ), r, shippedModel(), now);
+  const one = run("2026-10-30T01:00:00.000Z", "2026-10-30T02:00:00.000Z");
+  const imp = at(one.conditions, g, "impact");
+  check(imp?.status === "critical" && imp.rootCause === tank.id && imp.message === "storage-pool tank: pool-state", `a warning root then a critical one: the impact names the critical (${imp?.message})`);
+  check(at(one.conditions, g, "capacity")?.derived === false && at(one.conditions, g, "capacity")?.rootCause === tank.id, "…the guest's own critical is covered by the critical root");
+  check(one.rootCauses.map((x) => `${x.id}:${x.impactedCount}`).join(",") === `${tank.id}:1,${m.id}:1`, `…roots: the pool, then the machine (${one.rootCauses.map((x) => x.id).join(",")})`);
+  const two = run("2026-10-30T01:00:00.000Z", "", false);
+  const imp2 = at(two.conditions, g, "impact");
+  check(imp2?.status === "warning" && imp2.rootCause === m.id, "only the warning root: a warning impact naming the machine");
+  check(at(two.conditions, g, "capacity")?.rootCause === null && two.rootCauses.map((x) => x.id).join(",") === `${g.id},${m.id}`, "…a warning never covers a critical: the guest's critical is a root, before the machine");
+  const three = run("2026-10-30T02:00:00.000Z", "2026-10-30T01:00:00.000Z");
+  const norm = (d: ReturnType<typeof derive>): string => JSON.stringify([[...d.conditions].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, v.map(({ since: _s, ...c }) => c)]), d.rootCauses]);
+  check(norm(three) === norm(one), "…the same when the critical root came first");
+}
+
+// ── P0: roll-ups read a snapshot, whatever the order ──
+{
+  const room = obj("room", "cellar");
+  const rack = obj("rack", "r1");
+  const srv = obj("server", "s1");
+  const mach = obj("machine", "tappaas1");
+  const r = [rel("placed-in", rack, room), rel("placed-in", srv, rack), rel("allocated-to", srv, mach)];
+  const s = (): Map<string, Condition[]> => src([mach, [cond("operational", "critical", "node-down")]]);
+  const a = derive([room, rack, srv, mach], s(), r, shippedModel(), now);
+  const b = derive([rack, room, srv, mach], s(), r, shippedModel(), now);
+  const roomOp = at(a.conditions, room, "operational");
+  check(roomOp?.status === "critical" && roomOp.message === "2 of 2 members critical", `a room over a rack: its members' own conditions, never the rack's sum (${roomOp?.message})`);
+  const norm = (d: ReturnType<typeof derive>): string => JSON.stringify([...d.conditions].sort(([x], [y]) => x.localeCompare(y)));
+  check(norm(a) === norm(b), "…the same whichever is rolled up first");
+}
+
+// ── P0: a group's message names the member that failed first ──
+{
+  const nic = obj("port", "nic");
+  const ups = ["a", "b", "c"].map((x) => obj("port", `uplink-${x}`));
+  const r = ups.map((u) => rel("connects", nic, u, { redundancyGroup: "uplinks" }));
+  const ca = cond("operational", "critical", "link-down", { since: "2026-10-30T01:00:00.000Z" });
+  const cb = cond("operational", "critical", "link-down", { since: "2026-10-30T02:00:00.000Z" });
+  const ab = derive([nic, ...ups], src([ups[0], [{ ...ca }]], [ups[1], [{ ...cb }]]), r, shippedModel(), now);
+  const ba = derive([nic, ...ups], src([ups[1], [{ ...cb }]], [ups[0], [{ ...ca }]]), r, shippedModel(), now);
+  const ma = at(ab.conditions, nic, "impact")?.message ?? "";
+  check(/^two of three in uplinks down: port uplink-a/.test(ma), `two of three down: the message names the first to fail (${ma})`);
+  check(ma === (at(ba.conditions, nic, "impact")?.message ?? ""), "…whatever order the sources came in");
 }
 
 console.log(`\nResults: ${passed} passed, ${failed} failed`);

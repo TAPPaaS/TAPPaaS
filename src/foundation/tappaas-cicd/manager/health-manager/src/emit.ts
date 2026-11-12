@@ -25,7 +25,7 @@ import { cloneObjects, endedBeforeEmit, silenced } from "./ack";
 import { Condition, Flaps, HealthCmdb, HealthObject, Period, RootEntry, Status, conditionsOf, rootsOf, rootsOfSite, worse } from "./emit-cmdb";
 import { EventKind, HealthEvent, Journal, MaintenanceEvent, TransitionEvent, eventLine, levelChanged, levelRose } from "./events";
 import { Window, isOpen, readWindows } from "./windows";
-import { Deliver, Notice, NoticeEvent, NoticePlan, closeMail, noticeKey, openMail, planNotices, siteNotify, wantedNotices } from "./notices";
+import { Deliver, Notice, NoticeEvent, NoticePlan, closeMail, noticeKey, openMail, planNotices, siteNotify, wantedNotices, NotifyRules } from "./notices";
 import { renameGuarded, simulating, unlinkGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 
 export const CURSOR_FILE = ".health-emit-cursor";
@@ -56,12 +56,14 @@ export interface Cursor {
   roots: Record<string, RootSeen>; // by <ci>:<type>
   notices?: Record<string, Notice>; // the critical-root notices open (notices.ts), by <ci>:<type>
   windows?: Record<string, { until: number; reason: string; scope: string }>; // the maintenance windows told open
+  rules?: string; // the rule-set hash of the assess run last told
+  ruleRuns?: string[]; // when assess ran under changed rules: its transitions are not counted toward flapping
 }
 
 export function readCursor(configDir: string): Cursor | null {
   try {
     const c = JSON.parse(readFileSync(join(configDir, CURSOR_FILE), "utf8")) as Cursor;
-    return typeof c.time === "string" && !Number.isNaN(Date.parse(c.time)) ? { time: c.time, change: c.change ?? null, roots: c.roots ?? {}, notices: c.notices ?? {}, windows: c.windows ?? {} } : null;
+    return typeof c.time === "string" && !Number.isNaN(Date.parse(c.time)) ? { time: c.time, change: c.change ?? null, roots: c.roots ?? {}, notices: c.notices ?? {}, windows: c.windows ?? {}, ...(c.rules ? { rules: c.rules } : {}), ...(c.ruleRuns?.length ? { ruleRuns: c.ruleRuns } : {}) } : null;
   } catch {
     return null;
   }
@@ -144,6 +146,7 @@ export interface EmitInput {
   intervalMin: number;
   since?: string; // --since: everything after this, whatever the cursor says
   windows?: Window[]; // the maintenance windows (windows.ts); runEmit reads them
+  notify?: NotifyRules; // the notify records the site runs; without, the core ones
 }
 
 /** A window that opened or ended since the last run, told once each. */
@@ -236,6 +239,15 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
   const flapsOf = (o: HealthObject): Flaps => (o.attributes.flapping ??= {});
   const told: TransitionEvent[] = [];
   let change = cursor?.change ?? null;
+  // The rules: a run under a rule set other than the last one told changed
+  // health by the rules, not by the site.
+  const site = objects.find((o) => o.class === "site");
+  const stamp = ((site?.attributes as Record<string, unknown> | undefined)?.assessment as { time?: string; rules?: { hash?: string; changed?: string[] } } | undefined) ?? {};
+  const hash = stamp.rules?.hash;
+  const byRules = !!hash && !!cursor?.rules && cursor.rules !== hash;
+  const windowMsAll = BUCKETS * intervalMs;
+  const ruleRuns = [...(cursor?.ruleRuns ?? []), ...(byRules && stamp.time ? [stamp.time] : [])].filter((t) => Date.parse(t) > input.now.getTime() - windowMsAll);
+  const fromRules = (t: { at: string }): boolean => ruleRuns.some((r) => Math.abs(Date.parse(r) - Date.parse(t.at)) < 2000);
 
   if (from) {
     const fromMs = Date.parse(from);
@@ -283,10 +295,11 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
             // `silenced`, so the critical-root mail (which ends its match there)
             // never fires for it, and the digest's match takes it.
             ...(type === "performance" ? { digestOnly: true as const } : {}),
+            ...(byRules ? { cause: "rules" as const, rules: stamp.rules?.changed ?? [] } : {}),
           };
         };
         const windowMs = BUCKETS * intervalMs;
-        const recent = ofType.filter((t) => Date.parse(t.at) > input.now.getTime() - windowMs);
+        const recent = ofType.filter((t) => Date.parse(t.at) > input.now.getTime() - windowMs && !fromRules(t));
         // Its own attribute is what emit holds; the condition's copy is assess's projection.
         const was = !!flaps[type] || c?.flapping === true;
         const flapping = c ? flappingNow(was, flapPercent(recent.map((t) => Date.parse(t.at)), input.now.getTime(), intervalMs)) : false;
@@ -316,12 +329,14 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
 
   // The critical-root notices, from the set as it is now (after the acks above).
   const impactedOf = (k: string): string => now[k]?.impacted ?? now[`${k.slice(0, k.lastIndexOf(":"))}:`]?.impacted ?? "nothing";
-  const notices = planNotices(cursor?.notices ?? {}, wantedNotices(objects, roots, impactedOf, input.now), objects, roots, input.now);
+  const want = wantedNotices(objects, roots, impactedOf, input.now, input.notify);
+  if (hash) for (const n of want.values()) n.rules = hash.slice(0, 8);
+  const notices = { ...planNotices(cursor?.notices ?? {}, want, objects, roots, input.now, input.notify, byRules), ...(byRules ? { byRules: true } : {}) };
 
   const w = windowEvents(cursor?.windows ?? {}, input.windows ?? [], input.now);
 
   const events: HealthEvent[] = [...gone, ...w.events, ...told];
-  return { events, cursor: { time: at, change, roots: now, notices: cursor?.notices ?? {}, windows: w.seen }, notices, writes: dirty, objects };
+  return { events, cursor: { time: at, change, roots: now, notices: cursor?.notices ?? {}, windows: w.seen, ...(hash ? { rules: hash } : cursor?.rules ? { rules: cursor.rules } : {}), ...(ruleRuns.length ? { ruleRuns } : {}) }, notices, writes: dirty, objects };
 }
 
 /** One run: under a lock, as the timer and the alert receiver may overlap. false
@@ -356,15 +371,17 @@ export function deliverNotices(plan: NoticePlan, open: Record<string, Notice>, d
   const next = { ...open };
   const events: NoticeEvent[] = [];
   const base = (n: Omit<Notice, "opened">) => ({ event: "notice" as const, ci: n.ci, class: n.class, name: n.name, type: n.type, reason: n.reason, message: n.message, impacted: n.impacted });
+  const byRules = plan.byRules === true;
+  const cause = byRules ? { cause: "rules" as const } : {};
   for (const c of plan.close) {
-    const sent = deliver(closeMail(c.notice, c.why, c.detail), noticeKey(c.notice), true);
+    const sent = deliver(closeMail(c.notice, c.why, c.detail, byRules), noticeKey(c.notice), true);
     if (sent) delete next[c.notice.key];
-    events.push({ ...base(c.notice), phase: "close", why: c.why, ...(c.detail ? { detail: c.detail } : {}), sent, at });
+    events.push({ ...base(c.notice), phase: "close", why: c.why, ...(c.detail ? { detail: c.detail } : {}), ...cause, ...(c.notice.rules ? { rules: c.notice.rules } : {}), sent, at });
   }
   for (const n of plan.open) {
-    const sent = deliver(openMail(n), noticeKey(n), false);
+    const sent = deliver(openMail(n, byRules), noticeKey(n), false);
     if (sent) next[n.key] = { ...n, opened: at };
-    events.push({ ...base(n), phase: "open", sent, at });
+    events.push({ ...base(n), phase: "open", ...cause, ...(n.rules ? { rules: n.rules } : {}), sent, at });
   }
   return { open: next, events };
 }

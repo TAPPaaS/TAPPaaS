@@ -10,7 +10,8 @@
 import { useEffect, useState } from "react";
 import { useRead, useVerb } from "../api";
 import { OperateButton, Step } from "../operate";
-import { HealthCondition, HealthObject, HealthStatus } from "../types";
+import { HealthCondition, HealthObject, HealthStatus, HealthWhy } from "../types";
+import { rulePath } from "./Rules";
 import { DetailsLinks, Dot, Level, Link, ReadState, Section, Tag, when } from "../ui";
 import { ciDetails } from "../details";
 import { CiPanel } from "./CiPanel";
@@ -38,9 +39,9 @@ function Pick({ id, label, status, pick }: { id: string; label: string; status?:
 const conditionOrder = (c: { status: string; acknowledged?: boolean }): number => (c.status === "ok" ? 2 : c.acknowledged ? 1 : 0);
 
 function ConditionRow({ o, c, canAck, canUnack }: { o: HealthObject; c: HealthCondition; canAck: boolean; canUnack: boolean }) {
-  const silenced = c.acknowledged || c.maintenance;
+  const silenced = c.acknowledged || c.maintenance || !!c.quiet;
   return (
-    <li className={`att att-${LEVEL[c.status]}${c.acknowledged ? " att-ack" : ""}`}>
+    <li className={`att att-${LEVEL[c.status]}${c.acknowledged ? " att-ack" : ""}${c.quiet ? " att-quiet" : ""}`}>
       {c.acknowledged ? <span className="tag tag-ack" title="acknowledged">{c.status.toUpperCase()}</span> : <Tag level={c.status} />}
       <span className="att-gate">{c.type}</span>
       <span className="att-text">
@@ -53,6 +54,8 @@ function ConditionRow({ o, c, canAck, canUnack }: { o: HealthObject; c: HealthCo
         </span>
         {c.ack ? <span className="muted small"> · acknowledged by {c.ack.by ?? "?"}{c.ack.until ? ` until ${when(c.ack.until)}` : ""}{c.ack.sticky ? ", sticky" : ""}{c.ack.note ? `: ${c.ack.note}` : ""}</span> : c.acknowledged ? <span className="muted small"> · silenced with its root</span> : null}
         {c.window ? <span className="muted small"> · maintenance{c.window.until ? ` until ${when(c.window.until)}` : ""}{c.window.note ? `: ${c.window.note}` : ""}</span> : null}
+        {c.quieted ? <span className="muted small"> · quiet by <Link to={rulePath(c.quieted.rule)}>{c.quieted.rule}</Link>{c.quieted.via ? " (its root)" : ""}</span> : null}
+        {c.raw ? <span className="muted small"> · its source said {c.raw.status}; rated {c.status} by <Link to={rulePath(c.raw.rule)}>{c.raw.rule}</Link></span> : null}
       </span>
       {c.status !== "ok" && !c.derived && !silenced ? (
         <OperateButton label="Ack…" disabled={!canAck} hint={canAck ? undefined : "health-manager on this site has no ack verb"} title={`Acknowledge ${c.type} on ${o.label}`} steps={[hm(`health-manager ack ${o.label} --type ${c.type}`, "ack", o.id, { initial: { "--type": c.type }, hide: ["--type"], kinds: { "--until": "future-date" }, placeholders: { "--note": WHY, "--until": "when the condition recovers" }, labels: { "--note": "note", "--until": "until", "--sticky": "keep it when the status changes (a warning turning critical); it still ends when the condition recovers. Without it, the next status change ends it." }, descriptions: { "--note": "Required.", "--until": UNTIL, "--sticky": "" /* the label says it all; "" hides the verb's own help */ }, note: "The condition keeps its status but stops counting for validate, mails and the Overview. On a root cause it covers the symptoms too." })]} />
@@ -70,6 +73,61 @@ function Verbs({ o }: { o: HealthObject }) {
     <div className="toolbar">
       <OperateButton label="Maintenance…" disabled={!maint} hint={maint ? undefined : "health-manager on this site has no maintenance verb"} title={`A maintenance window on ${o.label}`} steps={[hm(`health-manager maintenance ${o.label}`, "maintenance", o.id, { placeholders: { "--note": WHY }, kinds: { "--until": "future-date" }, labels: { "--note": "note", "--until": "until" }, descriptions: { "--note": "Required.", "--until": `Required. ${UNTIL}` }, note: "During the window transitions are recorded but neither mailed nor counted." })]} />
     </div>
+  );
+}
+
+const HOW: Record<HealthWhy["conditions"][number]["how"], string> = {
+  root: "a root cause",
+  derived: "the same failure as its root, seen from here",
+  covered: "its own, but not a root while its root stands",
+  impact: "reached from its root",
+  follows: "takes its parent's colour",
+  "roll-up": "the sum of its members",
+  ok: "ok",
+};
+
+// Why each condition is what it is (health-manager rules explain): the chain
+// from the root, hop by hop, with the rule that decided each; read on demand.
+function Why({ id, pick }: { id: string; pick: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => setOpen(false), [id]);
+  return (
+    <Section title="Why" aside={open ? undefined : <button className="hlink" onClick={() => setOpen(true)}>explain</button>}>
+      {open ? <WhyBody id={id} pick={pick} /> : <p className="muted small">How each condition came about, and the health rule that decided it.</p>}
+    </Section>
+  );
+}
+
+function WhyBody({ id, pick }: { id: string; pick: (id: string) => void }) {
+  const r = useRead<HealthWhy>(`health/why/${encodeURIComponent(id)}`);
+  const w = r.env?.data;
+  return (
+    <>
+      <ReadState env={r.env} failure={r.failure} what="the explanation" />
+      {w ? (
+        <ul className="why">
+          {w.conditions.filter((c) => c.how !== "ok").map((c) => (
+            <li key={c.type}>
+              <Tag level={c.status} /> <b>{c.type}</b> {c.reason ? <span className="muted small">({c.reason})</span> : null}: {HOW[c.how]}
+              {c.how === "root" ? ` impacting ${c.impacts ?? 0}` : ""}
+              {c.rootCause && c.how !== "impact" ? <> · <button className="hlink" onClick={() => pick(c.rootCause!)}>its root</button></> : null}
+              {c.rule ? <div className="small">by <Link to={rulePath(c.rule)} className="mono">{c.rule}</Link>{c.ruleText ? <span className="muted">: {c.ruleText}</span> : null}</div> : null}
+              {c.path?.length ? (
+                <ol className="why-path">
+                  {c.path.map((h, i) => (
+                    <li key={i} className="small">
+                      {h.from} → {h.to}{h.relation ? <span className="muted"> over {h.relation}</span> : null}: {h.type} {h.status} · <Link to={rulePath(h.rule)} className="mono">{h.rule}</Link>
+                      {h.lost.map((l) => <div key={l.id} className="muted">lost: <span className="mono">{l.id}</span> ({l.why === "overridden" ? "overridden by" : "less specific than"} {l.by})</div>)}
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
+            </li>
+          ))}
+          {!w.conditions.some((c) => c.how !== "ok") ? <li className="muted">Nothing to explain: every condition is ok.</li> : null}
+        </ul>
+      ) : null}
+    </>
   );
 }
 
@@ -109,6 +167,7 @@ export function HealthPanel({ id, close, pick, showInTree }: { id: string; close
               ))}
             </ul>
           </Section>
+          <Why id={o.id} pick={pick} />
           {o.rootCauses.length ? (
             <Section title="Root cause">
               <ul className="plain">

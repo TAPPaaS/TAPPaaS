@@ -17,16 +17,18 @@ import { OBSERVATION_REASONS, fromObservations } from "./assess-observations";
 import { Finding, GATES, fromAlerts, fromCve, fromGates, fromSweep, fromThresholds } from "./assess-sources";
 import { SWEEP_MAX_AGE_MS, SweepRecord } from "./cmdbsweep";
 import { derive } from "./derive";
+import { Classified, classify } from "./classify";
 import { RulesDoc } from "./rules";
 import { STALE_DAYS, ScanStatus } from "./security";
 import { SiteSecurity, siteSecurity } from "./site-score";
 import { CheckResult } from "./types";
 import { CmdbReport } from "../../../lib/ts/src/cmdb";
 import { CONDITION_TYPES, ConditionStatus } from "../../../lib/ts/src/health-rules";
+import { conflicts, recordHash, ruleSetHash } from "../../../lib/ts/src/health-records";
 import { levelChanged } from "./events";
 import { Declared, PERF_OWNER, fromPerformance, fromTrends } from "./assess-performance";
 import { MetricsReader } from "./metrics-read";
-import { Window, asMaintenance, windowOf } from "./windows";
+import { Covered, Window, asMaintenance, coveredBy, named, windowOf, isOpen } from "./windows";
 
 /** Everything assess reads and writes; tests stub it. */
 export interface AssessIO {
@@ -42,7 +44,6 @@ export interface AssessIO {
   // The metrics store (ADR-046 D6): null when logging or its credential is not here.
   metrics?(): MetricsReader | null;
   perfDeclared?(): Declared[]; // the foundation modules' declared thresholds
-  modules?(): Set<string>; // the instances, to tell a CI's module
   horizonDays?(): number; // capacity: "full within" this many days is a warning
   windows?(): Window[]; // the maintenance windows (windows.ts): what they cover is in maintenance
   write(report: CmdbReport): void;
@@ -121,7 +122,7 @@ export function staleToUnknown(fs: Finding[], idx: SiteIndex, nowMs: number): Fi
   });
 }
 
-function worstOf(fs: Finding[]): Finding {
+function worstOf(fs: Classified[]): Classified {
   // unknown is no judgement: below ok here, between ok and warning on the object.
   const rank = (f: Finding): number => (f.status === "unknown" ? -1 : RANK[f.status]);
   const top = fs.reduce((w, f) => (rank(f) > rank(w) ? f : w));
@@ -130,15 +131,28 @@ function worstOf(fs: Finding[]): Finding {
   return { ...top, message: same.join("; ") };
 }
 
-const blank = (f: Finding, now: string): Condition => ({
+const blank = (f: Classified, now: string): Condition => ({
   type: f.type, status: f.status, reason: f.reason, message: f.message,
   since: now, lastChecked: now, source: SOURCE, owner: f.owner, derived: false, rootCause: null, acknowledged: null, maintenance: null,
+  ...(f.raw ? { raw: { ...f.raw, since: now } } : {}),
+  ...(f.quieted ? { quieted: { rule: f.quieted, since: now } } : {}),
+  ...(f.aggregate ? { aggregate: true } : {}),
 });
 
+// A fresh finding over the stored condition: since, and the source's own since
+// under a re-rating, and since when it is quiet, carried while they hold.
+function over(f: Classified, p: Condition, now: string): Condition {
+  const c = { ...blank(f, now), since: p.since };
+  if (c.raw && p.raw?.status === c.raw.status) c.raw.since = p.raw.since;
+  else if (c.raw && !p.raw && p.status === c.raw.status) c.raw.since = p.since;
+  if (c.quieted && p.quieted?.rule === c.quieted.rule) c.quieted.since = p.quieted.since;
+  return c;
+}
+
 /** What each object's source conditions are now: `fresh` over what was stored. */
-export function settle(priorOf: (id: string) => Condition[], ids: Iterable<string>, findings: Finding[], looked: (owner: string, id: string) => boolean, now: string): Map<string, Condition[]> {
+export function settle(priorOf: (id: string) => Condition[], ids: Iterable<string>, findings: Classified[], looked: (owner: string, id: string) => boolean, now: string): Map<string, Condition[]> {
   const nowMs = Date.parse(now);
-  const by = new Map<string, Map<string, Finding[]>>();
+  const by = new Map<string, Map<string, Classified[]>>();
   for (const f of findings) {
     if (!by.has(f.object)) by.set(f.object, new Map());
     const m = by.get(f.object)!;
@@ -147,7 +161,7 @@ export function settle(priorOf: (id: string) => Condition[], ids: Iterable<strin
   const out = new Map<string, Condition[]>();
   for (const id of new Set([...ids, ...by.keys()])) {
     const cs: Condition[] = [];
-    const fresh = by.get(id) ?? new Map<string, Finding[]>();
+    const fresh = by.get(id) ?? new Map<string, Classified[]>();
     // What derive computes is computed again, whole: none of it is carried.
     // Nor is an ok that only an explained symptom ever had.
     const prior = priorOf(id).filter((c) => !isDerivedKind(c) && !(c.derived && c.status === "ok"));
@@ -157,7 +171,7 @@ export function settle(priorOf: (id: string) => Condition[], ids: Iterable<strin
       const again = looked(own, id);
       if (fs) {
         const f = worstOf(fs);
-        cs.push(!again && failing(p) && RANK[f.status] < RANK[p.status] ? { ...p } : { ...blank(f, now), since: p.since });
+        cs.push(!again && failing(p) && RANK[f.status] < RANK[p.status] ? { ...p } : over(f, p, now));
       } else if (again) {
         // Its owner looked and has nothing to say: a failure is over, and an ok
         // or unknown nobody gives any more is no judgement.
@@ -196,7 +210,8 @@ export const flapsOf = (o: CmdbItem): Record<string, { held: ConditionStatus }> 
 
 // Since, across no change of status; the maintenance of the open window that
 // covers the object (windows.ts), never carried over.
-function stamp(c: Condition, p: Condition | undefined, now: string, nowMs: number, window: Window | undefined, word: OperatorWord | undefined, flap: { held: ConditionStatus } | undefined): Condition {
+function stamp(c: Condition, p: Condition | undefined, now: string, nowMs: number, cov: Covered | undefined, word: OperatorWord | undefined, flap: { held: ConditionStatus } | undefined): Condition {
+  const window: Window | undefined = coveredBy(c, cov);
   const mnt = window ? asMaintenance(window) : null;
   const held = !!p && p.status === c.status && p.reason === c.reason;
   const until = (w: { until: string | null } | null): boolean => w !== null && (!w.until || Date.parse(w.until) > nowMs);
@@ -235,6 +250,23 @@ function viaAcks(next: Map<string, Condition[]>, roots: RootCause[]): void {
   }
 }
 
+// An impact whose only root is quiet is quiet with it: what a quieted failure
+// reaches is still marked, quietly.
+function viaQuiet(next: Map<string, Condition[]>, roots: RootCause[]): void {
+  const rootQuiet = (id: string): Condition["quieted"] => {
+    const entries = roots.filter((r) => r.id === id);
+    return (next.get(id) ?? []).find((c) => c.quieted && !c.quieted.via && entries.some((r) => r.type === c.type))?.quieted;
+  };
+  for (const cs of next.values()) {
+    for (const c of cs) {
+      if (c.type !== "impact" || c.status === "ok" || !c.rootCause) continue;
+      const q = rootQuiet(c.rootCause);
+      if (q) c.quieted = { rule: q.rule, since: q.since, via: [c.rootCause] };
+      else if (c.quieted?.via) delete c.quieted;
+    }
+  }
+}
+
 const typeOrder = (c: Condition): number => CONDITION_TYPES.indexOf(c.type);
 
 // The parts history keeps: everything but lastChecked.
@@ -267,7 +299,7 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
   ran.add("observations");
   const reader = io.metrics ? t("metrics", () => io.metrics!()) : null;
   if (reader) {
-    const p = t("performance", () => fromPerformance(idx, reader, io.perfDeclared?.() ?? [], io.modules?.() ?? new Set()));
+    const p = t("performance", () => fromPerformance(idx, reader, io.perfDeclared?.() ?? []));
     const tr = t("trends", () => fromTrends(idx, reader, io.horizonDays?.() ?? 14));
     findings.push(...p.findings, ...tr.findings);
     // Both or neither: one owner takes back what either set.
@@ -278,6 +310,22 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
   findings.push(...fromCve(scan, sec, nowMs, idx));
   if (scan) ran.add("cve");
 
+  // The rules: two active records that can decide one case differently are a
+  // conflict the check should have refused; the engine takes the more severe
+  // outcome, and the site is told.
+  const model = t("rules", () => io.rules());
+  if (idx.site) {
+    for (const [a, b] of conflicts(model.records, model.ancestors)) {
+      findings.push({ object: idx.site.id, type: "drift", status: "warning", reason: "rules-conflict", message: `health records ${a.id} and ${b.id} decide one case differently — health-manager rules check`, owner: "rules" });
+    }
+    // A merge that did not hold left yesterday's rules running.
+    if (model.lastMerge && !model.lastMerge.ok) {
+      const errs = model.lastMerge.problems.filter((p) => p.startsWith("error")).map((p) => p.replace(/^error: /, ""));
+      findings.push({ object: idx.site.id, type: "drift", status: "warning", reason: "rules-merge", message: `the health rules of an update did not hold, the earlier ones still run: ${errs.slice(0, 3).join("; ")}${errs.length > 3 ? ` (+${errs.length - 3})` : ""} — health-manager rules merge`, owner: "rules" });
+    }
+    ran.add("rules");
+  }
+
   const priorOf = (id: string): Condition[] => (idx.byId.get(id) ? conditionsOf(idx.byId.get(id)!) : []);
   const looked = (owner: string, id: string): boolean => {
     if (only && id !== only.id) return false;
@@ -287,13 +335,18 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
     const judged = g.unjudged.get(owner);
     return !judged || judged.has(id) || id === idx.site?.id;
   };
-  const scoped = only ? findings.filter((f) => f.object === only.id) : findings;
+  // classify: what each failing finding becomes under the records.
+  const ruleConflicts = new Set<string>();
+  const classified = t("classify", () => classify(findings, idx.byId, model.records, model.ancestors, priorOf, nowMs, ruleConflicts));
+  const scoped = only ? classified.filter((f) => f.object === only.id) : classified;
   const source = t("settle", () => settle(priorOf, objects.map((o) => o.id), scoped, looked, time));
 
-  const model = t("rules", () => io.rules());
-  const d = t("derive", () => derive(objects, source, relations, model, time));
-
-  const windows = windowOf(io.windows?.() ?? [], objects, relations, nowMs);
+  // An open window covers what its object would impact under the rules: one
+  // simulated spread per object a window names.
+  const open = (io.windows?.() ?? []).filter((w) => isOpen(w, nowMs));
+  const cover = [...new Set(open.filter((w) => w.scope !== "site").flatMap((w) => [...named(w, objects)]))];
+  const d = t("derive", () => derive(objects, source, relations, model, time, { cover }));
+  const windows = windowOf(open, objects, nowMs, (id) => d.covers?.get(id) ?? new Map());
   const result: AssessResult = { time, objects: [], rootCauses: d.rootCauses, transitions: [], report: null };
   const reported: NonNullable<CmdbReport["objects"]> = [];
   const nextOf = new Map<string, Condition[]>();
@@ -315,6 +368,7 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
     if (next.length) nextOf.set(o.id, next);
   }
   viaAcks(nextOf, d.rootCauses);
+  viaQuiet(nextOf, d.rootCauses);
   for (const o of objects) {
     const next = nextOf.get(o.id);
     if (!next) continue;
@@ -327,22 +381,37 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
     }
     if (only && lasting(prior) === lasting(next)) continue;
     const attributes: Record<string, unknown> = { conditions: next };
-    if (o.id === idx.site?.id) Object.assign(attributes, siteAttributes(o, d.rootCauses, checks, only !== null, time));
+    if (o.id === idx.site?.id) Object.assign(attributes, siteAttributes(o, d.rootCauses, checks, only !== null, time, rulesOf(model.records, o)));
     reported.push({ id: o.id, class: o.class, name: o.name, attributes });
   }
   // The site may have no conditions at all, and still carries the run.
   if (idx.site && !reported.some((r) => r.id === idx.site!.id)) {
     const s = idx.site;
-    reported.push({ id: s.id, class: s.class, name: s.name, attributes: siteAttributes(s, d.rootCauses, checks, only !== null, time) });
+    reported.push({ id: s.id, class: s.class, name: s.name, attributes: siteAttributes(s, d.rootCauses, checks, only !== null, time, rulesOf(model.records, s)) });
   }
   if (reported.length) result.report = { source: SOURCE, kind: "observation", assessment: true, time, objects: reported };
   if (result.report && !opts.dryRun) t("cmdb write", () => io.write(result.report!));
   return result;
 }
 
-function siteAttributes(site: CmdbItem, rootCauses: RootCause[], checks: CheckResult[], only: boolean, time: string): Record<string, unknown> {
+/** The rule set a run used: its hash, each active record's own hash, and,
+ *  where the set differs from the last run's, the records that changed. */
+export interface RulesStamp { hash: string; records: Record<string, string>; changed?: string[] }
+
+function rulesOf(records: RulesDoc["records"], site: CmdbItem): RulesStamp {
+  const active = records.filter((r) => r.enabled !== false);
+  const stamp: RulesStamp = { hash: ruleSetHash(records), records: Object.fromEntries(active.map((r) => [r.id, recordHash(r)])) };
+  const prior = ((site.attributes.assessment ?? {}) as { rules?: RulesStamp }).rules;
+  if (prior?.hash && prior.hash !== stamp.hash) {
+    const ids = new Set([...Object.keys(prior.records ?? {}), ...Object.keys(stamp.records)]);
+    stamp.changed = [...ids].filter((id) => prior.records?.[id] !== stamp.records[id]).sort();
+  }
+  return stamp;
+}
+
+function siteAttributes(site: CmdbItem, rootCauses: RootCause[], checks: CheckResult[], only: boolean, time: string, rules: RulesStamp): Record<string, unknown> {
   const had = (site.attributes.assessment ?? {}) as { gates?: unknown };
   // --only runs no gate: the table of the last full run stands.
   const gates = only ? had.gates ?? [] : checks.map(({ name, status, detail, rows, findings }) => ({ name, status, detail, rows, findings }));
-  return { rootCauses, assessment: { time, gates } };
+  return { rootCauses, assessment: { time, gates, rules } };
 }

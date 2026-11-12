@@ -1,0 +1,44 @@
+[
+  {
+    "field": "description",
+    "released": "\"The site is the worst of everything on it that is not itself a sum.\"",
+    "here": "\"The site is the worst of everything on it that is not itself a sum.\"",
+    "now": "\"The site is the worst of everything on it that is not itself a sum.\"",
+    "mark": ""
+  },
+  {
+    "field": "fn",
+    "released": "\"worst\"",
+    "here": "\"worst\"",
+    "now": "\"worst\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.rollup.site\"",
+    "here": "\"core.rollup.site\"",
+    "now": "\"core.rollup.site\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"rollup\"",
+    "here": "\"rollup\"",
+    "now": "\"rollup\"",
+    "mark": ""
+  },
+  {
+    "field": "members",
+    "released": "\"all\"",
+    "here": "\"all\"",
+    "now": "\"all\"",
+    "mark": ""
+  },
+  {
+    "field": "when.object.class",
+    "released": "{\"isA\":[\"site\"]}",
+    "here": "{\"isA\":[\"site\"]}",
+    "now": "{\"isA\":[\"site\"]}",
+    "mark": ""
+  }
+]

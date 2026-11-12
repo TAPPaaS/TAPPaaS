@@ -1,0 +1,22 @@
+{
+  "object": {
+    "id": "12afc2ee-39e0-4a7d-9aab-d76063d278cc",
+    "class": "vm",
+    "name": "test-idoidc"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "critical",
+      "reason": "sweep-missing",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

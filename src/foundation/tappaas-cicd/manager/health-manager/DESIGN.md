@@ -28,7 +28,7 @@ are **N/A**. The surface:
 | `emit` | the CMDB's history of `conditions` | health events to the journal, critical-root notices through `site-notify.sh`, flapping |
 | `show`, `list`, `roots [--all]`, `history` | the conditions | reads |
 | `ack`, `unack`, `maintenance <ci> \| end <ci>` | the `acknowledgements` attribute; a window file | the operator's word; assess projects it |
-| `rules list\|check` | the correlation rules, the relations | `check` also reports dependency cycles |
+| `rules list\|check` | the health records, the relations | one sentence per record; `check` refuses a record it cannot place and a conflict, and reports dependency cycles |
 | `validate` | the conditions (`--live`: assess first) | **special**: asserts the *live* system is healthy (below) |
 | `update-os <name> <vmid> <node>` | `update-os.sh` | special **action**; thin pass-through to the script |
 | `reboot <module>` | `reboot-guest.sh` | special **action** (#730): resolves the module to its VMID and live node, then update-os.sh's own `reboot_guest` path |
@@ -110,8 +110,9 @@ a full one shows up as the placement problem it is.
   findings; `GATES` maps each gate to its condition type and reason.
 - `src/assess-model.ts` — a condition, and `SiteIndex`: a gate's subject → its object.
 - `src/assess-validate.ts` — `validate` as a read.
-- `src/derive.ts` — impact, root causes and roll-ups. Pure.
-- `src/rules.ts` — the correlation rules from the service; `rules list|check`.
+- `src/derive.ts` — the engine: impact, root causes, follows and roll-ups, driven by the health records. Pure.
+- `src/rules.ts` — the records and the metamodel from the service; `rules list|check`.
+- `src/rule-text.ts` — a record as one sentence.
 - `src/client.ts` — `CliClusterClient`: the real `ssh`/`ping`/`pvesh`/`qm`
   shell-out FFI. Inspection + gate logic depend only on `ClusterClient`, so unit
   tests inject `FakeClusterClient` and never touch SSH.
@@ -187,38 +188,108 @@ threshold or observation over an object no source has reported for 48 hours (its
 (owner `derive`) are dropped before `settle`, and their message is recomputed
 every run; one that was failing and is no longer produced is written once as ok.
 
-**Expected or derived.** A failure spreads from a provider to its dependant where
-a rule matches the failure, in a fixpoint, because a `redundancyGroup` is crossed
-only when all its members are down and they may be reached in any order. A group
-is its name, site-wide: a bond's two cables have different dependants (each NIC),
-so "the dependant's providers" would never hold two. A member is down when a
-provider of it other than the crossing's dependant is (what it reaches through the
-crossing is no cause of the crossing). Once nothing else grows, each group still
-partly down gives the dependant of a failed member a `warning`, which may travel
-on by a warning rule; the loop runs until neither pass adds a crossing. A rule
-with a `dependant` clause that matches wins over one without.
+**The engine and the records.** `src/derive.ts` is one engine, the same on every
+site. At each point where it decides something about a particular node, edge or
+condition it asks the health records (`lib/ts/src/health-records.ts` holds the record,
+the match language and the check; the core records are
+[`metamodel/health/`](../../controller/cmdb-controller/metamodel/health/README.md)):
 
-A failing condition is **derived** when a failure reaches its object in its own type
-and no less severe: the same failure seen from below. A worse one stays its own,
-because a warning must not silence a critical. A crossing softer than its source
-(a partly down group, the HA guest's warning) is also kept at the source's
-severity, one hop, for this question only: the NIC whose leg is down and the HA
-guest that stopped with its node are the same failure, derived, while their
-impact stays a warning. So both ends of a bond's dead cable still resolve to one
-root by `since`, as a plain cable does. Another type on an impacted object
-is not derived (a backup that was missing before the node died still is), but it
-is no root either while the node is down.
+| Stage | The engine does | The records decide (kind) |
+|---|---|---|
+| Spread | builds the graph from the relations and computes the least fixpoint of "what reaches what" | `propagate`: whether and as what a failure crosses an edge. `combine`: how edges that back each other up count together |
+| Roots | finds which failing conditions another explains, which stand as roots, and counts impact | `explain`: which arriving failure explains (derived) or covers an own condition |
+| Follow | colours what nothing judges | `follow`: whose colour it takes |
+| Roll up | sums collections and places from a snapshot of the stages above | `rollup`: who the members are and how they are summed |
+
+For one decision several records may match. A record another matching record names
+in `overrides` is out; so is one another matching record is strictly more specific
+than. What is left agrees, or it is a conflict: `rules check` refuses the set, and if
+one is ever evaluated the more severe outcome is taken, so the answer stays
+deterministic. Layer and file order never decide.
+
+**What holds whatever the records say.**
+
+- *A critical is never the symptom of a warning.* A crossing carries two levels: the
+  impact it gives and the level up to which it explains, which is the status it left
+  its provider with, capped by its root's own status. A root is covered only by an
+  impact whose root is at least as severe as the impact and as the condition covered.
+- *Only the owner clears.* The engine never turns a failure into ok.
+- *Matches read inputs only* (classes, attributes, relations, the condition crossing),
+  never what was derived, and records only add states. So the spread ends and has one
+  answer, whatever order objects, relations and records are visited in.
+- *Rules do not invent edges.* A failure travels only along a relation in the CMDB.
+- *Groups.* A `combine` record groups relations (by an edge attribute such as
+  `redundancyGroup`, or every matched relation into one dependant) and gives steps:
+  "one down: a warning", "all down: the failure itself". A member is down when a
+  provider on that relation, other than the dependant, is failing. The message names
+  the earliest failed member. A group's verdict never explains its own failed members,
+  and a group whose verdict can reach its own members counts them from a run without it.
+
+**Expected or derived.** A failing condition is **derived** when a failure reaches its
+object and an `explain` record says it explains it there (shipped: a failure of the same
+type, up to the level above). It does not count and is never a root. A failure of its
+own on an object a critical reached is **covered**: still its own, but not listed or
+mailed as a root while that stands (shipped: any critical covers).
 
 **Cycles.** `connects` has no direction, so both ends of a dead cable reach each
 other. Of two that reach each other the earlier `since` is the root.
 
-**Roots.** A root is a failing condition no other failure explains, unless a
-critical impact reached its object (a full disk on a guest whose node is down).
-A warning that reached it never takes a critical's place: a slow node does not
-explain a guest that stopped. Roots are ordered critical first, then by what they
-impact. A zone's and an environment's CVE score is derived, never a root. There is
-no common-ancestor rule: a standing warning on a machine was made the root of
-unrelated stopped guests by it.
+**Roots.** A root is a failing, non-derived condition that is not covered. Roots are
+ordered critical first, then by what they impact, then by `since`. An object reached by
+several roots names the one that gave its worst status. A zone's and an environment's
+CVE score is their own (an `own` roll-up record): derived, never a root. There is no
+common-ancestor rule: a standing warning on a machine was made the root of unrelated
+stopped guests by it.
+
+**Roll-ups** read their members from a snapshot taken before any roll-up, so a room
+counts its rack's own conditions, never the rack's sum. A roll-up never
+replaces an impact the spread gave (a cluster that lost quorum keeps saying so).
+
+**A group fed by its own verdict.** Where a group's verdict can reach its own members
+(the quorum: a cluster's failure travels back to its nodes), the crossing a group gave
+carries the members that counted as down for it, and is no impact on, explanation of
+or cover for them; and the group counts its members from a run with such groups
+switched off, so a member the verdict took down is not counted as a cause of it. On a
+site with no such group this costs nothing: there is one run.
+
+**Maintenance windows** cover what the records say (`src/windows.ts`): the object a
+window names whole, and on each object a simulated `operational critical` failure of it
+reaches, the conditions that failure would explain or cover there. One extra spread
+per object an open window names, with nothing else failing, so a second fault that the
+window did not plan for is still heard.
+
+**What a finding becomes** (`src/classify.ts`), before settle: each failing finding is
+matched against the `classify` records (its source, type, status, reason, labels and age,
+and the object). The winner may re-rate it (the condition keeps `raw`: the source's
+status, since when the source has said it, and the record; `finding.age` reads that
+since, so an age-based raise never resets its own clock), mark it a sum of others
+(`aggregate`: derived from the start, never a root), or quiet it (`quieted`: kept with the
+source's status, silenced like an acknowledgement without an end, and the impacts whose
+only root it is are quiet with it). An ok or unknown finding is never touched, so only
+its owner ever clears a condition.
+
+**How a root is told** (`src/notices.ts`): the engine still decides who can be told (a
+failing root of its own, nothing silenced); the `notify` record that wins for the root's
+object and condition says at once, in the digest, or not at all. With no installed set,
+emit uses the core notify records, kept equal to `notify.json` by a test.
+
+**Where the records come from** (`src/rulestore.ts`). The engine reads
+`config/health/rules/` (before the first merge, the core records of the release).
+`rules merge` compares, per origin and per rule id, what was last installed
+(`base/`), what is released now and what is installed, and never changes a rule the
+site edited or brings back one it deleted; the merged set is checked, a released
+rule that conflicts with a local one is held, and a module's rule must name the
+module at one end and has its reach measured by simulation. The verbs
+(`src/rules-verbs.ts`) change the installed set on a fresh copy, check it, run the
+contract scenarios and show the difference on the site before `--apply` writes. A
+changed active set runs assess and emit at once; emit marks that run's transitions
+`cause: "rules"` (by the site's `assessment.rules.hash` against its cursor's) and
+keeps them out of the flapping count.
+
+**Tracing.** Every derived condition carries `rule`: the record behind its crossing,
+explanation, follow or roll-up. With `trace` on (`rules explain`), the engine also
+keeps the crossings, the record and step behind each, and the records that matched
+and lost each decision.
 
 **Dependency cycles.** A cycle over required relations makes one failure reach
 everything on it and come back. `rules check` reads the CMDB's relations for them,
@@ -260,8 +331,8 @@ credential are here.
   datastores (PBS's) and node memory, "full in N days" from the last 7 days' slope; within the
   site's `performance.capacityHorizonDays` (14) a warning (`capacity-trend`), beside the usage
   thresholds.
-- **correlation**: `health-rules.json` crosses a pool's performance warning or critical over
-  `stored-on`, and a node's over `runs-on`, as a `warning` impact.
+- **correlation**: two core `propagate` records cross a pool's performance warning or critical
+  over `stored-on`, and a node's over `runs-on`, as a `warning` impact.
 - **mail**: a performance root is no critical-root notice of its own; its transition carries
   `digestOnly` after `silenced`, so the daily digest's match takes it; symptoms are never mailed.
 

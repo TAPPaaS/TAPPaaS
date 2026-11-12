@@ -1,0 +1,11 @@
+{
+  "description": "Whose colour an object takes when nothing judges it: the object on the to end of the named relation.",
+  "records": [
+    { "id": "core.follow.port", "kind": "follow", "description": "A port nothing judges takes its device's colour.",
+      "when": { "object": { "class": "port" } }, "relation": "part-of", "types": ["operational"] },
+    { "id": "core.follow.disk", "kind": "follow", "description": "A disk nothing judges takes its asset's colour.",
+      "when": { "object": { "class": "disk" } }, "relation": "part-of", "types": ["operational"] },
+    { "id": "core.follow.asset", "kind": "follow", "description": "An asset nothing judges takes the colour of the node it is allocated to.",
+      "when": { "object": { "class": "asset" } }, "relation": "allocated-to", "types": ["operational"] }
+  ]
+}

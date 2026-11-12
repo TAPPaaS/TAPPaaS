@@ -24,6 +24,10 @@ export interface Condition {
   flapping?: boolean; // emit's (its `flapping` attribute), projected by assess
   flappingHeld?: ConditionStatus;
   operatorAt?: string; // the operator's last word on it (acknowledgements) that assess took
+  rule?: string; // the health record that decided a derived condition: the crossing, the explanation, the follow, the roll-up
+  raw?: { status: ConditionStatus; since: string; rule: string }; // re-rated by a classify record: what the source said, since when
+  quieted?: { rule: string; since: string; via?: string[] }; // quieted by a classify record (or with the only root it names)
+  aggregate?: boolean; // a sum of others (a classify record): derived, never a root
 }
 
 export interface CmdbItem {
@@ -65,9 +69,9 @@ export const conditionsOf = (o: CmdbItem): Condition[] => (Array.isArray(o.attri
 const running = (w: { until: string | null } | null, now: number): boolean => w !== null && (!w.until || Date.parse(w.until) > now);
 
 /** Silenced by an operator: an acknowledgement or a maintenance window that holds. */
-export const silenced = (c: Condition, now: number): boolean => running(c.acknowledged, now) || running(c.maintenance, now);
+export const silenced = (c: Condition, now: number): boolean => running(c.acknowledged, now) || running(c.maintenance, now) || !!c.quieted;
 
-/** What fails `validate` (D2): critical, neither derived, acknowledged nor in maintenance. */
+/** What fails `validate` (D2): critical, neither derived, acknowledged, in maintenance nor quiet. */
 export const counts = (c: Condition, now: number): boolean => c.status === "critical" && !c.derived && !silenced(c, now);
 
 // A module is the node of its kind, or an app (ADR-040 D3).

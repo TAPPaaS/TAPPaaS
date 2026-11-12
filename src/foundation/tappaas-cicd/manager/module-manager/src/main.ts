@@ -1568,12 +1568,14 @@ function withChangeReport(verb: string, opts: Opts, client: ModuleClient, fn: ()
   const confs = client.guestConfs(vmids);
   const objects: CmdbObject[] = [];
   const relations: CmdbRelation[] = [];
+  const complete: { type: string; from: CmdbRelation["from"]; toClass?: string }[] = [];
   for (const name of touched) {
     const c = moduleChangeObjects(opts.configDir, name, before.get(name)?.m ?? null, confs);
     objects.push(...c.objects.filter((o) => !objects.some((x) => x.class === o.class && x.name === o.name)));
     relations.push(...c.relations);
+    complete.push(...(c.complete ?? []));
   }
-  reportChange({ source: REPORT_SOURCE, verb: [verb, ...opts.rest].join(" "), objects, relations, configDir: opts.configDir });
+  reportChange({ source: REPORT_SOURCE, verb: [verb, ...opts.rest].join(" "), objects, relations, complete, configDir: opts.configDir });
   return rc;
 }
 

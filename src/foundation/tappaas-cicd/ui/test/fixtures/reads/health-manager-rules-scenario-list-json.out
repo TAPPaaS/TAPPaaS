@@ -1,0 +1,34 @@
+[
+  {
+    "id": "core.scenario.node-down",
+    "description": "A node down: the node is the one root; its guest, the guest's service and what depends on that service are impacted; the guest's own stop is derived."
+  },
+  {
+    "id": "core.scenario.ha-guest",
+    "description": "An HA-protected guest whose node fails is degraded, not down, and its stop is the node's failure."
+  },
+  {
+    "id": "core.scenario.covered-by-down",
+    "description": "A guest's full disk on a node that is down is its own, but no root while the node is down."
+  },
+  {
+    "id": "core.scenario.warning-never-covers",
+    "description": "A slow node does not explain a guest that stopped, and a warning never takes a critical's place as root."
+  },
+  {
+    "id": "core.scenario.redundancy-group",
+    "description": "Two uplinks in one group: one down degrades the dependant and the member is the root; both down is the failure itself."
+  },
+  {
+    "id": "core.scenario.cable-both-ends",
+    "description": "Both ends of a cable see it down: the earlier is the root, the other the same failure."
+  },
+  {
+    "id": "core.scenario.pool-faulted",
+    "description": "A failed pool takes down what is stored on it, not what merely runs beside it; a degraded pool reaches nothing."
+  },
+  {
+    "id": "core.scenario.worst-root-named",
+    "description": "An object reached by a warning root and a critical root names the critical one, and a critical of its own is covered only by it."
+  }
+]

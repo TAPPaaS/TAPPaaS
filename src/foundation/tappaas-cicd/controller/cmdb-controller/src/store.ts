@@ -58,8 +58,9 @@ export interface Report {
   relations?: ReportRelation[];
   // The report names every relation of `type` from `from` (ADR-040 D4): an
   // open one it does not name has ended, and is closed. One an operator
-  // recorded is left alone.
-  complete?: { type: string; from: Ref }[];
+  // recorded is left alone. With `toClass`, only the relations to an object of
+  // that class (or a subclass): a node's zone, not its cluster.
+  complete?: { type: string; from: Ref; toClass?: string }[];
 }
 
 export interface Problem {
@@ -445,13 +446,11 @@ export class Store {
     return event.objects.length;
   }
 
-  /** The correlation rules, and what a reader of them needs of the metamodel
-   *  (ADR-041 D3): each relation type's dependant end, whether it is required and
+  /** What a reader of the health records needs of the metamodel: each relation type's dependant end, whether it is required and
    *  the end the Health view's tree nests (D5), each class's ancestors. */
   rules(): Obj {
     const relations = new Map(this.mm.relations.map((r) => [r.name, { name: r.name, dependant: r.dependant, required: r.required, tree: r.tree }]));
     return {
-      rules: this.mm.rules,
       relations: [...relations.values()],
       ancestors: Object.fromEntries([...this.mm.classes.keys()].map((c) => [c, this.mm.ancestors(c)])),
       fields: [...new Set([...this.mm.classes.keys()].flatMap((c) => [...this.mm.fields(c).keys()]))].sort(),
@@ -1543,12 +1542,18 @@ class ReportRun {
   }
 
   /** A complete statement: close what the report no longer names. */
-  async complete(i: number, c: { type: string; from: Ref }): Promise<void> {
+  async complete(i: number, c: { type: string; from: Ref; toClass?: string }): Promise<void> {
     const at = `complete[${i}]`;
     if (!isObj(c) || typeof c.type !== "string" || !this.mm.relationEnds(c.type).length) return this.problem(at, "a complete names a relation type and a from");
+    if (c.toClass !== undefined && (typeof c.toClass !== "string" || !this.mm.has(c.toClass))) return this.problem(`${at}.toClass`, `no class ${String(c.toClass)}`);
     const from = await this.target(`${at}.from`, c.from, null);
     if (!from) return;
-    const open = (await this.q("SELECT id, to_object FROM relation WHERE type = $1 AND from_object = $2 AND upper_inf(validity) AND NOT recorded", [c.type, from.id])).rows;
+    const open = (await this.q(
+      `SELECT r.id, r.to_object FROM relation r JOIN object o ON o.id = r.to_object
+        WHERE r.type = $1 AND r.from_object = $2 AND upper_inf(r.validity) AND NOT r.recorded
+          AND ($3::text IS NULL OR EXISTS (SELECT 1 FROM class_ancestor ca WHERE ca.class = o.class AND ca.ancestor = $3))`,
+      [c.type, from.id, c.toClass ?? null],
+    )).rows;
     for (const x of open) {
       if (this.named.has(`${c.type}|${from.id}|${String(x.to_object)}`)) continue;
       await this.closeRelation(Number(x.id));

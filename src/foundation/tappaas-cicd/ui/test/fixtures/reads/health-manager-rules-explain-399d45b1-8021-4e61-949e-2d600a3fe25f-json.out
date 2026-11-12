@@ -1,0 +1,22 @@
+{
+  "object": {
+    "id": "399d45b1-8021-4e61-949e-2d600a3fe25f",
+    "class": "device",
+    "name": "USW Pro XG 10 PoE"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "warning",
+      "reason": "vlan-undeclared",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

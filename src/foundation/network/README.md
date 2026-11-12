@@ -148,6 +148,15 @@ update installs and converges it (`scripts/crowdsec-converge.sh`, also `--check`
 `test.sh` checks it is running, local only, reading Caddy's logs and whitelisting
 the site.
 
+## Health rules
+
+[`network-health.json`](./network-health.json) holds the module's health rules:
+
+- `network.propagate.zone-down`: a zone that is down cuts off every node and
+  application in it. Nodes and applications are `member-of` the zone of their
+  record, and network-manager reports the zones, so the record names a class this
+  module reports. A maintenance window on a zone therefore covers what is in it.
+
 ## Split-horizon DNS — `network:proxy` (ADR-021)
 
 A published service answers at **one URL** inside and out. Inside, Unbound holds the

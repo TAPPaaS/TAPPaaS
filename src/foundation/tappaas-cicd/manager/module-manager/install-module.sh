@@ -355,6 +355,17 @@ rollback_failed_install() {
 
 # ── Main ─────────────────────────────────────────────────────────────
 
+
+# The module's health rules (<module>-health.json beside its JSON): merged into
+# what the site runs, keeping what the site edited; a changed set recalculates
+# health at once. Never stops the caller.
+health_rules_merge() {
+    local mod="$1"
+    command -v health-manager >/dev/null 2>&1 || return 0
+    health-manager rules merge --origin "${mod}" --apply >/dev/null 2>&1 \
+        || warn "  the health rules of ${mod} did not merge cleanly — health-manager rules merge --origin ${mod} shows why"
+}
+
 main() {
     # Handle help flag
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
@@ -637,6 +648,14 @@ main() {
     # can be caught by this.
     INSTALL_MODULE_NAME="${effective_module}"
     trap rollback_failed_install EXIT
+
+    # The module's health rules, when it ships them: refused here when they do
+    # not hold (schema, names, anchoring at its own end, conflicts), rather than
+    # at the merge after the install.
+    if [[ -f "$(pwd)/${module}-health.json" ]] && command -v health-manager >/dev/null 2>&1; then
+        health-manager rules check --file "$(pwd)/${module}-health.json" --origin "${module}" \
+            || die "${module}-health.json does not hold — fix the health rules named above"
+    fi
 
     # The module's alert rules (ADR-039), when it ships them: refused here, with
     # the finding, rather than at their first apply. Foundation fields (scope,
@@ -1074,6 +1093,8 @@ main() {
     fi
 
     # ── Done ─────────────────────────────────────────────────────────
+    health_rules_merge "${module}"
+
     info "${GN}${BOLD}╔══════════════════════════════════════════════╗${CL}"
     info "${GN}${BOLD}║  Module '${effective_module}' installed successfully     ${CL}"
     info "${GN}${BOLD}╚══════════════════════════════════════════════╝${CL}"

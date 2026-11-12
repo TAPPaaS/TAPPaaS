@@ -1,0 +1,58 @@
+[
+  {
+    "field": "description",
+    "released": "\"An operational warning nobody dealt with for a day becomes critical.\"",
+    "here": "\"An operational warning nobody dealt with for a day becomes critical.\"",
+    "now": "\"An operational warning nobody dealt with for a day becomes critical.\"",
+    "mark": ""
+  },
+  {
+    "field": "enabled",
+    "released": "false",
+    "here": "false",
+    "now": "false",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.classify.long-warning\"",
+    "here": "\"core.classify.long-warning\"",
+    "now": "\"core.classify.long-warning\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"classify\"",
+    "here": "\"classify\"",
+    "now": "\"classify\"",
+    "mark": ""
+  },
+  {
+    "field": "set",
+    "released": "{\"status\":\"critical\"}",
+    "here": "{\"status\":\"critical\"}",
+    "now": "{\"status\":\"critical\"}",
+    "mark": ""
+  },
+  {
+    "field": "when.finding.age",
+    "released": "{\"over\":\"24h\"}",
+    "here": "{\"over\":\"24h\"}",
+    "now": "{\"over\":\"24h\"}",
+    "mark": ""
+  },
+  {
+    "field": "when.finding.status",
+    "released": "\"warning\"",
+    "here": "\"warning\"",
+    "now": "\"warning\"",
+    "mark": ""
+  },
+  {
+    "field": "when.finding.type",
+    "released": "\"operational\"",
+    "here": "\"operational\"",
+    "now": "\"operational\"",
+    "mark": ""
+  }
+]

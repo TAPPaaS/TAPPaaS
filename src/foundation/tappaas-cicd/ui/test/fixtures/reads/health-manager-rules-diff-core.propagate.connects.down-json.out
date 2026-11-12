@@ -1,0 +1,51 @@
+[
+  {
+    "field": "as",
+    "released": "{\"status\":\"critical\"}",
+    "here": "{\"status\":\"critical\"}",
+    "now": "{\"status\":\"critical\"}",
+    "mark": ""
+  },
+  {
+    "field": "description",
+    "released": "\"A cable whose one end is down takes the other end down.\"",
+    "here": "\"A cable whose one end is down takes the other end down.\"",
+    "now": "\"A cable whose one end is down takes the other end down.\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.propagate.connects.down\"",
+    "here": "\"core.propagate.connects.down\"",
+    "now": "\"core.propagate.connects.down\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"propagate\"",
+    "here": "\"propagate\"",
+    "now": "\"propagate\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.status",
+    "released": "\"critical\"",
+    "here": "\"critical\"",
+    "now": "\"critical\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.type",
+    "released": "\"operational\"",
+    "here": "\"operational\"",
+    "now": "\"operational\"",
+    "mark": ""
+  },
+  {
+    "field": "when.relation",
+    "released": "\"connects\"",
+    "here": "\"connects\"",
+    "now": "\"connects\"",
+    "mark": ""
+  }
+]

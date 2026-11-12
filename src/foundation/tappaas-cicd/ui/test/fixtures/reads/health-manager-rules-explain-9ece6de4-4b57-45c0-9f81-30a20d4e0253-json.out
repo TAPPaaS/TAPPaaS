@@ -1,0 +1,22 @@
+{
+  "object": {
+    "id": "9ece6de4-4b57-45c0-9f81-30a20d4e0253",
+    "class": "backup-peer",
+    "name": "rasmus"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "warning",
+      "reason": "pulse",
+      "how": "root",
+      "impacts": 0
+    },
+    {
+      "type": "drift",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+[
+  {
+    "field": "as",
+    "released": "{\"status\":\"warning\"}",
+    "here": "{\"status\":\"warning\"}",
+    "now": "{\"status\":\"warning\"}",
+    "mark": ""
+  },
+  {
+    "field": "description",
+    "released": "\"A slow pool slows what is stored on it; it is not down, so the impact stays a warning.\"",
+    "here": "\"A slow pool slows what is stored on it; it is not down, so the impact stays a warning.\"",
+    "now": "\"A slow pool slows what is stored on it; it is not down, so the impact stays a warning.\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.propagate.stored-on.slow-pool\"",
+    "here": "\"core.propagate.stored-on.slow-pool\"",
+    "now": "\"core.propagate.stored-on.slow-pool\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"propagate\"",
+    "here": "\"propagate\"",
+    "now": "\"propagate\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.status",
+    "released": "[\"warning\",\"critical\"]",
+    "here": "[\"warning\",\"critical\"]",
+    "now": "[\"warning\",\"critical\"]",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.type",
+    "released": "\"performance\"",
+    "here": "\"performance\"",
+    "now": "\"performance\"",
+    "mark": ""
+  },
+  {
+    "field": "when.provider.class",
+    "released": "{\"isA\":[\"storage-pool\"]}",
+    "here": "{\"isA\":[\"storage-pool\"]}",
+    "now": "{\"isA\":[\"storage-pool\"]}",
+    "mark": ""
+  },
+  {
+    "field": "when.relation",
+    "released": "\"stored-on\"",
+    "here": "\"stored-on\"",
+    "now": "\"stored-on\"",
+    "mark": ""
+  }
+]

@@ -1,0 +1,37 @@
+[
+  {
+    "field": "description",
+    "released": "\"While something critical has reached an object, its own failures are not roots of their own.\"",
+    "here": "\"While something critical has reached an object, its own failures are not roots of their own.\"",
+    "now": "\"While something critical has reached an object, its own failures are not roots of their own.\"",
+    "mark": ""
+  },
+  {
+    "field": "effect",
+    "released": "\"covered\"",
+    "here": "\"covered\"",
+    "now": "\"covered\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.explain.down-covers\"",
+    "here": "\"core.explain.down-covers\"",
+    "now": "\"core.explain.down-covers\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"explain\"",
+    "here": "\"explain\"",
+    "now": "\"explain\"",
+    "mark": ""
+  },
+  {
+    "field": "when.cause.status",
+    "released": "\"critical\"",
+    "here": "\"critical\"",
+    "now": "\"critical\"",
+    "mark": ""
+  }
+]

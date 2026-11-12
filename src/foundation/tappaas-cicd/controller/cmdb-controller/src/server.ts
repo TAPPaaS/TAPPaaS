@@ -3,7 +3,7 @@
 // file permissions decide who may call), and on loopback with a bearer token
 // for the console and the agents behind it. Both serve the same routes.
 //
-//   GET  /v1/rules                         the correlation rules (ADR-041 D3)
+//   GET  /v1/rules                         what a reader of the health records needs of the metamodel
 //   GET  /v1/health                        the store answers; counts
 //   POST /v1/report                        observations and changes, in a batch
 //   POST /v1/query                         by class (and subclasses), physical, attributes, at

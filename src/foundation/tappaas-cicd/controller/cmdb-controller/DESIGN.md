@@ -136,7 +136,10 @@ says the report names every relation of that type from that object: after its
 relations are applied, the store closes each open one of that type from that
 object the report did not name, unless an operator recorded it. module-manager
 sends it for every instance's `depends-on`, and for an application's host, so a
-dependency dropped from a record ends.
+dependency dropped from a record ends. A complete may name `toClass`: then only the relations to
+an object of that class (or a subclass) are closed, so module-manager's report of a
+node's zone (`member-of` a `zone`) ends the old zone without touching the node's
+cluster or environment.
 
 `object.seen` keeps, per source, when it last reported the object; the query
 returns it beside `lastSeen`, so a judgement can tell an observation that is

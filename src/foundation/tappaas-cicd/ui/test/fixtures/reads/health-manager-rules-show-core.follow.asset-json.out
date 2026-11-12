@@ -1,0 +1,38 @@
+{
+  "id": "core.follow.asset",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "an asset nothing judges takes the operational colour of what it is allocated-to",
+  "record": {
+    "id": "core.follow.asset",
+    "kind": "follow",
+    "description": "An asset nothing judges takes the colour of the node it is allocated to.",
+    "when": {
+      "object": {
+        "class": "asset"
+      }
+    },
+    "relation": "allocated-to",
+    "types": [
+      "operational"
+    ]
+  },
+  "released": {
+    "id": "core.follow.asset",
+    "kind": "follow",
+    "description": "An asset nothing judges takes the colour of the node it is allocated to.",
+    "when": {
+      "object": {
+        "class": "asset"
+      }
+    },
+    "relation": "allocated-to",
+    "types": [
+      "operational"
+    ]
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": null
+}

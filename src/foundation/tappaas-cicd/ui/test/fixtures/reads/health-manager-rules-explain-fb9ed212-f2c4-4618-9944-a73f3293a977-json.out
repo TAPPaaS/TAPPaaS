@@ -1,0 +1,15 @@
+{
+  "object": {
+    "id": "fb9ed212-f2c4-4618-9944-a73f3293a977",
+    "class": "environment",
+    "name": "zcnode"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+[
+  {
+    "field": "description",
+    "released": "\"A room or a rack is the worst of what is placed in it and the nodes its assets are allocated to.\"",
+    "here": "\"A room or a rack is the worst of what is placed in it and the nodes its assets are allocated to.\"",
+    "now": "\"A room or a rack is the worst of what is placed in it and the nodes its assets are allocated to.\"",
+    "mark": ""
+  },
+  {
+    "field": "fn",
+    "released": "\"worst\"",
+    "here": "\"worst\"",
+    "now": "\"worst\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.rollup.place\"",
+    "here": "\"core.rollup.place\"",
+    "now": "\"core.rollup.place\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"rollup\"",
+    "here": "\"rollup\"",
+    "now": "\"rollup\"",
+    "mark": ""
+  },
+  {
+    "field": "members",
+    "released": "[{\"relations\":[\"placed-in\",\"at\"],\"transitive\":true,\"walk\":\"inbound\"},{\"relations\":[\"allocated-to\"],\"walk\":\"outbound\"}]",
+    "here": "[{\"relations\":[\"placed-in\",\"at\"],\"transitive\":true,\"walk\":\"inbound\"},{\"relations\":[\"allocated-to\"],\"walk\":\"outbound\"}]",
+    "now": "[{\"relations\":[\"placed-in\",\"at\"],\"transitive\":true,\"walk\":\"inbound\"},{\"relations\":[\"allocated-to\"],\"walk\":\"outbound\"}]",
+    "mark": ""
+  },
+  {
+    "field": "when.object.class",
+    "released": "{\"isA\":[\"place\"]}",
+    "here": "{\"isA\":[\"place\"]}",
+    "now": "{\"isA\":[\"place\"]}",
+    "mark": ""
+  }
+]

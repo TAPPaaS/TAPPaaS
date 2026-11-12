@@ -39,6 +39,13 @@ health-manager report security [--cves] [--scan [--all]] [--json]
 health-manager scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update] [--no-vex]
 health-manager scan images --refs <file> [--no-db-update] [--no-vex]
 health-manager score [--details <file>] [--items <file>] [--json]
+health-manager rules list [--kind K] [--origin O] [--state edited|pending|held|disabled|deleted] [--json|--markdown]
+health-manager rules show <id> | diff <id> [--json]
+health-manager rules check [--file F [--origin O]] | explain <ci> | simulate --fail <ci>[:type[:status]] … [--with F] [--without <id>] [--diff]
+health-manager rules add <file> | edit <id> --set path=value … | --unset path | --file F   [--note N] [--apply] [--force]
+health-manager rules enable|disable <id> | --origin O · delete|restore|take [--field F]|keep|accept <id>   [--apply]
+health-manager rules scenario list | retire <id> --note N | restore <id>   [--apply]
+health-manager rules merge [--origin O] [--apply]
 ```
 
 `scan nix-list` matches a JSON list of `{name, version}` against the CVE database as if those
@@ -582,7 +589,13 @@ with the console's job id. Like any change on an object, it clears the object's 
 
 Opens a window for the object: a file in `/var/lib/tappaas/maintenance`, the kind the update
 opens before a restart and the alert receiver reads. While it is open, assess puts every condition
-of the object, and of everything that runs on it, in maintenance: transitions are told with
+of the object in maintenance, and on everything the object would impact if it failed, what that
+failure would explain or cover there, under the health records in use (the same as `rules simulate
+--fail <object>`): the guests, services and applications on a node, what depends on a service
+being restarted, what is stored on a pool of the node, wherever it runs. An HA guest on the node
+is degraded, not down, so only its `operational` condition is silenced and a full disk on it is
+still heard; a relation marked `required: false` carries nothing, so covers nothing; a record a
+site adds that softens a crossing narrows the window with it. Transitions are told with
 `silenced: true`, and a critical root in it is no notice. It ends at `--until`, or by `maintenance
 end` (done early) or `cancel` (withdrawn); emit tells it opening and ending.
 
@@ -740,7 +753,7 @@ the CI within its class's expiry, `warning` (`unseen`) once it does not.
 | `location`, `room`, `rack` | the roll-up of what is in them. **Not assessed by design** when empty: grey says nothing is there | `roll-up` |
 | `node` | a placeholder's class: **not assessed by design**, a placeholder gets no conditions | — |
 
-**Follows.** `FOLLOWS` in `lib/ts/src/health-rules.ts` names what nothing judges:
+**Follows.** The core `follow` records name what nothing judges:
 a port or a disk its asset, an asset its node. Such an object gets a `derived` `operational`
 condition, reason `follows`, with the worst of the parent's `operational` and `impact`
 (`ok` when the parent is judged only in other types). It is worked out on every run,
@@ -752,26 +765,63 @@ switch lists every free port. `linkSpeed` reaches the CMDB from a node's NICs
 
 ### Root causes
 
-`metamodel/health-rules.json` says how a failure travels: each rule names a
-relation type, optionally the class of either end, the source condition and the
-impact it produces. A rule may also read the dependant: `"dependant": { "haNode": true }`
-matches only a dependant whose attribute has that value (`true`: any value that is
-set), and such a rule wins over one without it for the same crossing. Shipped:
-`operational critical` crosses `runs-on`, `depends-on`, `member-of`, `connects` and
-`built-on` (a disk to the pool built on it) and `stored-on` (a pool to the guests
-and backup datastores whose data is on it) as `critical` impact, except that over
-`runs-on` a guest with `haNode` set (HA-protected) gets a `warning`: its node failed,
-and it is moving or has moved. A pool's mirror or raidz members are one redundancy
-group: one failed member degrades the pool, all of them take it down.
-A warning crosses nothing: a DEGRADED pool leaves its guests and datastores as they are. `health-manager rules list` shows them (`… crosses
-runs-on to a dependant with haNode set as warning impact`); `rules check [--file F]`
-validates them or a candidate, and exits 1 on what it cannot place, a dependant
-clause naming an attribute no class has among it.
+How a failure travels, what explains what, who follows whom and how collections
+sum up are **health records**. The rule language and the standard records are in
+[Health Rules](../../controller/cmdb-controller/metamodel/health/README.md). The
+shipped `propagate` records cross an `operational critical` over `runs-on`,
+`depends-on`, `member-of`, `connects`, `built-on` (a disk to the pool built on it)
+and `stored-on` (a pool to the guests and backup datastores whose data is on it) as a
+`critical` impact, except that over `runs-on` a guest with `haNode` set
+(HA-protected) gets a `warning`: its node failed, and it is moving or has moved. A
+pool's mirror or raidz members are one redundancy group: one failed member degrades
+the pool, all of them take it down. A warning crosses nothing: a DEGRADED pool
+leaves its guests and datastores as they are.
 
-```json
-{ "relation": "runs-on", "source": { "type": "operational", "status": "critical" },
-  "dependant": { "haNode": true }, "impact": "warning" }
-```
+`health-manager rules list` prints each record as one sentence (`a critical
+operational failure crosses runs-on to its dependant with haNode as a warning
+impact`), `--kind` and `--origin` filter it, `--json` gives the records.
+`rules check [--file F]` checks the records in use, or a candidate file with them: it
+refuses a record it cannot place (an unknown class, relation, attribute or condition
+type), and two records that can decide one case differently with neither more
+specific nor naming the other in `overrides`, and exits 1. It runs the contract
+scenarios shipped beside the records and refuses a set under which one no longer
+holds. It also reports dependency cycles in the relations.
+
+`rules explain <object> [--json]` runs the derivation on the site as the CMDB holds
+it now and prints each condition of the object and how it came about: a root and
+what it impacts; a derived or covered condition with the record that explained it;
+an impact with its path from the root, hop by hop, each with the record that decided
+it and the records that matched and lost (less specific, or overridden).
+
+`rules simulate --fail <object>[:type[:status]] … [--with F] [--without <id>]
+[--diff] [--json]` runs it with extra failures (`operational critical` unless
+given), a file of extra records, or a record taken out, and prints the roots and
+what they impact, or with `--diff` the difference from now: roots that appear or go,
+objects whose colour changes. Neither writes anything.
+
+**What a finding becomes** is the `classify` records': the shipped ones make every
+open alert an operational warning, and the two that say something is exposed
+(`RootKeyChanged`, `FirewallCertChanged`) security warnings. A site record may
+re-rate a failing finding (the condition then carries `raw`: what its source said,
+since when, and the record) or quiet it (`quieted`: the record and since when; it
+is kept, fails nothing, is told nowhere, and what it impacts is quiet with it).
+The source still clears either. `list` flags them; `roots --all` shows a quiet root.
+
+**How a root is told** is the `notify` records': shipped, a critical root is
+mailed at once, and a warning, a performance root, a module's CVE level and what is
+about the site, a zone or an environment go to the daily digest. A record may tell
+a warning root at once (its mail says "root cause", not "critical root cause"), or a
+root nowhere. A notice closes when its root no longer wants one; besides recovered,
+eased, unchecked, retired, acknowledged, maintenance, symptom and digest it may
+close as quiet (a record quieted it) or rules (the rules changed). The digest leaves
+out a quiet condition and a root told nowhere. The preview of a write lists the
+conditions that would go quiet or be re-rated and the roots told differently.
+
+Each assess run records the rule set it used on the site's `assessment.rules`: the
+SHA-256 over the active records, each record's own hash, and, when the set differs
+from the last run's, the records that changed. A derived condition carries `rule`:
+the record that decided it. Two active records that decide one case differently are
+a `drift` warning on the site (`rules-conflict`) until the set holds again.
 
 A crossing softer than the failure (a warning for a critical) still explains the
 dependant's own condition of that type: the HA guest that stopped with its node is
@@ -798,6 +848,68 @@ The site object carries the result as `rootCauses[]`, most impact first:
 Roll-ups: a `collection` and a `place` carry the worst of their members per type,
 derived and counted (`3 of 12 critical`), leaving out what is acknowledged or in
 maintenance. A collection's own worse condition stands. A roll-up is never a root.
+
+### The rules a site runs
+
+The site runs one set of health records, in `config/health/`:
+
+| Path | What |
+|---|---|
+| `rules/<origin>.json` | what runs, one file per origin: `core.json`, a module's (`network.json`), `site.json` for the site's own rules. The merge, the verbs and the console write it; an edit by hand counts as an edit |
+| `base/<origin>.json` | each release as it was last installed: the merge alone writes it, so "what did I change" and "what did the release change" are both a diff |
+| `scenarios/<origin>.json` | the contract scenarios as released |
+| `state.json` | per rule the site touched: edited, deleted or added, who, when, why, as released when edited, whether upstream changed it since; rules held; scenarios retired; origins switched off; the last merge |
+
+Before the first merge health-manager runs the core records as released. Every
+record's origin is who released it (core, a module, the site); it never decides
+which record wins.
+
+**The merge** runs on every system update, on every module install, update and
+removal, and wherever corrected rules arrive: `rules merge [--origin O] --apply`.
+Per rule, over three versions (as last installed, as released now, as installed
+here): an unchanged rule takes the release (added, updated or removed); a rule the
+site edited is kept exactly as edited and marked when the release changed or
+removed it (pending until the operator decides); a rule the site deleted stays
+deleted, and its tombstone goes when the release drops it too; an edit that
+matches the new release is in step again. A released rule that replaces one the
+site edited comes in held, so two rules for one case never both run. The merged
+set is checked before it runs: a released rule that conflicts with a local one is
+held, the rest runs; a release that does not hold changes nothing and is told as
+drift on the site (`rules-merge`). A module's rule must name the module at one end
+(`module: <it>`, or a class its managers report), and its reach (the most objects
+one failure it matches can impact) is recorded; an app module's rule over the
+site's `health.rules.reachHold` (a count, or under 1 a share of the CIs; a quarter
+by default) is installed held until accepted. A foundation module's rule is never
+held.
+
+**The verbs** each preview first: without `--apply` they print the records that
+change, what the check says, contract scenarios that would no longer hold, and on
+the site as it is now the roots that appear or go and the objects whose colour
+changes. `--apply` writes it. A write the check refuses is not written; one under
+which a contract scenario no longer holds needs `--force`, which the rule's note
+records.
+
+- `add <file>`: the site's own rules (ids `site.…`). `edit <id> --set path=value`
+  (`as.status=warning`, `when.dependant.zone=dmz`), `--unset path`, or `--file F`.
+- `enable|disable <id>`: as a local edit. `disable --origin <module>` turns all of a
+  module's rules off; they stay off across updates.
+- `delete <id>`: a tombstone; an update never brings it back. `restore <id>`: as released.
+- `diff <id>`: as released when edited, as it is here, as released now, field by
+  field, each marked changed here, upstream or in both. `take <id> [--field F]`
+  takes the release whole, or one field; `keep <id>` keeps the edit and marks it
+  reviewed.
+- `accept <id>`: runs a held rule.
+- `scenario list|retire <id> --note …|restore <id>`: a scenario retired here is not
+  run, an update never brings it back, and a change to it upstream is noted.
+- `list --state …`, `show <id>`: what each rule decides on the site now, its state,
+  what it overrides and is overridden by.
+
+An apply or a merge that changes the active set runs `assess` and `emit` at once:
+health under the new rules, not at the next timer. Such a run's transitions carry
+`cause: "rules"` and the records that changed, do not count toward flapping, and a
+notice that opens or closes in it says the rules changed. Every notice carries the
+first eight characters of the rule-set hash it was decided under, and the daily
+digest lists rule changes, pending and held rules under their own heading, once.
 
 ## Common options
 

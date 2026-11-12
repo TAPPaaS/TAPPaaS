@@ -1,0 +1,22 @@
+{
+  "object": {
+    "id": "7c4857f1-332c-41c4-bdc7-7f2587e93c18",
+    "class": "vm",
+    "name": "tappaas-nixos"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "warning",
+      "reason": "sweep-unmanaged",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+[
+  {
+    "field": "as",
+    "released": "{\"status\":\"warning\"}",
+    "here": "{\"status\":\"critical\"}",
+    "now": "{\"status\":\"warning\"}",
+    "mark": "here"
+  },
+  {
+    "field": "description",
+    "released": "\"An HA-protected guest whose node fails is moving or has moved: degraded, not down.\"",
+    "here": "\"An HA-protected guest whose node fails is moving or has moved: degraded, not down.\"",
+    "now": "\"An HA-protected guest whose node fails is moving or has moved: degraded, not down, while HA has a node for it.\"",
+    "mark": "upstream"
+  },
+  {
+    "field": "id",
+    "released": "\"core.propagate.runs-on.down-ha\"",
+    "here": "\"core.propagate.runs-on.down-ha\"",
+    "now": "\"core.propagate.runs-on.down-ha\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"propagate\"",
+    "here": "\"propagate\"",
+    "now": "\"propagate\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.status",
+    "released": "\"critical\"",
+    "here": "\"critical\"",
+    "now": "\"critical\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.type",
+    "released": "\"operational\"",
+    "here": "\"operational\"",
+    "now": "\"operational\"",
+    "mark": ""
+  },
+  {
+    "field": "when.dependant.attr.haNode",
+    "released": "{\"exists\":true}",
+    "here": "{\"exists\":true}",
+    "now": "{\"exists\":true}",
+    "mark": ""
+  },
+  {
+    "field": "when.relation",
+    "released": "\"runs-on\"",
+    "here": "\"runs-on\"",
+    "now": "\"runs-on\"",
+    "mark": ""
+  }
+]

@@ -1,0 +1,44 @@
+[
+  {
+    "field": "aggregate",
+    "released": "true",
+    "here": "true",
+    "now": "true",
+    "mark": ""
+  },
+  {
+    "field": "description",
+    "released": "\"A zone's and an environment's CVE score is the sum of their modules': never a root.\"",
+    "here": "\"A zone's and an environment's CVE score is the sum of their modules': never a root.\"",
+    "now": "\"A zone's and an environment's CVE score is the sum of their modules': never a root.\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.classify.zone-score\"",
+    "here": "\"core.classify.zone-score\"",
+    "now": "\"core.classify.zone-score\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"classify\"",
+    "here": "\"classify\"",
+    "now": "\"classify\"",
+    "mark": ""
+  },
+  {
+    "field": "when.finding.source",
+    "released": "\"cve\"",
+    "here": "\"cve\"",
+    "now": "\"cve\"",
+    "mark": ""
+  },
+  {
+    "field": "when.object.class",
+    "released": "{\"isA\":[\"zone\",\"environment\"]}",
+    "here": "{\"isA\":[\"zone\",\"environment\"]}",
+    "now": "{\"isA\":[\"zone\",\"environment\"]}",
+    "mark": ""
+  }
+]

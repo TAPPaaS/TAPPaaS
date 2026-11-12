@@ -1,0 +1,28 @@
+{
+  "object": {
+    "id": "6101b828-baa8-4a3a-bd19-66f704725918",
+    "class": "vm",
+    "name": "test-nix-vlannode"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "critical",
+      "reason": "sweep-missing",
+      "how": "root",
+      "impacts": 0
+    },
+    {
+      "type": "capacity",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    }
+  ]
+}

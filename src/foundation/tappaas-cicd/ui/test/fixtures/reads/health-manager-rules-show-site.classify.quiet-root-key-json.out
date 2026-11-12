@@ -1,0 +1,33 @@
+{
+  "id": "site.classify.quiet-root-key",
+  "origin": "site",
+  "state": "added",
+  "sentence": "a finding from alerts, alertname RootKeyChanged on an object named cluster is kept and quiet",
+  "record": {
+    "id": "site.classify.quiet-root-key",
+    "kind": "classify",
+    "description": "The root key on the cluster was rotated on purpose.",
+    "when": {
+      "finding": {
+        "source": "alerts",
+        "labels": {
+          "alertname": "RootKeyChanged"
+        }
+      },
+      "object": {
+        "name": "cluster"
+      }
+    },
+    "quiet": true
+  },
+  "released": null,
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": {
+    "local": "added",
+    "by": "lars",
+    "at": "2026-11-01T09:00:00.000Z",
+    "note": "written with --force over scenario core.scenario.ha-guest"
+  }
+}
