@@ -751,6 +751,25 @@ def main():
         gate_modules["cve-match-failed"] = ["(a failed match)"]
         gate_items["cve-match-failed"] = "; ".join(errors)
         gate_why_["cve-match-failed"] = "match failed"
+    # A CVE put off at an earlier boundary whose deferral has ended is a gate item
+    # again, whether or not it is new: "accepted once" never becomes "for ever".
+    if a.vex_root:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import cve_components as cc
+        now_day = cc.today()
+        for (mod, cid), dfr in cc.deferrals(a.vex_root).items():
+            if dfr.get("until", "") > now_day:
+                continue
+            key = "baseline" if mod == "templates" else mod
+            cves = (details.get(key) or {}).get("cves") or {}
+            if any(c.get("id") == cid for c in (cves.get("new") or []) + (cves.get("same") or [])):
+                item = f"cve {key} {cid}"
+                if item in gate_why_:
+                    continue
+                introduced.setdefault(f"{key} {cid}", []).append(key)
+                gate_modules[item] = [key]
+                gate_items[item] = f"deferred until {dfr.get('until')}: {dfr.get('note', '')}"
+                gate_why_[item] = "deferral ended"
     gate = sorted([f"major {m['pkg']} {x}->{y}" for (p, x, y), m in majors.items()]
                   + [f"cve {k}" for k in introduced]
                   + (["cve-match-failed"] if errors else []))

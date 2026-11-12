@@ -154,7 +154,7 @@ def validate(doc, module):
             out.append(f"{k}: not a component key"); continue
         if sk[0] != module:
             out.append(f"{k}: belongs to {sk[0]}, not {module}")
-        if not r.get("migrated") and len((r.get("use") or "").strip()) < MIN_USE:
+        if not r.get("migrated") and not r.get("deferralsOnly") and len((r.get("use") or "").strip()) < MIN_USE:
             out.append(f"{k}: use must say how the module uses the component ({MIN_USE}+ characters)")
         if r.get("reason") not in REASONS:
             out.append(f"{k}: reason {r.get('reason')} is not one of {', '.join(REASONS)}")
@@ -309,3 +309,40 @@ def migrate_statements(vex_doc, module, src_of, date, who="migration"):
         report["decisions"] += len(rec["cves"])
     report["records"] = len(comps)
     return comps, report
+
+
+def walk_records(root):
+    """(module, path, doc) of every <module>-components.json under root/src."""
+    out = []
+    base = os.path.join(root, "src") if os.path.isdir(os.path.join(root, "src")) else root
+    for dp, dns, fns in os.walk(base):
+        dns[:] = sorted(d for d in dns if d not in {"node_modules", ".git", "fixtures", "docs", "dist", "dist-test"} and not d.startswith("test"))
+        for fn in sorted(fns):
+            if fn.endswith(SUFFIX):
+                p = os.path.join(dp, fn)
+                try:
+                    out.append((fn[:-len(SUFFIX)], p, json.load(open(p))))
+                except (OSError, ValueError):
+                    continue
+    return out
+
+
+def deferrals(root):
+    """(module, CVE) → the deferral, for every deferred CVE in the records."""
+    out = {}
+    for module, _, doc in walk_records(root):
+        for k, r in (doc.get("components") or {}).items():
+            for cid, e in (r.get("cves") or {}).items():
+                if e.get("deferred"):
+                    out[(module, cid)] = dict(e["deferred"], component=k)
+    return out
+
+
+def defer(doc, k, cid, until, note, by, release, date):
+    """A deferral of one CVE in its component's record; a record made for it alone
+    needs no use statement (it decides nothing)."""
+    rec = doc["components"].setdefault(k, {"use": "", "reason": "other", "versions": "*", "cves": {}, "author": by,
+                                           "decided": date, "reviewBy": until, "deferralsOnly": True})
+    e = rec.setdefault("cves", {}).setdefault(cid, {})
+    e["deferred"] = {"until": until, "note": note, "by": by, **({"release": release} if release else {})}
+    return rec

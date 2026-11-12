@@ -448,6 +448,20 @@ if command -v health-manager >/dev/null 2>&1; then
 else
     echo "  (health-manager not on PATH: the real scorer is covered by its unit tests and test-train-status)"
 fi
+
+# Component records: an ended deferral is a gate item again; a generated VEX
+# file beside the records is never classified or cleaned.
+V3="${T}/vexroot3"; mkdir -p "${V3}/src/obs/logging"
+cat > "${V3}/src/obs/logging/logging-components.json" <<'JEOF'
+{"schema":1,"components":{"logging/nix:openssl":{"use":"","reason":"other","versions":"*","author":"t","decided":"2020-01-01","reviewBy":"2020-01-15","deferralsOnly":true,
+ "cves":{"CVE-1":{"deferred":{"until":"2020-01-15","note":"fix in the next release"}}}}}}
+JEOF
+vexf "${V3}/src/obs/logging/logging-vex.json" "$(st CVE-2 not_affected 'generated' code_not_reachable "$(refs pkg:nix/grafana@13.9.0)")"
+VROOT="${V3}" runv
+ck "a CVE whose deferral ended is in the gate again, though it is not new" "deferral ended" "$(jq -r '.gateWhy["cve logging CVE-1"] // "-"' "${T}/p.json")"
+ck "…with its old note as the fingerprint" "yes" "$(jq -r '.gateItems["cve logging CVE-1"]' "${T}/p.json" | grep -q 'fix in the next release' && echo yes || echo no)"
+ck "a VEX file generated from records is not classified" "0" "$(jq '[.vexStatements[] | select(.file | test("logging"))] | length' "${T}/p.json")"
+
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"
 [[ "${FAIL}" -eq 0 ]]
