@@ -41,6 +41,7 @@ export interface SiemEntry {
   first: string;
   last: string;
   count: number;
+  query?: string; // the rule's Explore query (LogQL), as its mail links it
 }
 export interface SiemItem extends SiemEntry { subject: CheckSubject | null }
 
@@ -71,6 +72,7 @@ export function readSiem(path: string, place: (host: string, module: string) => 
       first: String(e.first ?? e.last),
       last: e.last,
       count: Number(e.count ?? 1) || 1,
+      ...(typeof e.query === "string" && e.query ? { query: e.query } : {}),
     };
     out.push({ ...entry, subject: place(entry.host, entry.module) });
   }
@@ -123,7 +125,7 @@ export function fromSiem(items: SiemItem[], idx: SiteIndex, nowMs: number, rate:
     // The hits and the hold as fields: the message keeps what it said when the
     // condition opened, these move with every hit.
     const heldUntil = hold === "until-ack" ? "ack" : new Date(lastMs + durationMs(hold)).toISOString();
-    out.push(still ? { ...base, hits: { count: e.count, first: e.first, last: e.last, alerts: [e.alertname] }, heldUntil } : { ...base, status: "ok", reason: "ok", message: "" });
+    out.push(still ? { ...base, hits: { count: e.count, first: e.first, last: e.last, alerts: [e.alertname], ...(e.query ? { query: e.query } : {}) }, heldUntil } : { ...base, status: "ok", reason: "ok", message: "" });
   }
   return out;
 }

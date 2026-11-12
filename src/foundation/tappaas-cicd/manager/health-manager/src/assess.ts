@@ -134,7 +134,7 @@ function worstOf(fs: Classified[]): Classified {
   // The hits of every finding at its status from the same source add up; the
   // longest hold wins ("ack" over any time).
   const counted = fs.filter((f) => f.status === top.status && f.owner === top.owner && f.hits);
-  const hits = counted.length > 1 ? counted.map((f) => f.hits!).reduce((a, b) => ({ count: a.count + b.count, first: a.first < b.first ? a.first : b.first, last: a.last > b.last ? a.last : b.last, alerts: [...new Set([...(a.alerts ?? []), ...(b.alerts ?? [])])] })) : top.hits;
+  const hits = counted.length > 1 ? counted.map((f) => f.hits!).reduce((a, b) => ({ count: a.count + b.count, first: a.first < b.first ? a.first : b.first, last: a.last > b.last ? a.last : b.last, alerts: [...new Set([...(a.alerts ?? []), ...(b.alerts ?? [])])], ...(a.query || b.query ? { query: a.query ?? b.query } : {}) })) : top.hits;
   const holds = counted.map((f) => f.heldUntil).filter((h): h is string => !!h);
   const heldUntil = holds.includes("ack") ? "ack" : holds.sort().pop() ?? top.heldUntil;
   return { ...top, message: same.join("; "), ...(hits ? { hits } : {}), ...(heldUntil ? { heldUntil } : {}) };

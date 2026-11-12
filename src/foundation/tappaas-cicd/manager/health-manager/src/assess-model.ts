@@ -9,7 +9,7 @@ export interface Acknowledged { by: string; note: string; until: string | null; 
 export interface Maintenance { until: string | null; note: string; by?: string }
 /** What a source that counts events saw (ADR-041 D1): how many, the first and the
  *  last, and the alert rules they came from. */
-export interface Hits { count: number; first: string; last: string; alerts?: string[] }
+export interface Hits { count: number; first: string; last: string; alerts?: string[]; query?: string }
 
 export interface Condition {
   type: ConditionType;

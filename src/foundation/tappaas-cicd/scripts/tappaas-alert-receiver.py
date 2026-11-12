@@ -888,7 +888,8 @@ def record(args, payload):
 # ── security hits (ADR-050 D12) ──────────────────────────────────────────
 def siem_record(args, payload, now=None):
     """Fold every firing alert of a security rule (labels type=security) into one
-    entry per rule and CI: first and last hit and their count. health-manager's
+    entry per rule and CI: first and last hit and their count, and the rule's
+    Explore query (the one its mail links). health-manager's
     siem source reads it and holds the condition (a warning 24 h from the last
     hit, a critical until acknowledged). The resolve of an event rule says
     nothing about the attack and is not a hit."""
@@ -899,7 +900,7 @@ def siem_record(args, payload, now=None):
         labels = a.get("labels") or {}
         if labels.get("type") != "security" or a.get("status", payload.get("status", "firing")) != "firing":
             continue
-        hits.append(labels)
+        hits.append((labels, str((a.get("annotations") or {}).get("query") or "")))
     try:
         with open(args.siem_state, encoding="utf-8") as f:
             doc = json.load(f)
@@ -910,7 +911,7 @@ def siem_record(args, payload, now=None):
     findings = doc.get("findings", {})
     if not hits and not findings:
         return
-    for labels in hits:
+    for labels, query in hits:
         name, host = labels.get("alertname", ""), labels.get("host", "")
         ci = labels.get("tappaas_ci_id", "")
         level = labels.get("level") if labels.get("level") in SIEM_LEVELS else "warning"
@@ -921,6 +922,8 @@ def siem_record(args, payload, now=None):
                   "labels": {k: v for k, v in extra_labels(labels).items() if k not in ("type", "level", "tappaas_ci_id")}})
         if ci:
             e["ci"] = ci
+        if query:
+            e["query"] = query
         findings[key] = e
     for key in list(findings):
         e = findings[key]

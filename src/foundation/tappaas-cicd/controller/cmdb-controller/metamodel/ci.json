@@ -62,7 +62,7 @@
               "raw": { "type": "object", "description": "Re-rated by a health record: the status its source gave, since when, and the record." },
               "quieted": { "type": "object", "description": "Quieted by a health record: the record and since when; via, the root whose quiet it shares." },
               "aggregate": { "type": "boolean", "description": "A sum of others by a health record: derived, never a root." },
-              "hits": { "type": "object", "properties": { "count": { "type": "number" }, "first": { "type": "string" }, "last": { "type": "string" }, "alerts": { "type": "array" } }, "description": "The events behind it, from its source: how many, the first and the last, the alert rules they came from." },
+              "hits": { "type": "object", "properties": { "count": { "type": "number" }, "first": { "type": "string" }, "last": { "type": "string" }, "alerts": { "type": "array" }, "query": { "type": "string" } }, "description": "The events behind it, from its source: how many, the first and the last, the alert rules they came from and the query of their log lines." },
               "heldUntil": { "type": "string", "description": "When its hold ends, or ack: held until acknowledged." },
               "heldBy": { "type": "string", "description": "The health record that set its hold." }
             }

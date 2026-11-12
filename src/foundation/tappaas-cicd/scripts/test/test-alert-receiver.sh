@@ -96,7 +96,7 @@ ck "the body carries the query to paste" "yes" "$(grep -q 'Explore, Loki): {host
 
 # Security hits (ADR-050 D12): one entry per rule and CI, with the count.
 sec() {  # sec <status> <level> <host> — a security rule's webhook body
-    printf '{"status":"%s","alerts":[{"status":"%s","labels":{"alertname":"SshBruteForce","host":"%s","kind":"event","module":"logging","type":"security","level":"%s","src_ip":"203.0.113.9"},"annotations":{"summary":"brute force"},"startsAt":"2026-11-12T08:00:00Z"}]}' "$1" "$1" "$3" "$2"
+    printf '{"status":"%s","alerts":[{"status":"%s","labels":{"alertname":"SshBruteForce","host":"%s","kind":"event","module":"logging","type":"security","level":"%s","src_ip":"203.0.113.9"},"annotations":{"summary":"brute force","query":"{host=\\"%s\\"} |~ \\"Failed password\\""},"startsAt":"2026-11-12T08:00:00Z"}]}' "$1" "$1" "$3" "$2" "$3"
 }
 post sekret "$(sec firing warning nextcloud)" >/dev/null
 post sekret "$(sec firing critical nextcloud)" >/dev/null
@@ -104,6 +104,7 @@ post sekret "$(sec resolved critical nextcloud)" >/dev/null
 ck "two security hits are one entry" "1" "$(jq '.findings | length' "${TMP}/siem.json")"
 ck "…counted twice (a resolve is no hit)" "2" "$(jq '.findings[].count' "${TMP}/siem.json")"
 ck "…at the last hit's level" "critical" "$(jq -r '.findings[].level' "${TMP}/siem.json")"
+ck "…with the rule's Explore query, as its mail has it" '{host="nextcloud"} |~ "Failed password"' "$(jq -r '.findings[].query' "${TMP}/siem.json")"
 ck "…with what it captured, not type or level" '{"src_ip":"203.0.113.9"}' "$(jq -c '.findings[].labels' "${TMP}/siem.json")"
 ck "an alert that is not security is no hit" "1" "$(jq '.findings | length' "${TMP}/siem.json")"
 jq '.findings[].last = "2026-01-01T00:00:00+00:00"' "${TMP}/siem.json" > "${TMP}/s2" && mv "${TMP}/s2" "${TMP}/siem.json"
