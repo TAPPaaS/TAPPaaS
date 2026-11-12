@@ -18,7 +18,7 @@ import { Acceptance, ComponentRecord, DAY, SiteView, categoryOf, levelRankOf } f
 import { CONTROL_PLANE_ZONE, readZonesFile } from "../../../lib/ts/src/zones";
 import { renameGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 import { readModuleJson } from "./config";
-import { CveItem, ScanStatus } from "./security";
+import { AcceptanceRow, CveItem, ScanStatus } from "./security";
 
 export const ACCEPTANCES_FILE = "security-acceptances.json";
 export const MAX_ACCEPT_DAYS = 366;
@@ -140,22 +140,34 @@ export function settleAcceptances(configDir: string, s: ScanStatus, now: number)
   const doc = readAcceptances(configDir);
   if (!doc.acceptances.length) return [];
   const items = new Map<string, CveItem>();
+  const ids = new Set<string>();
   for (const t of s.targets) {
     for (const i of t.items ?? []) {
       const unit = unitName(t.id);
       const k = `${unit} ${i.id} ${i.component}`;
       const had = items.get(k);
       if (!had || i.mark === "accepted") items.set(k, i);
+      ids.add(`${unit} ${i.id}`);
     }
+  }
+  const rows = new Map<string, AcceptanceRow>();
+  for (const t of s.targets) for (const r of t.acceptances ?? []) {
+    const k = `${unitName(t.id)} ${r.id} ${r.component}`;
+    const had = rows.get(k);
+    if (!had || (had.accepted && !r.accepted)) rows.set(k, r);
   }
   const keep: Acceptance[] = [];
   const ended: Ended[] = [];
   const day = new Date(now).toISOString().slice(0, 10);
   for (const a of doc.acceptances) {
-    const i = items.get(`${a.unit} ${a.cve} ${a.component}`);
+    const k = `${a.unit} ${a.cve} ${a.component}`;
+    const r = rows.get(k);
+    const i = items.get(k);
     let why = "";
     if (Date.parse(a.until) <= now) why = "expired";
-    else if (!i) why = "gone";
+    else if (r) why = r.accepted ? "" : r.ended ?? "";
+    else if (!i && !ids.has(`${a.unit} ${a.cve}`)) why = "gone";
+    else if (!i) why = ""; // the CVE is on the unit under another row: decided at the next scan
     else if (i.mark !== "accepted") {
       const was = categoryOf(a.severity);
       const now = categoryOf(i.severity);
