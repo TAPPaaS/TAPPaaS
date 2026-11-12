@@ -58,6 +58,10 @@ export function showLines(d: ShowDoc, objects: HealthObject[], now: Date): strin
     const a = c.acknowledged;
     if (a) out.push(`  ${c.type}: acknowledged by ${a.by}${a.note ? `: ${a.note}` : ""}${a.until ? `, until ${a.until}` : ""}${a.sticky ? ", sticky" : ""}${a.via ? `, with ${a.via.map(label).join(", ")}` : ""}`);
     if (c.maintenance) out.push(`  ${c.type}: in maintenance until ${c.maintenance.until}${c.maintenance.note ? `: ${c.maintenance.note}` : ""}`);
+    const h = (c as { hits?: { count: number; first: string; last: string } }).hits;
+    const held = (c as { heldUntil?: string }).heldUntil;
+    if (h) out.push(`  ${c.type}: ${h.count === 1 ? "1 hit" : `${h.count} hits`}, first ${h.first}, last ${h.last}`);
+    if (held) out.push(`  ${c.type}: ${held === "ack" ? "held until acknowledged" : `held until ${held}`}`);
   }
   if (d.rootCauses.length) out.push(`root cause: ${d.rootCauses.map(label).join(", ")}`);
   if (d.isRoot) out.push(`a root cause; impacts ${d.impacts.length}: ${d.impacts.map((i) => `${i.class}/${i.name}`).join(", ") || "nothing else"}`);

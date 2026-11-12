@@ -11,12 +11,14 @@ import { AccessConfig, Decision, Me, SETUP_COOKIE, addrMatches, decide, mayWrite
 import { linesNaming } from "./activity";
 import { attention, findingsFor, moduleSummaries, withConditions } from "./badges";
 import { securityView } from "./security";
+import { ThreatRow, threatsView } from "./threats";
 import { Entry, envelope } from "./cache";
 import { SCHEMAS } from "./fields";
-import { HealthGraph, TREE_FACETS, healthEgo, healthPath, healthSummary, healthTree, moduleHealth, treeChildren, treePath, treeSearch } from "./health";
+import { HealthGraph, TREE_FACETS, filteredCounts, healthEgo, healthPath, healthSummary, healthTree, moduleHealth, treeChildren, treePath, treeSearch } from "./health";
+import { operationsDoc } from "./openevents";
 import { HealthLive } from "./healthlive";
 import { Perf, isRange } from "./perf";
-import { JumpKind, jumpsFor } from "./jumps";
+import { JumpKind, ObjectLogs, jumpsFor, objectLogs } from "./jumps";
 import { Assistant, AssistantEvent } from "./assistant";
 import { LiteLLM } from "./litellm";
 import { CreateResult, JobSummary, Jobs, jobsNaming, summary } from "./jobs";
@@ -185,7 +187,7 @@ export class ConsoleServer {
     if (head === "setup" && a === "check") return this.setupCheck(method, me, res, req);
     if (head === "setup" && a === "answer") return this.setupAnswer(method, me, res, req);
     if (head === "assistant") return this.assistantApi(method, a, b, me, res, req);
-    if (head === "operations") return this.operationsApi(method, a, parts.length, me, res, req);
+    if (head === "assets" && a === "sweep" && parts.length === 2) return this.sweepApi(method, me, res, req);
     if (method !== "GET") return sendJson(res, 405, { error: `${method} /api/v1/${head ?? ""}: reads are GET; a change is a job (POST /api/v1/jobs)` });
 
     const env = <T>(e: Entry<T>, data?: unknown): Record<string, unknown> => ({ ...envelope(e), ...(data !== undefined ? { data } : {}) });
@@ -373,6 +375,14 @@ export class ConsoleServer {
         // The faceplate catalog's keys and kinds (asset-manager faceplates list): a form's suggestions.
         return sendJson(res, 200, envelope(await r.faceplates.get()));
       case "security": {
+        if (a === "threats") {
+          // The Threats tab: the threat conditions on the CIs, from the health document.
+          const [g, m, e] = await Promise.all([this.graph(), r.modules.get(), r.environments.get()]);
+          const ctx = { topology: r.topology.peek().value, modules: m.value?.modules ?? [], environments: e.value ?? [], mgmtDomain: this.cfg.mgmtDomain, pbsStore: "" };
+          const v = threatsView(g.value, Date.now());
+          const withLogs = (row: ThreatRow): ThreatRow & { logs: ObjectLogs } => ({ ...row, logs: objectLogs(ctx, row, [{ type: "threat", ...(row.hits ? { hits: row.hits } : {}) }]) });
+          return sendJson(res, 200, env(g, { ...v, open: v.open.map(withLogs), silenced: v.silenced.map(withLogs) }));
+        }
         // The risk scores as the Security page shows them; never whether a fix exists.
         const sec = await r.security.get();
         return sendJson(res, 200, env(sec, sec.value ? securityView(sec.value) : null));
@@ -409,21 +419,12 @@ export class ConsoleServer {
     return this.cfg.healthLive ? this.cfg.healthLive.read() : this.reads.healthGraph.get();
   }
 
-  // ── the Operations view (ADR-040 D11, D15) ──────────────────────────
-  //   GET  /operations         the open events by root cause, with impact and what changed
-  //   GET  /operations/sweep   the last discovery sweep's record, and one running from here
-  //   POST /operations/sweep   start one (a write: it asks every source; 409 while one runs)
-  private async operationsApi(method: string, sub: string | undefined, depth: number, me: Me, res: ServerResponse, req?: IncomingMessage): Promise<void> {
+  // ── the discovery sweep, on the Assets page (ADR-040 D15) ───────────
+  //   GET  /assets/sweep   the last discovery sweep's record, and one running from here
+  //   POST /assets/sweep   start one (a write: it asks every source; 409 while one runs)
+  private async sweepApi(method: string, me: Me, res: ServerResponse, req?: IncomingMessage): Promise<void> {
     const r = this.reads;
-    if (depth === 1 && method === "GET") {
-      const g = await this.graph();
-      try {
-        return sendJson(res, 200, { ...envelope(g), data: await r.operations(g.value) });
-      } catch (e) {
-        return sendJson(res, 200, { ...envelope(g), data: null, error: (e as Error).message });
-      }
-    }
-    if (depth === 2 && sub === "sweep") {
+    {
       const sweeps = r.sweeps;
       if (method === "GET") {
         if (!sweeps) return sendJson(res, 200, { data: null, at: null, ageSeconds: null, refreshing: false, error: "this console has no CMDB client" });
@@ -442,10 +443,8 @@ export class ConsoleServer {
         this.cfg.log(`discovery sweep started by ${me.user ?? me.via}`);
         return sendJson(res, 202, { data: { running: started.running } });
       }
-      return sendJson(res, 405, { error: "operations/sweep is GET or POST" });
+      return sendJson(res, 405, { error: "assets/sweep is GET or POST" });
     }
-    if (method !== "GET") return sendJson(res, 405, { error: `${method} /api/v1/operations: a read is GET` });
-    return sendJson(res, 404, { error: "operations | operations/sweep" });
   }
 
   // ── the Health view (ADR-041 D5) ──────────────────────────────────
@@ -456,6 +455,9 @@ export class ConsoleServer {
   //   GET /health/ego/<id>/path?to=root|impact[&at=]  the chain of the derivation
   //   GET /health/object/<id>             the CI panel's data
   //   GET /health/roots                   health-manager roots, else the document's
+  //   GET /health/counts?type=&class=&environment=  the header's counts under the filters
+  //   GET /health/events                  the open events by root cause (the Overview's alerts)
+  //   GET /health/changes                 what changed on each root cause in the last day
   //   GET /health/summary                 the worst per page: counts, types, Attention
   //   GET /health/stream                  what moved, as server-sent events
   //   GET /health/rules                   health-manager rules list and scenario list
@@ -503,6 +505,23 @@ export class ConsoleServer {
       const d = await r.healthRoots();
       return sendJson(res, 200, { data: d, at: new Date().toISOString(), ageSeconds: 0, refreshing: false, error: null });
     }
+    if (sub === "counts" && depth === 2) {
+      const g = await this.graph();
+      const f = { type: url.searchParams.get("type") ?? "", class: url.searchParams.get("class") ?? "", environment: url.searchParams.get("environment") ?? "" };
+      return sendJson(res, 200, { ...envelope(g), data: g.value ? filteredCounts(g.value, f) : null });
+    }
+    if (sub === "events" && depth === 2) {
+      const g = await this.graph();
+      return sendJson(res, 200, { ...envelope(g), data: operationsDoc(g.value, new Map(), [], Date.now()) });
+    }
+    if (sub === "changes" && depth === 2) {
+      const g = await this.graph();
+      try {
+        return sendJson(res, 200, { ...envelope(g), data: await r.rootChanges(g.value) });
+      } catch (e) {
+        return failed(e as Error);
+      }
+    }
     if (sub === "summary" && depth === 2) {
       const g = await this.graph();
       return sendJson(res, 200, { ...envelope(g), data: healthSummary(g.value) });
@@ -518,7 +537,7 @@ export class ConsoleServer {
       if (!OBJECT_ID.test(id)) return sendJson(res, 400, { error: "not an object id" });
       return r.healthWhy(id).then(now, failed);
     }
-    return sendJson(res, 404, { error: "health | health/tree | health/ego/<id> | health/object/<id> | health/roots | health/summary | health/stream | health/rules[/<id>] | health/why/<id>" });
+    return sendJson(res, 404, { error: "health | health/tree | health/ego/<id> | health/object/<id> | health/roots | health/counts | health/events | health/changes | health/summary | health/stream | health/rules[/<id>] | health/why/<id>" });
   }
 
   // ── performance (ADR-046 D7) ─────────────────────────────────────

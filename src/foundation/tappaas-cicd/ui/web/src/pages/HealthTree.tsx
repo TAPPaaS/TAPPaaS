@@ -7,7 +7,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { get, useRead } from "../api";
 import { Filters, keptRollup, patchRows } from "../healthgraph";
 import { ClassIcon } from "../moduleicon";
-import { HealthRoot, HealthStatus, HealthTree, TreeMatch, TreeNode, TreeRollup } from "../types";
+import { HealthRoot, HealthStatus, HealthTree, OpsChange, RootChanges, TreeMatch, TreeNode, TreeRollup } from "../types";
+import { ago, filtering, hitsCount, holdText, rootMatches } from "../healthwords";
 import { Dot, Level, Tag, when } from "../ui";
 
 const LEVEL: Record<HealthStatus, Level> = { ok: "pass", warning: "warn", critical: "fail", unknown: "skip" };
@@ -129,20 +130,46 @@ function Row({ n, depth, trail, m, selected, select, filters, lens }: { n: TreeN
   );
 }
 
-function RootList({ roots, selected, choose }: { roots: HealthRoot[]; selected: string | null; choose: (id: string) => void }) {
+// The last change on a root, as one line: "changed 2 h ago by lars (module modify)".
+function changedLine(list: OpsChange[] | undefined): string | null {
+  const c = list?.[0];
+  if (!c) return null;
+  return `changed ${ago(c.time)} ago${c.actor ? ` by ${c.actor}` : ` by ${c.source}`}${c.verb ? ` (${c.verb})` : ""}`;
+}
+
+function RootList({ roots, selected, choose, changes }: { roots: HealthRoot[]; selected: string | null; choose: (id: string) => void; changes: RootChanges | null }) {
   return (
     <ul className="health-roots">
-      {[...roots].sort((a, b) => Number(a.acknowledged) - Number(b.acknowledged)).map((r) => (
-        <li key={r.id}>
-          <button className={`hroot${selected === r.id ? " hroot-on" : ""}${r.acknowledged ? " hroot-ack" : ""}`} onClick={() => choose(r.id)}>
-            <span className="hroot-head"><Dot level={r.acknowledged ? "ack" : LEVEL[r.status]} title={r.acknowledged ? `${r.status}, acknowledged` : r.status} /> <b>{r.label}</b> <span className="muted small">{r.class}</span></span>
-            <span className="small">{r.message ?? r.reason ?? r.type}</span>
-            <span className="muted small">
-              {r.impactedCount} impacted{r.environments.length ? ` · ${r.environments.join(", ")}` : ""}{r.since ? ` · ${when(r.since)}` : ""}{r.acknowledged ? " · acknowledged" : ""}{r.flapping ? " · flapping" : ""}
-            </span>
-          </button>
-        </li>
-      ))}
+      {[...roots].sort((a, b) => Number(a.acknowledged) - Number(b.acknowledged)).map((r) => {
+        // One line per type it is a root in: what, its hits and its hold as columns.
+        const conds = r.conditions?.length ? r.conditions : [{ type: r.type ?? "", status: r.status, reason: r.reason, message: r.message, since: r.since, acknowledged: r.acknowledged, maintenance: !!r.maintenance }];
+        const changed = changedLine(changes?.changes[r.id]);
+        return (
+          <li key={r.id}>
+            <button className={`hroot${selected === r.id ? " hroot-on" : ""}${r.acknowledged ? " hroot-ack" : ""}`} onClick={() => choose(r.id)}>
+              <span className="hroot-head"><Dot level={r.acknowledged ? "ack" : LEVEL[r.status]} title={r.acknowledged ? `${r.status}, acknowledged` : r.status} /> <b>{r.label}</b> <span className="muted small">{r.class}</span></span>
+              <span className="hroot-conds">
+                {conds.map((c) => {
+                  const meta = ["hits" in c && c.hits ? hitsCount(c.hits) : "", "heldUntil" in c ? holdText(c.heldUntil) : ""].filter(Boolean).join(" · ");
+                  return (
+                    <span key={c.type} className="hroot-cond small">
+                      <span className="att-gate">{c.type}</span>
+                      <span className="hroot-text">
+                        {c.message ?? c.reason ?? c.status}{c.maintenance ? <span className="muted" title="in a maintenance window"> ⏸</span> : null}
+                        {meta ? <span className="hroot-meta muted">{meta}</span> : null}
+                      </span>
+                    </span>
+                  );
+                })}
+              </span>
+              <span className="muted small">
+                {r.impactedCount} impacted{r.environments.length ? ` · ${r.environments.join(", ")}` : ""}{r.since ? ` · ${when(r.since)}` : ""}{r.acknowledged ? " · acknowledged" : ""}{r.flapping ? " · flapping" : ""}
+              </span>
+              {changed ? <span className="muted small hroot-changed">{changed}</span> : null}
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -175,7 +202,10 @@ export function TreePane({ m, selected, select, chooseRoot, filters, open, lens,
   }, [text]);
   const doc = m.doc;
   // A lens lists its own roots (Performance: from the performance condition).
-  const roots = given ?? doc?.roots ?? [];
+  // The filters narrow the list as they narrow the tree.
+  const all = given ?? doc?.roots ?? [];
+  const roots = all.filter((r) => rootMatches(r, filters));
+  const changes = useRead<RootChanges>(all.length ? "health/changes" : null, 120_000).env?.data ?? null;
   return (
     <div className={`health-side${open ? " health-side-open" : ""}`}>
       <input className="ht-search" type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder="Find an object" aria-label="find an object in the CMDB" />
@@ -183,10 +213,10 @@ export function TreePane({ m, selected, select, chooseRoot, filters, open, lens,
         <>
           {roots.length ? (
             <>
-              <h3>Root causes ({roots.length})</h3>
-              <RootList roots={roots} selected={selected} choose={chooseRoot} />
+              <h3>Root causes ({filtering(filters) ? `${roots.length} of ${all.length}` : roots.length})</h3>
+              <RootList roots={roots} selected={selected} choose={chooseRoot} changes={changes} />
             </>
-          ) : doc?.hasConditions ? <p className="muted"><Tag level="ok" /> {lens ? `No ${lens} root cause.` : "Nothing is wrong."}</p> : null}
+          ) : all.length && filtering(filters) ? <p className="muted">No root cause under these filters ({all.length} without them).</p> : doc?.hasConditions ? <p className="muted"><Tag level="ok" /> {lens ? `No ${lens} root cause.` : "Nothing is wrong."}</p> : null}
           <ul className="ht-list ht-top">
             {(doc?.facets ?? []).map((f) => <Row key={f.id} n={f} depth={0} trail={[]} m={m} selected={selected} select={select} filters={filters} lens={lens} />)}
           </ul>

@@ -103,7 +103,7 @@ export function quietUnits(sec: SiteSecurity, objects: { class: string; name: st
   for (const [key, u] of Object.entries(sec.units)) {
     const classes = u.kind === "node" ? ["machine"] : ["vm", "lxc", "machine", "device", "app"];
     const o = objects.find((x) => x.name === u.name && classes.includes(x.class));
-    const c = (o?.attributes.conditions ?? []).find((x) => x.type === "security");
+    const c = (o?.attributes.conditions ?? []).find((x) => x.type === "vulnerability");
     if (c && (live(c.acknowledged) || live(c.maintenance))) quiet.add(key);
   }
   return quiet;

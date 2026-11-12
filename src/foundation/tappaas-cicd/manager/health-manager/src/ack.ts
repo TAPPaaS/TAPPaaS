@@ -18,6 +18,10 @@ import { AckEvent, HealthEvent, Journal, MaintenanceEvent, eventLine } from "./e
 import { MAINTENANCE_DIR, Window, readWindows } from "./windows";
 import { renameGuarded, unlinkGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 import { mkdirSync } from "fs";
+import { currentTypesOf } from "../../../lib/ts/src/health-rules";
+
+// A type as written before the split (security, maintenance) names what it split into.
+const ofType = (type: string | undefined) => (c: { type: string }): boolean => !type || currentTypesOf(type).includes(c.type as never);
 import { join } from "path";
 
 const liveUntil = (until: string | null | undefined, now: Date): boolean => !until || Date.parse(until) > now.getTime();
@@ -86,7 +90,7 @@ export interface AckRequest {
 export function ack(ctx: VerbContext, q: AckRequest): HealthEvent[] {
   const target = ctx.cmdb.resolve(q.ref);
   const at = ctx.now.toISOString();
-  const conds = conditionsOf(target).filter((c) => (q.type ? c.type === q.type : c.status !== "ok"));
+  const conds = conditionsOf(target).filter((c) => (q.type ? ofType(q.type)(c) : c.status !== "ok"));
   if (!conds.length) throw new Error(`${target.name} has no ${q.type ? `${q.type} condition` : "condition that is not ok"} to acknowledge`);
   const words = { ...(target.attributes.acknowledgements ?? {}) };
   const a: Ack = { by: ctx.actor, note: q.note, until: q.until ?? null, sticky: q.sticky, at };
@@ -100,7 +104,7 @@ export function ack(ctx: VerbContext, q: AckRequest): HealthEvent[] {
 export function unack(ctx: VerbContext, ref: string, type?: string): HealthEvent[] {
   const target = ctx.cmdb.resolve(ref);
   const at = ctx.now.toISOString();
-  const conds = conditionsOf(target).filter((c) => c.acknowledged && !c.acknowledged.via && (!type || c.type === type));
+  const conds = conditionsOf(target).filter((c) => c.acknowledged && !c.acknowledged.via && ofType(type)(c));
   if (!conds.length) throw new Error(`${target.name} has no acknowledged ${type ? `${type} ` : ""}condition`);
   const words = { ...(target.attributes.acknowledgements ?? {}) };
   for (const c of conds) words[c.type] = { ack: null, at };

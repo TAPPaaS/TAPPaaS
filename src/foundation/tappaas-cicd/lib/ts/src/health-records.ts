@@ -16,7 +16,7 @@
 // taken, so the result is still deterministic.
 
 import { createHash } from "crypto";
-import { CONDITION_TYPES } from "./health-rules";
+import { CONDITION_TYPES, LEGACY_TYPES, currentType, currentTypesOf } from "./health-rules";
 
 export type Val = string | number | boolean;
 export type Pred = Val | Val[] | { exists: true } | { glob: string } | { over: string } | { gte?: number; lte?: number };
@@ -554,4 +554,40 @@ export function anchorProblem(r: HealthRecord, origin: string, reports: string[]
     default:
       return own(w.object) ? null : `a ${origin} ${r.kind} record touches only its own objects: module: ${origin} on its object`;
   }
+}
+
+// ── the types before the split (health-rules.ts LEGACY_TYPES) ─────────
+
+const legacy = (t: unknown): boolean => typeof t === "string" && (LEGACY_TYPES as readonly string[]).includes(t);
+const strs = (p: Pred | undefined): string[] => (p === undefined ? [] : (Array.isArray(p) ? p : [p]).filter((x): x is string => typeof x === "string"));
+const onePred = (ts: string[]): Pred => (ts.length === 1 ? ts[0] : ts);
+
+/** A type match written before the split, as it reads now. */
+function migratePred(p: Pred | undefined, hint: { reasons?: string[]; source?: string[] }): Pred | undefined {
+  if (p === undefined) return p;
+  const ts = strs(p);
+  if (!ts.some(legacy)) return p;
+  return onePred([...new Set(ts.flatMap((t) => currentTypesOf(t, hint)))]);
+}
+
+/** A record written before the split, with every condition type in it as it
+ *  reads now: a match on `security` with no reason or source to decide it
+ *  matches both vulnerability and threat, so a site's edited rule keeps doing
+ *  what it did. The record itself when nothing changes. */
+export function migrateRecordTypes(r: HealthRecord): HealthRecord {
+  const text = JSON.stringify(r);
+  if (!/"(security|maintenance)"/.test(text)) return r;
+  const out = JSON.parse(text) as HealthRecord & Record<string, unknown>;
+  const w = (out.when ?? {}) as When;
+  const reasons = strs(w.condition?.reason ?? w.finding?.reason);
+  const source = strs(w.finding?.source);
+  if (w.condition?.type !== undefined) w.condition.type = migratePred(w.condition.type, { reasons: strs(w.condition.reason) });
+  if (w.finding?.type !== undefined) w.finding.type = migratePred(w.finding.type, { reasons: strs(w.finding.reason), source });
+  if (w.cause?.type !== undefined) w.cause.type = migratePred(w.cause.type, {});
+  // A type a record sets is one: decided by the reason or source it matches.
+  const setOne = (t: string): string => currentType(t, reasons.length === 1 ? reasons[0] : (out.kind === "classify" && (out as Classify).set?.reason) || null, source.length === 1 ? source[0] : null) ?? t;
+  if (out.kind === "classify" && out.set?.type !== undefined && legacy(out.set.type)) out.set.type = setOne(out.set.type);
+  if (out.kind === "propagate" && typeof out.as === "object" && out.as.type !== undefined && legacy(out.as.type)) out.as.type = setOne(out.as.type);
+  if (out.kind === "follow" && Array.isArray(out.types)) out.types = [...new Set(out.types.flatMap((t) => (legacy(t) ? currentTypesOf(t) : [t])))];
+  return out;
 }

@@ -12,7 +12,7 @@
 // flappingHeld). Maintenance is the open window's that covers the object.
 
 import { AlertItem } from "./alerts";
-import { Acknowledged, CmdbItem, CmdbRel, Condition, DERIVED, RootCause, RANK, SOURCE, SiteIndex, conditionsOf, failing, isDerivedKind } from "./assess-model";
+import { Acknowledged, CmdbItem, Hits, CmdbRel, Condition, DERIVED, RootCause, RANK, SOURCE, SiteIndex, conditionsOf, failing, isDerivedKind } from "./assess-model";
 import { OBSERVATION_REASONS, fromObservations } from "./assess-observations";
 import { Finding, GATES, fromAlerts, fromCve, fromGates, fromSweep, fromThresholds } from "./assess-sources";
 import { SWEEP_MAX_AGE_MS, SweepRecord } from "./cmdbsweep";
@@ -23,7 +23,7 @@ import { STALE_DAYS, ScanStatus } from "./security";
 import { SiteSecurity, siteSecurity } from "./site-score";
 import { CheckResult } from "./types";
 import { CmdbReport } from "../../../lib/ts/src/cmdb";
-import { CONDITION_TYPES, ConditionStatus } from "../../../lib/ts/src/health-rules";
+import { CONDITION_TYPES, ConditionStatus, currentType } from "../../../lib/ts/src/health-rules";
 import { conflicts, recordHash, ruleSetHash } from "../../../lib/ts/src/health-records";
 import { levelChanged } from "./events";
 import { Declared, PERF_OWNER, fromPerformance, fromTrends } from "./assess-performance";
@@ -131,7 +131,13 @@ function worstOf(fs: Classified[]): Classified {
   const top = fs.reduce((w, f) => (rank(f) > rank(w) ? f : w));
   if (top.status === "ok") return top;
   const same = [...new Set(fs.filter((f) => f.status === top.status && f.reason === top.reason).map((f) => f.message).filter(Boolean))];
-  return { ...top, message: same.join("; ") };
+  // The hits of every finding at its status from the same source add up; the
+  // longest hold wins ("ack" over any time).
+  const counted = fs.filter((f) => f.status === top.status && f.owner === top.owner && f.hits);
+  const hits = counted.length > 1 ? counted.map((f) => f.hits!).reduce((a, b) => ({ count: a.count + b.count, first: a.first < b.first ? a.first : b.first, last: a.last > b.last ? a.last : b.last, alerts: [...new Set([...(a.alerts ?? []), ...(b.alerts ?? [])])], ...(a.query || b.query ? { query: a.query ?? b.query } : {}) })) : top.hits;
+  const holds = counted.map((f) => f.heldUntil).filter((h): h is string => !!h);
+  const heldUntil = holds.includes("ack") ? "ack" : holds.sort().pop() ?? top.heldUntil;
+  return { ...top, message: same.join("; "), ...(hits ? { hits } : {}), ...(heldUntil ? { heldUntil } : {}) };
 }
 
 const blank = (f: Classified, now: string): Condition => ({
@@ -140,6 +146,9 @@ const blank = (f: Classified, now: string): Condition => ({
   ...(f.raw ? { raw: { ...f.raw, since: now } } : {}),
   ...(f.quieted ? { quieted: { rule: f.quieted, since: now } } : {}),
   ...(f.aggregate ? { aggregate: true } : {}),
+  ...(f.hits ? { hits: f.hits } : {}),
+  ...(f.heldUntil ? { heldUntil: f.heldUntil } : {}),
+  ...(f.heldBy ? { heldBy: f.heldBy } : {}),
 });
 
 // A fresh finding over the stored condition: since, and the source's own since
@@ -209,14 +218,14 @@ export function settle(priorOf: (id: string) => Condition[], ids: Iterable<strin
 // Both are projected onto the condition here, so every reader reads one shape.
 export interface OperatorWord { ack: Acknowledged | null; at: string }
 export const acksOf = (o: CmdbItem): Record<string, OperatorWord> => (o.attributes.acknowledgements as Record<string, OperatorWord> | undefined) ?? {};
-export const flapsOf = (o: CmdbItem): Record<string, { held: ConditionStatus }> => (o.attributes.flapping as Record<string, { held: ConditionStatus }> | undefined) ?? {};
+export const flapsOf = (o: CmdbItem): Record<string, { held: ConditionStatus; hits?: Hits }> => (o.attributes.flapping as Record<string, { held: ConditionStatus; hits?: Hits }> | undefined) ?? {};
 
 // Since, across no change of status; the maintenance of the open window that
 // covers the object (windows.ts), never carried over.
-function stamp(c: Condition, p: Condition | undefined, now: string, nowMs: number, cov: Covered | undefined, word: OperatorWord | undefined, flap: { held: ConditionStatus } | undefined): Condition {
-  // A security critical from a hit is told inside a window too (ADR-050 D12):
+function stamp(c: Condition, p: Condition | undefined, now: string, nowMs: number, cov: Covered | undefined, word: OperatorWord | undefined, flap: { held: ConditionStatus; hits?: Hits } | undefined): Condition {
+  // A threat critical from a hit is told inside a window too (ADR-050 D12):
   // an attacker does not keep to the update window.
-  const window: Window | undefined = c.type === "security" && c.owner === SIEM_OWNER && c.status === "critical" ? undefined : coveredBy(c, cov);
+  const window: Window | undefined = c.type === "threat" && c.owner === SIEM_OWNER && c.status === "critical" ? undefined : coveredBy(c, cov);
   const mnt = window ? asMaintenance(window) : null;
   const held = !!p && p.status === c.status && p.reason === c.reason;
   const until = (w: { until: string | null } | null): boolean => w !== null && (!w.until || Date.parse(w.until) > nowMs);
@@ -233,7 +242,7 @@ function stamp(c: Condition, p: Condition | undefined, now: string, nowMs: numbe
     acknowledged: ack,
     maintenance: mnt,
     ...(operatorAt ? { operatorAt } : {}),
-    ...(flap ? { flapping: true, flappingHeld: flap.held } : {}),
+    ...(flap ? { flapping: true, flappingHeld: flap.held, ...(flap.hits && !c.hits ? { hits: flap.hits } : {}) } : {}),
   };
 }
 
@@ -335,7 +344,7 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
   // Security hits (ADR-050 D12): held by the source, rated by the records.
   const hits = io.siem ? t("siem", () => io.siem!()) : null;
   if (hits) {
-    findings.push(...fromSiem(hits, idx, nowMs, (f) => classify([f], idx.byId, model.records, model.ancestors, priorOf, nowMs)[0]));
+    findings.push(...fromSiem(hits, idx, nowMs, (f) => classify([{ ...f, type: (currentType(f.type, f.reason, f.owner) ?? f.type) as Finding["type"] }], idx.byId, model.records, model.ancestors, priorOf, nowMs)[0]));
     ran.add(SIEM_OWNER);
   }
   const looked = (owner: string, id: string): boolean => {
@@ -348,6 +357,9 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
   };
   // classify: what each failing finding becomes under the records.
   const ruleConflicts = new Set<string>();
+  // A source still speaking a type from before the split (security,
+  // maintenance) is read by its reason and owner: vulnerability or threat.
+  for (const f of findings) if (!(CONDITION_TYPES as readonly string[]).includes(f.type)) f.type = (currentType(f.type, f.reason, f.owner) ?? f.type) as Finding["type"];
   const classified = t("classify", () => classify(findings, idx.byId, model.records, model.ancestors, priorOf, nowMs, ruleConflicts));
   const scoped = only ? classified.filter((f) => f.object === only.id) : classified;
   const source = t("settle", () => settle(priorOf, objects.map((o) => o.id), scoped, looked, time));

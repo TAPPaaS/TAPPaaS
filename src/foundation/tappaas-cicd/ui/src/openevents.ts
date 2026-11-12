@@ -1,7 +1,8 @@
-// operations.ts — the Operations view's document (ADR-040 D11, D15): the open
-// events by root cause, critical first, each with what it impacts and what
-// changed on its object in the last day; and the discovery sweep the page can
-// start. Pure but for SweepRunner: reads.ts reads, this shapes.
+// openevents.ts — the open events by root cause, critical first, each with what
+// it impacts (the Overview's alerts, GET health/events); what changed on an
+// object in the last day (the Health page's root list and panel); and the
+// discovery sweep the Assets page can start. Pure but for SweepRunner:
+// reads.ts reads, this shapes.
 //
 // An open event is an object with a failing condition of its own: critical or
 // warning, not derived, not acknowledged, not in a maintenance window. An
@@ -226,6 +227,25 @@ export function recentChanges(h: CmdbHistory, fromMs: number, untilMs = Number.P
     out.push({ id: c.id, time: c.time, kind: c.kind, source: c.source, verb: c.verb, job: c.job, actor: c.actor, drift: (c as { drift?: boolean }).drift === true, what: what.filter((w) => !NOISE.has(w)) });
   }
   return out.sort((a, b) => Date.parse(b.time) - Date.parse(a.time) || b.id - a.id);
+}
+
+/** What changed on each root cause within the window: the Health page's line. */
+export interface RootChanges {
+  windowHours: number;
+  changes: Record<string, OpsChange[]>; // by object id, newest first
+  changesError: Record<string, string>;
+  changesSkipped: string[];
+}
+
+export function rootChanges(histories: Map<string, CmdbHistory | Error>, skipped: string[], now: number): RootChanges {
+  const changes: Record<string, OpsChange[]> = {};
+  const changesError: Record<string, string> = {};
+  const from = now - WINDOW_HOURS * 3600_000;
+  for (const [id, h] of histories) {
+    if (h instanceof Error) changesError[id] = h.message;
+    else changes[id] = recentChanges(h, from, now);
+  }
+  return { windowHours: WINDOW_HOURS, changes, changesError, changesSkipped: skipped };
 }
 
 /** The objects whose history the page reads: every event's, in the page's order, at most `max`. */

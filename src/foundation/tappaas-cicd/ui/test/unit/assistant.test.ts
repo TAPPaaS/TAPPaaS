@@ -276,8 +276,10 @@ async function main(): Promise<void> {
   check(o.ok && o.navigate?.path === "/zones?zone=home", "modify-zone opens the zone on the Network page");
   o = await runTool(tools, "open_console", JSON.stringify({ target: "/site/physical" }));
   check(o.ok && o.navigate?.title.startsWith("the physical view") === true && o.navigate.values !== undefined, "a page");
-  o = await runTool(tools, "open_console", JSON.stringify({ target: "/security" }));
-  check(!o.ok && /no page \/security/.test(o.content), "a page the console does not have is refused");
+  o = await runTool(tools, "open_console", JSON.stringify({ target: "/operations" }));
+  check(!o.ok && /no page \/operations/.test(o.content), "a page the console does not have is refused");
+  o = await runTool(tools, "open_console", JSON.stringify({ target: "/security?tab=threats" }));
+  check(o.ok && o.navigate?.path === "/security?tab=threats", "the Security page's Threats tab");
   o = await runTool(tools, "open_console", JSON.stringify({ target: "add-vm" }));
   check(!o.ok && /no wizard 'add-vm' \(wizards: add-node,/.test(o.content), "a wizard the console does not have is refused, with the list");
   o = await runTool(tools, "open_console", JSON.stringify({ target: "add-node", values: { cores: "4" } }));

@@ -262,6 +262,7 @@ export interface HealthSite {
   roots?: Obj[];
   sweep?: Obj | null;
   dir?: string; // show/ and history/: an object's whole record, where it was captured
+  overlaid?: string[]; // the objects cmdb/overlay.synthetic.json changes: their captured record gets the same attributes
 }
 
 // The shipped metamodel's relation types, as /v1/rules serves them.
@@ -270,13 +271,39 @@ export function metamodelRelations(controllerDir: string): RelationType[] {
   return Object.entries(doc.relations).map(([name, r]) => ({ name, dependant: r.dependant ?? null, tree: r.tree ?? null }));
 }
 
+// A hand-kept layer over the capture (cmdb/overlay.synthetic.json): per object
+// id, conditions added (one of a type replaces the captured one),
+// acknowledgements merged, root causes added. What a capture cannot have yet.
+const OVERLAY = "overlay.synthetic.json";
+interface Overlay { objects?: Record<string, { conditions?: Obj[]; acknowledgements?: Obj; rootCauses?: Obj[] }> }
+export function overlaid(objects: Obj[], o: Overlay | null): Obj[] {
+  if (!o?.objects) return objects;
+  return objects.map((x) => {
+    const add = o.objects![String(x.id)];
+    if (!add) return x;
+    const a = (x.attributes ?? {}) as Obj;
+    const conds = (Array.isArray(a.conditions) ? (a.conditions as Obj[]) : []).filter((c) => !(add.conditions ?? []).some((n) => n.type === c.type));
+    return {
+      ...x,
+      attributes: {
+        ...a,
+        ...(add.conditions ? { conditions: [...conds, ...add.conditions] } : {}),
+        ...(add.acknowledgements ? { acknowledgements: { ...((a.acknowledgements ?? {}) as Obj), ...add.acknowledgements } } : {}),
+        ...(add.rootCauses ? { rootCauses: [...(Array.isArray(a.rootCauses) ? (a.rootCauses as Obj[]) : []), ...add.rootCauses] } : {}),
+      },
+    };
+  });
+}
+
 // The CMDB capture.sh recorded.
 export function capturedCmdb(dir: string, repoRoot: string): HealthSite {
   const json = <T>(f: string): T => JSON.parse(readFileSync(join(dir, "cmdb", f), "utf8")) as T;
   const roots = join(dir, "reads", `${fixtureSlug(["health-manager", "roots", "--json"])}.out`);
   const r = existsSync(roots) ? (JSON.parse(readFileSync(roots, "utf8")) as Obj[] | { roots?: Obj[] }) : [];
+  const overlay = existsSync(join(dir, "cmdb", OVERLAY)) ? json<Overlay>(OVERLAY) : null;
   return {
-    objects: json("objects.json"),
+    overlaid: Object.keys(overlay?.objects ?? {}),
+    objects: overlaid(json<Obj[]>("objects.json"), overlay) as unknown as HealthSite["objects"],
     relations: json("relations.json"),
     ids: {},
     history: [],
@@ -338,9 +365,15 @@ export class FixtureCmdb {
   }
   async show(id: string): Promise<unknown> {
     this.guard(`show ${id}`);
-    const whole = this.recordOf<unknown>("show", id);
-    if (whole) return whole;
+    const whole = this.recordOf<{ attributes?: Record<string, { value: unknown; source?: string; since?: string }> }>("show", id);
     const o = this.site.objects.find((x) => x.id === id);
+    if (whole && o && this.site.overlaid?.includes(id)) {
+      // The capture's record, with the overlay's attributes as the objects carry them.
+      const attrs = { ...(whole.attributes ?? {}) };
+      for (const k of ["conditions", "acknowledgements", "rootCauses"]) if (k in o.attributes) attrs[k] = { ...(attrs[k] ?? { source: "health-manager", since: "2026-11-01T08:50:02.363Z" }), value: o.attributes[k] };
+      return { ...whole, attributes: attrs };
+    }
+    if (whole) return whole;
     if (!o) throw new Error(`no object ${id}`);
     const since = (o as unknown as { created?: string }).created ?? "2026-10-01T00:00:00Z";
     return {

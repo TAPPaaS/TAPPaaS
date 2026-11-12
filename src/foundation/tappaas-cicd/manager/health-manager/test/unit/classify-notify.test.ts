@@ -165,8 +165,8 @@ function site(extra: HealthRecord[]) {
   const st = obj("site", "rossen");
   const byId = new Map([vm, st].map((o) => [o.id, o]));
   const fs = classify([
-    { object: vm.id, type: "security", status: "warning", reason: "cve-medium", message: "score 14", owner: "cve", labels: { setBy: "baseline" } },
-    { object: st.id, type: "security", status: "warning", reason: "cve-baseline", message: "the baseline: medium", owner: "cve" },
+    { object: vm.id, type: "vulnerability", status: "warning", reason: "cve-medium", message: "score 14", owner: "cve", labels: { setBy: "baseline" } },
+    { object: st.id, type: "vulnerability", status: "warning", reason: "cve-baseline", message: "the baseline: medium", owner: "cve" },
   ], byId, m.records, m.ancestors, () => [], T0);
   check(fs[0].aggregate === true && !fs[1].aggregate, "a module's CVE level set only by the baseline is a sum of others; the site's baseline finding is not");
   const src = new Map(fs.map((f) => [f.object, [{ type: f.type, status: f.status, reason: f.reason, message: f.message, since: at(0).toISOString(), lastChecked: at(0).toISOString(), source: "health-manager", owner: f.owner, derived: false, rootCause: null, acknowledged: null, maintenance: null, ...(f.aggregate ? { aggregate: true } : {}) } as never]]));
@@ -180,12 +180,12 @@ function site(extra: HealthRecord[]) {
   const base = obj("nixos-baseline", "nixos-baseline");
   const vm = obj("vm", "coturn");
   const st = obj("site", "rossen");
-  const c = (o: CmdbItem, status: "warning" | "critical", reason: string, extra: object = {}) => [o.id, [{ type: "security", status, reason, message: reason, since: at(0).toISOString(), lastChecked: at(0).toISOString(), source: "health-manager", owner: "cve", derived: false, rootCause: null, acknowledged: null, maintenance: null, ...extra } as never]] as [string, never[]];
+  const c = (o: CmdbItem, status: "warning" | "critical", reason: string, extra: object = {}) => [o.id, [{ type: "vulnerability", status, reason, message: reason, since: at(0).toISOString(), lastChecked: at(0).toISOString(), source: "health-manager", owner: "cve", derived: false, rootCause: null, acknowledged: null, maintenance: null, ...extra } as never]] as [string, never[]];
   const d = derive([base, vm, st], new Map([c(base, "critical", "cve-baseline"), c(vm, "critical", "cve-critical", { aggregate: true }), c(st, "warning", "cve-medium")]), [], m, at(0).toISOString());
-  check(d.rootCauses.some((r) => r.id === base.id && r.type === "security") && !d.rootCauses.some((r) => r.id === vm.id), "the baseline's own CI is the root; the unit it sets is a sum");
-  check(d.conditions.get(base.id)?.find((x) => x.type === "security")?.reason === "cve-baseline", "…its condition is its own, whatever the site's roll-up says");
+  check(d.rootCauses.some((r) => r.id === base.id && r.type === "vulnerability") && !d.rootCauses.some((r) => r.id === vm.id), "the baseline's own CI is the root; the unit it sets is a sum");
+  check(d.conditions.get(base.id)?.find((x) => x.type === "vulnerability")?.reason === "cve-baseline", "…its condition is its own, whatever the site's roll-up says");
   const rules = { records: m.records, ancestors: m.ancestors };
-  const cond = d.conditions.get(base.id)!.find((x) => x.type === "security")!;
+  const cond = d.conditions.get(base.id)!.find((x) => x.type === "vulnerability")!;
   check(notifyOf({ id: base.id, class: base.class, name: base.name, attributes: {} } as never, cond as never, rules) === "digest", "…a critical baseline is told in the digest, as a module's CVE level is");
 }
 

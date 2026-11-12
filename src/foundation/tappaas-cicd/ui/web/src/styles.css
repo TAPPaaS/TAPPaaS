@@ -250,8 +250,10 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 .tag-ack { background: var(--ack); }
 
 /* overview */
-.strip { display: grid; grid-template-columns: repeat(6, minmax(150px, 1fr)); gap: 10px; margin: 10px 0 var(--sp-4); }
-@media (max-width: var(--bp-xl)) { .strip { grid-template-columns: repeat(3, 1fr); } }
+.strip { display: grid; grid-template-columns: repeat(5, minmax(150px, 1fr)); gap: 10px; margin: 10px 0 var(--sp-4); }
+@media (max-width: var(--bp-xl)) { .strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: var(--bp-sm)) { .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.strip .card { min-width: 0; overflow-wrap: anywhere; }
 .card { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--skip); border-radius: var(--radius-panel); padding: 10px var(--sp-12); }
 .card-pass { border-left-color: var(--pass); }
 .card-warn { border-left-color: var(--warn); }
@@ -773,6 +775,12 @@ span.ht-caret { cursor: default; }
 .hroot-on { outline: 2px solid var(--accent); outline-offset: 1px; }
 .hroot-ack { background: var(--ack-bg); border-color: var(--ack); }
 .hroot-head { display: flex; align-items: center; gap: 6px; }
+/* One line per type a root is a root in: the type, what, and under it its hits and hold. */
+.hroot-conds { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--sp-8); row-gap: var(--sp-4); }
+.hroot-cond { display: contents; }
+.hroot-text { min-width: 0; overflow-wrap: anywhere; }
+.hroot-meta { display: block; }
+.hroot-changed { font-style: italic; }
 .hlink { font: inherit; background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; }
 .hlink:hover { text-decoration: underline; }
 .hc-name { overflow: hidden; text-overflow: ellipsis; }
@@ -805,30 +813,26 @@ span.ht-caret { cursor: default; }
   .health-time input { width: 130px; }
 }
 
-/* Operations: the open events by root cause, what changed beside each, the
-   discovery sweep; the object's panel (.health-panel) on the right. */
-.ops-view { display: flex; gap: var(--sp-12); align-items: flex-start; }
-.ops-main { flex: 1; min-width: 0; }
-.ops-view .health-panel { position: sticky; top: 60px; max-height: calc(100vh - 80px); }
-.ops-group { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--skip); border-radius: var(--radius-control); margin-bottom: 10px; }
-.ops-critical { border-left-color: var(--fail); }
-.ops-warning { border-left-color: var(--warn); }
-.ops-events { list-style: none; margin: 0; padding: 0; }
-.ops-event { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: var(--sp-12); padding: var(--sp-8) 10px; border-top: 1px solid var(--line); }
-.ops-event:first-child { border-top: 0; }
-.ops-event-on { background: var(--accent-a07); }
-.ops-event-head { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; padding: 0; font: inherit; text-align: left; color: inherit; background: none; border: 0; cursor: pointer; }
-.ops-event-head:hover .ops-event-name b { color: var(--accent); }
-.ops-event-name, .ops-event-text { min-width: 0; word-break: break-word; }
-.ops-root { color: var(--fail); font-size: 12px; font-weight: 600; }
-.ops-event-changes { min-width: 0; border-left: 1px dashed var(--line); padding-left: 10px; }
-.ops-changes li { padding: 2px 0; }
-.ops-what { color: var(--gray-700); word-break: break-word; }
-.ops-impact { padding: 6px 10px var(--sp-8); border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: var(--sp-4) 10px; align-items: center; }
-.ops-impacted { display: inline-flex; align-items: center; gap: var(--sp-4); font-size: 13px; }
+/* Security › Threats: the open findings as a table of columns, the object's
+   panel (.health-panel) on the right; a hit on an object with an open CVE is marked. */
+.thr-view { display: flex; gap: var(--sp-12); align-items: flex-start; }
+.thr-main { flex: 1; min-width: 0; }
+.thr-view .health-panel { position: sticky; top: 60px; max-height: calc(100vh - 80px); }
+.thr-table { display: grid; grid-template-columns: auto minmax(120px, 1.1fr) minmax(140px, 1.6fr) auto auto auto auto auto auto; column-gap: var(--sp-12); }
+.thr-row { display: contents; }
+.thr-row > span { padding: var(--sp-8) 0; border-top: 1px solid var(--line); min-width: 0; }
+.thr-head > span { border-top: 0; padding-top: 0; }
+.thr-cve > span { background: var(--warn-bg); }
+.thr-on > span { background: var(--accent-a07); }
+.thr-object, .thr-what { overflow-wrap: anywhere; }
+.thr-acts { display: flex; gap: var(--sp-8); align-items: center; white-space: nowrap; }
+.thr-silenced { margin-top: var(--sp-12); }
 @media (max-width: var(--bp-md)) {
-  .ops-event { grid-template-columns: 1fr; }
-  .ops-event-changes { border-left: 0; padding-left: 0; }
+  .thr-table { grid-template-columns: auto minmax(0, 1fr); }
+  .thr-head { display: none; }
+  .thr-row > span:nth-child(n + 3) { border-top: 0; padding-top: 0; grid-column: 2; }
+  /* Without the head row a cell says what it is. */
+  .thr-row > span[data-label]::before { content: attr(data-label) " "; color: var(--muted); }
 }
 
 /* A side panel's Details link, and the Assets view (tree, asset page). */

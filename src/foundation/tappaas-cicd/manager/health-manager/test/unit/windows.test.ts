@@ -112,8 +112,8 @@ const node2 = obj("machine", "tappaas2");
 {
   const is = covered([node, guest, far], [[far, [cond("capacity", "warning", "x")]], [node, [cond("drift", "warning", "y")]]], [rel("runs-on", guest, node)], win("site"));
   check(is(far, "capacity") === true && is(node, "drift") === true, "a site window covers every condition of every object");
-  const named = covered([node], [[node, [cond("drift", "warning", "y"), cond("security", "warning", "z")]]], [], win(["tappaas1"]));
-  check(named(node, "drift") === true && named(node, "security") === true, "the object a window names: every condition");
+  const named = covered([node], [[node, [cond("drift", "warning", "y"), cond("vulnerability", "warning", "z")]]], [], win(["tappaas1"]));
+  check(named(node, "drift") === true && named(node, "vulnerability") === true, "the object a window names: every condition");
 }
 
 console.log(`\nResults: ${passed} passed, ${failed} failed`);

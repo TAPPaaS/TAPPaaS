@@ -20,7 +20,7 @@ export interface Raw { status: Condition["status"]; since: string; rule: string 
 export interface Quieted { rule: string; since: string; via?: string[] }
 
 /** A finding after classify: what records made of it. */
-export type Classified = Finding & { raw?: { status: Condition["status"]; rule: string }; quieted?: string; aggregate?: true; hold?: string };
+export type Classified = Finding & { raw?: { status: Condition["status"]; rule: string }; quieted?: string; aggregate?: true; hold?: string; heldBy?: string };
 
 /** How long the source has said this status: from the condition as stored. */
 function ageOf(f: Finding, prior: Condition | undefined, nowMs: number): number {
@@ -70,7 +70,7 @@ export function classify(findings: Finding[], byId: Map<string, CmdbItem>, recor
     }
     if (w.quiet) out.quieted = w.id;
     if (w.aggregate) out.aggregate = true;
-    if (w.hold) out.hold = w.hold;
+    if (w.hold) { out.hold = w.hold; out.heldBy = w.id; }
     return out;
   });
 }

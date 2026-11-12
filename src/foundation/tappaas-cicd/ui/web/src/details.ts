@@ -75,7 +75,7 @@ export function selDetails(sel: Sel, ctx: SelContext): DetailTarget[] {
   }
 }
 
-// A CI as the Health and Operations panels show it.
+// A CI as the Health and Threats panels show it.
 export interface CiLike {
   class: string;
   ancestors: string[];
@@ -86,7 +86,7 @@ export interface CiLike {
 
 const IDENTITY: Record<string, string> = { user: "user", group: "group", role: "role", organization: "org" };
 
-/** The Details targets of a CI in the Health and Operations views: the page
+/** The Details targets of a CI in the Health and Threats views: the page
  *  that shows it in full; empty when the console has none for its class. */
 export function ciDetails(o: CiLike): DetailTarget[] {
   const is = (c: string) => o.class === c || o.ancestors.includes(c);

@@ -230,13 +230,13 @@ function judgeSoftware(o: CmdbItem, idx: SiteIndex, add: Add): void {
   else add(o, "operational", "ok", "ok", `${o.name} on ${runs[0].name}`);
   const pin = text((o.attributes.release as { version?: unknown } | undefined)?.version);
   const version = text(o.attributes.version);
-  if (pin && version && version !== "unknown") add(o, "maintenance", version === pin ? "ok" : "warning", "version-off-pin", `${o.name}: ${version}, released ${pin}`);
+  if (pin && version && version !== "unknown") add(o, "upkeep", version === pin ? "ok" : "warning", "version-off-pin", `${o.name}: ${version}, released ${pin}`);
 }
 
 function judgeDatastore(o: CmdbItem, idx: SiteIndex, nowMs: number, add: Add): void {
   const gc = o.attributes.gc as { "last-run-state"?: unknown } | undefined;
   const state = text(gc?.["last-run-state"]);
-  if (state) add(o, "maintenance", state === "OK" ? "ok" : "warning", "gc-failed", `${o.name}: garbage collection ${state}`);
+  if (state) add(o, "upkeep", state === "OK" ? "ok" : "warning", "gc-failed", `${o.name}: garbage collection ${state}`);
   const vmid = new Map(idx.objects.filter((x) => x.class === "vm" || x.class === "lxc").map((x) => [String(x.attributes.vmid), x]));
   for (const g of list(o.attributes.restorePoints)) {
     // A group whose guest is gone only waits for pruning: no one's protection.
@@ -274,7 +274,7 @@ export function fromObservations(idx: SiteIndex, ended: CmdbItem[], nowMs: numbe
     else if (o.class === "dns-name") judgeDns(o, idx, holders, add);
     else if (o.class === "proxy-route") judgeRoute(o, idx, holders, ended, add);
     else if (SOFTWARE.has(o.class)) judgeSoftware(o, idx, add);
-    else if (ASSETS.has(o.class)) add(o, "maintenance", a.faulty === true ? "warning" : "ok", "asset-faulty", a.faulty === true ? `${o.name}: faulty${a.faultNote ? `: ${text(a.faultNote)}` : ""}` : "");
+    else if (ASSETS.has(o.class)) add(o, "upkeep", a.faulty === true ? "warning" : "ok", "asset-faulty", a.faulty === true ? `${o.name}: faulty${a.faultNote ? `: ${text(a.faultNote)}` : ""}` : "");
     if (o.class === "ssid") judgeSsid(o, idx, add);
     if (o.class === "datastore") judgeDatastore(o, idx, nowMs, add);
     if (o.class === "backup-peer" && a.lastSeen) {

@@ -156,11 +156,11 @@ const days = (d: number): string => new Date(NOW.getTime() + d * 86_400_000).toI
   const mgr = obj("manager", "site-manager");
   const stray = obj("controller", "c");
   const r = run([m, lost, pinned, off, svc, mgr, stray], [rel("runs-on", pinned, m), rel("runs-on", off, m), rel("runs-on", svc, lost), rel("runs-on", mgr, m)]);
-  check(is(r, pinned, "ok", "ok") && is(r, pinned, "ok", "ok", "maintenance"), "an app on its node at its release");
-  check(is(r, off, "warning", "version-off-pin", "maintenance"), "a version off its release pin");
+  check(is(r, pinned, "ok", "ok") && is(r, pinned, "ok", "ok", "upkeep"), "an app on its node at its release");
+  check(is(r, off, "warning", "version-off-pin", "upkeep"), "a version off its release pin");
   check(is(r, svc, "warning", "software-node-unseen"), "software whose node is unseen");
   check(is(r, stray, "warning", "software-no-node"), "software on no node: its node is retired");
-  check(is(r, mgr, "ok", "ok") && got(r, mgr, "maintenance") === undefined, "a manager, with no release");
+  check(is(r, mgr, "ok", "ok") && got(r, mgr, "upkeep") === undefined, "a manager, with no release");
 }
 
 // ── assets, backup, shares, lifecycle ──
@@ -180,9 +180,9 @@ const days = (d: number): string => new Date(NOW.getTime() + d * 86_400_000).toI
   const user = obj("user", "lars", { stage: "operational" });
   const lostUser = obj("user", "x", { stage: "unseen" });
   const r = run([bad, fine, v1, v2, m, ds, peerOld, peerNew, share, orphan, user, lostUser]);
-  check(is(r, bad, "warning", "asset-faulty", "maintenance") && /fan/.test(got(r, bad, "maintenance")!.message), "a faulty asset (D1)");
-  check(is(r, fine, "ok", "ok", "maintenance"), "…an asset not marked faulty is ok");
-  check(is(r, ds, "warning", "gc-failed", "maintenance"), "a datastore's GC that failed");
+  check(is(r, bad, "warning", "asset-faulty", "upkeep") && /fan/.test(got(r, bad, "upkeep")!.message), "a faulty asset (D1)");
+  check(is(r, fine, "ok", "ok", "upkeep"), "…an asset not marked faulty is ok");
+  check(is(r, ds, "warning", "gc-failed", "upkeep"), "a datastore's GC that failed");
   check(is(r, v1, "warning", "restore-point-stale", "backup"), "a guest's newest restore point too old");
   check(is(r, v2, "ok", "ok", "backup") && is(r, m, "ok", "ok", "backup"), "…a fresh one, a guest's and a host's");
   check(!r.objects.some((o) => o.name === "999"), "…a group whose guest is gone is nobody's");
@@ -257,7 +257,7 @@ const days = (d: number): string => new Date(NOW.getTime() + d * 86_400_000).toI
   check(is(r, sectors, "warning", "smart") && /8 reallocated, 2 pending/.test(got(r, sectors)?.message ?? ""), "reallocated or pending sectors: a warning, smart");
   check(is(r, worn, "warning", "wear") && is(r, lightly, "ok", "ok"), "under 10 % of its rated life: a warning, wear; 12 % is ok");
   check(is(r, hot, "warning", "temperature") && is(r, warm, "ok", "ok") && is(r, warmHdd, "warning", "temperature"), "over its kind's temperature (NVMe 70 °C, HDD 60 °C): a warning");
-  check(got(r, quiet)?.reason === "follows" && got(r, quiet, "maintenance")?.reason === "asset-faulty", "nothing observed: it follows its asset; the faulty flag is maintenance, as an asset's");
+  check(got(r, quiet)?.reason === "follows" && got(r, quiet, "upkeep")?.reason === "asset-faulty", "nothing observed: it follows its asset; the faulty flag is upkeep, as an asset's");
   check(is(r, pulled, "critical", "zfs"), "a pulled disk ZFS names by its by-id path, UNAVAIL: critical");
   check(got(r, pool)?.derived === true && got(r, pool)?.rootCause === failedZfs.id, "the pool's own DEGRADED is the disk's failure seen from above");
   check(got(r, pool, "impact")?.status === "warning" && got(r, pool, "impact")?.reason === "redundancy-degraded", "…and it is degraded, not down");

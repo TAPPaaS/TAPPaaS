@@ -19,6 +19,7 @@ Read verbs only, redacted before they land here, in one ssh session to `cicd-hro
 | `sweep-journal.txt` | the last 3000 lines of the sweep's journal |
 | `reads/<slug>.out`, `.rc` | every other verb, one file per argv (`<slug>` is `fixtureSlug`); the managers' manifests are here too |
 | `cmdb/` | `objects.json`, `relations.json`, `classes.json`, `sweep.json`; `show/` and `history/` for the classes a page opens, a history cut to its latest 20 rows. Other objects' records are derived |
+| `cmdb/overlay.synthetic.json` | hand-kept, not captured, kept across a refresh: laid over `objects.json` (and those objects' `show/` records) per object id — conditions added (one of a type replaces the captured one), acknowledgements merged, root causes added. It holds the threat findings the capture has none of |
 | `config/` | the records the console reads directly: named files, never the whole directory |
 | `jobs/<slug>.preview.txt`, `.apply.txt` | hand-kept, not captured: what a job says in fixture mode. `<slug>` is the argv without `--apply`, `--check`, `--dry-run`, `--json`, or a prefix of it. A `.pace` beside one (`<first> <ms>`) says it line by line. The flows (`web/e2e/flows`) read them: tappaas4's removal, tappaas5's add, litellm's update |
 

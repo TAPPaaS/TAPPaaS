@@ -94,9 +94,9 @@ classes is not more specific than one naming an ancestor of only one of them.
   record that quieted it. The moment the record is edited, turned off or no longer
   matches, the condition is heard again. A `quiet` record must name a reason, a
   label or an object.
-- `hold` (ADR-050 D12) applies to findings that are events, the security hits of
+- `hold` (ADR-050 D12) applies to findings that are events, the threat hits of
   source `siem`: how long a hit holds its condition, a duration from the last hit
-  (`"24h"`, `"7d"`) or `"until-ack"` (until the CI's security condition is
+  (`"24h"`, `"7d"`) or `"until-ack"` (until the CI's threat condition is
   acknowledged after the last hit). The source decides from it whether the hit is
   still held; the record itself never makes a failure ok. Shipped: warning `24h`,
   critical `until-ack`.
@@ -299,11 +299,11 @@ with the records that matched and lost. Neither writes anything.
 **classify**
 
 - `core.classify.alert`: a finding from alerts is operational warning.
-- `core.classify.alert-security`: a finding from alerts, alertname RootKeyChanged or FirewallCertChanged is security warning.
-- `core.classify.siem-warning`: a finding from siem, level warning holds 24h from its last hit.
-- `core.classify.siem-critical`: a finding from siem, level critical holds until acknowledged.
+- `core.classify.alert-security`: a finding from alerts, alertname RootKeyChanged or FirewallCertChanged is threat warning.
+- `core.classify.siem-warning`: a threat finding from siem, level warning holds 24h from its last hit.
+- `core.classify.siem-critical`: a threat finding from siem, level critical holds until acknowledged.
 - `core.classify.zone-score`: a finding from cve on a zone or environment is a sum of others, never a root.
-- `core.classify.cve-baseline`: a finding from cve, setBy baseline is a sum of others, never a root.
+- `core.classify.cve-baseline`: a vulnerability finding from cve, setBy baseline is a sum of others, never a root.
 - `core.classify.long-warning` (off until a site turns it on): a warning operational finding standing older than 24h is critical.
 
 **propagate**
@@ -341,14 +341,14 @@ with the records that matched and lost. Neither writes anything.
 - `core.rollup.site`: a site is the worst of everything that is not a sum.
 - `core.rollup.collection`: a collection is the worst of what is member-of or serves it.
 - `core.rollup.place`: a place is the worst of what is placed-in or at it, all the way, then allocated-to from it.
-- `core.rollup.environment-score`: an environment's security is its own, not a sum of its members.
-- `core.rollup.zone-score`: a zone's security is its own, not a sum of its members.
+- `core.rollup.environment-score`: an environment's vulnerability is its own, not a sum of its members.
+- `core.rollup.zone-score`: a zone's vulnerability is its own, not a sum of its members.
 
 **notify**
 
 - `core.notify.root`: a root cause with a warning or critical condition is told in the daily digest.
 - `core.notify.critical-root`: a root cause with a critical condition is told at once.
 - `core.notify.performance`: a root cause with a performance condition is told in the daily digest.
-- `core.notify.cve-level`: a root cause with a security condition (cve-medium or cve-high or cve-critical or cve-baseline) is told in the daily digest.
+- `core.notify.cve-level`: a root cause with a vulnerability condition (cve-medium or cve-high or cve-critical or cve-baseline) is told in the daily digest.
 - `core.notify.site-own`: a root cause with a condition on a site or zone or environment is told in the daily digest.
 <!-- standard-rules:end -->

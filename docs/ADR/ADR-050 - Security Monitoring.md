@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Accepted** (operator, 2026-11-12; no question open). Layer 1 (P0–P4) is this iteration; the Wazuh module is future work |
-| **Version** | 1.1 |
+| **Version** | 1.2 |
 | **Date** | 2026-11-12 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | #843 (a SIEM for TAPPaaS); the basis for #886 (the console's security view). Settles the SIEM part of ADR-040 O6. Would amend ADR-039 (a `type` label on security rules), ADR-041 and ADR-049 (security conditions that age out), and ADR-011 (a Windows layer, with the future Wazuh work). Analysis: [`docs/plans/siem-analysis.md`](../plans/siem-analysis.md). |
-| **Changelog** | v1.1 (2026-11-12): **as built, first part** (see *Implementation status*): the switch is `site.json` `security.monitoring` beside `performance`, not a field of the logging module; guests' audit records go through journald's audit socket, no auditd daemon; the closure check is a health-manager gate over the systems update-os.sh records. · v1.0 (2026-11-12): **Accepted** by the operator. Implementation starts with P0. · v0.5 (2026-11-12): D12, the ageing of security conditions, approved by the operator as proposed. No question is open. · v0.4 (2026-11-12): Suricata alerts first; IPS later on the WAN only (D5, operator). Only D12 is left for review. · v0.3 (2026-11-12): **operator's answers**: layer 1 is off at `small` (D1, D11); security streams kept 90 days at medium and 180 at large (D2); the security part rides on `logging:logs`, no new service (D9); host bouncers are future work, off-site lookups off by default, event management parked. **D12 proposes how a security condition ages.** Open: Suricata IDS or IPS. · v0.2 (2026-11-12): **operator's decisions**: this iteration builds layer 1 only, and the Wazuh module is future work (D1, Phases); security streams are kept 90 days (D2). The Sigma claim is corrected: Sigma gives about a third of the rules, the platform-specific rules are TAPPaaS's own (D3, Consequences). · v0.1 (2026-11-12): first draft from the analysis. Two layers: detection on the existing logging stack at every size, with Wazuh as an optional module at medium and large. |
+| **Changelog** | v1.2 (2026-11-12): **the condition type is `threat`** (ADR-041 v1.8): a finding raises a `threat` condition, not `security`, which split into `vulnerability` (the supply chain) and `threat`; the rules keep their `type=security` label. The console's Security page has a Threats tab (P4): the open findings with count, first and last hit and the hold left, the CVE state beside each, Ack with the rule's wording, a Logs link with the rule's query. · v1.1 (2026-11-12): **as built, first part** (see *Implementation status*): the switch is `site.json` `security.monitoring` beside `performance`, not a field of the logging module; guests' audit records go through journald's audit socket, no auditd daemon; the closure check is a health-manager gate over the systems update-os.sh records. · v1.0 (2026-11-12): **Accepted** by the operator. Implementation starts with P0. · v0.5 (2026-11-12): D12, the ageing of security conditions, approved by the operator as proposed. No question is open. · v0.4 (2026-11-12): Suricata alerts first; IPS later on the WAN only (D5, operator). Only D12 is left for review. · v0.3 (2026-11-12): **operator's answers**: layer 1 is off at `small` (D1, D11); security streams kept 90 days at medium and 180 at large (D2); the security part rides on `logging:logs`, no new service (D9); host bouncers are future work, off-site lookups off by default, event management parked. **D12 proposes how a security condition ages.** Open: Suricata IDS or IPS. · v0.2 (2026-11-12): **operator's decisions**: this iteration builds layer 1 only, and the Wazuh module is future work (D1, Phases); security streams are kept 90 days (D2). The Sigma claim is corrected: Sigma gives about a third of the rules, the platform-specific rules are TAPPaaS's own (D3, Consequences). · v0.1 (2026-11-12): first draft from the analysis. Two layers: detection on the existing logging stack at every size, with Wazuh as an optional module at medium and large. |
 
 TAPPaaS collects every guest's journal, the firewall log and the nodes' audit log in Loki. It
 alerts on single lines, bans abusive clients of published names with CrowdSec, and scans for
@@ -177,7 +177,9 @@ untouched, because layer 1 is off at small.
 A security finding is an event; the condition it raises is a **hold** on the CI.
 
 - **One finding per CI and rule**, with `count`, first and last hit. Repeats update it and do not
-  mail again. The CI's `security` condition is its worst held finding (ADR-049 D2).
+  mail again. The CI's `threat` condition is its worst held finding (ADR-049 D2), and carries
+  the hits and the hold as fields (`hits`, `heldUntil`; ADR-041 D1). Before ADR-041 v1.8 the type
+  was `security`; the alert rules keep the label `type=security`, which says a rule is a hit.
 - **A hold per severity**, set by a new classify outcome `hold`:
   - info is `quiet`: no condition;
   - a warning is held `24h` from the last hit, mailed on the first, and ages out without a mail
@@ -275,7 +277,8 @@ Merged to `main` 2026-11-12 (`00745bfe`), live-tested on hrossen the same day.
   hrossen `/var/log` fell from 744 to 237 MB and about 500 MB of memory came back.
 - Found: an ack is per condition type (ADR-041), so an ack given on a security hit also silences
   a CVE warning on the same object until the status changes. D12's "an ack covers the finding"
-  needs acks per finding.
+  needs acks per finding. Since v1.2 a hit is a `threat` and a CVE a `vulnerability`, so an ack
+  on one no longer silences the other; two hits of different rules on one CI still share one ack.
 
 | Part | State |
 |---|---|
@@ -290,7 +293,8 @@ Merged to `main` 2026-11-12 (`00745bfe`), live-tested on hrossen the same day.
 | Suricata (D5) | **Built, live on hrossen.** `suricata-converge.sh`: alert only (PCAP) on the WAN, eve to syslog and so to Loki; rule sets by size (operator, 2026-11-12): a core set at medium (about 3 600 rules, 200 MB), the full set at large (about 60 000); not started while the firewall lacks the memory. Rules: IdsAlert (info), IdsAlertHigh (warning, severity 1) |
 | Caddy and CrowdSec logs into Loki (P0) | **Not built** |
 | CI id on log lines (P0) | **Not built.** Placement by the authenticated `host` label works without it |
-| CVE-aware severity, coverage report, #886 (P4) | **Not built**: they wait for the sources above |
+| Threats in the console (P4) | **Built.** Security has a Threats tab beside Vulnerabilities: open findings per node and module, critical first, with hits, first and last, the hold left and the CVE state; Ack with the wording of the rule that holds it, Logs with its query; recent acknowledgements and why |
+| CVE-aware severity, coverage report | **Not built**: they wait for the sources above |
 | `debianhost` audit, the hardening check at validate | **Not built** |
 
 ## Settled in review

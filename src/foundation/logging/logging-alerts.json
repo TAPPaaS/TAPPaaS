@@ -58,7 +58,7 @@
       "scope": "all",
       "_comment": "Anchored: Loki and Grafana log every rule's query text on the logging VM, which is in scope all, so an unanchored rule would match its own query. A success from an address that failed more than five times in ten minutes, on the same host.",
       "expr": "sum by (host, src_ip) (count_over_time(__SELECTOR__ |~ \"^(Failed password for|Invalid user)\" | regexp \"from (?P<src_ip>[0-9a-fA-F:.]+)\" [10m])) > 5 and on (host, src_ip) sum by (host, src_ip) (count_over_time(__SELECTOR__ |~ \"^Accepted (password|publickey|keyboard-interactive)\" | regexp \"from (?P<src_ip>[0-9a-fA-F:.]+)\" [10m])) > 0",
-      "summary": "An SSH login succeeded from an address that had just failed many times on the same host. Check who logged in, and acknowledge with the reason (health-manager ack <ci> --type security --note ...).",
+      "summary": "An SSH login succeeded from an address that had just failed many times on the same host. Check who logged in, and acknowledge with the reason (health-manager ack <ci> --type threat --note ...).",
       "query": "{host=\"<host>\"} |~ \"^(Accepted|Failed password)\""
     },
     {

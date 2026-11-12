@@ -2,10 +2,51 @@
 // dependency-cycle check over the CMDB's relations. The rules themselves are
 // health records (health-records.ts).
 
-export const CONDITION_TYPES = ["operational", "drift", "capacity", "performance", "security", "maintenance", "backup", "impact"] as const;
+export const CONDITION_TYPES = ["operational", "drift", "capacity", "performance", "backup", "upkeep", "vulnerability", "threat", "impact"] as const;
 export const CONDITION_STATUSES = ["ok", "warning", "critical", "unknown"] as const;
 export type ConditionType = (typeof CONDITION_TYPES)[number];
 export type ConditionStatus = (typeof CONDITION_STATUSES)[number];
+
+// ── the types before the split ──────────────────────────────────────
+// `maintenance` became `upkeep` (a maintenance window is not a condition type),
+// and `security` split into `vulnerability` (the supply chain: CVEs, the scan,
+// signatures, control-plane trust, the NixOS baseline) and `threat` (what
+// happens on a running system: the SIEM's hits, a system not built from the
+// repository, an alert that says something is exposed). Certificate expiry
+// moved to upkeep, an unescrowed backup key to backup. A stored condition, an
+// ack and a site's rule edit written before are read through these.
+export const LEGACY_TYPES = ["security", "maintenance"] as const;
+export const isConditionType = (t: unknown): t is ConditionType => typeof t === "string" && (CONDITION_TYPES as readonly string[]).includes(t);
+
+const THREAT_REASON = /^(siem-|alert-)|^system-not-built$/;
+const THREAT_SOURCES = new Set(["siem", "alerts", "guest-system"]);
+const VULN_SOURCES = new Set(["cve", "signature-status", "control-plane-trust"]);
+
+/** What a type, as written before the split, is now, given the condition's
+ *  reason and its source (owner). A current type is returned as it is; an
+ *  unknown one is null. */
+export function currentType(type: string, reason?: string | null, source?: string | null): ConditionType | null {
+  if (isConditionType(type)) return type;
+  if (type === "maintenance") return reason === "backup-key-not-escrowed" ? "backup" : "upkeep";
+  if (type !== "security") return null;
+  if (reason === "certificate-expiry") return "upkeep";
+  if ((reason && THREAT_REASON.test(reason)) || (source && THREAT_SOURCES.has(source))) return "threat";
+  return "vulnerability";
+}
+
+/** The types a match on a type written before the split now reads: a reason or
+ *  source that decides it gives one; otherwise every type it split into, so a
+ *  site's rule keeps matching what it matched. */
+export function currentTypesOf(type: string, hint: { reasons?: string[]; source?: string[] } = {}): ConditionType[] {
+  if (isConditionType(type)) return [type];
+  const reasons = hint.reasons?.length ? hint.reasons : null;
+  const sources = hint.source?.length ? hint.source : null;
+  if (reasons) return [...new Set(reasons.map((r) => currentType(type, r)!))];
+  if (sources && sources.every((s) => THREAT_SOURCES.has(s) || VULN_SOURCES.has(s))) return [...new Set(sources.map((s) => currentType(type, null, s)!))];
+  if (type === "maintenance") return ["upkeep"];
+  if (type === "security") return ["vulnerability", "threat"];
+  return [];
+}
 
 /** A relation as the cycle check reads it: its type, its ends and its words. */
 export interface CycleRelation {

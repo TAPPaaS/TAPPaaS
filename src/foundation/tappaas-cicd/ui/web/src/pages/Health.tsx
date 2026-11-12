@@ -6,17 +6,17 @@
 
 import { Background, Controls, ReactFlow, ReactFlowProvider, useReactFlow } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { get, useHealthStream } from "../api";
+import { get, useHealthStream, useRead } from "../api";
 import { PHONE_QUERY } from "../breakpoints";
 import { GEdge, GNode, edgeTypes, layout, nodeTypes } from "../graph";
 import { Anchor, Card, EgoState, Filters, NO_FILTERS, boundsOf, egoCards, expand, fold, hubsOf, kept, patchEgo, patchPaths, rollup, shapeOf, statusClass, viewFor, wrapRanks } from "../healthgraph";
 import { ClassIcon, ModuleIcon } from "../moduleicon";
-import { HealthEgo, HealthPath, HealthPatch, HealthView } from "../types";
+import { FilteredCounts, HealthEgo, HealthPath, HealthPatch, HealthView } from "../types";
+import { CONDITION_TYPES, filterQuery, filtering, filtersOf, healthPath, rootMatches } from "../healthwords";
 import { Link, ReadState, replacePath, when } from "../ui";
 import { HealthPanel } from "./HealthPanel";
 import { TreePane, useTree } from "./HealthTree";
 
-const CONDITION_TYPES = ["operational", "drift", "capacity", "performance", "security", "maintenance", "backup", "impact"];
 const STRONG = "var(--fail)";
 const THIN = "var(--slate-400)";
 const WEEK_HOURS = 168;
@@ -174,9 +174,13 @@ export function Health() {
   const [paths, setPaths] = useState<Map<Chain, HealthPath>>(new Map());
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [epoch, setEpoch] = useState(0); // a new value reads everything again
-  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  // The filters live in the address (/health?type=threat), so another page links into them.
+  const [filters, setFilters] = useState<Filters>(() => ({ ...NO_FILTERS, ...filtersOf(window.location.search) }));
+  const filtersNow = useRef(filters);
+  filtersNow.current = filters;
   const [sheet, setSheet] = useState(false);
-  const [panel, setPanel] = useState(() => !phone());
+  // On a phone the panel is a drawer: open when the address names an object (an alert's link).
+  const [panel, setPanel] = useState(() => !phone() || new URLSearchParams(window.location.search).has("select"));
   const [nonce, setNonce] = useState(0);
   const [failure, setFailure] = useState<string | null>(null);
   // Landing on a root opens on its symptoms (D5): the page's entry and a pick
@@ -193,13 +197,13 @@ export function Health() {
     setOpenGroups(new Set());
     setSheet(false);
     if (!phone()) setPanel(true);
-    replacePath(`/health?select=${encodeURIComponent(id)}`);
+    replacePath(healthPath(id, filtersNow.current));
   }, []);
 
-  // No object asked for: the worst root, or the site when nothing is wrong.
+  // No object asked for: the worst root the filters keep, or the site when nothing is wrong.
   useEffect(() => {
     if (center || !doc) return;
-    const first = doc.roots[0]?.id ?? doc.site;
+    const first = doc.roots.find((r) => rootMatches(r, filtersNow.current))?.id ?? doc.site;
     if (first) go(first, true);
   }, [center, doc, go]);
 
@@ -249,6 +253,13 @@ export function Health() {
     setEpoch((n) => n + 1);
   }, [tree.reload]);
   useHealthStream(onPatch, onOpen);
+  // The header under the filters: read again with them, and when the CMDB moves.
+  const counted = useRead<FilteredCounts>(filtering(filters) ? `health/counts?${filterQuery(filters)}` : null, 60_000);
+  const recount = useRef(counted.reload);
+  recount.current = counted.reload;
+  useEffect(() => {
+    if (filtering(filters)) recount.current();
+  }, [doc?.counts, filters]);
 
   const state: EgoState | null = useMemo(() => (center ? { center, anchors, reads, paths: [...paths.values()], openGroups } : null), [center, anchors, reads, paths, openGroups]);
   const grow = useCallback((c: Card) => {
@@ -273,8 +284,13 @@ export function Health() {
 
   const classes = useMemo(() => [...new Set((doc?.facets ?? []).flatMap((f) => f.classes))].sort(), [doc]);
   const environments = useMemo(() => [...new Set((doc?.facets ?? []).flatMap((f) => f.environments))].sort(), [doc]);
-  const set = (k: keyof Filters) => (e: { target: { value: string } }) => setFilters({ ...filters, [k]: e.target.value });
-  const c = doc?.counts;
+  const apply = (next: Filters): void => {
+    setFilters(next);
+    replacePath(healthPath(center, next));
+  };
+  const set = (k: keyof Filters) => (e: { target: { value: string } }) => apply({ ...filters, [k]: e.target.value });
+  const fc = filtering(filters) ? counted.env?.data ?? null : null;
+  const c = filtering(filters) ? fc?.counts : doc?.counts;
   const explained = !!ego && ego.center.rootCause.length > 0;
   const hurts = !!ego && (ego.center.isRoot || explained);
 
@@ -283,8 +299,10 @@ export function Health() {
       <div className="page-head">
         <h1>Health</h1>
         <span className="muted">
+          {fc ? `${fc.roots} of ${fc.rootsAll} root causes · ` : ""}
           {c ? `${c.critical} critical · ${c.warning} warning · ${c.acknowledged} silenced · ${c.unknown} unknown · ${c.ok} ok` : "…"} · {doc?.generated ? `read ${when(doc.generated)}` : ""}
         </span>
+        {filtering(filters) ? <button className="hlink" onClick={() => apply(NO_FILTERS)}>clear filter</button> : null}
         <Link to="/health/rules">Rules</Link>
         <span className="spacer" />
         <button className="btn health-sheet-btn" onClick={() => setSheet(!sheet)}>Tree</button>

@@ -5,7 +5,7 @@
 //   alerts       Grafana's open alerts and the receiver's record (ADR-039 D8)
 //   sweep        the last sweep record's lists, as `drift`
 //   thresholds   over observations already in the CMDB, never from the plane
-//   cve          the CVE scan's cve-status.json, as `security`
+//   cve          the CVE scan's cve-status.json, as `vulnerability`
 //   observations class by class over the same data (assess-observations.ts)
 //
 // A finding about something the CMDB does not have lands on the site, so nothing
@@ -13,7 +13,7 @@
 
 import { BASELINE_CLASS, BASELINE_NAME } from "./baseline-ci";
 import { AlertItem } from "./alerts";
-import { CmdbItem, SiteIndex } from "./assess-model";
+import { CmdbItem, Hits, SiteIndex } from "./assess-model";
 import { POOL_FAIL, POOL_WARN } from "./checks";
 import { SWEEP_MAX_AGE_MS, SweepRecord } from "./cmdbsweep";
 import { STALE_DAYS, ScanStatus } from "./security";
@@ -30,6 +30,8 @@ export interface Finding {
   reason: string; // "ok" when it is
   message: string;
   owner: string; // the gate or source, which alone can take a failure back
+  hits?: Hits; // the events behind it (the SIEM's)
+  heldUntil?: string; // when its hold ends, or "ack"
   labels?: Record<string, string>; // what the source says beside it, for a classify record to read: an alert's labels; { setBy: "baseline" } on a CVE level the NixOS baseline sets
 }
 
@@ -44,11 +46,11 @@ export const GATES: Record<string, GateMap> = {
   "guest-memory": { type: "capacity", reason: "guest-memory-short" },
   "storage-pools": { type: "capacity", reason: "pool-usage" },
   "storage-replication": { type: "operational", reason: "replication-failing" },
-  "cpu-impact": { type: "maintenance", reason: "cpu-level-loss" },
+  "cpu-impact": { type: "upkeep", reason: "cpu-level-loss" },
   "backup-status": { type: "backup", reason: "backup-not-covered" },
-  "backup-keys": { type: "maintenance", reason: "backup-key-not-escrowed" },
-  "pending-reboot": { type: "maintenance", reason: "reboot-pending" },
-  "site-timezone": { type: "maintenance", reason: "timezone-off" },
+  "backup-keys": { type: "backup", reason: "backup-key-not-escrowed" },
+  "pending-reboot": { type: "upkeep", reason: "reboot-pending" },
+  "site-timezone": { type: "upkeep", reason: "timezone-off" },
   quorum: { type: "operational", reason: "quorum-at-risk" },
   "lan-uplink": { type: "operational", reason: "lan-uplink", skip: "ok" }, // a skip is an informational line
   "ipv6-egress": { type: "operational", reason: "ipv6-egress" },
@@ -56,9 +58,9 @@ export const GATES: Record<string, GateMap> = {
   "switch-ports": { type: "operational", reason: "switch-port" },
   "mlag-pairs": { type: "operational", reason: "mlag-pair" },
   pulse: { type: "operational", reason: "pulse" },
-  "signature-status": { type: "security", reason: "repository-unverified" },
-  "control-plane-trust": { type: "security", reason: "controller-unverified" },
-  "guest-system": { type: "security", reason: "system-not-built" },
+  "signature-status": { type: "vulnerability", reason: "repository-unverified" },
+  "control-plane-trust": { type: "vulnerability", reason: "controller-unverified" },
+  "guest-system": { type: "threat", reason: "system-not-built" },
 };
 
 const STATUS: Record<CheckStatus, ConditionStatus> = { pass: "ok", warn: "warning", fail: "critical", skip: "unknown" };
@@ -112,7 +114,7 @@ export function fromGates(checks: CheckResult[], idx: SiteIndex): { findings: Fi
 // ── alerts (ADR-039 D8, ADR-040 D14) ─────────────────────────────────
 // The rules over health-manager's own events: they report conditions, they are not one. As one, the
 // digest's firing was a new warning, which kept the digest firing the next day.
-// The two CVE rules (ADR-045 D4) tell what the security condition already holds.
+// The two CVE rules (ADR-045 D4) tell what the vulnerability condition already holds.
 const HEALTH_RULES = new Set(["HealthRootCause", "HealthRootRecovered", "HealthDailyDigest", "CveNewCritical", "CveLevelUp"]);
 const CI_LABELS = ["tappaas_ci_id", "tappaas.ci.id", "service_instance_id", "service.instance.id", "host_id", "host.id"];
 const kebab = (s: string): string => s.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
@@ -128,7 +130,7 @@ export function fromAlerts(alerts: AlertItem[], idx: SiteIndex): Finding[] {
     out.push({
       object: o.id,
       // As the source sees it; the classify records say what it becomes (an
-      // operational warning, a security one for what says something is exposed).
+      // operational warning, a threat for what says something is exposed).
       type: "operational",
       status: "warning",
       reason: `alert-${kebab(a.alertname)}`,
@@ -236,18 +238,18 @@ function certificates(o: CmdbItem, certs: unknown, nowMs: number, add: (o: CmdbI
   for (const { name, to } of newest.values()) {
     const days = (to - nowMs) / DAY;
     const status: ConditionStatus = days < CERT_CRITICAL_DAYS ? "critical" : days < CERT_WARN_DAYS ? "warning" : "ok";
-    add(o, "security", status, "certificate-expiry", `certificate ${name}: ${days < 0 ? "expired" : `${days.toFixed(0)} day(s) left`}`);
+    add(o, "upkeep", status, "certificate-expiry", `certificate ${name}: ${days < 0 ? "expired" : `${days.toFixed(0)} day(s) left`}`);
   }
 }
 
 // ── the CVE scan (ADR-011) and its risk score (ADR-045 D4) ──────────
-// The security condition of a module, a node, a zone and an environment takes
+// The vulnerability condition of a module, a node, a zone and an environment takes
 // its status from the score's level: ok and low are ok, medium and high a
 // warning, critical critical. The reason names the level (cve-medium,
 // cve-high, cve-critical), so a level change is a change even when the status
 // stays warning. A zone and an environment carry their own score (with the
 // zone's tier multiplier), not the worst of their members (derive.ts leaves
-// their security alone). A target whose scan failed is a warning of its own,
+// their vulnerability alone). A target whose scan failed is a warning of its own,
 // and a scan older than STALE_DAYS a warning on the site.
 export function levelStatus(l: Level): ConditionStatus {
   return l === "critical" ? "critical" : l === "high" || l === "medium" ? "warning" : "ok";
@@ -272,7 +274,7 @@ export function fromCve(s: ScanStatus | null, sec: SiteSecurity | null, nowMs: n
   const out: Finding[] = [];
   const add = (o: CmdbItem | null, status: ConditionStatus, reason: string, message: string, labels?: Record<string, string>): void => {
     const at = o ?? (status !== "ok" ? idx.site : null);
-    if (at) out.push({ object: at.id, type: "security", status, reason, message: status === "ok" ? "" : message, owner: "cve", ...(labels ? { labels } : {}) });
+    if (at) out.push({ object: at.id, type: "vulnerability", status, reason, message: status === "ok" ? "" : message, owner: "cve", ...(labels ? { labels } : {}) });
   };
   const units = sec?.units ?? {};
   // A level only the shared NixOS baseline sets is one cause, the baseline's:
@@ -309,6 +311,6 @@ export function fromCve(s: ScanStatus | null, sec: SiteSecurity | null, nowMs: n
     add(o, levelStatus(a.level), levelReason(a.level), scoreMessage(a, by));
   }
   const days = Math.floor((nowMs - Date.parse(s.generated)) / DAY);
-  if (days > STALE_DAYS && idx.site) out.push({ object: idx.site.id, type: "security", status: "warning", reason: "cve-scan-stale", message: `the last scan is ${days} days old`, owner: "cve" });
+  if (days > STALE_DAYS && idx.site) out.push({ object: idx.site.id, type: "vulnerability", status: "warning", reason: "cve-scan-stale", message: `the last scan is ${days} days old`, owner: "cve" });
   return out;
 }

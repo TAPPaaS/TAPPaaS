@@ -1,15 +1,17 @@
 // Overview — the site at a glance: four tiles, one per area (Site, Environment,
 // Modules, Identity), each summed up from what that area's page reads and
 // coloured by the worst condition of the area's objects; below them Health
-// (the health line and the gates an operator checks in the morning), and the
-// Alerts, the ten open events that matter most. The shaping is overview.ts.
+// (the health line, then one card per condition type, each opening the Health
+// page filtered to it), and the Alerts, the ten open events that matter most,
+// each opening its object on the Health page. The shaping is overview.ts.
 
 import { SecurityView, securityTile } from "../security";
 import { ReactNode, useMemo } from "react";
 import { useHealthSummary, useRead } from "../api";
 import { ZoneLike } from "../envcards";
 import { locationHref } from "../locations";
-import { Alerts, bytes, environmentTile, identityTile, modulesTile, siteTile, topAlerts } from "../overview";
+import { Alerts, TypeCard, bytes, environmentTile, identityTile, modulesTile, siteTile, topAlerts, typeCards, typeValue } from "../overview";
+import { healthPath, NO_HEALTH_FILTERS } from "../healthwords";
 import { Activity, Envelope, EnvironmentRow, Health, HealthStatus, HealthSummary, JobSummary, ModuleSummary, Operations, SiteRead, StorageInventory, Topology } from "../types";
 import { Badge, Dot, Link, ReadState, Tag, levelOf, since, when } from "../ui";
 
@@ -69,7 +71,7 @@ export function Overview({ setupIncomplete = false }: { setupIncomplete?: boolea
   const identity = useRead<Record<string, string[]>>("identity");
   const activity = useRead<Activity>("activity");
   const topo = useRead<Topology>("topology");
-  const ops = useRead<Operations>("operations");
+  const ops = useRead<Operations>("health/events");
   const hs = useHealthSummary().env?.data;
   const summary = hs?.available ? hs : null;
 
@@ -85,8 +87,8 @@ export function Overview({ setupIncomplete = false }: { setupIncomplete?: boolea
   const t = topo.env?.data;
   const line = summary ? conditionLine(summary) : null;
   const backups = summary?.byType.backup;
-  // Performance stays quiet until it matters (ADR-046 D7): a card only while a CI is slow.
-  const slow = (summary?.byType.performance?.items ?? []).filter((i) => i.status !== "ok" && !i.silenced);
+  const cards = useMemo(() => typeCards(summary), [summary]);
+  const buddies = (t?.outside ?? []).filter((o) => o.kind === "buddy").map((o) => `buddy ${o.name}: ${o.state ?? "?"}`).join(" · ");
   const def = ((s ?? {}) as { defaultEnvironment?: string }).defaultEnvironment ?? null;
 
   const siteT = useMemo(() => siteTile(sd, storage.env?.data, h?.gates, hs), [sd, storage.env, h, hs]);
@@ -150,6 +152,10 @@ export function Overview({ setupIncomplete = false }: { setupIncomplete?: boolea
             ) : (
               <span className="muted">storage {storage.env ? "not read" : "…"}</span>
             )}
+          </p>
+          <p className="small">
+            release: {s?.channel ? `channel ${s.channel}` : <span className="muted">…</span>}
+            {(sd?.repositories ?? []).length ? <span className="muted"> · {(sd?.repositories ?? []).map((r) => `${r.name} ${r.branch ?? ""}`.trim()).join(" · ")}</span> : null}
           </p>
         </Tile>
 
@@ -248,38 +254,23 @@ export function Overview({ setupIncomplete = false }: { setupIncomplete?: boolea
           sub={line?.sub ?? (h ? `${c.skip} skipped · validate ${since(h.generated)}` : undefined)}
           level={line?.level ?? (c.fail ? "fail" : c.warn ? "warn" : h ? "pass" : "unknown")}
         />
-        <Card
-          title="Last sweep"
-          value={sweep ? `${when(sweep.end_time?.replace(" ", "T"))} · ${sweep.ok ? "succeeded" : "failed"}` : "…"}
-          sub={sweep ? `${sweep.total ?? "?"} modules · ${sweep.failed ?? 0} failed · reboot ${sweep.reboot ?? "?"}` : undefined}
-          level={sweep ? (sweep.ok ? "pass" : "fail") : "unknown"}
-        />
-        <Card
-          title="Backups"
-          value={backups?.items.length ? `${plural(backups.items.length, "object")} not protected` : backup ? backup.detail : "…"}
-          sub={(t?.outside ?? []).filter((o) => o.kind === "buddy").map((o) => `buddy ${o.name}: ${o.state ?? "?"}`).join(" · ") || undefined}
-          level={summary ? CONDITION_LEVEL[backups?.status ?? "ok"] : backup?.status ?? "unknown"}
-        />
-        {slow.length ? (
-          <Card
-            title={<Link to="/performance">Performance</Link>}
-            value={`${plural(slow.length, "object")} slow`}
-            sub={slow.slice(0, 3).map((i) => i.label).join(" · ")}
-            level={CONDITION_LEVEL[summary?.byType.performance?.status ?? "warning"]}
-          />
+        {cards.map((k) => <TypeCardView key={k.type} k={k} secT={secT} scanned={!!sec.env} buddies={buddies} />)}
+        {!cards.length ? (
+          <>
+            <Card
+              title="Backups"
+              value={backups?.items.length ? `${plural(backups.items.length, "object")} not protected` : backup ? backup.detail : "…"}
+              sub={buddies || undefined}
+              level={backup?.status ?? "unknown"}
+            />
+            <Card
+              title={<Link to="/security">Security</Link>}
+              value={secT?.value ?? (sec.env ? "no scan yet" : "…")}
+              sub={secT?.sub}
+              level={secT?.level ?? "unknown"}
+            />
+          </>
         ) : null}
-        <Card
-          title="Release"
-          value={s?.channel ? `channel ${s.channel}` : "…"}
-          sub={(sd?.repositories ?? []).map((r) => `${r.name} ${r.branch ?? ""}`).join(" · ") || undefined}
-          level="pass"
-        />
-        <Card
-          title={<Link to="/security">Security</Link>}
-          value={secT?.value ?? (sec.env ? "no scan yet" : "…")}
-          sub={secT ? `${secT.sub} · SIEM: not installed` : undefined}
-          level={secT?.level ?? "unknown"}
-        />
       </div>
 
       <AlertList alerts={alerts} ops={ops.env?.data ?? null} env={ops.env} failure={ops.failure} />
@@ -287,8 +278,26 @@ export function Overview({ setupIncomplete = false }: { setupIncomplete?: boolea
   );
 }
 
+// A condition type's card: open by status, the first names; its title opens the
+// Health page filtered to it. Vulnerability says the site's CVE level and score
+// beside it; threat its open findings; backup the buddies' state.
+function TypeCardView({ k, secT, scanned, buddies }: { k: TypeCard; secT: ReturnType<typeof securityTile>; scanned: boolean; buddies: string }) {
+  const to = healthPath(null, { ...NO_HEALTH_FILTERS, type: k.type });
+  const names = k.names.join(" · ");
+  const silenced = k.silenced ? `${k.silenced} silenced` : "";
+  const sub = (...parts: string[]): string | undefined => parts.filter(Boolean).join(" · ") || undefined;
+  if (k.type === "vulnerability") {
+    return <Card title={<Link to={to}>vulnerability</Link>} value={secT?.value ?? (scanned ? "no scan yet" : "…")} sub={sub(typeValue(k) === "ok" ? "" : typeValue(k), secT ? secT.sub : "", silenced)} level={secT?.level ?? CONDITION_LEVEL[k.status]} />;
+  }
+  if (k.type === "threat") {
+    const open = k.critical + k.warning;
+    return <Card title={<Link to={to}>threat</Link>} value={open ? `${plural(open, "open finding")}` : "no open finding"} sub={sub(open ? typeValue(k) : "", names, silenced)} level={CONDITION_LEVEL[k.status]} />;
+  }
+  return <Card title={<Link to={to}>{k.type}</Link>} value={typeValue(k)} sub={sub(names, k.type === "backup" ? buddies : "", silenced)} level={CONDITION_LEVEL[k.status]} />;
+}
+
 // The ten open events that matter most, one line each; a click opens the
-// event on the Operations page with its Health panel.
+// object on the Health page, in its panel.
 function AlertList({ alerts, ops, env, failure }: { alerts: Alerts; ops: Operations | null; env: Envelope<Operations> | null; failure: string | null }) {
   return (
     <>
@@ -296,7 +305,7 @@ function AlertList({ alerts, ops, env, failure }: { alerts: Alerts; ops: Operati
         Alerts <span className="muted small">{ops ? `${alerts.total} open · ${ops.counts.silenced} silenced` : ""}</span>
       </h2>
       <div className="section">
-        <ReadState env={env} failure={failure} what="open events (operations)" />
+        <ReadState env={env} failure={failure} what="open events" />
         {ops && !ops.hasConditions ? (
           <p className="muted">The CMDB holds no conditions yet: the gates are on the <Link to="/health">Health</Link> page.</p>
         ) : ops && alerts.total === 0 ? (
@@ -307,7 +316,7 @@ function AlertList({ alerts, ops, env, failure }: { alerts: Alerts; ops: Operati
             const text = e.message ?? e.reason ?? e.type;
             return (
               <li key={e.id}>
-                <Link to={`/operations?select=${encodeURIComponent(e.id)}`} className="ov-alert">
+                <Link to={`/health?select=${encodeURIComponent(e.id)}`} className="ov-alert">
                   <Tag level={CONDITION_LEVEL[e.status]} />
                   <span className="mono small ov-alert-what">
                     <span className="muted">{e.class}/</span>
@@ -322,11 +331,11 @@ function AlertList({ alerts, ops, env, failure }: { alerts: Alerts; ops: Operati
         </ul>
         {alerts.more > 0 ? (
           <p className="small">
-            <Link to="/operations">{plural(alerts.more, "more open event")} on the Operations page</Link>
+            <Link to="/health">{plural(alerts.more, "more open event")}: the root causes on the Health page</Link>
           </p>
         ) : alerts.total > 0 ? (
           <p className="small muted">
-            <Link to="/operations">The Operations page</Link> groups them by root cause.
+            <Link to="/health">The Health page</Link> lists them by root cause.
           </p>
         ) : null}
       </div>

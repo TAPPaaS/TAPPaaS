@@ -6,7 +6,7 @@
 
 import { Cmdb, CmdbError, CmdbHistory, CmdbObject } from "../../src/cmdb";
 import { HealthGraph, buildHealth } from "../../src/health";
-import { SweepApi, SweepRunner, changeTargets, groupEvents, openEvents, operationsDoc, recentChanges, sweepRecord } from "../../src/operations";
+import { SweepApi, SweepRunner, changeTargets, groupEvents, openEvents, operationsDoc, recentChanges, sweepRecord } from "../../src/openevents";
 import { check, done } from "./check";
 import { healthSite, relationTypes } from "./fake-cmdb";
 

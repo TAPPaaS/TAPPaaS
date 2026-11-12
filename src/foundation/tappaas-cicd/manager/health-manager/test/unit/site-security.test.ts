@@ -191,15 +191,15 @@ console.log("security alerts");
   const down = cveChangesEvent(sec, prev, new Set());
   check(down !== null && /level high → medium/.test(down.what), "…and a level going down");
   check(cveChangesEvent(null, sec, new Set()) === null, "…nothing on the first scan");
-  const objs = [{ class: "vm", name: "immich", attributes: { conditions: [{ type: "security", acknowledged: { until: null } }] } }];
-  check(quietUnits(sec, objs, new Date()).has("immich"), "an acknowledged security condition makes a module quiet");
-  const later = [{ class: "vm", name: "immich", attributes: { conditions: [{ type: "security", acknowledged: { until: "2020-01-01T00:00:00Z" } }] } }];
+  const objs = [{ class: "vm", name: "immich", attributes: { conditions: [{ type: "vulnerability", acknowledged: { until: null } }] } }];
+  check(quietUnits(sec, objs, new Date()).has("immich"), "an acknowledged vulnerability condition makes a module quiet");
+  const later = [{ class: "vm", name: "immich", attributes: { conditions: [{ type: "vulnerability", acknowledged: { until: "2020-01-01T00:00:00Z" } }] } }];
   check(!quietUnits(sec, later, new Date()).has("immich"), "…an expired one does not");
 
   // the digest's security section
-  const rows = [{ id: "immich", class: "vm", name: "immich", type: "security", status: "warning", reason: "cve-high", message: "score 20, high: 1 critical", since: "x", derived: false, rootCause: null, acknowledged: null, maintenance: null }] as unknown as ListRow[];
+  const rows = [{ id: "immich", class: "vm", name: "immich", type: "vulnerability", status: "warning", reason: "cve-high", message: "score 20, high: 1 critical", since: "x", derived: false, rootCause: null, acknowledged: null, maintenance: null }] as unknown as ListRow[];
   const d = buildDigest(rows, null, null, sec);
-  check(d.body.includes("Security: the site's CVE risk is"), "the digest says the site's level");
+  check(d.body.includes("Vulnerability: the site's CVE risk is"), "the digest says the site's level");
   check(d.body.includes("carried from another version: CVE-10") || d.body.includes("carried from"), "…lists carried items");
   check(d.body.includes("medium risk: CVE-11"), "…and analysed risk items");
   check(!d.body.includes("CVE-9"), "…not the open one (mailed at once)");

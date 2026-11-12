@@ -94,7 +94,11 @@ systemctl start update-tappaas-schedule.service 2>/dev/null \
 # keeping every rule the site edited or deleted; a changed set recalculates
 # health at once. A merge that does not hold leaves the earlier rules running
 # and is told as drift on the site, so it never fails the update.
+# Before it, once: what was stored under the condition types before the split
+# (maintenance, security) is written back under the new ones; idempotent.
 if command -v health-manager >/dev/null 2>&1; then
+    health-manager migrate types --apply >/dev/null 2>&1 \
+        || warn "  the stored health conditions were not moved to the new types — health-manager migrate types shows why"
     health-manager rules merge --apply >/dev/null 2>&1 \
         || warn "  the health rules did not merge cleanly — health-manager rules merge shows why"
 fi

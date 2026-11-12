@@ -11,13 +11,17 @@
 
 import { createHash } from "crypto";
 import { CmdbAttributePeriod, CmdbClassRow, CmdbObject, CmdbRelationRow, CmdbShow } from "./cmdb";
+import { migrateConditions, migrateStoredObjects } from "../../lib/ts/src/health-migrate";
+import { CONDITION_TYPES as TYPES } from "../../lib/ts/src/health-rules";
 
 export type Status = "ok" | "warning" | "critical" | "unknown";
 
 // `unknown` ranks between ok and warning (D1).
 const RANK: Record<Status, number> = { ok: 0, unknown: 1, warning: 2, critical: 3 };
 
-export const CONDITION_TYPES = ["operational", "drift", "capacity", "performance", "security", "maintenance", "backup", "impact"];
+// The types health speaks in. A condition stored under a type from before the
+// split (maintenance, security) reads as its new one (health-migrate.ts).
+export const CONDITION_TYPES: string[] = [...TYPES];
 
 // What the Health view needs of a relation type: the metamodel's words, so the
 // console hardcodes neither containment nor dependency (/v1/rules).
@@ -50,7 +54,13 @@ export interface Condition {
   quieted?: { rule: string; since?: string; via?: string[] } | null; // quiet by a health rule: kept, told nowhere
   raw?: { status: Status; since?: string; rule: string } | null; // re-rated by a health rule: what its source said
   rule?: string | null; // the health rule that decided a derived condition
+  owner?: string | null; // the source that raised it
+  hits?: Hits | null; // the events behind it: the SIEM's hits, a flapping condition's transitions
+  heldUntil?: string | null; // when its hold ends, or "ack": until acknowledged
+  heldBy?: string | null; // the health rule that set the hold
 }
+
+export interface Hits { count: number; first: string; last: string; alerts?: string[]; query?: string }
 
 // What a page shows of a condition.
 export interface Issue {
@@ -65,6 +75,9 @@ export interface Issue {
   maintenance: boolean;
   flapping: boolean;
   quiet?: string; // the health rule that quieted it (or its only root)
+  hits?: Hits;
+  heldUntil?: string;
+  heldBy?: string;
 }
 
 export interface HealthView {
@@ -88,6 +101,21 @@ export interface HealthNode extends HealthView {
   isRoot: boolean;
   types: Record<string, Status>; // the worst of each condition type
   issues: Issue[]; // the conditions that are not ok
+  acks?: Record<string, AckWord>; // the operator's last acknowledgement per type, kept after the condition ended
+}
+
+// An acknowledgement as the operator gave it (the object's acknowledgements attribute).
+export interface AckWord { by: string; note: string; at: string; until: string | null }
+
+function acksOf(attributes: Record<string, unknown>): Record<string, AckWord> | undefined {
+  const words = attributes.acknowledgements;
+  if (!words || typeof words !== "object") return undefined;
+  const out: Record<string, AckWord> = {};
+  for (const [type, w] of Object.entries(words as Record<string, { ack?: { by?: string; note?: string; until?: string | null; at?: string } | null; at?: string }>)) {
+    if (!w?.ack) continue;
+    out[type] = { by: w.ack.by ?? "", note: w.ack.note ?? "", at: w.ack.at ?? w.at ?? "", until: w.ack.until ?? null };
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 export interface HealthEdge {
@@ -97,12 +125,30 @@ export interface HealthEdge {
   to: string;
 }
 
+// A root's condition of one type it is a root in: the fields its row shows.
+export interface RootCondition {
+  type: string;
+  status: Status;
+  reason: string | null;
+  message: string | null;
+  since: string | null;
+  acknowledged: boolean;
+  maintenance: boolean;
+  hits?: Hits;
+  heldUntil?: string;
+  heldBy?: string;
+}
+
 export interface HealthRoot {
   id: string;
   class: string;
   name: string;
   label: string;
-  type: string | null;
+  type: string | null; // the worst of the types it is a root in
+  types: string[]; // every type it is a root in
+  conditions: RootCondition[]; // one per type in `types`, worst first
+  environment: string | null; // its own
+  maintenance: boolean;
   status: Status;
   reason: string | null;
   message: string | null;
@@ -161,7 +207,7 @@ const asArray = (v: unknown): string[] => (typeof v === "string" && v ? [v] : Ar
 
 export function conditionsOf(attributes: Record<string, unknown>): Condition[] {
   const v = attributes.conditions;
-  return Array.isArray(v) ? (v as Condition[]).filter((c) => !!c && typeof c.type === "string" && typeof c.status === "string" && c.status in RANK) : [];
+  return Array.isArray(v) ? migrateConditions((v as Condition[]).filter((c) => !!c && typeof c.type === "string" && typeof c.status === "string" && c.status in RANK)) : [];
 }
 
 // An acknowledgement or a window holds until its `until`; none: until cleared.
@@ -187,6 +233,9 @@ export function issueOf(c: Condition, rootsAcked: Set<string>, now: number): Iss
     maintenance: !!c.maintenance && holds(c.maintenance.until, now),
     flapping: c.flapping === true,
     ...(c.quieted?.rule ? { quiet: c.quieted.rule } : {}),
+    ...(c.hits && typeof c.hits.count === "number" ? { hits: c.hits } : {}),
+    ...(c.heldUntil ? { heldUntil: c.heldUntil } : {}),
+    ...(c.heldBy ? { heldBy: c.heldBy } : {}),
   };
 }
 
@@ -257,6 +306,39 @@ export function countsOf(nodes: HealthNode[]): Counts {
   return c;
 }
 
+// The Health page's filters: a condition type, a class, an environment; "" is all.
+export interface HealthFilter { type?: string; class?: string; environment?: string }
+
+const filtering = (f: HealthFilter): boolean => !!(f.type || f.class || f.environment);
+
+/** Is a root cause in the list under the filters: a root in that type, of that
+ *  class, in that environment (its own, or one of what it impacts)? */
+export function rootMatches(r: HealthRoot, f: HealthFilter): boolean {
+  return (!f.type || r.types.includes(f.type)) && (!f.class || r.class === f.class) && (!f.environment || r.environment === f.environment || r.environments.includes(f.environment));
+}
+
+/** The header under the filters: the objects by colour as the filters see them
+ *  (under a type, that type's colour), what they silence, and "8 of 34 root causes". */
+export function filteredCounts(doc: HealthGraph, f: HealthFilter): { counts: Counts; roots: number; rootsAll: number; filtered: boolean } {
+  const c = emptyCounts();
+  for (const n of doc.nodes) {
+    if ((f.class && n.class !== f.class) || (f.environment && n.environment !== f.environment)) continue;
+    if (!f.type) {
+      if (!n.acknowledged && !n.maintenance) c[n.status]++;
+      c.acknowledged += n.issues.filter((i) => i.status !== "ok" && silenced(i)).length;
+      continue;
+    }
+    const st = n.types[f.type];
+    if (st === undefined) continue;
+    const mine = n.issues.filter((i) => i.type === f.type);
+    const v = mine.length ? viewOf(mine) : null;
+    if (!v) c[st]++;
+    else if (!v.acknowledged && !v.maintenance) c[v.status]++;
+    c.acknowledged += mine.filter((i) => i.status !== "ok" && silenced(i)).length;
+  }
+  return { counts: c, roots: doc.roots.filter((r) => rootMatches(r, f)).length, rootsAll: doc.roots.length, filtered: filtering(f) };
+}
+
 export interface BuildInput {
   objects: CmdbObject[];
   relations: CmdbRelationRow[];
@@ -283,7 +365,7 @@ function environmentsOf(objects: CmdbObject[], rows: CmdbRelationRow[], parent: 
 export function buildHealth(i: BuildInput): HealthGraph {
   const parent = new Map<string, string | null>(Object.entries(SHIPPED_PARENTS));
   for (const c of i.classes ?? []) parent.set(c.name, c.parent);
-  const objects = [...i.objects].sort((a, b) => a.id.localeCompare(b.id));
+  const objects = migrateStoredObjects([...i.objects]).sort((a, b) => a.id.localeCompare(b.id));
   const byId = new Map(objects.map((o) => [o.id, o]));
   const modules = new Set(i.modules ?? []);
   const site = objects.find((o) => isA(o.class, "site", parent)) ?? null;
@@ -318,6 +400,7 @@ export function buildHealth(i: BuildInput): HealthGraph {
       isRoot: false,
       types,
       issues: issues.filter((x) => x.status !== "ok"),
+      ...(acksOf(o.attributes) ? { acks: acksOf(o.attributes) } : {}),
       ...(conditions.length ? viewOf(issues) : NO_CONDITION),
     };
   });
@@ -331,8 +414,17 @@ export function buildHealth(i: BuildInput): HealthGraph {
   const roots: HealthRoot[] = ids.map((id) => {
     const n = nodeOf.get(id)!;
     n.isRoot = true;
-    const rec = recorded.find((r) => r.id === id);
-    const type = typeof rec?.type === "string" ? rec.type : n.type;
+    const recs = recorded.filter((r) => r.id === id);
+    const rec = recs.find((r) => typeof r.impactedCount === "number") ?? recs[0];
+    // Every type the object is a root in; worst first. An entry without a type
+    // is its failing conditions.
+    const named = [...new Set(recs.map((r) => r.type).filter((t): t is string => typeof t === "string"))];
+    const own = n.issues.filter((x) => (named.length ? named.includes(x.type) : x.type !== "impact" && !x.derived));
+    const conds: RootCondition[] = own
+      .sort((a, b) => RANK[b.status] - RANK[a.status] || Number(a.acknowledged) - Number(b.acknowledged) || a.type.localeCompare(b.type))
+      .map((x) => ({ type: x.type, status: x.status, reason: x.reason, message: x.message, since: x.since, acknowledged: x.acknowledged, maintenance: x.maintenance, ...(x.hits ? { hits: x.hits } : {}), ...(x.heldUntil ? { heldUntil: x.heldUntil } : {}), ...(x.heldBy ? { heldBy: x.heldBy } : {}) }));
+    const types = named.length ? [...new Set([...conds.map((x) => x.type), ...named])] : conds.map((x) => x.type);
+    const type = conds[0]?.type ?? named[0] ?? n.type;
     const c = n.issues.find((x) => x.type === type) ?? n.issues[0] ?? null;
     const impacted = impactedBy.get(id) ?? [];
     return {
@@ -341,6 +433,10 @@ export function buildHealth(i: BuildInput): HealthGraph {
       name: n.name,
       label: n.label,
       type,
+      types,
+      conditions: conds,
+      environment: n.environment,
+      maintenance: conds.length > 0 && conds.every((x) => x.maintenance),
       status: c?.status ?? n.status,
       reason: c?.reason ?? n.reason,
       message: c?.message ?? null,
@@ -918,6 +1014,7 @@ export interface HealthObject {
   relations: { id: string; type: string; direction: "in" | "out"; other: { id: string; class: string; name: string; status: Status | null } }[];
   history: ConditionChange[];
   changes: { id: number; kind: string; source: string; job: string | null; verb: string | null; actor: string | null; time: string }[];
+  isRoot: boolean;
   rootCauses: { id: string; class: string; label: string; reason: string | null }[];
   impacts: { id: string; class: string; label: string; status: Status }[];
 }
@@ -942,6 +1039,7 @@ export function healthObject(show: CmdbShow, periods: CmdbAttributePeriod[], cha
     relations: show.relations.map((r) => ({ id: String(r.id), type: r.type, direction: r.direction, other: { ...r.other, status: nodeOf.get(r.other.id)?.status ?? null } })),
     history: conditionHistory(periods),
     changes: changes.slice(-50).reverse(),
+    isRoot: !!root,
     rootCauses: (n?.rootCause ?? []).map((id) => {
       const r = (doc?.roots ?? []).find((x) => x.id === id);
       return { id, class: r?.class ?? nodeOf.get(id)?.class ?? "?", label: r?.label ?? nodeOf.get(id)?.label ?? id, reason: r?.message ?? r?.reason ?? null };

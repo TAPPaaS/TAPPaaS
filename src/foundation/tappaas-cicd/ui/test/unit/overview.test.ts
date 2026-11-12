@@ -7,7 +7,7 @@ import { join } from "path";
 import { moduleSummaries } from "../../src/badges";
 import { buildHealth, healthSummary } from "../../src/health";
 import { BackupRow, HealthDoc, ModuleRow } from "../../src/model";
-import { operationsDoc } from "../../src/operations";
+import { operationsDoc } from "../../src/openevents";
 import { ZoneLike } from "../../web/src/envcards";
 import { AREA_CLASSES, areaStatus, bytes, environmentTile, identityTile, modulesTile, siteTile, topAlerts } from "../../web/src/overview";
 import { HealthSummary, JobSummary, ModuleSummary, OpsEvent, Operations, SiteRead, StorageInventory } from "../../web/src/types";

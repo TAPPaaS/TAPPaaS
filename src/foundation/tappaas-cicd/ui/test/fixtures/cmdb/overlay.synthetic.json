@@ -1,0 +1,33 @@
+{
+  "_comment": "Hand-kept, laid over objects.json by capturedCmdb (src/fixtures.ts) and kept across a capture: the threat findings the capture predates (security monitoring was not on yet). coturn and vllm-amd carry an open CVE, so their hits stand out; immich's ack ended its critical. Stored under the new types beside the captured old ones, as on a site between the update and its first assess.",
+  "objects": {
+    "33394b2f-6716-4deb-aefd-76295bd61baa": {
+      "conditions": [
+        { "type": "threat", "status": "warning", "reason": "siem-ssh-brute-force", "message": "SshBruteForce on coturn (src_ip 203.0.113.9)", "since": "2026-11-01T06:10:00.000Z", "lastChecked": "2026-11-01T08:50:02.363Z", "source": "health-manager", "owner": "siem", "derived": false, "rootCause": null, "acknowledged": null, "maintenance": null,
+          "hits": { "count": 23, "first": "2026-11-01T06:10:00.000Z", "last": "2026-11-01T08:41:00.000Z", "alerts": ["SshBruteForce"], "query": "{host=\"coturn\"} |~ \"Failed password\"" },
+          "heldUntil": "2026-11-02T08:41:00.000Z", "heldBy": "core.classify.siem-warning" }
+      ]
+    },
+    "c6eec96f-e8de-4217-bea3-5ce0b88930fb": {
+      "conditions": [
+        { "type": "threat", "status": "critical", "reason": "siem-ssh-login-after-brute-force", "message": "SshLoginAfterBruteForce on vllm-amd (user root, src_ip 198.51.100.4)", "since": "2026-11-01T07:02:00.000Z", "lastChecked": "2026-11-01T08:50:02.363Z", "source": "health-manager", "owner": "siem", "derived": false, "rootCause": null, "acknowledged": null, "maintenance": null,
+          "hits": { "count": 1, "first": "2026-11-01T07:02:00.000Z", "last": "2026-11-01T07:02:00.000Z", "alerts": ["SshLoginAfterBruteForce"], "query": "{host=\"vllm-amd\"} |~ \"Accepted (password|publickey)\"" },
+          "heldUntil": "ack", "heldBy": "core.classify.siem-critical" }
+      ]
+    },
+    "813802d8-e8ed-4a4b-aeb0-444e501571d9": {
+      "conditions": [
+        { "type": "threat", "status": "ok", "reason": "ok", "message": "", "since": "2026-10-31T15:05:00.000Z", "lastChecked": "2026-11-01T08:50:02.363Z", "source": "health-manager", "owner": "siem", "derived": false, "rootCause": null, "acknowledged": null, "maintenance": null }
+      ],
+      "acknowledgements": {
+        "threat": { "ack": { "by": "lars", "note": "the office's own scan, booked for that hour", "until": null, "sticky": false, "at": "2026-10-31T15:00:00.000Z" }, "at": "2026-10-31T15:00:00.000Z" }
+      }
+    },
+    "b090efc7-4700-40c0-b91a-d6b30d1c6369": {
+      "rootCauses": [
+        { "id": "c6eec96f-e8de-4217-bea3-5ce0b88930fb", "type": "threat", "impactedCount": 0 },
+        { "id": "33394b2f-6716-4deb-aefd-76295bd61baa", "type": "threat", "impactedCount": 0 }
+      ]
+    }
+  }
+}

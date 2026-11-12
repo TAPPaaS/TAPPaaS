@@ -176,8 +176,11 @@ if ! python3 "${HERE}/redact.py" "${TMP}/new"; then
     exit 1
 fi
 
-# Replaced as a set: an object gone from the site must not linger here.
+# Replaced as a set: an object gone from the site must not linger here. The
+# hand-kept overlay over the CMDB stays (README: cmdb/overlay.synthetic.json).
+[[ -f "${OUT}/cmdb/overlay.synthetic.json" ]] && cp "${OUT}/cmdb/overlay.synthetic.json" "${TMP}/overlay.synthetic.json"
 rm -rf -- "${OUT}/reads" "${OUT}/cmdb" "${OUT}/config"
 cp -R "${TMP}/new/." "${OUT}/"
+[[ -f "${TMP}/overlay.synthetic.json" ]] && cp "${TMP}/overlay.synthetic.json" "${OUT}/cmdb/overlay.synthetic.json"
 echo "captured into ${OUT}: $(tr '\n' ' ' < "${OUT}/CAPTURED")"
 grep -E '^rc=[^0]' "${TMP}/capture.log" || echo "every verb answered"

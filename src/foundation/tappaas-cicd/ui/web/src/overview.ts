@@ -6,6 +6,7 @@
 
 import { envCards, EnvLike, ModuleLike, ZoneLike } from "./envcards";
 import { Gate, HealthStatus, HealthSummary, JobSummary, ModuleSummary, OpsEvent, Operations, SiteRead, StorageInventory } from "./types";
+import { CONDITION_TYPES } from "./healthwords";
 
 const RANK: Record<HealthStatus, number> = { ok: 0, unknown: 1, warning: 2, critical: 3 };
 const worst = (list: HealthStatus[]): HealthStatus => list.reduce<HealthStatus>((a, s) => (RANK[s] > RANK[a] ? s : a), "ok");
@@ -216,12 +217,47 @@ export function identityTile(identity: Record<string, string[]> | null | undefin
   return { counts, provider, status: identity || modules ? worst(parts) : "unknown" };
 }
 
+// ── the health strip: one card per condition type ─────────────────────
+
+export interface TypeCard {
+  type: string;
+  status: HealthStatus; // the worst open one; ok when none
+  critical: number; // objects, open (not silenced)
+  warning: number;
+  silenced: number;
+  names: string[]; // the first few open, worst first
+}
+
+/** One card per condition type, in the filter's order, from the conditions the
+ *  CMDB holds: what is open, what is silenced, the first names. */
+export function typeCards(s: HealthSummary | null | undefined): TypeCard[] {
+  if (!s?.available) return [];
+  return CONDITION_TYPES.map((type) => {
+    const items = s.byType[type]?.items ?? [];
+    const open = items.filter((i) => !i.silenced && (i.status === "critical" || i.status === "warning")).sort((a, b) => RANK[b.status] - RANK[a.status] || a.label.localeCompare(b.label));
+    return {
+      type,
+      status: worst(open.map((i) => i.status)),
+      critical: open.filter((i) => i.status === "critical").length,
+      warning: open.filter((i) => i.status === "warning").length,
+      silenced: items.filter((i) => i.silenced && i.status !== "ok").length,
+      names: [...new Set(open.map((i) => i.label))].slice(0, 3),
+    };
+  });
+}
+
+/** A card's line: "2 critical · 1 warning", or "ok". */
+export function typeValue(c: TypeCard): string {
+  const parts = [c.critical ? `${c.critical} critical` : "", c.warning ? `${c.warning} warning` : ""].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "ok";
+}
+
 // ── Alerts ────────────────────────────────────────────────────────────
 
 export interface Alerts {
   rows: OpsEvent[];
   total: number;
-  more: number; // past the first `max`: the Operations page has them
+  more: number; // past the first `max`: the Health page's root list has them
 }
 
 const sinceMs = (s: string | null): number => (s ? Date.parse(s) || 0 : 0);

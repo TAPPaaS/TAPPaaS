@@ -45,6 +45,7 @@ health-manager rules check [--file F [--origin O]] | explain <ci> | simulate --f
 health-manager rules add <file> | edit <id> --set path=value … | --unset path | --file F   [--note N] [--apply] [--force]
 health-manager rules enable|disable <id> | --origin O · delete|restore|take [--field F]|keep|accept <id>   [--apply]
 health-manager rules scenario list | retire <id> --note N | restore <id>   [--apply]
+health-manager migrate types [--apply]
 health-manager rules merge [--origin O] [--apply]
 ```
 
@@ -367,7 +368,7 @@ open/risk/carried/decided counts and the last 7 days; `--cves` lists each unit's
 counted CVEs under it. `--json` prints `cve-status.json` with the scores under
 `score` (the console's `/api/security` reads that).
 
-**Health.** The `security` condition of a module, a node, a zone and an
+**Health.** The `vulnerability` condition of a module, a node, a zone and an
 environment takes its status from the level: ok and low → ok, medium and high →
 warning, critical → critical. The reason names the level (`cve-medium`,
 `cve-high`, `cve-critical`), so a level change is a transition and an event even
@@ -383,8 +384,8 @@ one mail per scan; `cve-changes` (a new risk or carried item, a level going down
 reaches the daily digest, whose mail gets a security section: the site's level
 and the analysed and carried items. A module's level rising to high or critical
 is emit's transition with `levelUp`, mailed by `cve-level-up`. A module whose
-security condition is acknowledged or in maintenance is left out of all of it:
-quieting is `health-manager ack <module> --type security` and maintenance
+vulnerability condition is acknowledged or in maintenance is left out of all of it:
+quieting is `health-manager ack <module> --type vulnerability` and maintenance
 windows.
 
 ### What `cpu-impact` measures
@@ -650,11 +651,11 @@ gathers what the sources say and writes everything in one report:
 
 | Source | Becomes |
 |---|---|
-| The gates | a condition on the object each row judged: `service-liveness`, `storage-replication`, `quorum`, `lan-uplink`, `switch-ports`, `mlag-pairs`, `pulse`, `ipv6-egress` → `operational`; `disk-threshold`, `memory-commitment`, `guest-memory`, `storage-pools` → `capacity`; `backup-status` → `backup`; `pending-reboot`, `site-timezone`, `backup-keys`, `cpu-impact` → `maintenance`; `signature-status`, `control-plane-trust`, `guest-system` → `security` |
-| Grafana's open alerts, the receiver's record | a `warning` on the alert's CI id, else where `alerts` places it: `security` for RootKeyChanged and FirewallCertChanged, `operational` for the rest |
+| The gates | a condition on the object each row judged: `service-liveness`, `storage-replication`, `quorum`, `lan-uplink`, `switch-ports`, `mlag-pairs`, `pulse`, `ipv6-egress` → `operational`; `disk-threshold`, `memory-commitment`, `guest-memory`, `storage-pools` → `capacity`; `backup-status` → `backup`; `backup-keys` → `backup`; `pending-reboot`, `site-timezone`, `cpu-impact` → `upkeep`; `signature-status`, `control-plane-trust` → `vulnerability`; `guest-system` → `threat` |
+| Grafana's open alerts, the receiver's record | a `warning` on the alert's CI id, else where `alerts` places it: `threat` for RootKeyChanged and FirewallCertChanged, `operational` for the rest; a security hit (`type=security`) is the SIEM source's, a `threat` |
 | The last sweep's lists | `drift` on each object named: `critical` when missing, else `warning`. No sweep in 48 hours, or a source that failed: `critical` on the site |
-| Thresholds over the CMDB's observations, never the plane | a `storage-pool`'s and `datastore`'s used/size (warning 80%, critical 90%) → `capacity`; a pool's `zfsState` (DEGRADED warning, FAULTED and worse critical) → `operational`; a cabled port's `link` down → `operational` critical; a `vpn-peer`'s `lastHandshake` over 7 days → `operational` warning; a certificate on the firewall's `discover` data, the newest per common name, under 30 days warning, under 7 critical → `security` |
-| `cve-status.json` | `security` on the module or node: a `warning` on `act` or a failed scan, as its gate |
+| Thresholds over the CMDB's observations, never the plane | a `storage-pool`'s and `datastore`'s used/size (warning 80%, critical 90%) → `capacity`; a pool's `zfsState` (DEGRADED warning, FAULTED and worse critical) → `operational`; a cabled port's `link` down → `operational` critical; a `vpn-peer`'s `lastHandshake` over 7 days → `operational` warning; a certificate on the firewall's `discover` data, the newest per common name, under 30 days warning, under 7 critical → `upkeep` |
+| `cve-status.json` | `vulnerability` on the module or node: a `warning` on `act` or a failed scan, as its gate |
 | Observations in the CMDB, class by class (`assess-observations.ts`) | see [What judges which class](#what-judges-which-class): the managers report, this judges, no plane is asked |
 
 Then it derives impact, root causes and roll-ups (below). `open-alerts`,
@@ -735,7 +736,7 @@ the CI within its class's expiry, `warning` (`unseen`) once it does not.
 | `vm`, `lxc` | gates (liveness, disk, memory, backup, reboot, timezone), alerts, CVE, sweep, seen; the newest restore point, 3 days → `backup` | `guest-stopped` and the gates' reasons, `restore-point-stale`, `unseen` |
 | `machine` | gates (memory, disks, uplink, timezone), alerts, CVE, sweep, seen; a file backup's restore point | the gates' reasons, `restore-point-stale`, `unseen` |
 | `device` | `switch-ports`, `mlag-pairs`, sweep, seen; a VLAN no zone declares, VLAN 1 aside → `drift` | `switch-port`, `vlan-undeclared`, `unseen` |
-| `app`, `service`, `controller`, `manager` | its `runs-on` node; `version` against `release.version` → `maintenance` | `software-no-node` (none: a retired node ends the relation), `software-node-unseen`, `version-off-pin` |
+| `app`, `service`, `controller`, `manager` | its `runs-on` node; `version` against `release.version` → `upkeep` | `software-no-node` (none: a retired node ends the relation), `software-node-unseen`, `version-off-pin` |
 | `zone` | its firewall `interface` and DHCP range; its VLAN against the switches' `vlans` | `zone-interface-disabled` (critical), `zone-no-interface`, `zone-vlan-uncarried` |
 | `ssid` | its zone exists, an AP broadcasts it | `ssid-no-zone`, `ssid-not-broadcast` |
 | `address` | who holds it: a node's addresses, a device's management address, a private name `<node>.<zone>.internal`; a reservation's MAC against NICs, ports and what they see | `address-holder-unseen`, `address-holder-retired`, `address-no-ci`. A lease nobody holds is `ok`: it carries no MAC yet, so a client is not told from a guest |
@@ -743,12 +744,12 @@ the CI within its class's expiry, `warning` (`unseen`) once it does not.
 | `proxy-route` | the node of its upstream | `route-target-unknown`, `route-target-unseen`, `route-target-retired` |
 | `vpn-peer` | `lastHandshake`, 7 days; seen | `vpn-handshake-stale` |
 | `storage-pool` | `zfsState`, used/size, `storage-pools`; seen. **What it is `built-on`**: a member disk failed degrades it (`impact` warning naming the disk) while its mirror or raidz vdev has a member left, and takes it down once none is; its own DEGRADED is then that failure seen from above, and the disk is the root cause | `pool-state`, `pool-usage`, `redundancy-degraded` |
-| `disk` | Proxmox's `health` (every report); its state as a member of each pool `built-on` it; the sweep's `smart`, `wearout` and `temperature`; `faulty` → `maintenance`. **Nothing observed: follows its asset** | `smart` (critical: health FAILED; warning: reallocated, pending or uncorrectable sectors, media errors, an NVMe critical warning), `zfs` (critical: FAULTED, UNAVAIL or REMOVED; warning: DEGRADED), `wear` (warning under 10 % of its rated life), `temperature` (warning at 60 °C, an NVMe disk 70 °C), `asset-faulty` |
-| `datastore` | used/size; `gc` last run → `maintenance`; seen | `datastore-usage`, `gc-failed` |
+| `disk` | Proxmox's `health` (every report); its state as a member of each pool `built-on` it; the sweep's `smart`, `wearout` and `temperature`; `faulty` → `upkeep`. **Nothing observed: follows its asset** | `smart` (critical: health FAILED; warning: reallocated, pending or uncorrectable sectors, media errors, an NVMe critical warning), `zfs` (critical: FAULTED, UNAVAIL or REMOVED; warning: DEGRADED), `wear` (warning under 10 % of its rated life), `temperature` (warning at 60 °C, an NVMe disk 70 °C), `asset-faulty` |
+| `datastore` | used/size; `gc` last run → `upkeep`; seen | `datastore-usage`, `gc-failed` |
 | `backup-peer` | `pulse`, `lastSeen` 3 days → `backup`; seen | `pulse`, `peer-stale` |
 | `share` | every grant's consumer is a node | `share-consumer-gone` |
 | `port` | cabled: `link`, and `linkSpeed` under the cable's recorded speed, else the slower end's. Not cabled: `link` against a declared `role`, `switch-ports`. **No link data: follows its asset** | `link-down` (critical), `link-slow`, `role-port-down`, `switch-port` |
-| `server`, `network-device`, `appliance`, `passive-device`, `other-device` | `faulty` → `maintenance`. **`operational` follows its node** where it is allocated to one | `asset-faulty` |
+| `server`, `network-device`, `appliance`, `passive-device`, `other-device` | `faulty` → `upkeep`. **`operational` follows its node** where it is allocated to one | `asset-faulty` |
 | `organization`, `group`, `user`, `role` | seen only: nothing observes more | `unseen` |
 | `site`, `cluster`, `environment` | seen, and the roll-up of their members; `quorum` on the cluster | `quorum-at-risk`, `roll-up` |
 | `location`, `room`, `rack` | the roll-up of what is in them. **Not assessed by design** when empty: grey says nothing is there | `roll-up` |

@@ -12,6 +12,7 @@ import type { InvestigationPeriod } from "./perf";
 import { changeJob } from "../../../lib/ts/src/job";
 import { RANK } from "./assess-model";
 import type { ConditionStatus } from "../../../lib/ts/src/health-rules";
+import { migrateStoredObject, migrateStoredObjects } from "../../../lib/ts/src/health-migrate";
 
 const SOURCE = "health-manager";
 
@@ -63,7 +64,8 @@ export interface RootEntry {
 // The operator's last word per condition type (the ack verbs), and what emit
 // holds while a condition flaps: attributes of their own, one writer each.
 export interface OperatorWord { ack: Ack | null; at: string }
-export type Flaps = Record<string, { held: Status }>;
+// hits: the transitions in the window while it flaps, projected onto the condition by assess.
+export type Flaps = Record<string, { held: Status; hits?: { count: number; first: string; last: string } }>;
 
 export interface HealthObject {
   id: string;
@@ -117,23 +119,23 @@ export function splitRef(ref: string): { ref: string; class?: string } {
 
 export class LiveHealthCmdb implements HealthCmdb {
   objects(at?: string): HealthObject[] {
-    return cmdbQuery({ class: "object", limit: 100000, ...(at ? { at } : {}) }) as unknown as HealthObject[];
+    return migrateStoredObjects(cmdbQuery({ class: "object", limit: 100000, ...(at ? { at } : {}) }) as unknown as HealthObject[]);
   }
 
   objectsOfClass(cls: string): HealthObject[] {
-    return cmdbQuery({ class: cls, limit: 100000 }) as unknown as HealthObject[];
+    return migrateStoredObjects(cmdbQuery({ class: cls, limit: 100000 }) as unknown as HealthObject[]);
   }
 
   resolve(ref: string): HealthObject {
     const r = splitRef(ref);
     const s = cmdbShow(r.ref, r.class ? { class: r.class } : {});
     const attrs = (s.attributes ?? {}) as Record<string, { value: unknown }>;
-    return {
+    return migrateStoredObject({
       id: String(s.id),
       class: String(s.class),
       name: String(s.name),
       attributes: Object.fromEntries(Object.entries(attrs).map(([k, v]) => [k, v.value])) as HealthObject["attributes"],
-    };
+    });
   }
 
   periods(id: string): Period[] {

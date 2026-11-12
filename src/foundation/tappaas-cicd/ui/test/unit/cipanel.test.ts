@@ -82,7 +82,7 @@ function record(): void {
 
   // Open events: not ok only, the worst first, then the newest.
   const ev = r.events;
-  check(ev.map((e) => e.type).join(",") === "capacity,backup,security", "open events: critical first, then warnings newest first; ok left out");
+  check(ev.map((e) => e.type).join(",") === "capacity,backup,vulnerability", "open events: critical first, then warnings newest first; ok left out");
   check(ev[0].acknowledged === false, "an acknowledgement that ran out no longer silences");
   check(ev[2].maintenance === true, "a maintenance window that holds marks the event");
   check(ev[1].reason === "stale" && ev[1].source === "backup-manager", "an event keeps its reason and source");
