@@ -250,6 +250,16 @@
         "aliases": { "type": "array", "items": { "type": "string" } }
       }
     },
+    "nixos-baseline": {
+      "parent": "ci",
+      "symbol": "❄",
+      "family": "software",
+      "label": "NixOS baseline",
+      "description": "The shared NixOS baseline every NixOS module is built from: the packages present in all of them, one CI per site. health-manager reports it from the component records' templates/* components; a CVE level only the baseline sets is its condition, not each module's.",
+      "fields": {
+        "components": { "type": "array", "items": { "type": "string" }, "description": "The component records' templates/* keys: the baseline's source packages that carry CVE decisions." }
+      }
+    },
     "network-element": { "parent": "ci", "abstract": true, "symbol": "⋈", "family": "network", "label": "network element", "description": "What the network is made of.", "fields": {} },
     "zone": {
       "parent": "network-element",

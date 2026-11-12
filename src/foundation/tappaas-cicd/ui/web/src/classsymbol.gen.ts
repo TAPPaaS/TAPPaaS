@@ -39,6 +39,7 @@ export const CLASSES: Record<string, { symbol: string; family: Family; label: st
   "service": { symbol: "⊙", family: "software", label: "service" },
   "controller": { symbol: "⟳", family: "software", label: "controller" },
   "manager": { symbol: "☰", family: "software", label: "manager" },
+  "nixos-baseline": { symbol: "❄", family: "software", label: "NixOS baseline" },
   "identity": { symbol: "I", family: "identity", label: "identity" },
   "organization": { symbol: "O", family: "identity", label: "organization" },
   "group": { symbol: "G", family: "identity", label: "group" },
