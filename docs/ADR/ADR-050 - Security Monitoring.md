@@ -264,6 +264,13 @@ Merged to `main` 2026-11-12 (`00745bfe`), live-tested on hrossen the same day.
   per scanning address, so SSH brute force is `info` (recorded, not mailed, no condition);
   pvedaemon's message starts with a space; each boot's `audit_enabled=0` initialisation line is
   no switch-off.
+- **CrowdSec and Suricata, the same day:** the logging VM's processor logged in to the firewall
+  and its SSH scenarios filled on hrossen's real traffic. Moving the local API needs a restart
+  of the engine and the bouncer, which the plugin's reconfigure does not do (fixed). Suricata
+  with all 21 rule sets was killed for memory on the 4 GB firewall, whose `/var/log` takes
+  about 740 MB of RAM (its filter log); turning sets off needs a rule update before the start,
+  or their files still load. With the core set it runs in 200 MB, and an `id check returned
+  root` test reached the receiver as an info hit.
 - Found: an ack is per condition type (ADR-041), so an ack given on a security hit also silences
   a CVE warning on the same object until the status changes. D12's "an ack covers the finding"
   needs acks per finding.
@@ -277,7 +284,9 @@ Merged to `main` 2026-11-12 (`00745bfe`), live-tested on hrossen the same day.
 | Rule pack (D3) | **First part built**, hand-written: SSH brute force (info), login after a brute force (critical), password login, sudo refused, audit stopped, kernel module from a session (logging, scope all); Authentik login brute force, suspicious request, impersonation (identity); Proxmox sign-in failures (pvehost); firewall sign-in failures (network). The Sigma conversion is not done |
 | Guests' audit records (D6) | **Built.** NixOS guests: journald's audit socket, rules on `/etc/secrets`, `/root/.ssh`, `/etc/ssh` and kernel modules from a session, plus a module's `securityPaths` that exist; labelled `transport="audit"` |
 | Closure check (D6) | **Built** as the `guest-system` gate (critical): update-os.sh records each system it activates or stages in `config/.guest-systems/<vmname>` (the last 20); a profile or running system not in it fails. The weekly store verification is not built |
-| CrowdSec processor (D4), Suricata (D5), Caddy and CrowdSec logs into Loki (P0) | **Not built**: they change OPNsense's plugins and the logging VM's NixOS, and need a live firewall to be written against |
+| CrowdSec processor (D4) | **Built, live on hrossen.** A CrowdSec log processor on the logging VM reads Loki (sshd, Authentik, pvedaemon; the line's program from its acquisition's `type`) and reports as machine `tappaas-logging` to the firewall's local API, moved to the mgmt address (`crowdsec-converge.sh`, step 5); the firewall's bouncer bans. Runs only while the mothership has written its credentials (security monitoring on) |
+| Suricata (D5) | **Built, live on hrossen.** `suricata-converge.sh`: alert only (PCAP) on the WAN, eve to syslog and so to Loki; rule sets by size (operator, 2026-11-12): a core set at medium (about 3 600 rules, 200 MB), the full set at large (about 60 000); not started while the firewall lacks the memory. Rules: IdsAlert (info), IdsAlertHigh (warning, severity 1) |
+| Caddy and CrowdSec logs into Loki (P0) | **Not built** |
 | CI id on log lines (P0) | **Not built.** Placement by the authenticated `host` label works without it |
 | CVE-aware severity, coverage report, #886 (P4) | **Not built**: they wait for the sources above |
 | `debianhost` audit, the hardening check at validate | **Not built** |

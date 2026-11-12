@@ -12,17 +12,22 @@
 #   1. with the site's security monitoring on (site.json security.monitoring;
 #      off on a small site): IDS enabled, PCAP mode, the WAN, eve to syslog;
 #      off: IDS disabled — nothing else is touched;
-#   2. the rule sets: threat categories of ET Open and abuse.ch (exploits,
-#      malware and its command-and-control, phishing, known-bad addresses) —
-#      not the policy, info, scan or hunting ones, which on a WAN are noise
-#      (CrowdSec already bans scanners);
+#   2. the rule sets, by the site's size (operator, 2026-11-12): threat
+#      categories of ET Open and abuse.ch — at medium a core set (exploits,
+#      attack responses, command-and-control and known-bad hosts), at large
+#      also the big ones (ET malware, phishing, exploit kits, web apps, the SSL
+#      blacklist). Not the policy, info, scan or hunting ones, which on a WAN
+#      are noise (CrowdSec already bans scanners). Sets of the other size are
+#      turned off, so a site that shrinks gives the memory back;
 #   3. the rules downloaded when a rule set was turned on, then a reconfigure.
 #
 # Memory: the firewall keeps /var/log in RAM and has no swap, so what Suricata
 # needs must be free. It is not turned on while less than SURICATA_NEED_MB (free
 # and inactive memory) is: on hrossen's 4 GB firewall the full rule set was
 # killed with about 1.9 GB free, and the kernel had killed unbound before
-# (2026-11-12): 3 GB is the first guess for the 21 rule sets below.
+# (2026-11-12). The need is by size: the core set (about 3 600 rules) ran in
+# 200 MB on hrossen, so medium asks 1 GB free; the full set (about 60 000)
+# asks 3 GB, which a large site's 8 GB network VM has (ADR-044).
 #
 # Usage: suricata-converge.sh [--check]   (--check: report, change nothing)
 set -euo pipefail
@@ -52,15 +57,23 @@ api() { curl -ksS --max-time 120 -u "$OPN_AUTH" "$@"; }
 post() { api -X POST -H 'Content-Type: application/json' "$@"; }
 
 # The rule sets taken: threats, not policy. File names as OPNsense lists them.
-RULESETS=(
-    abuse.ch.feodotracker.rules abuse.ch.sslblacklist.rules abuse.ch.sslipblacklist.rules
-    abuse.ch.threatfox.rules abuse.ch.urlhaus.rules
-    botcc.rules compromised.rules drop.rules ciarmy.rules
-    emerging-attack_response.rules emerging-coinminer.rules emerging-current_events.rules
-    emerging-exploit.rules emerging-exploit_kit.rules emerging-malware.rules
-    emerging-mobile_malware.rules emerging-phishing.rules emerging-web_server.rules
-    emerging-web_specific_apps.rules emerging-worm.rules threatview_CS_c2.rules
+CORE=(
+    abuse.ch.feodotracker.rules abuse.ch.sslipblacklist.rules abuse.ch.threatfox.rules
+    abuse.ch.urlhaus.rules botcc.rules compromised.rules drop.rules ciarmy.rules
+    threatview_CS_c2.rules emerging-attack_response.rules emerging-coinminer.rules
+    emerging-exploit.rules emerging-web_server.rules emerging-worm.rules
 )
+LARGE=(
+    abuse.ch.sslblacklist.rules emerging-current_events.rules emerging-exploit_kit.rules
+    emerging-malware.rules emerging-mobile_malware.rules emerging-phishing.rules
+    emerging-web_specific_apps.rules
+)
+SIZE="$(_ms_size)"
+if [[ "${SIZE}" == large ]]; then
+    RULESETS=("${CORE[@]}" "${LARGE[@]}"); NOT=(); NEED_DEFAULT=3072
+else
+    RULESETS=("${CORE[@]}"); NOT=("${LARGE[@]}"); NEED_DEFAULT=1024
+fi
 
 api "${IDS}/settings/get" > "${TMP}" || die "cannot read the IDS settings"
 jq -e '.ids.general' "${TMP}" >/dev/null || die "the IDS settings did not read as expected"
@@ -82,7 +95,7 @@ fi
 
 # 1. on, alert only, on the WAN, eve to syslog — if the memory is there
 changed=0
-NEED_MB="${SURICATA_NEED_MB:-3072}"
+NEED_MB="${SURICATA_NEED_MB:-${NEED_DEFAULT}}"
 if [[ "${enabled}" != 1 ]]; then
     free_mb="$(ssh -n -o BatchMode=yes -o ConnectTimeout=10 "root@${FW}" \
         "/bin/sh -c 'echo \$(( (\$(sysctl -n vm.stats.vm.v_free_count) + \$(sysctl -n vm.stats.vm.v_inactive_count)) * \$(sysctl -n hw.pagesize) / 1048576 ))'" 2>/dev/null || echo "")"
@@ -102,33 +115,50 @@ if [[ "${enabled}" != 1 || "$(sel mode)" != pcap || "$(sel interfaces)" != wan |
     fi
 fi
 
-# 2. the rule sets
+# 2. the rule sets of this size on, the others off
 api "${IDS}/settings/listRulesets" > "${TMP}" || die "cannot list the IDS rule sets"
 new_rules=0
-off=()
+state_of() { jq -r --arg f "$1" '.rows[] | select(.filename == $f) | .enabled' "${TMP}"; }
+want_on=(); want_off=()
 for f in "${RULESETS[@]}"; do
-    state="$(jq -r --arg f "${f}" '.rows[] | select(.filename == $f) | .enabled' "${TMP}")"
-    [[ -n "${state}" ]] || { warn "  rule set ${f} is not offered by this OPNsense — skipped"; continue; }
-    [[ "${state}" == 1 ]] || off+=("${f}")
+    st="$(state_of "${f}")"
+    [[ -n "${st}" ]] || { warn "  rule set ${f} is not offered by this OPNsense — skipped"; continue; }
+    [[ "${st}" == 1 ]] || want_on+=("${f}")
 done
-if [[ ${#off[@]} -gt 0 ]]; then
-    if [[ ${CHECK} -eq 1 ]]; then info "  would turn on ${#off[@]} rule set(s): ${off[*]}"; else
-        # One call for all of them; the answer is the state they are in now.
-        list="$(IFS=,; echo "${off[*]}")"
-        post "${IDS}/settings/toggleRuleset/${list}/1" -d '{}' | jq -e '.status == "1"' >/dev/null \
-            || die "could not turn on the rule sets: ${off[*]}"
+for f in ${NOT[@]+"${NOT[@]}"}; do
+    [[ "$(state_of "${f}")" == 1 ]] && want_off+=("${f}")
+done
+# One call per direction; the answer is the state the sets are in now.
+toggle() {  # toggle <0|1> <files...>
+    local to="$1"; shift
+    local list; list="$(IFS=,; echo "$*")"
+    post "${IDS}/settings/toggleRuleset/${list}/${to}" -d '{}' | jq -e --arg to "${to}" '.status == $to' >/dev/null
+}
+if [[ ${#want_on[@]} -gt 0 ]]; then
+    if [[ ${CHECK} -eq 1 ]]; then info "  would turn on ${#want_on[@]} rule set(s): ${want_on[*]}"; else
+        toggle 1 "${want_on[@]}" || die "could not turn on the rule sets: ${want_on[*]}"
+        new_rules=1; changed=1
+    fi
+fi
+if [[ ${#want_off[@]} -gt 0 ]]; then
+    if [[ ${CHECK} -eq 1 ]]; then info "  would turn off ${#want_off[@]} rule set(s) for a ${SIZE} site: ${want_off[*]}"; else
+        toggle 0 "${want_off[@]}" || die "could not turn off the rule sets: ${want_off[*]}"
         new_rules=1; changed=1
     fi
 fi
 
-# 3. download what was turned on, then apply
+# 3. the rules on disk follow the sets (a set turned off keeps its file until
+# a rule update), then apply. On the firewall and synchronous: the API's
+# updateRules runs in the background, and a reconfigure before it ends starts
+# Suricata on every file there (hrossen: 60 000 rules, out of memory).
 if [[ ${CHECK} -eq 0 && ${changed} -eq 1 ]]; then
     if [[ ${new_rules} -eq 1 ]]; then
-        post "${IDS}/service/updateRules" -d '{}' | jq -e '.status' >/dev/null || die "the rule download did not start"
-        info "  rules downloading (ET Open, abuse.ch)"
+        ssh -n -o BatchMode=yes -o ConnectTimeout=10 "root@${FW}" "/usr/local/sbin/configctl ids update" >/dev/null \
+            || die "the rule update on the firewall failed"
+        info "  rules updated (ET Open, abuse.ch)"
     fi
     post "${IDS}/service/reconfigure" -d '{}' | jq -e '.status' >/dev/null || die "the IDS reconfigure failed"
-    info "  ${GN}✓${CL} IDS on: alert only, WAN, ${#RULESETS[@]} threat rule sets"
+    info "  ${GN}✓${CL} IDS on: alert only, WAN, ${#RULESETS[@]} threat rule sets (${SIZE})"
 fi
 status="$(api "${IDS}/service/status" | jq -r '.status // "unknown"')"
 echo "  suricata: ${status}"
