@@ -192,5 +192,9 @@ if [[ -n "${have}" && "${have}" != "${LAPI_ADDR}" ]]; then
         || die "could not set CrowdSec's local API address"
     curl -ksS -u "$OPN_AUTH" -X POST "${CS_API}/service/reconfigure" | jq -e '.status == "ok"' >/dev/null \
         || die "CrowdSec's reconfigure failed after moving its local API"
+    # The reconfigure writes the files and restarts nothing: the engine and
+    # the bouncer take the new address only from a restart (hrossen).
+    ssh -o BatchMode=yes "root@${FW}" "/bin/sh -c 'service crowdsec restart >/dev/null 2>&1; sleep 5; service crowdsec_firewall restart >/dev/null 2>&1'" \
+        || die "could not restart CrowdSec after moving its local API"
     info "  ${GN}✓${CL} CrowdSec's local API listens on ${LAPI_ADDR}:${SECURITY_LAPI_PORT}"; fi
 fi

@@ -88,15 +88,21 @@ fi
 # 2. the rule sets
 api "${IDS}/settings/listRulesets" > "${TMP}" || die "cannot list the IDS rule sets"
 new_rules=0
+off=()
 for f in "${RULESETS[@]}"; do
     state="$(jq -r --arg f "${f}" '.rows[] | select(.filename == $f) | .enabled' "${TMP}")"
     [[ -n "${state}" ]] || { warn "  rule set ${f} is not offered by this OPNsense — skipped"; continue; }
-    [[ "${state}" == 1 ]] && continue
-    if [[ ${CHECK} -eq 1 ]]; then info "  would turn on rule set ${f}"; continue; fi
-    post "${IDS}/settings/toggleRuleset/${f}/1" -d '{}' | jq -e '.status == "ok" or .result == "saved"' >/dev/null \
-        || die "could not turn on rule set ${f}"
-    new_rules=1; changed=1
+    [[ "${state}" == 1 ]] || off+=("${f}")
 done
+if [[ ${#off[@]} -gt 0 ]]; then
+    if [[ ${CHECK} -eq 1 ]]; then info "  would turn on ${#off[@]} rule set(s): ${off[*]}"; else
+        # One call for all of them; the answer is the state they are in now.
+        list="$(IFS=,; echo "${off[*]}")"
+        post "${IDS}/settings/toggleRuleset/${list}/1" -d '{}' | jq -e '.status == "1"' >/dev/null \
+            || die "could not turn on the rule sets: ${off[*]}"
+        new_rules=1; changed=1
+    fi
+fi
 
 # 3. download what was turned on, then apply
 if [[ ${CHECK} -eq 0 && ${changed} -eq 1 ]]; then
