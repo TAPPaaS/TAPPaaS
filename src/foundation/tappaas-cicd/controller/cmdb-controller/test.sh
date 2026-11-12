@@ -467,6 +467,14 @@ _orph() { curl -s --unix-socket "${CMDB_SOCKET}" -X POST -H 'Content-Type: appli
 check "…but one nothing reported within its class's expiry is an orphan, retired by the sweep" "yes" \
     "$(_orph "{\"orphans\":true,\"now\":\"${_far}\"}" | jq -r 'if ([.data.retire[] | select(.name == "ph-old" and (.reason | startswith("a placeholder")))] | length) == 1 then "yes" else "no" end')"
 check "…not before" "0" "$(_orph "{\"orphans\":true,\"now\":\"${OLD}\"}" | jq '[.data.retire[] | select(.name == "ph-old")] | length')"
+cmdb report --json >/dev/null <<JSON
+{ "source": "asset-manager", "time": "${OLD}", "objects": [ { "ref": "k", "class": "other-device", "name": "ph-holder" }, { "ref": "g", "class": "other-device", "name": "ph-left" } ],
+  "relations": [ { "type": "allocated-to", "from": { "ref": "k" }, "to": { "class": "node", "name": "ph-kept" } }, { "type": "allocated-to", "from": { "ref": "g" }, "to": { "class": "node", "name": "ph-gone" } } ] }
+JSON
+cmdb report --json >/dev/null <<<'{"source":"asset-manager","objects":[{"class":"other-device","name":"ph-holder"}]}'
+_now="$(date -u -d '+1 hour' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v+1H +%Y-%m-%dT%H:%M:%SZ)"
+check "…but not one an object seen within the expiry still refers to; one only stale objects refer to is" "ph-gone" \
+    "$(_orph "{\"orphans\":true,\"now\":\"${_now}\"}" | jq -r '[.data.retire[] | select(.name == "ph-kept" or .name == "ph-gone") | .name] | join(",")')"
 refuse "a reference to a class that does not exist is refused" 4 "no class nope" \
     '{"source":"t","objects":[{"class":"zone","name":"z9"}],"relations":[{"type":"serves","from":{"class":"nope","name":"x"},"to":{"class":"environment","name":"e"}}]}'
 
