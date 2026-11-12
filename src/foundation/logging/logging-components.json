@@ -1,0 +1,29 @@
+{
+ "schema": 1,
+ "components": {
+  "logging/nix:libxslt": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2025-7425": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libxslt is only linked into nginx's built-in xslt filter, and the logging nginx.conf has no xslt_stylesheet directive, so no XSLT is ever run; the libxml2 it links (2.15.4) also carries the upstream mitigation (>= 2.14.5).",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2025-7425": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:H/PR:N/UI:N/S:C/C:N/I:H/A:H",
+     "epss": 0.00444
+    }
+   }
+  }
+ }
+}

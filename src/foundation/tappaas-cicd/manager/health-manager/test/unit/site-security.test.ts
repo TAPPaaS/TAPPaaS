@@ -123,7 +123,7 @@ console.log("site scores");
   check(sec.units.immich.score === 20 && sec.units.immich.level === "high", "immich: one open critical, the same CVE in its image counted once: 20, high");
   check(sec.zones.rossen.score === 20 && sec.zones.rossen.multiplier === 1, "rossen ×1: 20");
   check(sec.zones.mgmt.score === 40 && sec.zones.mgmt.level === "critical" && sec.zones.mgmt.setBy.module === "firewall", "mgmt ×2: the firewall's open critical is 40, critical");
-  check(sec.zones.dmz.score === 9 && sec.zones.dmz.level === "medium", "dmz ×0.25: two rated criticals (37.5) are 9.375, shown 9, medium");
+  check(sec.zones.dmz.score === 8 && sec.zones.dmz.level === "medium", "dmz ×0.25: two rated criticals (30) are 7.5, shown 8, medium");
   check(sec.zones.iotCams.score === 2 && sec.zones.iotCams.level === "low", "iotCams ×0.1: an open critical is 2, low");
   check(sec.environments.rossen.score === 20 && sec.environments.mgmt.score === 40, "an environment is the highest of its zones");
   check(sec.outside.includes("dmz") && sec.outside.includes(NO_ZONE), "zones in no environment roll up to the site directly");
@@ -153,11 +153,11 @@ console.log("site scores");
   check(at(/environment rossen/) !== "" && lines.findIndex((l) => /environment rossen/.test(l)) < lines.findIndex((l) => /zone rossen/.test(l)), "…environments, then their zones");
   check(/zone mgmt ×2/.test(at(/zone mgmt/)), "…a zone with its multiplier");
   check(/^  zone dmz ×0.25/.test(at(/zone dmz/)), "…a zone in no environment directly under the site");
-  check(/immich\s+high\s+20\s+1 critical\s+1\/1\/0\/0/.test(at(/^\s+immich/)), "…a module: level, score, what counts, open/risk/carried/decided");
+  check(/immich\s+high\s+20\s+1 critical\s+1\/0\/1\/0\/0/.test(at(/^\s+immich/)), "…a module: level, score, what counts, unread/rule/confirmed/review/accepted");
   check(/firewall firewall/.test(at(/firewall firewall/)) && /node tappaas1/.test(at(/node tappaas1/)), "…platform targets named as such");
   check(lines.some((l) => /scan failed: broken/.test(l)), "…and what was not counted");
   const withCves = renderSecurity(rec, Date.parse("2026-11-08T05:00:00Z"), { items: true });
-  check(withCves.some((l) => /risk\s+high \(rated\)\s+CVE-2/.test(l)), "--cves: each counted CVE with its state and rating");
+  check(withCves.some((l) => /confirmed\s+high\s+CVE-2/.test(l)), "--cves: each counted CVE with its mark, upstream and effective level");
   check(!lines.join("\n").match(/fix/i), "the report never says whether a fix exists");
 
   check(run(["report", "security", "--config-dir", dir], new FakeClusterClient()) === 0, "report security prints the table");
@@ -176,6 +176,15 @@ console.log("security alerts");
   const e = cveNewEvent(cur, sec, new Set());
   check(e?.count === 1 && e.items === "CVE-9 critical p 1 (immich)" && e.modules === "immich", "cve-new: the new open items, one line per scan");
   check(cveNewEvent(cur, sec, new Set(["immich"])) === null, "…a quiet module tells nothing");
+  const kevItem = { ...item("CVE-10", "carried", "High"), mark: "review" as const, level: "high" as const, kev: "2026-11-11", flags: ["kev"] };
+  const prevK = scan([target("immich", [item("CVE-10", "risk", "High", "low")])]);
+  const curK = scan([target("immich", [kevItem])]);
+  diffScans(curK, prevK);
+  check(curK.targets[0].newKev?.join() === "CVE-10", "a CVE that joined the known-exploited list since the last scan is noted");
+  const ek = cveNewEvent(curK, siteSecurity(curK, sitePlacement(dir, scoreUnits(curK))), new Set());
+  check(ek?.items === "CVE-10 high p 1 (immich, known exploited)", "…and mailed at once, though it was decided before");
+  diffScans(curK, curK);
+  check(curK.targets[0].newKev?.length === 0, "…once");
   check(/"event":"cve-new".*"silenced":false/.test(JSON.stringify(e)), "…the line the rule matches");
   const c = cveChangesEvent(prev, sec, new Set());
   check(c !== null && /immich: 1 new carried/.test(c.what) && /proxy: 1 new risk/.test(c.what), "cve-changes: new carried and risk items for the digest");
@@ -208,18 +217,21 @@ console.log("rescan");
   const sb = sbomDir(dir);
   mkdirSync(sb, { recursive: true });
   const comps = (n: number): unknown[] => Array.from({ length: n }, (_, i) => ({ type: "library", name: `lib${i}`, version: "1.0", purl: `pkg:nix/lib${i}@1.0`, cpe: `cpe:2.3:a:lib${i}:lib${i}:1.0:*:*:*:*:*:*:*` }));
-  const deb = [{ type: "library", name: "libc6", version: "2.41-12", purl: "pkg:deb/debian/libc6@2.41-12?arch=amd64&distro=debian-13.7" },
+  const deb = [{ type: "library", name: "libc6", version: "2.41-12", purl: "pkg:deb/debian/libc6@2.41-12?arch=amd64&distro=debian-13.7",
+    properties: [{ name: "aquasecurity:trivy:SrcName", value: "glibc" }, { name: "aquasecurity:trivy:SrcVersion", value: "2.41" }, { name: "aquasecurity:trivy:SrcRelease", value: "12" }] },
     { type: "library", name: "requests", version: "2.0", purl: "pkg:pypi/requests@2.0" },
     { type: "library", name: "ffmpeg (in av)", version: "7.1", purl: "pkg:generic/ffmpeg@7.1", cpe: "cpe:2.3:a:ffmpeg:ffmpeg:7.1:*:*:*:*:*:*:*", properties: [{ name: "tappaas:bundled-in", value: "av" }] }];
   const prev = scan([
     target("immich", [], { layer: "nix" }),
     target("node:tappaas1", [], { layer: "debian", note: "debian 13.7; Proxmox packages not matched" }),
     target("firewall", [item("CVE-F", "open", "High")], { layer: "opnsense" }),
+    target("old-lxc", [item("CVE-OLD", "open", "High")], { layer: "debian", note: "debian 13.7" }),
     target("broken", [], { coverage: "fail", verdict: "failed", note: "unreachable", layer: "unknown" }),
   ], "2026-11-07T03:00:00.000Z");
   writeFileSync(join(sb, STATUS_FILE), JSON.stringify(prev));
   writeFileSync(join(sb, SITE_CDX_FILE), JSON.stringify({ bomFormat: "CycloneDX", components: [
-    { "bom-ref": "immich", components: comps(60) }, { "bom-ref": "node:tappaas1", components: deb }, { "bom-ref": "firewall", components: [{ name: "unbound", version: "1", purl: "pkg:generic/opnsense/unbound@1" }] },
+    { "bom-ref": "immich", components: comps(60) }, { "bom-ref": "node:tappaas1", components: deb },
+    { "bom-ref": "old-lxc", components: [{ type: "library", name: "libtiff6", version: "4.7.0-3", purl: "pkg:deb/debian/libtiff6@4.7.0-3?arch=amd64" }] }, { "bom-ref": "firewall", components: [{ name: "unbound", version: "1", purl: "pkg:generic/opnsense/unbound@1" }] },
   ] }));
   const calls: string[] = [];
   const sbomDocs: Record<string, unknown>[] = [];
@@ -251,6 +263,10 @@ console.log("rescan");
   check(by("immich").items?.some((i) => i.id === "CVE-N" && i.state === "open") === true, "a Nix target is matched again by grype from its stored inventory");
   check(by("node:tappaas1").items?.map((i) => i.id).sort().join() === "CVE-B,CVE-T", "an OS target by trivy offline, its bundled libraries by grype");
   check(by("firewall").items?.[0].id === "CVE-F", "the firewall stays as its last audit found it");
+  check(by("old-lxc").items?.[0].id === "CVE-OLD" && calls.filter((c) => c === "trivy-sbom").length === 1 && r.status.notes.some((n) => n.includes("no source packages")),
+    "an OS inventory without source packages is not matched thinner: the last scan stands, and the notes say so");
+  const libc = (sbomDocs[0] as { components: { name: string; properties?: { name: string; value: string }[] }[] }).components.find((c) => c.name === "libc6");
+  check(libc?.properties?.some((x) => x.name === "aquasecurity:trivy:SrcName" && x.value === "glibc") === true, "trivy is handed each package's source package, as it found it");
   check(by("broken").verdict === "failed", "a failed inventory stays failed");
   check(r.status.inventory === prev.generated && r.status.generated === "2026-11-08T03:00:00.000Z", "the status says when the inventory was taken and when it was matched");
   const doc = sbomDocs[0] as { components: { type: string; "bom-ref": string; purl?: string }[]; dependencies: { ref: string; dependsOn: string[] }[] };
@@ -260,7 +276,7 @@ console.log("rescan");
   check((trivySbomDoc([], null).components as unknown[]).length === 0, "no OS known: packages only");
   writeScan(dir, r.status, r.cdx);
   check(JSON.parse(readFileSync(join(sb, PREVIOUS_FILE), "utf8")).generated === prev.generated, "written like a scan: the last one becomes the previous");
-  check((JSON.parse(readFileSync(join(sb, SITE_CDX_FILE), "utf8")) as { components: unknown[] }).components.length === 3, "…the inventory itself unchanged");
+  check((JSON.parse(readFileSync(join(sb, SITE_CDX_FILE), "utf8")) as { components: unknown[] }).components.length === 4, "…the inventory itself unchanged");
   const none = runRescan({ configDir: mkdtempSync(join(tmpdir(), "hm-none-")), repoDir: dir }, io);
   check("error" in none, "no scan yet: the rescan says so");
 }

@@ -14,6 +14,8 @@ import { Cursor, deliverNotices, emit } from "../../src/emit";
 import { CORE_NOTIFY, NotifyRules } from "../../src/notices";
 import { HealthRecord } from "../../../../lib/ts/src/health-records";
 import { StubIO, coreRecords, obj, rel, shippedModel } from "./assess-fixture";
+import { classify } from "../../src/classify";
+import { derive } from "../../src/derive";
 
 let passed = 0;
 let failed = 0;
@@ -154,6 +156,22 @@ function site(extra: HealthRecord[]) {
   const u = site([raiseUps, hush]);
   u.run(0, [u.alert("UpsOnBattery", "ups-rack1")]);
   check(u.cond(u.ups, "operational")?.status === "critical" && !u.mails.some((m) => m.subject.includes("ups-rack1")), "a critical root a record tells nowhere: no notice, the condition stays visible");
+}
+
+// ── a CVE level only the NixOS baseline sets: a sum, never a root ──
+{
+  const m = shippedModel();
+  const vm = obj("vm", "coturn");
+  const st = obj("site", "rossen");
+  const byId = new Map([vm, st].map((o) => [o.id, o]));
+  const fs = classify([
+    { object: vm.id, type: "security", status: "warning", reason: "cve-medium", message: "score 14", owner: "cve", labels: { setBy: "baseline" } },
+    { object: st.id, type: "security", status: "warning", reason: "cve-baseline", message: "the baseline: medium", owner: "cve" },
+  ], byId, m.records, m.ancestors, () => [], T0);
+  check(fs[0].aggregate === true && !fs[1].aggregate, "a module's CVE level set only by the baseline is a sum of others; the site's baseline finding is not");
+  const src = new Map(fs.map((f) => [f.object, [{ type: f.type, status: f.status, reason: f.reason, message: f.message, since: at(0).toISOString(), lastChecked: at(0).toISOString(), source: "health-manager", owner: f.owner, derived: false, rootCause: null, acknowledged: null, maintenance: null, ...(f.aggregate ? { aggregate: true } : {}) } as never]]));
+  const d = derive([vm, st], src, [], m, at(0).toISOString());
+  check(d.rootCauses.length === 1 && d.rootCauses[0].id === st.id, "…so the one root is the site's baseline finding");
 }
 
 console.log(`\nResults: ${passed} passed, ${failed} failed`);

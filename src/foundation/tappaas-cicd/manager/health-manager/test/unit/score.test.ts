@@ -30,8 +30,8 @@ const decided = (severity: string): ScoredItem => ({ id: `CVE-D${++n}`, state: "
 const many = (k: number, f: () => ScoredItem): ScoredItem[] => Array.from({ length: k }, f);
 
 console.log("points per item");
-check(itemPoints(risk("critical"))?.points === 25, "risk critical 25");
-check(itemPoints(risk("high"))?.points === 10, "risk high 10");
+check(itemPoints(risk("critical"))?.points === 20, "a confirmed critical 20: one table, by effective level");
+check(itemPoints(risk("high"))?.points === 8, "a confirmed high 8");
 check(itemPoints(risk("medium"))?.points === 3, "risk medium 3");
 check(itemPoints(risk("low"))?.points === 1, "risk low 1");
 check(itemPoints(open("Critical"))?.points === 20, "open critical 20");
@@ -40,13 +40,21 @@ check(itemPoints(open("Medium")) === null && itemPoints(open("Low")) === null, "
 check(itemPoints(carried("CRITICAL"))?.points === 20 && itemPoints(carried("high"))?.points === 8, "carried counts as open (any case)");
 check(itemPoints(decided("Critical")) === null, "decided counts nothing");
 check(itemPoints(risk("low", "Critical"))?.category === "low", "a risk item counts by its TAPPaaS rating, not its CVE severity");
-check(itemPoints({ id: "x", state: "risk", severity: "High" })?.points === 10, "an unrated risk item counts at its CVE severity, risk weights");
+check(itemPoints({ id: "x", state: "risk", severity: "High" })?.points === 8, "an unrated risk item counts at its CVE severity");
+check(itemPoints({ id: "x", state: "open", severity: "High", level: "low", mark: "rule" })?.points === 1, "an effective level counts, whatever the old state says");
+check(itemPoints({ id: "x", state: "open", severity: "Critical", level: "none", mark: "confirmed" }) === null, "effective none counts nothing");
+check(itemPoints({ id: "x", state: "open", severity: "Critical", level: "critical", mark: "accepted" }) === null, "an accepted CVE counts nothing");
+check(itemPoints({ id: "x", state: "open", severity: "Medium", level: "medium", mark: "unread" }) === null, "an unread medium is listed, not counted");
+check(itemPoints({ id: "x", state: "risk", severity: "Medium", level: "medium", mark: "confirmed" })?.points === 3, "…a confirmed one counts");
+check(itemPoints({ id: "x", state: "open", severity: "Critical", level: "critical", counted: false }) === null, "a decision's own verdict wins");
+check(moduleScore([{ id: "a", state: "open", severity: "High" }, { id: "b", state: "risk", severity: "High", level: "high", mark: "confirmed" }]).marks.unread === 1,
+  "the marks are counted: unread and confirmed alike score 8 + 4");
 
 console.log("module score: the ADR's examples");
 const three = moduleScore(many(3, () => risk("critical")));
-check(near(three.raw, 43.75) && three.level === "critical", "3 analysed criticals = 25 + 12.5 + 6.25 = 43.75, critical");
+check(near(three.raw, 35) && three.level === "critical", "3 confirmed criticals = 20 + 10 + 5 = 35, critical");
 const ro = moduleScore([open("Critical"), risk("critical")]);
-check(near(ro.raw, 35) && ro.level === "critical", "a risk critical and an open critical = 25 + 10 = 35, highest first");
+check(near(ro.raw, 30) && ro.level === "critical", "a confirmed and an unread critical = 20 + 10 = 30: read or not, the same points");
 const nine = moduleScore(many(9, () => open("High")));
 check(near(nine.raw, 8 * (2 - 2 ** -8)) && nine.score === 15 && nine.level === "medium", "9 open highs ≈ 15.97, shown 15: medium, never rounded up into high");
 const immich = moduleScore([open("Critical"), ...many(9, () => open("High")), ...many(6, () => risk("medium"))]);
@@ -54,13 +62,13 @@ check(immich.raw === 20 && immich.level === "high" && immich.category === "criti
   "immich 2.4: one open critical, nine open highs, six risk items = 20, high (only the top category counts)");
 check(immich.counts.open === 10 && immich.counts.risk === 6, "…and its counts say what it holds");
 check(moduleScore([open("Critical")]).level === "high", "one open critical (20) is high, not critical");
-check(moduleScore([risk("critical")]).level === "high", "one analysed critical (25) is high");
-check(moduleScore([risk("critical"), risk("critical")]).level === "critical", "two criticals (37.5) are critical");
+check(moduleScore([risk("critical")]).level === "high", "one confirmed critical (20) is high");
+check(moduleScore([risk("critical"), risk("critical")]).level === "critical", "two criticals (30) are critical");
 check(moduleScore([open("Critical"), open("Critical")]).raw === 30 && moduleScore([open("Critical"), open("Critical")]).level === "critical",
   "two open criticals = 30 exactly: the band starts there");
 check(moduleScore([open("High")]).level === "medium" && moduleScore([risk("high")]).level === "medium", "one open or analysed high is medium");
-check(near(moduleScore(many(3, () => risk("high"))).raw, 17.5) && moduleScore(many(3, () => risk("high"))).level === "high",
-  "analysed highs reach high from three (17.5)");
+check(near(moduleScore(many(3, () => risk("high"))).raw, 14) && moduleScore(many(3, () => risk("high"))).level === "medium",
+  "three highs, read or not, stay medium (14)");
 check(moduleScore(many(20, () => risk("medium"))).level === "low", "mediums never pass low");
 check(moduleScore([risk("low")]).level === "low" && moduleScore([risk("low")]).raw === 1, "one analysed low = 1, low");
 check(moduleScore([]).level === "ok" && moduleScore([decided("Critical"), open("Medium")]).raw === 0, "nothing counted: 0, ok");
@@ -110,23 +118,23 @@ const site = siteScores({
   },
 });
 check(site.zones.rossen.raw === 20 && site.zones.rossen.setBy.module === "immich", "rossen: its highest module, immich 20");
-check(near(site.zones.iotLocal.raw, 3.75) && site.zones.iotLocal.level === "low", "iotLocal ×0.1: 37.5 → 3.75, low");
+check(near(site.zones.iotLocal.raw, 3) && site.zones.iotLocal.level === "low", "iotLocal ×0.1: 30 → 3, low");
 check(site.zones.home.raw === 15 && site.zones.home.level === "medium", "home ×0.75: 20 → 15, medium");
 check(site.environments.rossen.raw === 20 && site.environments.rossen.setBy.zone === "rossen", "the rossen environment is the highest of its zones");
 check(site.environments.test.raw === 15 && site.environments.test.setBy.module === "homeassistant", "a shared zone counts for every environment it names");
 check(site.environments.mgmt.raw === 16 && site.environments.mgmt.level === "high", "the firewall counts in mgmt: one open high ×2 = 16, high");
-check(site.outside.join(",") === "dmz,work" && near(site.zones.dmz.raw, 2.5), "zones in no environment roll up to the site directly");
+check(site.outside.join(",") === "dmz,work" && near(site.zones.dmz.raw, 2), "zones in no environment roll up to the site directly");
 check(site.site.raw === 20 && site.site.setBy.module === "immich" && site.site.setBy.zone === "rossen", "the site: 20, high, pointing at immich in rossen");
 const crit = siteScores({ modules: { firewall: [open("Critical")] }, placement: { firewall: ["mgmt"] }, zones: { mgmt: { tier: 0, environment: "mgmt" } } });
 check(crit.site.raw === 40 && crit.site.level === "critical", "one open critical on the firewall makes the site critical (40)");
 const dmzOnly = siteScores({ modules: { caddy: many(3, () => risk("critical")) }, placement: { caddy: ["dmz"] }, zones: { dmz: { tier: 4 } } });
-check(dmzOnly.site.setBy.zone === "dmz" && near(dmzOnly.site.raw, 10.9375), "a DMZ-only site is set by the DMZ");
+check(dmzOnly.site.setBy.zone === "dmz" && near(dmzOnly.site.raw, 8.75), "a DMZ-only site is set by the DMZ");
 const unknown = siteScores({ modules: { x: [open("High")] }, placement: { x: ["lab"] }, zones: {} });
 check(unknown.zones.lab.multiplier === 1 && unknown.site.raw === 8, "a zone zones.json does not know counts ×1, outside every environment");
 
 console.log("release score");
 const rel = releaseScores({ immich: [open("Critical")], identity: [risk("critical"), risk("critical")], coturn: [] });
-check(rel.release.raw === 37.5 && rel.release.level === "critical" && rel.release.setBy.module === "identity", "a release is its highest module, no multiplier");
+check(rel.release.raw === 30 && rel.release.level === "critical" && rel.release.setBy.module === "identity", "a release is its highest module, no multiplier");
 check(rel.modules.coturn.level === "ok" && rel.modules.immich.score === 20, "…each module scored");
 check(releaseScores({}).release.level === "ok", "an empty release is ok");
 
@@ -156,7 +164,7 @@ const doc = JSON.parse(outl.join("\n"));
 check(doc.modules.immich.score === 20 && doc.modules.immich.level === "high", "immich in the 2.4-style preview: 20, high");
 check(doc.modules.baseline.score === 8 && doc.modules.baseline.level === "medium", "a carried baseline high: 8, medium");
 check(doc.release.score === 20 && doc.release.setBy.module === "immich" && doc.modules.coturn.level === "ok", "the release: its highest module");
-check(doc.model.weights.risk.critical === 25 && doc.model.tierMultipliers[0] === 2, "…with the values it used");
+check(doc.model.points.critical === 20 && doc.model.tierMultipliers[0] === 2, "…with the values it used");
 outl = [];
 cmdScore(["--details", join(dir, "d.json")], (l) => outl.push(l));
 check(outl[0] === "release: 20 high — set by immich" && outl.some((l) => /immich +20 +high +1 critical/.test(l)), "the text form: the release, then a line per module");

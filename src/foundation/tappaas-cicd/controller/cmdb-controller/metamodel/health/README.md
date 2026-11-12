@@ -295,6 +295,7 @@ with the records that matched and lost. Neither writes anything.
 - `core.classify.alert`: a finding from alerts is operational warning.
 - `core.classify.alert-security`: a finding from alerts, alertname RootKeyChanged or FirewallCertChanged is security warning.
 - `core.classify.zone-score`: a finding from cve on a zone or environment is a sum of others, never a root.
+- `core.classify.cve-baseline`: a finding from cve, setBy baseline is a sum of others, never a root.
 - `core.classify.long-warning` (off until a site turns it on): a warning operational finding standing older than 24h is critical.
 
 **propagate**

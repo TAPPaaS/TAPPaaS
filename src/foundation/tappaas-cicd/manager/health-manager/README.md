@@ -287,9 +287,12 @@ config's `moduleSource` module, so the module's VEX applies to it), and a node l
 backup); Proxmox's own packages are matched by no feed, and the node's note says so.
 
 **Output** goes to `config/sbom/`: `site.cdx.json` — one CycloneDX 1.4 document,
-each target a component with its packages nested — and `cve-status.json`; the
-scan before is kept as `cve-status.previous.json`, which is what makes "new"
-mean something. `--notify` mails the site owner (through `site-notify.sh`, the
+each target a component with its packages nested, an OS package with its source
+package (the name its distribution files advisories under, so the rescan matches
+it as the scan did) — and `cve-status.json`; the scan before is kept as
+`cve-status.previous.json`. `first-seen.json` holds, per target, when each
+critical/high CVE was first and last counted: a CVE is **new** the first time it
+is counted, and again only after 30 days without it. `--notify` mails the site owner (through `site-notify.sh`, the
 ADR-007e target) only when a fixable CVE or a failed scan is **new** since that
 scan. **Triage decisions** are committed next to the module as
 `<module>-vex.json` (CycloneDX VEX: `not_affected`, `false_positive`, `resolved`

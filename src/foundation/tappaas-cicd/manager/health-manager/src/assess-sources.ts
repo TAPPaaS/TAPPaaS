@@ -29,7 +29,7 @@ export interface Finding {
   reason: string; // "ok" when it is
   message: string;
   owner: string; // the gate or source, which alone can take a failure back
-  labels?: Record<string, string>; // what the source says beside it (an alert's labels): what a classify record may read
+  labels?: Record<string, string>; // what the source says beside it, for a classify record to read: an alert's labels; { setBy: "baseline" } on a CVE level the NixOS baseline sets
 }
 
 // Each gate's condition: the type it feeds and the reason a failure carries. The
@@ -252,6 +252,14 @@ export function levelStatus(l: Level): ConditionStatus {
 export const CVE_LEVEL_REASONS = ["cve-medium", "cve-high", "cve-critical"];
 const levelReason = (l: Level): string => (levelStatus(l) === "ok" ? "ok" : `cve-${l}`);
 
+// What is behind a level besides its points: "3 unread, 2 accepted". Confirmed
+// items need nothing from anyone and are not named.
+export function marksText(m: Partial<Record<string, number>> | undefined): string {
+  if (!m) return "";
+  const words: [string, string][] = [["unread", "unread"], ["rule", "by rule"], ["review", "to review"], ["deferred", "deferred"], ["accepted", "accepted"]];
+  return words.filter(([k]) => (m[k] ?? 0) > 0).map(([k, w]) => `${m[k]} ${w}`).join(", ");
+}
+
 function scoreMessage(a: { score: number; level: Level }, why: string): string {
   return `score ${a.score}, ${a.level}${why ? `: ${why}` : ""}`;
 }
@@ -259,15 +267,24 @@ function scoreMessage(a: { score: number; level: Level }, why: string): string {
 export function fromCve(s: ScanStatus | null, sec: SiteSecurity | null, nowMs: number, idx: SiteIndex): Finding[] {
   if (!s) return [];
   const out: Finding[] = [];
-  const add = (o: CmdbItem | null, status: ConditionStatus, reason: string, message: string): void => {
+  const add = (o: CmdbItem | null, status: ConditionStatus, reason: string, message: string, labels?: Record<string, string>): void => {
     const at = o ?? (status !== "ok" ? idx.site : null);
-    if (at) out.push({ object: at.id, type: "security", status, reason, message: status === "ok" ? "" : message, owner: "cve" });
+    if (at) out.push({ object: at.id, type: "security", status, reason, message: status === "ok" ? "" : message, owner: "cve", ...(labels ? { labels } : {}) });
   };
   const units = sec?.units ?? {};
+  // A level only the shared NixOS baseline sets is one cause, the baseline's:
+  // the units carry the label (a classify record makes them derived), and the
+  // site gets the baseline's own finding, the root.
+  const base = Object.values(units).filter((u) => u.baselineOnly && u.level !== "ok").sort((a, b) => b.raw - a.raw);
+  if (base.length) {
+    const top = base[0];
+    add(idx.site, levelStatus(top.level), "cve-baseline",
+      scoreMessage(top, `the NixOS baseline: ${top.counted} ${top.category}, in ${base.length} unit(s)${marksText(top.marks) ? ` · ${marksText(top.marks)}` : ""}`));
+  }
   for (const u of Object.values(units)) {
     const o = idx.resolve(u.subject);
-    const why = u.category ? `${u.counted} ${u.category}` : "";
-    add(o, levelStatus(u.level), levelReason(u.level), scoreMessage(u, why));
+    const why = [u.category ? `${u.counted} ${u.category}` : "", u.baselineOnly ? "from the NixOS baseline" : "", marksText(u.marks)].filter(Boolean).join(" · ");
+    add(o, levelStatus(u.level), levelReason(u.level), scoreMessage(u, why), u.baselineOnly && u.level !== "ok" ? { setBy: "baseline" } : undefined);
     if (u.failed.length > 0) {
       const t = s.targets.filter((x) => u.failed.includes(x.id));
       add(o, "warning", "cve-scan-failed", t.map((x) => `${x.name}: ${x.note}`).join("; "));

@@ -283,13 +283,42 @@ wait_for_guest_settled() {
 # A backup holding the guest refuses the reboot (#686). That is a postponed
 # reboot, not a failure: rc 3, with the lock holder in REBOOT_LOCK_HOLDER.
 REBOOT_LOCK_HOLDER=""
+
+# A planned reboot opens a maintenance window first, as converge-lib.sh does:
+# the receiver holds the guest's HostSilent and assess silences the guest and
+# what runs on it, so the restart mails no critical root cause. An hour covers
+# the restart and the log shippers catching up; a fault still there when it
+# ends is mailed then. The firewall's restart cuts every zone: the whole site.
+# Best effort: no script, no window.
+_maintenance_script() {
+    local mw; mw="$(command -v tappaas-maintenance.sh 2>/dev/null || true)"
+    [[ -n "${mw}" ]] || mw="${TAPPAAS_BIN:-/home/tappaas/bin}/tappaas-maintenance.sh"
+    [[ -x "${mw}" ]] && printf '%s\n' "${mw}"
+}
+hold_guest_alerts() {
+    local vmname="$1" mw scope="$1"
+    mw="$(_maintenance_script)" || return 0
+    case "${vmname}" in network|firewall) scope="site" ;; esac
+    "${mw}" open --name "restart-${vmname}" --scope "${scope}" --minutes 60 \
+        --reason "${vmname} rebooted to take its new configuration" >/dev/null 2>&1 \
+        && info "  ${vmname}: alerts for $( [[ "${scope}" == site ]] && echo "the site" || echo "${vmname}" ) held for an hour while it reboots" \
+        || true
+}
+# The reboot did not happen: the window would only hide a real fault.
+release_guest_alerts() {
+    local mw; mw="$(_maintenance_script)" || return 0
+    "${mw}" close --name "restart-$1" >/dev/null 2>&1 || true
+}
+
 reboot_guest() {
     local vmname="$1" vmid="$2" node="$3" vm_ip="$4"
     REBOOT_LOCK_HOLDER=""
     if declare -F wait_for_vm_unlock >/dev/null 2>&1; then
         wait_for_vm_unlock "${vmid}" "${node}" "${TAPPAAS_LOCK_WAIT:-600}" || true
     fi
+    hold_guest_alerts "${vmname}"
     if ! ssh "root@${node}.${MGMT}.internal" "qm reboot ${vmid}"; then
+        release_guest_alerts "${vmname}"
         declare -F vm_lock_holder >/dev/null 2>&1 && REBOOT_LOCK_HOLDER="$(vm_lock_holder "${vmid}" "${node}")"
         [[ -z "${REBOOT_LOCK_HOLDER}" ]] || return 3
         die "could not reboot ${vmname} (VM ${vmid})"

@@ -1,0 +1,379 @@
+{
+ "schema": 1,
+ "components": {
+  "network/opnsense:expat": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-93990": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "The firewall parses no untrusted XML; config.xml is its own.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-93990": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+     "epss": 0.00413
+    }
+   }
+  },
+  "network/opnsense:openssl": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-54873": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "OpenSSL's QUIC stack; nothing on the firewall uses QUIC.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-63075": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "OpenSSL's QUIC stack; nothing on the firewall uses QUIC.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-84784": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "OpenSSL's QUIC stack; nothing on the firewall uses QUIC.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-54874": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "DTLS; nothing on the firewall speaks DTLS (OpenVPN, which could, is not running).",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-84782": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "DTLS; nothing on the firewall speaks DTLS (OpenVPN, which could, is not running).",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-63072": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "CMS decryption; nothing on the firewall decrypts CMS messages.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-63073": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "OpenSSL's CMP client; nothing on the firewall uses CMP.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-63076": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "OpenSSL's CMP client; nothing on the firewall uses CMP.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-14457": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "RFC 7250 raw public keys with no certificate; no TLS service on the firewall is configured that way.",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-72897": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "A TLS server swapping SSL_CTX mid-handshake between contexts with different providers; lighttpd on the firewall is not configured that way.",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-84783": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Needs several threads first using one X.509 certificate concurrently; lighttpd is single-threaded, and unbound serves no TLS here.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-75803": {
+     "level": "low",
+     "why": "ChaCha20-Poly1305/AES-OCB tag not checked for an empty ciphertext through EVP_Cipher(); not ruled out for the TLS record layer of the web UI (8443), impact a forged empty record."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-54873": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00722
+    },
+    "CVE-2026-63075": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.0057
+    },
+    "CVE-2026-84784": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00607
+    },
+    "CVE-2026-54874": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00622
+    },
+    "CVE-2026-84782": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:H",
+     "epss": 0.00906
+    },
+    "CVE-2026-63072": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00916
+    },
+    "CVE-2026-63073": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.01159
+    },
+    "CVE-2026-63076": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.01602
+    },
+    "CVE-2026-14457": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.01167
+    },
+    "CVE-2026-72897": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00388
+    },
+    "CVE-2026-84783": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.0029
+    },
+    "CVE-2026-75803": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+     "epss": 0.00254
+    }
+   }
+  },
+  "network/opnsense:openvpn": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-84732": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "OpenVPN is not running on the firewall.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-84732": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00342
+    }
+   }
+  },
+  "network/opnsense:strongswan": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "6.*",
+   "cves": {
+    "CVE-2026-78130": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "strongSwan: IPsec is not configured and charon is not running on the firewall.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-78132": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "strongSwan: IPsec is not configured and charon is not running on the firewall.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-78133": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "strongSwan: IPsec is not configured and charon is not running on the firewall.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-78134": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "strongSwan: IPsec is not configured and charon is not running on the firewall.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-78135": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "strongSwan: IPsec is not configured and charon is not running on the firewall.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-78130": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00346
+    },
+    "CVE-2026-78132": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00346
+    },
+    "CVE-2026-78133": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00466
+    },
+    "CVE-2026-78134": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:L",
+     "epss": 0.00451
+    },
+    "CVE-2026-78135": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:L",
+     "epss": 0.00424
+    }
+   }
+  },
+  "network/opnsense:unbound": {
+   "use": "",
+   "reason": "feature-disabled",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-81634": {
+     "level": "high",
+     "why": "Heap overflow in RRSet canonicalisation from a 255-byte query name and a large TCP response. unbound on the firewall is a full recursive resolver for every zone (forwards only internal and 10.in-addr.arpa to dnsmasq), so any internal client looking up an attacker's domain makes unbound read the attacker's own DNS server's responses. Fixed in unbound 1.26.1; OPNsense 26.1.11_10 ships 1.25.1 and its channel offers nothing newer yet."
+    },
+    "CVE-2026-82717": {
+     "level": "high",
+     "why": "Progressive heap corruption, possible code execution. unbound on the firewall is a full recursive resolver for every zone (forwards only internal and 10.in-addr.arpa to dnsmasq), so any internal client looking up an attacker's domain makes unbound read the attacker's own DNS server's responses. Fixed in unbound 1.26.1; OPNsense 26.1.11_10 ships 1.25.1 and its channel offers nothing newer yet."
+    },
+    "CVE-2026-50252": {
+     "level": "medium",
+     "why": "Outgoing query source-port entropy weakened where upstream load balancing depends on it: cache poisoning of the site's recursive resolver. unbound on the firewall is a full recursive resolver for every zone (forwards only internal and 10.in-addr.arpa to dnsmasq), so any internal client looking up an attacker's domain makes unbound read the attacker's own DNS server's responses."
+    },
+    "CVE-2026-80225": {
+     "level": "low",
+     "why": "Unbounded consecutive reads on a TCP/DoT connection: denial of service of the resolver, by a client inside the site (port 53 on the internal zones)."
+    },
+    "CVE-2026-32665": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Downstream DNS-over-QUIC is not configured on the firewall's unbound (no quic-port).",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-40691": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "DNSCrypt is not configured on the firewall's unbound.",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-55973": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "dns-error-reporting is not configured on the firewall's unbound (default no).",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-44690": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "aggressive NSEC processing; the firewall's unbound does no DNSSEC validation (module-config: python iterator, no validator).",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-81642": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "the DNSSEC validator's DNSKEY digesting; the firewall's unbound does no DNSSEC validation (module-config: python iterator, no validator).",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-85501": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "DNSSEC algorithmic complexity (ReTrap); the firewall's unbound does no DNSSEC validation (module-config: python iterator, no validator).",
+     "justification": "requires_configuration"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-81634": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.0048
+    },
+    "CVE-2026-82717": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00782
+    },
+    "CVE-2026-50252": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:A/AC:L/PR:N/UI:N/S:C/C:N/I:H/A:H",
+     "epss": 0.00172
+    },
+    "CVE-2026-80225": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00482
+    },
+    "CVE-2026-32665": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00285
+    },
+    "CVE-2026-40691": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00293
+    },
+    "CVE-2026-55973": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00281
+    },
+    "CVE-2026-44690": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+     "epss": 0.00153
+    },
+    "CVE-2026-81642": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00962
+    },
+    "CVE-2026-85501": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00482
+    }
+   }
+  }
+ }
+}

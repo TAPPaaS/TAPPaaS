@@ -7,6 +7,7 @@ type UiLevel = "pass" | "warn" | "fail" | "skip";
 
 export type RiskLevel = "ok" | "low" | "medium" | "high" | "critical";
 export type CveState = "decided" | "risk" | "open" | "carried";
+export type CveMark = "unread" | "rule" | "confirmed" | "deferred" | "review" | "accepted";
 
 export interface SecurityCve {
   id: string;
@@ -17,6 +18,28 @@ export interface SecurityCve {
   version: string;
   analysis: string | null;
   carriedFrom: string | null;
+  mark?: CveMark;
+  level?: string;
+  component?: string | null;
+  reason?: string | null;
+  flags?: string[];
+  old?: string | null;
+  note?: string | null;
+}
+
+export interface QueueCard {
+  title: string;
+  text: string;
+  worst: string;
+  units: string[];
+  count: number;
+  baseline: boolean;
+  action: string | null;
+}
+
+export interface SecurityQueues {
+  operator: Record<string, QueueCard[]>;
+  maintainer: Record<string, QueueCard[]> | null;
 }
 
 export interface SecurityRow {
@@ -31,6 +54,8 @@ export interface SecurityRow {
 export interface SecurityUnit extends SecurityRow {
   kind: "module" | "node" | "firewall";
   counts: Record<CveState, number>;
+  marks?: Record<CveMark, number>;
+  baselineOnly?: boolean;
   failed: boolean;
   cves: SecurityCve[];
 }
@@ -54,6 +79,27 @@ export interface SecurityView {
   outside: SecurityZone[];
   failed: string[];
   levels?: { level: RiskLevel; from: number; to: number | null }[];
+  queues?: SecurityQueues | null;
+}
+
+// The queues, in the order the page shows them, with their headings.
+export const OPERATOR_QUEUES: { key: string; title: string; empty: string }[] = [
+  { key: "update", title: "Update", empty: "No update is waiting that clears a CVE." },
+  { key: "coming", title: "Coming", empty: "Nothing announced for the next release." },
+  { key: "decision", title: "Your decision", empty: "Nothing needs your decision: this site runs as the records assume." },
+  { key: "tappaas", title: "With TAPPaaS", empty: "Nothing waits on a TAPPaaS decision." },
+  { key: "upstream", title: "With upstream", empty: "Nothing decided is waiting on an upstream fix." },
+];
+export const MAINTAINER_QUEUES: { key: string; title: string; empty: string }[] = [
+  { key: "move", title: "Move a pin", empty: "No pin move clears anything today." },
+  { key: "decide", title: "Decide", empty: "Every critical and high CVE has a decision." },
+  { key: "review", title: "Review", empty: "Nothing to review." },
+  { key: "deferred", title: "Deferred", empty: "Nothing is put off." },
+];
+
+// A queue card's level as a status colour: the worst CVE it holds.
+export function cardTone(c: QueueCard): UiLevel {
+  return c.worst === "critical" ? "fail" : c.worst === "high" || c.worst === "medium" ? "warn" : "pass";
 }
 
 // The score's ranges in one line: "critical 30 and above · high 16–29 · … · ok 0".
@@ -74,24 +120,53 @@ export const riskText = (r: { level: RiskLevel; score: number }): string => (r.l
 
 export const unitLabel = (u: SecurityUnit): string => (u.kind === "node" ? `node ${u.name}` : u.kind === "firewall" ? `${u.name} (firewall)` : u.name);
 
-// What a CVE counts as: an analysed one at its rating, an open or carried one
-// at its CVE severity.
+const markOf = (c: SecurityCve): CveMark =>
+  c.mark ?? (c.state === "decided" || c.state === "risk" ? "confirmed" : c.state === "carried" ? "review" : "unread");
+
+// What a CVE counts as: its upstream level, and the effective one when a
+// decision changed it ("critical → high").
 export function cveCategory(c: SecurityCve): string {
-  if (c.state === "risk") return c.rating ? `${c.rating}, rated here` : c.severity.toLowerCase();
-  return c.severity.toLowerCase();
+  const up = c.severity.toLowerCase();
+  const lv = c.level ?? (c.state === "decided" ? "none" : c.state === "risk" && c.rating ? c.rating : up);
+  return lv === up ? up : `${up} → ${lv}`;
 }
 
-export const STATE_WORD: Record<CveState, string> = { open: "open", risk: "risk", carried: "carried", decided: "decided" };
+export const MARK_WORD: Record<CveMark, string> = { unread: "unread", rule: "by rule", confirmed: "confirmed", deferred: "deferred", review: "to review", accepted: "accepted" };
 
-// The note under a CVE: its analysis, or why it has none.
+// The badge a mark is drawn with: hollow (warn) for what needs someone, solid
+// for what is settled, struck (skip) for an acceptance.
+export function markTone(c: SecurityCve): UiLevel | "info" {
+  const m = markOf(c);
+  return m === "confirmed" ? "info" : m === "accepted" ? "skip" : m === "rule" ? "pass" : "warn";
+}
+export const markWord = (c: SecurityCve): string => MARK_WORD[markOf(c)];
+
+const FLAG_WORD: Record<string, string> = {
+  kev: "known exploited", epss: "likely to be exploited", "review-due": "review due", "needs-use": "needs its use statement",
+  assumption: "does not hold here", version: "new major version", "upstream-changed": "upstream changed its score", expired: "review date passed",
+  "rule-expired": "the rule's result was not read in 14 days",
+};
+
+// The note under a CVE: why it has the level it has, or what it waits for.
 export function cveNote(c: SecurityCve): string | null {
-  if (c.state === "carried") return `Analysed for ${c.carriedFrom ?? "another version"}${c.analysis ? `: ${c.analysis}` : ""}. Confirm it for ${c.version}.`;
-  if (c.state === "open") return "Not analysed yet.";
-  return c.analysis;
+  const m = markOf(c);
+  const flags = (c.flags ?? []).map((f) => FLAG_WORD[f] ?? f);
+  const lead = flags.length ? `${flags.join(", ")}. ` : "";
+  if (m === "review") return `${lead}${c.old ? `Was ${c.old}.` : c.carriedFrom ? `Analysed for ${c.carriedFrom}${c.analysis ? `: ${c.analysis}` : ""}.` : ""}${c.analysis && c.old ? ` ${c.analysis}` : ""}`.trim() || null;
+  if (m === "unread") return `${lead}Not decided yet.`;
+  if (m === "deferred") return `${lead}Put off: ${c.note ?? ""}`.trim();
+  if (m === "accepted") return `${lead}Accepted on this site: ${c.note ?? ""}`.trim();
+  if (m === "rule") return `${lead}Lowered by a rule nobody has read yet${c.analysis ? `: ${c.analysis}` : ""}.`;
+  return `${lead}${c.analysis ?? ""}`.trim() || null;
 }
 
-// The counts as words, only what is there: "1 open, 2 risk".
-export function countsText(c: Record<CveState, number>): string {
+// The marks as words, only what needs someone: "3 unread, 1 to review".
+export function countsText(c: Record<CveState, number>, marks?: Record<CveMark, number>): string {
+  if (marks) {
+    const order: CveMark[] = ["unread", "rule", "review", "deferred", "accepted", "confirmed"];
+    const parts = order.filter((k) => (marks[k] ?? 0) > 0).map((k) => `${marks[k]} ${MARK_WORD[k]}`);
+    return parts.length ? parts.join(", ") : "none";
+  }
   const parts = (["open", "risk", "carried", "decided"] as CveState[]).filter((k) => c[k] > 0).map((k) => `${c[k]} ${k}`);
   return parts.length ? parts.join(", ") : "none";
 }

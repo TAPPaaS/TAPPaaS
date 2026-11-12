@@ -1,0 +1,176 @@
+{
+ "schema": 1,
+ "components": {
+  "nextcloud/nix:curl": {
+   "use": "",
+   "reason": "other",
+   "versions": "8.*",
+   "cves": {
+    "CVE-2026-92392": {
+     "level": "medium",
+     "why": "HTTP/2 upload use-after-free (curl 8.22.0, fixed in 8.23.0). Nextcloud 35 sends its outgoing requests over HTTP/2 (Http/Client/Client.php: CURL_HTTP_VERSION_2TLS) through php-curl, which links this curl, and federation (federatedfilesharing, cloud_federation_api) is enabled: any user sharing to a remote cloud ID makes Nextcloud POST to that server, so an attacker's server can answer the upload. Risk here: medium (high attack complexity, runs as the nextcloud PHP worker). Fix: curl 8.23.0 with the estate pin (staging-next-26.05)."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "nextcloud/nix:imagemagick": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "7.*",
+   "cves": {
+    "CVE-2026-108693": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "NTGhostscriptEXE() launching gswin64c.exe by bare name is Windows-only code; the nextcloud VM runs Linux, where ImageMagick calls the gs binary from its own store path.",
+     "justification": "code_not_present"
+    },
+    "CVE-2014-9826": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "SUN coder error handling fixed in ImageMagick 6.8.9 (2014); 7.1.2-32 contains the fix, the match comes from a version-less CVE record.\ncarried from 7.1.2-31 on 2026-11-09",
+     "justification": "code_not_present"
+    },
+    "CVE-2017-5506": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Double free in profile.c fixed in 6.9.7-4 / 7.0.4-4; 7.1.2-32 contains the fix.\ncarried from 7.1.2-31 on 2026-11-09",
+     "justification": "code_not_present"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2014-9826": {
+     "severity": "critical",
+     "vector": "CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.03738
+    },
+    "CVE-2017-5506": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.02071
+    }
+   }
+  },
+  "nextcloud/nix:libraw": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "0.*",
+   "cves": {
+    "CVE-2026-20884": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "deflate_dng_load_raw integer overflow (TALOS-2026-2364) is fixed in upstream LibRaw 0.22.1 (commit aa4458e, Debian marks 0.22.1-1 fixed); the shipped libraw is 0.22.1.",
+     "justification": "code_not_present"
+    },
+    "CVE-2026-24450": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "uncompressed_fp_dng_load_raw overflow (TALOS-2026-2363) is fixed in upstream LibRaw 0.22.1 (commit c911c9b); the shipped libraw is 0.22.1.",
+     "justification": "code_not_present"
+    },
+    "CVE-2026-20911": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "HuffTable::initval overflow (TALOS-2026-2330) is fixed in upstream LibRaw 0.22.1 (commit 5357bb5); the shipped libraw is 0.22.1.",
+     "justification": "code_not_present"
+    },
+    "CVE-2026-21413": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "lossless_jpeg_load_raw overflow (TALOS-2026-2331) is fixed in upstream LibRaw 0.22.1 (commit 75ed2c1); the shipped libraw is 0.22.1.",
+     "justification": "code_not_present"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-20884": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.0059
+    },
+    "CVE-2026-24450": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.0059
+    },
+    "CVE-2026-20911": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00641
+    },
+    "CVE-2026-21413": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.01406
+    }
+   }
+  },
+  "nextcloud/nix:libxslt": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2025-7425": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libxslt is only linked into nginx's built-in xslt filter, and the nextcloud nginx.conf has no xslt_stylesheet directive, so no XSLT is ever run; the libxml2 it links (2.15.4) also carries the upstream mitigation (>= 2.14.5).",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2025-7425": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:H/PR:N/UI:N/S:C/C:N/I:H/A:H",
+     "epss": 0.00444
+    }
+   }
+  },
+  "nextcloud/nix:redis": {
+   "use": "",
+   "reason": "other",
+   "versions": "*",
+   "cves": {
+    "CVE-2022-0543": {
+     "level": "none",
+     "state": "false_positive",
+     "why": "Debian/Ubuntu packaging bug (Lua loaded as a dynamic library, exposing package/loadlib); nixpkgs builds redis with its bundled Lua and this Nextcloud instance listens only on a unix socket."
+    },
+    "CVE-2022-3734": {
+     "level": "none",
+     "state": "false_positive",
+     "why": "Concerns an unofficial Windows port (dbghelp.dll search path); upstream Redis on Linux is not affected."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2022-0543": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
+     "kev": "2022-03-28",
+     "epss": 0.99351
+    },
+    "CVE-2022-3734": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00837
+    }
+   }
+  }
+ }
+}

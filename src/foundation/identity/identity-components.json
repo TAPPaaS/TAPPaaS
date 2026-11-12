@@ -1,0 +1,850 @@
+{
+ "schema": 1,
+ "components": {
+  "identity/deb:acl": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-54369": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libacl pathname functions follow symlinks when a privileged process handles attacker-writable paths; the container runs a single unprivileged user and no privileged process calls acl_*_file (only coreutils link it).",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-54369": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+     "epss": 0.00153
+    }
+   }
+  },
+  "identity/deb:apt": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-109518": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "APT download path; apt never runs in the container, which runs only dumb-init, the Go server, gunicorn workers and the worker process as uid 1000, and the image is never updated in place. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-109518": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00928
+    }
+   }
+  },
+  "identity/deb:brotli": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-111497": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Brotli decoder overflow in Debian libbrotli1; no process in authentik-server or authentik-worker maps libbrotli (checked /proc/*/maps of all processes), the Go server does not link it and Python decodes no brotli. Debian fixed it in 1.1.0-2+deb13u1; it drops out when upstream rebuilds. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-111497": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "kev": "2026-10-27",
+     "epss": 0.82641
+    }
+   }
+  },
+  "identity/deb:gnutls28": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-88647": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "GnuTLS TLS-client hostname-verification bypass (CN fallback); nothing in the image makes TLS connections through gnutls (the app uses OpenSSL; ffmpeg may open no network URLs).",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-88648": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "GnuTLS TLS-client cross-domain CA restriction bypass; nothing in the image makes TLS connections through gnutls (the app uses OpenSSL; ffmpeg may open no network URLs).",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-88647": {
+     "severity": "low"
+    },
+    "CVE-2026-88648": {
+     "severity": "low"
+    }
+   }
+  },
+  "identity/deb:libxml2": {
+   "use": "",
+   "reason": "other",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-86139": {
+     "level": "low",
+     "why": "Integer overflow in xmlURIEscapeStr; lxml/xmlsec in Authentik link the image's libxml2 2.9.14 and SAML endpoints take unauthenticated XML from the internet via the proxy, but triggering the overflow needs input far beyond request size limits. Risk here: low. Action: No Debian fix yet; Wait for an upstream Authentik image (2026.8.x patch or next line) built on a fixed package; append that tag to the lines list in identity.nix."
+    },
+    "CVE-2026-6653": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Use-after-free in DTD internal subset parsing; Authentik parses untrusted XML only via lib/xml.lxml_from_string, which rejects any DOCTYPE with expat before libxml2 sees it, or via defusedxml (expat).",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-74860": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Double free in libxml2's Python bindings SAX callback; the bindings (python3-libxml2) are not installed, Authentik uses lxml.",
+     "justification": "code_not_present"
+    },
+    "CVE-2026-86138": {
+     "level": "low",
+     "why": "Integer overflow in xmlDictAddQString; libxml2 parses SAML XML from the internet via lxml, but the overflow needs oversized names well beyond request size limits. Risk here: low. Action: No Debian fix yet; Wait for an upstream Authentik image (2026.8.x patch or next line) built on a fixed package; append that tag to the lines list in identity.nix."
+    },
+    "CVE-2026-86140": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Stack overflow in xmlSnprintfElements, used by DTD validation errors; DOCTYPEs are rejected before parsing and Authentik never enables DTD validation.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-86142": {
+     "level": "low",
+     "why": "Heap overflow in XPointer evaluation; xmlsec resolves #xpointer(...) Reference URIs when Authentik verifies a signed AuthnRequest, reachable unauthenticated but only for a SAML provider with a verification certificate (TAPPaaS configures none) and only with an oversized expression. Risk here: low. Action: No Debian fix yet; Wait for an upstream Authentik image (2026.8.x patch or next line) built on a fixed package; append that tag to the lines list in identity.nix."
+    },
+    "CVE-2026-86143": {
+     "level": "low",
+     "why": "Negative length reaches output write callbacks in xmlIO; Authentik serializes SAML/XML through lxml, but the overflow needs output sizes far beyond what requests produce. Risk here: low. Action: No Debian fix yet; Wait for an upstream Authentik image (2026.8.x patch or next line) built on a fixed package; append that tag to the lines list in identity.nix."
+    },
+    "CVE-2026-86144": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "XInclude does not propagate parse flags; Authentik never runs XInclude processing (no xinclude call in the code base) and xmlsec signature verification does not use it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-86139": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00166
+    },
+    "CVE-2026-6653": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00355
+    },
+    "CVE-2026-74860": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H",
+     "epss": 0.00658
+    },
+    "CVE-2026-86138": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00132
+    },
+    "CVE-2026-86140": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00157
+    },
+    "CVE-2026-86142": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00157
+    },
+    "CVE-2026-86143": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:L",
+     "epss": 0.00194
+    },
+    "CVE-2026-86144": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00186
+    }
+   }
+  },
+  "identity/deb:ncurses": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "6.*",
+   "cves": {
+    "CVE-2025-69720": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "ncurses terminfo string analysis (tic/infocmp); nothing in the container processes attacker-supplied terminfo, and the app processes do not link ncurses.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2025-69720": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00475
+    }
+   }
+  },
+  "identity/deb:openssl": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-75804": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "OpenSSL QUIC flow control; nothing in the container speaks QUIC (Python's ssl module has no QUIC, the Go server uses crypto/tls, xmlsec uses libcrypto only).",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-84782": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "DTLS retransmission; nothing in the container speaks DTLS (Python's ssl module is TLS over TCP, the Go server uses crypto/tls, xmlsec uses libcrypto only).",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-75804": {
+     "severity": "medium"
+    },
+    "CVE-2026-84782": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:H",
+     "epss": 0.00906
+    }
+   }
+  },
+  "identity/deb:perl": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "5.*",
+   "cves": {
+    "CVE-2026-9538": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Archive::Tar is not part of perl-base and is not installed in the image (perl -MArchive::Tar fails).",
+     "justification": "code_not_present"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-9538": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00517
+    }
+   }
+  },
+  "identity/deb:sqlite3": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-119373": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "FTS5 prefix merge with negative rowids; no process in either container maps libsqlite3 (checked /proc/*/maps) and authentik stores everything in PostgreSQL. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-119374": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "crafted FTS5 database file; no process in either container maps libsqlite3 (checked /proc/*/maps) and authentik stores everything in PostgreSQL. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-119379": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "session extension changeset apply; no process in either container maps libsqlite3 (checked /proc/*/maps) and authentik stores everything in PostgreSQL. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-119373": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00162
+    },
+    "CVE-2026-119374": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.0023
+    },
+    "CVE-2026-119379": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00278
+    }
+   }
+  },
+  "identity/deb:systemd": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "257.*",
+   "cves": {
+    "CVE-2026-16742": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Flaw is in systemd-homed, which is not in libsystemd0/libudev1 and not in the image; only the client libraries are present.",
+     "justification": "code_not_present"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-16742": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00057
+    }
+   }
+  },
+  "identity/deb:util-linux": {
+   "use": "",
+   "reason": "feature-disabled",
+   "versions": "2.*,4.*",
+   "cves": {
+    "CVE-2026-76642": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Applies to SUID mount with /etc/fstab entries carrying the user option; the container's /etc/fstab is the unconfigured Debian stub with no entries, and Authentik runs as uid 1000 with no capabilities and never calls mount.",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-78408": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "nsenter --join-cgroup run as root; nsenter is never invoked in the container, which runs only dumb-init, gunicorn/Python and the Go server as uid 1000.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-78409": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Applies to SUID mount with /etc/fstab entries carrying the user option; the container's /etc/fstab is the unconfigured Debian stub with no entries, and Authentik runs as uid 1000 with no capabilities and never calls mount.",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-78410": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Applies to SUID mount with /etc/fstab entries carrying the user option; the container's /etc/fstab is the unconfigured Debian stub with no entries, and Authentik runs as uid 1000 with no capabilities and never calls mount.",
+     "justification": "requires_configuration"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-76642": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00216
+    },
+    "CVE-2026-78408": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:C/C:N/I:H/A:H",
+     "epss": 0.00237
+    },
+    "CVE-2026-78409": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00189
+    },
+    "CVE-2026-78410": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00198
+    }
+   }
+  },
+  "identity/deb:zlib": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-76844": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "gz_write() after a failed write(); the only zlib1g user mapped in the containers is Python's zlib module, which uses the deflate/inflate stream API and never the gz* file functions (Python's gzip module is pure Python), and the Go server does not link zlib. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-85091": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "gz_vacate() with non-blocking gzwrite/gzprintf; the only zlib1g user mapped in the containers is Python's zlib module, which uses the deflate/inflate stream API and never the gz* file functions (Python's gzip module is pure Python), and the Go server does not link zlib. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-76844": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:H",
+     "epss": 0.00592
+    },
+    "CVE-2026-85091": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:H",
+     "epss": 0.00469
+    }
+   }
+  },
+  "identity/generic:expat": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-113351": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "CPython 3.14's bundled expat 2.8.2 (pyexpat). Needs XML_ParserReset reuse; pyexpat never resets a parser (a new one per document). Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-115506": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "CPython 3.14's bundled expat 2.8.2 (pyexpat). Entity expansion amplification; defusedxml raises on the first entity declaration and lib/xml's scan rejects any DOCTYPE, so no entity is ever expanded. Untrusted XML reaches pyexpat only through SAML provider endpoints (defusedxml for AuthnRequest/LogoutRequest, plus the DOCTYPE scan in lib/xml) and the admin-only metadata import; this site has no SAML provider (0 in the database) and TAPPaaS creates none. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-117610": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "CPython 3.14's bundled expat 2.8.2 (pyexpat). Needs an external-entity subparser; defusedxml forbids external entities and pyexpat creates none. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-76641": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "CPython 3.14's bundled expat 2.8.2 (pyexpat). Out-of-bounds read only in parsers created with XML_ExternalEntityParserCreate; defusedxml forbids external entities and nothing in authentik creates one. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-118370": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "CPython 3.14's bundled expat 2.8.2 (pyexpat). Needs a multi-GB start tag with over 2^30 attributes. Untrusted XML reaches pyexpat only through SAML provider endpoints (defusedxml for AuthnRequest/LogoutRequest, plus the DOCTYPE scan in lib/xml) and the admin-only metadata import; this site has no SAML provider (0 in the database) and TAPPaaS creates none. Even with one, POST bodies are capped by Django's upload limit. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-66046": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "CPython 3.14's bundled expat 2.8.2 (pyexpat). Quadratic storeAtts needs DTD-declared default attributes; defusedxml allows DTDs by default, so an unauthenticated AuthnRequest/LogoutRequest would reach it once a SAML provider exists (then: CPU DoS, upgrade promptly). Untrusted XML reaches pyexpat only through SAML provider endpoints (defusedxml for AuthnRequest/LogoutRequest, plus the DOCTYPE scan in lib/xml) and the admin-only metadata import; this site has no SAML provider (0 in the database) and TAPPaaS creates none. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-76956": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "CPython 3.14's bundled expat 2.8.2 (pyexpat). Weak hash-salt entropy from a misread return code; CPython sets the parser's hash salt itself (XML_SetHashSalt from its own hash secret), so expat's own entropy gathering is not used. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-76957": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "CPython 3.14's bundled expat 2.8.2 (pyexpat). Use-after-free in custom encoding converter callbacks (local attacker); pyexpat's unknown-encoding handler supplies a byte map without a convert callback. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-77214": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "CPython 3.14's bundled expat 2.8.2 (pyexpat). Over-read when the caller passes XML_ParseBuffer a length beyond its buffer, a caller bug; pyexpat passes correct lengths. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-93990": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "CPython 3.14's bundled expat 2.8.2 (pyexpat). Lone UTF-16 high surrogates silently replaced; this only matters where fields read from the defusedxml parse differ from a signature checked on the lxml parse, which needs a SAML provider with a verification certificate. Untrusted XML reaches pyexpat only through SAML provider endpoints (defusedxml for AuthnRequest/LogoutRequest, plus the DOCTYPE scan in lib/xml) and the admin-only metadata import; this site has no SAML provider (0 in the database) and TAPPaaS creates none. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "requires_configuration"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-113351": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00494
+    },
+    "CVE-2026-115506": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00448
+    },
+    "CVE-2026-117610": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00425
+    },
+    "CVE-2026-76641": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00353
+    },
+    "CVE-2026-118370": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:H",
+     "epss": 0.00391
+    },
+    "CVE-2026-66046": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00862
+    },
+    "CVE-2026-76956": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00287
+    },
+    "CVE-2026-76957": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00119
+    },
+    "CVE-2026-77214": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:L",
+     "epss": 0.0033
+    },
+    "CVE-2026-93990": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+     "epss": 0.00413
+    }
+   }
+  },
+  "identity/pypi:aiohttp": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-111064": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "An aiohttp server applies no keepalive timeout before a request's first bytes, so an idle connection holds server capacity. aiohttp 3.14.3 in authentik's Python environment (/ak-root/.venv) is a client library only: nothing in the image serves HTTP through aiohttp. Requests reach authentik's Go server (9000/9443) and its gunicorn ASGI worker; authentik's own code (/authentik) imports aiohttp nowhere. It is pulled in by twilio, geoip2, kubernetes, the Azure and Google SDKs, sentry-sdk and prometheus-client, whose client calls go only to the upstream APIs they are configured for, and TAPPaaS configures none of those integrations. Fixed in aiohttp 3.14.4; verified on hrossen 2026-10-20.",
+     "justification": "code_not_reachable"
+    },
+    "GHSA-2g87-pp6c-29x5": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Excessive memory or CPU in an aiohttp server on attacker-controlled requests (form parsing, the request parser). aiohttp 3.14.3 in authentik's Python environment (/ak-root/.venv) is a client library only: nothing in the image serves HTTP through aiohttp. Requests reach authentik's Go server (9000/9443) and its gunicorn ASGI worker; authentik's own code (/authentik) imports aiohttp nowhere. It is pulled in by twilio, geoip2, kubernetes, the Azure and Google SDKs, sentry-sdk and prometheus-client, whose client calls go only to the upstream APIs they are configured for, and TAPPaaS configures none of those integrations. Fixed in aiohttp 3.14.4; verified on hrossen 2026-10-20.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-111066": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "aiohttp server multipart Request.post() descriptor leak; nothing in the image serves HTTP through aiohttp (requests reach the Go server and gunicorn), and authentik's code imports aiohttp nowhere; it is only a client dependency of unconfigured SDKs. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-111064": {
+     "severity": "high",
+     "epss": 0.00399
+    },
+    "CVE-2026-111066": {
+     "severity": "high",
+     "epss": 0.00412
+    }
+   }
+  },
+  "identity/pypi:djangorestframework": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-114136": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "DRF JSONParser charset codec abuse; authentik replaces the default parser with its MsgspecJSONParser, which decodes with bytes.decode() and so rejects byte-transform codecs such as bz2_codec; DRF's JSONParser is used only by SCIM source views (token auth runs before the body is parsed) and no SCIM source exists here. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-114137": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "TokenProxy.delete() in rest_framework.authtoken; authentik does not install rest_framework.authtoken and uses its own token model. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-114138": {
+     "level": "medium",
+     "why": "Unbounded Accept header parsing in DRF's DefaultContentNegotiation, which every authentik API view runs before authentication and before its anonymous throttle; the API is reachable unauthenticated from the internet through the proxy. Risk here: medium (CPU exhaustion of gunicorn workers, i.e. SSO outage for every app; header size is capped by the Go server). Action: fixed in djangorestframework 3.18.2; wait for an upstream authentik image with it and add that tag to identity.nix. Verified live on hrossen with authentik server:2026.8.5."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-114136": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00503
+    },
+    "CVE-2026-114137": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+     "epss": 0.00512
+    },
+    "CVE-2026-114138": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00595
+    }
+   }
+  },
+  "identity/pypi:dnspython": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-114605": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "dnspython name decompression on untrusted DNS wire data; authentik code never resolves through dnspython (its users are psycopg's SRV helper, unused, and email_validator, not imported by authentik), so lookups go through the system resolver. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-114605": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00466
+    }
+   }
+  },
+  "identity/pypi:msgpack": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "GHSA-6v7p-g79w-8964": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "This msgpack 1.1.2 is pip's vendored copy under /usr/local/lib/python3.14/site-packages/pip/_vendor, used only by pip's cache, and pip never runs in the container; Authentik's own venv has msgpack 1.2.1 (fixed).",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-114613": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "msgpack C extension leak on malformed maps; its only user is the django-channels-postgres channel layer, which unpacks messages authentik's own processes wrote to PostgreSQL, so no attacker-supplied msgpack is decoded; the API uses msgspec. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "GHSA-6v7p-g79w-8964": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+    },
+    "CVE-2026-114613": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00543
+    }
+   }
+  },
+  "identity/pypi:oauthlib": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-118669": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Flaw is in oauthlib's server-side client_credentials/password grant handlers; authentik's OAuth2 provider is its own code, and oauthlib is used only as a client through requests-oauthlib (OAuth sources) and the unused kubernetes client. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-49272": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Flaw is in oauthlib's server-side RFC 8628 device grant; authentik implements its device flow itself, and oauthlib is used only as a client through requests-oauthlib. Verified live on hrossen with authentik server:2026.8.5.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-118669": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+     "epss": 0.00312
+    },
+    "CVE-2026-49272": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:C/C:L/I:H/A:N",
+     "epss": 0.00328
+    }
+   }
+  },
+  "identity/pypi:pyasn1": {
+   "use": "",
+   "reason": "other",
+   "versions": "0.*",
+   "cves": {
+    "CVE-2026-119194": {
+     "level": "low",
+     "why": "Quadratic TagSet tracking in schemaless container decoding. pyasn1 BER decoding: py_webauthn's android-key attestation verifier runs ber_decode(..., asn1Spec=Certificate()) on the certificate a user's browser submits when enrolling a WebAuthn device (authentik requests DIRECT attestation, and the default WebAuthn setup stage exists here); ldap3 and google-auth paths are unused (no LDAP source). With a Certificate schema only ANY-typed parts decode schemalessly, so reachability is uncertain and kept at low. Risk here: low (needs a signed-in user in the enrollment flow; costs CPU in one gunicorn worker). Action: fixed in pyasn1 0.6.5; wait for an upstream authentik image with it. Verified live on hrossen with authentik server:2026.8.5."
+    },
+    "CVE-2026-119195": {
+     "level": "low",
+     "why": "Quadratic concatenation of constructed OCTET/character string fragments, accepted by the BER decoder. pyasn1 BER decoding: py_webauthn's android-key attestation verifier runs ber_decode(..., asn1Spec=Certificate()) on the certificate a user's browser submits when enrolling a WebAuthn device (authentik requests DIRECT attestation, and the default WebAuthn setup stage exists here); ldap3 and google-auth paths are unused (no LDAP source). Risk here: low (needs a signed-in user in the enrollment flow; costs CPU in one gunicorn worker). Action: fixed in pyasn1 0.6.5; wait for an upstream authentik image with it. Verified live on hrossen with authentik server:2026.8.5."
+    },
+    "CVE-2026-119196": {
+     "level": "low",
+     "why": "Quadratic constructed BIT STRING decoding; the certificate's signature and public key are BIT STRINGs. pyasn1 BER decoding: py_webauthn's android-key attestation verifier runs ber_decode(..., asn1Spec=Certificate()) on the certificate a user's browser submits when enrolling a WebAuthn device (authentik requests DIRECT attestation, and the default WebAuthn setup stage exists here); ldap3 and google-auth paths are unused (no LDAP source). Risk here: low (needs a signed-in user in the enrollment flow; costs CPU in one gunicorn worker). Action: fixed in pyasn1 0.6.5; wait for an upstream authentik image with it. Verified live on hrossen with authentik server:2026.8.5."
+    },
+    "CVE-2026-119197": {
+     "level": "low",
+     "why": "Quadratic binary REAL mantissa decoding, reachable per the advisory with or without a REAL in the schema. pyasn1 BER decoding: py_webauthn's android-key attestation verifier runs ber_decode(..., asn1Spec=Certificate()) on the certificate a user's browser submits when enrolling a WebAuthn device (authentik requests DIRECT attestation, and the default WebAuthn setup stage exists here); ldap3 and google-auth paths are unused (no LDAP source). Risk here: low (needs a signed-in user in the enrollment flow; costs CPU in one gunicorn worker). Action: fixed in pyasn1 0.6.5; wait for an upstream authentik image with it. Verified live on hrossen with authentik server:2026.8.5."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-119194": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00425
+    },
+    "CVE-2026-119195": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00527
+    },
+    "CVE-2026-119196": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00425
+    },
+    "CVE-2026-119197": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00425
+    }
+   }
+  },
+  "identity/pypi:setuptools": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "70.*",
+   "cves": {
+    "CVE-2025-47273": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "setuptools 70.3.0 is only pip's vendored pkg_resources (pip/_vendor/vendor.txt); the vulnerable PackageIndex download code is not shipped there, and Authentik's venv has setuptools 83.0.0.",
+     "justification": "code_not_present"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2025-47273": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.01592
+    }
+   }
+  },
+  "identity/pypi:urllib3": {
+   "use": "",
+   "reason": "feature-disabled",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-97687": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "urllib3 proxy vs. target TLS settings mixing; only applies when traffic goes through a ProxyManager, and the Authentik containers have no HTTP(S)_PROXY set and Authentik configures no proxy.",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-97689": {
+     "level": "low",
+     "why": "Unbounded memory in chunked response parsing; Authentik fetches over requests/urllib3 from admin-configured URLs (OIDC source JWKS/userinfo, webhooks) and its update check, so a hostile or compromised remote server could exhaust worker memory. Risk here: low. Action: Wait for an upstream Authentik image with urllib3 >= 2.8.0; append that tag to the lines list in identity.nix."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-97687": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:N",
+     "epss": 0.00206
+    },
+    "CVE-2026-97689": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00335
+    }
+   }
+  }
+ }
+}

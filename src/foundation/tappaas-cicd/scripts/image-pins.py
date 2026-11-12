@@ -146,6 +146,11 @@ def judge(pin: dict, value: str, age: int | None, tags: list[str] | None,
         return r
     r["latest"] = same[-1]
     r["newer"] = sum(1 for t in same if vkey(t) > vkey(value))
+    # The newest tag of the pinned major.minor: a patch-level move, the smallest
+    # one that can clear a CVE (the daily pin candidates try it first).
+    mm = vkey(value)[:2]
+    patch = [t for t in same if len(vkey(t)) >= 2 and vkey(t)[:2] == mm and vkey(t) > vkey(value)]
+    r["latestPatch"] = patch[-1] if patch else None
     if r["newer"] and age is not None and age > TRIPWIRE_DAYS:
         r["status"] = "stale"
     elif r["newer"]:

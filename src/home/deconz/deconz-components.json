@@ -1,0 +1,1131 @@
+{
+ "schema": 1,
+ "components": {
+  "deconz/deb:acl": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-54369": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Symlink traversal in libacl path functions needs a local attacker controlling a path a privileged caller processes; the diyHue container has no unprivileged local users and tar runs without --acls on its root-owned config directory. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-54369": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+     "epss": 0.00153
+    }
+   }
+  },
+  "deconz/deb:apt": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-109518": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "APT download/redirect flaw; apt never runs in the running container (githubInstall.sh's apt-get step is only used when building the image). Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-109518": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00928
+    }
+   }
+  },
+  "deconz/deb:bluez": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "5.*",
+   "cves": {
+    "CVE-2023-44431": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Bluetooth stack bug in bluetoothd; bluez is installed in the diyHue image but the container's command starts only python3, no bluetoothd runs, there is no system D-Bus in the container and the VM has no Bluetooth adapter (only the ConBee Zigbee stick is passed through). (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-19774": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Bluetooth stack bug in bluetoothd; bluez is installed in the diyHue image but the container's command starts only python3, no bluetoothd runs, there is no system D-Bus in the container and the VM has no Bluetooth adapter (only the ConBee Zigbee stick is passed through). (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-80186": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Bluetooth stack bug in bluetoothd; bluez is installed in the diyHue image but the container's command starts only python3, no bluetoothd runs, there is no system D-Bus in the container and the VM has no Bluetooth adapter (only the ConBee Zigbee stick is passed through). (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-85218": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Bluetooth stack bug in bluetoothd; bluez is installed in the diyHue image but the container's command starts only python3, no bluetoothd runs, there is no system D-Bus in the container and the VM has no Bluetooth adapter (only the ConBee Zigbee stick is passed through). (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2023-44431": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:A/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.01563
+    },
+    "CVE-2026-19774": {
+     "severity": "high",
+     "vector": "CVSS:3.0/AV:A/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00266
+    },
+    "CVE-2026-80186": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:A/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:H",
+     "epss": 0.00501
+    },
+    "CVE-2026-85218": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:A/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:H"
+    }
+   }
+  },
+  "deconz/deb:brotli": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-111497": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libbrotli1 is only libcurl's dependency; the Python process does not map it and no brotli Python module is installed. curl runs only from githubInstall.sh (self-update) to GitHub and the bridge itself, never with --compressed, so it never asks for or decodes brotli content. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-111497": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "kev": "2026-10-27",
+     "epss": 0.82641
+    }
+   }
+  },
+  "deconz/deb:curl": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "8.*",
+   "cves": {
+    "CVE-2026-5773": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "SMB connection reuse in libcurl; curl in the diyHue container only fetches https:// URLs. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-6276": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Cookie leak after a custom Host: header; diyHue's curl calls set no custom Host header and use no cookies. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-8286": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "STARTTLS connection reuse in curl; curl in the diyHue container only speaks HTTPS, no STARTTLS protocols. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-8927": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Proxy-Authorization leak with environment-variable proxies; the diyHue container is started without any proxy environment variables.",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-12064": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "curl tool with --proto-default sftp/scp; the diyHue container only runs curl on https:// URLs in githubInstall.sh. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 8.14.1-2+deb13u2 on 2026-11-09",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-8458": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Negotiate-auth connection reuse in libcurl; diyHue's curl calls use no Negotiate authentication. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 8.14.1-2+deb13u2 on 2026-11-09",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-12064": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+     "epss": 0.00414
+    },
+    "CVE-2026-8458": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N",
+     "epss": 0.00371
+    }
+   }
+  },
+  "deconz/deb:expat": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2025-59375": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "XML parsing bug in libexpat; diyHue parses no XML (it only renders its own description.xml), and the only XML parser user, bleak's BlueZ D-Bus backend, is never reached without bluetoothd. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-25210": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "XML parsing bug in libexpat; diyHue parses no XML (it only renders its own description.xml), and the only XML parser user, bleak's BlueZ D-Bus backend, is never reached without bluetoothd. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-45186": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "XML parsing bug in libexpat; diyHue parses no XML (it only renders its own description.xml), and the only XML parser user, bleak's BlueZ D-Bus backend, is never reached without bluetoothd. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-66046": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "XML parsing bug in libexpat; diyHue parses no XML (it only renders its own description.xml), and the only XML parser user, bleak's BlueZ D-Bus backend, is never reached without bluetoothd. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-76956": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "XML parsing bug in libexpat; diyHue parses no XML (it only renders its own description.xml), and the only XML parser user, bleak's BlueZ D-Bus backend, is never reached without bluetoothd. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-76957": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "XML parsing bug in libexpat; diyHue parses no XML (it only renders its own description.xml), and the only XML parser user, bleak's BlueZ D-Bus backend, is never reached without bluetoothd. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-93990": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "XML parsing bug in libexpat; diyHue parses no XML (it only renders its own description.xml), and the only XML parser user, bleak's BlueZ D-Bus backend, is never reached without bluetoothd. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-77214": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "A heap over-read when the calling program passes XML_ParseBuffer a length beyond its buffer — a caller bug, not crafted XML; the programs that load expat here pass correct lengths.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-113351": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "The Python process maps libexpat via pyexpat, but diyHue's code parses no XML (it only renders its own description.xml; grep of /opt/hue-emulator finds no XML parser use), and the only XML parsing in installed packages is dbus_fast introspection for BlueZ, unreachable without bluetoothd or a system D-Bus. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-115506": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "The Python process maps libexpat via pyexpat, but diyHue's code parses no XML (it only renders its own description.xml; grep of /opt/hue-emulator finds no XML parser use), and the only XML parsing in installed packages is dbus_fast introspection for BlueZ, unreachable without bluetoothd or a system D-Bus. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-117610": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "The Python process maps libexpat via pyexpat, but diyHue's code parses no XML (it only renders its own description.xml; grep of /opt/hue-emulator finds no XML parser use), and the only XML parsing in installed packages is dbus_fast introspection for BlueZ, unreachable without bluetoothd or a system D-Bus. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-118370": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "The Python process maps libexpat via pyexpat, but diyHue's code parses no XML (it only renders its own description.xml; grep of /opt/hue-emulator finds no XML parser use), and the only XML parsing in installed packages is dbus_fast introspection for BlueZ, unreachable without bluetoothd or a system D-Bus. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-113351": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00494
+    },
+    "CVE-2026-115506": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00448
+    },
+    "CVE-2026-117610": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00425
+    },
+    "CVE-2026-118370": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:H",
+     "epss": 0.00391
+    }
+   }
+  },
+  "deconz/deb:glib2.0": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-58016": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "GLib parsing/D-Bus bug; glib is in the diyHue image only as a bluez dependency, and nothing the container runs (python3, openssl, coap-client, tar, curl) links or feeds it untrusted input. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-58010": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "GLib parsing/D-Bus bug; glib is in the diyHue image only as a bluez dependency, and nothing the container runs (python3, openssl, coap-client, tar, curl) links or feeds it untrusted input. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-58011": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "GLib parsing/D-Bus bug; glib is in the diyHue image only as a bluez dependency, and nothing the container runs (python3, openssl, coap-client, tar, curl) links or feeds it untrusted input. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-58012": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "GLib parsing/D-Bus bug; glib is in the diyHue image only as a bluez dependency, and nothing the container runs (python3, openssl, coap-client, tar, curl) links or feeds it untrusted input. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-58013": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "GLib parsing/D-Bus bug; glib is in the diyHue image only as a bluez dependency, and nothing the container runs (python3, openssl, coap-client, tar, curl) links or feeds it untrusted input. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-58014": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "GLib parsing/D-Bus bug; glib is in the diyHue image only as a bluez dependency, and nothing the container runs (python3, openssl, coap-client, tar, curl) links or feeds it untrusted input. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-58015": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "GLib parsing/D-Bus bug; glib is in the diyHue image only as a bluez dependency, and nothing the container runs (python3, openssl, coap-client, tar, curl) links or feeds it untrusted input. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "deconz/deb:gnutls28": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-33845": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "DTLS handshake parsing in GnuTLS; the only gnutls user in the diyHue image is coap-client-gnutls for IKEA Tradfri gateways, which this deployment does not configure (diyHue's only backend is deCONZ on localhost). (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-42010": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "RSA-PSK server username matching in GnuTLS; nothing in the diyHue container is a GnuTLS server (coap-client is a client, the TLS servers use OpenSSL). (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-33846": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "DTLS handshake parsing in GnuTLS; the only gnutls user in the diyHue image is coap-client-gnutls for IKEA Tradfri gateways, which this deployment does not configure (diyHue's only backend is deCONZ on localhost). (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-3833": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "nameConstraints case handling in GnuTLS certificate verification; curl and Python in the image use OpenSSL, and coap-client-gnutls (unconfigured Tradfri only) uses PSK without certificates. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-42009": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "DTLS handshake parsing in GnuTLS; the only gnutls user in the diyHue image is coap-client-gnutls for IKEA Tradfri gateways, which this deployment does not configure (diyHue's only backend is deCONZ on localhost). (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-88647": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "GnuTLS TLS-client hostname-verification bypass (CN fallback); nothing in the diyHue image makes TLS connections through gnutls (curl and Python use OpenSSL; the gnutls CoAP client is for unconfigured Tradfri support).\ncarried from 3.8.9-3+deb13u2 on 2026-11-09",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-88648": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "GnuTLS TLS-client cross-domain CA restriction bypass; nothing in the diyHue image makes TLS connections through gnutls (curl and Python use OpenSSL; the gnutls CoAP client is for unconfigured Tradfri support).\ncarried from 3.8.9-3+deb13u2 on 2026-11-09",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-88647": {
+     "severity": "low"
+    },
+    "CVE-2026-88648": {
+     "severity": "low"
+    }
+   }
+  },
+  "deconz/deb:gzip": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-41992": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "LZW-then-LZH decompression in one gzip -d run; nothing in the diyHue container runs gzip. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "deconz/deb:krb5": {
+   "use": "",
+   "reason": "feature-disabled",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-40355": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "gss_accept_sec_context with a NegoEx mechanism registered; nothing in the diyHue container accepts GSSAPI and no NegoEx mech is registered in /etc/gss/mech.",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-40356": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "gss_accept_sec_context with a NegoEx mechanism registered; nothing in the diyHue container accepts GSSAPI and no NegoEx mech is registered in /etc/gss/mech.",
+     "justification": "requires_configuration"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "deconz/deb:libcap2": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-4878": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "TOCTOU in libcap cap_set_file() by a local unprivileged user; the diyHue container never sets file capabilities and has no unprivileged users. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "deconz/deb:libcoap3": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "4.*",
+   "cves": {
+    "CVE-2025-34468": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libcoap proxy request handling; diyHue only runs coap-client-gnutls as a client for IKEA Tradfri gateways (not configured here), never the proxy code path. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-29013": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "OSCORE CBOR unwrap in libcoap; diyHue's coap-client-gnutls calls (Tradfri only, not configured here) use DTLS-PSK and never pass an OSCORE configuration. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "requires_configuration"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "deconz/deb:libpcap": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-0799": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libpcap BPF interpreter with a crafted filter program; libpcap is only nmap's library in the diyHue image and diyHue never runs nmap or compiles BPF filters from untrusted input. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-6554": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libpcap BPF interpreter with a crafted filter program from a local attacker; libpcap is only nmap's library, nmap runs with filters of its own, and there are no local users in the container. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-0799": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:L/I:H/A:H",
+     "epss": 0.00108
+    },
+    "CVE-2026-6554": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.0044
+    }
+   }
+  },
+  "deconz/deb:libssh2": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-55199": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libssh2 SSH client bug; libssh2 is linked by curl and nmap in the diyHue image, but curl is only used for https:// URLs (githubInstall.sh) and nmap is not invoked, so no SSH connection is ever made. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-55200": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libssh2 SSH client bug; libssh2 is linked by curl and nmap in the diyHue image, but curl is only used for https:// URLs (githubInstall.sh) and nmap is not invoked, so no SSH connection is ever made. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-58050": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libssh2 SSH client bug; libssh2 is linked by curl and nmap in the diyHue image, but curl is only used for https:// URLs (githubInstall.sh) and nmap is not invoked, so no SSH connection is ever made. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-7598": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libssh2 SSH client bug; libssh2 is linked by curl and nmap in the diyHue image, but curl is only used for https:// URLs (githubInstall.sh) and nmap is not invoked, so no SSH connection is ever made. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "deconz/deb:ncurses": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "6.*",
+   "cves": {
+    "CVE-2025-69720": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "ncurses analyze_string() in terminfo tooling; nothing in the diyHue container runs tic/infocmp or parses terminfo from untrusted input. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2025-69720": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00475
+    }
+   }
+  },
+  "deconz/deb:nghttp2": {
+   "use": "",
+   "reason": "other",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-27135": {
+     "level": "low",
+     "why": "nghttp2 keeps reading after terminate and can crash on a malformed frame; libcurl uses it when githubInstall.sh fetches the diyHue update zip from GitHub over HTTP/2, so only a malicious HTTP/2 server could crash that one curl run. Risk here: low. Action: Bump the pinned diyhue/core digest to a build on a fixed Debian package, re-verifying the bind-mounted deconz.py/Group.py patches."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "deconz/deb:openssl": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-31789": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "OCTET STRING to hex heap overflow only on 32-bit platforms; the deconz VM and the diyHue image are x86_64.",
+     "justification": "requires_environment"
+    },
+    "CVE-2026-14456": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "OpenSSL QUIC listener resource exhaustion; nothing in the diyHue container runs an OpenSSL QUIC server (Python ssl and openssl s_server use TLS/DTLS). (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-28387": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "DANE TLSA client authentication with mixed usages; nothing in the diyHue container enables DANE.",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-28388": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Delta CRL processing; neither Python's ssl defaults nor curl enable CRL checking in the diyHue container.",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-28389": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "CMS EnvelopedData parsing; nothing in the diyHue container processes CMS messages. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-28390": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "CMS EnvelopedData parsing; nothing in the diyHue container processes CMS messages. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-45447": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "PKCS#7/S/MIME signature verification; nothing in the diyHue container verifies PKCS#7 messages. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-75804": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "OpenSSL QUIC stream flow control; no QUIC is used in the diyHue container (Python ssl has no QUIC, curl fetches over TCP). (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-84782": {
+     "level": "low",
+     "why": "DTLS retransmission over-read can leak heap or crash; diyHue runs `openssl s_server -dtls1_2 -psk` on UDP 2100 (open to the iotCloud zone) while a Hue Entertainment session is active, which needs a registered Hue API user, so only the short-lived s_server process is exposed. Risk here: low. Action: Bump the pinned diyhue/core digest to a build on a fixed Debian package, re-verifying the bind-mounted deconz.py/Group.py patches. Consider closing UDP 2100 in deconz.nix and network:rules if no Hue Entertainment client is used (the SysAP does not need it)."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "deconz/deb:pcre2": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "10.*",
+   "cves": {
+    "CVE-2026-103111": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "PCRE2 JIT with attacker-controlled regexes; Python's re does not use PCRE2, and the only pcre2 user (grep in diyHue's startup MAC lookup) gets the TAPPaaS-set IP address as pattern. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-86145": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "pcre2_dfa_match with crafted patterns; nothing in the diyHue container compiles untrusted regexes with PCRE2 (Python's re is separate, grep only gets the fixed host IP). (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-89157": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "PCRE2 overflow only on 32-bit platforms; the VM and the diyHue image are x86_64.",
+     "justification": "requires_environment"
+    },
+    "CVE-2026-89161": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "pcre2_jit_match memory corruption with crafted input; the only PCRE2 user in the diyHue container is grep matching the TAPPaaS-set host IP at startup. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "deconz/deb:perl": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "5.*",
+   "cves": {
+    "CVE-2026-13221": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Perl interpreter/module bug; perl-base is only Debian's packaging runtime in the diyHue image, and nothing diyHue runs invokes perl. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-42496": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Perl interpreter/module bug; perl-base is only Debian's packaging runtime in the diyHue image, and nothing diyHue runs invokes perl. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-8376": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Perl interpreter/module bug; perl-base is only Debian's packaging runtime in the diyHue image, and nothing diyHue runs invokes perl. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-42497": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Perl interpreter/module bug; perl-base is only Debian's packaging runtime in the diyHue image, and nothing diyHue runs invokes perl. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-48962": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Perl interpreter/module bug; perl-base is only Debian's packaging runtime in the diyHue image, and nothing diyHue runs invokes perl. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-57432": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Perl interpreter/module bug; perl-base is only Debian's packaging runtime in the diyHue image, and nothing diyHue runs invokes perl. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-57433": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Perl interpreter/module bug; perl-base is only Debian's packaging runtime in the diyHue image, and nothing diyHue runs invokes perl. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-9538": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Perl interpreter/module bug; perl-base is only Debian's packaging runtime in the diyHue image, and nothing diyHue runs invokes perl. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 5.40.1-6 on 2026-11-09",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-9538": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00517
+    }
+   }
+  },
+  "deconz/deb:python3.13": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2025-13836": {
+     "level": "low",
+     "why": "http.client trusts Content-Length and reads it into memory; diyHue's requests calls poll lights and probe LAN hosts in the iotCloud zone during light discovery, so a malicious device there could exhaust the container's memory (DoS of the Hue bridge only). Risk here: low. Action: Bump the pinned diyhue/core digest to a build on a fixed Debian package, re-verifying the bind-mounted deconz.py/Group.py patches."
+    },
+    "CVE-2026-11940": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "tarfile extraction filter bypass; diyHue never extracts tar archives in Python (it only creates config backups with the tar CLI). (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-3644": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Control-character check bypass in http.cookies Morsel; neither diyHue nor Flask/Werkzeug builds cookies with http.cookies Morsel. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-4224": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "pyexpat/ElementTree XML parsing; diyHue's Python code parses no XML from the network. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-6100": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Reusing an lzma/bz2/gzip decompressor after MemoryError; diyHue does not use these, and urllib3 decodes gzip through zlib with a fresh decoder per response. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-8328": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "ftplib ftpcp() PASV handling; diyHue uses no FTP. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-15308": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Python's incremental HTMLParser; diyHue never parses HTML. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 3.13.5-2 on 2026-11-09",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-19445": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Use-after-free when an sni_callback swaps SSLSocket.context; diyHue's HTTPS server (Flask/Werkzeug on 443) wraps its listening socket with one fixed context and sets no sni_callback. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 3.13.5-2 on 2026-11-09",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-19553": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "wrap_bio() accepting server_hostname=None with check_hostname; diyHue's outbound HTTPS goes through requests/urllib3, which use wrap_socket with the hostname set, and the only wrap_bio user (AnyIO) makes no TLS connections here. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 3.13.5-2 on 2026-11-09",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-7210": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "pyexpat/ElementTree XML parsing; diyHue's Python code parses no XML from the network. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 3.13.5-2 on 2026-11-09",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-82049": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "tarfile extraction filter bypass; diyHue never extracts tar archives in Python (it only creates config backups with the tar CLI). (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 3.13.5-2 on 2026-11-09",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-15308": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00637
+    },
+    "CVE-2026-19445": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00524
+    },
+    "CVE-2026-19553": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+     "epss": 0.00547
+    },
+    "CVE-2026-7210": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00672
+    },
+    "CVE-2026-82049": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:N",
+     "epss": 0.00188
+    }
+   }
+  },
+  "deconz/deb:sqlite3": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-11822": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "SQLite FTS5 with a crafted database; diyHue keeps its state in YAML files and opens no SQLite databases. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-11824": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "SQLite FTS5 heap overflow with a crafted database; diyHue keeps its state in YAML files and opens no SQLite databases. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-119373": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "SQLite FTS5/session-extension flaws with crafted databases; diyHue keeps its state in YAML files, opens no SQLite database, and the Python process does not map libsqlite3. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-119374": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "SQLite FTS5/session-extension flaws with crafted databases; diyHue keeps its state in YAML files, opens no SQLite database, and the Python process does not map libsqlite3. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-119379": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "SQLite FTS5/session-extension flaws with crafted databases; diyHue keeps its state in YAML files, opens no SQLite database, and the Python process does not map libsqlite3. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-119373": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00162
+    },
+    "CVE-2026-119374": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.0023
+    },
+    "CVE-2026-119379": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00278
+    }
+   }
+  },
+  "deconz/deb:systemd": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "257.*",
+   "cves": {
+    "CVE-2026-16742": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "systemd-homed signature check; the diyHue container runs no systemd or homed, the systemd packages are only libraries in the image. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 257.9-1~deb13u1 on 2026-11-09",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-16742": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00057
+    }
+   }
+  },
+  "deconz/deb:util-linux": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*,4.*",
+   "cves": {
+    "CVE-2026-53612": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "mount/login/nsenter/fstab handling in util-linux; the diyHue container runs only python3 HueEmulator3.py as root, never runs mount, login or nsenter, and has no fstab user entries. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-53613": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "mount/login/nsenter/fstab handling in util-linux; the diyHue container runs only python3 HueEmulator3.py as root, never runs mount, login or nsenter, and has no fstab user entries. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-53614": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "mount/login/nsenter/fstab handling in util-linux; the diyHue container runs only python3 HueEmulator3.py as root, never runs mount, login or nsenter, and has no fstab user entries. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-76642": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "mount/login/nsenter/fstab handling in util-linux; the diyHue container runs only python3 HueEmulator3.py as root, never runs mount, login or nsenter, and has no fstab user entries. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 2.41-5, 4.16.0-2+really2.41-5 on 2026-11-09",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-78409": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "mount/login/nsenter/fstab handling in util-linux; the diyHue container runs only python3 HueEmulator3.py as root, never runs mount, login or nsenter, and has no fstab user entries. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 2.41-5, 4.16.0-2+really2.41-5 on 2026-11-09",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-78410": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "mount/login/nsenter/fstab handling in util-linux; the diyHue container runs only python3 HueEmulator3.py as root, never runs mount, login or nsenter, and has no fstab user entries. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 2.41-5, 4.16.0-2+really2.41-5 on 2026-11-09",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-78408": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "mount/login/nsenter/fstab handling in util-linux; the diyHue container runs only python3 HueEmulator3.py as root, never runs mount, login or nsenter, and has no fstab user entries. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)\ncarried from 2.41-5, 4.16.0-2+really2.41-5 on 2026-11-09",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-76642": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00216
+    },
+    "CVE-2026-78409": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00189
+    },
+    "CVE-2026-78410": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00198
+    },
+    "CVE-2026-78408": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:C/C:N/I:H/A:H",
+     "epss": 0.00237
+    }
+   }
+  },
+  "deconz/deb:zlib": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-76844": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Flaws in zlib's gzwrite file API; Python's zlib module (used by urllib3/requests for gzip responses) only inflates in memory, and nothing in diyHue writes gz files through zlib. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-85091": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Flaws in zlib's gzwrite file API; Python's zlib module (used by urllib3/requests for gzip responses) only inflates in memory, and nothing in diyHue writes gz files through zlib. Verified live on hrossen with diyhue/core@sha256:392c1c39 on deconz-test: the container runs only python3 -u HueEmulator3.py --docker as PID 1.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-76844": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:H",
+     "epss": 0.00592
+    },
+    "CVE-2026-85091": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:H",
+     "epss": 0.00469
+    }
+   }
+  },
+  "deconz/nix:cups": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2018-6553": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ubuntu's CUPS AppArmor profile for the dnssd backend; NixOS does not ship that profile and no cupsd runs on the VM, libcups is only a transitive Qt5 library of deCONZ.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2018-6553": {
+     "severity": "high",
+     "vector": "CVSS:3.0/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+     "epss": 0.00385
+    }
+   }
+  },
+  "deconz/pypi:anyio": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "4.*",
+   "cves": {
+    "CVE-2026-63374": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "IDNA 2003 hostname handling in AnyIO TLS connections; anyio is only a dependency of python-kasa's CLI (asyncclick), and diyHue makes no AnyIO TLS connections. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "deconz/pypi:urllib3": {
+   "use": "",
+   "reason": "feature-disabled",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-44431": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Cross-origin header forwarding via urllib3 ProxyManager; diyHue's requests calls use no proxy, so ProxyManager is never used. (Based on diyHue's published Dockerfile and source, not a live check of the pinned image.)",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-44432": {
+     "level": "low",
+     "why": "urllib3 can fully decompress a response during partial reads; diyHue reads whole responses from LAN light devices it polls or probes, so a malicious device in iotCloud could send a compression bomb and exhaust diyHue's memory. Risk here: low. Action: Bump the pinned diyhue/core digest to a build on a fixed Debian package, re-verifying the bind-mounted deconz.py/Group.py patches."
+    },
+    "CVE-2026-97687": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "TLS settings applied to an HTTPS proxy connection; the diyHue container uses no HTTPS proxy.",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-97689": {
+     "level": "low",
+     "why": "Unbounded chunk-size line in urllib3's chunked reader; requests reads chunked responses this way, so a malicious HTTP device in the iotCloud zone that diyHue polls or probes during light discovery could exhaust diyHue's memory. Risk here: low. Action: Bump the pinned diyhue/core digest to a build on a fixed Debian package, re-verifying the bind-mounted deconz.py/Group.py patches."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  }
+ }
+}

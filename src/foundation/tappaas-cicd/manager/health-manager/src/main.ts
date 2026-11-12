@@ -26,6 +26,7 @@
 //   health-manager report security [--all] [--json]      (prints the last scan)
 //   health-manager scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update] [--no-vex]
 //   health-manager score --details <file> | --items <file> [--json]
+//   health-manager cve validate|preview <components-file>
 //                            (ADR-045 D3: the one CVE risk score — a release
 //                             preview's per module, or a site's by zone)
 //   health-manager scan images --refs <file> [--no-db-update] [--no-vex]
@@ -48,7 +49,7 @@ import { nodeGuests } from "./guests";
 import { reachLines, runVlanReach, writeReach } from "./vlanreach";
 import {
   CliSecurityIO, loadVex, scanComponentList, scanImageRefs, PREVIOUS_FILE, SITE_CDX_FILE, STATUS_FILE, notify, readStatus, renderReport, runScan, sbomDir,
-  ScanStatus, runRescan, sweepIsNewer, writeScan,
+  ScanStatus, runRescan, sweepIsNewer, writeScan, componentStatements, loadComponents,
 } from "./security";
 import { HISTORY_FILE, SiteSecurity, loadSiteSecurity, recordHistory, renderSecurity } from "./site-score";
 import { cveChangesEvent, cveNewEvent, quietUnits, securityJournal } from "./security-alerts";
@@ -70,6 +71,9 @@ import { cmdRulesWrite } from "./rules-verbs";
 import { RuleStore, healthDir, reportedClasses, siteRecords } from "./rulestore";
 import { readWindows } from "./windows";
 import { cmdScore } from "./score-verb";
+import { cmdAccept, cmdCve, cmdUnaccept } from "./cve-verb";
+import { buildQueues, renderQueues, runsTrain } from "./security-queues";
+import { Ended, settleAcceptances, siteDecisions } from "./site-decisions";
 // ── ADR-041 emit half ──
 import { EMIT_HELP, liveEmitContext, runEmitVerb } from "./emit-verbs";
 // ── end ADR-041 emit half ──
@@ -176,6 +180,36 @@ export const HELP: HelpSpec = {
         "{\"<ref>\": {\"findings\": [...], \"suppressed\": [...], \"error\": \"\"}}.",
     },
     {
+      usage: "accept <unit> <CVE>… --note <why> --until <date> | accept <unit> --component <key> --note <why> --until <date> | accept --list",
+      effect: { noPreview: "writes config/security-acceptances.json" },
+      options: [
+        ["--note <why>", "Why this site accepts it. Required."],
+        ["--until <date>", "When the acceptance ends, at most a year ahead. Required."],
+        ["--component <key>", "Every CVE of this component (<module>/<eco>:<source>) the last scan counts on the unit, by name."],
+        ["--list", "Every acceptance in force, and how many have ended."],
+      ],
+      details:
+        "This site accepts a CVE of one unit (a module instance, node:<name>, or the firewall's module) until a date.\n" +
+        "It leaves the unit's level, and the zone, environment and site above it, at the next scan, and is shown\n" +
+        "beside the score. It survives version moves. It ends at its date, when the CVE becomes known exploited,\n" +
+        "when upstream rates it higher, or when a central decision covers it; the daily digest says so.",
+    },
+    {
+      usage: "unaccept <unit> <CVE>…", effect: { noPreview: "writes config/security-acceptances.json" },
+      details: "Withdraws acceptances: the CVEs count again at the next scan.",
+    },
+    {
+      usage: "cve validate <components-file> | cve preview <components-file> [--status FILE] [--json]", effect: "read",
+      options: [
+        ["--status FILE", "The scan to try the records against (default config/sbom/cve-status.json)."],
+        ["--json", "Print the rows as JSON."],
+      ],
+      details:
+        "Component records (<module>-components.json) checked before they are committed. validate\n" +
+        "lists what is wrong with a file. preview lists every CVE of the last scan the file's records\n" +
+        "cover, with its level and mark now and with these records. Writes nothing.",
+    },
+    {
       usage: "score [--details <file>] [--items <file>] [--json]", effect: "read",
       options: [
         ["--details <file>", "A release preview's details (config/train-preview-details.json): each module's release score."],
@@ -183,8 +217,9 @@ export const HELP: HelpSpec = {
         ["--json", "Print the scores as JSON, with the weights, bands and multipliers used."],
       ],
       details:
-        "The one CVE risk score (ADR-045 D3). Per counted CVE: risk 25/10/3/1 by its TAPPaaS rating,\n" +
-        "open or carried 20/8 by its severity. Only a module's highest category counts, each further\n" +
+        "The one CVE risk score. Each CVE counts at its effective level (upstream, lower after a decision,\n" +
+        "or none): critical 20, high 8, medium 3, low 1; an unread medium or low and an accepted CVE count\n" +
+        "nothing. Only a module's highest level counts, each further\n" +
         "item at half the one before. Levels: ok 0, low <7, medium <16, high <30, critical ≥30. A zone\n" +
         "is its highest module times its tier's multiplier (0 ×2, 1 ×1, 2 ×0.75, 3 ×0.5, 4 ×0.25,\n" +
         "5–6 ×0.1, none ×1); an environment the highest of its zones; the site the highest of its\n" +
@@ -272,14 +307,19 @@ export const HELP: HelpSpec = {
     },
     // ── end ADR-041 assess ──
     {
-      usage: "report security [--cves] [--scan [--all]] [--json]", effect: "read",
+      usage: "report security [--cves] [--table] [--maintainer] [--scan [--all]] [--json]", effect: "read",
       options: [
-        ["--cves", "List each module's counted CVEs under it, with state, rating and analysis."],
+        ["--cves", "List each module's CVEs under it, with mark, upstream and effective level, and why."],
+        ["--table", "Only the table, without the list of things to do."],
+        ["--maintainer", "Add the maintainers' queues (shown anyway where the release train runs)."],
         ["--scan", "Print the scan per target instead: coverage, counts and verdict."],
         ["--all", "With --scan: every finding to act on, not the first ten per target."],
-        ["--json", "Print cve-status.json, with the risk scores under `score`."],
+        ["--json", "Print cve-status.json, with the risk scores under `score` and the queues under `queues`."],
       ],
-      details: "The risk score of the site, then each environment, zone and module: level, score, what sets\nit, open/risk/carried/decided counts and the last 7 days.",
+      details: "What to do first, one card per component or update: for you (update, coming, your decision),\n" +
+        "waiting (with TAPPaaS, with upstream) and, where the train runs, for the maintainers (move a pin,\n" +
+        "decide, review, deferred). Then the risk score of the site, each environment, zone and module:\n" +
+        "level, score, what sets it, unread/rule/confirmed/review/accepted counts and the last 7 days.",
     },
     {
       usage: "reboot <module>", effect: { noPreview: "reboots the module's guest" },
@@ -629,9 +669,10 @@ function cmdValidate(opts: Opts, client: ClusterClient): number {
 // module directory), so a triage decision counts the same in both (#788).
 function verbVex(opts: Opts, off: boolean): ReturnType<typeof loadVex>["statements"] {
   if (off) return [];
-  const v = loadVex(opts.configDir, process.env.TAPPAAS_REPO ?? "/home/tappaas/TAPPaaS");
+  const repo = process.env.TAPPAAS_REPO ?? "/home/tappaas/TAPPaaS";
+  const v = loadVex(opts.configDir, repo);
   for (const u of v.unreadable) process.stderr.write(`[Warning] VEX file not parseable, decides nothing: ${u}\n`);
-  return v.statements;
+  return [...v.statements, ...componentStatements(loadComponents(opts.configDir, repo).records)];
 }
 
 // ── scan nix-list (#788) ──────────────────────────────────────────────
@@ -706,14 +747,17 @@ function cmdScanSecurity(opts: Opts, client: ClusterClient): number {
   const prevStatus = readStatus(join(sbomDir(opts.configDir), STATUS_FILE));
   let status: ScanStatus;
   let cdx: Record<string, unknown>;
+  let decisionState: Record<string, string> | undefined;
+  const site = siteDecisions(opts.configDir);
   if (rescan) {
-    const r = runRescan({ configDir: opts.configDir, repoDir, log: (m) => info(`  ${m}`) }, io);
+    const r = runRescan({ configDir: opts.configDir, repoDir, log: (m) => info(`  ${m}`), site }, io);
     if ("error" in r) die(`scan security --rescan: ${r.error}`);
-    ({ status, cdx } = r);
+    ({ status, cdx, decisionState } = r);
   } else {
-    ({ status, cdx } = runScan({ configDir: opts.configDir, defaultNode: DEFAULT_NODE, repoDir, log: (m) => info(`  ${m}`) }, client, io));
+    ({ status, cdx, decisionState } = runScan({ configDir: opts.configDir, defaultNode: DEFAULT_NODE, repoDir, log: (m) => info(`  ${m}`), site }, client, io));
   }
-  const diff = writeScan(opts.configDir, status, cdx);
+  const diff = writeScan(opts.configDir, status, cdx, decisionState);
+  const ended = settleAcceptances(opts.configDir, status, Date.now());
   const sec = recordHistory(opts.configDir, status);
   info("");
   for (const l of renderReport(status, false, Date.now())) info(l);
@@ -721,7 +765,7 @@ function cmdScanSecurity(opts: Opts, client: ClusterClient): number {
   for (const l of renderSecurity(sec, Date.now())) info(l);
   info("");
   info(`written: ${join(sbomDir(opts.configDir), SITE_CDX_FILE)}, ${STATUS_FILE} (previous: ${PREVIOUS_FILE}), ${HISTORY_FILE}`);
-  tellSecurity(opts, prevStatus, status, sec);
+  tellSecurity(opts, prevStatus, status, sec, ended);
   if (doNotify) {
     const n = notify(status, diff, SITE_NOTIFY_BIN());
     info(n.sent ? `notice sent: ${n.message}` : n.message);
@@ -734,7 +778,7 @@ function cmdScanSecurity(opts: Opts, client: ClusterClient): number {
 // The scan's lines for the alert rules: new open critical/high (mailed at once)
 // and the other changes (the daily digest). A module whose security condition
 // is acknowledged or in maintenance is left out; without the CMDB nobody is.
-function tellSecurity(opts: Opts, prevStatus: ScanStatus | null, status: ScanStatus, sec: SiteSecurity): void {
+function tellSecurity(opts: Opts, prevStatus: ScanStatus | null, status: ScanStatus, sec: SiteSecurity, ended: Ended[] = []): void {
   let quiet = new Set<string>();
   if (!cmdbOff()) {
     try {
@@ -745,6 +789,11 @@ function tellSecurity(opts: Opts, prevStatus: ScanStatus | null, status: ScanSta
   }
   const prevSec = prevStatus ? loadSiteSecurity(opts.configDir, prevStatus) : null;
   const lines = [cveNewEvent(status, sec, quiet), cveChangesEvent(prevSec, sec, quiet)].filter((e) => e !== null).map((e) => JSON.stringify(e));
+  // An acceptance that ended goes to the daily digest, with why.
+  if (ended.length) {
+    lines.push(JSON.stringify({ event: "cve-changes", scan: status.generated, count: ended.length,
+      what: ended.map((a) => `${a.unit}: acceptance of ${a.cve} ended (${a.why})`).join("; "), silenced: false }));
+  }
   if (lines.length === 0) return info("nothing new for the alert rules");
   securityJournal(lines);
   for (const l of lines) info(`told: ${l}`);
@@ -753,8 +802,9 @@ function tellSecurity(opts: Opts, prevStatus: ScanStatus | null, status: ScanSta
 function cmdReportSecurity(opts: Opts): number {
   const s = readStatus(join(sbomDir(opts.configDir), STATUS_FILE));
   if (!s) die("no security scan yet — run: health-manager scan security");
+  const queues = buildQueues(s, { configDir: opts.configDir, now: Date.now(), maintainer: opts.rest.includes("--maintainer") || runsTrain(opts.configDir) });
   if (opts.rest.includes("--json")) {
-    console.log(JSON.stringify({ ...s, score: loadSiteSecurity(opts.configDir, s) }, null, 1));
+    console.log(JSON.stringify({ ...s, score: loadSiteSecurity(opts.configDir, s), queues }, null, 1));
     return 0;
   }
   info(`${BOLD}TAPPaaS Security Report${CL}`);
@@ -762,6 +812,10 @@ function cmdReportSecurity(opts: Opts): number {
     const tag = (l: string): string => l.replace(/ACT\b/, `${RD}ACT${CL}`).replace(/SCAN FAILED/, `${YW}SCAN FAILED${CL}`);
     for (const l of renderReport(s, opts.rest.includes("--all"), Date.now())) info(tag(l));
     return 0;
+  }
+  if (!opts.rest.includes("--table")) {
+    for (const l of renderQueues(queues)) info(l);
+    info("");
   }
   for (const l of renderSecurity(loadSiteSecurity(opts.configDir, s), Date.now(), { items: opts.rest.includes("--cves") })) info(l);
   return 0;
@@ -949,6 +1003,22 @@ export function run(argv: string[], client: ClusterClient): number {
         if (opts.rest[0] === "images") return cmdScanImages({ ...opts, rest: opts.rest.slice(1) });
         if (opts.rest[0] !== "security") die("scan: expected 'security' or 'nix-list'");
         return cmdScanSecurity({ ...opts, rest: opts.rest.slice(1) }, client);
+      case "accept":
+      case "unaccept":
+        try {
+          const o = (l: string): void => { process.stdout.write(l + "\n"); };
+          return cmd === "accept" ? cmdAccept(opts.rest, opts.configDir, o) : cmdUnaccept(opts.rest, opts.configDir, o);
+        } catch (e) {
+          die((e as Error).message);
+        }
+        return 1;
+      case "cve":
+        try {
+          return cmdCve(opts.rest, opts.configDir, (l) => process.stdout.write(l + "\n"));
+        } catch (e) {
+          die((e as Error).message);
+        }
+        return 1;
       case "score":
         try {
           return cmdScore(opts.rest, (l) => process.stdout.write(l + "\n"));

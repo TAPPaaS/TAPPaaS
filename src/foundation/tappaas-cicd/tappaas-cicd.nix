@@ -878,6 +878,40 @@ in
     };
   };
 
+  # The daily "would moving a pin help": each image pin's newer tags scanned by
+  # reference, the nixpkgs pin from the last preview. Only where the release
+  # train runs (release-train.json); it writes config/pin-candidates.json and
+  # changes nothing in the repository. It reaches the image registries, never
+  # Codeberg.
+  systemd.timers.tappaas-pin-candidates = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*-*-* 05:30:00";
+      RandomizedDelaySec = "30min";
+      Persistent = true;
+      Unit = "tappaas-pin-candidates.service";
+    };
+  };
+  systemd.services.tappaas-pin-candidates = {
+    description = "TAPPaaS pin candidates — would moving a pin clear CVEs";
+    unitConfig.ConditionPathExists = "/home/tappaas/config/release-train.json";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "tappaas";
+      ExecStart = "${pkgs.util-linux}/bin/flock /home/tappaas/config/.security-scan.lock /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/tappaas-train.sh candidates";
+      Environment = [
+        ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
+          + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
+          + ":/run/current-system/sw/bin")
+      ];
+      ProtectSystem = "strict";
+      ReadWritePaths = [ "/home/tappaas/config" "/home/tappaas/.cache" ];
+      PrivateTmp = true;
+      NoNewPrivileges = true;
+      TimeoutStartSec = "2h";
+    };
+  };
+
   # #860: read the switches after every sweep (OnSuccess/OnFailure of
   # update-tappaas above), never by a timer of its own. `switch-manager
   # interrogate --no-park` reads every controller and auto switch — it never

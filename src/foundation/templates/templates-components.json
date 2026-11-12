@@ -1,0 +1,636 @@
+{
+ "schema": 1,
+ "components": {
+  "templates/nix:curl": {
+   "use": "",
+   "reason": "other",
+   "versions": "8.*",
+   "cves": {
+    "CVE-2026-92392": {
+     "level": "low",
+     "why": "HTTP/2 upload use-after-free when the server resets the stream (curl 8.21.0 to 8.22.0, fixed in 8.23.0). Needs a request with a body over HTTPS/HTTP2 to a malicious or compromised server. The base's libcurl users (git, nix, systemd, NetworkManager, elfutils, tpm2-tss) and TAPPaaS's curl calls upload only to TAPPaaS's own services and to the code forges over TLS. Fix: curl 8.23.0, in staging-next-26.05, not yet on the nixos-26.05 channel."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "templates/nix:dnsmasq": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-6507": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "A dnsmasq DHCP server with --dhcp-split-relay; dnsmasq is only a NetworkManager dependency on guests and does not run.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-6507": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00482
+    }
+   }
+  },
+  "templates/nix:git": {
+   "use": "",
+   "reason": "other",
+   "versions": "*",
+   "cves": {
+    "CVE-2026-62960": {
+     "level": "none",
+     "state": "false_positive",
+     "why": "Git for Windows only (transport_get_remote_bundle_uri in the Windows port); guests run git on Linux."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-62960": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:H/I:N/A:N",
+     "epss": 0.00457
+    }
+   }
+  },
+  "templates/nix:glibc": {
+   "use": "",
+   "reason": "other",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2019-1010022": {
+     "level": "low",
+     "why": "Disputed upstream: a stack-guard bypass that needs an overflow already exploited; the record names no affected versions. Unchanged in glibc 2.42-103. Kept counted, as glibc is."
+    },
+    "CVE-2019-1010023": {
+     "level": "low",
+     "why": "Disputed upstream: ldd run on a malicious ELF, which glibc treats as a non-security bug; the record names no affected versions. Unchanged in glibc 2.42-103. Kept counted, as glibc is."
+    },
+    "CVE-2026-84243": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "gettext loads a catalog from a LANGUAGE value containing / or ..; it needs an attacker who sets LANGUAGE for a program running with other rights and without AT_SECURE. On the guests nobody outside can: sshd accepts no client environment (AcceptEnv unset, forgejo only GIT_PROTOCOL; PermitUserEnvironment no; checked on all NixOS guests on hrossen 2026-11-07), services get fixed systemd environments, and sudo is setuid (AT_SECURE). Admins who log in already run code as themselves.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2019-1010022": {
+     "severity": "critical",
+     "vector": "CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.03249
+    },
+    "CVE-2019-1010023": {
+     "severity": "high",
+     "vector": "CVSS:3.0/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.03069
+    },
+    "CVE-2026-84243": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00297
+    }
+   }
+  },
+  "templates/nix:gnutls": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2025-32990": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "In certtool's template parsing; certtool is not run on guests.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-1584": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "A TLS server's PSK handshake; only NetworkManager loads gnutls on a guest, as a client, and no guest serves TLS through gnutls.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-33845": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "DTLS handshake reassembly; nothing on a guest speaks DTLS through gnutls.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-3833": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "nameConstraints in X.509 path validation through gnutls; the only gnutls user on a guest (NetworkManager) does no such validation for TAPPaaS (wired, no 802.1X).",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-42009": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "DTLS packet reordering; nothing on a guest speaks DTLS through gnutls.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-42010": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "A TLS server with RSA-PSK; no guest serves TLS through gnutls.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2025-32990": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:H",
+     "epss": 0.00896
+    },
+    "CVE-2026-1584": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.01374
+    },
+    "CVE-2026-33845": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:H",
+     "epss": 0.02073
+    },
+    "CVE-2026-3833": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+     "epss": 0.00565
+    },
+    "CVE-2026-42009": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.01335
+    },
+    "CVE-2026-42010": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.0105
+    }
+   }
+  },
+  "templates/nix:libcap": {
+   "use": "",
+   "reason": "internal-only",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-4878": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "A TOCTOU in cap_set_file needing a local user with write access to the parent directory; only root runs setcap, at activation.",
+     "justification": "requires_environment"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-11-12",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-4878": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00209
+    }
+   }
+  },
+  "templates/nix:libressl": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "4.*",
+   "cves": {
+    "CVE-2026-118374": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Memory exhaustion in LibreSSL's ocspcheck tool from a malicious OCSP responder; ocspcheck is not on any guest's PATH, nothing runs it, and no running process maps libressl (checked on all NixOS guests on hrossen 2026-11-07).",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-118374": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00212
+    }
+   }
+  },
+  "templates/nix:libssh2": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-55199": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Needs the client to connect to a malicious SSH server; libssh2's users on a guest (NetworkManager, nix-daemon) open no SSH connections (nix fetches over HTTPS).",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-55200": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Malicious SSH server against a libssh2 client; no guest opens SSH connections through libssh2.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-58050": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "publickey subsystem of a malicious SSH server, 32-bit only; no guest opens SSH connections through libssh2.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-58051": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "publickey subsystem of a malicious SSH server; no guest opens SSH connections through libssh2.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-66032": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "SFTP to a malicious server; no guest opens SSH connections through libssh2.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-66033": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Malicious SSH server against a libssh2 client; no guest opens SSH connections through libssh2.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-66034": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Malicious SSH server against a libssh2 client; no guest opens SSH connections through libssh2.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-66035": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Malicious SSH server against a libssh2 client; no guest opens SSH connections through libssh2.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-7598": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "userauth_password in a libssh2 client; no guest opens SSH connections through libssh2.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-55199": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00918
+    },
+    "CVE-2026-55200": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:L",
+     "epss": 0.03877
+    },
+    "CVE-2026-58050": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00444
+    },
+    "CVE-2026-58051": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:H",
+     "epss": 0.00286
+    },
+    "CVE-2026-66032": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00476
+    },
+    "CVE-2026-66033": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00583
+    },
+    "CVE-2026-66034": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00416
+    },
+    "CVE-2026-66035": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00472
+    },
+    "CVE-2026-7598": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:H",
+     "epss": 0.00484
+    }
+   }
+  },
+  "templates/nix:openssh": {
+   "use": "",
+   "reason": "other",
+   "versions": "10.*",
+   "cves": {
+    "CVE-2008-3844": {
+     "level": "none",
+     "state": "false_positive",
+     "why": "Trojaned Red Hat Enterprise Linux 4/5 OpenSSH packages signed in August 2008; matched by product name only. NixOS builds upstream OpenSSH."
+    },
+    "CVE-2026-3497": {
+     "level": "none",
+     "state": "false_positive",
+     "why": "Affects the GSSAPI patch some Linux distributions add, not upstream OpenSSH; nixpkgs' default openssh carries no GSSAPI patch, and GSSAPI authentication is off."
+    },
+    "CVE-2026-106553": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "sshd keeping GSSAPI credentials after a failed GSSAPIAuthentication attempt. nixpkgs builds openssh without Kerberos (withKerberos = false: no --with-kerberos5, no krb5 in its closure), so sshd has no GSSAPI authentication at all: sshd -T lists no GSSAPI option. Every NixOS guest and the mothership run that one build (43zp0r...-openssh-10.5p1). Fixed upstream in OpenSSH 10.6.",
+     "justification": "code_not_present"
+    },
+    "CVE-2026-106555": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "sshd keeping GSSAPI authentication state across attempts. nixpkgs builds openssh without Kerberos (withKerberos = false: no --with-kerberos5, no krb5 in its closure), so sshd has no GSSAPI authentication at all: sshd -T lists no GSSAPI option. Every NixOS guest and the mothership run that one build (43zp0r...-openssh-10.5p1). Fixed upstream in OpenSSH 10.6.",
+     "justification": "code_not_present"
+    },
+    "CVE-2026-106583": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "ssh client: a $ or \\ in a command-line username is injected where %r/%u is expanded into a shell-run directive (ProxyCommand, LocalCommand, Match exec). The guests' ssh_config has only systemd's ssh proxy, whose ProxyCommand uses %h and %p, the operator's ~/.ssh/config none, and TAPPaaS calls ssh with fixed user names (tappaas, root). Fixed upstream in OpenSSH 10.6.",
+     "justification": "requires_configuration"
+    },
+    "CVE-2023-51767": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Rowhammer flip of the authenticated flag in mm_answer_authpassword (disputed upstream), the PasswordAuthentication path; every NixOS guest runs sshd with PasswordAuthentication no, and no account has a usable password hash, so keyboard-interactive/PAM cannot authenticate by password either (sshd -T and /etc/shadow checked on all 19 NixOS guests on hrossen 2026-11-07).",
+     "justification": "requires_environment"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2008-3844": {
+     "severity": "high",
+     "epss": 0.02662
+    },
+    "CVE-2026-3497": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.02375
+    },
+    "CVE-2023-51767": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00661
+    }
+   }
+  },
+  "templates/nix:perl": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "5.*",
+   "cves": {
+    "CVE-2026-13221": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Regexes with more than 65535 alternation branches; perl on a guest runs only NixOS's own scripts, with no attacker-supplied pattern.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-57432": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "pack/unpack templates from an attacker; perl on a guest runs only NixOS's own scripts.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-8376": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Regex compilation on 32-bit builds; guests are x86_64 and run only NixOS's own perl scripts.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-13221": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:H",
+     "epss": 0.00525
+    },
+    "CVE-2026-57432": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00213
+    },
+    "CVE-2026-8376": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00643
+    }
+   }
+  },
+  "templates/nix:rsync": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-119741": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Sender-side hash_search DoS by a malicious receiver pulling from a public rsync daemon module; no guest runs an rsync daemon (nothing listens on 873, checked on all NixOS guests on hrossen 2026-11-07), and rsync over ssh only runs between TAPPaaS hosts.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-119741": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00627
+    }
+   }
+  },
+  "templates/nix:sqlite": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-11822": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "A crafted FTS5 database supplied by an attacker; sqlite on a guest opens only nix's own root-owned database.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-11824": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "A crafted FTS5 database supplied by an attacker; sqlite on a guest opens only nix's own root-owned database.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-119586": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "The sqlite3 command-line shell's .recover output carries shell instructions from a crafted schema; only an admin running .recover by hand on such a file and feeding the output back into the shell reaches it, and no unit or script on the guests runs .recover.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-119586": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.01545
+    }
+   }
+  },
+  "templates/nix:util-linux": {
+   "use": "",
+   "reason": "feature-disabled",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-53613": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Non-root mount(8) TOCTOU, reachable only through an /etc/fstab entry with the user or users option; no guest's fstab has one (checked on all 19 NixOS guests on hrossen 2026-11-07) and no module declares one. 2.42.4 also closes it except for the legacy mount(2) path without /proc, which no guest uses.",
+     "justification": "requires_configuration"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-53613": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00163
+    }
+   }
+  },
+  "templates/nix:vim": {
+   "use": "",
+   "reason": "other",
+   "versions": "9.*",
+   "cves": {
+    "CVE-2026-52858": {
+     "level": "low",
+     "why": "Python omni-completion executing buffer code (python3complete.vim). vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-52860": {
+     "level": "low",
+     "why": "Python omni-completion exec() of reconstructed definitions. vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-57456": {
+     "level": "low",
+     "why": "Python omni-completion exec() of reconstructed definitions. vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-52859": {
+     "level": "low",
+     "why": "terminal snapshot copy (update_snapshot) in a :terminal window. vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-55693": {
+     "level": "low",
+     "why": "a crafted spell file (tree_count_words). vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-57455": {
+     "level": "low",
+     "why": "a crafted spell file (spell_soundfold_sofo). vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-73072": {
+     "level": "low",
+     "why": "a crafted spell file (set_sofo). vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-55895": {
+     "level": "low",
+     "why": "netrw deleting a crafted file name. vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-73078": {
+     "level": "low",
+     "why": "netrw bookmark/history menus from crafted directory names. vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-59856": {
+     "level": "low",
+     "why": "PHP omni-completion on a crafted class name. vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-59858": {
+     "level": "low",
+     "why": "C omni-completion on a crafted tags entry. vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-73073": {
+     "level": "low",
+     "why": "C omni-completion on a crafted tags file. vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-73076": {
+     "level": "low",
+     "why": "a crafted vimball (.VimballRecord). vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-73077": {
+     "level": "low",
+     "why": "K (keywordprg) on a crafted selection in sh/zsh/ps1. vim on a guest runs only when an admin edits over SSH; no service hands it untrusted input. Reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-57453": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "zip.vim falls back to PowerShell only when unzip is missing and PowerShell is installed; no guest has PowerShell.",
+     "justification": "requires_environment"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "templates/nix:zlib": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-85091": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "gzprintf after a stalled non-blocking gzwrite; guest programs use zlib streams, not that gz file API sequence.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-85091": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:H",
+     "epss": 0.00469
+    }
+   }
+  }
+ }
+}

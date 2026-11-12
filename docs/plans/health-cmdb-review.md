@@ -546,6 +546,19 @@ work and were left.
 The two fixes found here (`fix(cmdb)` placeholders, `fix(health)` drift by id) are on
 `fix/health-review` after the merge and need a push and a tappaas-cicd update to take effect.
 
+**Second deploy, `bfe99491` (2026-11-12, 09:59–10:40).** Same path: pgrep, the sweep in its
+unit, stall watch. It succeeded with no error (the cluster timing test passed this time), and
+tappaas-cicd runs the new health-manager and cmdb-controller (controller restarted 09:59:36).
+
+| Check | Result |
+|---|---|
+| tanka1 drift by id | **pass**: the drift sits only on the tappaas2 pool (the one whose size changed); the other two carry none; five runs from 10:26 to 10:46 emitted 0 events. |
+| Placeholders kept | **pass**, by a retire preview (`/v1/retire`, `apply: false`) against the running controller: as of 2026-11-19 08:30Z, past the three placeholders' expiry while asset-manager's referrers (seen 2026-11-12 09:07Z) are within theirs, nothing is retired; as of 09:30Z, with the referrers past theirs too, the three would go. The real sweep rescans before it retires, so asset-manager's report keeps them. |
+| A planned reboot mails nothing | **failed, fixed on the branch**: the sweep rebooted immich after its rebuild (PVE `qmreboot`, 10:14:51) with no window, and emit mailed an ALERT (10:16) and a RESOLVED (10:21). The post-rebuild reboot in `update-os.sh`, also used by `health-manager reboot`, opened no window; only converge's held-fields reboot and the cluster package upgrade did. `reboot_guest` now opens `restart-<vm>` for an hour before `qm reboot` (the whole site for the firewall) and closes it when the reboot did not run. Unit-tested in health-manager's `test.sh`; run in update-tappaas.service's context with `tappaas-unit-run.sh` from a scratch copy into a scratch window directory: the window is written. Needs a push and a tappaas-cicd update. |
+
+Teardown: the scratch copy `~/tmp-rg-check` removed; the live window directory holds only the
+two expired 2026-11-09 files from other work; no open notice in the cursor or the outbox.
+
 ### Overlap with other work
 
 - `design/cve-vex`: `health-manager/src/security.ts` is untouched here. Zone and environment
