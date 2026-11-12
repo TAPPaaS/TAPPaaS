@@ -26,6 +26,15 @@ Then:
 ssh cicd-hrossen 'systemctl list-timers tappaas-pin-candidates.timer; systemctl cat tappaas-pin-candidates.service | grep Condition'
 ```
 
+The scan and the rescan run in their units' sandbox (ProtectSystem=strict); the
+new files they write (`first-seen.json`, `decision-state.json`,
+`security-acceptances.json`) are all under `config/`, which both units may write.
+Check it in the unit's own context before the first night:
+
+```bash
+ssh cicd-hrossen '~/TAPPaaS/src/foundation/tappaas-cicd/scripts/tappaas-unit-run.sh --unit tappaas-security-rescan.service -- health-manager report security --table'
+```
+
 ## The first night: the scan fix and the source packages
 
 The rescan matches by source package only on an inventory the new scan took.
