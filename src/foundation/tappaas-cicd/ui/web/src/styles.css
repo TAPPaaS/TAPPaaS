@@ -813,6 +813,9 @@ span.ht-caret { cursor: default; }
   .health-time input { width: 130px; }
 }
 
+/* The discovery sweep's findings scroll in their own box, never the page. */
+.sweep-findings { overflow-x: auto; max-width: 100%; }
+
 /* Security › Threats: the open findings as a table of columns, the object's
    panel (.health-panel) on the right; a hit on an object with an open CVE is marked. */
 .thr-view { display: flex; gap: var(--sp-12); align-items: flex-start; }

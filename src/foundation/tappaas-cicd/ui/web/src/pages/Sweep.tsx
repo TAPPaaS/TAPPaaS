@@ -27,6 +27,7 @@ function SweepRecord({ s, open }: { s: DiscoverySweep; open: (id: string) => voi
       {failed.length ? <div className="readstate readstate-fail">Sources that failed: {failed.map((x) => `${x.source}${x.error ? ` (${x.error})` : ""}`).join(", ")}</div> : null}
       {plain.length ? <p className="muted small">Asked without --discover (they do not know it yet): {plain.map((x) => x.source).join(", ")}</p> : null}
       {s.findings.length ? (
+        <div className="sweep-findings">
         <table className="table compact">
           <thead>
             <tr><th>found</th><th>object</th><th>what</th><th>source</th></tr>
@@ -47,6 +48,7 @@ function SweepRecord({ s, open }: { s: DiscoverySweep; open: (id: string) => voi
             ) : null}
           </tbody>
         </table>
+        </div>
       ) : <p className="muted">Nothing found that a change does not explain.</p>}
     </>
   );
