@@ -18,6 +18,12 @@
 #      (CrowdSec already bans scanners);
 #   3. the rules downloaded when a rule set was turned on, then a reconfigure.
 #
+# Memory: the firewall keeps /var/log in RAM and has no swap, so what Suricata
+# needs must be free. It is not turned on while less than SURICATA_NEED_MB (free
+# and inactive memory) is: on hrossen's 4 GB firewall the full rule set was
+# killed with about 1.9 GB free, and the kernel had killed unbound before
+# (2026-11-12): 3 GB is the first guess for the 21 rule sets below.
+#
 # Usage: suricata-converge.sh [--check]   (--check: report, change nothing)
 set -euo pipefail
 # shellcheck source=/home/tappaas/bin/common-install-routines.sh
@@ -74,8 +80,19 @@ if [[ "$(security_monitoring)" != on ]]; then
     exit 0
 fi
 
-# 1. on, alert only, on the WAN, eve to syslog
+# 1. on, alert only, on the WAN, eve to syslog — if the memory is there
 changed=0
+NEED_MB="${SURICATA_NEED_MB:-3072}"
+if [[ "${enabled}" != 1 ]]; then
+    free_mb="$(ssh -n -o BatchMode=yes -o ConnectTimeout=10 "root@${FW}" \
+        "/bin/sh -c 'echo \$(( (\$(sysctl -n vm.stats.vm.v_free_count) + \$(sysctl -n vm.stats.vm.v_inactive_count)) * \$(sysctl -n hw.pagesize) / 1048576 ))'" 2>/dev/null || echo "")"
+    if [[ ! "${free_mb}" =~ ^[0-9]+$ ]]; then
+        warn "  could not read the firewall's free memory — Suricata stays off"; echo "  suricata: off (memory unknown)"; exit 0
+    elif (( free_mb < NEED_MB )); then
+        warn "  Suricata needs about ${NEED_MB} MB free; the firewall has ${free_mb} MB — it stays off (give network more memory: module-manager module modify network --set memory=<MB>)"
+        echo "  suricata: off (not enough memory)"; exit 0
+    fi
+fi
 want='{"enabled":"1","mode":"pcap","interfaces":"wan","syslog_eve":"1"}'
 if [[ "${enabled}" != 1 || "$(sel mode)" != pcap || "$(sel interfaces)" != wan || "$(jq -r '.ids.general.syslog_eve' "${TMP}")" != 1 ]]; then
     if [[ ${CHECK} -eq 1 ]]; then info "  would turn the IDS on: alert only (PCAP), on the WAN, alerts to syslog"; else
