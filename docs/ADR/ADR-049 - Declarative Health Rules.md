@@ -1103,6 +1103,12 @@ run. None is fixed here (design only); the fix is specified under *Migration*, P
 | **P3** | `config/health/`, the merge, the verbs, module files and D8's guardrails; the `module` attribute and `member-of` a zone (D13), the network module's zone record; module-manager and the patch step call the merge; recalculation at once on a changed set. Docs (D15): the verbs, files and merge in health-manager's README; module-manager's and cmdb-controller's READMEs; the module template's section and example file | Merge table of D7 as a test per row; an update over an edited, a deleted and a conflicting rule, and a retired scenario, on a scratch config; live on the test system: install a module with a rule, edit it, update, and take a corrected rule as a patch |
 | **P4** | `classify` with `raw` and `quiet`; `notify` and `notices.ts` reading it; the console's Rules page and the Why view; the console's own root computation removed. Docs (D15): `classify` and `notify` added to the language README and the verbs' README | Alert findings identical with the core `classify` records; `emit.test.ts` and `health-flow.test.ts` unchanged and green with the core `notify` records; a local override raises and clears with its source; a quieted condition closes its notice as "quiet" and is heard again when the rule goes; console review by the console-gui checklist |
 
+**Implementation status** (branch `feat/adr049-health-rules`):
+
+| Phase | State | Proof recorded |
+|---|---|---|
+| P0 | Done 2026-11-12 | 3 new cases in `derive.test.ts` (88/88); against the prototype: 7,000 random sites identical, roll-up counts included; shuffled inputs: 0 of 1,500 differ (was 7) |
+
 Each phase is shippable alone. P1 changes no behaviour; P2 changes what a maintenance window
 covers and otherwise adds expressiveness nobody uses until a rule does; P3 is the first that
 touches a site's `config/` and adds the zone relation; P4 moves the last two constants to

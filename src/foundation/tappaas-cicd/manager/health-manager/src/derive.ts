@@ -44,6 +44,7 @@ interface Edge {
 
 interface Seed { obj: string; cond: Condition }
 type State = string; // `${obj}|${type}|${status}`
+const earlier = (a: Seed, b: Seed): number => Date.parse(a.cond.since) - Date.parse(b.cond.since) || a.obj.localeCompare(b.obj);
 const stateOf = (obj: string, type: string, status: string): State => `${obj}|${type}|${status}`;
 
 export interface Derivation {
@@ -83,6 +84,8 @@ function ruleFor(e: Edge, type: string, status: string, model: RulesDoc, attrsOf
 // A redundancy group partly down: what reached the dependant, and how much of
 // the group is down.
 export interface PartialGroup { member: string; group: string; down: number; of: number }
+// While the spread runs: the crossing that made the entry, to recount it at the end.
+interface PartialAt extends PartialGroup { edge: Edge; type: string; status: string }
 
 interface Spread {
   crossed: Map<State, Set<State>>; // every crossing, at the impact it gives
@@ -97,7 +100,7 @@ interface Spread {
 function spread(seeds: Seed[], edges: Edge[], model: RulesDoc, attrsOf: (id: string) => Record<string, unknown> | undefined): Spread {
   const crossed = new Map<State, Set<State>>();
   const softer = new Map<State, Set<State>>();
-  const partial = new Map<State, PartialGroup>();
+  const partial = new Map<State, PartialAt>();
   const down = new Set<State>(seeds.map((s) => stateOf(s.obj, s.cond.type, s.cond.status)));
   const byProv = new Map<string, Edge[]>();
   const byRel = new Map<number, Edge[]>();
@@ -111,10 +114,17 @@ function spread(seeds: Seed[], edges: Edge[], model: RulesDoc, attrsOf: (id: str
   const add = (m: Map<State, Set<State>>, from: State, to: State): void => void m.set(from, (m.get(from) ?? new Set()).add(to));
   // How much of e's group is down: a member is down when a provider of it is,
   // other than e's dependant (what it reaches through e is no cause of e).
-  const groupDown = (e: Edge, type: string, status: string): { down: number; of: number } => {
+  const groupDown = (e: Edge, type: string, status: string): { down: number; of: number; who: string[] } => {
     const members = [...groups.get(e.group!)!];
-    const isDown = (rel: number): boolean => rel === e.rel || (byRel.get(rel) ?? []).some((x) => x.prov !== e.dep && down.has(stateOf(x.prov, type, status)));
-    return { down: members.filter(isDown).length, of: members.length };
+    const who = new Set<string>();
+    let n = 0;
+    for (const rel of members) {
+      const provs = (byRel.get(rel) ?? []).filter((x) => x.prov !== e.dep && down.has(stateOf(x.prov, type, status))).map((x) => x.prov);
+      if (rel === e.rel) provs.push(e.prov);
+      if (provs.length) n++;
+      for (const p of provs) who.add(p);
+    }
+    return { down: n, of: members.length, who: [...who] };
   };
   const pass = (partly: boolean): boolean => {
     let grew = false;
@@ -124,13 +134,13 @@ function spread(seeds: Seed[], edges: Edge[], model: RulesDoc, attrsOf: (id: str
         const rule = ruleFor(e, type, status, model, attrsOf);
         if (!rule) continue;
         let impact = rule.impact;
-        let part: PartialGroup | null = null;
+        let part: PartialAt | null = null;
         if (e.group) {
           const g = groupDown(e, type, status);
           if (g.down < g.of) {
             if (!partly) continue;
             impact = "warning";
-            part = { member: obj, group: e.group, ...g };
+            part = { member: obj, group: e.group, down: g.down, of: g.of, edge: e, type, status };
           } else if (partly) continue;
         }
         const to = stateOf(e.dep, type, impact);
@@ -148,7 +158,16 @@ function spread(seeds: Seed[], edges: Edge[], model: RulesDoc, attrsOf: (id: str
     while (pass(false));
     if (!pass(true)) break;
   }
-  return { crossed, softer, partial };
+  // The counts as they stand at the end, and the member named by rule: the
+  // earliest seed among the members down, else the down member first by id.
+  const out = new Map<State, PartialGroup>();
+  const ordered = [...seeds].sort(earlier);
+  for (const [to, p] of partial) {
+    const g = groupDown(p.edge, p.type, p.status);
+    const first = ordered.find((s) => g.who.includes(s.obj) && s.cond.type === p.type && s.cond.status === p.status)?.obj ?? [...g.who].sort()[0] ?? p.member;
+    out.set(to, { member: first, group: p.group, down: g.down, of: g.of });
+  }
+  return { crossed, softer, partial: out };
 }
 
 function reach(from: State, crossed: Map<State, Set<State>>): Set<State> {
@@ -166,8 +185,6 @@ function reach(from: State, crossed: Map<State, Set<State>>): Set<State> {
 
 const WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 const count = (n: number): string => WORDS[n] ?? String(n);
-
-const earlier = (a: Seed, b: Seed): number => Date.parse(a.cond.since) - Date.parse(b.cond.since) || a.obj.localeCompare(b.obj);
 
 const isA = (o: CmdbItem, anc: string, model: RulesDoc): boolean => (model.ancestors[o.class] ?? [o.class]).includes(anc);
 
@@ -288,7 +305,7 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
     for (const [obj, { status, state }] of objs) {
       const had = impacted.get(obj);
       if (!had) impacted.set(obj, { root: r, status, state });
-      else if (RANK[status] > RANK[had.status]) Object.assign(had, { status, state });
+      else if (RANK[status] > RANK[had.status]) Object.assign(had, { root: r, status, state });
     }
   }
   for (const s of seeds) {
@@ -314,7 +331,8 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
   // (a slow node, a group partly down) stays a root: a failure of its own.
   const covered = (s: Seed): Seed | null => {
     const hit = impacted.get(s.obj);
-    return hit && hit.root !== s && hit.status === "critical" ? hit.root : null;
+    // Never behind a root weaker than the condition it would cover.
+    return hit && hit.root !== s && hit.status === "critical" && RANK[hit.root.cond.status] >= RANK[s.cond.status] ? hit.root : null;
   };
   for (const s of roots) {
     const by = covered(s);
@@ -328,9 +346,12 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
   follow(objects, out, relations, model, now);
 
   // Roll-ups, over what is settled above; never a root.
+  // Members are read from a snapshot taken before any roll-up, so a place
+  // inside another counts with its own conditions, never with its sum.
   const rolled = objects.filter((o) => isA(o, "collection", model) || isA(o, "place", model));
+  const settled = new Map(out);
   for (const o of rolled) {
-    const members = membersOf(o, objects, relations, model).map((id) => out.get(id) ?? []);
+    const members = membersOf(o, objects, relations, model).map((id) => settled.get(id) ?? []);
     const cs = rollUp(out.get(o.id) ?? [], members, now, nowMs, o.class);
     if (cs.length) out.set(o.id, cs);
   }
