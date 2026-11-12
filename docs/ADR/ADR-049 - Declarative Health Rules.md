@@ -46,7 +46,7 @@ on `fix/health-review`:
 | Test | Result |
 |---|---|
 | `derive.test.ts`, unchanged, against the prototype with today's rules as records | 78 of 78 checks pass |
-| Differential run: 13,000 random sites (two to three nodes, pools on mirrored disks, bonded uplinks, HA guests, `depends-on` loops, five condition types), `derive.ts` against the prototype | Identical conditions and root lists, except 14 impact messages where the prototype names the earliest failed member of a group and `derive.ts` the first in iteration order |
+| Differential run: 13,000 random sites (two to three nodes, pools on mirrored disks, bonded uplinks, HA guests, `depends-on` loops, five condition types), `derive.ts` against the prototype | Identical root lists and conditions on every site, except the wording of 51 impact messages, where the prototype names the earliest failed member of a group and `derive.ts` the first in iteration order |
 | New cases the proposal asks for: a 3-node quorum, a type-changing rule, a cross-type explanation, a raising rule, a raising cycle | All terminate and give the intended roots, after three engine rules were added (D6) |
 | Static conflict detection over the ported core records plus deliberately conflicting ones | Every conflict found; the core set alone has none |
 | 1,161 objects, 2,255 relations, 148 failing conditions, 300 records | 67 ms for a whole derivation, unoptimised (`derive.ts`: 34 ms); the pairwise conflict check 5 ms |
@@ -470,8 +470,8 @@ failure reached. Records only ever add to it: `propagate` adds a state on the fa
 edge, a `combine` step adds one when a count is reached, and no match reads the state (D2.4).
 The set is finite (objects × types × two statuses) and only grows, so the computation ends; and
 because every rule is "if these are present, add that", the result is the same in whatever order
-objects, relations and records are visited. Today's code is not order-free in one place (which
-member a "one of two down" message names); the prototype is.
+objects, relations and records are visited. Today's code is not order-free in which
+member a "two of three down" message names; the prototype is.
 
 What this rules out, on purpose: "partly down, *but not if* all are down", "cross *unless* the
 dependant is already impacted". Such a rule reads the state negatively and has no single answer
@@ -742,14 +742,16 @@ attribute; a broad site rule meant to replace a specific core one, which loses o
 although the site meant it. D4's answer is that containment is the only implicit order, anything
 else is a conflict the check refuses, and `overrides` writes the order down. One finding from
 the port: a record that lists two classes is not "more specific" than a record naming an
-ancestor of only one of them, so own-score became one record per class.
+ancestor of only one of them, so a record that must
+win over a class's general rule names one class.
 
 **Does the fixpoint terminate and stay deterministic with k-of-n, escalation and raising?** Yes
 (D6): states are only added, thresholds are "at least", matches read inputs only. Raising cycles
 settle at the top. Oscillation between runs has one possible source, an age-based raise resetting
-its own clock, and `raw.since` removes it. Determinism under reordered input: the prototype's
-conditions and roots are the same for shuffled objects, relations and sources on 1,500 sites,
-apart from the roll-up counts that today's code also gets differently (*Found on the way*, 2).
+its own clock, and `raw.since` removes it. Determinism under reordered input: for shuffled objects,
+relations and sources on 1,500 sites the prototype's roots and conditions are the same on all of
+them, leaving aside the roll-up counts (*Found on the way*, 2, not fixed in the prototype
+either); `derive.ts` differs on 7, in which member a group's message names.
 
 **How do `explain` and root selection work with type changes?** D6: the arriving failure has the
 new type on the far side and is explained from there. The level it explains to is its provider's,
