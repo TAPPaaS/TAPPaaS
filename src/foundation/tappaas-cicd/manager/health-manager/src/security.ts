@@ -99,6 +99,7 @@ export interface TargetStatus {
   items?: CveItem[]; // every CVE the risk score looks at, with its state (ADR-045 D1)
   newOpen?: string[]; // ids among `new` nobody has analysed (state open): what cve-new-critical mails
   newKev?: string[]; // ids that joined the known-exploited list since the last scan: mailed with them, whatever was decided
+  acceptances?: AcceptanceRow[]; // every row a site acceptance named, with what became of it: the items keep one row per CVE
   os?: { family: string; name: string }; // what trivy detected: the rescan matches the inventory as this system
 }
 
@@ -814,6 +815,26 @@ const MARK_RANK: Record<Mark, number> = { review: 0, unread: 1, rule: 2, deferre
 // The items of a target, one per CVE, from its decisions: the decision that
 // counts the most wins (one package still exposed makes the CVE count).
 // Listed: every critical/high, and any CVE a decision names.
+// The rows a site acceptance named, one per CVE and component: whether it held,
+// or why it ended. settleAcceptances reads these, not the items, which keep only
+// the heaviest row of a CVE (an accepted row loses to a counted one elsewhere).
+export interface AcceptanceRow { id: string; component: string; accepted: boolean; ended?: string }
+export function acceptanceRows(all: Finding[], decisions: Map<Finding, Decision>): AcceptanceRow[] {
+  const by = new Map<string, AcceptanceRow>();
+  for (const f of all) {
+    const d = decisions.get(f);
+    if (!f.id || !d) continue;
+    const ended = d.flags.find((x) => x.startsWith("acceptance-ended:"))?.slice(17);
+    const accepted = d.mark === "accepted";
+    if (!accepted && !ended) continue;
+    const k = `${f.id} ${d.component}`;
+    const had = by.get(k);
+    // One row of a component that ended it ends it (a severity that rose on one version).
+    if (!had || (had.accepted && !accepted)) by.set(k, { id: f.id, component: d.component, accepted, ...(ended ? { ended } : {}) });
+  }
+  return [...by.values()].sort((a, b) => a.id.localeCompare(b.id) || a.component.localeCompare(b.component));
+}
+
 export function decisionItems(all: Finding[], decisions: Map<Finding, Decision>, facts: Record<string, CveFacts>): CveItem[] {
   const by = new Map<string, { item: CveItem; weight: number }>();
   for (const f of all) {
@@ -946,6 +967,8 @@ export function summarize(
   const chVex = new Set(all.filter((f) => f.id && isCH(f) && isNone(f)).map((f) => f.id));
   if (chVex.size > 0) status.critHighVex = [...chVex].sort();
   status.items = coverageFail ? [] : decisions ? decisionItems(all, decisions, facts) : cveItems(all, vex);
+  const acc = !coverageFail && decisions ? acceptanceRows(all, decisions) : [];
+  if (acc.length) status.acceptances = acc;
   if (coverageFail) status.verdict = "failed";
   else if (!hasFixState) status.verdict = "triage";
   else if (chFix.length > 0) {

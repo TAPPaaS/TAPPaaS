@@ -88,6 +88,21 @@ cmdAccept(["nextcloud", "CVE-1", "--note", "two users", "--until", "2027-05-01"]
 check(cmdUnaccept(["nextcloud", "CVE-1"], cfg, () => undefined, NOW) === 0 && readAcceptances(cfg).ended.some((e) => e.why === "withdrawn"), "unaccept withdraws it");
 cmdAccept(["nextcloud", "CVE-1", "--note", "x", "--until", "2026-11-20"], cfg, () => undefined, NOW, "lars");
 check(settleAcceptances(cfg, status, Date.parse("2026-11-21T00:00:00Z"))[0]?.why === "expired", "an acceptance ends at its date");
+console.log("an accepted row hidden by a heavier row of the same CVE");
+cmdAccept(["nextcloud", "CVE-1", "--note", "two users", "--until", "2027-05-01"], cfg, () => undefined, NOW, "lars");
+const site3 = siteDecisions(cfg);
+const ncT3 = summarize({ id: "nextcloud", name: "nextcloud", layer: "nix", host: "nextcloud" }, 300, "", [f("CVE-1")],
+  withDecisions([], { ...dec("nextcloud"), site: (c, rr, id) => site3("nextcloud", c, rr, id) }), false);
+check(ncT3.acceptances?.length === 1 && ncT3.acceptances[0].accepted && ncT3.acceptances[0].component === "nextcloud/nix:imagemagick", "the scan records each row an acceptance named");
+const baseRow = { ...ncT3.items![0], mark: "confirmed" as const, level: "low" as const, counted: true, component: "templates/nix:imagemagick", version: "7.1.1-1" };
+const hidden = { ...ncT3, items: [baseRow] };
+check(settleAcceptances(cfg, { ...status, targets: [imT, hidden] }, NOW).length === 0 && readAcceptances(cfg).acceptances.length === 1,
+  "the items show the baseline's counted row: the acceptance holds, it is not gone");
+const endedRow = { ...hidden, acceptances: [{ ...ncT3.acceptances![0], accepted: false, ended: "known-exploited" }] };
+check(settleAcceptances(cfg, { ...status, targets: [imT, endedRow] }, NOW)[0]?.why === "known-exploited", "…and one the scan ended ends with the scan's reason");
+cmdAccept(["nextcloud", "CVE-1", "--note", "x", "--until", "2027-05-01"], cfg, () => undefined, NOW, "lars");
+check(settleAcceptances(cfg, { ...status, targets: [imT, { ...ncT, items: [baseRow] }] }, NOW).length === 0, "one accepted while the scan ran, under another row: it stays");
+check(settleAcceptances(cfg, { ...status, targets: [imT, { ...ncT, items: [] }] }, NOW)[0]?.why === "gone", "a CVE no longer on the unit at all: gone");
 const raw = JSON.parse(readFileSync(join(cfg, "security-acceptances.json"), "utf8"));
 check(raw.schema === 1 && Array.isArray(raw.ended), "the file keeps what ended");
 
