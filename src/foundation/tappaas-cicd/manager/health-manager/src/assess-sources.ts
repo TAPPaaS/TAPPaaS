@@ -58,6 +58,7 @@ export const GATES: Record<string, GateMap> = {
   pulse: { type: "operational", reason: "pulse" },
   "signature-status": { type: "security", reason: "repository-unverified" },
   "control-plane-trust": { type: "security", reason: "controller-unverified" },
+  "guest-system": { type: "security", reason: "system-not-built" },
 };
 
 const STATUS: Record<CheckStatus, ConditionStatus> = { pass: "ok", warn: "warning", fail: "critical", skip: "unknown" };

@@ -13,6 +13,7 @@
 //   - backup-keys      (#874: does a key stick hold the escrow's keys as they are — WARN)
 //   - service-liveness (guest-agent ping / running-state — see TODO)
 //   - pending-reboot   (#730: guests whose update is waiting for a reboot)
+//   - guest-system     (ADR-050 P2: a NixOS guest runs a system TAPPaaS did not build — FAIL)
 //   - cve-status       (ADR-011: the last security scan — WARN, never FAIL)
 //   - switch-ports     (#853: a switch port unrecorded and not parked, or set
 //                       otherwise than its record — WARN)
@@ -635,6 +636,47 @@ export function checkPendingReboot(
   };
 }
 
+// ── guest-system gate (ADR-050 P2) ────────────────────────────────────
+// A NixOS guest runs, and will boot, only systems TAPPaaS activated or staged
+// there: update-os.sh records each in config/.guest-systems/<vmname> (the last
+// 20, so TAPPaaS's own rollback to an earlier one is still known). A system
+// that is not in that list was built or activated by someone else: a
+// `nixos-rebuild` by hand, or a changed store. A guest with no record yet (none
+// since this gate exists) is not judged until its next update records one.
+export const GUEST_SYSTEMS_DIR = (configDir: string): string => process.env.TAPPAAS_GUEST_SYSTEMS ?? join(configDir, ".guest-systems");
+
+export function knownSystems(dir: string, vmname: string): Set<string> | null {
+  const f = join(dir, vmname);
+  if (!/^[A-Za-z0-9-]+$/.test(vmname) || !existsSync(f)) return null;
+  const lines = readFileSync(f, "utf8").split("\n").map((l) => l.trim()).filter((l) => l.startsWith("/nix/store/"));
+  return lines.length ? new Set(lines) : null;
+}
+
+const sysName = (p: string): string => p.replace(/^\/nix\/store\/[a-z0-9]+-nixos-system-/, "");
+
+export function checkGuestSystem(client: ClusterClient, configDir: string, defaultNode: string): CheckResult {
+  const dir = GUEST_SYSTEMS_DIR(configDir);
+  const rows: CheckRow[] = [];
+  const judged: CheckSubject[] = [];
+  for (const m of loadConfigModules(configDir, defaultNode).filter(isManaged)) {
+    const target = probeTarget(client, configDir, m);
+    if (!target || target.startsWith("lxc:")) continue;
+    const known = knownSystems(dir, target.split(".")[0]);
+    if (!known) continue;
+    const p = client.systemPaths(target);
+    if (!p) continue; // unreachable, or not NixOS
+    judged.push(mod(m.module));
+    const strange = [
+      !known.has(p.profile) ? `its system profile is ${sysName(p.profile)}` : "",
+      !known.has(p.current) && p.current !== p.booted ? `it runs ${sysName(p.current)}` : "",
+    ].filter(Boolean);
+    if (strange.length) rows.push({ status: "fail", text: `${m.module.padEnd(16)}${strange.join(", ")}: not a system TAPPaaS built for it`, subject: mod(m.module) });
+  }
+  if (!judged.length) return { name: "guest-system", status: "skip", detail: "no NixOS guest with a recorded system answered" };
+  if (!rows.length) return { name: "guest-system", status: "pass", detail: `${judged.length} guest(s) run what TAPPaaS built`, judged };
+  return { name: "guest-system", status: "fail", detail: `${rows.length} guest(s) run a system TAPPaaS did not build — who rebuilt it? (the next update puts TAPPaaS's back)`, rows, judged };
+}
+
 // ── storage-pools gate (#100) ─────────────────────────────────────────
 // Every guest-disk pool on every node. Automatic disk growth stops at its
 // pool ceiling (80%) and says so per module; this is the cluster-wide view of
@@ -1159,6 +1201,7 @@ export function runHealthGates(client: ClusterClient, opts: ValidateOpts): Healt
     gate(() => checkBackupStatus(opts.configDir)),
     gate(() => checkBackupKeys(opts.configDir)),
     gate(() => checkPendingReboot(client, opts.configDir, opts.defaultNode)),
+    gate(() => checkGuestSystem(client, opts.configDir, opts.defaultNode)),
     gate(() => checkSiteTimezone(client, opts.configDir, opts.defaultNode)),
     gate(() => checkQuorum(client)),
     gate(() => checkLanUplink(client)),

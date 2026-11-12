@@ -208,6 +208,9 @@ export interface ClusterClient {
   nodeCpu(node: string): NodeCpu | null;
   // Whether a guest is waiting for a reboot (via SSH); null if unreachable (#730).
   pendingReboot(target: string): PendingReboot | null;
+  // A NixOS guest's booted, running and profile systems (via SSH); null if
+  // unreachable or not NixOS (ADR-050 P2).
+  systemPaths(target: string): SystemPaths | null;
   // Every active guest-disk pool on every node (#100); backup stores excluded.
   storagePools(): StoragePool[];
   // AVX-512 use in a guest (via SSH); null if unreachable (#827).
@@ -241,6 +244,8 @@ export interface LanUplink {
 // not the system profile (a switched generation whose kernel is not running,
 // or a release move staged for the next boot, #728). Debian:
 // /var/run/reboot-required.
+export interface SystemPaths { booted: string; current: string; profile: string }
+
 export interface PendingReboot {
   os: "nixos" | "debian" | "other";
   pending: boolean;

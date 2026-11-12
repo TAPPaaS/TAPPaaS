@@ -86,7 +86,7 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check(got(r, site, "maintenance")?.message === "module ghost: the keys changed", "what the CMDB does not have lands on the site, naming its subject");
   check(io.written.length === 1 && io.written[0].source === "health-manager" && io.written[0].assessment === true, "one report, an assessment, from health-manager");
   check((io.written[0].objects ?? []).every((o) => typeof o.id === "string"), "…naming its objects by id");
-  check(Object.keys(GATES).length === 20, "every gate that is no source of its own is mapped");
+  check(Object.keys(GATES).length === 21, "every gate that is no source of its own is mapped");
   const cs = got(r, nc, "operational")!;
   check(Object.keys(cs).sort().join() === "acknowledged,derived,lastChecked,maintenance,message,owner,reason,rootCause,since,source,status,type", "a condition has D1's fields, and the owner that takes it back");
   const a = (io.written[0].objects ?? []).find((o) => o.id === site.id)?.attributes as { rootCauses: unknown[]; assessment: { time: string; gates: unknown[] } };

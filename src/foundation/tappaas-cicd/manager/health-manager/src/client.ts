@@ -29,7 +29,7 @@ import { applyBalloonStats, balloonProbe, parseBalloonStats } from "./balloon";
 import { defaultConfigDir, siteNodeHostnames } from "./config";
 import { countedMem } from "./memcount";
 import { parseCpu, parseVolumes } from "./guests";
-import { Avx512Use, ClusterClient, GuestVolume, LanUplink, NodeCapacity, NodeCpu, PendingReboot, RunningGuest, StoragePool } from "./types";
+import { Avx512Use, ClusterClient, GuestVolume, LanUplink, NodeCapacity, NodeCpu, PendingReboot, RunningGuest, StoragePool, SystemPaths } from "./types";
 
 // `lxc:<node>:<vmid>` (checks.ts probeTarget): an LXC module, reached through
 // `pct exec` on its node rather than SSH of its own (#901).
@@ -267,6 +267,19 @@ export class CliClusterClient implements ClusterClient {
     const r = guestRun(target, probe);
     if (!r.ran || r.rc !== 0) return null;
     return parsePendingReboot(r.stdout);
+  }
+
+  // ADR-050 P2: the three systems a NixOS guest has, for the guest-system gate.
+  systemPaths(target: string): SystemPaths | null {
+    const probe =
+      "if [ -e /run/booted-system ]; then " +
+      'echo "$(readlink -f /run/booted-system) $(readlink -f /run/current-system) $(readlink -f /nix/var/nix/profiles/system)"; ' +
+      "else echo other; fi";
+    const r = guestRun(target, probe);
+    if (!r.ran || r.rc !== 0) return null;
+    const [booted, current, profile] = r.stdout.trim().split(/\s+/);
+    const sys = (p: string | undefined): p is string => !!p && /^\/nix\/store\/[a-z0-9]+-nixos-system-/.test(p);
+    return sys(booted) && sys(current) && sys(profile) ? { booted, current, profile } : null;
   }
 
   // #827: one ssh — does the guest's CPU offer AVX-512, and which processes
