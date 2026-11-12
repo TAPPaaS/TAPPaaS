@@ -505,6 +505,20 @@ else
     warn "  CrowdSec did not converge — the firewall update itself is complete"
 fi
 
+# ── Suricata, alert only (ADR-050 D5) ───────────────────────────────
+#
+# The IDS on the WAN in PCAP mode with the threat rule sets, its alerts to
+# syslog and so to Loki; off while the site's security monitoring is.
+debug "Converging Suricata on the firewall..."
+_ids_out=""
+if _ids_out="$(bash "${SCRIPT_DIR}/scripts/suricata-converge.sh" 2>&1)"; then
+    relog_steps <<< "${_ids_out}"
+    debug "  ${GN}✓${CL} Suricata converged"
+else
+    printf '%s\n' "${_ids_out}" | sed 's/\x1b\[[0-9;]*m//g' | while IFS= read -r _l; do [[ -n "${_l}" ]] && warn "  ${_l# }"; done
+    warn "  Suricata did not converge — the firewall update itself is complete"
+fi
+
 # ── The WAN's address ───────────────────────────────────────────────
 #
 # site.json network.publicIp "auto" means the provider's address, which the
