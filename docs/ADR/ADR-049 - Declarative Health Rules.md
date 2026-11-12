@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** — every question settled with the operator; for his review |
-| **Version** | 0.2 |
+| **Version** | 0.3 |
 | **Date** | 2026-11-12 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | Amends ADR-041 D3 (derivation: the correlation rules become seven kinds of record, and the logic at each node is data), D2 (how a source's finding becomes a condition), D1 (what a maintenance window covers) and D4 (which roots are told at once is a record). Amends ADR-046 D6 (its shipped correlation rules become records), ADR-040 D3 (`member-of` from a node and an app to a zone; a `module` attribute) and ADR-048 D2 (a corrected health rule is patch content). Builds on the review in [`docs/plans/health-cmdb-review.md`](../plans/health-cmdb-review.md). Related: ADR-040 (CMDB, metamodel), ADR-039 (module alert rules: the pattern for a module file), ADR-047 (central and site decisions: the layering this ADR does *not* copy), ADR-034 (console). |
-| **Changelog** | v0.2 (2026-11-12): **Proposed**, with the operator's answers to all ten open questions. A site rule may **quiet** a condition for good (D2.3, `classify`). A seventh kind, **`notify`**, says which roots are told at once, in the digest or not at all (D5). A **maintenance window covers what its object would impact under the rules** (D14). The **module of a CI is a CMDB attribute**, and a node and an app are `member-of` their zone (D13). **Foundation modules' rules are never held for reach** (D8). Corrected rules may arrive by the security stream, and **a changed rule set recalculates health at once** (D7). A site may **retire a contract scenario** (D11). A roll-up never replaces an impact the spread gave (D5). Numeric predicates are specified, not shipped (D3). P0 has a precise fix specification. Where the rule language, the standard rules and the verbs are documented, and that the language is published under *Develop* (D15). · v0.1 (2026-11-12): first draft, from the operator's direction of 2026-11-11 and his answers on cross-module rules, the update merge, escalation and raising severity. The proposal was tested against a prototype before it was written down; what changed because of that is in *What changed from the proposal*. |
+| **Changelog** | v0.3 (2026-11-12): the operator confirmed the five choices listed under *Open questions*; nothing else changed. · v0.2 (2026-11-12): **Proposed**, with the operator's answers to all ten open questions. A site rule may **quiet** a condition for good (D2.3, `classify`). A seventh kind, **`notify`**, says which roots are told at once, in the digest or not at all (D5). A **maintenance window covers what its object would impact under the rules** (D14). The **module of a CI is a CMDB attribute**, and a node and an app are `member-of` their zone (D13). **Foundation modules' rules are never held for reach** (D8). Corrected rules may arrive by the security stream, and **a changed rule set recalculates health at once** (D7). A site may **retire a contract scenario** (D11). A roll-up never replaces an impact the spread gave (D5). Numeric predicates are specified, not shipped (D3). P0 has a precise fix specification. Where the rule language, the standard rules and the verbs are documented, and that the language is published under *Develop* (D15). · v0.1 (2026-11-12): first draft, from the operator's direction of 2026-11-11 and his answers on cross-module rules, the update merge, escalation and raising severity. The proposal was tested against a prototype before it was written down; what changed because of that is in *What changed from the proposal*. |
 
 Health propagation and root-cause selection are one algorithm in `derive.ts`. Part of what it
 decides at each object is data already (`health-rules.json`: which failure crosses which
@@ -1193,8 +1193,8 @@ All ten open questions of v0.1 were answered by the operator on 2026-11-12.
 
 ## Open questions
 
-None. Five choices made while writing v0.2 that the answers did not spell out, for the operator
-to confirm or change at review:
+None. Five choices made while writing v0.2 that the answers did not spell out were confirmed by
+the operator on 2026-11-12, as written:
 
 1. **A quieted condition still spreads**, quietly (D5), as an acknowledged one does today. The
    alternative, that a quieted failure reaches nothing, would make dependants' symptoms roots of
