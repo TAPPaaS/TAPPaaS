@@ -31,6 +31,40 @@
       },
       "summary": "More than three failed sign-ins to the firewall's web UI from one address in ten minutes.",
       "query": "{host=\"<host>\", unit=\"audit\"} |= \"authentication error\""
+    },
+    {
+      "name": "suricata-alert",
+      "title": "IdsAlert",
+      "headline": "IDS alert",
+      "kind": "event",
+      "security": "info",
+      "window": 300,
+      "unit": "suricata",
+      "_comment": "Suricata's eve alerts over syslog (ADR-050 D5): every alert is recorded with its count; the severe ones are SuricataHigh.",
+      "match": "\"event_type\":\"alert\"",
+      "capture": {
+        "src_ip": "\"src_ip\":\"(?P<src_ip>[^\"]+)\"",
+        "sid": "\"signature_id\":(?P<sid>[0-9]+)"
+      },
+      "summary": "Suricata on the firewall's WAN raised an alert. Recorded, not raised: on a WAN most alerts are the internet's background.",
+      "query": "{host=\"<host>\", unit=\"suricata\"} |= \"\\\"event_type\\\":\\\"alert\\\"\" | json"
+    },
+    {
+      "name": "suricata-high",
+      "title": "IdsAlertHigh",
+      "headline": "IDS alert, high severity",
+      "kind": "event",
+      "security": "warning",
+      "window": 300,
+      "unit": "suricata",
+      "_comment": "Severity 1 in ET Open and abuse.ch: exploits, malware command-and-control, known-bad hosts.",
+      "match": "\"event_type\":\"alert\".*\"severity\":1[,}]",
+      "capture": {
+        "src_ip": "\"src_ip\":\"(?P<src_ip>[^\"]+)\"",
+        "sid": "\"signature_id\":(?P<sid>[0-9]+)"
+      },
+      "summary": "Suricata raised a high-severity alert on the WAN: an exploit attempt, or traffic to or from a known-bad host. The alert names the signature and the addresses.",
+      "query": "{host=\"<host>\", unit=\"suricata\"} |= \"\\\"severity\\\":1\" | json"
     }
   ]
 }

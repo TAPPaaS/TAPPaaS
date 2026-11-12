@@ -19,7 +19,11 @@
 #      would trip;
 #   4. who it never bans: private IPv4 (crowdsecurity/whitelists) and every
 #      IPv6 /64 on the firewall's internal interfaces (the site's own clients
-#      use global IPv6 addresses), recomputed each run for a dynamic prefix.
+#      use global IPv6 addresses), recomputed each run for a dynamic prefix;
+#   5. with the site's security monitoring on (ADR-050 D4): the logging VM's
+#      CrowdSec log processor registered as machine tappaas-logging, and the
+#      local API listening on the firewall's mgmt address so it can report;
+#      off, the machine is removed and the local API is localhost only again.
 #
 # Usage: crowdsec-converge.sh [--check]   (--check: report, change nothing)
 
@@ -58,7 +62,16 @@ if [[ ${caddy_changed} -eq 1 ]]; then
     info "  ${GN}✓${CL} Caddy writes one access log per published name"
 fi
 
-# ── 1, 3, 4. On the firewall ──────────────────────────────────────────────
+# ── 5. What the logging VM's processor needs (ADR-050 D4) ─────────────────
+# shellcheck source=/home/tappaas/bin/security-monitoring.sh
+. "${TAPPAAS_BIN:-/home/tappaas/bin}/security-monitoring.sh"
+LAPI_ADDR=127.0.0.1; MACHINE_PW=""
+if [[ "$(security_monitoring)" == on ]]; then
+    LAPI_ADDR="$(security_firewall_lapi)" || die "cannot resolve the firewall's mgmt address"
+    MACHINE_PW="$(security_crowdsec_password)" || die "no CrowdSec machine password for the logging VM"
+fi
+
+# ── 1, 3, 4, 5. On the firewall ───────────────────────────────────────────
 ssh -o BatchMode=yes "root@${FW}" "/bin/sh -s -- ${CHECK}" <<EOF
 set -e
 CHECK="\$1"
@@ -137,6 +150,23 @@ if [ -z "\$nets" ]; then
 elif [ "\$(cat "\$WLF" 2>/dev/null)" != "\$wl" ]; then
     [ "\$CHECK" = 1 ] && say "would whitelist the site's IPv6 networks: \$(echo \$nets)" || { mkdir -p "\$CS/parsers/s02-enrich"; printf '%s\n' "\$wl" > "\$WLF"; changed=1; }
 fi
+# 5. the logging VM's processor as a machine of this local API. -f /dev/null:
+# cscli would otherwise write its credentials over this agent's own.
+PW='${MACHINE_PW}'
+MK="\$CS/.tappaas-logging-machine"
+if [ -n "\$PW" ]; then
+    want=\$(printf '%s' "\$PW" | sha256 -q)
+    if [ "\$(cat "\$MK" 2>/dev/null)" != "\$want" ] || ! cscli machines list -o raw --error 2>/dev/null | grep -q '^${SECURITY_CROWDSEC_MACHINE},'; then
+        if [ "\$CHECK" = 1 ]; then say "would register the logging VM's CrowdSec (machine ${SECURITY_CROWDSEC_MACHINE})"; else
+            cscli machines add ${SECURITY_CROWDSEC_MACHINE} --password "\$PW" --force -f /dev/null --error >/dev/null \
+                || { echo "  ERROR: could not register the logging VM's CrowdSec" >&2; exit 1; }
+            printf '%s\n' "\$want" > "\$MK"; chmod 600 "\$MK"
+            say "the logging VM's CrowdSec registered (machine ${SECURITY_CROWDSEC_MACHINE})"
+        fi
+    fi
+elif cscli machines list -o raw --error 2>/dev/null | grep -q '^${SECURITY_CROWDSEC_MACHINE},'; then
+    [ "\$CHECK" = 1 ] && say "would remove machine ${SECURITY_CROWDSEC_MACHINE} (security monitoring off)" || { cscli machines delete ${SECURITY_CROWDSEC_MACHINE} --error >/dev/null; rm -f "\$MK"; say "machine ${SECURITY_CROWDSEC_MACHINE} removed (security monitoring off)"; }
+fi
 [ "\$changed" = 1 ] && [ "\$CHECK" != 1 ] && { service crowdsec reload >/dev/null 2>&1 || service crowdsec restart >/dev/null; say "crowdsec reloaded"; }
 # report
 cscli capi status --error >/dev/null 2>&1 && say "WARNING: registered with the central API" || say "central API: not registered (local only)"
@@ -149,3 +179,22 @@ fi
 service crowdsec_firewall status >/dev/null 2>&1 && say "firewall bouncer: running" || say "firewall bouncer: NOT running"
 say "active bans: \$(cscli decisions list -o json --error 2>/dev/null | /usr/local/bin/python3 -c 'import sys, json; d = json.load(sys.stdin) or []; print(sum(len(a.get("decisions") or []) for a in d))' 2>/dev/null || echo 0)"
 EOF
+
+# ── 5. Where the local API listens (the plugin, through the OPNsense API) ──
+# The plugin's reconfigure moves the agent's and the bouncer's own address with
+# it (reconfigure.py), so the firewall's bans go on working.
+CS_API="https://${FW}:8443/api/crowdsec"
+have="$(curl -ksS -u "$OPN_AUTH" "${CS_API}/general/get" | jq -r '.general.lapi_listen_address // empty')"
+if [[ -n "${have}" && "${have}" != "${LAPI_ADDR}" ]]; then
+    if [[ ${CHECK} -eq 1 ]]; then info "  would move CrowdSec's local API from ${have} to ${LAPI_ADDR}"; else
+    curl -ksS -u "$OPN_AUTH" -X POST "${CS_API}/general/set" -H 'Content-Type: application/json' \
+        -d "{\"general\":{\"lapi_listen_address\":\"${LAPI_ADDR}\"}}" | jq -e '.result == "saved"' >/dev/null \
+        || die "could not set CrowdSec's local API address"
+    curl -ksS -u "$OPN_AUTH" -X POST "${CS_API}/service/reconfigure" | jq -e '.status == "ok"' >/dev/null \
+        || die "CrowdSec's reconfigure failed after moving its local API"
+    # The reconfigure writes the files and restarts nothing: the engine and
+    # the bouncer take the new address only from a restart (hrossen).
+    ssh -o BatchMode=yes "root@${FW}" "/bin/sh -c 'service crowdsec restart >/dev/null 2>&1; sleep 5; service crowdsec_firewall restart >/dev/null 2>&1'" \
+        || die "could not restart CrowdSec after moving its local API"
+    info "  ${GN}✓${CL} CrowdSec's local API listens on ${LAPI_ADDR}:${SECURITY_LAPI_PORT}"; fi
+fi

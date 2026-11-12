@@ -999,6 +999,41 @@ in
   ];
 
   # ============================================================================
+  # CROWDSEC LOG PROCESSOR (ADR-050 D4)
+  # ============================================================================
+  #
+  # Reads the security lines of the site from Loki itself (localhost, no
+  # credential) and reports what its scenarios find to the local API on the
+  # firewall, whose bouncer bans the address in pf. No local API here and no
+  # central API anywhere: nothing about the site leaves it. A line from Loki is
+  # not syslog, so its acquisition's `type` label is the program the hub's
+  # parsers select on (crowdsecurity/syslog-logs' non-syslog node).
+  #
+  # It runs only while the mothership has written its credentials
+  # (lib/security-monitoring.sh, with the site's security monitoring on); the
+  # firewall's crowdsec-converge.sh registers the same machine there.
+  services.crowdsec = {
+    enable = true;
+    settings.lapi.credentialsFile = "/etc/secrets/crowdsec-lapi.yaml";
+    hub = {
+      collections = [ "crowdsecurity/sshd" "firix/authentik" "fulljackz/proxmox" ];
+      parsers = [ "crowdsecurity/syslog-logs" "crowdsecurity/dateparse-enrich" "crowdsecurity/whitelists" ];
+    };
+    localConfig.acquisitions = [
+      # sshd on every guest and node; the firewall's own sshd is its CrowdSec's.
+      { source = "loki"; url = "http://127.0.0.1:${toString lokiInternal}";
+        query = ''{unit=~"sshd.*", source!="opnsense"}''; labels.type = "sshd"; }
+      # Authentik's events (identity).
+      { source = "loki"; url = "http://127.0.0.1:${toString lokiInternal}";
+        query = ''{host="identity", container="authentik-server"}''; labels.type = "authentik"; }
+      # Proxmox's API sign-ins on the nodes.
+      { source = "loki"; url = "http://127.0.0.1:${toString lokiInternal}";
+        query = ''{source="proxmox", unit="pvedaemon"}''; labels.type = "pvedaemon"; }
+    ];
+  };
+  systemd.services.crowdsec.unitConfig.ConditionPathExists = "/etc/secrets/crowdsec-lapi.yaml";
+
+  # ============================================================================
   # PROMETHEUS — the metrics store (logging:metrics, ADR-046 P1)
   # ============================================================================
   #

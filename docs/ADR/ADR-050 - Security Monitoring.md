@@ -245,8 +245,40 @@ This iteration is P0–P4.
 
 ## Implementation status
 
-Branch `feat/adr050-security-monitoring`, 2026-11-12. Unit tests pass offline; nothing has run
-on a site yet.
+Merged to `main` 2026-11-12 (`00745bfe`), live-tested on hrossen the same day.
+
+**Live test, hrossen, 2026-11-12** (deployed from the branch under a pull hold):
+
+- tappaas-cicd and logging updated, their module tests pass; the 11 security rules are in
+  Grafana with their levels; Loki reloaded its runtime config (the security streams at 90 days).
+- lazysite updated: audit rules loaded, journald `Audit=true`, its system recorded. A write in
+  `/etc/secrets` and a kernel module loaded from a session reached Loki as `transport="audit"`
+  records; the module load raised KernelModuleFromSession (warning).
+- Seven failed SSH logins as an unknown user, then a key login, from the mothership: sshd's own
+  `PerSourcePenalties` dropped the later attempts, and SshLoginAfterBruteForce raised a
+  **critical** security condition on lazysite, owner `siem`, not in maintenance. An ack with a
+  note closed it at the next assess; the 24 h warning stayed.
+- The guest-system gate passed for lazysite, failed critical when its record was swapped for a
+  foreign system, and passed again when it was restored.
+- Real logs changed four things (`23091a53`, `736e3f86`): health-manager's gates probed the
+  firewall as `tappaas` every 5 minutes (four "Invalid user" lines each run, which made a false
+  critical on `network`); the mothership's internet-facing sshd sees 75–150 failed logins a day
+  per scanning address, so SSH brute force is `info` (recorded, not mailed, no condition);
+  pvedaemon's message starts with a space; each boot's `audit_enabled=0` initialisation line is
+  no switch-off.
+- **CrowdSec and Suricata, the same day:** the logging VM's processor logged in to the firewall
+  and its SSH scenarios filled on hrossen's real traffic. Moving the local API needs a restart
+  of the engine and the bouncer, which the plugin's reconfigure does not do (fixed). Suricata
+  with all 21 rule sets was killed for memory on the 4 GB firewall, whose `/var/log` takes
+  about 740 MB of RAM (its filter log); turning sets off needs a rule update before the start,
+  or their files still load. With the core set it runs in 200 MB, and an `id check returned
+  root` test reached the receiver as an info hit. The firewall now keeps its own logs two days in
+  its RAM disk, not 31 (`log-retention-converge.sh`; seven without the logging module): on
+  hrossen `/var/log` fell from 744 to 237 MB and about 500 MB of memory came back.
+- Found: an ack is per condition type (ADR-041), so an ack given on a security hit also silences
+  a CVE warning on the same object until the status changes. D12's "an ack covers the finding"
+  needs acks per finding. Since v1.2 a hit is a `threat` and a CVE a `vulnerability`, so an ack
+  on one no longer silences the other; two hits of different rules on one CI still share one ack.
 
 | Part | State |
 |---|---|
@@ -254,10 +286,12 @@ on a site yet.
 | Hits recorded | **Built.** The alert receiver folds every `type=security` alert into `/var/lib/tappaas/siem-findings.json`: per rule, host and CI id, first, last and count; pruned at 7, 30 and 90 days by level |
 | Rule format | **Built.** `security: info \| warning \| critical` on an ADR-039 rule adds `type` and `level` labels; security rules are rendered only while monitoring is on |
 | Switch and retention (D1, D2) | **Built.** `site.json` `security` (`monitoring`, `retentionDays`); Loki's runtime config (`/etc/tappaas-loki/runtime.yaml`) keeps the security streams, written by logging's update |
-| Rule pack (D3) | **First part built**, hand-written: SSH brute force, login after a brute force (critical), password login, sudo refused, audit stopped, kernel module from a session (logging, scope all); Authentik login brute force, suspicious request, impersonation (identity); Proxmox sign-in failures (pvehost); firewall sign-in failures (network). The Sigma conversion is not done |
+| Rule pack (D3) | **First part built**, hand-written: SSH brute force (info), login after a brute force (critical), password login, sudo refused, audit stopped, kernel module from a session (logging, scope all); Authentik login brute force, suspicious request, impersonation (identity); Proxmox sign-in failures (pvehost); firewall sign-in failures (network). The Sigma conversion is not done |
 | Guests' audit records (D6) | **Built.** NixOS guests: journald's audit socket, rules on `/etc/secrets`, `/root/.ssh`, `/etc/ssh` and kernel modules from a session, plus a module's `securityPaths` that exist; labelled `transport="audit"` |
 | Closure check (D6) | **Built** as the `guest-system` gate (critical): update-os.sh records each system it activates or stages in `config/.guest-systems/<vmname>` (the last 20); a profile or running system not in it fails. The weekly store verification is not built |
-| CrowdSec processor (D4), Suricata (D5), Caddy and CrowdSec logs into Loki (P0) | **Not built**: they change OPNsense's plugins and the logging VM's NixOS, and need a live firewall to be written against |
+| CrowdSec processor (D4) | **Built, live on hrossen.** A CrowdSec log processor on the logging VM reads Loki (sshd, Authentik, pvedaemon; the line's program from its acquisition's `type`) and reports as machine `tappaas-logging` to the firewall's local API, moved to the mgmt address (`crowdsec-converge.sh`, step 5); the firewall's bouncer bans. Runs only while the mothership has written its credentials (security monitoring on) |
+| Suricata (D5) | **Built, live on hrossen.** `suricata-converge.sh`: alert only (PCAP) on the WAN, eve to syslog and so to Loki; rule sets by size (operator, 2026-11-12): a core set at medium (about 3 600 rules, 200 MB), the full set at large (about 60 000); not started while the firewall lacks the memory. Rules: IdsAlert (info), IdsAlertHigh (warning, severity 1) |
+| Caddy and CrowdSec logs into Loki (P0) | **Not built** |
 | CI id on log lines (P0) | **Not built.** Placement by the authenticated `host` label works without it |
 | Threats in the console (P4) | **Built.** Security has a Threats tab beside Vulnerabilities: open findings per node and module, critical first, with hits, first and last, the hold left and the CVE state; Ack with the wording of the rule that holds it, Logs with its query; recent acknowledgements and why |
 | CVE-aware severity, coverage report | **Not built**: they wait for the sources above |
