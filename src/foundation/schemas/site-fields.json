@@ -104,6 +104,28 @@
       "minLength": 1,
       "changeClass": "in-place"
     },
+    "security": {
+      "description": "Security monitoring (ADR-050): security sources into the logging module, the security alert rules, and the findings they raise on the CMDB's objects.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "monitoring": {
+          "description": "on or off. Not set: off on a small site, on on a medium or large one. Off, the site keeps what it has without it: CrowdSec on the published names, the nodes' auditd and the platform's other alerts.",
+          "type": "string",
+          "enum": ["on", "off"],
+          "changeClass": "in-place",
+          "changeNote": "Applied by logging's update: the security alert rules and the security log retention are set or removed."
+        },
+        "retentionDays": {
+          "description": "How many days the security logs (audit records, logins, firewall blocks, IDS alerts, Authentik's events) are kept. Not set: 90 on a small or medium site, 180 on a large one. Every other log is kept 30 days.",
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 730,
+          "changeClass": "in-place",
+          "changeNote": "Loki reads it within a minute of logging's next update; a shorter one deletes the older security lines at the next compaction."
+        }
+      }
+    },
     "performance": {
       "description": "Performance monitoring: how much the site measures of how well its nodes, guests and services run, and how long it keeps the numbers. Collected in the logging module's metrics store.",
       "type": "object",

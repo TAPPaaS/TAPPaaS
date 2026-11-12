@@ -489,6 +489,13 @@ in
         delete_request_store = "filesystem";
       };
 
+      # Per-stream retention the mothership writes (lib/security-monitoring.sh,
+      # ADR-050 D2): the security streams kept 90 or 180 days. Loki re-reads it.
+      runtime_config = {
+        file = "/etc/tappaas-loki/runtime.yaml";
+        period = "60s";
+      };
+
       analytics.reporting_enabled = false;
     };
   };
@@ -1735,6 +1742,9 @@ in
     "f /etc/loki-auth/admin.htpasswd   0640 root     nginx    -"
     # InfluxDB tokens (PBS), written by the mothership; empty refuses all.
     "f /etc/loki-auth/influx-tokens.map 0640 root    nginx    -"
+    # Loki's runtime config (per-stream retention) until the mothership writes it.
+    "d /etc/tappaas-loki               0755 root     root     -"
+    "f /etc/tappaas-loki/runtime.yaml  0644 root     root     -   overrides: {}"
     # The metrics store's retention until the mothership writes the site's.
     "d /etc/tappaas-metrics            0755 root     root     -"
     "f /etc/tappaas-metrics/prometheus.env 0644 root root     -   PROM_RETENTION=15d"
