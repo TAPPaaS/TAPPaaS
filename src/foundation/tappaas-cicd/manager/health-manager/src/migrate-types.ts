@@ -9,7 +9,9 @@
 //   the rule store    config/health/: the installed records, their base and the
 //                     site's edits (RuleStore.read maps them); a site-edited
 //                     rule stays edited, under its new type
-//   acknowledgements  per object, keyed by type (the ack verbs' attribute)
+//   acknowledgements  per object, keyed by type (the ack verbs' attribute); on
+//                     an object the SIEM has hits for, a security ack was
+//                     about them and becomes threat alone
 //   flapping          per object, keyed by type (emit's attribute)
 //   emit's cursor     the roots and notices told, by "<ci>:<type>"
 //   the digest        the keys it told
@@ -28,6 +30,7 @@ export interface MigrateObject { id: string; class: string; name: string; attrib
 export interface MigrateIO {
   configDir: string;
   objects(): MigrateObject[]; // as stored, not mapped
+  hits?(): { ci?: string; host?: string }[]; // the SIEM's entries (siem.ts SIEM_STATE): an old security ack on their object was about them
   write(o: MigrateObject, attributes: Record<string, unknown>): void;
 }
 export interface MigrateResult { rules: string[]; objects: string[]; conditions: number; cursor: number; digest: number }
@@ -46,11 +49,16 @@ export function migrateTypes(io: MigrateIO, apply: boolean): MigrateResult {
 
   const objects = io.objects();
   const byId = new Map(objects.map((o) => [o.id, o]));
+  const hitOn = new Set<string>();
+  for (const h of io.hits?.() ?? []) {
+    if (h.ci && byId.has(h.ci)) hitOn.add(h.ci);
+    else if (h.host) for (const o of objects) if (o.name === h.host && ["vm", "lxc", "machine", "device"].includes(o.class)) hitOn.add(o.id);
+  }
   for (const o of objects) {
     const before = condsOf(o);
     if (before.some((c) => isLegacy(c.type))) res.conditions++;
     const a = o.attributes;
-    const acks = migrateKeyed(a.acknowledgements as Record<string, StoredWord> | undefined, before);
+    const acks = migrateKeyed(a.acknowledgements as Record<string, StoredWord> | undefined, before, hitOn.has(o.id));
     const flaps = migrateKeyed(a.flapping as Record<string, StoredWord> | undefined, before);
     const write: Record<string, unknown> = {};
     if (acks !== a.acknowledgements) write.acknowledgements = acks;
