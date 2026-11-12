@@ -68,8 +68,8 @@ import { readLastSweep } from "./cmdbsweep";
 import { cmdRules, readRules } from "./rules";
 import { readWindows } from "./windows";
 import { cmdScore } from "./score-verb";
-import { cmdCve } from "./cve-verb";
-import { siteDecisions } from "./site-decisions";
+import { cmdAccept, cmdCve, cmdUnaccept } from "./cve-verb";
+import { Ended, settleAcceptances, siteDecisions } from "./site-decisions";
 // ── ADR-041 emit half ──
 import { EMIT_HELP, liveEmitContext, runEmitVerb } from "./emit-verbs";
 // ── end ADR-041 emit half ──
@@ -174,6 +174,25 @@ export const HELP: HelpSpec = {
         "release preview compares a past release's images with the next one's. trivy fetches each\n" +
         "image (layers are cached). Same VEX as `scan security`. Writes nothing. Prints\n" +
         "{\"<ref>\": {\"findings\": [...], \"suppressed\": [...], \"error\": \"\"}}.",
+    },
+    {
+      usage: "accept <unit> <CVE>… --note <why> --until <date> | accept <unit> --component <key> --note <why> --until <date> | accept --list",
+      effect: { noPreview: "writes config/security-acceptances.json" },
+      options: [
+        ["--note <why>", "Why this site accepts it. Required."],
+        ["--until <date>", "When the acceptance ends, at most a year ahead. Required."],
+        ["--component <key>", "Every CVE of this component (<module>/<eco>:<source>) the last scan counts on the unit, by name."],
+        ["--list", "Every acceptance in force, and how many have ended."],
+      ],
+      details:
+        "This site accepts a CVE of one unit (a module instance, node:<name>, or the firewall's module) until a date.\n" +
+        "It leaves the unit's level, and the zone, environment and site above it, at the next scan, and is shown\n" +
+        "beside the score. It survives version moves. It ends at its date, when the CVE becomes known exploited,\n" +
+        "when upstream rates it higher, or when a central decision covers it; the daily digest says so.",
+    },
+    {
+      usage: "unaccept <unit> <CVE>…", effect: { noPreview: "writes config/security-acceptances.json" },
+      details: "Withdraws acceptances: the CVEs count again at the next scan.",
     },
     {
       usage: "cve validate <components-file> | cve preview <components-file> [--status FILE] [--json]", effect: "read",
@@ -660,6 +679,7 @@ function cmdScanSecurity(opts: Opts, client: ClusterClient): number {
     ({ status, cdx, decisionState } = runScan({ configDir: opts.configDir, defaultNode: DEFAULT_NODE, repoDir, log: (m) => info(`  ${m}`), site }, client, io));
   }
   const diff = writeScan(opts.configDir, status, cdx, decisionState);
+  const ended = settleAcceptances(opts.configDir, status, Date.now());
   const sec = recordHistory(opts.configDir, status);
   info("");
   for (const l of renderReport(status, false, Date.now())) info(l);
@@ -667,7 +687,7 @@ function cmdScanSecurity(opts: Opts, client: ClusterClient): number {
   for (const l of renderSecurity(sec, Date.now())) info(l);
   info("");
   info(`written: ${join(sbomDir(opts.configDir), SITE_CDX_FILE)}, ${STATUS_FILE} (previous: ${PREVIOUS_FILE}), ${HISTORY_FILE}`);
-  tellSecurity(opts, prevStatus, status, sec);
+  tellSecurity(opts, prevStatus, status, sec, ended);
   if (doNotify) {
     const n = notify(status, diff, SITE_NOTIFY_BIN());
     info(n.sent ? `notice sent: ${n.message}` : n.message);
@@ -680,7 +700,7 @@ function cmdScanSecurity(opts: Opts, client: ClusterClient): number {
 // The scan's lines for the alert rules: new open critical/high (mailed at once)
 // and the other changes (the daily digest). A module whose security condition
 // is acknowledged or in maintenance is left out; without the CMDB nobody is.
-function tellSecurity(opts: Opts, prevStatus: ScanStatus | null, status: ScanStatus, sec: SiteSecurity): void {
+function tellSecurity(opts: Opts, prevStatus: ScanStatus | null, status: ScanStatus, sec: SiteSecurity, ended: Ended[] = []): void {
   let quiet = new Set<string>();
   if (!cmdbOff()) {
     try {
@@ -691,6 +711,11 @@ function tellSecurity(opts: Opts, prevStatus: ScanStatus | null, status: ScanSta
   }
   const prevSec = prevStatus ? loadSiteSecurity(opts.configDir, prevStatus) : null;
   const lines = [cveNewEvent(status, sec, quiet), cveChangesEvent(prevSec, sec, quiet)].filter((e) => e !== null).map((e) => JSON.stringify(e));
+  // An acceptance that ended goes to the daily digest, with why.
+  if (ended.length) {
+    lines.push(JSON.stringify({ event: "cve-changes", scan: status.generated, count: ended.length,
+      what: ended.map((a) => `${a.unit}: acceptance of ${a.cve} ended (${a.why})`).join("; "), silenced: false }));
+  }
   if (lines.length === 0) return info("nothing new for the alert rules");
   securityJournal(lines);
   for (const l of lines) info(`told: ${l}`);
@@ -895,6 +920,15 @@ export function run(argv: string[], client: ClusterClient): number {
         if (opts.rest[0] === "images") return cmdScanImages({ ...opts, rest: opts.rest.slice(1) });
         if (opts.rest[0] !== "security") die("scan: expected 'security' or 'nix-list'");
         return cmdScanSecurity({ ...opts, rest: opts.rest.slice(1) }, client);
+      case "accept":
+      case "unaccept":
+        try {
+          const o = (l: string): void => { process.stdout.write(l + "\n"); };
+          return cmd === "accept" ? cmdAccept(opts.rest, opts.configDir, o) : cmdUnaccept(opts.rest, opts.configDir, o);
+        } catch (e) {
+          die((e as Error).message);
+        }
+        return 1;
       case "cve":
         try {
           return cmdCve(opts.rest, opts.configDir, (l) => process.stdout.write(l + "\n"));
