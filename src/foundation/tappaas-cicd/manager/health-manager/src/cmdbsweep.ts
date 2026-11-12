@@ -15,6 +15,7 @@ export interface SweepDifference {
   kind: string;
   class: string;
   name: string;
+  id?: string; // the object's, where it has one: names repeat (a pool per node)
   attribute: string | null;
   after?: unknown;
   expected: boolean;

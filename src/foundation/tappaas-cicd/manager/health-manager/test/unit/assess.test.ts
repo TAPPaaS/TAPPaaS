@@ -176,6 +176,12 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check(got(assess(io, {}, later(1)), nc, "drift")?.reason === "sweep-changed", "a drifted attribute the store still marks is drift");
   delete s.items.find((o) => o.id === nc.id)!.attributes.drift;
   check(got(assess(io, {}, later(2)), nc, "drift")?.status === "ok", "…and is over once a change cleared it, before the next sweep");
+  // Names repeat (a pool per node): the sweep's id says which one drifted.
+  const twin = { ...obj("storage-pool", "tanka1"), id: "pool-tanka1-on-tappaas2" };
+  s.items.push({ ...twin, attributes: { drift: { since: T0, attributes: { size: { was: 1, now: 2 } } } } });
+  io.sweepRecord = { ...rec, differences: [{ kind: "changed", class: "storage-pool", name: "tanka1", id: twin.id, attribute: "size", expected: false }] };
+  const r2 = assess(io, {}, later(3));
+  check(got(r2, twin, "drift")?.reason === "sweep-changed" && got(r2, pool, "drift")?.status !== "warning", "a drift on one of two same-named objects lands on the one the sweep names by id");
   io.sweepRecord = null;
   check(got(assess(io, {}, later(5)), site, "drift")?.reason === "sweep-none", "no sweep at all is critical on the site");
 }

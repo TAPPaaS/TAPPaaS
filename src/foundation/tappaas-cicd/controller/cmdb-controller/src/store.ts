@@ -312,7 +312,9 @@ export class Store {
    *  took its pools with it. Nothing can find them again. */
   async orphans(now: Date = new Date()): Promise<RetireCandidate[]> {
     // A placeholder (made for a reference to something not reported yet) that
-    // no owner reported within its class's expiry never will be: it goes too.
+    // no owner reported within its class's expiry never will be: it goes too,
+    // unless an object seen within that expiry still refers to it (an asset
+    // allocated to a role no source reports is a reference, not an orphan).
     const expiries: Record<string, number> = {};
     for (const c of this.mm.classes.keys()) expiries[c] = this.mm.expirySeconds(c) ?? 7 * 86400;
     const stale = (
@@ -322,6 +324,12 @@ export class Store {
           WHERE o.ended IS NULL
             AND EXISTS (SELECT 1 FROM attribute ph WHERE ph.object = o.id AND ph.name = 'placeholder' AND upper_inf(ph.validity))
             AND o.created + make_interval(secs => e.value::double precision) < $2::timestamptz
+            AND NOT EXISTS (
+              SELECT 1 FROM relation r
+                JOIN object x ON x.id = CASE WHEN r.from_object = o.id THEN r.to_object ELSE r.from_object END
+               WHERE (r.from_object = o.id OR r.to_object = o.id) AND upper_inf(r.validity)
+                 AND x.ended IS NULL AND x.last_seen IS NOT NULL
+                 AND x.last_seen + make_interval(secs => e.value::double precision) >= $2::timestamptz)
           ORDER BY o.class, o.name, o.id`,
         [expiries, now.toISOString()],
       )
