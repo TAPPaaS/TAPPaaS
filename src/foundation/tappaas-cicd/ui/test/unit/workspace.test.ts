@@ -66,6 +66,8 @@ check(t.open.map((r) => r.name).join() === "vllm-amd,coturn,cluster", "critical 
 check(t.open[0].cve?.open === true && t.open[2].cve === null, "the CVE state beside each finding");
 check(t.acks.length === 1 && t.acks[0].note.startsWith("the office") && t.acks[0].label === "Immich", "a recent acknowledgement and why, kept after its condition ended");
 check(threatsView(doc, NOW + 40 * 86_400_000).acks.length === 0, "…for 30 days");
+const rolled = buildHealth({ objects: overlaid(site.objects as never, { objects: { [site.objects.find((o) => o.class === "site")!.id]: { conditions: [{ type: "threat", status: "warning", reason: "roll-up", message: "2 of 3 members warning", derived: true, owner: "derive" }] } } }) as never, relations: site.relations, classes: site.classes, relationTypes: site.relationTypes, now: NOW });
+check(!threatsView(rolled, NOW).open.some((r) => r.class === "site"), "a roll-up is a sum of findings, not one: not listed");
 const held = buildHealth({ objects: overlaid(site.objects as never, { objects: { [vllm.id]: { conditions: [{ ...(site.objects.find((o) => o.id === vllm.id)!.attributes.conditions as Record<string, unknown>[]).find((c) => c.type === "threat"), maintenance: { until: null, note: "update" } }] } } }) as never, relations: site.relations, classes: site.classes, relationTypes: site.relationTypes, now: NOW });
 check(threatsView(held, NOW).open.some((r) => r.name === "vllm-amd"), "a threat critical in a maintenance window stays open");
 

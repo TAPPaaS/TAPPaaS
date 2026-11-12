@@ -10,6 +10,7 @@ import { AckWord, HealthGraph, Hits, Status } from "./health";
 const RANK: Record<Status, number> = { ok: 0, unknown: 1, warning: 2, critical: 3 };
 const ACK_DAYS = 30;
 const ACKS_SHOWN = 20;
+const ROLLED_UP = new Set(["roll-up", "rollup"]);
 
 export interface ThreatRow {
   id: string;
@@ -52,12 +53,13 @@ export function threatsView(doc: HealthGraph | null, now: number): ThreatsView {
   const rows: ThreatRow[] = [];
   const acks: ThreatAck[] = [];
   for (const n of doc?.nodes ?? []) {
-    const vuln = n.issues.find((i) => i.type === "vulnerability");
+    const vuln = n.issues.find((i) => i.type === "vulnerability" && !(i.derived && ROLLED_UP.has(i.reason ?? "")));
     const cve = n.types.vulnerability !== undefined
       ? { status: vuln?.status ?? n.types.vulnerability, reason: vuln?.reason ?? null, message: vuln?.message ?? null, open: (vuln?.status ?? n.types.vulnerability) === "warning" || (vuln?.status ?? n.types.vulnerability) === "critical" }
       : null;
     for (const i of n.issues) {
-      if (i.type !== "threat" || (i.status !== "warning" && i.status !== "critical")) continue;
+      // A finding, not a sum of them: a collection's roll-up repeats its members.
+      if (i.type !== "threat" || (i.status !== "warning" && i.status !== "critical") || (i.derived && ROLLED_UP.has(i.reason ?? ""))) continue;
       rows.push({
         id: n.id, class: n.class, name: n.name, label: n.label, module: n.module, environment: n.environment,
         status: i.status, reason: i.reason, message: i.message, since: i.since,
