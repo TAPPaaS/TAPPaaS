@@ -37,8 +37,8 @@ import { guestTarget } from "./checks";
 import { CheckResult, CheckRow, CheckStatus, CheckSubject, ClusterClient } from "./types";
 import { mkdirGuarded, renameGuarded, rmGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 import {
-  ComponentRecord, CveFacts, Decision, EffLevel, Mark, SiteView, categoryOf, decideCentral, decideSite, findingComponent, levelRankOf,
-  validateComponents,
+  ComponentRecord, CveFacts, Decision, EffLevel, Mark, SiteView, categoryOf, decideCentral, decideSite, findingComponent, inVersions,
+  levelRankOf, purlParts, splitKey, validateComponents,
 } from "../../../lib/ts/src/cve-decisions";
 
 export const SBOM_DIRNAME = "sbom";
@@ -608,6 +608,9 @@ export interface VexStatement {
   module: string; // whose targets it decides: "" = every target (templates, the estate-wide base)
   risk?: string; // exploitable/in_triage: the risk HERE, from ratings[] (source TAPPaaS) — low|medium|high|critical
   detail?: string; // the analysis as written: justification and detail, for people to read
+  // A statement made from a component record (componentStatements): it matches a
+  // finding of that component, at a version inside the record's, whatever its package.
+  component?: { eco: string; source: string; versions: string; entryVersions?: string };
 }
 
 const VEX_SUPPRESS = new Set(["not_affected", "false_positive", "resolved", "resolved_with_pedigree"]);
@@ -659,6 +662,12 @@ function vexMatching(f: Finding, vex: VexStatement[]): VexStatement[] {
   const fp = splitPurl(f.purl);
   return vex.filter((s) => {
     if (s.id !== f.id) return false;
+    if (s.component) {
+      const p = purlParts(f.purl);
+      const src = (f.src || p.name || f.pkg).toLowerCase();
+      return (p.eco || "generic") === s.component.eco && src === s.component.source && inVersions(s.component.versions, f.installed)
+        && inVersions(s.component.entryVersions, f.installed);
+    }
     if (s.refs.length === 0) return true;
     return s.refs.some((r) => {
       const rp = splitPurl(r);
@@ -674,7 +683,7 @@ function vexMatching(f: Finding, vex: VexStatement[]): VexStatement[] {
 export function vexCarried(f: Finding, vex: VexStatement[]): { statement: VexStatement; version: string } | null {
   const fp = splitPurl(f.purl);
   for (const s of vex) {
-    if (s.id !== f.id || s.source === PATCH_SOURCE) continue;
+    if (s.id !== f.id || s.source === PATCH_SOURCE || s.component) continue;
     for (const r of s.refs) {
       const rp = splitPurl(r);
       if (rp.base === fp.base && rp.version !== "" && rp.version !== fp.version) return { statement: s, version: rp.version };
@@ -1493,6 +1502,27 @@ export function loadComponents(configDir: string, fallbackRepo: string): { recor
     }
   }
   return { records, files, problems, modules };
+}
+
+// The named decisions of component records as VEX statements, for the list
+// scans the release preview makes: they know no module per finding, only which
+// module's statements decided it. Rules need the CVE's vector and are left to
+// the site's scan; a deferral is not a decision.
+export function componentStatements(records: Record<string, ComponentRecord>): VexStatement[] {
+  const out: VexStatement[] = [];
+  for (const [key, r] of Object.entries(records)) {
+    const k = splitKey(key);
+    if (!k) continue;
+    for (const [id, e] of Object.entries(r.cves ?? {})) {
+      if (e.level === undefined) continue;
+      const base = { id, refs: [], source: key, module: k.module === "templates" ? "" : k.module,
+        component: { eco: k.eco, source: k.source, versions: r.versions, ...(e.versions ? { entryVersions: e.versions } : {}) },
+        detail: [r.use, e.why].filter(Boolean).join(" ") };
+      if (e.level === "none") out.push({ ...base, state: e.state ?? "not_affected" });
+      else out.push({ ...base, state: "exploitable", ...(e.level !== "same" ? { risk: e.level } : {}) });
+    }
+  }
+  return out;
 }
 
 // Every <module>-vex.json in a registered module's directory (ADR-011 §8).

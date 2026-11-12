@@ -236,6 +236,8 @@ def load_vex(root):
                 continue
             p = os.path.join(dp, fn)
             mod = fn[:-len("-vex.json")]
+            if f"{mod}-components.json" in fns:
+                continue  # generated from the module's component records: not hand-kept, never cleaned
             try:
                 doc = json.load(open(p))
             except (OSError, ValueError):

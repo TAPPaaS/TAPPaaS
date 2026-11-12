@@ -1337,6 +1337,25 @@ do_phase_cve() {
     else
         info "  nothing to remove"
     fi
+    # A module with component records has its VEX generated from them, for the
+    # versions the site and the preview see now.
+    local exp_file="${CONFIG_DIR}/train-vex-export.json" gen
+    rm -f "${exp_file}"
+    out="$(python3 "${TRAIN_SCRIPTS}/cve-triage.py" --repo "${REPO_DIR}" export --report "${exp_file}" 2>&1)"; rc=$?
+    [[ -n "${out}" ]] && sed 's/^/  /' <<<"${out}"
+    if (( rc != 0 )) || [[ ! -s "${exp_file}" ]]; then
+        error "  the VEX could not be generated from the component records — nothing was committed"
+        local x; for x in $(g diff --name-only -- '*-vex.json'); do g checkout -q -- "${x}"; done
+        return 1
+    fi
+    mapfile -t gen < <(jq -r '.files[]' "${exp_file}")
+    if (( ${#gen[@]} > 0 )); then
+        local x; for x in "${gen[@]}"; do g add -- "${x}"; done
+        if ! g diff --cached --quiet; then
+            g commit -q -m "chore(vex): generate ${#gen[@]} VEX file(s) from component records" \
+                || { error "could not commit the generated VEX"; return 1; }
+        fi
+    fi
     # Published before the site tracks the branch: phase 2 proves what is on the forge.
     if [[ "$(g rev-parse "${br}")" != "$(g rev-parse "origin/${br}" 2>/dev/null)" ]]; then
         g push -q origin "${br}" || { error "could not publish the VEX cleanup on ${br}"; return 1; }

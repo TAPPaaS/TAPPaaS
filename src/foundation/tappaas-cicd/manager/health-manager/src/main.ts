@@ -49,7 +49,7 @@ import { nodeGuests } from "./guests";
 import { reachLines, runVlanReach, writeReach } from "./vlanreach";
 import {
   CliSecurityIO, loadVex, scanComponentList, scanImageRefs, PREVIOUS_FILE, SITE_CDX_FILE, STATUS_FILE, notify, readStatus, renderReport, runScan, sbomDir,
-  ScanStatus, runRescan, sweepIsNewer, writeScan,
+  ScanStatus, runRescan, sweepIsNewer, writeScan, componentStatements, loadComponents,
 } from "./security";
 import { HISTORY_FILE, SiteSecurity, loadSiteSecurity, recordHistory, renderSecurity } from "./site-score";
 import { cveChangesEvent, cveNewEvent, quietUnits, securityJournal } from "./security-alerts";
@@ -572,9 +572,10 @@ function cmdValidate(opts: Opts, client: ClusterClient): number {
 // module directory), so a triage decision counts the same in both (#788).
 function verbVex(opts: Opts, off: boolean): ReturnType<typeof loadVex>["statements"] {
   if (off) return [];
-  const v = loadVex(opts.configDir, process.env.TAPPAAS_REPO ?? "/home/tappaas/TAPPaaS");
+  const repo = process.env.TAPPAAS_REPO ?? "/home/tappaas/TAPPaaS";
+  const v = loadVex(opts.configDir, repo);
   for (const u of v.unreadable) process.stderr.write(`[Warning] VEX file not parseable, decides nothing: ${u}\n`);
-  return v.statements;
+  return [...v.statements, ...componentStatements(loadComponents(opts.configDir, repo).records)];
 }
 
 // ── scan nix-list (#788) ──────────────────────────────────────────────
