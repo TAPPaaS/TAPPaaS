@@ -385,7 +385,7 @@ Loki today.
 | Port scans and probing from the WAN | **R** (CrowdSec on `filterlog`: `crowdsecurity/pf-scan-multi_ports`) | OPNsense `filterlog` | Layer 1 (CrowdSec on the firewall reads it locally) |
 | Blocked outbound bursts from a guest (a compromised guest calling out) | D | `filterlog` (outbound blocks per source) | Layer 1 rule |
 | Lateral movement: blocked attempts from one zone into mgmt or into another tenant's zone | D (critical into tier 0) | `filterlog` | Layer 1 rule |
-| IDS alerts: exploit attempts, malware command-and-control, known-bad TLS fingerprints, policy hits | D. IPS mode (drop) later, per zone (question 2) | Suricata `eve.json` (*new*) → syslog → Loki | Layer 1: Suricata on OPNsense, ET Open rules, IDS mode on the WAN and on the client zones |
+| IDS alerts: exploit attempts, malware command-and-control, known-bad TLS fingerprints, policy hits | D. IPS (drop) later, on the WAN only (settled: alert first) | Suricata `eve.json` (*new*) → syslog → Loki | Layer 1: Suricata on OPNsense, ET Open rules, IDS mode on the WAN and on the client zones |
 | Exploit attempt against a CVE open on the target module (§3.4) | D, critical; **R** through the CrowdSec ban | CrowdSec `http-cve`, Suricata ET with CVE metadata | Layer 1 correlation |
 | DNS requests to blocklisted or threat domains | D (repeated hits from one guest) | Unbound blocklist hits | Layer 1 rule |
 | CrowdSec decisions themselves (who was banned, why, how often) | D (a summary, and a warning when one site user is banned) | CrowdSec log (*new*) → syslog → Loki | Layer 1 |
@@ -534,6 +534,11 @@ at small). The binding limit is ADR-044's small budget, not a single node's size
 - Event management (incidents, on-call; ADR-040 O6) is parked. This plan settles only the SIEM
   part: events stay in Loki, and the CMDB holds the CI state.
 - Windows CVEs through Wazuh, and Wazuh's timing, wait for the Wazuh work.
+- **Suricata alerts first.** It runs as an IDS on the WAN and the client zones. After 2–4 weeks
+  of alerts, IPS (drop) may be turned on for the WAN only, with only the categories that rarely
+  misfire: known-bad networks, known command-and-control servers, compromised hosts. Internal
+  zones stay alert-only. That step is its own issue, with a rollback switch and a netmap test on
+  the firewall VM.
 
 **For review:**
 
@@ -541,7 +546,4 @@ at small). The binding limit is ADR-044's small budget, not a single node's size
    acknowledged with a reason, one finding per CI and rule with a count, criticals mailed even
    inside a maintenance window.
 
-**Still open:**
-
-2. **Suricata mode.** IDS only (alert), or IPS (drop) on the WAN from the start? IPS can break a
-   published service on a false positive. The plan assumes IDS first (P3).
+Nothing else is open.
