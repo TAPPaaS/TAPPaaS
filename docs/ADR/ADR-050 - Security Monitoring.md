@@ -243,8 +243,30 @@ This iteration is P0–P4.
 
 ## Implementation status
 
-Branch `feat/adr050-security-monitoring`, 2026-11-12. Unit tests pass offline; nothing has run
-on a site yet.
+Merged to `main` 2026-11-12 (`00745bfe`), live-tested on hrossen the same day.
+
+**Live test, hrossen, 2026-11-12** (deployed from the branch under a pull hold):
+
+- tappaas-cicd and logging updated, their module tests pass; the 11 security rules are in
+  Grafana with their levels; Loki reloaded its runtime config (the security streams at 90 days).
+- lazysite updated: audit rules loaded, journald `Audit=true`, its system recorded. A write in
+  `/etc/secrets` and a kernel module loaded from a session reached Loki as `transport="audit"`
+  records; the module load raised KernelModuleFromSession (warning).
+- Seven failed SSH logins as an unknown user, then a key login, from the mothership: sshd's own
+  `PerSourcePenalties` dropped the later attempts, and SshLoginAfterBruteForce raised a
+  **critical** security condition on lazysite, owner `siem`, not in maintenance. An ack with a
+  note closed it at the next assess; the 24 h warning stayed.
+- The guest-system gate passed for lazysite, failed critical when its record was swapped for a
+  foreign system, and passed again when it was restored.
+- Real logs changed four things (`23091a53`, `736e3f86`): health-manager's gates probed the
+  firewall as `tappaas` every 5 minutes (four "Invalid user" lines each run, which made a false
+  critical on `network`); the mothership's internet-facing sshd sees 75–150 failed logins a day
+  per scanning address, so SSH brute force is `info` (recorded, not mailed, no condition);
+  pvedaemon's message starts with a space; each boot's `audit_enabled=0` initialisation line is
+  no switch-off.
+- Found: an ack is per condition type (ADR-041), so an ack given on a security hit also silences
+  a CVE warning on the same object until the status changes. D12's "an ack covers the finding"
+  needs acks per finding.
 
 | Part | State |
 |---|---|
@@ -252,7 +274,7 @@ on a site yet.
 | Hits recorded | **Built.** The alert receiver folds every `type=security` alert into `/var/lib/tappaas/siem-findings.json`: per rule, host and CI id, first, last and count; pruned at 7, 30 and 90 days by level |
 | Rule format | **Built.** `security: info \| warning \| critical` on an ADR-039 rule adds `type` and `level` labels; security rules are rendered only while monitoring is on |
 | Switch and retention (D1, D2) | **Built.** `site.json` `security` (`monitoring`, `retentionDays`); Loki's runtime config (`/etc/tappaas-loki/runtime.yaml`) keeps the security streams, written by logging's update |
-| Rule pack (D3) | **First part built**, hand-written: SSH brute force, login after a brute force (critical), password login, sudo refused, audit stopped, kernel module from a session (logging, scope all); Authentik login brute force, suspicious request, impersonation (identity); Proxmox sign-in failures (pvehost); firewall sign-in failures (network). The Sigma conversion is not done |
+| Rule pack (D3) | **First part built**, hand-written: SSH brute force (info), login after a brute force (critical), password login, sudo refused, audit stopped, kernel module from a session (logging, scope all); Authentik login brute force, suspicious request, impersonation (identity); Proxmox sign-in failures (pvehost); firewall sign-in failures (network). The Sigma conversion is not done |
 | Guests' audit records (D6) | **Built.** NixOS guests: journald's audit socket, rules on `/etc/secrets`, `/root/.ssh`, `/etc/ssh` and kernel modules from a session, plus a module's `securityPaths` that exist; labelled `transport="audit"` |
 | Closure check (D6) | **Built** as the `guest-system` gate (critical): update-os.sh records each system it activates or stages in `config/.guest-systems/<vmname>` (the last 20); a profile or running system not in it fails. The weekly store verification is not built |
 | CrowdSec processor (D4), Suricata (D5), Caddy and CrowdSec logs into Loki (P0) | **Not built**: they change OPNsense's plugins and the logging VM's NixOS, and need a live firewall to be written against |
