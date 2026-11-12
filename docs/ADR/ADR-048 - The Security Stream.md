@@ -55,6 +55,7 @@ qualify:
 | Security | a nixpkgs lock move inside the same NixOS release; an image pin inside the same minor; a code fix for a vulnerability | commit type `build(pin)`, or a `fix` with `Patch: security` |
 | Decisions | component records (ADR-047) | commit type `chore(vex)` |
 | Bug fix that affects operation | a backup that does not run, an update that fails, a service that does not start, a check that reports wrongly | a `fix` with a `Patch:` trailer |
+| Health rule correction | a released rule file that reports wrongly (ADR-049 D7) | a `fix(health-rules)` with a `Patch:` trailer; it changes rule files only, and is a patch like any other bug fix |
 
 **The marker is a commit trailer** on the `fix` commit on `main`:
 

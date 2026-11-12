@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** — every question settled with the operator; for his review |
-| **Version** | 0.4 |
-| **Date** | 2026-11-11 |
+| **Status** | **Accepted** (2026-11-12) — D9 built; D1–D8 to build |
+| **Version** | 1.0 |
+| **Date** | 2026-11-12 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | Amends ADR-045 (D1 states, D2 lifecycle, D5 gate) and ADR-011 §8 (VEX). Built on the measurement in [`docs/plans/cve-as-built.md`](../plans/cve-as-built.md). Delivery to production is [ADR-048](<ADR-048 - The Security Stream.md>). |
-| **Changelog** | v0.1 (2026-11-10): first draft. v0.2 (2026-11-10): the operator's answers. Central decisions are **per component**, not per CVE and version: the component record replaces the assessment file, and VEX is generated from it (D2, D3). A site acceptance **lowers the site's score** (D5). Decisions reach production **faster than code** (ADR-048). The scan/rescan defect and "new means first seen" are **built** (D9); every figure is re-sized against the corrected scan. v0.3 (2026-11-11): the operator's answers to the open questions. **A decision is a reclassification** (D4): every CVE has an effective level, the same as upstream, lower, or none, and is scored by that level alone; the separate points for analysed and unanalysed items go. An unread CVE differs from a confirmed one in the view, not in points. The in-between level is expressed in VEX as `exploitable` with a TAPPaaS rating. Version scope settled: automatic inside a major, Review at a new major. Review period settled: 90 days (180 at most) for records grounded in how the code is used, one year for records grounded in how TAPPaaS is deployed. Authors as proposed. The condition-type question goes to the health review. v0.4 (2026-11-11): **Proposed.** The single points table is 20 / 8 / 3 / 1, so levels stay where they are today and fall as decisions are made. No question is open. |
+| **Changelog** | v0.1 (2026-11-10): first draft. v0.2 (2026-11-10): the operator's answers. Central decisions are **per component**, not per CVE and version: the component record replaces the assessment file, and VEX is generated from it (D2, D3). A site acceptance **lowers the site's score** (D5). Decisions reach production **faster than code** (ADR-048). The scan/rescan defect and "new means first seen" are **built** (D9); every figure is re-sized against the corrected scan. v0.3 (2026-11-11): the operator's answers to the open questions. **A decision is a reclassification** (D4): every CVE has an effective level, the same as upstream, lower, or none, and is scored by that level alone; the separate points for analysed and unanalysed items go. An unread CVE differs from a confirmed one in the view, not in points. The in-between level is expressed in VEX as `exploitable` with a TAPPaaS rating. Version scope settled: automatic inside a major, Review at a new major. Review period settled: 90 days (180 at most) for records grounded in how the code is used, one year for records grounded in how TAPPaaS is deployed. Authors as proposed. The condition-type question goes to the health review. v0.4 (2026-11-11): **Proposed.** The single points table is 20 / 8 / 3 / 1, so levels stay where they are today and fall as decisions are made. No question is open. v1.0 (2026-11-12): **Accepted** by the operator. |
 
 ADR-045 gave CVEs a lifecycle and a score. Running it for one boundary showed that the records
 are the wrong size for daily work: a VEX statement is one CVE at one version, a site ack is a
@@ -431,6 +431,8 @@ through a pull request. Whether `security` should be one condition type for CVE 
 other security reasons is the health review's question.
 
 Settled in v0.4 (operator, 2026-11-11): the single points table is 20 / 8 / 3 / 1 / 0.
+
+Accepted in v1.0 (operator, 2026-11-12).
 
 ## Open questions
 
