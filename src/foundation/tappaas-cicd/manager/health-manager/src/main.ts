@@ -26,6 +26,7 @@
 //   health-manager report security [--all] [--json]      (prints the last scan)
 //   health-manager scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update] [--no-vex]
 //   health-manager score --details <file> | --items <file> [--json]
+//   health-manager cve validate|preview <components-file>
 //                            (ADR-045 D3: the one CVE risk score — a release
 //                             preview's per module, or a site's by zone)
 //   health-manager scan images --refs <file> [--no-db-update] [--no-vex]
@@ -67,6 +68,8 @@ import { readLastSweep } from "./cmdbsweep";
 import { cmdRules, readRules } from "./rules";
 import { readWindows } from "./windows";
 import { cmdScore } from "./score-verb";
+import { cmdCve } from "./cve-verb";
+import { siteDecisions } from "./site-decisions";
 // ── ADR-041 emit half ──
 import { EMIT_HELP, liveEmitContext, runEmitVerb } from "./emit-verbs";
 // ── end ADR-041 emit half ──
@@ -173,6 +176,17 @@ export const HELP: HelpSpec = {
         "{\"<ref>\": {\"findings\": [...], \"suppressed\": [...], \"error\": \"\"}}.",
     },
     {
+      usage: "cve validate <components-file> | cve preview <components-file> [--status FILE] [--json]", effect: "read",
+      options: [
+        ["--status FILE", "The scan to try the records against (default config/sbom/cve-status.json)."],
+        ["--json", "Print the rows as JSON."],
+      ],
+      details:
+        "Component records (<module>-components.json) checked before they are committed. validate\n" +
+        "lists what is wrong with a file. preview lists every CVE of the last scan the file's records\n" +
+        "cover, with its level and mark now and with these records. Writes nothing.",
+    },
+    {
       usage: "score [--details <file>] [--items <file>] [--json]", effect: "read",
       options: [
         ["--details <file>", "A release preview's details (config/train-preview-details.json): each module's release score."],
@@ -180,8 +194,9 @@ export const HELP: HelpSpec = {
         ["--json", "Print the scores as JSON, with the weights, bands and multipliers used."],
       ],
       details:
-        "The one CVE risk score (ADR-045 D3). Per counted CVE: risk 25/10/3/1 by its TAPPaaS rating,\n" +
-        "open or carried 20/8 by its severity. Only a module's highest category counts, each further\n" +
+        "The one CVE risk score. Each CVE counts at its effective level (upstream, lower after a decision,\n" +
+        "or none): critical 20, high 8, medium 3, low 1; an unread medium or low and an accepted CVE count\n" +
+        "nothing. Only a module's highest level counts, each further\n" +
         "item at half the one before. Levels: ok 0, low <7, medium <16, high <30, critical ≥30. A zone\n" +
         "is its highest module times its tier's multiplier (0 ×2, 1 ×1, 2 ×0.75, 3 ×0.5, 4 ×0.25,\n" +
         "5–6 ×0.1, none ×1); an environment the highest of its zones; the site the highest of its\n" +
@@ -634,14 +649,16 @@ function cmdScanSecurity(opts: Opts, client: ClusterClient): number {
   const prevStatus = readStatus(join(sbomDir(opts.configDir), STATUS_FILE));
   let status: ScanStatus;
   let cdx: Record<string, unknown>;
+  let decisionState: Record<string, string> | undefined;
+  const site = siteDecisions(opts.configDir);
   if (rescan) {
-    const r = runRescan({ configDir: opts.configDir, repoDir, log: (m) => info(`  ${m}`) }, io);
+    const r = runRescan({ configDir: opts.configDir, repoDir, log: (m) => info(`  ${m}`), site }, io);
     if ("error" in r) die(`scan security --rescan: ${r.error}`);
-    ({ status, cdx } = r);
+    ({ status, cdx, decisionState } = r);
   } else {
-    ({ status, cdx } = runScan({ configDir: opts.configDir, defaultNode: DEFAULT_NODE, repoDir, log: (m) => info(`  ${m}`) }, client, io));
+    ({ status, cdx, decisionState } = runScan({ configDir: opts.configDir, defaultNode: DEFAULT_NODE, repoDir, log: (m) => info(`  ${m}`), site }, client, io));
   }
-  const diff = writeScan(opts.configDir, status, cdx);
+  const diff = writeScan(opts.configDir, status, cdx, decisionState);
   const sec = recordHistory(opts.configDir, status);
   info("");
   for (const l of renderReport(status, false, Date.now())) info(l);
@@ -877,6 +894,13 @@ export function run(argv: string[], client: ClusterClient): number {
         if (opts.rest[0] === "images") return cmdScanImages({ ...opts, rest: opts.rest.slice(1) });
         if (opts.rest[0] !== "security") die("scan: expected 'security' or 'nix-list'");
         return cmdScanSecurity({ ...opts, rest: opts.rest.slice(1) }, client);
+      case "cve":
+        try {
+          return cmdCve(opts.rest, opts.configDir, (l) => process.stdout.write(l + "\n"));
+        } catch (e) {
+          die((e as Error).message);
+        }
+        return 1;
       case "score":
         try {
           return cmdScore(opts.rest, (l) => process.stdout.write(l + "\n"));

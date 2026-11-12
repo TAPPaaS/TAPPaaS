@@ -224,7 +224,7 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   io.scan = scan([target("nextcloud", "act", [crit("CVE-1")]), target("node:tappaas1", "watch", []), target("image:network/x", "failed", [])]);
   const r = assess(io, {}, NOW);
   check(got(r, nc, "security")?.status === "warning" && got(r, nc, "security")?.reason === "cve-high", "one open critical: high, a warning on the module");
-  check(got(r, nc, "security")?.message === "score 20, high: 1 critical", "…the message gives the score and what counts");
+  check(got(r, nc, "security")?.message === "score 20, high: 1 critical · 1 unread", "…the message gives the score, what counts and what nobody has read");
   check(got(r, m1, "security")?.status === "ok", "…nothing counted is ok on the node");
   check(got(r, net, "security")?.reason === "cve-scan-failed", "…a failed image is its module's warning");
   check(got(r, zr, "security")?.reason === "cve-high" && got(r, zr, "security")?.message.includes("×1") === true, "the zone has its own score, with its multiplier");

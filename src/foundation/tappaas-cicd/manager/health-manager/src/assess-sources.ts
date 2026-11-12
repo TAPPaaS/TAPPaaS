@@ -251,6 +251,14 @@ export function levelStatus(l: Level): ConditionStatus {
 export const CVE_LEVEL_REASONS = ["cve-medium", "cve-high", "cve-critical"];
 const levelReason = (l: Level): string => (levelStatus(l) === "ok" ? "ok" : `cve-${l}`);
 
+// What is behind a level besides its points: "3 unread, 2 accepted". Confirmed
+// items need nothing from anyone and are not named.
+export function marksText(m: Partial<Record<string, number>> | undefined): string {
+  if (!m) return "";
+  const words: [string, string][] = [["unread", "unread"], ["rule", "by rule"], ["review", "to review"], ["deferred", "deferred"], ["accepted", "accepted"]];
+  return words.filter(([k]) => (m[k] ?? 0) > 0).map(([k, w]) => `${m[k]} ${w}`).join(", ");
+}
+
 function scoreMessage(a: { score: number; level: Level }, why: string): string {
   return `score ${a.score}, ${a.level}${why ? `: ${why}` : ""}`;
 }
@@ -265,7 +273,7 @@ export function fromCve(s: ScanStatus | null, sec: SiteSecurity | null, nowMs: n
   const units = sec?.units ?? {};
   for (const u of Object.values(units)) {
     const o = idx.resolve(u.subject);
-    const why = u.category ? `${u.counted} ${u.category}` : "";
+    const why = [u.category ? `${u.counted} ${u.category}` : "", marksText(u.marks)].filter(Boolean).join(" · ");
     add(o, levelStatus(u.level), levelReason(u.level), scoreMessage(u, why));
     if (u.failed.length > 0) {
       const t = s.targets.filter((x) => u.failed.includes(x.id));

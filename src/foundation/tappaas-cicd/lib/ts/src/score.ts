@@ -3,12 +3,14 @@
 // else. health-manager's `score` verb, the release preview (through that verb)
 // and the release record all call it.
 //
-// A counted CVE is in one of three states (decided ones count nothing):
-//   risk     analysed, exploitable here — counted at its TAPPaaS rating
-//   open     critical/high nobody has analysed — counted at its CVE severity
-//   carried  analysed for another version of the package — counted as open
-// Points: risk 25/10/3/1 (critical/high/medium/low), open and carried 20/8
-// (critical/high; an unanalysed medium or low counts nothing).
+// Every CVE is scored by its EFFECTIVE level (cve-decisions.ts): the upstream
+// level, a lower one a decision set, or none. One table: critical 20, high 8,
+// medium 3, low 1, none 0. Whether a person has read it changes what the view
+// says, not the points. An unanalysed medium or low is listed and not counted;
+// an accepted CVE counts nothing on the site that accepted it.
+//
+// The release preview still hands items in the older shape (state + rating):
+// decided → none; risk → its rating (or severity); open, carried → severity.
 //
 // A module's score: only the highest category with any item counts; within it
 // the items are taken highest first, each counting half the one before. So a
@@ -24,6 +26,8 @@
 // The weights, the bands and the multipliers are judgement calls, kept in the
 // tables below so changing one is one edit; the release record stores them.
 
+import { EffLevel, Mark, MARKS } from "./cve-decisions";
+
 export type CveState = "decided" | "risk" | "open" | "carried";
 export type Category = "critical" | "high" | "medium" | "low";
 export type Level = "ok" | "low" | "medium" | "high" | "critical";
@@ -31,11 +35,8 @@ export type Level = "ok" | "low" | "medium" | "high" | "critical";
 export const CATEGORIES: Category[] = ["critical", "high", "medium", "low"];
 export const LEVELS: Level[] = ["ok", "low", "medium", "high", "critical"];
 
-// Points per counted CVE (ADR-045 D3).
-export const WEIGHTS: { risk: Record<Category, number>; open: Partial<Record<Category, number>> } = {
-  risk: { critical: 25, high: 10, medium: 3, low: 1 },
-  open: { critical: 20, high: 8 },
-};
+// Points per counted CVE, by its effective level.
+export const POINTS: Record<Category, number> = { critical: 20, high: 8, medium: 3, low: 1 };
 
 // The lower bound of each level above ok: a score at or above it has that level.
 export const BANDS: { level: Level; from: number }[] = [
@@ -59,6 +60,9 @@ export interface ScoredItem {
   severity?: string; // the CVE's own severity: Critical | High | Medium | Low (any case)
   rating?: string; // a risk item's TAPPaaS rating: critical | high | medium | low
   pkg?: string;
+  level?: EffLevel; // the effective level (cve-decisions.ts); when present it is what counts
+  mark?: Mark;
+  counted?: boolean; // the decision's own verdict; absent: derived from level and mark
 }
 
 export interface ModuleScore {
@@ -68,6 +72,7 @@ export interface ModuleScore {
   category: Category | null; // the category that counts
   counted: number; // items in that category
   counts: Record<CveState, number>;
+  marks: Record<Mark, number>;
 }
 
 export interface Aggregate {
@@ -82,20 +87,31 @@ function lc(s: string | undefined): string {
   return (s ?? "").trim().toLowerCase();
 }
 
-// The category and points of one item; null when it counts nothing (decided, or
-// an unanalysed medium/low). A risk item without a TAPPaaS rating counts at its
-// CVE severity, with the risk weights: analysed, and nobody said it is less.
+// The category and points of one item; null when it counts nothing.
 export function itemPoints(i: ScoredItem): { category: Category; points: number } | null {
-  if (i.state === "decided") return null;
-  if (i.state === "risk") {
-    const r = lc(i.rating);
-    const c = (CATEGORIES as string[]).includes(r) ? (r as Category) : (lc(i.severity) as Category);
-    if (!(CATEGORIES as string[]).includes(c)) return null;
-    return { category: c, points: WEIGHTS.risk[c] };
+  const lv = effectiveOf(i);
+  if (!lv || lv === "none") return null;
+  if (i.counted === false) return null;
+  if (i.counted === undefined) {
+    const mark = markOf(i);
+    if (mark === "accepted") return null;
+    if ((mark === "unread" || mark === "review" || mark === "deferred") && (lv === "medium" || lv === "low")) return null;
   }
-  const c = lc(i.severity) as Category;
-  const p = WEIGHTS.open[c];
-  return p === undefined ? null : { category: c, points: p };
+  return { category: lv, points: POINTS[lv] };
+}
+
+export function effectiveOf(i: ScoredItem): EffLevel | null {
+  if (i.level) return i.level;
+  if (i.state === "decided") return "none";
+  const r = lc(i.rating);
+  if (i.state === "risk" && (CATEGORIES as string[]).includes(r)) return r as Category;
+  const c = lc(i.severity);
+  return (CATEGORIES as string[]).includes(c) ? (c as Category) : null;
+}
+
+export function markOf(i: ScoredItem): Mark {
+  if (i.mark) return i.mark;
+  return i.state === "decided" || i.state === "risk" ? "confirmed" : i.state === "carried" ? "review" : "unread";
 }
 
 export function levelOf(score: number): Level {
@@ -141,6 +157,7 @@ export function halvingSum(points: number[]): number {
 
 export function moduleScore(items: ScoredItem[]): ModuleScore {
   const counts: Record<CveState, number> = { decided: 0, risk: 0, open: 0, carried: 0 };
+  const marks = Object.fromEntries(MARKS.map((m) => [m, 0])) as Record<Mark, number>;
   const by: Record<Category, number[]> = { critical: [], high: [], medium: [], low: [] };
   const seen = new Set<string>();
   for (const i of items) {
@@ -149,12 +166,13 @@ export function moduleScore(items: ScoredItem[]): ModuleScore {
     if (i.id && seen.has(key)) continue;
     if (i.id) seen.add(key);
     if (i.state in counts) counts[i.state]++;
+    marks[markOf(i)]++;
     const p = itemPoints(i);
     if (p) by[p.category].push(p.points);
   }
   const category = CATEGORIES.find((c) => by[c].length > 0) ?? null;
   const raw = category ? halvingSum(by[category]) : 0;
-  return { score: displayScore(raw), raw, level: levelOf(raw), category, counted: category ? by[category].length : 0, counts };
+  return { score: displayScore(raw), raw, level: levelOf(raw), category, counted: category ? by[category].length : 0, counts, marks };
 }
 
 // A tier that is no number (the overlays, work, wan) counts ×1; a tier above 6
@@ -251,6 +269,6 @@ export function releaseScores(mods: Record<string, ScoredItem[]>): { release: Ag
 }
 
 // The values a score was computed with, stored with a release record.
-export function scoreModel(): { weights: typeof WEIGHTS; bands: typeof BANDS; tierMultipliers: typeof TIER_MULTIPLIERS; halving: number } {
-  return { weights: WEIGHTS, bands: BANDS, tierMultipliers: TIER_MULTIPLIERS, halving: 0.5 };
+export function scoreModel(): { points: typeof POINTS; bands: typeof BANDS; tierMultipliers: typeof TIER_MULTIPLIERS; halving: number } {
+  return { points: POINTS, bands: BANDS, tierMultipliers: TIER_MULTIPLIERS, halving: 0.5 };
 }

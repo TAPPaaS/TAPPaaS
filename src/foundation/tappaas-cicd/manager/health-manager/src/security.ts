@@ -36,6 +36,10 @@ import { isManaged, loadConfigModules, readModuleJson, siteNodeHostnames } from 
 import { guestTarget } from "./checks";
 import { CheckResult, CheckRow, CheckStatus, CheckSubject, ClusterClient } from "./types";
 import { mkdirGuarded, renameGuarded, rmGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
+import {
+  ComponentRecord, CveFacts, Decision, EffLevel, Mark, SiteView, categoryOf, decideCentral, decideSite, findingComponent, levelRankOf,
+  validateComponents,
+} from "../../../lib/ts/src/cve-decisions";
 
 export const SBOM_DIRNAME = "sbom";
 export const STATUS_FILE = "cve-status.json";
@@ -63,6 +67,7 @@ export interface Finding {
   vexModules?: string[]; // a list scan's suppressed finding: whose statements decided it ("" = templates, every module)
   triage?: { module: string; state: string; risk: string }[]; // a list scan's kept finding: analysed, still counted (exploitable)
   unversioned?: boolean; // matched on a CVE record with no version range: every version "matches" — check first
+  src?: string; // the source package a distribution files its advisories under (Debian: tiff for libtiff6)
 }
 
 export interface TargetStatus {
@@ -111,6 +116,24 @@ export interface CveItem {
   version: string;
   analysis?: string; // the VEX statement's analysis (decided, risk, carried: the earlier one)
   carriedFrom?: string; // carried: the version the earlier statement named
+  // The decision (cve-decisions.ts), when the scan made one: what counts is `level`.
+  level?: EffLevel; // effective: the same as upstream, lower, or none
+  mark?: Mark; // unread, rule, confirmed, deferred, review, accepted
+  counted?: boolean;
+  component?: string; // <module>/<eco>:<source>
+  reason?: string;
+  use?: string;
+  rule?: string;
+  author?: string;
+  decided?: string;
+  reviewBy?: string;
+  flags?: string[];
+  old?: { level: EffLevel; mark: Mark; why?: string };
+  note?: string;
+  kev?: string;
+  epss?: number;
+  vector?: string;
+  modifiedVector?: string;
 }
 
 export interface ScanStatus {
@@ -505,6 +528,19 @@ function trivyProps(type: string, p: { SrcName?: string; SrcVersion?: string; Sr
 
 // An inventory of OS packages taken before the source package was kept: the
 // rescan cannot match it as the scan did, and must not pretend to.
+// A rescan's findings carry no source package (trivy lists packages only with
+// --list-all-pkgs): it comes from the stored inventory, by purl, then by name.
+export function withSources(findings: Finding[], comps: Component[]): Finding[] {
+  const by = new Map<string, string>();
+  for (const c of comps) {
+    const src = c.properties?.find((x) => x.name === `${TRIVY_PROP}SrcName`)?.value;
+    if (!src) continue;
+    if (c.purl) by.set(c.purl.split("?")[0], src);
+    by.set(`name:${c.name}`, src);
+  }
+  return findings.map((f) => (f.src ? f : { ...f, ...((by.get(f.purl.split("?")[0]) ?? by.get(`name:${f.pkg}`)) ? { src: by.get(f.purl.split("?")[0]) ?? by.get(`name:${f.pkg}`) } : {}) }));
+}
+
 export function lacksSource(comps: Component[]): boolean {
   const os = comps.filter((c) => /^pkg:(deb|apk|rpm)\//.test(c.purl));
   return os.length > 0 && !os.some((c) => c.properties?.some((x) => x.name === `${TRIVY_PROP}SrcName`));
@@ -520,8 +556,17 @@ export function trivyParse(json: string): { family: string; osName: string; comp
       const props = trivyProps(res.Type ?? "", p);
       components.push({ type: "library", name: p.Name ?? "", version, purl: p.Identifier?.PURL ?? p.PkgIdentifier?.PURL ?? "", ...(props.length ? { properties: props } : {}) });
     }
+    const srcOf = new Map<string, string>();
+    for (const p of res.Packages ?? []) {
+      if (!p.SrcName) continue;
+      const purl = p.Identifier?.PURL ?? p.PkgIdentifier?.PURL ?? "";
+      if (purl) srcOf.set(purl, p.SrcName);
+      if (p.Name) srcOf.set(`name:${p.Name}`, p.SrcName);
+    }
     for (const v of res.Vulnerabilities ?? []) {
+      const src = srcOf.get(v.PkgIdentifier?.PURL ?? "") ?? srcOf.get(`name:${v.PkgName ?? ""}`);
       findings.push({
+        ...(src ? { src } : {}),
         id: v.VulnerabilityID ?? "",
         severity: normSeverity(v.Severity ?? ""),
         pkg: v.PkgName ?? "",
@@ -673,6 +718,109 @@ export function cveItems(all: Finding[], vex: VexStatement[]): CveItem[] {
   return [...by.values()].sort((a, b) => STATE_RANK[a.state] - STATE_RANK[b.state] || a.id.localeCompare(b.id));
 }
 
+// ── decisions: component records on top of the scan ────────────────────
+// What one target needs to decide its CVEs: the records, the facts about each
+// CVE, and the site. Built once per scan (decisionContext) and handed to
+// summarize through the target's VEX list (withDecisions), so every scanner
+// path uses it without its own parameter.
+export interface TargetDecisions {
+  module: string; // the module the target is an instance of
+  unit: string; // the score unit it counts in (site-score.ts unitOf)
+  records: Record<string, ComponentRecord>; // every component record the site has
+  baseline: Set<string>; // "<name>@<version>" of the shared NixOS closure
+  facts: (ids: string[]) => Record<string, CveFacts>;
+  now: number;
+  firstSeen: (key: string) => string | undefined; // "<CVE> <pkg>" on this target
+  guardSince: (component: string, id: string, guard: string) => string | undefined;
+  site: (component: string, record: ComponentRecord | undefined, id: string) => SiteView;
+}
+
+export type VexArg = VexStatement[] & { decisions?: TargetDecisions };
+export function withDecisions(vex: VexStatement[], dec: TargetDecisions | undefined): VexArg {
+  const out = [...vex] as VexArg;
+  if (dec) out.decisions = dec;
+  return out;
+}
+
+// The component a finding is decided under, and its record. A shared NixOS
+// package is the baseline's (templates); otherwise the module's own record,
+// then the baseline's, which has always decided for every target.
+export function recordFor(f: Finding, dec: TargetDecisions): { key: string; record: ComponentRecord | undefined } {
+  const inBase = f.purl.startsWith("pkg:nix/") && dec.baseline.has(`${f.pkg}@${f.installed}`);
+  const own = findingComponent(dec.module, f, false);
+  const base = findingComponent(dec.module, f, true);
+  const order = inBase ? [base, own] : [own, base];
+  for (const k of order) if (dec.records[k]) return { key: k, record: dec.records[k] };
+  return { key: order[0], record: undefined };
+}
+
+// One finding's decision: from its component record, or else from the legacy
+// VEX statements (a module that has no records yet, a Community module).
+export function decideFinding(f: Finding, vex: VexStatement[], dec: TargetDecisions, facts: Record<string, CveFacts>): Decision {
+  const { key, record } = recordFor(f, dec);
+  const fx = facts[f.id];
+  const subject = { id: f.id, severity: f.severity, version: f.installed, facts: fx, firstSeen: dec.firstSeen(`${f.id} ${f.pkg}`) };
+  let d: Decision;
+  if (record) {
+    d = decideCentral(subject, key, record, { now: dec.now, guardSince: (g) => dec.guardSince(key, f.id, g) });
+  } else {
+    const upstream = categoryOf(f.severity);
+    const up: EffLevel = upstream ?? "none";
+    const base: Decision = { component: key, upstream, level: up, mark: "unread", counted: false, flags: [] };
+    const decided = vexDeciders(f, vex);
+    const tri = decided.length ? [] : vexTriage(f, vex);
+    if (decided.length) {
+      const st = decided[0];
+      d = { ...base, level: "none", mark: "confirmed", why: st.detail ?? (st.source === PATCH_SOURCE ? "fixed by a patch nixpkgs applies" : undefined),
+        vex: { state: st.state }, reason: st.source === PATCH_SOURCE ? "patched" : "vex" };
+    } else if (tri.length) {
+      const rank = ["critical", "high", "medium", "low"];
+      const t = [...tri].sort((a, b) => (rank.indexOf(a.risk ?? "") + 9) % 9 - (rank.indexOf(b.risk ?? "") + 9) % 9)[0];
+      const rated = categoryOf(t.risk);
+      d = { ...base, level: rated ? (upstream && levelRankOf(rated) > levelRankOf(upstream) ? up : rated) : up, mark: "confirmed", why: t.detail, vex: { state: "exploitable" }, reason: "vex" };
+    } else {
+      const c = upstream === "critical" || upstream === "high" ? vexCarried(f, vex) : null;
+      d = c ? { ...base, mark: "review", flags: ["version"], old: { level: "none", mark: "confirmed", why: c.statement.detail } } : base;
+    }
+    d.counted = d.level !== "none" && !((d.mark === "unread" || d.mark === "review") && (d.level === "medium" || d.level === "low")) && (upstream !== null || d.mark === "confirmed");
+  }
+  return decideSite(d, dec.site(key, record, f.id), { now: dec.now, unit: dec.unit, kev: !!fx?.kev });
+}
+
+const MARK_RANK: Record<Mark, number> = { review: 0, unread: 1, rule: 2, deferred: 3, confirmed: 4, accepted: 5 };
+
+// The items of a target, one per CVE, from its decisions: the decision that
+// counts the most wins (one package still exposed makes the CVE count).
+// Listed: every critical/high, and any CVE a decision names.
+export function decisionItems(all: Finding[], decisions: Map<Finding, Decision>, facts: Record<string, CveFacts>): CveItem[] {
+  const by = new Map<string, { item: CveItem; weight: number }>();
+  for (const f of all) {
+    const d = decisions.get(f);
+    if (!f.id || !d) continue;
+    const ch = d.upstream === "critical" || d.upstream === "high";
+    if (!ch && d.mark === "unread") continue;
+    const state: CveItem["state"] = d.mark === "accepted" || d.level === "none" ? "decided" : d.mark === "review" ? "carried"
+      : d.mark === "unread" || d.mark === "deferred" ? "open" : "risk";
+    const fx = facts[f.id];
+    const item: CveItem = {
+      id: f.id, state, severity: f.severity, pkg: f.pkg, version: f.installed,
+      ...(d.level !== "none" && d.upstream && d.level !== d.upstream ? { rating: d.level } : {}),
+      ...(d.why ? { analysis: d.why } : {}),
+      level: d.level, mark: d.mark, counted: d.counted, component: d.component,
+      ...(d.reason ? { reason: d.reason } : {}), ...(d.use ? { use: d.use } : {}), ...(d.rule ? { rule: d.rule } : {}),
+      ...(d.author ? { author: d.author } : {}), ...(d.decided ? { decided: d.decided } : {}), ...(d.reviewBy ? { reviewBy: d.reviewBy } : {}),
+      ...(d.flags.length ? { flags: d.flags } : {}), ...(d.old ? { old: d.old } : {}), ...(d.note ? { note: d.note } : {}),
+      ...(fx?.kev ? { kev: fx.kev } : {}), ...(typeof fx?.epss === "number" ? { epss: fx.epss } : {}), ...(fx?.vector ? { vector: fx.vector } : {}),
+      ...(d.modifiedVector ? { modifiedVector: d.modifiedVector } : {}),
+    };
+    const weight = (d.counted ? 10 + levelRankOf(d.level) : levelRankOf(d.level)) * 10 + (5 - MARK_RANK[d.mark]);
+    const had = by.get(f.id);
+    if (!had || weight > had.weight) by.set(f.id, { item, weight });
+  }
+  const order = (i: CveItem): number => (i.counted ? 0 : 1) * 10 + (4 - levelRankOf(i.level ?? "none"));
+  return [...by.values()].map((x) => x.item).sort((a, b) => order(a) - order(b) || a.id.localeCompare(b.id));
+}
+
 // ── nixpkgs patches: a fix nixpkgs backported ──────────────────────────
 // A package's `patches` naming a CVE (libssh2's CVE-2026-55199.patch) is that fix,
 // applied: the finding is resolved for the version nixpkgs builds — no person needs
@@ -731,8 +879,17 @@ export function summarize(
   hasFixState: boolean,
   note = "",
 ): TargetStatus {
-  const kept = all.filter((f) => f.id && !vexSuppresses(f, vex));
-  const suppressed = new Set(all.filter((f) => f.id && vexSuppresses(f, vex)).map((f) => f.id)).size;
+  const dec = (vex as VexArg).decisions;
+  let decisions: Map<Finding, Decision> | null = null;
+  let facts: Record<string, CveFacts> = {};
+  if (dec && !coverageFail) {
+    const ids = [...new Set(all.filter((f) => f.id && (categoryOf(f.severity) === "critical" || categoryOf(f.severity) === "high" || recordFor(f, dec).record?.cves?.[f.id])).map((f) => f.id))];
+    facts = ids.length ? dec.facts(ids) : {};
+    decisions = new Map(all.filter((f) => f.id).map((f) => [f, decideFinding(f, vex, dec, facts)]));
+  }
+  const isNone = (f: Finding): boolean => decisions ? decisions.get(f)?.level === "none" && decisions.get(f)?.mark !== "accepted" : vexSuppresses(f, vex);
+  const kept = all.filter((f) => f.id && !isNone(f));
+  const suppressed = new Set(all.filter((f) => f.id && isNone(f)).map((f) => f.id)).size;
   const ids = (fs: Finding[]): number => new Set(fs.map((f) => f.id)).size;
   const ch = kept.filter((f) => f.severity === "Critical" || f.severity === "High");
   const fixable = kept.filter((f) => f.fixed !== "");
@@ -763,9 +920,9 @@ export function summarize(
     const lv = tri.map((x) => x.risk).filter((r) => rank.includes(r)).sort((a, b) => rank.indexOf(a) - rank.indexOf(b));
     status.riskLevel = lv[0] ?? "unrated";
   }
-  const chVex = new Set(all.filter((f) => f.id && isCH(f) && vexSuppresses(f, vex)).map((f) => f.id));
+  const chVex = new Set(all.filter((f) => f.id && isCH(f) && isNone(f)).map((f) => f.id));
   if (chVex.size > 0) status.critHighVex = [...chVex].sort();
-  status.items = coverageFail ? [] : cveItems(all, vex);
+  status.items = coverageFail ? [] : decisions ? decisionItems(all, decisions, facts) : cveItems(all, vex);
   if (coverageFail) status.verdict = "failed";
   else if (!hasFixState) status.verdict = "triage";
   else if (chFix.length > 0) {
@@ -804,7 +961,8 @@ export function summarizeOpnsense(
   const note = `${p.version || "OPNsense"}; VuXML ${age === null ? "age unknown" : `${age} day(s) old`}` +
     (severity === null ? "; severity unknown (CVE database lookup failed)" : "; severity from the CVE database (NVD first)");
   const s = summarize(base, p.pkgs.length, "", findings, vex, true, note);
-  const fixable = findings.filter((f) => f.fixed !== "" && !vexSuppresses(f, vex));
+  const none = new Set((s.items ?? []).filter((i) => i.level === "none" && i.mark !== "accepted").map((i) => `${i.id} ${i.pkg}`));
+  const fixable = findings.filter((f) => f.fixed !== "" && !vexSuppresses(f, vex) && !none.has(`${f.id} ${f.pkg}`));
   if (fixable.length > 0) {
     s.verdict = "act";
     s.act = dedupe(fixable);
@@ -881,7 +1039,7 @@ export function diffScans(cur: ScanStatus, prev: ScanStatus | null, seen: FirstS
     const p = prevById.get(t.id);
     const before = seen ? new Set(Object.keys(seen[t.id] ?? {})) : new Set(p?.critHighKeys ?? []);
     t.new = t.critHighKeys.filter((k) => !before.has(k));
-    const open = new Set((t.items ?? []).filter((i) => i.state === "open").map((i) => i.id));
+    const open = new Set((t.items ?? []).filter((i) => (i.mark ? i.mark === "unread" : i.state === "open")).map((i) => i.id));
     t.newOpen = [...new Set(t.new.map((k) => k.split(" ")[0]).filter((id) => open.has(id)))].sort();
     if (t.verdict === "failed" && p?.verdict !== "failed") out.newlyFailed.push(t);
     const actBefore = new Set((p?.act ?? []).map((f) => `${f.id} ${f.pkg}`));
@@ -902,6 +1060,7 @@ export interface SecurityIO {
   probeFirewall(script: string): RemoteResult;
   // CVE id → Critical|High|Medium|Low from the local CVE database (null: lookup failed)
   cveSeverities(ids: string[]): Record<string, string> | null;
+  cveFacts?(ids: string[]): Record<string, CveFacts> | null; // vector, known-exploited, EPSS from the scanner's database
   // pname → nixpkgs meta.identifiers.cpeParts (null: eval failed as a whole)
   nixCpeParts(names: string[]): Record<string, CpeParts | null> | null;
   // pname → the version nixpkgs builds and the names of its patches (null: eval failed)
@@ -981,6 +1140,20 @@ export class CliSecurityIO implements SecurityIO {
       if (r.rc !== 0) return null;
       try {
         Object.assign(out, pickSeverities(JSON.parse(r.stdout) as { id?: string; provider?: string; severity?: string }[]));
+      } catch {
+        return null;
+      }
+    }
+    return out;
+  }
+  cveFacts(ids: string[]): Record<string, CveFacts> | null {
+    const out: Record<string, CveFacts> = {};
+    for (let i = 0; i < ids.length; i += 200) {
+      const r = exec("grype", ["db", "search", "vuln", ...ids.slice(i, i + 200), "-o", "json", "-q"], undefined, 5 * MIN,
+        { ...process.env, GRYPE_DB_AUTO_UPDATE: "false" });
+      if (r.rc !== 0) return null;
+      try {
+        Object.assign(out, pickFacts(JSON.parse(r.stdout) as FactRow[]));
       } catch {
         return null;
       }
@@ -1072,6 +1245,37 @@ export class CliSecurityIO implements SecurityIO {
 
 // One severity per CVE id: NVD's when it has one, else the highest any provider
 // gives — distro feeds rate a CVE for their own build, NVD for the software.
+// What the scanner's database says about each CVE: the CVSS 3 vector (NVD
+// first, then any provider), the date it entered the known-exploited list, the
+// EPSS probability.
+export interface FactRow {
+  id?: string;
+  provider?: string;
+  severities?: { scheme?: string; value?: { vector?: string; version?: string } }[];
+  known_exploited?: { date_added?: string }[] | null;
+  epss?: { epss?: number }[] | null;
+}
+export function pickFacts(rows: FactRow[]): Record<string, CveFacts> {
+  const out: Record<string, CveFacts & { nvd?: boolean }> = {};
+  for (const r of rows) {
+    if (!r.id) continue;
+    const id = r.id.toUpperCase().startsWith("CVE-") ? r.id.toUpperCase() : r.id;
+    const e = (out[id] ??= {});
+    const v = (r.severities ?? []).map((x) => x.value?.vector ?? "").find((x) => /^CVSS:3\.[01]\//.test(x));
+    const nvd = r.provider === "nvd";
+    if (v && (!e.vector || (nvd && !e.nvd))) {
+      e.vector = v;
+      if (nvd) e.nvd = true;
+    }
+    const kev = (r.known_exploited ?? []).map((k) => k.date_added ?? "").filter(Boolean).sort()[0];
+    if (kev && (!e.kev || kev < e.kev)) e.kev = kev;
+    const ep = (r.epss ?? []).map((x) => x.epss).find((x): x is number => typeof x === "number");
+    if (typeof ep === "number" && (e.epss === undefined || ep > e.epss)) e.epss = ep;
+  }
+  for (const e of Object.values(out)) delete e.nvd;
+  return out;
+}
+
 export function pickSeverities(rows: { id?: string; provider?: string; severity?: string }[]): Record<string, string> {
   const rank = ["critical", "high", "medium", "low"];
   const nvd: Record<string, string> = {};
@@ -1123,6 +1327,13 @@ export interface ScanOpts {
   defaultNode: string;
   repoDir: string; // the tree this scan ships in — VEX source only when site.json registers no repository
   log?: (msg: string) => void;
+  site?: (unit: string, component: string, record: ComponentRecord | undefined, id: string) => SiteView; // assumptions and acceptances
+}
+
+export interface ScanResult {
+  status: ScanStatus;
+  cdx: Record<string, unknown>;
+  decisionState?: Record<string, string>;
 }
 
 export function planTargets(configDir: string, defaultNode: string, client: ClusterClient, io: SecurityIO): Planned[] {
@@ -1246,6 +1457,44 @@ export function vexFor(vex: VexStatement[], target: string, instances: Record<st
   return vex.filter((s) => s.module === "" || s.module === module);
 }
 
+// Every <module>-components.json in a registered module's directory: the
+// component records. A module with one has its <module>-vex.json generated
+// from it, so the scan does not read that VEX file as well.
+export const COMPONENTS_SUFFIX = "-components.json";
+export function loadComponents(configDir: string, fallbackRepo: string): { records: Record<string, ComponentRecord>; files: string[]; problems: string[]; modules: Set<string> } {
+  const records: Record<string, ComponentRecord> = {};
+  const files: string[] = [];
+  const problems: string[] = [];
+  const modules = new Set<string>();
+  for (const dir of registeredModuleDirs(configDir, fallbackRepo)) {
+    let entries: string[] = [];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const e of entries.filter((x) => x.endsWith(COMPONENTS_SUFFIX)).sort()) {
+      const p = join(dir, e);
+      const module = e.slice(0, -COMPONENTS_SUFFIX.length);
+      try {
+        const doc = JSON.parse(readFileSync(p, "utf8")) as { schema?: number; components?: Record<string, ComponentRecord> };
+        const bad = validateComponents(doc, module);
+        // A record that is not valid still decides nothing wrongly: it is used
+        // as written, and the problem is said in the scan's notes.
+        for (const b of bad.slice(0, 5)) problems.push(`${e}: ${b}`);
+        if (bad.length > 5) problems.push(`${e}: and ${bad.length - 5} more problem(s)`);
+        if (doc.schema !== 1 || !doc.components) continue;
+        Object.assign(records, doc.components);
+        files.push(p);
+        modules.add(dir);
+      } catch {
+        problems.push(`${e}: not readable, ignored`);
+      }
+    }
+  }
+  return { records, files, problems, modules };
+}
+
 // Every <module>-vex.json in a registered module's directory (ADR-011 §8).
 export function loadVex(configDir: string, fallbackRepo: string): { statements: VexStatement[]; files: string[]; unreadable: string[] } {
   const statements: VexStatement[] = [];
@@ -1260,6 +1509,8 @@ export function loadVex(configDir: string, fallbackRepo: string): { statements: 
     }
     for (const e of entries.filter((x) => x.endsWith("-vex.json")).sort()) {
       const p = join(dir, e);
+      const own = e.slice(0, -"-vex.json".length);
+      if (entries.includes(`${own}${COMPONENTS_SUFFIX}`)) continue; // generated from the records
       try {
         const module = e.slice(0, -"-vex.json".length);
         statements.push(...parseVex(readFileSync(p, "utf8"), p, module === "templates" ? "" : module));
@@ -1273,14 +1524,93 @@ export function loadVex(configDir: string, fallbackRepo: string): { statements: 
   return { statements, files, unreadable };
 }
 
+// ── the decision context of one scan ──────────────────────────────────
+export const DECISION_STATE_FILE = "decision-state.json"; // when each guard first fired: "<component> <CVE> <guard>" → ISO
+
+// The shared NixOS closure: the packages, at their versions, that every NixOS
+// target has. A CVE in one of them is the baseline's, decided once.
+export function baselineOf(nixTargets: { name: string; version: string }[][]): Set<string> {
+  if (nixTargets.length < 2) return new Set();
+  const sets = nixTargets.map((cs) => new Set(cs.map((c) => `${c.name}@${c.version}`)));
+  return new Set([...sets[0]].filter((k) => sets.every((x) => x.has(k))));
+}
+
+export interface DecisionContext {
+  forTarget(id: string, layer: Layer): TargetDecisions;
+  state(): Record<string, string>; // the guard ledger to write after the scan
+  notes: string[];
+}
+
+export function decisionContext(
+  configDir: string,
+  repoDir: string,
+  io: Pick<SecurityIO, "cveFacts" | "now">,
+  inst: Record<string, string>,
+  baseline: Set<string>,
+  site: (unit: string, component: string, record: ComponentRecord | undefined, id: string) => SiteView = () => ({}),
+): DecisionContext {
+  const c = loadComponents(configDir, repoDir);
+  const notes: string[] = [];
+  if (c.files.length) notes.push(`component records: ${Object.keys(c.records).length} from ${c.files.length} file(s)`);
+  notes.push(...c.problems);
+  const dir = sbomDir(configDir);
+  const seen = readFirstSeen(join(dir, FIRST_SEEN_FILE)) ?? {};
+  let prevState: Record<string, string> = {};
+  try {
+    prevState = JSON.parse(readFileSync(join(dir, DECISION_STATE_FILE), "utf8")) as Record<string, string>;
+  } catch {
+    prevState = {};
+  }
+  const now = io.now();
+  const state: Record<string, string> = {};
+  const cache: Record<string, CveFacts> = {};
+  let factsFailed = false;
+  const facts = (ids: string[]): Record<string, CveFacts> => {
+    const missing = ids.filter((i) => !(i in cache));
+    if (missing.length && io.cveFacts && !factsFailed) {
+      const got = io.cveFacts(missing);
+      if (got === null) {
+        factsFailed = true;
+        notes.push("CVE facts (vector, known-exploited, EPSS) not available: rules and guards that need them did not apply");
+      } else for (const id of missing) cache[id] = got[id] ?? {};
+    }
+    for (const id of missing) cache[id] ??= {};
+    return Object.fromEntries(ids.map((i) => [i, cache[i]]));
+  };
+  return {
+    notes,
+    state: () => state,
+    forTarget(id: string, layer: Layer): TargetDecisions {
+      const subject = targetSubject({ id } as TargetStatus);
+      const unit = subject.kind === "node" ? `node:${subject.name}` : subject.name;
+      return {
+        module: moduleOf(id, inst),
+        unit: layer === "opnsense" ? subject.name : unit,
+        records: c.records,
+        baseline,
+        facts,
+        now,
+        firstSeen: (key) => seen[id]?.[key]?.first,
+        guardSince: (component, cve, guard) => {
+          const k = `${component} ${cve} ${guard}`;
+          state[k] ??= prevState[k] ?? new Date(now).toISOString();
+          return state[k];
+        },
+        site: (component, record, cve) => site(unit, component, record, cve),
+      };
+    },
+  };
+}
+
 interface CdxTarget {
   status: TargetStatus;
   version: string;
   components: Component[];
 }
 
-export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): { status: ScanStatus; cdx: Record<string, unknown> } {
+export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): ScanResult {
   const log = opts.log ?? ((): void => undefined);
+  let dctx: DecisionContext | null = null;
   const inst = instanceModules(opts.configDir);
   const v = loadVex(opts.configDir, opts.repoDir);
   const vex = v.statements;
@@ -1337,6 +1667,9 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
       notes.push(`nixpkgs patches: ${patched.length} CVE fix(es) in ${new Set(patched.map((s) => s.refs[0])).size} package(s) count as resolved`);
     }
 
+    // The decisions: component records, the shared NixOS baseline, the facts.
+    dctx = decisionContext(opts.configDir, opts.repoDir, io, inst, baselineOf([...nixComps.values()].map((c) => c.components)), opts.site);
+
     // 3. scan each target with its layer's scanner
     const failed = (t: Planned, layer: Layer, why: string, seen = 0): CdxTarget => ({
       status: summarize({ id: t.id, name: t.name, layer, host: t.host }, seen, why, [], vexFor(vex, t.id, inst), layer !== "nix"),
@@ -1345,7 +1678,7 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
     });
     for (const p of probed) {
       const t = p.t;
-      const tv = vexFor(vex, t.id, inst);
+      const tv = withDecisions(vexFor(vex, t.id, inst), dctx.forTarget(t.id, t.layer === "opnsense" ? "opnsense" : "unknown"));
       if (t.layer === "opnsense") {
         const ids = [...new Set((p.opn?.audit ?? []).flatMap((a) => a.cves))];
         const sev = ids.length > 0 && dbOk ? io.cveSeverities(ids) : ids.length > 0 ? null : {};
@@ -1453,7 +1786,8 @@ export function runScan(opts: ScanOpts, client: ClusterClient, io: SecurityIO): 
     notes,
     targets: results.map((r) => r.status),
   };
-  return { status, cdx: siteCdx(results, status, siteName(opts.configDir)) };
+  if (dctx) status.notes.push(...dctx.notes);
+  return { status, cdx: siteCdx(results, status, siteName(opts.configDir)), ...(dctx ? { decisionState: dctx.state() } : {}) };
 }
 
 // The bundled libraries of one container, matched by CPE (#811). null when it
@@ -1705,9 +2039,10 @@ export interface RescanOpts {
   configDir: string;
   repoDir: string;
   log?: (msg: string) => void;
+  site?: ScanOpts["site"];
 }
 
-export function runRescan(opts: RescanOpts, io: SecurityIO): { status: ScanStatus; cdx: Record<string, unknown> } | { error: string } {
+export function runRescan(opts: RescanOpts, io: SecurityIO): ScanResult | { error: string } {
   const log = opts.log ?? ((): void => undefined);
   const dir = sbomDir(opts.configDir);
   const prev = readStatus(join(dir, STATUS_FILE));
@@ -1734,13 +2069,15 @@ export function runRescan(opts: RescanOpts, io: SecurityIO): { status: ScanStatu
   const patched = names.length > 0 ? patchVex(io.nixPatches(names)) : [];
   if (patched.length > 0) vex.push(...patched);
 
+  const nixLists = prev.targets.filter((t) => t.layer === "nix" && t.coverage === "ok").map((t) => stored.get(t.id) ?? []);
+  const dctx = decisionContext(opts.configDir, opts.repoDir, io, inst, baselineOf(nixLists), opts.site);
   const tmp = mkdtempSync(join(tmpdir(), "tappaas-rescan-"));
   const targets: TargetStatus[] = [];
   let kept = 0;
   try {
     for (const t of prev.targets) {
       const comps = stored.get(t.id) ?? [];
-      const tv = vexFor(vex, t.id, inst);
+      const tv = withDecisions(vexFor(vex, t.id, inst), dctx.forTarget(t.id, t.layer));
       const base = { id: t.id, name: t.name, layer: t.layer, host: t.host, ...(t.runsOn ? { runsOn: t.runsOn } : {}), ...(t.ref ? { ref: t.ref } : {}) };
       const keep = (): void => {
         kept++;
@@ -1793,7 +2130,7 @@ export function runRescan(opts: RescanOpts, io: SecurityIO): { status: ScanStatu
       let findings: Finding[] = [];
       try {
         if (!r.ran || r.rc !== 0) throw new Error(lastLine(r.stderr) || `exit ${r.rc}`);
-        findings = trivyParse(r.stdout).findings.filter((x) => !isBuildOnly(x.pkg));
+        findings = withSources(trivyParse(r.stdout).findings.filter((x) => !isBuildOnly(x.pkg)), plain);
       } catch (e) {
         keep();
         notes.push(`${t.name}: trivy failed (${(e as Error).message}); the last scan's result stands`);
@@ -1827,7 +2164,8 @@ export function runRescan(opts: RescanOpts, io: SecurityIO): { status: ScanStatu
     targets,
   };
   for (const t of status.targets) if (!t.module) t.module = moduleOf(t.id, inst);
-  return { status, cdx };
+  status.notes.push(...dctx.notes);
+  return { status, cdx, decisionState: dctx.state() };
 }
 
 // ── persistence ────────────────────────────────────────────────────────
@@ -1847,7 +2185,7 @@ export function readStatus(path: string): ScanStatus | null {
 
 // The previous scan becomes cve-status.previous.json; both files are replaced
 // atomically, so a reader never sees half a scan.
-export function writeScan(configDir: string, status: ScanStatus, cdx: Record<string, unknown>): ScanDiff {
+export function writeScan(configDir: string, status: ScanStatus, cdx: Record<string, unknown>, decisionState?: Record<string, string>): ScanDiff {
   const dir = sbomDir(configDir);
   mkdirGuarded(dir, { recursive: true });
   const cur = join(dir, STATUS_FILE);
@@ -1855,7 +2193,9 @@ export function writeScan(configDir: string, status: ScanStatus, cdx: Record<str
   const seen = readFirstSeen(join(dir, FIRST_SEEN_FILE)) ?? seedFirstSeen(prev, readStatus(join(dir, PREVIOUS_FILE)));
   const diff = diffScans(status, prev, seen);
   if (existsSync(cur)) renameGuarded(cur, join(dir, PREVIOUS_FILE));
-  for (const [file, doc] of [[SITE_CDX_FILE, cdx], [STATUS_FILE, status], [FIRST_SEEN_FILE, noteSeen(seen, status)]] as const) {
+  const docs: [string, unknown][] = [[SITE_CDX_FILE, cdx], [STATUS_FILE, status], [FIRST_SEEN_FILE, noteSeen(seen, status)]];
+  if (decisionState) docs.push([DECISION_STATE_FILE, decisionState]);
+  for (const [file, doc] of docs) {
     writeFileGuarded(join(dir, `${file}.tmp`), JSON.stringify(doc, null, 1) + "\n");
     renameGuarded(join(dir, `${file}.tmp`), join(dir, file));
   }
