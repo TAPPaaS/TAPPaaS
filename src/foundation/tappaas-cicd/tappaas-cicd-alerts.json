@@ -18,7 +18,7 @@
     {
       "name": "cve-new-critical",
       "title": "CveNewCritical",
-      "headline": "New critical or high CVEs nobody has analysed",
+      "headline": "New critical or high CVEs nobody has read, or newly known exploited",
       "kind": "event",
       "match": "\"event\":\"cve-new\".*\"silenced\":false",
       "capture": {
@@ -27,10 +27,10 @@
         "items": "\"items\":\"(?P<items>[^\"]*)\""
       },
       "window": 300,
-      "summary": "The security scan (after a sweep, or the daily rescan) found critical or high CVEs that are new since the last scan and that no VEX statement analyses. One mail per scan, listing them. A module whose security condition is acknowledged or in maintenance is left out.",
+      "summary": "The security scan (after a sweep, or the daily rescan) found critical or high CVEs that are new since the last scan and that nobody has decided, or a CVE that joined the known-exploited list whatever was decided for it. One mail per scan, listing them. A module whose security condition is acknowledged or in maintenance is left out.",
       "mail": {
         "subject": "{state}: {label.count} new open critical/high CVE(s) in {label.modules}",
-        "body": "== New open critical/high CVEs: {label.count}\nmodules: {label.modules}\n\n{label.items}\n\nhealth-manager report security --cves shows each module's CVEs and its risk score.\nTo analyse one: cve-triage.sh open <module>. To quiet a module: health-manager ack <module> --type security --note <why>.\nIn Grafana (Explore, Loki): {query}"
+        "body": "== New open critical/high CVEs: {label.count}\nmodules: {label.modules}\n\n{label.items}\n\nhealth-manager report security --cves shows each module's CVEs and its risk score.\nTo decide one: cve-triage.sh component <module> <source>. To quiet a module: health-manager ack <module> --type security --note <why>.\nIn Grafana (Explore, Loki): {query}"
       }
     },
     {

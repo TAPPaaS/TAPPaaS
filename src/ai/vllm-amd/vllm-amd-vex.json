@@ -3,358 +3,657 @@
   "specVersion": "1.5",
   "version": 1,
   "metadata": {
+    "timestamp": "2026-11-12",
     "component": {
       "type": "application",
       "name": "vllm-amd",
-      "description": "TAPPaaS module vllm-amd: triage of its own critical/high CVEs (#788)."
+      "description": "TAPPaaS module vllm-amd: generated from vllm-amd-components.json; do not edit."
     }
   },
   "vulnerabilities": [
     {
-      "id": "CVE-2026-89407",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed \u2014 vLLM uses Ray, if at all, from Python.",
-        "justification": "code_not_reachable"
-      },
+      "id": "CVE-2026-54369",
       "affects": [
         {
-          "ref": "pkg:maven/com.fasterxml.jackson.core/jackson-core@2.18.8"
+          "ref": "pkg:deb/debian/libacl1@2.3.1-3"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libacl1@2.3.2-1build1.1"
         }
-      ]
-    },
-    {
-      "id": "CVE-2026-89425",
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed \u2014 vLLM uses Ray, if at all, from Python.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:maven/com.fasterxml.jackson.core/jackson-core@2.18.8"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-68497",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed \u2014 vLLM uses Ray, if at all, from Python.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.18.8"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-91776",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed \u2014 vLLM uses Ray, if at all, from Python.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.18.8"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-91777",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed \u2014 vLLM uses Ray, if at all, from Python.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.18.8"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-54399",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed \u2014 vLLM uses Ray, if at all, from Python.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:maven/org.apache.httpcomponents.core5/httpcore5@5.0.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2025-47273",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "pip 26.2.1's own bundled copy (pip/_vendor/vendor.txt), loaded only when pip runs; vLLM serving never runs pip, and the copy vLLM imports is fixed (setuptools 79.0.1).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/setuptools@70.3.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-97687",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "pip 26.2.1's own bundled copy (pip/_vendor/vendor.txt), loaded only when pip runs; vLLM serving never runs pip, and the copy vLLM imports is fixed (urllib3 2.8.0).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/urllib3@2.7.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-97689",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "pip 26.2.1's own bundled copy (pip/_vendor/vendor.txt), loaded only when pip runs; vLLM serving never runs pip, and the copy vLLM imports is fixed (urllib3 2.8.0).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/urllib3@2.7.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-23949",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "A copy bundled inside setuptools 79 (setuptools/_vendor), used to unpack archives when installing packages; vLLM serving installs nothing.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/jaraco.context@5.3.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-24049",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "A copy bundled inside setuptools 79 (setuptools/_vendor), used to unpack wheels when installing packages; vLLM serving installs nothing.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/wheel@0.45.1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-84782",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "DTLS handshake retransmission in the image's Ubuntu openssl; vLLM serves plain HTTP on :8000 and nothing in the container speaks DTLS (Ubuntu's 3.0.13-0ubuntu3.16 fixes it).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/ubuntu/libssl3t64@3.0.13-0ubuntu3.15"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-84782",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "DTLS handshake retransmission in the image's Ubuntu openssl; vLLM serves plain HTTP on :8000 and nothing in the container speaks DTLS (Ubuntu's 3.0.13-0ubuntu3.16 fixes it).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/ubuntu/openssl@3.0.13-0ubuntu3.15"
-        }
-      ]
-    },
-    {
-      "id": "GHSA-6v7p-g79w-8964",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "pip 26.2.1's own bundled copy (pip/_vendor/vendor.txt), loaded only when pip runs; vLLM serving never runs pip, and the copy vLLM imports is fixed (msgpack 1.2.2).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/msgpack@1.1.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2019-16224",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "liblmdb0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/liblmdb0@0.9.24-1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2019-16225",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "liblmdb0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/liblmdb0@0.9.24-1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2019-16226",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "liblmdb0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/liblmdb0@0.9.24-1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2019-16227",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "liblmdb0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/liblmdb0@0.9.24-1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2019-16228",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "liblmdb0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/liblmdb0@0.9.24-1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2023-2953",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libldap-2.5-0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libldap-2.5-0@2.5.13%2Bdfsg-5"
-        }
-      ]
+        "detail": "vllm-amd/deb:acl. Symlink traversal through libacl into privilege; needs an unprivileged local user, and the LXC has none. Decided by migration 2026-11-12; review by 2027-11-12.",
+        "justification": "requires_environment"
+      }
     },
     {
       "id": "CVE-2023-39616",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libaom3@3.6.0-1+deb12u3"
+        }
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "libaom3: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+        "detail": "vllm-amd/deb:aom. libaom3: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
         "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libaom3@3.6.0-1%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2023-45853",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "zipOpenNewFileInZip4_6 is minizip, which zlib1g does not ship (Debian: will not fix for that reason).",
-        "justification": "code_not_present"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/zlib1g@1.2.13.dfsg-1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2023-52355",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libtiff6: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libtiff6@4.5.0-6%2Bdeb12u4"
-        }
-      ]
+      }
     },
     {
       "id": "CVE-2023-6879",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libaom3: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
-          "ref": "pkg:deb/debian/libaom3@3.6.0-1%2Bdeb12u3"
+          "ref": "pkg:deb/debian/libaom3@3.6.0-1+deb12u3"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:aom. libaom3: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
-      "id": "CVE-2025-66471",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "python3-urllib3: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
+      "id": "CVE-2026-109518",
       "affects": [
         {
-          "ref": "pkg:deb/debian/python3-urllib3@1.26.12-1%2Bdeb12u4"
+          "ref": "pkg:deb/debian/apt-utils@2.6.2"
+        },
+        {
+          "ref": "pkg:deb/debian/apt@2.6.2"
+        },
+        {
+          "ref": "pkg:deb/debian/libapt-pkg6.0@2.6.2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/apt@2.8.3"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libapt-pkg6.0t64@2.8.3"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:apt. APT download/redirect flaw; apt never runs in the running container, which runs only the vLLM API server and engine. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-19666",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bind9-dnsutils@9.18.49-1~deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/bind9-host@9.18.49-1~deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/bind9-libs@9.18.49-1~deb12u3"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:bind9. Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-19667",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bind9-dnsutils@9.18.49-1~deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/bind9-host@9.18.49-1~deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/bind9-libs@9.18.49-1~deb12u3"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:bind9. Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-76163",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bind9-dnsutils@9.18.49-1~deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/bind9-host@9.18.49-1~deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/bind9-libs@9.18.49-1~deb12u3"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:bind9. Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-77692",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bind9-dnsutils@9.18.49-1~deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/bind9-host@9.18.49-1~deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/bind9-libs@9.18.49-1~deb12u3"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:bind9. Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-80274",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bind9-dnsutils@9.18.49-1~deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/bind9-host@9.18.49-1~deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/bind9-libs@9.18.49-1~deb12u3"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:bind9. Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-81563",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bind9-dnsutils@9.18.49-1~deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/bind9-host@9.18.49-1~deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/bind9-libs@9.18.49-1~deb12u3"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:bind9. Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-81736",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bind9-dnsutils@9.18.49-1~deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/bind9-host@9.18.49-1~deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/bind9-libs@9.18.49-1~deb12u3"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:bind9. Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-12064",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/curl@7.88.1-10+deb12u15"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl3-gnutls@7.88.1-10+deb12u15"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl4@7.88.1-10+deb12u15"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:curl. curl libcurl3-gnutls libcurl4: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-6276",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/curl@7.88.1-10+deb12u15"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl3-gnutls@7.88.1-10+deb12u15"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl4@7.88.1-10+deb12u15"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:curl. curl libcurl3-gnutls libcurl4: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-8286",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/curl@7.88.1-10+deb12u15"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl3-gnutls@7.88.1-10+deb12u15"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl4@7.88.1-10+deb12u15"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:curl. curl libcurl3-gnutls libcurl4: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-8458",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/curl@7.88.1-10+deb12u15"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl3-gnutls@7.88.1-10+deb12u15"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl4@7.88.1-10+deb12u15"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:curl. curl libcurl3-gnutls libcurl4: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-8927",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/curl@7.88.1-10+deb12u15"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl3-gnutls@7.88.1-10+deb12u15"
+        },
+        {
+          "ref": "pkg:deb/debian/libcurl4@7.88.1-10+deb12u15"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:curl. curl libcurl3-gnutls libcurl4: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-77214",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libexpat1-dev@2.5.0-1+deb12u5"
+        },
+        {
+          "ref": "pkg:deb/debian/libexpat1@2.5.0-1+deb12u5"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libexpat1-dev@2.6.1-2ubuntu0.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libexpat1@2.6.1-2ubuntu0.6"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:expat. A heap over-read when the calling program passes XML_ParseBuffer a length beyond its buffer \u2014 a caller bug, not crafted XML; the programs that load expat here pass correct lengths. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-88647",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libgnutls30@3.7.9-2+deb12u7"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libgnutls30t64@3.8.3-1.1ubuntu3.6"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:gnutls28. GnuTLS TLS-client hostname-verification bypass (CN fallback); the only gnutls TLS client on the host is apt's HTTPS downloads, and apt verifies the GPG signatures on everything it installs \u2014 an impersonated mirror cannot inject a package. Decided by migration 2026-11-12; review by 2027-11-12.",
+        "justification": "protected_by_mitigating_control"
+      }
+    },
+    {
+      "id": "CVE-2026-88648",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libgnutls30@3.7.9-2+deb12u7"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libgnutls30t64@3.8.3-1.1ubuntu3.6"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:gnutls28. GnuTLS TLS-client cross-domain CA restriction bypass; the only gnutls TLS client on the host is apt's HTTPS downloads, and apt verifies the GPG signatures on everything it installs \u2014 an impersonated mirror cannot inject a package. Decided by migration 2026-11-12; review by 2027-11-12.",
+        "justification": "protected_by_mitigating_control"
+      }
+    },
+    {
+      "id": "CVE-2026-41992",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/gzip@1.12-1"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/gzip@1.12-1ubuntu3.2"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:gzip. gzip: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2025-68431",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
-          "ref": "pkg:deb/debian/libheif1@1.15.1-1%2Bdeb12u1"
+          "ref": "pkg:deb/debian/libheif1@1.15.1-1+deb12u1"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:libheif. libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-32740",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libheif1@1.15.1-1+deb12u1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:libheif. libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-32741",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libheif1@1.15.1-1+deb12u1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:libheif. libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-32882",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libheif1@1.15.1-1+deb12u1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:libheif. libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-41071",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libheif1@1.15.1-1+deb12u1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:libheif. libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-47178",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libheif1@1.15.1-1+deb12u1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:libheif. libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-84450",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libheif1@1.15.1-1+deb12u1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:libheif. libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-84451",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libheif1@1.15.1-1+deb12u1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:libheif. libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-88806",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libx11-6@1.8.4-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/libx11-data@1.8.4-2+deb12u2"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:libx11. libx11-6 libx11-data: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-6653",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.9.14+dfsg-1.3~deb12u6"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:libxml2. libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-74860",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.9.14+dfsg-1.3~deb12u6"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:libxml2. libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-86138",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.9.14+dfsg-1.3~deb12u6"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:libxml2. libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-86140",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.9.14+dfsg-1.3~deb12u6"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:libxml2. libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-86142",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.9.14+dfsg-1.3~deb12u6"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:libxml2. libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-86143",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.9.14+dfsg-1.3~deb12u6"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:libxml2. libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-86144",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libxml2@2.9.14+dfsg-1.3~deb12u6"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:libxml2. libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2019-16224",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/liblmdb0@0.9.24-1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:lmdb. liblmdb0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2019-16225",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/liblmdb0@0.9.24-1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:lmdb. liblmdb0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2019-16226",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/liblmdb0@0.9.24-1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:lmdb. liblmdb0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2019-16227",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/liblmdb0@0.9.24-1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:lmdb. liblmdb0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2019-16228",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/liblmdb0@0.9.24-1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:lmdb. liblmdb0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2025-69720",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libncursesw6 libtinfo6 ncurses-base ncurses-bin ncurses-term: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:deb/debian/libncursesw6@6.4-4"
@@ -370,112 +669,337 @@
         },
         {
           "ref": "pkg:deb/debian/ncurses-term@6.4-4"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libncursesw6@6.4+20240113-1ubuntu2.2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libtinfo6@6.4+20240113-1ubuntu2.2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/ncurses-base@6.4+20240113-1ubuntu2.2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/ncurses-bin@6.4+20240113-1ubuntu2.2"
         }
-      ]
-    },
-    {
-      "id": "CVE-2025-7458",
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "libsqlite3-0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+        "detail": "vllm-amd/deb:ncurses. libncursesw6 libtinfo6 ncurses-base ncurses-bin ncurses-term: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
         "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libsqlite3-0@3.40.1-2%2Bdeb12u2"
-        }
-      ]
+      }
     },
     {
-      "id": "CVE-2026-11822",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libsqlite3-0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
+      "id": "CVE-2023-2953",
       "affects": [
         {
-          "ref": "pkg:deb/debian/libsqlite3-0@3.40.1-2%2Bdeb12u2"
+          "ref": "pkg:deb/debian/libldap-2.5-0@2.5.13+dfsg-5"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libldap2@2.6.10+dfsg-0ubuntu0.24.04.1"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:openldap. libldap-2.5-0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
-      "id": "CVE-2026-11824",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libsqlite3-0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
+      "id": "CVE-2026-59999",
       "affects": [
         {
-          "ref": "pkg:deb/debian/libsqlite3-0@3.40.1-2%2Bdeb12u2"
+          "ref": "pkg:deb/debian/openssh-client@9.2p1-2+deb12u10"
+        },
+        {
+          "ref": "pkg:deb/debian/openssh-server@9.2p1-2+deb12u10"
+        },
+        {
+          "ref": "pkg:deb/debian/openssh-sftp-server@9.2p1-2+deb12u10"
+        },
+        {
+          "ref": "pkg:deb/debian/ssh@9.2p1-2+deb12u10"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/openssh-client@9.6p1-3ubuntu13.20"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:openssh. sshd: DisableForwarding not overriding PermitTunnel; PermitTunnel is no in the LXC. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "requires_configuration"
+      }
+    },
+    {
+      "id": "CVE-2026-60000",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/openssh-client@9.2p1-2+deb12u10"
+        },
+        {
+          "ref": "pkg:deb/debian/openssh-server@9.2p1-2+deb12u10"
+        },
+        {
+          "ref": "pkg:deb/debian/openssh-sftp-server@9.2p1-2+deb12u10"
+        },
+        {
+          "ref": "pkg:deb/debian/ssh@9.2p1-2+deb12u10"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/openssh-client@9.6p1-3ubuntu13.20"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:openssh. sshd: MaxAuthTries with GSSAPI authentication; GSSAPIAuthentication is off in the LXC. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "requires_configuration"
+      }
+    },
+    {
+      "id": "CVE-2026-60002",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/openssh-client@9.2p1-2+deb12u10"
+        },
+        {
+          "ref": "pkg:deb/debian/openssh-server@9.2p1-2+deb12u10"
+        },
+        {
+          "ref": "pkg:deb/debian/openssh-sftp-server@9.2p1-2+deb12u10"
+        },
+        {
+          "ref": "pkg:deb/debian/ssh@9.2p1-2+deb12u10"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/openssh-client@9.6p1-3ubuntu13.20"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:openssh. ssh client use-after-free on a server's rekey; nothing in the LXC runs the ssh client. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-84782",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libssl3@3.0.22-1~deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/openssl@3.0.22-1~deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libssl3t64@3.0.13-0ubuntu3.16"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/openssl@3.0.13-0ubuntu3.16"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:openssl. DTLS handshake retransmission; nothing in the LXC speaks DTLS (sshd uses libcrypto only). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-9538",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libperl5.36@5.36.0-7+deb12u4"
+        },
+        {
+          "ref": "pkg:deb/debian/perl-base@5.36.0-7+deb12u4"
+        },
+        {
+          "ref": "pkg:deb/debian/perl-modules-5.36@5.36.0-7+deb12u4"
+        },
+        {
+          "ref": "pkg:deb/debian/perl@5.36.0-7+deb12u4"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libperl5.38t64@5.38.2-3.2ubuntu0.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/perl-base@5.38.2-3.2ubuntu0.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/perl-modules-5.38@5.38.2-3.2ubuntu0.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/perl@5.38.2-3.2ubuntu0.6"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:perl. libperl5.36 perl perl-base perl-modules-5.36: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-43964",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/postfix@3.7.11-0+deb12u1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:postfix. Over-read of a remote SMTP server's enhanced status code; postfix listens on loopback only, has no relay host, and nothing in the LXC sends mail out. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2025-66471",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/python3-urllib3@1.26.12-1+deb12u4"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:python-urllib3. python3-urllib3: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-97687",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/python3-urllib3@1.26.12-1+deb12u4"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:python-urllib3. python3-urllib3: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-97689",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/python3-urllib3@1.26.12-1+deb12u4"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:python-urllib3. python3-urllib3: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-11940",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libpython3.11 libpython3.11-minimal libpython3.11-stdlib python3.11 python3.11-minimal: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
-          "ref": "pkg:deb/debian/libpython3.11-minimal@3.11.2-6%2Bdeb12u9"
+          "ref": "pkg:deb/debian/libpython3.11-dev@3.11.2-6+deb12u9"
         },
         {
-          "ref": "pkg:deb/debian/libpython3.11-stdlib@3.11.2-6%2Bdeb12u9"
+          "ref": "pkg:deb/debian/libpython3.11-minimal@3.11.2-6+deb12u9"
         },
         {
-          "ref": "pkg:deb/debian/libpython3.11@3.11.2-6%2Bdeb12u9"
+          "ref": "pkg:deb/debian/libpython3.11-stdlib@3.11.2-6+deb12u9"
         },
         {
-          "ref": "pkg:deb/debian/python3.11-minimal@3.11.2-6%2Bdeb12u9"
+          "ref": "pkg:deb/debian/libpython3.11@3.11.2-6+deb12u9"
         },
         {
-          "ref": "pkg:deb/debian/python3.11@3.11.2-6%2Bdeb12u9"
+          "ref": "pkg:deb/debian/python3.11-dev@3.11.2-6+deb12u9"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.11-minimal@3.11.2-6+deb12u9"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.11@3.11.2-6+deb12u9"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:python3.11. libpython3.11 libpython3.11-minimal libpython3.11-stdlib python3.11 python3.11-minimal: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
-      "id": "CVE-2026-12064",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "curl libcurl3-gnutls libcurl4: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
+      "id": "CVE-2026-7210",
       "affects": [
         {
-          "ref": "pkg:deb/debian/curl@7.88.1-10%2Bdeb12u15"
+          "ref": "pkg:deb/debian/libpython3.11-dev@3.11.2-6+deb12u9"
         },
         {
-          "ref": "pkg:deb/debian/libcurl3-gnutls@7.88.1-10%2Bdeb12u15"
+          "ref": "pkg:deb/debian/libpython3.11-minimal@3.11.2-6+deb12u9"
         },
         {
-          "ref": "pkg:deb/debian/libcurl4@7.88.1-10%2Bdeb12u15"
+          "ref": "pkg:deb/debian/libpython3.11-stdlib@3.11.2-6+deb12u9"
+        },
+        {
+          "ref": "pkg:deb/debian/libpython3.11@3.11.2-6+deb12u9"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.11-dev@3.11.2-6+deb12u9"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.11-minimal@3.11.2-6+deb12u9"
+        },
+        {
+          "ref": "pkg:deb/debian/python3.11@3.11.2-6+deb12u9"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:python3.11. libpython3.11 libpython3.11-minimal libpython3.11-stdlib python3.11 python3.11-minimal: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
-      "id": "CVE-2026-12912",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libtiff6: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
+      "id": "CVE-2025-7458",
       "affects": [
         {
-          "ref": "pkg:deb/debian/libtiff6@4.5.0-6%2Bdeb12u4"
+          "ref": "pkg:deb/debian/libsqlite3-0@3.40.1-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libsqlite3-0@3.45.1-1ubuntu2.8"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:sqlite3. libsqlite3-0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-11822",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libsqlite3-0@3.40.1-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libsqlite3-0@3.45.1-1ubuntu2.8"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:sqlite3. libsqlite3-0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-11824",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libsqlite3-0@3.40.1-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libsqlite3-0@3.45.1-1ubuntu2.8"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:sqlite3. libsqlite3-0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-16742",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "systemd-homed signature verification; systemd-homed is not used in the LXC.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:deb/debian/libnss-systemd@252.39-1~deb12u2"
@@ -504,1652 +1028,1462 @@
         {
           "ref": "pkg:deb/debian/udev@252.39-1~deb12u2"
         }
-      ]
-    },
-    {
-      "id": "CVE-2026-19666",
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them.",
+        "detail": "vllm-amd/deb:systemd. systemd-homed signature verification; systemd-homed is not used in the LXC. Decided by migration 2026-11-12; review by 2027-05-11.",
         "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/bind9-dnsutils@9.18.49-1~deb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/bind9-host@9.18.49-1~deb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/bind9-libs@9.18.49-1~deb12u2"
-        }
-      ]
+      }
     },
     {
-      "id": "CVE-2026-19667",
+      "id": "CVE-2023-52355",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libtiff6@4.5.0-6+deb12u4"
+        }
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them.",
+        "detail": "vllm-amd/deb:tiff. libtiff6: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
         "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/bind9-dnsutils@9.18.49-1~deb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/bind9-host@9.18.49-1~deb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/bind9-libs@9.18.49-1~deb12u2"
-        }
-      ]
+      }
     },
     {
-      "id": "CVE-2026-26269",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
+      "id": "CVE-2026-12912",
       "affects": [
         {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
+          "ref": "pkg:deb/debian/libtiff6@4.5.0-6+deb12u4"
         }
       ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-28417",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-28421",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-32740",
       "analysis": {
         "state": "not_affected",
-        "detail": "libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+        "detail": "vllm-amd/deb:tiff. libtiff6: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
         "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libheif1@1.15.1-1%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-32741",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libheif1@1.15.1-1%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-32882",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libheif1@1.15.1-1%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-33412",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-34982",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-35177",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
+      }
     },
     {
       "id": "CVE-2026-36849",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libtiff6: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
-          "ref": "pkg:deb/debian/libtiff6@4.5.0-6%2Bdeb12u4"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-39881",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
+          "ref": "pkg:deb/debian/libtiff6@4.5.0-6+deb12u4"
         }
       ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-41071",
       "analysis": {
         "state": "not_affected",
-        "detail": "libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+        "detail": "vllm-amd/deb:tiff. libtiff6: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
         "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libheif1@1.15.1-1%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-41992",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "gzip: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/gzip@1.12-1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-43961",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-43964",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Over-read of a remote SMTP server's enhanced status code; postfix listens on loopback only, has no relay host, and nothing in the LXC sends mail out.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/postfix@3.7.11-0%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-46483",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-47162",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-47178",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libheif1@1.15.1-1%2Bdeb12u1"
-        }
-      ]
+      }
     },
     {
       "id": "CVE-2026-52490",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libtiff6@4.5.0-6+deb12u4"
+        }
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "libtiff6: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+        "detail": "vllm-amd/deb:tiff. libtiff6: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
         "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libtiff6@4.5.0-6%2Bdeb12u4"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-52858",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-52860",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
+      }
     },
     {
       "id": "CVE-2026-53613",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bsdextrautils@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/fdisk@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/libfdisk1@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux-extra@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/bsdutils@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libblkid1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libfdisk1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libmount1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libsmartcols1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libuuid1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/mount@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/util-linux@2.39.3-9ubuntu6.6"
+        }
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "util-linux mount helpers/nsenter: needs an unprivileged local user and fstab user mounts; the LXC has neither.",
+        "detail": "vllm-amd/deb:util-linux. util-linux mount helpers/nsenter: needs an unprivileged local user and fstab user mounts; the LXC has neither. Decided by migration 2026-11-12; review by 2027-11-12.",
         "justification": "requires_environment"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/bsdextrautils@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/bsdutils@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/fdisk@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/libblkid1@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/libfdisk1@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/libmount1@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/libsmartcols1@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/libuuid1@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/mount@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/util-linux-extra@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/util-linux@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-54369",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Symlink traversal through libacl into privilege; needs an unprivileged local user, and the LXC has none.",
-        "justification": "requires_environment"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libacl1@2.3.1-3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-55693",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-55895",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-57455",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-57456",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-58471",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "wget: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/wget@1.21.3-1%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-58472",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "wget: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/wget@1.21.3-1%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-59856",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-59858",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-59999",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "sshd: DisableForwarding not overriding PermitTunnel; PermitTunnel is no in the LXC.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/openssh-client@9.2p1-2%2Bdeb12u10"
-        },
-        {
-          "ref": "pkg:deb/debian/openssh-server@9.2p1-2%2Bdeb12u10"
-        },
-        {
-          "ref": "pkg:deb/debian/openssh-sftp-server@9.2p1-2%2Bdeb12u10"
-        },
-        {
-          "ref": "pkg:deb/debian/ssh@9.2p1-2%2Bdeb12u10"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-60000",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "sshd: MaxAuthTries with GSSAPI authentication; GSSAPIAuthentication is off in the LXC.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/openssh-client@9.2p1-2%2Bdeb12u10"
-        },
-        {
-          "ref": "pkg:deb/debian/openssh-server@9.2p1-2%2Bdeb12u10"
-        },
-        {
-          "ref": "pkg:deb/debian/openssh-sftp-server@9.2p1-2%2Bdeb12u10"
-        },
-        {
-          "ref": "pkg:deb/debian/ssh@9.2p1-2%2Bdeb12u10"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-60002",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ssh client use-after-free on a server's rekey; nothing in the LXC runs the ssh client.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/openssh-client@9.2p1-2%2Bdeb12u10"
-        },
-        {
-          "ref": "pkg:deb/debian/openssh-server@9.2p1-2%2Bdeb12u10"
-        },
-        {
-          "ref": "pkg:deb/debian/openssh-sftp-server@9.2p1-2%2Bdeb12u10"
-        },
-        {
-          "ref": "pkg:deb/debian/ssh@9.2p1-2%2Bdeb12u10"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-6276",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "curl libcurl3-gnutls libcurl4: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/curl@7.88.1-10%2Bdeb12u15"
-        },
-        {
-          "ref": "pkg:deb/debian/libcurl3-gnutls@7.88.1-10%2Bdeb12u15"
-        },
-        {
-          "ref": "pkg:deb/debian/libcurl4@7.88.1-10%2Bdeb12u15"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-6653",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libxml2@2.9.14%2Bdfsg-1.3~deb12u6"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-7210",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libpython3.11 libpython3.11-minimal libpython3.11-stdlib python3.11 python3.11-minimal: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libpython3.11-minimal@3.11.2-6%2Bdeb12u9"
-        },
-        {
-          "ref": "pkg:deb/debian/libpython3.11-stdlib@3.11.2-6%2Bdeb12u9"
-        },
-        {
-          "ref": "pkg:deb/debian/libpython3.11@3.11.2-6%2Bdeb12u9"
-        },
-        {
-          "ref": "pkg:deb/debian/python3.11-minimal@3.11.2-6%2Bdeb12u9"
-        },
-        {
-          "ref": "pkg:deb/debian/python3.11@3.11.2-6%2Bdeb12u9"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-73072",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-73073",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-73076",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-73077",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-73078",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/vim-common@9.0.1378-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2%2Bdeb12u2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-74860",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libxml2@2.9.14%2Bdfsg-1.3~deb12u6"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-76163",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/bind9-dnsutils@9.18.49-1~deb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/bind9-host@9.18.49-1~deb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/bind9-libs@9.18.49-1~deb12u2"
-        }
-      ]
+      }
     },
     {
       "id": "CVE-2026-76642",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bsdextrautils@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/fdisk@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/libfdisk1@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux-extra@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/bsdutils@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libblkid1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libfdisk1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libmount1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libsmartcols1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libuuid1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/mount@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/util-linux@2.39.3-9ubuntu6.6"
+        }
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "util-linux mount helpers/nsenter: needs an unprivileged local user and fstab user mounts; the LXC has neither.",
+        "detail": "vllm-amd/deb:util-linux. util-linux mount helpers/nsenter: needs an unprivileged local user and fstab user mounts; the LXC has neither. Decided by migration 2026-11-12; review by 2027-11-12.",
         "justification": "requires_environment"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/bsdextrautils@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/bsdutils@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/fdisk@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/libblkid1@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/libfdisk1@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/libmount1@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/libsmartcols1@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/libuuid1@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/mount@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/util-linux-extra@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/util-linux@2.38.1-5%2Bdeb12u3"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-77692",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/bind9-dnsutils@9.18.49-1~deb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/bind9-host@9.18.49-1~deb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/bind9-libs@9.18.49-1~deb12u2"
-        }
-      ]
+      }
     },
     {
       "id": "CVE-2026-78408",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "util-linux mount helpers/nsenter: needs an unprivileged local user and fstab user mounts; the LXC has neither.",
-        "justification": "requires_environment"
-      },
       "affects": [
         {
-          "ref": "pkg:deb/debian/bsdextrautils@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/bsdextrautils@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/bsdutils@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/bsdutils@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/fdisk@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/fdisk@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/libblkid1@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/libblkid1@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/libfdisk1@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/libfdisk1@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/libmount1@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/libmount1@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/libsmartcols1@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/libsmartcols1@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/libuuid1@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/libuuid1@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/mount@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/mount@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/util-linux-extra@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/util-linux-extra@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/util-linux@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/util-linux@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/bsdutils@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libblkid1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libfdisk1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libmount1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libsmartcols1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libuuid1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/mount@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/util-linux@2.39.3-9ubuntu6.6"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:util-linux. util-linux mount helpers/nsenter: needs an unprivileged local user and fstab user mounts; the LXC has neither. Decided by migration 2026-11-12; review by 2027-11-12.",
+        "justification": "requires_environment"
+      }
     },
     {
       "id": "CVE-2026-78409",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "util-linux mount helpers/nsenter: needs an unprivileged local user and fstab user mounts; the LXC has neither.",
-        "justification": "requires_environment"
-      },
       "affects": [
         {
-          "ref": "pkg:deb/debian/bsdextrautils@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/bsdextrautils@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/bsdutils@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/bsdutils@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/fdisk@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/fdisk@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/libblkid1@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/libblkid1@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/libfdisk1@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/libfdisk1@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/libmount1@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/libmount1@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/libsmartcols1@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/libsmartcols1@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/libuuid1@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/libuuid1@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/mount@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/mount@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/util-linux-extra@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/util-linux-extra@2.38.1-5+deb12u3"
         },
         {
-          "ref": "pkg:deb/debian/util-linux@2.38.1-5%2Bdeb12u3"
+          "ref": "pkg:deb/debian/util-linux@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/bsdutils@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libblkid1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libfdisk1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libmount1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libsmartcols1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libuuid1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/mount@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/util-linux@2.39.3-9ubuntu6.6"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:util-linux. util-linux mount helpers/nsenter: needs an unprivileged local user and fstab user mounts; the LXC has neither. Decided by migration 2026-11-12; review by 2027-11-12.",
+        "justification": "requires_environment"
+      }
     },
     {
       "id": "CVE-2026-78410",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/bsdextrautils@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/bsdutils@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/fdisk@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/libblkid1@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/libfdisk1@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/libmount1@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/libsmartcols1@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/libuuid1@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/mount@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux-extra@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/debian/util-linux@2.38.1-5+deb12u3"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/bsdutils@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libblkid1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libfdisk1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libmount1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libsmartcols1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/libuuid1@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/mount@2.39.3-9ubuntu6.6"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/util-linux@2.39.3-9ubuntu6.6"
+        }
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "util-linux mount helpers/nsenter: needs an unprivileged local user and fstab user mounts; the LXC has neither.",
+        "detail": "vllm-amd/deb:util-linux. util-linux mount helpers/nsenter: needs an unprivileged local user and fstab user mounts; the LXC has neither. Decided by migration 2026-11-12; review by 2027-11-12.",
         "justification": "requires_environment"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/bsdextrautils@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/bsdutils@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/fdisk@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/libblkid1@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/libfdisk1@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/libmount1@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/libsmartcols1@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/libuuid1@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/mount@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/util-linux-extra@2.38.1-5%2Bdeb12u3"
-        },
-        {
-          "ref": "pkg:deb/debian/util-linux@2.38.1-5%2Bdeb12u3"
-        }
-      ]
+      }
     },
     {
-      "id": "CVE-2026-80274",
+      "id": "CVE-2026-26269",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-28417",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-28421",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-33412",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-34982",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-35177",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-39881",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-43961",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-46483",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-47162",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-52858",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-52860",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-55693",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-55895",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-57455",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-57456",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-59856",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-59858",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-73072",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-73073",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-73076",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-73077",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-73078",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/vim-common@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/debian/vim-tiny@9.0.1378-2+deb12u2"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-common@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim-runtime@9.1.0016-1ubuntu7.20"
+        },
+        {
+          "ref": "pkg:deb/ubuntu/vim@9.1.0016-1ubuntu7.20"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "vllm-amd/deb:vim. vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-58471",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/wget@1.21.3-1+deb12u1"
+        }
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them.",
+        "detail": "vllm-amd/deb:wget. wget: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
         "justification": "code_not_reachable"
-      },
+      }
+    },
+    {
+      "id": "CVE-2026-58472",
       "affects": [
         {
-          "ref": "pkg:deb/debian/bind9-dnsutils@9.18.49-1~deb12u2"
+          "ref": "pkg:deb/debian/wget@1.21.3-1+deb12u1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/deb:wget. wget: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2023-45853",
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/zlib1g-dev@1.2.13.dfsg-1"
         },
         {
-          "ref": "pkg:deb/debian/bind9-host@9.18.49-1~deb12u2"
+          "ref": "pkg:deb/debian/zlib1g@1.2.13.dfsg-1"
         },
         {
-          "ref": "pkg:deb/debian/bind9-libs@9.18.49-1~deb12u2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-81563",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/bind9-dnsutils@9.18.49-1~deb12u2"
+          "ref": "pkg:deb/ubuntu/zlib1g-dev@1.3.dfsg-3.1ubuntu2.3"
         },
         {
-          "ref": "pkg:deb/debian/bind9-host@9.18.49-1~deb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/bind9-libs@9.18.49-1~deb12u2"
+          "ref": "pkg:deb/ubuntu/zlib1g@1.3.dfsg-3.1ubuntu2.3"
         }
-      ]
-    },
-    {
-      "id": "CVE-2026-81736",
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/bind9-dnsutils@9.18.49-1~deb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/bind9-host@9.18.49-1~deb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/bind9-libs@9.18.49-1~deb12u2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-8286",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "curl libcurl3-gnutls libcurl4: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/curl@7.88.1-10%2Bdeb12u15"
-        },
-        {
-          "ref": "pkg:deb/debian/libcurl3-gnutls@7.88.1-10%2Bdeb12u15"
-        },
-        {
-          "ref": "pkg:deb/debian/libcurl4@7.88.1-10%2Bdeb12u15"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-84450",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libheif1@1.15.1-1%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-84451",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libheif1@1.15.1-1%2Bdeb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-8458",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "curl libcurl3-gnutls libcurl4: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/curl@7.88.1-10%2Bdeb12u15"
-        },
-        {
-          "ref": "pkg:deb/debian/libcurl3-gnutls@7.88.1-10%2Bdeb12u15"
-        },
-        {
-          "ref": "pkg:deb/debian/libcurl4@7.88.1-10%2Bdeb12u15"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-84782",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "DTLS handshake retransmission; nothing in the LXC speaks DTLS (sshd uses libcrypto only).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libssl3@3.0.22-1~deb12u1"
-        },
-        {
-          "ref": "pkg:deb/debian/openssl@3.0.22-1~deb12u1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-86138",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libxml2@2.9.14%2Bdfsg-1.3~deb12u6"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-86140",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libxml2@2.9.14%2Bdfsg-1.3~deb12u6"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-86142",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libxml2@2.9.14%2Bdfsg-1.3~deb12u6"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-86143",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libxml2@2.9.14%2Bdfsg-1.3~deb12u6"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-86144",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libxml2@2.9.14%2Bdfsg-1.3~deb12u6"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-88806",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libx11-6 libx11-data: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libx11-6@1.8.4-2%2Bdeb12u2"
-        },
-        {
-          "ref": "pkg:deb/debian/libx11-data@1.8.4-2%2Bdeb12u2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-8927",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "curl libcurl3-gnutls libcurl4: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/curl@7.88.1-10%2Bdeb12u15"
-        },
-        {
-          "ref": "pkg:deb/debian/libcurl3-gnutls@7.88.1-10%2Bdeb12u15"
-        },
-        {
-          "ref": "pkg:deb/debian/libcurl4@7.88.1-10%2Bdeb12u15"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-9538",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libperl5.36 perl perl-base perl-modules-5.36: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libperl5.36@5.36.0-7%2Bdeb12u4"
-        },
-        {
-          "ref": "pkg:deb/debian/perl-base@5.36.0-7%2Bdeb12u4"
-        },
-        {
-          "ref": "pkg:deb/debian/perl-modules-5.36@5.36.0-7%2Bdeb12u4"
-        },
-        {
-          "ref": "pkg:deb/debian/perl@5.36.0-7%2Bdeb12u4"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-97687",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "python3-urllib3: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/python3-urllib3@1.26.12-1%2Bdeb12u4"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-97689",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "python3-urllib3: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/python3-urllib3@1.26.12-1%2Bdeb12u4"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-77214",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "A heap over-read when the calling program passes XML_ParseBuffer a length beyond its buffer \u2014 a caller bug, not crafted XML; the programs that load expat here pass correct lengths.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libexpat1@2.5.0-1%2Bdeb12u4"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-88647",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "GnuTLS TLS-client hostname-verification bypass (CN fallback); the only gnutls TLS client on the host is apt's HTTPS downloads, and apt verifies the GPG signatures on everything it installs \u2014 an impersonated mirror cannot inject a package.",
-        "justification": "protected_by_mitigating_control"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libgnutls30@3.7.9-2%2Bdeb12u7"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-88648",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "GnuTLS TLS-client cross-domain CA restriction bypass; the only gnutls TLS client on the host is apt's HTTPS downloads, and apt verifies the GPG signatures on everything it installs \u2014 an impersonated mirror cannot inject a package.",
-        "justification": "protected_by_mitigating_control"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/debian/libgnutls30@3.7.9-2%2Bdeb12u7"
-        }
-      ]
+        "detail": "vllm-amd/deb:zlib. zipOpenNewFileInZip4_6 is minizip, which zlib1g does not ship (Debian: will not fix for that reason). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_present"
+      }
     },
     {
       "id": "CVE-2026-4775",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libtiff bundled in the Pillow wheel (bundled-library scan, #811). vLLM decodes images only for a multimodal model's image inputs; the served model is text-only, and the API requires vLLM's key (held by LiteLLM).",
-        "justification": "requires_configuration"
-      },
       "affects": [
         {
-          "ref": "pkg:generic/libtiff@4.7.1"
+          "ref": "pkg:generic/libtiff@4.7.2"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/generic:libtiff. libtiff bundled in the Pillow wheel (bundled-library scan, #811). vLLM decodes images only for a multimodal model's image inputs; the served model is text-only, and the API requires vLLM's key (held by LiteLLM). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "requires_configuration"
+      }
     },
     {
       "id": "CVE-2026-54873",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
-          "ref": "pkg:generic/openssl@4.0.2"
+          "ref": "pkg:generic/openssl@4.0.3"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/generic:openssl. OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-72897",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
-          "ref": "pkg:generic/openssl@4.0.2"
+          "ref": "pkg:generic/openssl@4.0.3"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/generic:openssl. OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-84782",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
-          "ref": "pkg:generic/openssl@4.0.2"
+          "ref": "pkg:generic/openssl@4.0.3"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/generic:openssl. OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-84783",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
-          "ref": "pkg:generic/openssl@4.0.2"
+          "ref": "pkg:generic/openssl@4.0.3"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/generic:openssl. OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-84784",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
-          "ref": "pkg:generic/openssl@4.0.2"
+          "ref": "pkg:generic/openssl@4.0.3"
         }
-      ]
-    },
-    {
-      "id": "CVE-2026-111064",
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "The vulnerable aiohttp is the 3.14.3 copy vendored in Ray's runtime_env agent (ray/_private/runtime_env/agent/thirdparty_files), loaded only by that agent in a Ray cluster; the container runs only vLLM's OpenAI API server (uvicorn) and its EngineCore with the multiprocessing executor, no Ray processes. The aiohttp vLLM itself imports is 3.14.5, which has the fix. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix.",
+        "detail": "vllm-amd/generic:openssl. OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path. Decided by migration 2026-11-12; review by 2027-05-11.",
         "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/aiohttp@3.14.3"
-        },
-        {
-          "ref": "pkg:pypi/aiohttp@3.14.5"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-111066",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "The vulnerable aiohttp is the 3.14.3 copy vendored in Ray's runtime_env agent (ray/_private/runtime_env/agent/thirdparty_files), loaded only by that agent in a Ray cluster; the container runs only vLLM's OpenAI API server (uvicorn) and its EngineCore with the multiprocessing executor, no Ray processes. The aiohttp vLLM itself imports is 3.14.5, which has the fix. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/aiohttp@3.14.3"
-        },
-        {
-          "ref": "pkg:pypi/aiohttp@3.14.5"
-        }
-      ]
-    },
-    {
-      "id": "GHSA-2g87-pp6c-29x5",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "The vulnerable aiohttp is the 3.14.3 copy vendored in Ray's runtime_env agent (ray/_private/runtime_env/agent/thirdparty_files), loaded only by that agent in a Ray cluster; the container runs only vLLM's OpenAI API server (uvicorn) and its EngineCore with the multiprocessing executor, no Ray processes. The aiohttp vLLM itself imports is 3.14.5, which has the fix. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:pypi/aiohttp@3.14.3"
-        },
-        {
-          "ref": "pkg:pypi/aiohttp@3.14.5"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-109518",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "APT download/redirect flaw; apt never runs in the running container, which runs only the vLLM API server and engine. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:deb/ubuntu/apt@2.8.3"
-        },
-        {
-          "ref": "pkg:deb/ubuntu/libapt-pkg6.0t64@2.8.3"
-        }
-      ]
+      }
     },
     {
       "id": "CVE-2026-102554",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Guava inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed and nothing deserialises Java objects. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:maven/com.google.guava/guava@32.0.1-jre"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/maven:guava. Guava inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed and nothing deserialises Java objects. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-54399",
+      "affects": [
+        {
+          "ref": "pkg:maven/org.apache.httpcomponents.core5/httpcore5@5.4.3"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/maven:httpcore5. Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed \u2014 vLLM uses Ray, if at all, from Python. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-89407",
+      "affects": [
+        {
+          "ref": "pkg:maven/com.fasterxml.jackson.core/jackson-core@2.18.8"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/maven:jackson-core. Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed \u2014 vLLM uses Ray, if at all, from Python. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-89425",
+      "affects": [
+        {
+          "ref": "pkg:maven/com.fasterxml.jackson.core/jackson-core@2.18.8"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/maven:jackson-core. Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed \u2014 vLLM uses Ray, if at all, from Python. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-68497",
+      "affects": [
+        {
+          "ref": "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.18.8"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/maven:jackson-databind. Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed \u2014 vLLM uses Ray, if at all, from Python. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-91776",
+      "affects": [
+        {
+          "ref": "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.18.8"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/maven:jackson-databind. Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed \u2014 vLLM uses Ray, if at all, from Python. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-91777",
+      "affects": [
+        {
+          "ref": "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.18.8"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/maven:jackson-databind. Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed \u2014 vLLM uses Ray, if at all, from Python. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-111064",
+      "affects": [
+        {
+          "ref": "pkg:pypi/aiohttp@3.14.3"
+        },
+        {
+          "ref": "pkg:pypi/aiohttp@3.14.5"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/pypi:aiohttp. The vulnerable aiohttp is the 3.14.3 copy vendored in Ray's runtime_env agent (ray/_private/runtime_env/agent/thirdparty_files), loaded only by that agent in a Ray cluster; the container runs only vLLM's OpenAI API server (uvicorn) and its EngineCore with the multiprocessing executor, no Ray processes. The aiohttp vLLM itself imports is 3.14.5, which has the fix. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-111066",
+      "affects": [
+        {
+          "ref": "pkg:pypi/aiohttp@3.14.3"
+        },
+        {
+          "ref": "pkg:pypi/aiohttp@3.14.5"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/pypi:aiohttp. The vulnerable aiohttp is the 3.14.3 copy vendored in Ray's runtime_env agent (ray/_private/runtime_env/agent/thirdparty_files), loaded only by that agent in a Ray cluster; the container runs only vLLM's OpenAI API server (uvicorn) and its EngineCore with the multiprocessing executor, no Ray processes. The aiohttp vLLM itself imports is 3.14.5, which has the fix. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "GHSA-2g87-pp6c-29x5",
+      "affects": [
+        {
+          "ref": "pkg:pypi/aiohttp@3.14.3"
+        },
+        {
+          "ref": "pkg:pypi/aiohttp@3.14.5"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/pypi:aiohttp. The vulnerable aiohttp is the 3.14.3 copy vendored in Ray's runtime_env agent (ray/_private/runtime_env/agent/thirdparty_files), loaded only by that agent in a Ray cluster; the container runs only vLLM's OpenAI API server (uvicorn) and its EngineCore with the multiprocessing executor, no Ray processes. The aiohttp vLLM itself imports is 3.14.5, which has the fix. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-23949",
+      "affects": [
+        {
+          "ref": "pkg:pypi/jaraco.context@5.3.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/pypi:jaraco.context. A copy bundled inside setuptools 79 (setuptools/_vendor), used to unpack archives when installing packages; vLLM serving installs nothing. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-114613",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "The leak is in msgpack's C extension; the C extension vLLM imports is msgpack 1.2.4, which has the fix, and the other copy (pip's vendored msgpack 1.1.2) is pure Python, which the advisory says does not leak, and is loaded only when pip runs. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix.",
-        "justification": "code_not_present"
-      },
       "affects": [
         {
           "ref": "pkg:pypi/msgpack@1.1.2"
@@ -2157,7 +2491,89 @@
         {
           "ref": "pkg:pypi/msgpack@1.2.4"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/pypi:msgpack. The leak is in msgpack's C extension; the C extension vLLM imports is msgpack 1.2.4, which has the fix, and the other copy (pip's vendored msgpack 1.1.2) is pure Python, which the advisory says does not leak, and is loaded only when pip runs. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_present"
+      }
+    },
+    {
+      "id": "GHSA-6v7p-g79w-8964",
+      "affects": [
+        {
+          "ref": "pkg:pypi/msgpack@1.1.2"
+        },
+        {
+          "ref": "pkg:pypi/msgpack@1.2.4"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/pypi:msgpack. pip 26.2.1's own bundled copy (pip/_vendor/vendor.txt), loaded only when pip runs; vLLM serving never runs pip, and the copy vLLM imports is fixed (msgpack 1.2.2). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2025-47273",
+      "affects": [
+        {
+          "ref": "pkg:pypi/setuptools@70.3.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/pypi:setuptools. pip 26.2.1's own bundled copy (pip/_vendor/vendor.txt), loaded only when pip runs; vLLM serving never runs pip, and the copy vLLM imports is fixed (setuptools 79.0.1). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-97687",
+      "affects": [
+        {
+          "ref": "pkg:pypi/urllib3@2.7.0"
+        },
+        {
+          "ref": "pkg:pypi/urllib3@2.8.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/pypi:urllib3. pip 26.2.1's own bundled copy (pip/_vendor/vendor.txt), loaded only when pip runs; vLLM serving never runs pip, and the copy vLLM imports is fixed (urllib3 2.8.0). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-97689",
+      "affects": [
+        {
+          "ref": "pkg:pypi/urllib3@2.7.0"
+        },
+        {
+          "ref": "pkg:pypi/urllib3@2.8.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/pypi:urllib3. pip 26.2.1's own bundled copy (pip/_vendor/vendor.txt), loaded only when pip runs; vLLM serving never runs pip, and the copy vLLM imports is fixed (urllib3 2.8.0). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-24049",
+      "affects": [
+        {
+          "ref": "pkg:pypi/wheel@0.45.1"
+        },
+        {
+          "ref": "pkg:pypi/wheel@0.48.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "vllm-amd/pypi:wheel. A copy bundled inside setuptools 79 (setuptools/_vendor), used to unpack wheels when installing packages; vLLM serving installs nothing. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     }
   ]
 }

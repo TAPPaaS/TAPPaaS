@@ -1,0 +1,53 @@
+{
+ "schema": 1,
+ "components": {
+  "tappaas-cicd/nix:libssh": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "0.*",
+   "cves": {
+    "CVE-2026-59850": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Channel callbacks after close in an SSH session; libssh is only ansible-pylibssh's, and ansible-core is used for module-spec validation, never to connect.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-59850": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00346
+    }
+   }
+  },
+  "tappaas-cicd/nix:libxslt": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2025-7425": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "XSLT key() processing; libxslt is only lxml's, pulled in by ansible-core's validation-only dependencies, and no TAPPaaS code runs XSLT.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2025-7425": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:H/PR:N/UI:N/S:C/C:N/I:H/A:H",
+     "epss": 0.00444
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,1934 @@
+{
+ "schema": 1,
+ "components": {
+  "pvehost/deb:acl": {
+   "use": "",
+   "reason": "internal-only",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-54369": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Symlink traversal through libacl into privilege; needs an unprivileged local user, and a node has none.",
+     "justification": "requires_environment"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-11-12",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-54369": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+     "epss": 0.00153
+    }
+   }
+  },
+  "pvehost/deb:busybox": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2023-39810": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-26157": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-26158": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-29004": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-38754": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-88830": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-88832": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2023-39810": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00765
+    },
+    "CVE-2026-26157": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00723
+    },
+    "CVE-2026-26158": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.0019
+    },
+    "CVE-2026-29004": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:A/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00375
+    },
+    "CVE-2026-38754": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00235
+    },
+    "CVE-2026-88830": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00351
+    },
+    "CVE-2026-88832": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00131
+    }
+   }
+  },
+  "pvehost/deb:c-ares": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-33630": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libcares2 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-69184": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libcares2 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-69186": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libcares2 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-33630": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00845
+    },
+    "CVE-2026-69184": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00479
+    },
+    "CVE-2026-69186": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+     "epss": 0.00466
+    }
+   }
+  },
+  "pvehost/deb:ceph": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "19.*",
+   "cves": {
+    "CVE-2025-30156": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-39944": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-50152": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-54330": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2025-30156": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:A/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:L",
+     "epss": 0.00093
+    },
+    "CVE-2026-39944": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00285
+    },
+    "CVE-2026-50152": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:L/A:L",
+     "epss": 0.00248
+    },
+    "CVE-2026-54330": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+     "epss": 0.00367
+    }
+   }
+  },
+  "pvehost/deb:cifs-utils": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "7.*",
+   "cves": {
+    "CVE-2026-12505": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "cifs-utils is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "pvehost/deb:corosync": {
+   "use": "",
+   "reason": "other",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-81665": {
+     "level": "low",
+     "why": "Heap overflow in totem message reassembly; Proxmox's corosync drops packets not carrying the cluster's authkey, so it needs a cluster member."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-81665": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:A/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00416
+    }
+   }
+  },
+  "pvehost/deb:curl": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "8.*",
+   "cves": {
+    "CVE-2026-12064": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "The curl command is not run by any service; kvm loads libcurl-gnutls only for QEMU's curl block driver, and no disk is http:.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-8286": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "The curl command is not run by any service; kvm loads libcurl-gnutls only for QEMU's curl block driver, and no disk is http:.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-8458": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "The curl command is not run by any service; kvm loads libcurl-gnutls only for QEMU's curl block driver, and no disk is http:.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-8927": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "The curl command is not run by any service; kvm loads libcurl-gnutls only for QEMU's curl block driver, and no disk is http:.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-12064": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+     "epss": 0.00414
+    },
+    "CVE-2026-8458": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N",
+     "epss": 0.00371
+    }
+   }
+  },
+  "pvehost/deb:dracut": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "106.*",
+   "cves": {
+    "CVE-2026-15816": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-16445": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-6893": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Only used to build the initramfs; is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-15816": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:A/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00371
+    },
+    "CVE-2026-16445": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:A/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.03222
+    },
+    "CVE-2026-6893": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:A/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.01275
+    }
+   }
+  },
+  "pvehost/deb:expat": {
+   "use": "",
+   "reason": "other",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-66046": {
+     "level": "low",
+     "why": "libexpat is loaded by dbus, kvm and the Proxmox daemons; untrusted XML arrives only when an admin imports an OVA/OVF."
+    },
+    "CVE-2026-76956": {
+     "level": "low",
+     "why": "libexpat is loaded by dbus, kvm and the Proxmox daemons; untrusted XML arrives only when an admin imports an OVA/OVF."
+    },
+    "CVE-2026-76957": {
+     "level": "low",
+     "why": "libexpat is loaded by dbus, kvm and the Proxmox daemons; untrusted XML arrives only when an admin imports an OVA/OVF."
+    },
+    "CVE-2026-93990": {
+     "level": "low",
+     "why": "libexpat is loaded by dbus, kvm and the Proxmox daemons; untrusted XML arrives only when an admin imports an OVA/OVF."
+    },
+    "CVE-2026-77214": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "A heap over-read when the calling program passes XML_ParseBuffer a length beyond its buffer — a caller bug, not crafted XML; the programs that load expat here pass correct lengths.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "pvehost/deb:frr": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "10.*",
+   "cves": {
+    "CVE-2026-37460": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-37460": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00335
+    }
+   }
+  },
+  "pvehost/deb:gnupg2": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-24882": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "dirmngr gnupg gnupg-l10n gpg gpg-agent gpgconf gpgsm is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-24882": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00438
+    }
+   }
+  },
+  "pvehost/deb:gnutls28": {
+   "use": "",
+   "reason": "mitigated-by-rule",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-88647": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "GnuTLS TLS-client hostname-verification bypass (CN fallback); the only gnutls TLS client on the host is apt's HTTPS downloads, and apt verifies the GPG signatures on everything it installs — an impersonated mirror cannot inject a package.",
+     "justification": "protected_by_mitigating_control"
+    },
+    "CVE-2026-88648": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "GnuTLS TLS-client cross-domain CA restriction bypass; the only gnutls TLS client on the host is apt's HTTPS downloads, and apt verifies the GPG signatures on everything it installs — an impersonated mirror cannot inject a package.",
+     "justification": "protected_by_mitigating_control"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-11-12",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-88647": {
+     "severity": "low"
+    },
+    "CVE-2026-88648": {
+     "severity": "low"
+    }
+   }
+  },
+  "pvehost/deb:grub2": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2025-61662": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "grub-common grub-efi-amd64 grub-efi-amd64-bin grub-efi-amd64-unsigned grub-pc-bin grub2-common proxmox-grub is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2025-61662": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00219
+    }
+   }
+  },
+  "pvehost/deb:libnet-dns-perl": {
+   "use": "",
+   "reason": "other",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-81928": {
+     "level": "low",
+     "why": "Archive::Tar denial of service from a crafted tar header (Debian: fix deferred); only an admin-supplied tar reaches it."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-81928": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00684
+    }
+   }
+  },
+  "pvehost/deb:libpcap": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-0799": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libpcap0.8t64 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-0799": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:L/I:H/A:H",
+     "epss": 0.00108
+    }
+   }
+  },
+  "pvehost/deb:libsndfile": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-37555": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Needs a crafted audio file read; QEMU reads none on a node.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-37555": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:H",
+     "epss": 0.00504
+    }
+   }
+  },
+  "pvehost/deb:libx11": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-88806": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Needs a malicious X server; kvm loads libX11 for display backends Proxmox does not use (consoles are VNC/SPICE).",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-88806": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00202
+    }
+   }
+  },
+  "pvehost/deb:libxml2": {
+   "use": "",
+   "reason": "other",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-6653": {
+     "level": "low",
+     "why": "libxml2 is loaded by kvm and the Proxmox daemons; their API is JSON, and untrusted XML arrives only when an admin imports an OVA/OVF."
+    },
+    "CVE-2026-74860": {
+     "level": "low",
+     "why": "libxml2 is loaded by kvm and the Proxmox daemons; their API is JSON, and untrusted XML arrives only when an admin imports an OVA/OVF."
+    },
+    "CVE-2026-86138": {
+     "level": "low",
+     "why": "libxml2 is loaded by kvm and the Proxmox daemons; their API is JSON, and untrusted XML arrives only when an admin imports an OVA/OVF."
+    },
+    "CVE-2026-86139": {
+     "level": "low",
+     "why": "libxml2 is loaded by kvm and the Proxmox daemons; their API is JSON, and untrusted XML arrives only when an admin imports an OVA/OVF."
+    },
+    "CVE-2026-86140": {
+     "level": "low",
+     "why": "libxml2 is loaded by kvm and the Proxmox daemons; their API is JSON, and untrusted XML arrives only when an admin imports an OVA/OVF."
+    },
+    "CVE-2026-86142": {
+     "level": "low",
+     "why": "libxml2 is loaded by kvm and the Proxmox daemons; their API is JSON, and untrusted XML arrives only when an admin imports an OVA/OVF."
+    },
+    "CVE-2026-86143": {
+     "level": "low",
+     "why": "libxml2 is loaded by kvm and the Proxmox daemons; their API is JSON, and untrusted XML arrives only when an admin imports an OVA/OVF."
+    },
+    "CVE-2026-86144": {
+     "level": "low",
+     "why": "libxml2 is loaded by kvm and the Proxmox daemons; their API is JSON, and untrusted XML arrives only when an admin imports an OVA/OVF."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-6653": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00355
+    },
+    "CVE-2026-74860": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H",
+     "epss": 0.00658
+    },
+    "CVE-2026-86138": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00132
+    },
+    "CVE-2026-86139": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00166
+    },
+    "CVE-2026-86140": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00157
+    },
+    "CVE-2026-86142": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00157
+    },
+    "CVE-2026-86143": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:L",
+     "epss": 0.00194
+    },
+    "CVE-2026-86144": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00186
+    }
+   }
+  },
+  "pvehost/deb:libxrender": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "0.*",
+   "cves": {
+    "CVE-2026-88807": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Needs a malicious X server; kvm loads libX11 for display backends Proxmox does not use (consoles are VNC/SPICE).",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-88807": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:H/I:H/A:H",
+     "epss": 0.00263
+    }
+   }
+  },
+  "pvehost/deb:libyang": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-44673": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libyang3 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-44673": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00635
+    }
+   }
+  },
+  "pvehost/deb:lmdb": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "0.*",
+   "cves": {
+    "CVE-2019-16224": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "liblmdb0 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2019-16225": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "liblmdb0 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2019-16226": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "liblmdb0 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2019-16227": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "liblmdb0 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2019-16228": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "liblmdb0 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2019-16224": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.01815
+    },
+    "CVE-2019-16225": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.01815
+    },
+    "CVE-2019-16226": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.01586
+    },
+    "CVE-2019-16227": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.02044
+    },
+    "CVE-2019-16228": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.01786
+    }
+   }
+  },
+  "pvehost/deb:ncurses": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "6.*",
+   "cves": {
+    "CVE-2025-69720": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libncurses6 libncursesw6 libtinfo6 ncurses-base ncurses-bin ncurses-term is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2025-69720": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00475
+    }
+   }
+  },
+  "pvehost/deb:open-iscsi": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-44943": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libopeniscsiusr open-iscsi is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-44944": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libopeniscsiusr open-iscsi is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-44943": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:N/I:H/A:N",
+     "epss": 0.00385
+    },
+    "CVE-2026-44944": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00093
+    }
+   }
+  },
+  "pvehost/deb:open-isns": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "0.*",
+   "cves": {
+    "CVE-2026-55995": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libisns0t64 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-55995": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00252
+    }
+   }
+  },
+  "pvehost/deb:openssh": {
+   "use": "",
+   "reason": "feature-disabled",
+   "versions": "10.*",
+   "cves": {
+    "CVE-2026-59999": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "sshd: DisableForwarding not overriding PermitTunnel; neither is set on the nodes (tunnelling is off by default).",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-60000": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "sshd: MaxAuthTries with GSSAPI authentication; GSSAPIAuthentication is off on the nodes.",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-60002": {
+     "level": "low",
+     "why": "ssh client use-after-free when a server changes its host key on rekey; Proxmox's ssh client connects only to the cluster's own nodes."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-59999": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+     "epss": 0.00159
+    },
+    "CVE-2026-60000": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00618
+    },
+    "CVE-2026-60002": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:L",
+     "epss": 0.003
+    }
+   }
+  },
+  "pvehost/deb:perl": {
+   "use": "",
+   "reason": "other",
+   "versions": "5.*",
+   "cves": {
+    "CVE-2026-9538": {
+     "level": "low",
+     "why": "Archive::Tar denial of service from a crafted tar header (Debian: fix deferred); only an admin-supplied tar reaches it."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-9538": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00517
+    }
+   }
+  },
+  "pvehost/deb:python-cryptography": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "43.*",
+   "cves": {
+    "CVE-2026-69249": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-69249": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00262
+    }
+   }
+  },
+  "pvehost/deb:python-urllib3": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2025-66471": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-97687": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-97689": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2025-66471": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00731
+    },
+    "CVE-2026-97687": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:N",
+     "epss": 0.00206
+    },
+    "CVE-2026-97689": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00335
+    }
+   }
+  },
+  "pvehost/deb:python3.13": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-15308": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-19445": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-19553": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-7210": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-82049": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-15308": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00637
+    },
+    "CVE-2026-19445": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00524
+    },
+    "CVE-2026-19553": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+     "epss": 0.00547
+    },
+    "CVE-2026-7210": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00672
+    },
+    "CVE-2026-82049": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:N",
+     "epss": 0.00188
+    }
+   }
+  },
+  "pvehost/deb:qtbase-opensource-src": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "5.*",
+   "cves": {
+    "CVE-2026-9499": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libqt5core5t64 libqt5dbus5t64 libqt5network5t64 is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-9499": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00302
+    }
+   }
+  },
+  "pvehost/deb:rpcbind": {
+   "use": "",
+   "reason": "other",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-94640": {
+     "level": "low",
+     "why": "Unauthenticated denial of service of rpcbind (port 111, listening on every node; tappaas1 serves NFS) — a crash, not code execution, reachable only from inside the site's network."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-94640": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.0064
+    }
+   }
+  },
+  "pvehost/deb:setuptools": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "78.*",
+   "cves": {
+    "CVE-2026-23949": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Python: no Python service runs on a node (Proxmox is Perl); this is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-23949": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N",
+     "epss": 0.00632
+    }
+   }
+  },
+  "pvehost/deb:sg3-utils": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-16313": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libsgutils2-1.48 sg3-utils is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-16313": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:P/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
+     "epss": 0.00348
+    }
+   }
+  },
+  "pvehost/deb:sudo": {
+   "use": "",
+   "reason": "feature-disabled",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-96512": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "sudo NOTBEFORE/NOTAFTER rules; the nodes' sudoers uses none.",
+     "justification": "requires_configuration"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-96512": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00321
+    }
+   }
+  },
+  "pvehost/deb:systemd": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "257.*",
+   "cves": {
+    "CVE-2026-16742": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "systemd-homed signature verification; systemd-homed is not used on a node.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-16742": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00057
+    }
+   }
+  },
+  "pvehost/deb:thrift": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "0.*",
+   "cves": {
+    "CVE-2025-48431": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-41602": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-41606": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-41607": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-41608": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-43871": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-45112": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-48144": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-48145": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-48586": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-55969": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-55971": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-58023": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-58662": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-61373": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-66054": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-66081": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-66837": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-66858": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-82458": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-82459": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-83663": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-85086": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-85088": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-85494": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-93925": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-93926": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-94637": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-94650": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Ceph: no Ceph cluster on the site (no ceph.conf, no monitor); kvm loads librados/librbd but only an rbd: disk would use them, and there are none.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-61374": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-63772": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-66055": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-66859": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-83632": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-85476": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-91135": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-91137": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-94634": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-94636": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-94639": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-94642": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-94644": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-94651": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-94653": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-94654": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-96286": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-96287": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-96289": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Apache Thrift language bindings (Java/Python/Perl, fixed in 0.25.0); Debian's libthrift-0.19.0t64 is the C++ library, used only by Ceph's librgw2 — no Ceph cluster on the site, and nothing loads either.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2025-48431": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.01038
+    },
+    "CVE-2026-41602": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.01163
+    },
+    "CVE-2026-41606": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.01101
+    },
+    "CVE-2026-41607": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:H",
+     "epss": 0.00896
+    },
+    "CVE-2026-41608": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.0103
+    },
+    "CVE-2026-43871": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.0103
+    },
+    "CVE-2026-45112": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.0103
+    },
+    "CVE-2026-48144": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+     "epss": 0.004
+    },
+    "CVE-2026-48145": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+     "epss": 0.00417
+    },
+    "CVE-2026-48586": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.0103
+    },
+    "CVE-2026-55969": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.0103
+    },
+    "CVE-2026-55971": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00979
+    },
+    "CVE-2026-58023": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:H",
+     "epss": 0.01017
+    },
+    "CVE-2026-58662": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:H",
+     "epss": 0.01078
+    },
+    "CVE-2026-61373": {
+     "severity": "high",
+     "epss": 0.0043
+    },
+    "CVE-2026-66054": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00277
+    },
+    "CVE-2026-66081": {
+     "severity": "high",
+     "epss": 0.00316
+    },
+    "CVE-2026-66837": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00349
+    },
+    "CVE-2026-66858": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00307
+    },
+    "CVE-2026-82458": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00342
+    },
+    "CVE-2026-82459": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00342
+    },
+    "CVE-2026-83663": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00277
+    },
+    "CVE-2026-85086": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+     "epss": 0.00176
+    },
+    "CVE-2026-85088": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N",
+     "epss": 0.0017
+    },
+    "CVE-2026-85494": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.0031
+    },
+    "CVE-2026-93925": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00306
+    },
+    "CVE-2026-93926": {
+     "severity": "high",
+     "epss": 0.00277
+    },
+    "CVE-2026-94637": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00277
+    },
+    "CVE-2026-94650": {
+     "severity": "high",
+     "epss": 0.00303
+    },
+    "CVE-2026-61374": {
+     "severity": "high",
+     "epss": 0.00248
+    },
+    "CVE-2026-63772": {
+     "severity": "high",
+     "epss": 0.00316
+    },
+    "CVE-2026-66055": {
+     "severity": "high",
+     "epss": 0.00277
+    },
+    "CVE-2026-66859": {
+     "severity": "high",
+     "epss": 0.00316
+    },
+    "CVE-2026-83632": {
+     "severity": "medium"
+    },
+    "CVE-2026-85476": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00332
+    },
+    "CVE-2026-91135": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:H",
+     "epss": 0.00339
+    },
+    "CVE-2026-91137": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00277
+    },
+    "CVE-2026-94634": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00277
+    },
+    "CVE-2026-94636": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00277
+    },
+    "CVE-2026-94639": {
+     "severity": "high",
+     "epss": 0.00342
+    },
+    "CVE-2026-94642": {
+     "severity": "high",
+     "epss": 0.00374
+    },
+    "CVE-2026-94644": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00303
+    },
+    "CVE-2026-94651": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.0031
+    },
+    "CVE-2026-94653": {
+     "severity": "high",
+     "epss": 0.00277
+    },
+    "CVE-2026-94654": {
+     "severity": "high",
+     "epss": 0.00332
+    },
+    "CVE-2026-96286": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00342
+    },
+    "CVE-2026-96287": {
+     "severity": "high",
+     "epss": 0.00342
+    },
+    "CVE-2026-96289": {
+     "severity": "high",
+     "epss": 0.00342
+    }
+   }
+  },
+  "pvehost/deb:util-linux": {
+   "use": "",
+   "reason": "internal-only",
+   "versions": "2.*,4.*",
+   "cves": {
+    "CVE-2026-76642": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "util-linux mount helpers/nsenter: needs an unprivileged local user (fstab user entries, cgroup joins); a node has none.",
+     "justification": "requires_environment"
+    },
+    "CVE-2026-78408": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "util-linux mount helpers/nsenter: needs an unprivileged local user (fstab user entries, cgroup joins); a node has none.",
+     "justification": "requires_environment"
+    },
+    "CVE-2026-78409": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "util-linux mount helpers/nsenter: needs an unprivileged local user (fstab user entries, cgroup joins); a node has none.",
+     "justification": "requires_environment"
+    },
+    "CVE-2026-78410": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "util-linux mount helpers/nsenter: needs an unprivileged local user (fstab user entries, cgroup joins); a node has none.",
+     "justification": "requires_environment"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-11-12",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-76642": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00216
+    },
+    "CVE-2026-78408": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:C/C:N/I:H/A:H",
+     "epss": 0.00237
+    },
+    "CVE-2026-78409": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00189
+    },
+    "CVE-2026-78410": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00198
+    }
+   }
+  },
+  "pvehost/deb:vim": {
+   "use": "",
+   "reason": "other",
+   "versions": "9.*",
+   "cves": {
+    "CVE-2026-26269": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-28417": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-28421": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-33412": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-34982": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-35177": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-39881": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-43961": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-46483": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-47162": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-52858": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-52860": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-55693": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-55895": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-57455": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-57456": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-59856": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-59858": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-73072": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-73073": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-73076": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-73077": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-73078": {
+     "level": "low",
+     "why": "vim on a node runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "pvehost/deb:wget": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-58471": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "wget is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-58472": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "wget is installed with Proxmox but no running process on a node loads it, and no configured feature uses it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-58471": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:L/A:H",
+     "epss": 0.0039
+    },
+    "CVE-2026-58472": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:L/A:H",
+     "epss": 0.0039
+    }
+   }
+  }
+ }
+}

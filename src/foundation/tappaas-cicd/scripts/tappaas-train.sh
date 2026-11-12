@@ -49,6 +49,11 @@
 #                                          NEW, FIXED and SAME, the image and packages that change
 #   tappaas-train ack [--module <m>] --note "<why>"   accept what the last preview reported (one
 #                                          module's with --module; acks add up); the boundary goes on
+#   tappaas-train candidates               would moving a pin help? every image pin's newer patch and
+#                                          latest tag scanned by reference, the nixpkgs pin from the
+#                                          last preview: config/pin-candidates.json (the daily check)
+#   tappaas-train candidates apply <m>     the proposed move on a branch pin/<m>-<tag>, in a worktree
+#                                          of its own; live-test and merge it yourself
 #   tappaas-train releases                 every version, its commit, when it reached each channel
 #   tappaas-train releases --render        re-render RELEASES.md from release/releases.json (after a hand edit)
 #
@@ -1337,6 +1342,25 @@ do_phase_cve() {
     else
         info "  nothing to remove"
     fi
+    # A module with component records has its VEX generated from them, for the
+    # versions the site and the preview see now.
+    local exp_file="${CONFIG_DIR}/train-vex-export.json" gen
+    rm -f "${exp_file}"
+    out="$(python3 "${TRAIN_SCRIPTS}/cve-triage.py" --repo "${REPO_DIR}" export --report "${exp_file}" 2>&1)"; rc=$?
+    [[ -n "${out}" ]] && sed 's/^/  /' <<<"${out}"
+    if (( rc != 0 )) || [[ ! -s "${exp_file}" ]]; then
+        error "  the VEX could not be generated from the component records — nothing was committed"
+        local x; for x in $(g diff --name-only -- '*-vex.json'); do g checkout -q -- "${x}"; done
+        return 1
+    fi
+    mapfile -t gen < <(jq -r '.files[]' "${exp_file}"; g diff --name-only -- '*-components.json')
+    if (( ${#gen[@]} > 0 )); then
+        local x; for x in "${gen[@]}"; do g add -- "${x}"; done
+        if ! g diff --cached --quiet; then
+            g commit -q -m "chore(vex): component records and the VEX generated from them" \
+                || { error "could not commit the generated VEX"; return 1; }
+        fi
+    fi
     # Published before the site tracks the branch: phase 2 proves what is on the forge.
     if [[ "$(g rev-parse "${br}")" != "$(g rev-parse "origin/${br}" 2>/dev/null)" ]]; then
         g push -q origin "${br}" || { error "could not publish the VEX cleanup on ${br}"; return 1; }
@@ -1567,9 +1591,13 @@ do_phase_tag() {   # $1 = the version this boundary cuts, $2 = forced
 # every note, and the pin and preview digest it was given against — kept with the
 # release instead of deleted with the state. null when nothing was acknowledged.
 ack_record() {
-    jq -c '(.ack // null) | if . == null or ((.gate // []) | length) == 0 then null else
-        {items: (.gate // []), fingerprints: (.items // {}), notes: (.notes // []), pin: (.to // null),
-         digest: (.digest // null), at: (.at // null)} end' "${STATE_FILE}" 2>/dev/null || echo null
+    # Only the acks the gate used (.boundary.accepted): one for an item that left
+    # the gate before the boundary was not an acceptance of anything released.
+    jq -c '(.boundary.accepted // null) as $used | (.ack // null) | if . == null or ((.gate // []) | length) == 0 then null else
+        ((.gate // []) | if $used == null then . else map(select(. as $k | $used | index($k))) end) as $items
+        | if ($items | length) == 0 then null else
+        {items: $items, fingerprints: ((.items // {}) | with_entries(select(.key as $k | $items | index($k)))), notes: (.notes // []), pin: (.to // null),
+         digest: (.digest // null), at: (.at // null)} end end' "${STATE_FILE}" 2>/dev/null || echo null
 }
 
 # Each module's release score and level (ADR-045 D3), its counts, the release's
@@ -2200,6 +2228,21 @@ cmd_preview() {
 # ack [--module <m>] --note "<why>": accept the preview's gate items — all of them,
 # or one module's (its new CVEs, and the majors it ships). Acks add up: one module
 # accepted today, another tomorrow; each note is kept with what it accepted.
+defer_acked() {   # $1 = the acked gate items (JSON array)
+    local next until m ids
+    next="$(jq -r '.nextBoundary // empty' "${STATE_FILE}" 2>/dev/null)"
+    [[ -n "${next}" ]] || next="$(day_utc "$(now_epoch)")"
+    until="$(day_utc $(( $(epoch_of "${next}T00:00:00Z") + 14 * 86400 )))"
+    while IFS= read -r m; do
+        [[ -n "${m}" ]] || continue
+        mapfile -t ids < <(jq -r --arg m "${m}" '.[] | select(startswith("cve " + $m + " ")) | split(" ")[2]' <<<"$1")
+        (( ${#ids[@]} )) || continue
+        python3 "${TRAIN_SCRIPTS}/cve-triage.py" --repo "${REPO_DIR}" defer "${m}" "${ids[@]}" --until "${until}" \
+            --note "${NOTE:-acknowledged for the release}" --release "$(jq -r '.channels.staging.version // empty' "${STATE_FILE}" 2>/dev/null)" \
+            | sed 's/^/  /' || warn "  ${m}: the deferral could not be written into its component record"
+    done < <(jq -r '.[] | select(startswith("cve ")) | split(" ")[1]' <<<"$1" | sort -u)
+}
+
 cmd_ack() {
     [[ -s "${PREVIEW_FILE}" ]] || die "nothing to acknowledge — run: ${SCRIPT_NAME} preview"
     local n sel
@@ -2227,6 +2270,9 @@ cmd_ack() {
         info "  dropped $(grep -c . <<<"${stale}") stale ack(s) — no longer in the gate:"
         sed 's/^/    /' <<<"${stale}"
     fi
+    # An acked CVE is put off in its component's record until the boundary after
+    # this one: sites see it as known and deferred, and that boundary asks again.
+    defer_acked "${sel}"
     info "${GN}✓${CL} acknowledged ${n} item(s)${MODULE_SHOW:+ of ${MODULE_SHOW}} of the preview to ${BL}$(jq -r '.to[0:12]' "${PREVIEW_FILE}")${CL}:"
     jq -r '.[]' <<<"${sel}" | sed 's/^/    /'
     local left; left="$(unacked "${PREVIEW_FILE}")"
@@ -2324,7 +2370,7 @@ cmd_releases() {
 
 # The range must cover the whole header block above: extend it when the header
 # grows, or --help quietly stops before its last line.
-usage() { sed -n '3,62p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '3,67p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 command -v jq >/dev/null 2>&1 || die "jq is required"
 NO_FETCH=0; DRY_RUN=0; RESUME=0; FORCE_BOUNDARY=0
@@ -2433,8 +2479,9 @@ case "${1:-}" in
     releases) cmd_releases ;;
     preview)  cmd_preview ;;
     ack)      cmd_ack ;;
+    candidates) shift; python3 "${TRAIN_SCRIPTS}/pin-candidates.py" --repo "${REPO_DIR}" --config "${CONFIG_DIR}" "$@" ;;
     staging-site) shift; cmd_staging_site "$@" ;;
     canary)   shift; cmd_canary "$@" ;;
     -h|--help|help|"") usage ;;
-    *) die "unknown command '${1}' (status | init | boundary | staging-site | canary | fault | patch | preview | ack | releases)" ;;
+    *) die "unknown command '${1}' (status | init | boundary | staging-site | canary | fault | patch | preview | ack | candidates | releases)" ;;
 esac

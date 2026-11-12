@@ -14,7 +14,7 @@ import {
   CpeParts, DB_SPACE_BYTES, dbSpaceProblem, Finding, LINUX_PROBE, OPNSENSE_PROBE, PREVIOUS_FILE, STATUS_FILE, ScanStatus, SecurityIO,
   TargetStatus, applyCpes, checkCveStatus, fit, groupByImage, diffScans, nixComponents, parseLinuxProbe, parseOpnsenseProbe,
   loadVex, parseStorePath, parseVex, scanComponentList, scanImageRefs, readStatus, registeredModuleDirs, renderReport, runScan, sbomDir, summarize, summarizeOpnsense, sweepIsNewer,
-  vexFor, vexSuppresses, writeScan, isBuildOnly, pickSeverities, aptModules, moduleOf, patchVex, grypeFindings, instanceModules, cvesInPatchMessages, trivyParse,
+  vexFor, vexSuppresses, writeScan, isBuildOnly, pickSeverities, aptModules, moduleOf, patchVex, grypeFindings, instanceModules, cvesInPatchMessages, trivyParse, FIRST_SEEN_FILE, FORGET_DAYS, FirstSeen, readFirstSeen, seedFirstSeen, noteSeen, lacksSource,
   bundledComponents, matchBundled, BUNDLED_PY, base64Ascii,
 } from "../../src/security";
 import { run } from "../../src/main";
@@ -232,6 +232,15 @@ console.log("trivy package purls");
     { Name: "rpcbind", Version: "1.2.7", Release: "1", Identifier: { PURL: "pkg:deb/debian/rpcbind@1.2.7-1?arch=amd64&distro=debian-13.7" } }] }] });
   check(trivyParse(doc).components[0].purl === "pkg:deb/debian/rpcbind@1.2.7-1?arch=amd64&distro=debian-13.7",
     "a package's purl comes from Identifier (trivy >= 0.50) — the inventory had none for Debian hosts and images");
+  const src = trivyParse(JSON.stringify({ Metadata: { OS: { Family: "debian", Name: "13.7" } }, Results: [
+    { Type: "debian", Packages: [{ Name: "libtiff6", Version: "4.7.0", Release: "3", SrcName: "tiff", SrcVersion: "4.7.0", SrcRelease: "3", SrcEpoch: 0, Identifier: { PURL: "pkg:deb/debian/libtiff6@4.7.0-3" } }] },
+    { Type: "npm", Packages: [{ Name: "sharp", Version: "0.34.1", Identifier: { PURL: "pkg:npm/sharp@0.34.1" } }] }] })).components;
+  const prop = (c: { properties?: { name: string; value: string }[] }, k: string): string | undefined => c.properties?.find((x) => x.name === `aquasecurity:trivy:${k}`)?.value;
+  check(prop(src[0], "SrcName") === "tiff" && prop(src[0], "SrcVersion") === "4.7.0" && prop(src[0], "SrcRelease") === "3" && prop(src[0], "SrcEpoch") === undefined && prop(src[0], "PkgType") === "debian",
+    "an OS package keeps its source package: the advisories are filed under it, and the rescan matches by it");
+  check(prop(src[1], "PkgType") === "npm" && prop(src[1], "SrcName") === undefined, "a language package keeps its type, and has no source package");
+  check(!lacksSource(src) && lacksSource([{ type: "library", name: "libtiff6", version: "4.7.0-3", purl: "pkg:deb/debian/libtiff6@4.7.0-3" }]) && !lacksSource([src[1]]),
+    "an OS inventory without any source package is one an older scan took");
 }
 
 console.log("unversioned CVE records");
@@ -422,6 +431,39 @@ console.log("writeScan / diffScans / checkCveStatus / report");
   check(d2.newAct.length === 0 && d2.newlyFailed.length === 1, "second scan: the same ACT is not new; a new failure is");
   check(readStatus(join(sbomDir(dir), PREVIOUS_FILE))?.targets[1].verdict === "watch", "the previous scan is kept");
   check(diffScans(second, second).newlyFailed.length === 0, "a target that stays failed is not re-announced");
+
+  // first seen: a scan that saw less does not make the next one announce again
+  const fs = site();
+  const led = (): FirstSeen => readFirstSeen(join(sbomDir(fs), FIRST_SEEN_FILE))!;
+  const full = (at: string): ScanStatus => mk([{ id: "n", critHighKeys: ["CVE-1 libtiff6", "CVE-2 libc6"] }], at);
+  const thin = (at: string): ScanStatus => mk([{ id: "n", critHighKeys: ["CVE-2 libc6"] }], at);
+  const s1 = full("2026-11-08T01:00:00.000Z");
+  writeScan(fs, s1, {});
+  check(s1.targets[0].new.length === 2 && led().n["CVE-1 libtiff6"].first === "2026-11-08T01:00:00.000Z", "no ledger, no scan: everything is seen for the first time");
+  writeScan(fs, thin("2026-11-08T04:00:00.000Z"), {});
+  const s3 = full("2026-11-09T01:00:00.000Z");
+  writeScan(fs, s3, {});
+  check(s3.targets[0].new.length === 0, "a CVE a thinner scan missed is not new when it is counted again");
+  check(led().n["CVE-1 libtiff6"].first === "2026-11-08T01:00:00.000Z" && led().n["CVE-1 libtiff6"].last === "2026-11-09T01:00:00.000Z", "…first seen stays, last seen moves");
+  const s4 = mk([{ id: "n", critHighKeys: ["CVE-1 libtiff6", "CVE-2 libc6", "CVE-3 curl"] }], "2026-11-10T01:00:00.000Z");
+  writeScan(fs, s4, {});
+  check(s4.targets[0].new.join() === "CVE-3 curl", "a CVE never counted before is new, once");
+  const down = mk([{ id: "n", verdict: "failed", coverage: "fail", critHighKeys: [] }], "2026-12-20T01:00:00.000Z");
+  writeScan(fs, down, {});
+  check(Object.keys(led().n).length === 3, "a failed scan counted nothing: the ledger waits");
+  const s6 = thin("2026-12-21T01:00:00.000Z");
+  writeScan(fs, s6, {});
+  check(Object.keys(led().n).join() === "CVE-2 libc6", `a key not counted for ${FORGET_DAYS} days is forgotten`);
+  const s7 = full("2026-12-22T01:00:00.000Z");
+  writeScan(fs, s7, {});
+  check(s7.targets[0].new.join() === "CVE-1 libtiff6", "…so one that comes back after that is new again");
+  const up = site();
+  mkdirSync(sbomDir(up), { recursive: true });
+  writeFileSync(join(sbomDir(up), PREVIOUS_FILE), JSON.stringify(full("2026-11-08T01:00:00.000Z")));
+  writeFileSync(join(sbomDir(up), STATUS_FILE), JSON.stringify(thin("2026-11-08T04:00:00.000Z")));
+  const s8 = mk([{ id: "n", critHighKeys: ["CVE-1 libtiff6", "CVE-2 libc6", "CVE-3 curl"] }], "2026-11-09T01:00:00.000Z");
+  writeScan(up, s8, {});
+  check(s8.targets[0].new.join() === "CVE-3 curl" && noteSeen(seedFirstSeen(null), s8).n !== undefined, "a site with scans and no ledger yet: what its last two scans counted is seen, the thinner rescan included");
 
   const g = checkCveStatus(dir, now);
   check(g.status === "warn" && (g.rows ?? []).length === 2, "gate: an ACT and a failed scan are WARN rows");

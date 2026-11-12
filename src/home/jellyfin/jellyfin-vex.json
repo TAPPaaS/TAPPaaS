@@ -3,31 +3,543 @@
   "specVersion": "1.5",
   "version": 1,
   "metadata": {
+    "timestamp": "2026-11-12",
     "component": {
       "type": "application",
       "name": "jellyfin",
-      "description": "TAPPaaS module jellyfin: triage of its own critical/high CVEs (#788). Jellyfin 12.2 (from a pinned nixos-unstable, #850) runs on its NixOS VM (port 8096, plain HTTP), published through the firewall's Caddy to home, netbird and internet zones without the Authentik gate (ADR-032 D3): Jellyfin's own login decides who gets in, and its admin and diagnostic paths answer only inside the site; the library is an NFS share mounted at /media. Live check: the server launches jellyfin-ffmpeg 8.1.3-2 (--ffmpeg flag; FFmpeg 8.1.3, ahead of the nixos-unstable channel, #807), which links libssh 0.12.2, openssl 3.5.8 and, through chromaprint, only libavutil.so.61 of ffmpeg-headless 9.0.1; the Jellyfin process itself runs on the glibc 2.44 and openssl 3.5.8 its .NET runtime brings from nixos-unstable, beside the system's glibc 2.42. jellyfin-ffmpeg 8.1.3-2's own patches are feature and hardware fixes; FFmpeg 8.1.3 itself fixes most decoder/demuxer CVEs of 8.1.2, the rest are triaged against Jellyfin's own use: library files are attacker-relevant input, so decoder/demuxer CVEs it contains are kept exploitable. Hardware acceleration is none and the VM has no render node. No Live TV tuner and no .strm file are configured. Filter names floodfill/swaprect/hqdn3d/quirc and the spdif format do not occur in Jellyfin 12.2's assemblies."
+      "description": "TAPPaaS module jellyfin: generated from jellyfin-components.json; do not edit."
     }
   },
   "vulnerabilities": [
     {
-      "id": "CVE-2026-31852",
-      "analysis": {
-        "state": "false_positive",
-        "detail": "GitHub Actions workflow in the jellyfin-ios repository; not part of the Jellyfin server package."
-      },
+      "id": "CVE-2026-111497",
       "affects": [
         {
-          "ref": "pkg:nix/jellyfin"
+          "ref": "pkg:nix/brotli@1.2.1"
         }
-      ]
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: Brotli decoder buffer overflow (c/dec/decode.c, 1.0.3 to 1.2.0). v2.3.3 and earlier: the jellyfin process maps libbrotlidec 1.2.0 through .NET's System.IO.Compression.Native. Jellyfin does not decompress request bodies: a br-labelled garbage body to /Users/AuthenticateByName is parsed as raw JSON (probed on hrossen 2026-11-07), so the decoder is reached only by HttpClient's automatic decompression of outbound responses (metadata providers, plugin repository, all over HTTPS). Risk there: low: needs a malicious or impersonated metadata/plugin server; the parse runs in the hardened jellyfin process. Fixed after v2.3.3 (commit 54f16aab): jellyfin.nix swaps the pinned brotli for the same package built from 1.2.1 (system.replaceDependencies); on hrossen 2026-11-07 the jellyfin process maps libbrotlidec.so.1.2.1. 1.2.0 stays in the closure only through the base system (template nixpkgs rev 1f607aa79b63: systemd's curl 8.22.0, freetype/fontconfig, nix), which decodes br only in HTTP responses to what the guest itself fetches; no jellyfin process maps it.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "jellyfin/nix:brotli. Brotli decoder buffer overflow (c/dec/decode.c, 1.0.3 to 1.2.0). v2.3.3 and earlier: the jellyfin process maps libbrotlidec 1.2.0 through .NET's System.IO.Compression.Native. Jellyfin does not decompress request bodies: a br-labelled garbage body to /Users/AuthenticateByName is parsed as raw JSON (probed on hrossen 2026-11-07), so the decoder is reached only by HttpClient's automatic decompression of outbound responses (metadata providers, plugin repository, all over HTTPS). Risk there: low: needs a malicious or impersonated metadata/plugin server; the parse runs in the hardened jellyfin process. Fixed after v2.3.3 (commit 54f16aab): jellyfin.nix swaps the pinned brotli for the same package built from 1.2.1 (system.replaceDependencies); on hrossen 2026-11-07 the jellyfin process maps libbrotlidec.so.1.2.1. 1.2.0 stays in the closure only through the base system (template nixpkgs rev 1f607aa79b63: systemd's curl 8.22.0, freetype/fontconfig, nix), which decodes br only in HTTP responses to what the guest itself fetches; no jellyfin process maps it. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-107928",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-107929",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-86410",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-86412",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-86413",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-86414",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-86415",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-87861",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-87862",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-87863",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-87865",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-87866",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-92386",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-92387",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-92388",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-92389",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-92390",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-92391",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-92392",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-94265",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-94266",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:curl. libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-107696",
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:ffmpeg-headless. ffmpeg-headless 9.0.1 is in the closure only for chromaprint and pipewire; jellyfin-ffmpeg maps just its libavutil.so.61 (through chromaprint), no running process maps its libavformat, and the RTSP client is in libavformat. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-0861",
+      "affects": [
+        {
+          "ref": "pkg:nix/glibc@2.42-103"
+        },
+        {
+          "ref": "pkg:nix/glibc@2.44-25"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:glibc. memalign alignment overflow in glibc 2.30 to 2.42 (the CVE's own text); the glibc 2.44 that Jellyfin 12.2's .NET runtime brings from nixos-unstable carries the fix. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_present"
+      }
+    },
+    {
+      "id": "CVE-2026-19499",
+      "affects": [
+        {
+          "ref": "pkg:nix/glibc@2.42-103"
+        },
+        {
+          "ref": "pkg:nix/glibc@2.44-25"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:glibc. strfmon/strfmon_l width-padding overflow, real in glibc 2.44 (loaded by the Jellyfin process through its .NET runtime from nixos-unstable); reachable only through a call to strfmon, and neither the .NET runtime's native libraries, Jellyfin's own, nor jellyfin-ffmpeg and the libraries it links import strfmon (nm -D on the VM). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-31852",
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin@12.2"
+        }
+      ],
+      "analysis": {
+        "state": "false_positive",
+        "detail": "jellyfin/nix:jellyfin. GitHub Actions workflow in the jellyfin-ios repository; not part of the Jellyfin server package. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-107696",
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: RTSP client follows 3xx redirects without a limit (libavformat/rtsp.c), present in jellyfin-ffmpeg 8.1.3-2; Jellyfin opens rtsp:// only for a .strm or a Live TV source. Risk here: low: no Live TV tuner and no .strm file are configured, so it needs one added that points at an attacker's server, and the outcome is one ffmpeg process spinning. Action: not fixed upstream yet (FFmpeg through 9.0.2).",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "jellyfin/nix:jellyfin-ffmpeg. RTSP client follows 3xx redirects without a limit (libavformat/rtsp.c), present in jellyfin-ffmpeg 8.1.3-2; Jellyfin opens rtsp:// only for a .strm or a Live TV source. Risk here: low: no Live TV tuner and no .strm file are configured, so it needs one added that points at an attacker's server, and the outcome is one ffmpeg process spinning. Action: not fixed upstream yet (FFmpeg through 9.0.2). Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-52296",
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: Out-of-bounds read from unpadded extradata in the WMA encoder (libavcodec/wmaenc.c), present in jellyfin-ffmpeg 8.1.3-2 (not in FFmpeg 8.1.3); Jellyfin 12.2 lists wmav1/wmav2 among its audio codecs, so a client that asks for WMA audio gets ffmpeg's WMA encoder. Risk here: low: needs a signed-in user whose client requests WMA transcoding (no current Jellyfin client does by default); a read past a buffer in one ffmpeg process. Action: fixed upstream in 23227a4 (FFmpeg 9.0); needs a jellyfin-ffmpeg release carrying it.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "jellyfin/nix:jellyfin-ffmpeg. Out-of-bounds read from unpadded extradata in the WMA encoder (libavcodec/wmaenc.c), present in jellyfin-ffmpeg 8.1.3-2 (not in FFmpeg 8.1.3); Jellyfin 12.2 lists wmav1/wmav2 among its audio codecs, so a client that asks for WMA audio gets ffmpeg's WMA encoder. Risk here: low: needs a signed-in user whose client requests WMA transcoding (no current Jellyfin client does by default); a read past a buffer in one ffmpeg process. Action: fixed upstream in 23227a4 (FFmpeg 9.0); needs a jellyfin-ffmpeg release carrying it. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-52297",
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: Out-of-bounds read from unpadded IAMF extradata in the MOV demuxer (mov_read_iacb), present in jellyfin-ffmpeg 8.1.3-2 (not in FFmpeg 8.1.3); any MP4/MOV in the library is probed. Risk here: low: a read past a buffer, not a write; needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in 8439e02 (FFmpeg 9.0); needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "jellyfin/nix:jellyfin-ffmpeg. Out-of-bounds read from unpadded IAMF extradata in the MOV demuxer (mov_read_iacb), present in jellyfin-ffmpeg 8.1.3-2 (not in FFmpeg 8.1.3); any MP4/MOV in the library is probed. Risk here: low: a read past a buffer, not a write; needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in 8439e02 (FFmpeg 9.0); needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-70628",
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+        }
+      ],
+      "analysis": {
+        "state": "resolved",
+        "detail": "jellyfin/nix:jellyfin-ffmpeg. DVB subtitle parser signed overflow (libavcodec/dvbsub_parser.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-2 is built on \u2014 46ef25c9c, cherry-picked from 93f2a525e. NVD's range (before 9.0) misses the 8.1 backport. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-70632",
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+        }
+      ],
+      "analysis": {
+        "state": "resolved",
+        "detail": "jellyfin/nix:jellyfin-ffmpeg. CineForm HD transform-2 out-of-bounds write (libavcodec/cfhd.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-2 is built on \u2014 ea7210860, cherry-picked from db05df9d1. NVD's range (before 9.0) misses the 8.1 backport. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-96611",
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: Signed integer overflow in the MOV/MP4 demuxer's HEIF ispe box (libavformat/mov.c), present in jellyfin-ffmpeg 8.1.3-2: FFmpeg 8.1.3 does not carry the fix; the box is parsed in any MP4/MOV/HEIF that ffprobe opens. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in 059eb2e (FFmpeg 9.0), not in 8.1.3; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump.",
+          "severity": "medium"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "jellyfin/nix:jellyfin-ffmpeg. Signed integer overflow in the MOV/MP4 demuxer's HEIF ispe box (libavformat/mov.c), present in jellyfin-ffmpeg 8.1.3-2: FFmpeg 8.1.3 does not carry the fix; the box is parsed in any MP4/MOV/HEIF that ffprobe opens. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in 059eb2e (FFmpeg 9.0), not in 8.1.3; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
     },
     {
       "id": "CVE-2026-59850",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Use-after-free on channel data after close; libssh is linked by jellyfin-ffmpeg 8.1.3-2 as its SFTP client and is reachable only via an sftp:// stream URL. Risk here: low: needs a library .strm with an sftp:// URL to an attacker SSH server; outcome is a crash or UAF in one ffmpeg process. Action: Fixed in a newer libssh; next nixpkgs pin that carries it."
-      },
       "affects": [
         {
           "ref": "pkg:nix/libssh@0.12.2"
@@ -38,509 +550,79 @@
           "source": {
             "name": "TAPPaaS"
           },
-          "severity": "low",
           "method": "other",
-          "justification": "risk in this deployment, from the triage"
+          "justification": "other: Use-after-free on channel data after close; libssh is linked by jellyfin-ffmpeg 8.1.3-2 as its SFTP client and is reachable only via an sftp:// stream URL. Risk here: low: needs a library .strm with an sftp:// URL to an attacker SSH server; outcome is a crash or UAF in one ffmpeg process. Action: Fixed in a newer libssh; next nixpkgs pin that carries it.",
+          "severity": "low"
         }
-      ]
-    },
-    {
-      "id": "CVE-2026-107696",
+      ],
       "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless 9.0.1 is in the closure only for chromaprint and pipewire; jellyfin-ffmpeg maps just its libavutil.so.61 (through chromaprint), no running process maps its libavformat, and the RTSP client is in libavformat.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-0861",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "memalign alignment overflow in glibc 2.30 to 2.42 (the CVE's own text); the glibc 2.44 that Jellyfin 12.2's .NET runtime brings from nixos-unstable carries the fix.",
-        "justification": "code_not_present"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/glibc@2.44-25"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-19499",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "strfmon/strfmon_l width-padding overflow, real in glibc 2.44 (loaded by the Jellyfin process through its .NET runtime from nixos-unstable); reachable only through a call to strfmon, and neither the .NET runtime's native libraries, Jellyfin's own, nor jellyfin-ffmpeg and the libraries it links import strfmon (nm -D on the VM).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/glibc@2.44-25"
-        }
-      ]
+        "state": "exploitable",
+        "detail": "jellyfin/nix:libssh. Use-after-free on channel data after close; libssh is linked by jellyfin-ffmpeg 8.1.3-2 as its SFTP client and is reachable only via an sftp:// stream URL. Risk here: low: needs a library .strm with an sftp:// URL to an attacker SSH server; outcome is a crash or UAF in one ffmpeg process. Action: Fixed in a newer libssh; next nixpkgs pin that carries it. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
     },
     {
       "id": "CVE-2026-54873",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Packet-buffer retention in OpenSSL's own QUIC stack; nothing on the VM uses it: .NET's HTTP/3 runs on msquic, and Jellyfin and jellyfin-ffmpeg use OpenSSL for TLS over TCP only.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:nix/openssl@3.5.8"
+        },
+        {
+          "ref": "pkg:nix/openssl@3.6.5"
         }
-      ]
-    },
-    {
-      "id": "CVE-2026-84784",
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "NEW_CONNECTION_ID flood against OpenSSL's own QUIC stack; nothing on the VM uses it (.NET's HTTP/3 runs on msquic; TLS over TCP only).",
+        "detail": "jellyfin/nix:openssl. Packet-buffer retention in OpenSSL's own QUIC stack; nothing on the VM uses it: .NET's HTTP/3 runs on msquic, and Jellyfin and jellyfin-ffmpeg use OpenSSL for TLS over TCP only. Decided by migration 2026-11-12; review by 2027-05-11.",
         "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/openssl@3.5.8"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-84782",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "DTLS handshake retransmission; nothing on the VM speaks DTLS: Jellyfin serves plain HTTP on :8096 (TLS ends at the firewall's Caddy; HTTPS is not enabled in network.xml), outbound HTTPS is TLS over TCP, and ffmpeg's dtls protocol is used only by its WHIP muxer, which Jellyfin never selects.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/openssl@3.5.8"
-        }
-      ]
+      }
     },
     {
       "id": "CVE-2026-72897",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Needs a TLS server that swaps SSL_CTX mid-handshake between contexts with different providers; Jellyfin serves plain HTTP on :8096 (TLS ends at the firewall's Caddy; HTTPS is not enabled in network.xml), so no process on the VM serves TLS with this OpenSSL.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:nix/openssl@3.5.8"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-96611",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Signed integer overflow in the MOV/MP4 demuxer's HEIF ispe box (libavformat/mov.c), present in jellyfin-ffmpeg 8.1.3-2: FFmpeg 8.1.3 does not carry the fix; the box is parsed in any MP4/MOV/HEIF that ffprobe opens. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in 059eb2e (FFmpeg 9.0), not in 8.1.3; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
-      },
-      "affects": [
+        },
         {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+          "ref": "pkg:nix/openssl@3.6.5"
         }
       ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "medium",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:openssl. Needs a TLS server that swaps SSL_CTX mid-handshake between contexts with different providers; Jellyfin serves plain HTTP on :8096 (TLS ends at the firewall's Caddy; HTTPS is not enabled in network.xml), so no process on the VM serves TLS with this OpenSSL. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
-      "id": "CVE-2026-52297",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Out-of-bounds read from unpadded IAMF extradata in the MOV demuxer (mov_read_iacb), present in jellyfin-ffmpeg 8.1.3-2 (not in FFmpeg 8.1.3); any MP4/MOV in the library is probed. Risk here: low: a read past a buffer, not a write; needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in 8439e02 (FFmpeg 9.0); needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
-      },
+      "id": "CVE-2026-84782",
       "affects": [
         {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+          "ref": "pkg:nix/openssl@3.5.8"
+        },
+        {
+          "ref": "pkg:nix/openssl@3.6.5"
         }
       ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
+      "analysis": {
+        "state": "not_affected",
+        "detail": "jellyfin/nix:openssl. DTLS handshake retransmission; nothing on the VM speaks DTLS: Jellyfin serves plain HTTP on :8096 (TLS ends at the firewall's Caddy; HTTPS is not enabled in network.xml), outbound HTTPS is TLS over TCP, and ffmpeg's dtls protocol is used only by its WHIP muxer, which Jellyfin never selects. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
-      "id": "CVE-2026-52296",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Out-of-bounds read from unpadded extradata in the WMA encoder (libavcodec/wmaenc.c), present in jellyfin-ffmpeg 8.1.3-2 (not in FFmpeg 8.1.3); Jellyfin 12.2 lists wmav1/wmav2 among its audio codecs, so a client that asks for WMA audio gets ffmpeg's WMA encoder. Risk here: low: needs a signed-in user whose client requests WMA transcoding (no current Jellyfin client does by default); a read past a buffer in one ffmpeg process. Action: fixed upstream in 23227a4 (FFmpeg 9.0); needs a jellyfin-ffmpeg release carrying it."
-      },
+      "id": "CVE-2026-84784",
       "affects": [
         {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+          "ref": "pkg:nix/openssl@3.5.8"
+        },
+        {
+          "ref": "pkg:nix/openssl@3.6.5"
         }
       ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-107696",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "RTSP client follows 3xx redirects without a limit (libavformat/rtsp.c), present in jellyfin-ffmpeg 8.1.3-2; Jellyfin opens rtsp:// only for a .strm or a Live TV source. Risk here: low: no Live TV tuner and no .strm file are configured, so it needs one added that points at an attacker's server, and the outcome is one ffmpeg process spinning. Action: not fixed upstream yet (FFmpeg through 9.0.2)."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-70628",
-      "analysis": {
-        "state": "resolved",
-        "detail": "DVB subtitle parser signed overflow (libavcodec/dvbsub_parser.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-2 is built on \u2014 46ef25c9c, cherry-picked from 93f2a525e. NVD's range (before 9.0) misses the 8.1 backport."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-70632",
-      "analysis": {
-        "state": "resolved",
-        "detail": "CineForm HD transform-2 out-of-bounds write (libavcodec/cfhd.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-2 is built on \u2014 ea7210860, cherry-picked from db05df9d1. NVD's range (before 9.0) misses the 8.1 backport."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-86413",
       "analysis": {
         "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "detail": "jellyfin/nix:openssl. NEW_CONNECTION_ID flood against OpenSSL's own QUIC stack; nothing on the VM uses it (.NET's HTTP/3 runs on msquic; TLS over TCP only). Decided by migration 2026-11-12; review by 2027-05-11.",
         "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-86414",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-87861",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-87866",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-92388",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-94265",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-107928",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-107929",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-86410",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-86412",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-86415",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-87862",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-87863",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-87865",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-92386",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-92387",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-92389",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-92390",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-92391",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-92392",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-94266",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is referenced only by elfutils' debuginfod client, which nothing in the VM runs; no process maps it. jellyfin-ffmpeg does not link libcurl (its http/ftp/sftp protocols are ffmpeg's own and libssh), and Jellyfin is .NET. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-111497",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Brotli decoder buffer overflow (c/dec/decode.c, 1.0.3 to 1.2.0). v2.3.3 and earlier: the jellyfin process maps libbrotlidec 1.2.0 through .NET's System.IO.Compression.Native. Jellyfin does not decompress request bodies: a br-labelled garbage body to /Users/AuthenticateByName is parsed as raw JSON (probed on hrossen 2026-11-07), so the decoder is reached only by HttpClient's automatic decompression of outbound responses (metadata providers, plugin repository, all over HTTPS). Risk there: low: needs a malicious or impersonated metadata/plugin server; the parse runs in the hardened jellyfin process. Fixed after v2.3.3 (commit 54f16aab): jellyfin.nix swaps the pinned brotli for the same package built from 1.2.1 (system.replaceDependencies); on hrossen 2026-11-07 the jellyfin process maps libbrotlidec.so.1.2.1. 1.2.0 stays in the closure only through the base system (template nixpkgs rev 1f607aa79b63: systemd's curl 8.22.0, freetype/fontconfig, nix), which decodes br only in HTTP responses to what the guest itself fetches; no jellyfin process maps it."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/brotli@1.2.0"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
+      }
     }
   ]
 }

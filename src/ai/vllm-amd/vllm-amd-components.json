@@ -1,0 +1,1634 @@
+{
+ "schema": 1,
+ "components": {
+  "vllm-amd/deb:acl": {
+   "use": "",
+   "reason": "internal-only",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-54369": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Symlink traversal through libacl into privilege; needs an unprivileged local user, and the LXC has none.",
+     "justification": "requires_environment"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-11-12",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-54369": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+     "epss": 0.00153
+    }
+   }
+  },
+  "vllm-amd/deb:aom": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2023-39616": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libaom3: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2023-6879": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libaom3: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2023-39616": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00738
+    },
+    "CVE-2023-6879": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.01175
+    }
+   }
+  },
+  "vllm-amd/deb:apt": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-109518": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "APT download/redirect flaw; apt never runs in the running container, which runs only the vLLM API server and engine. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-109518": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00928
+    }
+   }
+  },
+  "vllm-amd/deb:bind9": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "9.*",
+   "cves": {
+    "CVE-2026-19666": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-19667": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-76163": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-77692": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-80274": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-81563": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-81736": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Denial of service in BIND's server/resolver; only the dig/nslookup client tools are installed, and nothing runs them.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-76163": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00569
+    },
+    "CVE-2026-77692": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.06558
+    }
+   }
+  },
+  "vllm-amd/deb:curl": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "7.*",
+   "cves": {
+    "CVE-2026-12064": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "curl libcurl3-gnutls libcurl4: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-6276": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "curl libcurl3-gnutls libcurl4: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-8286": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "curl libcurl3-gnutls libcurl4: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-8458": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "curl libcurl3-gnutls libcurl4: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-8927": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "curl libcurl3-gnutls libcurl4: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-12064": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+     "epss": 0.00414
+    },
+    "CVE-2026-6276": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00295
+    },
+    "CVE-2026-8286": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+     "epss": 0.00309
+    },
+    "CVE-2026-8458": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N",
+     "epss": 0.00371
+    },
+    "CVE-2026-8927": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
+     "epss": 0.005
+    }
+   }
+  },
+  "vllm-amd/deb:expat": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-77214": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "A heap over-read when the calling program passes XML_ParseBuffer a length beyond its buffer — a caller bug, not crafted XML; the programs that load expat here pass correct lengths.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "vllm-amd/deb:gnutls28": {
+   "use": "",
+   "reason": "mitigated-by-rule",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-88647": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "GnuTLS TLS-client hostname-verification bypass (CN fallback); the only gnutls TLS client on the host is apt's HTTPS downloads, and apt verifies the GPG signatures on everything it installs — an impersonated mirror cannot inject a package.",
+     "justification": "protected_by_mitigating_control"
+    },
+    "CVE-2026-88648": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "GnuTLS TLS-client cross-domain CA restriction bypass; the only gnutls TLS client on the host is apt's HTTPS downloads, and apt verifies the GPG signatures on everything it installs — an impersonated mirror cannot inject a package.",
+     "justification": "protected_by_mitigating_control"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-11-12",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-88647": {
+     "severity": "low"
+    },
+    "CVE-2026-88648": {
+     "severity": "low"
+    }
+   }
+  },
+  "vllm-amd/deb:gzip": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-41992": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "gzip: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-41992": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+     "epss": 0.0062
+    }
+   }
+  },
+  "vllm-amd/deb:libheif": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2025-68431": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-32740": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-32741": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-32882": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-41071": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-47178": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-84450": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-84451": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libheif1: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2025-68431": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:N/A:H",
+     "epss": 0.00427
+    },
+    "CVE-2026-32740": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00684
+    },
+    "CVE-2026-32741": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:L/A:H",
+     "epss": 0.00343
+    },
+    "CVE-2026-32882": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:N/A:H",
+     "epss": 0.00708
+    },
+    "CVE-2026-41071": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:N/A:H",
+     "epss": 0.00302
+    },
+    "CVE-2026-47178": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00183
+    },
+    "CVE-2026-84450": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:N/A:L",
+     "epss": 0.00284
+    },
+    "CVE-2026-84451": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:N/A:H",
+     "epss": 0.00311
+    }
+   }
+  },
+  "vllm-amd/deb:libx11": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-88806": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libx11-6 libx11-data: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-88806": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00202
+    }
+   }
+  },
+  "vllm-amd/deb:libxml2": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-6653": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-74860": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-86138": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-86140": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-86142": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-86143": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-86144": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libxml2: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-6653": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00355
+    },
+    "CVE-2026-74860": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:C/C:H/I:H/A:H",
+     "epss": 0.00658
+    },
+    "CVE-2026-86138": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00132
+    },
+    "CVE-2026-86140": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00157
+    },
+    "CVE-2026-86142": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00157
+    },
+    "CVE-2026-86143": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:L",
+     "epss": 0.00194
+    },
+    "CVE-2026-86144": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00186
+    }
+   }
+  },
+  "vllm-amd/deb:lmdb": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "0.*",
+   "cves": {
+    "CVE-2019-16224": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "liblmdb0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2019-16225": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "liblmdb0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2019-16226": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "liblmdb0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2019-16227": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "liblmdb0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2019-16228": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "liblmdb0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2019-16224": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.01815
+    },
+    "CVE-2019-16225": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.01815
+    },
+    "CVE-2019-16226": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.01586
+    },
+    "CVE-2019-16227": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.02044
+    },
+    "CVE-2019-16228": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.01786
+    }
+   }
+  },
+  "vllm-amd/deb:ncurses": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "6.*",
+   "cves": {
+    "CVE-2025-69720": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libncursesw6 libtinfo6 ncurses-base ncurses-bin ncurses-term: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2025-69720": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00475
+    }
+   }
+  },
+  "vllm-amd/deb:openldap": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2023-2953": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libldap-2.5-0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2023-2953": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.01999
+    }
+   }
+  },
+  "vllm-amd/deb:openssh": {
+   "use": "",
+   "reason": "feature-disabled",
+   "versions": "9.*",
+   "cves": {
+    "CVE-2026-59999": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "sshd: DisableForwarding not overriding PermitTunnel; PermitTunnel is no in the LXC.",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-60000": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "sshd: MaxAuthTries with GSSAPI authentication; GSSAPIAuthentication is off in the LXC.",
+     "justification": "requires_configuration"
+    },
+    "CVE-2026-60002": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "ssh client use-after-free on a server's rekey; nothing in the LXC runs the ssh client.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-59999": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+     "epss": 0.00159
+    },
+    "CVE-2026-60000": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00618
+    },
+    "CVE-2026-60002": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:L",
+     "epss": 0.003
+    }
+   }
+  },
+  "vllm-amd/deb:openssl": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-84782": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "DTLS handshake retransmission; nothing in the LXC speaks DTLS (sshd uses libcrypto only).",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "vllm-amd/deb:perl": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "5.*",
+   "cves": {
+    "CVE-2026-9538": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libperl5.36 perl perl-base perl-modules-5.36: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-9538": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00517
+    }
+   }
+  },
+  "vllm-amd/deb:postfix": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-43964": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Over-read of a remote SMTP server's enhanced status code; postfix listens on loopback only, has no relay host, and nothing in the LXC sends mail out.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-43964": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00511
+    }
+   }
+  },
+  "vllm-amd/deb:python-urllib3": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2025-66471": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "python3-urllib3: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-97687": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "python3-urllib3: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-97689": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "python3-urllib3: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2025-66471": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00731
+    },
+    "CVE-2026-97687": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:N",
+     "epss": 0.00206
+    },
+    "CVE-2026-97689": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00335
+    }
+   }
+  },
+  "vllm-amd/deb:python3.11": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-11940": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libpython3.11 libpython3.11-minimal libpython3.11-stdlib python3.11 python3.11-minimal: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-7210": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libpython3.11 libpython3.11-minimal libpython3.11-stdlib python3.11 python3.11-minimal: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-11940": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:R/S:U/C:H/I:H/A:N",
+     "epss": 0.0075
+    },
+    "CVE-2026-7210": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00672
+    }
+   }
+  },
+  "vllm-amd/deb:sqlite3": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2025-7458": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libsqlite3-0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-11822": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libsqlite3-0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-11824": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libsqlite3-0: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2025-7458": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:H",
+     "epss": 0.00353
+    },
+    "CVE-2026-11822": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:N/I:N/A:H",
+     "epss": 0.00195
+    },
+    "CVE-2026-11824": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00182
+    }
+   }
+  },
+  "vllm-amd/deb:systemd": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "252.*",
+   "cves": {
+    "CVE-2026-16742": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "systemd-homed signature verification; systemd-homed is not used in the LXC.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-16742": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00057
+    }
+   }
+  },
+  "vllm-amd/deb:tiff": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "4.*",
+   "cves": {
+    "CVE-2023-52355": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libtiff6: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-12912": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libtiff6: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-36849": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libtiff6: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-52490": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libtiff6: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2023-52355": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.01829
+    },
+    "CVE-2026-12912": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00433
+    },
+    "CVE-2026-36849": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:N/A:H"
+    },
+    "CVE-2026-52490": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00726
+    }
+   }
+  },
+  "vllm-amd/deb:util-linux": {
+   "use": "",
+   "reason": "internal-only",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-53613": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "util-linux mount helpers/nsenter: needs an unprivileged local user and fstab user mounts; the LXC has neither.",
+     "justification": "requires_environment"
+    },
+    "CVE-2026-76642": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "util-linux mount helpers/nsenter: needs an unprivileged local user and fstab user mounts; the LXC has neither.",
+     "justification": "requires_environment"
+    },
+    "CVE-2026-78408": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "util-linux mount helpers/nsenter: needs an unprivileged local user and fstab user mounts; the LXC has neither.",
+     "justification": "requires_environment"
+    },
+    "CVE-2026-78409": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "util-linux mount helpers/nsenter: needs an unprivileged local user and fstab user mounts; the LXC has neither.",
+     "justification": "requires_environment"
+    },
+    "CVE-2026-78410": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "util-linux mount helpers/nsenter: needs an unprivileged local user and fstab user mounts; the LXC has neither.",
+     "justification": "requires_environment"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-11-12",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-53613": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00163
+    },
+    "CVE-2026-78410": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.00198
+    }
+   }
+  },
+  "vllm-amd/deb:vim": {
+   "use": "",
+   "reason": "other",
+   "versions": "9.*",
+   "cves": {
+    "CVE-2026-26269": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-28417": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-28421": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-33412": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-34982": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-35177": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-39881": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-43961": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-46483": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-47162": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-52858": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-52860": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-55693": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-55895": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-57455": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-57456": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-59856": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-59858": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-73072": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-73073": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-73076": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-73077": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    },
+    "CVE-2026-73078": {
+     "level": "low",
+     "why": "vim in the LXC runs only when an admin edits over SSH; reachable only if that admin opens attacker-supplied content."
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-26269": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00349
+    },
+    "CVE-2026-28417": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.01353
+    },
+    "CVE-2026-28421": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00206
+    },
+    "CVE-2026-33412": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00886
+    },
+    "CVE-2026-34982": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:C/C:H/I:H/A:N",
+     "epss": 0.00456
+    },
+    "CVE-2026-35177": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:N/I:H/A:H",
+     "epss": 0.00131
+    },
+    "CVE-2026-39881": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00644
+    },
+    "CVE-2026-43961": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00159
+    },
+    "CVE-2026-46483": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00552
+    },
+    "CVE-2026-47162": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00275
+    },
+    "CVE-2026-52858": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00201
+    },
+    "CVE-2026-52860": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00224
+    },
+    "CVE-2026-55693": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00124
+    },
+    "CVE-2026-55895": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00226
+    },
+    "CVE-2026-57455": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00118
+    },
+    "CVE-2026-57456": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00145
+    },
+    "CVE-2026-59856": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00216
+    },
+    "CVE-2026-59858": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00137
+    },
+    "CVE-2026-73072": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00115
+    },
+    "CVE-2026-73073": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00152
+    },
+    "CVE-2026-73076": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00134
+    },
+    "CVE-2026-73077": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00144
+    },
+    "CVE-2026-73078": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+     "epss": 0.00314
+    }
+   }
+  },
+  "vllm-amd/deb:wget": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2026-58471": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "wget: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-58472": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "wget: nothing in the LXC loads it (vLLM's Python runs in its Docker container on the image's own libraries), and no service in the LXC handles untrusted input with it.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-58471": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:L/A:H",
+     "epss": 0.0039
+    },
+    "CVE-2026-58472": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:L/A:H",
+     "epss": 0.0039
+    }
+   }
+  },
+  "vllm-amd/deb:zlib": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "CVE-2023-45853": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "zipOpenNewFileInZip4_6 is minizip, which zlib1g does not ship (Debian: will not fix for that reason).",
+     "justification": "code_not_present"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2023-45853": {
+     "severity": "critical",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.03448
+    }
+   }
+  },
+  "vllm-amd/generic:libtiff": {
+   "use": "",
+   "reason": "feature-disabled",
+   "versions": "4.*",
+   "cves": {
+    "CVE-2026-4775": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "libtiff bundled in the Pillow wheel (bundled-library scan, #811). vLLM decodes images only for a multimodal model's image inputs; the served model is text-only, and the API requires vLLM's key (held by LiteLLM).",
+     "justification": "requires_configuration"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "vllm-amd/generic:openssl": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "4.*",
+   "cves": {
+    "CVE-2026-54873": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-72897": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-84782": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-84783": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-84784": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "OpenSSL linked statically into the cryptography wheel, found by the bundled-library scan (#811). The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy; Python's ssl module uses the interpreter's own OpenSSL, which the OS-package scan reports. This is a TLS/DTLS/QUIC/CMP/OCSP/DANE code path.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "vllm-amd/maven:guava": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "32.*",
+   "cves": {
+    "CVE-2026-102554": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Guava inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed and nothing deserialises Java objects. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-102554": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00352
+    }
+   }
+  },
+  "vllm-amd/maven:httpcore5": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "5.*",
+   "cves": {
+    "CVE-2026-54399": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed — vLLM uses Ray, if at all, from Python.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true
+  },
+  "vllm-amd/maven:jackson-core": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-89407": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed — vLLM uses Ray, if at all, from Python.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-89425": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed — vLLM uses Ray, if at all, from Python.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-89407": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00628
+    },
+    "CVE-2026-89425": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00532
+    }
+   }
+  },
+  "vllm-amd/maven:jackson-databind": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-68497": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed — vLLM uses Ray, if at all, from Python.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-91776": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed — vLLM uses Ray, if at all, from Python.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-91777": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "Inside Ray's ray/jars/ray_dist.jar (its Java worker API); the image has no Java runtime, so no jar is ever executed — vLLM uses Ray, if at all, from Python.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-68497": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00628
+    },
+    "CVE-2026-91776": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00487
+    },
+    "CVE-2026-91777": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00487
+    }
+   }
+  },
+  "vllm-amd/pypi:aiohttp": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "3.*",
+   "cves": {
+    "CVE-2026-111064": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "The vulnerable aiohttp is the 3.14.3 copy vendored in Ray's runtime_env agent (ray/_private/runtime_env/agent/thirdparty_files), loaded only by that agent in a Ray cluster; the container runs only vLLM's OpenAI API server (uvicorn) and its EngineCore with the multiprocessing executor, no Ray processes. The aiohttp vLLM itself imports is 3.14.5, which has the fix. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix.",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-111066": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "The vulnerable aiohttp is the 3.14.3 copy vendored in Ray's runtime_env agent (ray/_private/runtime_env/agent/thirdparty_files), loaded only by that agent in a Ray cluster; the container runs only vLLM's OpenAI API server (uvicorn) and its EngineCore with the multiprocessing executor, no Ray processes. The aiohttp vLLM itself imports is 3.14.5, which has the fix. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix.",
+     "justification": "code_not_reachable"
+    },
+    "GHSA-2g87-pp6c-29x5": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "The vulnerable aiohttp is the 3.14.3 copy vendored in Ray's runtime_env agent (ray/_private/runtime_env/agent/thirdparty_files), loaded only by that agent in a Ray cluster; the container runs only vLLM's OpenAI API server (uvicorn) and its EngineCore with the multiprocessing executor, no Ray processes. The aiohttp vLLM itself imports is 3.14.5, which has the fix. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-111064": {
+     "severity": "high",
+     "epss": 0.00399
+    },
+    "CVE-2026-111066": {
+     "severity": "high",
+     "epss": 0.00412
+    }
+   }
+  },
+  "vllm-amd/pypi:jaraco.context": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "5.*",
+   "cves": {
+    "CVE-2026-23949": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "A copy bundled inside setuptools 79 (setuptools/_vendor), used to unpack archives when installing packages; vLLM serving installs nothing.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-23949": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N",
+     "epss": 0.00632
+    }
+   }
+  },
+  "vllm-amd/pypi:msgpack": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "1.*",
+   "cves": {
+    "GHSA-6v7p-g79w-8964": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "pip 26.2.1's own bundled copy (pip/_vendor/vendor.txt), loaded only when pip runs; vLLM serving never runs pip, and the copy vLLM imports is fixed (msgpack 1.2.2).",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-114613": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "The leak is in msgpack's C extension; the C extension vLLM imports is msgpack 1.2.4, which has the fix, and the other copy (pip's vendored msgpack 1.1.2) is pure Python, which the advisory says does not leak, and is loaded only when pip runs. Verified live on hrossen (tappaas2 ct312) with kyuz0/vllm-therock-gfx1151, vLLM 0.33.0+strix.",
+     "justification": "code_not_present"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "GHSA-6v7p-g79w-8964": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+    },
+    "CVE-2026-114613": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00543
+    }
+   }
+  },
+  "vllm-amd/pypi:setuptools": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "70.*",
+   "cves": {
+    "CVE-2025-47273": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "pip 26.2.1's own bundled copy (pip/_vendor/vendor.txt), loaded only when pip runs; vLLM serving never runs pip, and the copy vLLM imports is fixed (setuptools 79.0.1).",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2025-47273": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+     "epss": 0.01592
+    }
+   }
+  },
+  "vllm-amd/pypi:urllib3": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "2.*",
+   "cves": {
+    "CVE-2026-97687": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "pip 26.2.1's own bundled copy (pip/_vendor/vendor.txt), loaded only when pip runs; vLLM serving never runs pip, and the copy vLLM imports is fixed (urllib3 2.8.0).",
+     "justification": "code_not_reachable"
+    },
+    "CVE-2026-97689": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "pip 26.2.1's own bundled copy (pip/_vendor/vendor.txt), loaded only when pip runs; vLLM serving never runs pip, and the copy vLLM imports is fixed (urllib3 2.8.0).",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-97687": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:N",
+     "epss": 0.00206
+    },
+    "CVE-2026-97689": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+     "epss": 0.00335
+    }
+   }
+  },
+  "vllm-amd/pypi:wheel": {
+   "use": "",
+   "reason": "not-used",
+   "versions": "0.*",
+   "cves": {
+    "CVE-2026-24049": {
+     "level": "none",
+     "state": "not_affected",
+     "why": "A copy bundled inside setuptools 79 (setuptools/_vendor), used to unpack wheels when installing packages; vLLM serving installs nothing.",
+     "justification": "code_not_reachable"
+    }
+   },
+   "author": "migration",
+   "decided": "2026-11-12",
+   "reviewBy": "2027-05-11",
+   "migrated": true,
+   "basis": {
+    "CVE-2026-24049": {
+     "severity": "high",
+     "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:N/I:H/A:N",
+     "epss": 0.0035
+    }
+   }
+  }
+ }
+}

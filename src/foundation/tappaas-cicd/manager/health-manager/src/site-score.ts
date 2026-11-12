@@ -17,6 +17,7 @@
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { Aggregate, CveState, Level, ModuleScore, ScoredItem, ZoneInfo, siteScores, tierMultiplier } from "../../../lib/ts/src/score";
+import { Mark } from "../../../lib/ts/src/cve-decisions";
 import { CONTROL_PLANE_ZONE, readZonesFile } from "../../../lib/ts/src/zones";
 import { renameGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 import { readModuleJson } from "./config";
@@ -37,6 +38,7 @@ export interface UnitScore extends ModuleScore {
   targets: string[]; // the scan targets it is made of
   failed: string[]; // those whose scan failed: not counted, and said so
   items: CveItem[];
+  baselineOnly?: boolean; // every CVE that sets its level is the shared NixOS baseline's
 }
 
 export interface SiteSecurity {
@@ -101,7 +103,10 @@ export function sitePlacement(configDir: string, units: ReturnType<typeof scoreU
   return { placement, zones };
 }
 
-const scored = (items: CveItem[]): ScoredItem[] => items.map((i) => ({ id: i.id, state: i.state as CveState, severity: i.severity, rating: i.rating, pkg: i.pkg }));
+const scored = (items: CveItem[]): ScoredItem[] => items.map((i) => ({
+  id: i.id, state: i.state as CveState, severity: i.severity, rating: i.rating, pkg: i.pkg,
+  ...(i.level ? { level: i.level } : {}), ...(i.mark ? { mark: i.mark } : {}), ...(i.counted !== undefined ? { counted: i.counted } : {}),
+}));
 
 export function siteSecurity(s: ScanStatus, place: { placement: Record<string, string[]>; zones: Record<string, ZoneInfo> }, history: HistoryEntry[] = []): SiteSecurity {
   const units = scoreUnits(s);
@@ -119,7 +124,12 @@ export function siteSecurity(s: ScanStatus, place: { placement: Record<string, s
     units: {},
     history,
   };
-  for (const [k, u] of Object.entries(units)) out.units[k] = { ...sc.modules[k], ...u, zones: place.placement[k] ?? [] };
+  for (const [k, u] of Object.entries(units)) {
+    const m = sc.modules[k];
+    const top = m.category ? u.items.filter((i) => i.counted !== false && (i.level ?? "") === m.category) : [];
+    const baselineOnly = top.length > 0 && top.every((i) => (i.component ?? "").startsWith("templates/"));
+    out.units[k] = { ...m, ...u, zones: place.placement[k] ?? [], ...(baselineOnly ? { baselineOnly } : {}) };
+  }
   return out;
 }
 
@@ -181,6 +191,20 @@ export function sparkline(history: HistoryEntry[], pick: (h: HistoryEntry) => nu
   return out;
 }
 
+// One CVE as the report lists it: its levels, its mark, and why.
+export function itemLines(i: CveItem, indent: string): string[] {
+  const pad = (x: string, n: number): string => x.padEnd(n);
+  const up = i.severity.toLowerCase();
+  const lv = i.level ?? (i.state === "decided" ? "none" : i.rating ?? up);
+  const levels = lv === up ? up : `${up} → ${lv}`;
+  const mark = i.mark ?? (i.state === "decided" || i.state === "risk" ? "confirmed" : i.state === "carried" ? "review" : "unread");
+  const extra = (i.flags ?? []).filter((f) => ["kev", "epss", "expired", "review-due", "needs-use", "assumption", "version", "upstream-changed", "grace", "rule-expired"].includes(f));
+  const out = [`${indent}${pad(mark === "rule" ? "by rule" : mark, 10)}${pad(levels, 20)}${pad(i.id, 20)}${i.pkg} ${i.version}${extra.length ? `  [${extra.join(", ")}]` : ""}`];
+  const why = i.mark === "review" && i.old?.why ? `was ${i.old.level}: ${i.old.why}` : i.note ?? i.analysis;
+  if (why) out.push(`${indent}  ${why.replace(/\s+/g, " ").slice(0, 110)}`);
+  return out;
+}
+
 // ── the table (`report security`) ─────────────────────────────────────
 const LEVEL_RANK: Record<Level, number> = { ok: 0, low: 1, medium: 2, high: 3, critical: 4 };
 export const levelRank = (l: Level): number => LEVEL_RANK[l] ?? 0;
@@ -194,7 +218,8 @@ export function sparkText(vs: (number | null)[]): string {
 const setByText = (a: { setBy: { module: string | null; zone?: string | null } }, units: Record<string, UnitScore>): string =>
   a.setBy.module ? `${units[a.setBy.module]?.name ?? a.setBy.module}${a.setBy.zone ? ` in ${a.setBy.zone}` : ""}` : "";
 
-const countsText = (c: Record<CveState, number>): string => `${c.open}/${c.risk}/${c.carried}/${c.decided}`;
+// Unread, by rule, confirmed, to review, accepted — deferred joins unread.
+const countsText = (m: Record<Mark, number>): string => `${m.unread + m.deferred}/${m.rule}/${m.confirmed}/${m.review}/${m.accepted}`;
 
 export function renderSecurity(sec: SiteSecurity, now: number, opts: { items?: boolean } = {}): string[] {
   const today = new Date(now).toISOString().slice(0, 10);
@@ -205,10 +230,10 @@ export function renderSecurity(sec: SiteSecurity, now: number, opts: { items?: b
   out.push(`Security of ${sec.generated} (${age < 48 ? `${age} h` : `${Math.floor(age / 24)} days`} ago)` +
     (sec.inventory ? `, the inventory of ${sec.inventory} matched again` : ""));
   out.push("");
-  const head = `${pad("", 34)}${pad("LEVEL", 9)}${"SCORE".padStart(6)}  ${pad("SET BY", 24)}${pad("O/R/C/D", 12)}7 DAYS`;
+  const head = `${pad("", 34)}${pad("LEVEL", 9)}${"SCORE".padStart(6)}  ${pad("SET BY", 24)}${pad("U/R/C/V/A", 14)}7 DAYS`;
   out.push(head);
   const row = (label: string, a: Aggregate, by: string, counts: string, spark: (number | null)[]): string =>
-    `${pad(label, 34)}${pad(a.level, 9)}${num(a.score)}  ${pad(by, 24)}${pad(counts, 12)}${sparkText(spark)}`;
+    `${pad(label, 34)}${pad(a.level, 9)}${num(a.score)}  ${pad(by, 24)}${pad(counts, 14)}${sparkText(spark)}`;
   out.push(row("site", sec.site, setByText(sec.site, sec.units), "", sparkline(sec.history, (h) => h.site, today)));
   const zoneRow = (z: string, indent: string): void => {
     const a = sec.zones[z];
@@ -216,12 +241,9 @@ export function renderSecurity(sec: SiteSecurity, now: number, opts: { items?: b
     const us = Object.entries(sec.units).filter(([, u]) => u.zones.includes(z)).sort((x, y) => y[1].raw - x[1].raw || x[1].name.localeCompare(y[1].name));
     for (const [k, u] of us) {
       const label = `${indent}  ${u.kind === "module" ? "" : `${u.kind} `}${u.name}`;
-      out.push(row(label, u as unknown as Aggregate, u.category ? `${u.counted} ${u.category}` : u.failed.length ? "scan failed" : "", countsText(u.counts), sparkline(sec.history, (h) => h.units[k], today)));
+      out.push(row(label, u as unknown as Aggregate, u.category ? `${u.counted} ${u.category}${u.baselineOnly ? ", baseline" : ""}` : u.failed.length ? "scan failed" : "", countsText(u.marks), sparkline(sec.history, (h) => h.units[k], today)));
       if (opts.items) {
-        for (const i of u.items) {
-          out.push(`${indent}      ${pad(i.state, 8)}${pad(i.rating ? `${i.rating} (rated)` : i.severity.toLowerCase(), 16)}${pad(i.id, 20)}${i.pkg} ${i.version}`);
-          if (i.analysis) out.push(`${indent}        ${i.analysis.replace(/\s+/g, " ").slice(0, 110)}`);
-        }
+        for (const i of u.items) out.push(...itemLines(i, `${indent}      `));
       }
     }
   };
@@ -230,7 +252,8 @@ export function renderSecurity(sec: SiteSecurity, now: number, opts: { items?: b
     for (const z of a.zones) zoneRow(z, "    ");
   }
   for (const z of sec.outside) zoneRow(z, "  ");
-  out.push("", "O/R/C/D: open, risk, carried, decided CVEs. A module's score counts its highest category only.");
+  out.push("", "U/R/C/V/A: unread, by rule, confirmed, to review, accepted CVEs. Each counts at its effective level;",
+    "a module's score counts its highest level only.");
   const failed = Object.values(sec.units).filter((u) => u.failed.length > 0);
   if (failed.length) out.push(`Not counted, the scan failed: ${failed.map((u) => u.name).join(", ")} (health-manager report security --scan).`);
   return out;
