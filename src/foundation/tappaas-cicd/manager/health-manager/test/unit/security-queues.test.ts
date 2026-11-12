@@ -6,6 +6,8 @@ import { join } from "path";
 import { CveItem, ScanStatus, TargetStatus } from "../../src/security";
 import { buildQueues, renderQueues } from "../../src/security-queues";
 import { siteSecurity, sitePlacement, scoreUnits, renderSecurity } from "../../src/site-score";
+import { CmdbItem, SiteIndex } from "../../src/assess-model";
+import { fromCve } from "../../src/assess-sources";
 
 let passed = 0;
 let failed = 0;
@@ -67,6 +69,16 @@ console.log("the baseline in the table");
 const sec = siteSecurity(s, sitePlacement(cfg, scoreUnits(s)));
 check(sec.units.coturn.baselineOnly === true && !sec.units.network.baselineOnly, "a unit set only by the baseline is marked");
 check(renderSecurity(sec, NOW).some((l) => /coturn.*1 high, baseline/.test(l)), "…and the table says so");
+
+console.log("health: the baseline is one root");
+const o = (cls: string, name: string): CmdbItem => ({ id: `${cls}-${name}`, class: cls, name, attributes: {} });
+const idx = new SiteIndex([o("site", "home"), o("vm", "coturn"), o("vm", "immich"), o("device", "network")], []);
+const fs = fromCve(s, sec, NOW, idx);
+const coturn = fs.find((x) => x.object === "vm-coturn" && x.reason.startsWith("cve-"))!;
+check(coturn.labels?.setBy === "baseline" && coturn.message.includes("from the NixOS baseline"), "a unit set only by the baseline carries the label a classify record matches");
+check(fs.filter((x) => x.labels?.setBy === "baseline").length === 2 && !fs.some((x) => x.message.includes("critical") && x.labels), "…only those: the firewall, set by curl, does not");
+const root = fs.find((x) => x.object === "site-home" && x.reason === "cve-baseline");
+check(root !== undefined && root.status === "warning" && root.message.includes("the NixOS baseline") && root.message.includes("in 2 unit(s)"), "the site gets the baseline's own finding: the root");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
