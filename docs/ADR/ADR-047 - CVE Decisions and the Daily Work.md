@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted** (2026-11-12) — D9 built; D1–D8 to build |
+| **Status** | **Accepted** (2026-11-12) — P0–P7 built on `feat/adr047-cve-decisions` (2026-11-12), not yet deployed; see Phases |
 | **Version** | 1.0 |
 | **Date** | 2026-11-12 |
 | **Author** | Lars Rossen |
@@ -404,16 +404,32 @@ after the update.
 
 ## Phases
 
-| Phase | Content | Done when |
+| Phase | Content | Done when | Status (2026-11-12) |
+|---|---|---|---|
+| P0 | D9 | Two nights on hrossen with the same counts from scan and rescan and no repeated `cve-new` | Built (17fe1acf). Scratch proof: scan and rescan agree on 37 targets. The two nights wait for the deploy |
+| P1 | D2: the scan keeps vectors, known-exploited and EPSS; the component key; `<module>-components.json`; `cve-triage component`; re-scoring; the reclassification outcomes and marks of D4, the single points table | The firewall's curl items are one record and hrossen's site level follows from it | Built (f028eac5): `lib/ts/src/cve-decisions.ts`, `health-manager cve validate/preview`, `cve-triage.sh component/read` |
+| P2 | Migration of the 1708 statements; `cve-triage export`; the boundary's `cve` phase generates VEX | The scan counts the same items from the records as from the old files; a rehearsal boundary needs no carry commit | Built (06f8c624); 1708 statements migrated into 366 records (dc81aefb) |
+| P3 | D3: the guards, the "by rule" mark, the Review queue | A new CVE matching a rule is reclassified the same night and listed "by rule"; a known-exploited one is not lowered | Built (f028eac5, b59e9d21): guards in the library, `decision-state.json`, a CVE that becomes known exploited is mailed |
+| P4 | D5: `assumes` evaluation, `health-manager accept`, the `accepted` state in the score | A test module made public on hrossen turns its record into `review`; an acceptance lowers the level and survives an image bump | Built (51c9a9f8); proved in unit tests, live after the deploy |
+| P5 | D6: deferrals from `ack`; the record archives only used acks | The next boundary's gate lists an expired deferral | Built (efdab263); the next boundary is the first live run |
+| P6 | D7: the queues in `report security` and the console; the baseline shown once; derived health conditions | hrossen's page opens with the queues | Built (751b1d25); the derived baseline condition is ADR-049's derive |
+| P7 | D8: `candidates` and `candidates apply` | A daily run on hrossen proposes a patch-level image move with its cleared and added CVEs | Built (737d4f10), with a daily timer where the train runs |
+
+**Proved on hrossen's data, 2026-11-12**, in a scratch copy (removed afterwards):
+
+| | Before (live, today's code) | After (this branch) |
 |---|---|---|
-| P0 | D9 | **Built.** Deployed with the next update of hrossen; two nights with the same counts from scan and rescan and no repeated `cve-new` |
-| P1 | D2: the scan keeps vectors, known-exploited and EPSS; the component key; `<module>-components.json`; `cve-triage component`; re-scoring; the reclassification outcomes and marks of D4, the single points table | The firewall's curl items are one record and hrossen's site level follows from it |
-| P2 | Migration of the 1708 statements; `cve-triage export`; the boundary's `cve` phase generates VEX | The scan counts the same items from the records as from the old files; a rehearsal boundary needs no carry commit |
-| P3 | D3: the guards, the "by rule" mark, the Review queue | A new CVE matching a rule is reclassified the same night and listed "by rule"; a known-exploited one is not lowered |
-| P4 | D5: `assumes` evaluation, `health-manager accept`, the `accepted` state in the score | A test module made public on hrossen turns its record into `review`; an acceptance lowers the level and survives an image bump |
-| P5 | D6: deferrals from `ack`; the record archives only used acks | The next boundary's gate lists an expired deferral |
-| P6 | D7: the queues in `report security` and the console; the baseline shown once; derived health conditions | hrossen's page opens with the queues |
-| P7 | D8: `candidates` and `candidates apply` | A daily run on hrossen proposes a patch-level image move with its cleared and added CVEs |
+| Hand-kept VEX | 1708 statements in 19 files | 366 component records, 1434 decisions, 11 conflicts settled to the level that counts more; VEX generated |
+| Decisions, legacy against records | | 2917 of 2948 CVE rows the same; 31 differ, each intended: 6 known-exploited CVEs back at upstream, 12 conflicts now at the stricter level, 8 old version-pinned statements carried inside the major, 5 more listed |
+| Scan and rescan | 6213 / 2899 findings (the defect) | 6227 / 6226 |
+| What the operator reads | 24 unit rows, about 2900 CVE rows | For you: 1 card (the next release clears 1). Waiting: 62 components with TAPPaaS, 45 with upstream |
+| What the maintainers read | the same table | Decide: 55 components; Review: 25 cards; Move a pin: none today (every image pin is at its newest tag); the nixpkgs pin clears 2 |
+| Site level | critical, 79 | critical, 79: set by curl on the firewall until someone writes its record |
+
+Two limits of what is built. The release preview applies a record's named decisions but not its
+rules: it has no CVSS vectors, so a CVE only a rule lowers still counts at its upstream level in
+the preview's gate. And a migrated record keeps its decisions until its review date (180 days
+for a code reason, a year for a deployment reason): its use statement still needs a person.
 
 ## Settled in review
 
