@@ -99,8 +99,8 @@
       "security": "warning",
       "window": 300,
       "scope": "all",
-      "_comment": "Anchored: Loki and Grafana log every rule's query text on the logging VM, which is in scope all, so an unanchored rule would match its own query. Also seen at a planned shutdown; a reboot outside the update window is worth a look anyway.",
-      "match": "^(Stopping|Stopped) .*([Aa]udit(ing)? [Ss]ervice|auditd)|^audit: .*audit_enabled=0",
+      "_comment": "Anchored: Loki and Grafana log every rule's query text on the logging VM, which is in scope all, so an unanchored rule would match its own query. Also seen at a planned shutdown; a reboot outside the update window is worth a look anyway. Not the boot's own 'state=initialized audit_enabled=0' (seen on hrossen).",
+      "match": "^(Stopping|Stopped) .*([Aa]udit(ing)? [Ss]ervice|auditd)|^audit: type=1305 .*op=set audit_enabled=0",
       "summary": "The audit daemon stopped, or auditing was switched off in the kernel: changes on this host are no longer recorded.",
       "query": "{host=\"<host>\"} |~ \"audit\""
     },
