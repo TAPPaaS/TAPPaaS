@@ -329,6 +329,7 @@ the same change, and the console's tests fail until the script has run.
 | ⊙ | `service` | service | software: what runs in a node |
 | ⟳ | `controller` | controller | software: what runs in a node |
 | ☰ | `manager` | manager | software: what runs in a node |
+| ❄ | `nixos-baseline` | NixOS baseline | software: what runs in a node |
 | I | `identity` | identity | identity: users, groups, roles |
 | O | `organization` | organization | identity: users, groups, roles |
 | G | `group` | group | identity: users, groups, roles |

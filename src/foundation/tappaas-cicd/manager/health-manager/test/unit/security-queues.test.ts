@@ -8,6 +8,7 @@ import { buildQueues, renderQueues } from "../../src/security-queues";
 import { siteSecurity, sitePlacement, scoreUnits, renderSecurity } from "../../src/site-score";
 import { CmdbItem, SiteIndex } from "../../src/assess-model";
 import { fromCve } from "../../src/assess-sources";
+import { BASELINE_CLASS, BASELINE_NAME, baselineComponents, buildBaselineReport } from "../../src/baseline-ci";
 
 let passed = 0;
 let failed = 0;
@@ -81,7 +82,23 @@ const coturn = fs.find((x) => x.object === "vm-coturn" && x.reason.startsWith("c
 check(coturn.labels?.setBy === "baseline" && coturn.message.includes("from the NixOS baseline"), "a unit set only by the baseline carries the label a classify record matches");
 check(fs.filter((x) => x.labels?.setBy === "baseline").length === 2 && !fs.some((x) => x.message.includes("critical") && x.labels), "…only those: the firewall, set by curl, does not");
 const root = fs.find((x) => x.object === "site-home" && x.reason === "cve-baseline");
-check(root !== undefined && root.status === "warning" && root.message.includes("the NixOS baseline") && root.message.includes("in 2 unit(s)"), "the site gets the baseline's own finding: the root");
+check(root !== undefined && root.status === "warning" && root.message.includes("the NixOS baseline") && root.message.includes("in 2 unit(s)"), "without the baseline's CI, the site gets the baseline's own finding");
+const idxB = new SiteIndex([o("site", "home"), o("vm", "coturn"), o("vm", "immich"), o("device", "network"), o(BASELINE_CLASS, BASELINE_NAME)], []);
+const fsB = fromCve(s, sec, NOW, idxB);
+const onCi = fsB.filter((x) => x.reason === "cve-baseline");
+check(onCi.length === 1 && onCi[0].object === `${BASELINE_CLASS}-${BASELINE_NAME}` && onCi[0].status === "warning", "with the CI: the baseline's finding is on it, not on the site");
+check(!fsB.some((x) => x.object === "site-home" && x.reason === "cve-baseline"), "…and the site carries no baseline finding");
+const quietSec = siteSecurity({ ...s, targets: [tg("network", "opnsense", s.targets[0].items!)] }, sitePlacement(cfg, scoreUnits(s)));
+const okB = fromCve({ ...s, targets: [tg("network", "opnsense", s.targets[0].items!)] }, quietSec, NOW, idxB).find((x) => x.reason === "cve-baseline");
+check(okB?.status === "ok" && okB.object === `${BASELINE_CLASS}-${BASELINE_NAME}`, "no unit set only by the baseline: the CI is ok");
+
+console.log("the baseline's CI");
+const recs = { "templates/nix:sqlite": {}, "templates/nix:glibc": {}, "immich/nix:imagemagick": {} } as unknown as Parameters<typeof buildBaselineReport>[0];
+check(baselineComponents(recs).join() === "templates/nix:glibc,templates/nix:sqlite", "its components: the records under templates/, sorted");
+const rep = buildBaselineReport(recs).report();
+check(rep.objects?.length === 1 && rep.objects[0].class === "nixos-baseline" && rep.objects[0].name === "nixos-baseline"
+  && JSON.stringify(rep.objects[0].attributes?.components) === '["templates/nix:glibc","templates/nix:sqlite"]', "one nixos-baseline CI, with them");
+check(buildBaselineReport({ "immich/nix:imagemagick": {} } as unknown as Parameters<typeof buildBaselineReport>[0]).objects.length === 0, "no baseline record: nothing reported");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

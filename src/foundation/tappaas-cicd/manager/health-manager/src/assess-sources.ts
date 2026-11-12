@@ -11,6 +11,7 @@
 // A finding about something the CMDB does not have lands on the site, so nothing
 // a gate said is lost. Pure over its inputs: the reads are in assess.ts's AssessIO.
 
+import { BASELINE_CLASS, BASELINE_NAME } from "./baseline-ci";
 import { AlertItem } from "./alerts";
 import { CmdbItem, SiteIndex } from "./assess-model";
 import { POOL_FAIL, POOL_WARN } from "./checks";
@@ -273,12 +274,15 @@ export function fromCve(s: ScanStatus | null, sec: SiteSecurity | null, nowMs: n
   const units = sec?.units ?? {};
   // A level only the shared NixOS baseline sets is one cause, the baseline's:
   // the units carry the label (a classify record makes them derived), and the
-  // site gets the baseline's own finding, the root.
+  // baseline's CI gets its own finding, the root (the site until the CI exists).
   const base = Object.values(units).filter((u) => u.baselineOnly && u.level !== "ok").sort((a, b) => b.raw - a.raw);
+  const baselineCi = idx.named(BASELINE_NAME, [BASELINE_CLASS]);
   if (base.length) {
     const top = base[0];
-    add(idx.site, levelStatus(top.level), "cve-baseline",
+    add(baselineCi ?? idx.site, levelStatus(top.level), "cve-baseline",
       scoreMessage(top, `the NixOS baseline: ${top.counted} ${top.category}, in ${base.length} unit(s)${marksText(top.marks) ? ` · ${marksText(top.marks)}` : ""}`));
+  } else if (baselineCi) {
+    add(baselineCi, "ok", "cve-baseline", "");
   }
   for (const u of Object.values(units)) {
     const o = idx.resolve(u.subject);
