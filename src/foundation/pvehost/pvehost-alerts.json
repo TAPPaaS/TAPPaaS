@@ -26,6 +26,22 @@
       "expr": "(sum by (host, slave) (count_over_time(__SELECTOR__ |~ `lanbond: \\(slave [^)]+\\): link status definitely down` | regexp `\\(slave (?P<slave>[^)]+)\\): link status definitely` [5m])) - sum by (host, slave) (count_over_time(__SELECTOR__ |~ `lanbond: \\(slave [^)]+\\): link status definitely up` | regexp `\\(slave (?P<slave>[^)]+)\\): link status definitely` [5m]))) or sum by (host, slave) (count_over_time(__SELECTOR__ |~ `lanbond: \\(slave [^)]+\\): link status definitely down` | regexp `\\(slave (?P<slave>[^)]+)\\): link status definitely` [5m]))",
       "summary": "A leg of a node's bonded lan uplink went down and did not come back. The node runs on the rest; one more port or switch failure cuts it off. See: site-manager node network show <host>.",
       "query": "__SELECTOR__ |= \"lanbond\""
+    },
+    {
+      "name": "pve-auth-failure",
+      "title": "ProxmoxAuthFailure",
+      "headline": "Proxmox sign-in failures",
+      "kind": "event",
+      "security": "warning",
+      "window": 600,
+      "above": 5,
+      "unit": "pvedaemon",
+      "match": "^authentication failure; rhost=",
+      "capture": {
+        "src_ip": "rhost=(::ffff:)?(?P<src_ip>[0-9a-fA-F:.]+)"
+      },
+      "summary": "More than five failed sign-ins to Proxmox's web UI or API from one address in ten minutes. The UI is reached only from the management zone and the admin VPN.",
+      "query": "{host=\"<host>\", unit=\"pvedaemon\"} |= \"authentication failure\""
     }
   ]
 }

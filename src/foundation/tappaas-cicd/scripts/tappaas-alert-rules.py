@@ -20,6 +20,13 @@ window on one of the module's guests or published services. It is built over
 Prometheus, never written as PromQL by the module; delivery, labels and the
 mail are a log rule's.
 
+A rule with `security: "info" | "warning" | "critical"` (ADR-050) is a security
+hit: it carries the labels type=security and level=<value>, the receiver keeps
+each hit (first, last, count) and health-manager holds the condition it raises
+(warning 24 h from the last hit, critical until acknowledged). Security rules
+are rendered only while the site's security monitoring is on (site.json
+security.monitoring; not set: off on a small site).
+
 Usage:
   tappaas-alert-rules.py validate <file> [--foundation]
   tappaas-alert-rules.py render   <module> [--file F] [--hosts a,b] [--foundation] [--config-dir D]
@@ -58,7 +65,9 @@ PLACEHOLDERS = {"state", "title", "host", "hosts", "module", "labels", "summary"
 RESERVED_LABELS = {"host", "kind", "module", "bundle", "lines", "alertname", "unit",
                    "severity", "zone", "source", "job", "grafana_folder", "container"}
 RULE_KEYS = {"name", "title", "headline", "kind", "match", "unit", "capture", "window",
-             "above", "absent", "repeat", "summary", "mail", "include", "source", "signal"}
+             "above", "absent", "repeat", "summary", "mail", "include", "source", "signal",
+             "security"}
+SECURITY_LEVELS = ("info", "warning", "critical")
 # The signals a metrics rule may name: lib/ts/src/perf-signals.ts's names and
 # expressions (a test holds the two equal). __SEL__ is the label selector.
 SIGNALS = {
@@ -133,6 +142,8 @@ def validate(doc, foundation=False):
         w = r.get("window")
         if not (isinstance(w, int) and not isinstance(w, bool) and 60 <= w <= 86400):
             errs.append(f"{where}: 'window' must be whole seconds, 60–86400")
+        if "security" in r and r["security"] not in SECURITY_LEVELS:
+            errs.append(f"{where}: 'security' is info, warning or critical")
         if r.get("source", "logs") not in ("logs", "metrics"):
             errs.append(f"{where}: 'source' is 'logs' (the default) or 'metrics'")
         if r.get("source") == "metrics":
@@ -317,6 +328,9 @@ def grafana_rule(module, rule, hosts):
     labels = {"kind": rule["kind"], "module": module}
     if metrics:
         labels["source"] = "metrics"
+    if rule.get("security"):
+        labels["type"] = "security"
+        labels["level"] = rule["security"]
     for x in rule.get("include", []):
         labels[x] = "true"
     ann = {"summary": rule["summary"], "query": explore_query(hosts, rule)}
@@ -384,9 +398,25 @@ def rule_hosts(module, rule, scopes):
     return scopes(module)
 
 
-def render_group(module, doc, scopes):
+def security_on(config_dir):
+    """The site's security monitoring (ADR-050 D1): site.json security.monitoring,
+    else off on a small site and on otherwise (lib/security-monitoring.sh)."""
+    try:
+        with open(os.path.join(config_dir, "site.json"), encoding="utf-8") as f:
+            site = json.load(f)
+    except (OSError, ValueError):
+        site = {}
+    m = (site.get("security") or {}).get("monitoring")
+    if m in ("on", "off"):
+        return m == "on"
+    return site.get("size", "medium") != "small"
+
+
+def render_group(module, doc, scopes, security=True):
     rules = []
     for r in doc["rules"]:
+        if r.get("security") and not security:
+            continue  # security monitoring is off on this site
         if r.get("source") == "metrics" and SIGNALS[r["signal"]][0] == "route":
             sc = r.get("scope")
             hs = "*" if sc == "all" else (sc if isinstance(sc, list) else [module])
@@ -582,7 +612,7 @@ def cmd_render(a):
     else:
         scopes = lambda m: scope_hosts(a.config_dir, m)  # noqa: E731
     try:
-        group = render_group(a.module, doc, scopes)
+        group = render_group(a.module, doc, scopes, security_on(a.config_dir))
     except ValueError as e:
         print(f"{path}: {e}", file=sys.stderr)
         return 1
@@ -615,7 +645,7 @@ def apply_module(module, config_dir, dry_run=False, vm=None, without=()):
     if errs:
         return False, "; ".join(errs)
     try:
-        group = render_group(module, doc, lambda m: scope_hosts(config_dir, m, without))
+        group = render_group(module, doc, lambda m: scope_hosts(config_dir, m, without), security_on(config_dir))
     except ValueError as e:
         return False, str(e)
     if dry_run:

@@ -211,6 +211,25 @@ gm = ar.render_group("nextcloud", {"rules": [dict(mr, signal="memory_pressure_pe
 ck('service_name=~"^(nextcloud)$"' in gm["data"][0]["model"]["expr"], "a guest signal: the module's guests by name")
 ck(ar.render_group("nextcloud", {"rules": [dict(mr, signal="memory_pressure_percent")]}, lambda m: [])["rules"] == [], "no guest in scope: no rule")
 
+# ── security rules (ADR-050) ──
+sr = {**ok, "name": "ssh-bf", "security": "critical"}
+ck(ar.validate(rules(sr)) == [], f"a security rule validates ({ar.validate(rules(sr))})")
+ck(any("'security'" in e for e in ar.validate(rules({**ok, "security": "high"}))), "an unknown security level is refused")
+g = ar.render_group("logging", {"rules": [sr, ok]}, lambda m: ["n1"])["rules"]
+ck(g[0]["labels"].get("type") == "security" and g[0]["labels"].get("level") == "critical", f"a security rule carries type and level ({g[0]['labels']})")
+ck("type" not in g[1]["labels"], "a plain rule carries no type")
+off = ar.render_group("logging", {"rules": [sr, ok]}, lambda m: ["n1"], security=False)["rules"]
+ck([r["uid"] for r in off] == ["logging-sig-rejected"], "security monitoring off: the security rule is not rendered")
+import os as _os
+def site(d):
+    with open(f"{cfg}/site.json", "w") as f: json.dump(d, f)
+site({"size": "small"}); ck(not ar.security_on(cfg), "small: security monitoring off")
+site({"size": "medium"}); ck(ar.security_on(cfg), "medium: on")
+site({}); ck(ar.security_on(cfg), "no size: on")
+site({"size": "small", "security": {"monitoring": "on"}}); ck(ar.security_on(cfg), "site.json on wins at small")
+site({"size": "large", "security": {"monitoring": "off"}}); ck(not ar.security_on(cfg), "site.json off wins at large")
+site({"name": "t", "location": {"country": "DK", "timezone": "Europe/Copenhagen"}})
+
 print(f"alert-rules: {passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)
 PYEOF
