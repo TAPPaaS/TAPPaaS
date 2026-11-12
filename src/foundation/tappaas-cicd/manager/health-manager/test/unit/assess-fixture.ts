@@ -1,13 +1,15 @@
 // assess-fixture.ts — a small site in the CMDB's shape, and a stubbed AssessIO,
 // for the assess, derive and validate tests. The rules are the shipped file.
 
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import { AssessIO } from "../../src/assess";
 import { CmdbItem, CmdbRel, Condition } from "../../src/assess-model";
 import { RulesDoc } from "../../src/rules";
 import { CmdbReport } from "../../../../lib/ts/src/cmdb";
-import { ConditionStatus, ConditionType, HealthRule } from "../../../../lib/ts/src/health-rules";
+import { ConditionStatus, ConditionType } from "../../../../lib/ts/src/health-rules";
+import { HealthRecord, Propagate } from "../../../../lib/ts/src/health-records";
+import { HealthRule } from "./oracle/derive-p0";
 
 const CICD = process.env.HM_CICD_DIR ?? join(__dirname, "../../../../../../..");
 const META = join(CICD, "controller/cmdb-controller/metamodel");
@@ -24,13 +26,61 @@ const CLASSES: Record<string, string[]> = {
   port: ["port", "resource", "object"], disk: ["disk", "resource", "object"], rack: ["rack", "place", "object"], room: ["room", "place", "object"],
 };
 
-export function shippedModel(extra: HealthRule[] = []): RulesDoc {
+/** The core records as released: metamodel/health/*.json. */
+export function coreRecords(): HealthRecord[] {
+  const dir = join(META, "health");
+  return readdirSync(dir).filter((f) => f.endsWith(".json")).sort().flatMap((f) => (JSON.parse(readFileSync(join(dir, f), "utf8")) as { records: HealthRecord[] }).records);
+}
+
+export function shippedRelations(): RulesDoc["relations"] {
   const rel = JSON.parse(readFileSync(join(META, "relations.json"), "utf8")) as { relations: Record<string, { dependant?: "from" | "to" | "both"; required?: boolean }> };
-  const rules = JSON.parse(readFileSync(join(META, "health-rules.json"), "utf8")) as { rules: HealthRule[] };
+  return Object.entries(rel.relations).map(([name, r]) => ({ name, dependant: r.dependant ?? null, required: r.required === true }));
+}
+
+// Every class of the metamodel files with its ancestors, as the controller serves them.
+function metamodelAncestors(): Record<string, string[]> {
+  const parent = new Map<string, string | null>();
+  for (const f of readdirSync(META).filter((x) => x.endsWith(".json"))) {
+    const doc = JSON.parse(readFileSync(join(META, f), "utf8")) as { classes?: Record<string, { parent?: string }> };
+    for (const [name, c] of Object.entries(doc.classes ?? {})) parent.set(name, c.parent ?? null);
+  }
+  const out: Record<string, string[]> = {};
+  for (const name of parent.keys()) {
+    const chain: string[] = [];
+    for (let c: string | null | undefined = name; c && !chain.includes(c); c = parent.get(c)) chain.push(c);
+    out[name] = chain;
+  }
+  return out;
+}
+const ALL_CLASSES: Record<string, string[]> = { ...metamodelAncestors(), ...CLASSES };
+export const ANCESTORS = ALL_CLASSES;
+
+let legacyN = 0;
+/** A rule in the old health-rules.json shape, as the propagate record it is: the
+ *  tests written before records add rules this way. */
+export function fromLegacy(r: HealthRule, relations: RulesDoc["relations"] = shippedRelations()): Propagate {
+  const meta = relations.find((x) => x.name === r.relation);
+  const when: Propagate["when"] = { relation: r.relation, condition: { type: r.source.type, status: r.source.status } };
+  if (meta?.dependant === "both") {
+    if (r.from) when.from = { class: r.from };
+    if (r.to) when.to = { class: r.to };
+  } else {
+    const [depCls, provCls] = meta?.dependant === "to" ? [r.to, r.from] : [r.from, r.to];
+    if (depCls) when.dependant = { class: depCls };
+    if (provCls) when.provider = { class: provCls };
+  }
+  if (r.dependant) when.dependant = { ...(when.dependant ?? {}), attr: Object.fromEntries(Object.entries(r.dependant).map(([k, v]) => [k, v === true ? { exists: true } : v])) };
+  return { id: `test.propagate.r${++legacyN}`, kind: "propagate", when, as: { status: r.impact as "warning" | "critical" } };
+}
+
+/** The shipped records, the metamodel's relations and the classes; `extra`
+ *  records, or rules in the old shape, added. */
+export function shippedModel(extra: (HealthRule | HealthRecord)[] = []): RulesDoc {
+  const relations = shippedRelations();
   return {
-    rules: [...rules.rules, ...extra],
-    relations: Object.entries(rel.relations).map(([name, r]) => ({ name, dependant: r.dependant ?? null, required: r.required === true })),
-    ancestors: CLASSES,
+    records: [...coreRecords(), ...extra.map((x) => ("kind" in x ? x : fromLegacy(x, relations)))],
+    relations,
+    ancestors: ALL_CLASSES,
   };
 }
 

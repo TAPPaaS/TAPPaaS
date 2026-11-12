@@ -6,7 +6,7 @@
 
 import { CmdbItem, Condition } from "../../src/assess-model";
 import { derive } from "../../src/derive";
-import { T0, cond, obj, rel, shippedModel } from "./assess-fixture";
+import { T0, cond, fromLegacy, obj, rel, shippedModel } from "./assess-fixture";
 import { ConditionType } from "../../../../lib/ts/src/health-rules";
 
 let passed = 0;
@@ -75,7 +75,7 @@ const rels = [
     shippedModel([{ relation: "runs-on", source: { type: "operational", status: "critical" }, dependant: { haNode: "tappaas9" }, impact: "warning" }]), now);
   check(at(eq.conditions, haVm, "impact")?.status === "warning", "the shipped clause matches any value set");
   const neq = derive([node, haVm], src([node, [cond("operational", "critical")]]), [rel("runs-on", haVm, node)],
-    { ...shippedModel(), rules: shippedModel().rules.filter((x) => !x.dependant).concat([{ relation: "runs-on", source: { type: "operational", status: "critical" }, dependant: { haNode: "tappaas9" }, impact: "warning" }]) }, now);
+    { ...shippedModel(), records: shippedModel().records.filter((x) => x.id !== "core.propagate.runs-on.down-ha").concat([fromLegacy({ relation: "runs-on", source: { type: "operational", status: "critical" }, dependant: { haNode: "tappaas9" }, impact: "warning" })]) }, now);
   check(at(neq.conditions, haVm, "impact")?.status === "critical", "a clause naming a value matches only that value");
 }
 

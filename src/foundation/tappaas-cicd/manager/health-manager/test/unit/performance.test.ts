@@ -12,7 +12,7 @@ import { AssessResult, assess } from "../../src/assess";
 import { Declared, fromPerformance, fromTrends, horizonOf, reasonOf, thresholdsFor } from "../../src/assess-performance";
 import { CmdbItem, Condition, SiteIndex } from "../../src/assess-model";
 import { MetricsReader, Sample, curlReader, parseVector } from "../../src/metrics-read";
-import { checkHealthRules } from "../../../../lib/ts/src/health-rules";
+import { Propagate, checkSet } from "../../../../lib/ts/src/health-records";
 import { PERF_SIGNALS, signalNamed } from "../../../../lib/ts/src/perf-signals";
 import { NOW, StubIO, cond, obj, rel, shippedModel } from "./assess-fixture";
 
@@ -164,16 +164,14 @@ const writeWait = (min: number, max: number): { has: string; samples: Sample[] }
   check(horizonOf({ performance: { capacityHorizonDays: 30 } }) === 30 && horizonOf(null) === 14 && horizonOf({ performance: { capacityHorizonDays: -1 } }) === 14, "the horizon: the site's, else 14");
 }
 
-// ── the shipped rules hold, and carry performance ──
+// ── the shipped records hold, and carry performance ──
 {
   const m = shippedModel();
-  const relNames = m.relations.map((r) => r.name);
-  const deps = m.relations.filter((r) => r.dependant).map((r) => r.name);
-  check(checkHealthRules({ rules: m.rules }, { relations: relNames, dependants: deps, classes: Object.keys(m.ancestors) }).length === 0, "rules check passes with the performance rules");
-  const perf = m.rules.filter((r) => r.source.type === "performance");
-  check(perf.some((r) => r.relation === "stored-on" && r.to === "storage-pool" && r.source.status === "warning" && r.impact === "warning"), "a slow pool crosses stored-on as a warning");
-  check(perf.some((r) => r.relation === "runs-on" && r.to === "machine" && r.source.status === "warning" && r.impact === "warning"), "a pressured node crosses runs-on as a warning");
-  check(perf.every((r) => r.impact === "warning"), "performance never impacts as critical");
+  check(checkSet(m.records, { relations: m.relations, ancestors: m.ancestors }).filter((p) => p.level === "error").length === 0, "rules check passes with the performance records");
+  const perf = m.records.filter((r): r is Propagate => r.kind === "propagate" && JSON.stringify(r.when.condition?.type) === '"performance"');
+  check(perf.some((r) => r.when.relation === "stored-on" && JSON.stringify(r.when.provider?.class) === '"storage-pool"' && r.as !== "none" && r.as.status === "warning"), "a slow pool crosses stored-on as a warning");
+  check(perf.some((r) => r.when.relation === "runs-on" && JSON.stringify(r.when.provider?.class) === '"machine"' && r.as !== "none" && r.as.status === "warning"), "a pressured node crosses runs-on as a warning");
+  check(perf.every((r) => r.as !== "none" && r.as.status === "warning"), "performance never impacts as critical");
 }
 
 // ── the store's answer, and the credential never in argv ──

@@ -149,7 +149,7 @@ not fit the metamodel).
 | `POST /v1/rescan` | | what each source answered |
 | `POST /v1/sweep`, `GET /v1/sweep` | | a sweep and its record (409 while one runs); the last record (404 when none has) |
 | `GET /v1/classes`, `GET /v1/classes/<name>` | | the metamodel |
-| `GET /v1/rules` | | the correlation rules (a rule's `dependant` clause too), each relation type's `dependant`, `required` and `tree`, each class's ancestors, and `fields`: every attribute some class declares, what a `dependant` clause may name |
+| `GET /v1/rules` | | the core health records (`records`), each relation type's `dependant`, `required` and `tree`, each class's ancestors, and `fields`: every attribute some class declares, what a record's `attr` may name |
 | `GET /v1/stream` | | server-sent events: `event: change` with the change's id, kind, source, job, verb, time, objects, relations, drift |
 
 ```bash
@@ -214,9 +214,9 @@ by the same thresholds, and is critical when there has been no sweep for 48 hour
 [`metamodel/ci.json`](./metamodel/ci.json) (the root `object` and the `ci`
 branch), [`resource.json`](./metamodel/resource.json),
 [`place.json`](./metamodel/place.json),
-[`relations.json`](./metamodel/relations.json) and
-[`health-rules.json`](./metamodel/health-rules.json) are loaded into the metamodel
-tables at every start. A field is declared as ADR-020's `fields.json` declares
+[`relations.json`](./metamodel/relations.json) are loaded into the metamodel
+tables at every start, and the core health records in
+[`health/`](./metamodel/health/README.md) with them. A field is declared as ADR-020's `fields.json` declares
 one — `type`, `required`, `immutable`, `description`, `enum` — plus:
 
 - `key`: the rank of the identity key the field is part of (D5). Fields of one
@@ -257,11 +257,11 @@ them; `null` unsets one, and a report giving nothing but these adds them to the
 relation's other attributes, so the source that knows the redundancy sets it.
 `tree` is the end the console's Health tree nests under the other (`from`, `to`,
 `both` when each end lists the other as a leaf, as a cable; none: no containment).
-[`health-rules.json`](./metamodel/health-rules.json) holds the correlation rules
-(ADR-041 D3); a rule the controller cannot place stops the load like any
-metamodel error, and `GET /v1/rules` serves them with what a reader needs. A
-rule's optional `dependant` (`{attribute: value}`, `true` for any value set) must
-name an attribute some class declares.
+[`health/`](./metamodel/health/README.md) holds the core health records, one file
+per kind, and the rule language they are written in. A record the controller cannot
+place (an unknown class, relation, attribute or condition type), or two that decide
+one case differently, stop the load like any metamodel error, and `GET /v1/rules`
+serves them with what a reader needs.
 
 Disks: a **`disk`** (a resource beside `port`, physical) is a disk in an asset, `part-of`
 it — its `asset` and its `name` (the disk asset's tag, `dsk-NN`) are its key, and the asset
@@ -273,8 +273,8 @@ from the sweep) site-manager's, all volatile. A **`built-on`** relation joins a
 `storage-pool` to each of its member disks (`dependant: from`, required): site-manager sets
 `redundancyGroup` `<node>:<pool>:<vdev>` on the members of a mirror or raidz vdev and
 `required: false` on a log, cache or spare member, so one failed disk of a mirror degrades
-its pool and a vdev with every member failed takes it down (the `built-on` rule in
-`health-rules.json`). A **`stored-on`** relation joins a `vm`, an `lxc` or a backup
+its pool and a vdev with every member failed takes it down (the core records
+`core.propagate.built-on.down` and `core.combine.redundancy-group`). A **`stored-on`** relation joins a `vm`, an `lxc` or a backup
 `datastore` to each pool its data is on (`dependant: from`, required, n:m): a pool's
 `critical` takes them down with it; its warning (`DEGRADED`) reaches none.
 

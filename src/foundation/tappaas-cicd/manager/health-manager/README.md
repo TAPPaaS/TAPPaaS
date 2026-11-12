@@ -737,7 +737,7 @@ the CI within its class's expiry, `warning` (`unseen`) once it does not.
 | `location`, `room`, `rack` | the roll-up of what is in them. **Not assessed by design** when empty: grey says nothing is there | `roll-up` |
 | `node` | a placeholder's class: **not assessed by design**, a placeholder gets no conditions | — |
 
-**Follows.** `FOLLOWS` in `lib/ts/src/health-rules.ts` names what nothing judges:
+**Follows.** The core `follow` records name what nothing judges:
 a port or a disk its asset, an asset its node. Such an object gets a `derived` `operational`
 condition, reason `follows`, with the worst of the parent's `operational` and `impact`
 (`ok` when the parent is judged only in other types). It is worked out on every run,
@@ -749,26 +749,26 @@ switch lists every free port. `linkSpeed` reaches the CMDB from a node's NICs
 
 ### Root causes
 
-`metamodel/health-rules.json` says how a failure travels: each rule names a
-relation type, optionally the class of either end, the source condition and the
-impact it produces. A rule may also read the dependant: `"dependant": { "haNode": true }`
-matches only a dependant whose attribute has that value (`true`: any value that is
-set), and such a rule wins over one without it for the same crossing. Shipped:
-`operational critical` crosses `runs-on`, `depends-on`, `member-of`, `connects` and
-`built-on` (a disk to the pool built on it) and `stored-on` (a pool to the guests
-and backup datastores whose data is on it) as `critical` impact, except that over
-`runs-on` a guest with `haNode` set (HA-protected) gets a `warning`: its node failed,
-and it is moving or has moved. A pool's mirror or raidz members are one redundancy
-group: one failed member degrades the pool, all of them take it down.
-A warning crosses nothing: a DEGRADED pool leaves its guests and datastores as they are. `health-manager rules list` shows them (`… crosses
-runs-on to a dependant with haNode set as warning impact`); `rules check [--file F]`
-validates them or a candidate, and exits 1 on what it cannot place, a dependant
-clause naming an attribute no class has among it.
+How a failure travels, what explains what, who follows whom and how collections
+sum up are **health records**. The rule language and the standard records are in
+[Health Rules](../../controller/cmdb-controller/metamodel/health/README.md). The
+shipped `propagate` records cross an `operational critical` over `runs-on`,
+`depends-on`, `member-of`, `connects`, `built-on` (a disk to the pool built on it)
+and `stored-on` (a pool to the guests and backup datastores whose data is on it) as a
+`critical` impact, except that over `runs-on` a guest with `haNode` set
+(HA-protected) gets a `warning`: its node failed, and it is moving or has moved. A
+pool's mirror or raidz members are one redundancy group: one failed member degrades
+the pool, all of them take it down. A warning crosses nothing: a DEGRADED pool
+leaves its guests and datastores as they are.
 
-```json
-{ "relation": "runs-on", "source": { "type": "operational", "status": "critical" },
-  "dependant": { "haNode": true }, "impact": "warning" }
-```
+`health-manager rules list` prints each record as one sentence (`a critical
+operational failure on a provider crosses runs-on to its dependant with haNode as a
+warning impact`), `--kind` and `--origin` filter it, `--json` gives the records.
+`rules check [--file F]` checks the records in use, or a candidate file with them: it
+refuses a record it cannot place (an unknown class, relation, attribute or condition
+type), and two records that can decide one case differently with neither more
+specific nor naming the other in `overrides`, and exits 1. It also reports
+dependency cycles in the relations.
 
 A crossing softer than the failure (a warning for a critical) still explains the
 dependant's own condition of that type: the HA guest that stopped with its node is

@@ -443,7 +443,7 @@ export class Store {
   rules(): Obj {
     const relations = new Map(this.mm.relations.map((r) => [r.name, { name: r.name, dependant: r.dependant, required: r.required, tree: r.tree }]));
     return {
-      rules: this.mm.rules,
+      records: this.mm.records,
       relations: [...relations.values()],
       ancestors: Object.fromEntries([...this.mm.classes.keys()].map((c) => [c, this.mm.ancestors(c)])),
       fields: [...new Set([...this.mm.classes.keys()].flatMap((c) => [...this.mm.fields(c).keys()]))].sort(),

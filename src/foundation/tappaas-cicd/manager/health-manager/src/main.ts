@@ -216,12 +216,15 @@ export const HELP: HelpSpec = {
         "stands until the source that raised it has looked again.",
     },
     {
-      usage: "rules list|check [--file F] [--json]", effect: "read",
+      usage: "rules list|check [--kind K] [--origin O] [--file F] [--json|--markdown]", effect: "read",
       options: [
-        ["--file F", "check: this candidate file instead of the rules in use."],
-        ["--json", "Print the rules, or the problems."],
+        ["--kind K", "list: only records of this kind (classify, propagate, combine, explain, follow, rollup, notify)."],
+        ["--origin O", "list: only records released by core, a module, or the site."],
+        ["--file F", "check: this candidate file with the rules in use."],
+        ["--json", "Print the records, or the problems."],
+        ["--markdown", "list: the records by kind, one line each, as the rule language's README shows them."],
       ],
-      details: "The correlation rules of metamodel/health-rules.json. check exits 1 on a rule it cannot place.",
+      details: "The health records that decide how a failure spreads, what explains what, who follows whom and how collections sum up; one sentence each. check refuses a record it cannot place and two records that decide one case differently, and exits 1.",
     },
     // ── end ADR-041 assess ──
     {
