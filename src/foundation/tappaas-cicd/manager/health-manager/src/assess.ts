@@ -379,7 +379,12 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
     const made = d.conditions.get(o.id) ?? [];
     const words = acksOf(o);
     const flaps = flapsOf(o);
-    const st = (c: Condition, p: Condition | undefined): Condition => stamp(c, p, time, nowMs, windows.get(o.id), words[c.type], flaps[c.type]);
+    // A carried ack whose word now stands under another type (the split moved a
+    // security ack to threat) no longer holds this condition: its own type has
+    // no word, so nothing acknowledged it.
+    const movedAway = (c: Condition, p: Condition | undefined): boolean =>
+      !!p?.acknowledged && !p.acknowledged.via && !words[c.type] && Object.entries(words).some(([t, w]) => t !== c.type && !!w?.ack && !!p.acknowledged?.at && w.ack.at === p.acknowledged.at);
+    const st = (c: Condition, p: Condition | undefined): Condition => stamp(c, p && movedAway(c, p) ? { ...p, acknowledged: null } : p, time, nowMs, windows.get(o.id), words[c.type], flaps[c.type]);
     const next = made.map((c) => st(c, byType.get(c.type)));
     // What was a failing impact or roll-up and no longer is: over, not gone.
     // One that was ok already is simply not computed any more.
