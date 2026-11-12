@@ -45,7 +45,7 @@ r="$(render_loki_runtime)"
 has "${r}" "  fake:" "the runtime config overrides the single tenant"
 has "${r}" "period: 4320h" "180 days as hours"
 has "${r}" "selector: '{transport=\"audit\"}'" "audit records are a security stream"
-has "${r}" "selector: '{source=\"opnsense\", unit=~\"filterlog|audit|sshd|crowdsec.*|suricata\"}'" "the firewall's blocks are"
+has "${r}" "selector: '{source=\"opnsense\", unit=~\"filterlog|audit|api|sshd.*|crowdsec.*|suricata\"}'" "the firewall's blocks are"
 eq "$(grep -c 'selector:' <<<"${r}")" "$(security_streams | grep -c .)" "one rule per stream"
 if command -v python3 >/dev/null && python3 -c 'import yaml' 2>/dev/null; then
     python3 -c 'import sys,yaml; d=yaml.safe_load(sys.stdin); assert d["overrides"]["fake"]["retention_stream"][0]["priority"]==1' <<<"${r}" && ok || no "the runtime config is YAML Loki reads"

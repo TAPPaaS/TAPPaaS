@@ -36,12 +36,13 @@
       "window": 600,
       "above": 5,
       "unit": "pvedaemon",
-      "match": "^authentication failure; rhost=",
+      "match": "^\\s*authentication failure; rhost=",
       "capture": {
         "src_ip": "rhost=(::ffff:)?(?P<src_ip>[0-9a-fA-F:.]+)"
       },
       "summary": "More than five failed sign-ins to Proxmox's web UI or API from one address in ten minutes. The UI is reached only from the management zone and the admin VPN.",
-      "query": "{host=\"<host>\", unit=\"pvedaemon\"} |= \"authentication failure\""
+      "query": "{host=\"<host>\", unit=\"pvedaemon\"} |= \"authentication failure\"",
+      "_comment": "pvedaemon's message starts with a space (seen on hrossen)."
     }
   ]
 }

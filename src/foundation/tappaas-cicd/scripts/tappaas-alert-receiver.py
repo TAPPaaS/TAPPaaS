@@ -941,6 +941,18 @@ def siem_record(args, payload, now=None):
         print(f"security hits NOT recorded: {e}", flush=True)
 
 
+def without_info_hits(payload):
+    """The webhook without its info-level security hits (ADR-050 D12): they are
+    recorded and nothing more, no mail and no assessment. None when nothing
+    else is left."""
+    alerts = payload.get("alerts") or []
+    keep = [a for a in alerts if not ((a.get("labels") or {}).get("type") == "security"
+                                      and (a.get("labels") or {}).get("level") == "info")]
+    if len(keep) == len(alerts):
+        return payload
+    return {**payload, "alerts": keep} if keep else None
+
+
 # ── the health hook (ADR-041 D2) ─────────────────────────────────────────
 DIGEST_RULE = "HealthDailyDigest"
 HEALTH_RULES = {"HealthRootCause", "HealthRootRecovered", DIGEST_RULE}  # health-manager's own
@@ -1052,6 +1064,10 @@ def make_handler(args):
             record(args, payload)
             with _siem_lock:
                 siem_record(args, payload)
+            payload = without_info_hits(payload)
+            if payload is None:
+                self.reply(200, "security hit recorded (info)")
+                return
             health_hook(args, payload)
             payload = fold_node_down(args, payload)
             if payload is None:

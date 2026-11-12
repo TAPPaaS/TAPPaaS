@@ -49,6 +49,10 @@ const nodeOf = (name: string): CheckSubject => ({ kind: "node", name });
 export function guestTarget(configDir: string, module: string): string | null {
   const raw = readModuleJson(join(configDir, `${module}.json`));
   if (!raw) return null;
+  // The firewall (OPNsense) has no tappaas user: its own controller reaches it
+  // as root. Probing it as tappaas failed every gate's every run, four sshd
+  // "Invalid user" lines each time, which a brute-force rule reads (ADR-050).
+  if (/\/network\/?$/.test(String(raw.moduleSource ?? raw.location ?? ""))) return null;
   // Pattern A keeps zone0 (and possibly vmname) under .config: a flat read
   // sent every such guest to <name>.mgmt.internal, which does not resolve.
   const vn = configField(raw, "vmname");
@@ -652,7 +656,8 @@ export function knownSystems(dir: string, vmname: string): Set<string> | null {
   return lines.length ? new Set(lines) : null;
 }
 
-const sysName = (p: string): string => p.replace(/^\/nix\/store\/[a-z0-9]+-nixos-system-/, "");
+// A system as an operator tells two apart: the start of its store hash.
+const sysName = (p: string): string => p.replace(/^\/nix\/store\/([a-z0-9]{8})[a-z0-9]*-nixos-system-(.*)$/, "$2 ($1…)");
 
 export function checkGuestSystem(client: ClusterClient, configDir: string, defaultNode: string): CheckResult {
   const dir = GUEST_SYSTEMS_DIR(configDir);
@@ -667,8 +672,8 @@ export function checkGuestSystem(client: ClusterClient, configDir: string, defau
     if (!p) continue; // unreachable, or not NixOS
     judged.push(mod(m.module));
     const strange = [
-      !known.has(p.profile) ? `its system profile is ${sysName(p.profile)}` : "",
-      !known.has(p.current) && p.current !== p.booted ? `it runs ${sysName(p.current)}` : "",
+      !known.has(p.profile) ? `system profile ${sysName(p.profile)}` : "",
+      !known.has(p.current) && p.current !== p.booted ? `running ${sysName(p.current)}` : "",
     ].filter(Boolean);
     if (strange.length) rows.push({ status: "fail", text: `${m.module.padEnd(16)}${strange.join(", ")}: not a system TAPPaaS built for it`, subject: mod(m.module) });
   }
