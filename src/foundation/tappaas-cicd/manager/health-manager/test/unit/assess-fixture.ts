@@ -32,6 +32,12 @@ export function coreRecords(): HealthRecord[] {
   return readdirSync(dir).filter((f) => f.endsWith(".json")).sort().flatMap((f) => (JSON.parse(readFileSync(join(dir, f), "utf8")) as { records: HealthRecord[] }).records);
 }
 
+/** The core contract scenarios: metamodel/health/scenarios/*.json. */
+export function coreScenarios(): NonNullable<RulesDoc["scenarios"]> {
+  const dir = join(META, "health", "scenarios");
+  return readdirSync(dir).filter((f) => f.endsWith(".json")).sort().flatMap((f) => (JSON.parse(readFileSync(join(dir, f), "utf8")) as { scenarios: NonNullable<RulesDoc["scenarios"]> }).scenarios);
+}
+
 export function shippedRelations(): RulesDoc["relations"] {
   const rel = JSON.parse(readFileSync(join(META, "relations.json"), "utf8")) as { relations: Record<string, { dependant?: "from" | "to" | "both"; required?: boolean }> };
   return Object.entries(rel.relations).map(([name, r]) => ({ name, dependant: r.dependant ?? null, required: r.required === true }));
@@ -80,6 +86,7 @@ export function shippedModel(extra: (HealthRule | HealthRecord)[] = []): RulesDo
   return {
     records: [...coreRecords(), ...extra.map((x) => ("kind" in x ? x : fromLegacy(x, relations)))],
     relations,
+    scenarios: coreScenarios(),
     ancestors: ALL_CLASSES,
   };
 }

@@ -24,6 +24,7 @@ export interface Condition {
   flapping?: boolean; // emit's (its `flapping` attribute), projected by assess
   flappingHeld?: ConditionStatus;
   operatorAt?: string; // the operator's last word on it (acknowledgements) that assess took
+  rule?: string; // the health record that decided a derived condition: the crossing, the explanation, the follow, the roll-up
 }
 
 export interface CmdbItem {

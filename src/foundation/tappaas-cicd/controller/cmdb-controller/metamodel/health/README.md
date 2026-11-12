@@ -79,12 +79,24 @@ classes is not more specific than one naming an ancestor of only one of them.
 ### propagate — whether and as what a failure crosses a relation
 
 `when`: `relation`, `provider`, `dependant` (`from`, `to` for a relation both ends
-depend on), `edge`, `condition`. Outcome: `as: {"status": "warning" | "critical"}`
-or `as: "none"`.
+depend on), `edge`, `condition`. Outcome: `as: {"status": "warning" | "critical",
+"type"?: …}` or `as: "none"`; optionally `dependantEnd`.
 
-The failure crosses from the provider to the end the metamodel declares as hurt
-(`relations.json`), only over a relation that is required. `as: "none"` is an
-exception: the failure does not cross here, where a general record says it does.
+- The failure crosses from the provider to the end the metamodel declares as hurt
+  (`relations.json`), only over a relation that is required.
+- `status` may be lower than, equal to or higher than the failure's own: a record may
+  raise. A raise still cannot make a real critical the symptom of a warning.
+- `type` changes the failure's type on the far side (a slow pool that is an
+  `operational` degradation of one database); from there the records for that type
+  apply. Without it the type is kept.
+- `as: "none"` is an exception: the failure does not cross here, where a general
+  record says it does.
+- `dependantEnd: "from" | "to"` names the hurt end for this record: it can cross a
+  relation the metamodel gives no dependant, or cross one against its declared
+  direction (a node counting against its cluster's quorum).
+- `condition.reason` matches only the provider's own condition, so a record can say
+  "node-down crosses, a standing advisory does not".
+
 Each status has its own records: a critical does not also fire the warning ones.
 
 ```json
@@ -102,13 +114,16 @@ Each status has its own records: a critical does not also fire the warning ones.
   value; `groupBy: "dependant"` groups every matched relation of one type into one
   dependant.
 - `steps`: how many members are down, and what then crosses: `down: 1 | 2 | … |
-  "half" | "all"`, and `as: "warning" | "critical" | "rule"` (`rule` is what the
+  "half" | "all"` (half is at least half, rounded up: two of three, two of four) or
+  `upFewerThan: k`, and `as: "warning" | "critical" | "rule"` (`rule` is what the
   `propagate` record gives). A step may name the `reason` the impact then has. Every
   step that holds applies, and the worst wins. Steps may not get softer as more
   members fail.
 
 A member is down when a provider on that relation, other than the dependant, is
-failing. The impact names the member that failed first.
+failing. The impact names the member that failed first. A group's verdict never
+explains its own failed members, so two dead nodes of a cluster that lost quorum are
+both roots.
 
 ```json
 { "id": "core.combine.redundancy-group", "kind": "combine",
@@ -116,6 +131,21 @@ failing. The impact names the member that failed first.
   "groupBy": { "edgeAttr": "redundancyGroup" },
   "steps": [ { "down": 1, "as": "warning", "reason": "redundancy-degraded" },
              { "down": "all", "as": "rule" } ] }
+```
+
+A cluster's quorum, written by the module that reports clusters:
+
+```json
+{ "id": "cluster.propagate.node-to-cluster", "kind": "propagate", "dependantEnd": "to",
+  "when": { "relation": "member-of", "provider": { "class": "machine" }, "dependant": { "class": "cluster" },
+            "condition": { "type": "operational", "status": "critical" } },
+  "as": { "status": "critical" } }
+
+{ "id": "cluster.combine.quorum", "kind": "combine",
+  "when": { "relation": "member-of", "dependant": { "class": "cluster" } },
+  "groupBy": "dependant",
+  "steps": [ { "down": 1, "as": "warning", "reason": "quorum-reduced" },
+             { "down": "half", "as": "rule", "reason": "quorum-lost" } ] }
 ```
 
 ### explain — which arriving failure accounts for which own condition
@@ -136,7 +166,16 @@ the symptom of a warning.
 ```json
 { "id": "core.explain.same-failure", "kind": "explain",
   "when": { "cause": { "sameType": true } }, "effect": "derived" }
+
+{ "id": "site.explain.slow-pool-alerts", "kind": "explain",
+  "description": "A database timing out on a slow pool is the pool's problem.",
+  "when": { "cause": { "type": "performance" }, "condition": { "type": "operational", "reason": { "glob": "alert-*" } },
+            "object": { "name": "postgres" } },
+  "effect": "derived" }
 ```
+
+Use `explain` to say "this symptom is that cause"; use a type change on `propagate`
+only when the consequences further on differ.
 
 ### follow — whose colour an object nothing judges takes
 
@@ -153,17 +192,47 @@ travels on.
 
 `when`: `object`, optionally `condition.type`. Outcome: `members` (`"all"`, or steps
 over relations: `relations`, `walk: "inbound" | "outbound"`, `transitive`) and `fn`:
-`"worst"`, or `"own"` (the object's own condition stands, no sum; such a condition is
-itself a sum of others, never a root).
+`"worst"`, `{"kOfN": {"warning": n, "critical": n | "half" | "all"}}` (counted over
+all the members, a member with no condition of the type counting as up), or `"own"`
+(the object's own condition stands, no sum; such a condition is itself a sum of
+others, never a root).
 
-A roll-up reads its members as they are before any roll-up, is never a root and
-never travels on.
+A roll-up reads its members as they are before any roll-up, is never a root, never
+travels on, and never replaces an impact the spread gave: a cluster that lost quorum
+keeps "quorum lost".
 
 ```json
 { "id": "core.rollup.place", "kind": "rollup", "when": { "object": { "class": "place" } },
   "members": [ { "relations": ["placed-in", "at"], "walk": "inbound", "transitive": true },
                { "relations": ["allocated-to"], "walk": "outbound" } ], "fn": "worst" }
 ```
+
+## Contract scenarios
+
+Beside the records, [`scenarios/`](./scenarios/core.json) holds small fixtures: a few
+objects, a failure, and what must come out (`roots`, the `impact` on an object,
+which conditions are `derived` or `covered`). A set of records can pass every static
+check and still stop naming a dead node as a root; `rules check` runs every scenario
+and refuses a set under which one no longer holds. A site that changed behaviour on
+purpose can retire a scenario.
+
+```json
+{ "id": "core.scenario.covered-by-down",
+  "objects": [ { "class": "machine", "name": "n1" }, { "class": "vm", "name": "g" } ],
+  "relations": [ { "type": "runs-on", "from": "vm/g", "to": "machine/n1" } ],
+  "conditions": [ { "object": "machine/n1", "type": "operational", "status": "critical", "reason": "node-down" },
+                  { "object": "vm/g", "type": "capacity", "status": "critical", "reason": "disk-full" } ],
+  "expect": { "roots": ["machine/n1"], "covered": ["vm/g:capacity"] } }
+```
+
+## Trying a record
+
+`health-manager rules simulate --fail <object>[:type[:status]] … [--with F]
+[--without <id>] [--diff]` runs the derivation on the site as it is now with extra
+failures, a file of extra records, or a record taken out, and prints the roots, or
+with `--diff` what changes. `health-manager rules explain <object>` prints, for each
+condition of an object, how it came about and which record decided it, hop by hop,
+with the records that matched and lost. Neither writes anything.
 
 ## The standard rules
 

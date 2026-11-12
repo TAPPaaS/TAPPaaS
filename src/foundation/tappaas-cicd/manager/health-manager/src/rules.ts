@@ -11,6 +11,8 @@ import { cmdbRequest } from "../../../lib/ts/src/cmdb";
 import { CycleRelation, dependencyCycles } from "../../../lib/ts/src/health-rules";
 import { HealthRecord, KINDS, ModelInfo, Problem, checkSet, originOf, recordsOf } from "../../../lib/ts/src/health-records";
 import { sentence } from "./rule-text";
+import { Scenario, runScenarios } from "./scenarios";
+import { Snapshot, diffLines, diffSim, explainLines, explainObject, parseFailure, simLines, simulate } from "./rules-tools";
 
 export interface RelationMeta {
   name: string;
@@ -23,6 +25,14 @@ export interface RulesDoc {
   relations: RelationMeta[];
   ancestors: Record<string, string[]>;
   fields?: string[]; // every attribute some class declares
+  scenarios?: Scenario[]; // the contract scenarios shipped beside the records
+}
+
+/** What the verbs that read the site need, beyond the records. */
+export interface RulesSite {
+  snapshot?: () => Snapshot;
+  now?: () => string;
+  retired?: Set<string>; // contract scenarios the site retired
 }
 
 export const readRules = (): RulesDoc => cmdbRequest("GET", "/v1/rules") as RulesDoc;
@@ -62,9 +72,40 @@ const problemLine = (p: Problem): string => `${p.level}: ${p.id}: ${p.message}`;
 /** `rules list [--kind K] [--origin O] [--json|--markdown]` and
  *  `rules check [--file F] [--json]`. Returns the exit code. Without --file,
  *  check also reads the relations (when given) for dependency cycles. */
-export function cmdRules(rest: string[], model: RulesDoc, print: (l: string) => void, relations?: () => CycleRelation[]): number {
+export function cmdRules(rest: string[], model: RulesDoc, print: (l: string) => void, relations?: () => CycleRelation[], site: RulesSite = {}): number {
   const [verb, ...args] = rest;
   const json = args.includes("--json");
+  const now = (): string => site.now?.() ?? new Date().toISOString();
+  const snap = (): Snapshot => {
+    if (!site.snapshot) throw new Error(`rules ${verb}: needs the CMDB`);
+    return site.snapshot();
+  };
+  if (verb === "explain") {
+    const ref = args.find((a) => !a.startsWith("--"));
+    if (!ref) throw new Error("rules explain: name an object");
+    const s = snap();
+    const x = explainObject(s, model, now(), ref);
+    if (json) print(JSON.stringify({ object: { id: x.object.id, class: x.object.class, name: x.object.name }, conditions: x.conditions }, null, 2));
+    else for (const l of explainLines(x, s.objects)) print(l);
+    return 0;
+  }
+  if (verb === "simulate") {
+    const fails = args.flatMap((a, i) => (args[i - 1] === "--fail" ? [parseFailure(a)] : []));
+    const withFile = flag(args, "--with");
+    const without = args.flatMap((a, i) => (args[i - 1] === "--without" ? [a] : []));
+    const extra = withFile ? recordsOf(JSON.parse(readFileSync(withFile, "utf8")), withFile).records : [];
+    if (!fails.length && !withFile && !without.length) throw new Error("rules simulate: give --fail <object>[:type[:status]], --with F or --without <id>");
+    const s = snap();
+    const t = now();
+    const after = simulate(s, model, t, fails, { with: extra, without });
+    if (args.includes("--diff")) {
+      const d = diffSim(simulate(s, model, t, []), after, s.objects);
+      if (json) print(JSON.stringify(d, null, 2));
+      else for (const l of diffLines(d)) print(l);
+    } else if (json) print(JSON.stringify({ roots: after.roots, colours: after.colours }, null, 2));
+    else for (const l of simLines(after)) print(l);
+    return 0;
+  }
   if (verb === "list") {
     const kind = flag(args, "--kind");
     const origin = flag(args, "--origin");
@@ -74,7 +115,7 @@ export function cmdRules(rest: string[], model: RulesDoc, print: (l: string) => 
     else for (const r of recs) print(`${r.id}${r.enabled === false ? " [off]" : ""}: ${sentence(r)}`);
     return 0;
   }
-  if (verb !== "check") throw new Error("rules: expected list or check");
+  if (verb !== "check") throw new Error("rules: expected list, check, explain or simulate");
   const file = flag(args, "--file");
   let recs = model.records;
   const problems: Problem[] = [];
@@ -86,6 +127,11 @@ export function cmdRules(rest: string[], model: RulesDoc, print: (l: string) => 
     recs = [...model.records.filter((r) => !ids.has(r.id)), ...got.records];
   }
   problems.push(...checkSet(recs, modelInfo(model)));
+  // The contract scenarios: a set that passes every static check can still
+  // stop naming a dead node as a root.
+  if (!problems.some((p) => p.level === "error")) {
+    for (const f of runScenarios(model.scenarios ?? [], { ...model, records: recs }, site.retired)) problems.push({ level: "error", id: f.id, message: `the scenario no longer holds: ${f.problems.join("; ")}` });
+  }
   const cycles = !file && relations ? cycleProblems(relations(), model) : [];
   const errors = problems.filter((p) => p.level === "error");
   if (json) print(JSON.stringify({ ok: errors.length === 0, problems: [...problems.map(problemLine), ...cycles] }, null, 2));

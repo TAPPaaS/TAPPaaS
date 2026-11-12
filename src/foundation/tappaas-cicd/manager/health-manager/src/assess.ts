@@ -23,10 +23,11 @@ import { SiteSecurity, siteSecurity } from "./site-score";
 import { CheckResult } from "./types";
 import { CmdbReport } from "../../../lib/ts/src/cmdb";
 import { CONDITION_TYPES, ConditionStatus } from "../../../lib/ts/src/health-rules";
+import { conflicts, recordHash, ruleSetHash } from "../../../lib/ts/src/health-records";
 import { levelChanged } from "./events";
 import { Declared, PERF_OWNER, fromPerformance, fromTrends } from "./assess-performance";
 import { MetricsReader } from "./metrics-read";
-import { Window, asMaintenance, windowOf } from "./windows";
+import { Covered, Window, asMaintenance, coveredBy, named, windowOf, isOpen } from "./windows";
 
 /** Everything assess reads and writes; tests stub it. */
 export interface AssessIO {
@@ -196,7 +197,8 @@ export const flapsOf = (o: CmdbItem): Record<string, { held: ConditionStatus }> 
 
 // Since, across no change of status; the maintenance of the open window that
 // covers the object (windows.ts), never carried over.
-function stamp(c: Condition, p: Condition | undefined, now: string, nowMs: number, window: Window | undefined, word: OperatorWord | undefined, flap: { held: ConditionStatus } | undefined): Condition {
+function stamp(c: Condition, p: Condition | undefined, now: string, nowMs: number, cov: Covered | undefined, word: OperatorWord | undefined, flap: { held: ConditionStatus } | undefined): Condition {
+  const window: Window | undefined = coveredBy(c, cov);
   const mnt = window ? asMaintenance(window) : null;
   const held = !!p && p.status === c.status && p.reason === c.reason;
   const until = (w: { until: string | null } | null): boolean => w !== null && (!w.until || Date.parse(w.until) > nowMs);
@@ -278,6 +280,17 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
   findings.push(...fromCve(scan, sec, nowMs, idx));
   if (scan) ran.add("cve");
 
+  // The rules: two active records that can decide one case differently are a
+  // conflict the check should have refused; the engine takes the more severe
+  // outcome, and the site is told.
+  const model = t("rules", () => io.rules());
+  if (idx.site) {
+    for (const [a, b] of conflicts(model.records, model.ancestors)) {
+      findings.push({ object: idx.site.id, type: "drift", status: "warning", reason: "rules-conflict", message: `health records ${a.id} and ${b.id} decide one case differently — health-manager rules check`, owner: "rules" });
+    }
+    ran.add("rules");
+  }
+
   const priorOf = (id: string): Condition[] => (idx.byId.get(id) ? conditionsOf(idx.byId.get(id)!) : []);
   const looked = (owner: string, id: string): boolean => {
     if (only && id !== only.id) return false;
@@ -290,10 +303,12 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
   const scoped = only ? findings.filter((f) => f.object === only.id) : findings;
   const source = t("settle", () => settle(priorOf, objects.map((o) => o.id), scoped, looked, time));
 
-  const model = t("rules", () => io.rules());
-  const d = t("derive", () => derive(objects, source, relations, model, time));
-
-  const windows = windowOf(io.windows?.() ?? [], objects, relations, nowMs);
+  // An open window covers what its object would impact under the rules: one
+  // simulated spread per object a window names.
+  const open = (io.windows?.() ?? []).filter((w) => isOpen(w, nowMs));
+  const cover = [...new Set(open.filter((w) => w.scope !== "site").flatMap((w) => [...named(w, objects)]))];
+  const d = t("derive", () => derive(objects, source, relations, model, time, { cover }));
+  const windows = windowOf(open, objects, nowMs, (id) => d.covers?.get(id) ?? new Map());
   const result: AssessResult = { time, objects: [], rootCauses: d.rootCauses, transitions: [], report: null };
   const reported: NonNullable<CmdbReport["objects"]> = [];
   const nextOf = new Map<string, Condition[]>();
@@ -327,22 +342,37 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
     }
     if (only && lasting(prior) === lasting(next)) continue;
     const attributes: Record<string, unknown> = { conditions: next };
-    if (o.id === idx.site?.id) Object.assign(attributes, siteAttributes(o, d.rootCauses, checks, only !== null, time));
+    if (o.id === idx.site?.id) Object.assign(attributes, siteAttributes(o, d.rootCauses, checks, only !== null, time, rulesOf(model.records, o)));
     reported.push({ id: o.id, class: o.class, name: o.name, attributes });
   }
   // The site may have no conditions at all, and still carries the run.
   if (idx.site && !reported.some((r) => r.id === idx.site!.id)) {
     const s = idx.site;
-    reported.push({ id: s.id, class: s.class, name: s.name, attributes: siteAttributes(s, d.rootCauses, checks, only !== null, time) });
+    reported.push({ id: s.id, class: s.class, name: s.name, attributes: siteAttributes(s, d.rootCauses, checks, only !== null, time, rulesOf(model.records, s)) });
   }
   if (reported.length) result.report = { source: SOURCE, kind: "observation", assessment: true, time, objects: reported };
   if (result.report && !opts.dryRun) t("cmdb write", () => io.write(result.report!));
   return result;
 }
 
-function siteAttributes(site: CmdbItem, rootCauses: RootCause[], checks: CheckResult[], only: boolean, time: string): Record<string, unknown> {
+/** The rule set a run used: its hash, each active record's own hash, and,
+ *  where the set differs from the last run's, the records that changed. */
+export interface RulesStamp { hash: string; records: Record<string, string>; changed?: string[] }
+
+function rulesOf(records: RulesDoc["records"], site: CmdbItem): RulesStamp {
+  const active = records.filter((r) => r.enabled !== false);
+  const stamp: RulesStamp = { hash: ruleSetHash(records), records: Object.fromEntries(active.map((r) => [r.id, recordHash(r)])) };
+  const prior = ((site.attributes.assessment ?? {}) as { rules?: RulesStamp }).rules;
+  if (prior?.hash && prior.hash !== stamp.hash) {
+    const ids = new Set([...Object.keys(prior.records ?? {}), ...Object.keys(stamp.records)]);
+    stamp.changed = [...ids].filter((id) => prior.records?.[id] !== stamp.records[id]).sort();
+  }
+  return stamp;
+}
+
+function siteAttributes(site: CmdbItem, rootCauses: RootCause[], checks: CheckResult[], only: boolean, time: string, rules: RulesStamp): Record<string, unknown> {
   const had = (site.attributes.assessment ?? {}) as { gates?: unknown };
   // --only runs no gate: the table of the last full run stands.
   const gates = only ? had.gates ?? [] : checks.map(({ name, status, detail, rows, findings }) => ({ name, status, detail, rows, findings }));
-  return { rootCauses, assessment: { time, gates } };
+  return { rootCauses, assessment: { time, gates, rules } };
 }

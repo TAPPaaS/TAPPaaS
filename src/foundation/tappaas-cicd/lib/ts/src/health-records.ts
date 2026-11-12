@@ -522,3 +522,6 @@ export function ruleSetHash(recs: HealthRecord[]): string {
   const active = recs.filter((r) => r.enabled !== false).sort((a, b) => a.id.localeCompare(b.id));
   return createHash("sha256").update(canonical(active)).digest("hex");
 }
+
+/** A record's own short hash: which records changed between two sets. */
+export const recordHash = (r: HealthRecord): string => createHash("sha256").update(canonical(r)).digest("hex").slice(0, 12);

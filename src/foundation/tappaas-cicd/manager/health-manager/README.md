@@ -579,7 +579,13 @@ with the console's job id. Like any change on an object, it clears the object's 
 
 Opens a window for the object: a file in `/var/lib/tappaas/maintenance`, the kind the update
 opens before a restart and the alert receiver reads. While it is open, assess puts every condition
-of the object, and of everything that runs on it, in maintenance: transitions are told with
+of the object in maintenance, and on everything the object would impact if it failed, what that
+failure would explain or cover there, under the health records in use (the same as `rules simulate
+--fail <object>`): the guests, services and applications on a node, what depends on a service
+being restarted, what is stored on a pool of the node, wherever it runs. An HA guest on the node
+is degraded, not down, so only its `operational` condition is silenced and a full disk on it is
+still heard; a relation marked `required: false` carries nothing, so covers nothing; a record a
+site adds that softens a crossing narrows the window with it. Transitions are told with
 `silenced: true`, and a critical root in it is no notice. It ends at `--until`, or by `maintenance
 end` (done early) or `cancel` (withdrawn); emit tells it opening and ending.
 
@@ -762,13 +768,32 @@ the pool, all of them take it down. A warning crosses nothing: a DEGRADED pool
 leaves its guests and datastores as they are.
 
 `health-manager rules list` prints each record as one sentence (`a critical
-operational failure on a provider crosses runs-on to its dependant with haNode as a
-warning impact`), `--kind` and `--origin` filter it, `--json` gives the records.
+operational failure crosses runs-on to its dependant with haNode as a warning
+impact`), `--kind` and `--origin` filter it, `--json` gives the records.
 `rules check [--file F]` checks the records in use, or a candidate file with them: it
 refuses a record it cannot place (an unknown class, relation, attribute or condition
 type), and two records that can decide one case differently with neither more
-specific nor naming the other in `overrides`, and exits 1. It also reports
-dependency cycles in the relations.
+specific nor naming the other in `overrides`, and exits 1. It runs the contract
+scenarios shipped beside the records and refuses a set under which one no longer
+holds. It also reports dependency cycles in the relations.
+
+`rules explain <object> [--json]` runs the derivation on the site as the CMDB holds
+it now and prints each condition of the object and how it came about: a root and
+what it impacts; a derived or covered condition with the record that explained it;
+an impact with its path from the root, hop by hop, each with the record that decided
+it and the records that matched and lost (less specific, or overridden).
+
+`rules simulate --fail <object>[:type[:status]] … [--with F] [--without <id>]
+[--diff] [--json]` runs it with extra failures (`operational critical` unless
+given), a file of extra records, or a record taken out, and prints the roots and
+what they impact, or with `--diff` the difference from now: roots that appear or go,
+objects whose colour changes. Neither writes anything.
+
+Each assess run records the rule set it used on the site's `assessment.rules`: the
+SHA-256 over the active records, each record's own hash, and, when the set differs
+from the last run's, the records that changed. A derived condition carries `rule`:
+the record that decided it. Two active records that decide one case differently are
+a `drift` warning on the site (`rules-conflict`) until the set holds again.
 
 A crossing softer than the failure (a warning for a critical) still explains the
 dependant's own condition of that type: the HA guest that stopped with its node is

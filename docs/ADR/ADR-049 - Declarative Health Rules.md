@@ -1109,6 +1109,7 @@ run. None is fixed here (design only); the fix is specified under *Migration*, P
 |---|---|---|
 | P0 | Done 2026-11-12 | 3 new cases in `derive.test.ts` (88/88); against the prototype: 7,000 random sites identical, roll-up counts included; shuffled inputs: 0 of 1,500 differ (was 7) |
 | P1 | Done 2026-11-12 | The engine reads the core records (`metamodel/health/`, 20 records, no conflict). `derive.test.ts` 88/88 (one line names the HA record by id instead of filtering the old file), `assess.test.ts` 131/131, `health-flow.test.ts` 10/10, `emit.test.ts` 126/126 unchanged. `differential.test.ts`: 6,000 random sites identical to the frozen P0 oracle, 1,500 shuffled sites identical. cmdb-controller serves and checks the records (196/196) |
+| P2 | Done 2026-11-12 | `rules-engine.test.ts` 26/26: the quorum table (one, two, three of three down), raise and raising cycle, type change against cross-type explain, `as: none`, k of n, a roll-up keeping "quorum lost", the record on each derived condition, traced hops with the records that lost. `windows.test.ts` 11/11: each row of D14's table except the zone row (P3). `rules-tools.test.ts` 21/21: 8 core contract scenarios hold and a set without `runs-on` fails one, `rules explain`, `rules simulate --diff`, the hash and changed ids on the site's assessment, a conflict as `drift`. Differential and shuffle tests still identical |
 
 Each phase is shippable alone. P1 changes no behaviour; P2 changes what a maintenance window
 covers and otherwise adds expressiveness nobody uses until a rule does; P3 is the first that

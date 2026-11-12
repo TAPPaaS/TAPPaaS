@@ -23,7 +23,7 @@ const oracle = oracleModel(model);
 const N = Number(process.env.HM_DIFF_SITES ?? 2000);
 const clone = (m: Map<string, Condition[]>): Map<string, Condition[]> => new Map([...m].map(([k, v]) => [k, v.map((c) => ({ ...c }))]));
 const norm = (d: { conditions: Map<string, Condition[]>; rootCauses: unknown[] }): string =>
-  JSON.stringify([[...d.conditions].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, v.map((x) => JSON.stringify(x)).sort()]), d.rootCauses]);
+  JSON.stringify([[...d.conditions].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, v.map(({ rule: _r, ...x }) => JSON.stringify(x)).sort()]), d.rootCauses]);
 
 for (const [label, cycles, faults] of [["with depends-on loops", true, 0.12], ["acyclic, more faults", false, 0.25], ["many faults", true, 0.4]] as const) {
   let differ = 0;

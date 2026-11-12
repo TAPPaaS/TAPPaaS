@@ -242,7 +242,26 @@ common-ancestor rule: a standing warning on a machine was made the root of unrel
 stopped guests by it.
 
 **Roll-ups** read their members from a snapshot taken before any roll-up, so a room
-counts its rack's own conditions, never the rack's sum.
+counts its rack's own conditions, never the rack's sum. A roll-up never
+replaces an impact the spread gave (a cluster that lost quorum keeps saying so).
+
+**A group fed by its own verdict.** Where a group's verdict can reach its own members
+(the quorum: a cluster's failure travels back to its nodes), the crossing a group gave
+carries the members that counted as down for it, and is no impact on, explanation of
+or cover for them; and the group counts its members from a run with such groups
+switched off, so a member the verdict took down is not counted as a cause of it. On a
+site with no such group this costs nothing: there is one run.
+
+**Maintenance windows** cover what the records say (`src/windows.ts`): the object a
+window names whole, and on each object a simulated `operational critical` failure of it
+reaches, the conditions that failure would explain or cover there. One extra spread
+per object an open window names, with nothing else failing, so a second fault that the
+window did not plan for is still heard.
+
+**Tracing.** Every derived condition carries `rule`: the record behind its crossing,
+explanation, follow or roll-up. With `trace` on (`rules explain`), the engine also
+keeps the crossings, the record and step behind each, and the records that matched
+and lost each decision.
 
 **Dependency cycles.** A cycle over required relations makes one failure reach
 everything on it and come back. `rules check` reads the CMDB's relations for them,

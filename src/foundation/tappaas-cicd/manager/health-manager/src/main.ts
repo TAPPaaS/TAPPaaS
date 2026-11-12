@@ -15,7 +15,7 @@
 //                             conditions; exit 1 on one that counts, ADR-041 D2)
 //   health-manager assess [--only <ci>] [--json] [--dry-run] [--timing]
 //                            (writes the conditions; the only writer, ADR-041)
-//   health-manager rules list|check [--file F]
+//   health-manager rules list|check|explain|simulate
 //   health-manager update-os <name> <vmid> <node>        (special action; shells
 //                            out to update-os.sh — see the update-os case)
 //   health-manager reboot <module>                       (special action; the
@@ -216,15 +216,19 @@ export const HELP: HelpSpec = {
         "stands until the source that raised it has looked again.",
     },
     {
-      usage: "rules list|check [--kind K] [--origin O] [--file F] [--json|--markdown]", effect: "read",
+      usage: "rules list|check|explain|simulate [<object>] [--kind K] [--origin O] [--file F] [--fail O[:T[:S]]]... [--with F] [--without ID]... [--diff] [--json|--markdown]", effect: "read",
       options: [
         ["--kind K", "list: only records of this kind (classify, propagate, combine, explain, follow, rollup, notify)."],
         ["--origin O", "list: only records released by core, a module, or the site."],
         ["--file F", "check: this candidate file with the rules in use."],
         ["--json", "Print the records, or the problems."],
         ["--markdown", "list: the records by kind, one line each, as the rule language's README shows them."],
+        ["--fail O[:T[:S]]", "simulate: fail this object (operational critical unless a type and status are given); repeatable."],
+        ["--with F", "simulate: add the records of this file, replacing any of the same id."],
+        ["--without ID", "simulate: take this record out; repeatable."],
+        ["--diff", "simulate: print what changes from now: roots that appear or go, objects whose colour changes."],
       ],
-      details: "The health records that decide how a failure spreads, what explains what, who follows whom and how collections sum up; one sentence each. check refuses a record it cannot place and two records that decide one case differently, and exits 1.",
+      details: "The health records that decide how a failure spreads, what explains what, who follows whom and how collections sum up; one sentence each. check refuses a record it cannot place, two records that decide one case differently, and a set under which a contract scenario no longer holds, and exits 1. explain <object> shows how each of its conditions came about, hop by hop, with the record that decided it. simulate runs the derivation on the site as it is with extra failures or changed records. Neither writes.",
     },
     // ── end ADR-041 assess ──
     {
@@ -894,7 +898,9 @@ export function run(argv: string[], client: ClusterClient): number {
       case "assess":
         return cmdAssess(opts, client);
       case "rules":
-        return cmdRules(opts.rest, readRules(), info, () => cmdbRelations({}) as unknown as CmdbRel[]);
+        return cmdRules(opts.rest, readRules(), info, () => cmdbRelations({}) as unknown as CmdbRel[], {
+          snapshot: () => ({ objects: (cmdbQuery({ class: "object", limit: 100000 }) as unknown as CmdbItem[]).filter((o) => o.attributes.placeholder !== true), relations: cmdbRelations({}) as unknown as CmdbRel[] }),
+        });
       // end ADR-041 assess verbs
       default:
         usage();

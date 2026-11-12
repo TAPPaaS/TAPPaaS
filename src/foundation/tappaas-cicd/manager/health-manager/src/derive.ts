@@ -57,7 +57,7 @@ interface Run {
   down: Set<State>;
   via: Map<string, Set<string>>; // `${a}>${b}` a group gave: the members that counted as down for it
   keys: Map<string, string>; // `${a}>${b}` a group gave: the group
-  by: Map<string, { rec: string; step?: number }>; // `${a}>${b}`: the record (and step) that made the crossing
+  by: Map<string, { rec: string; step?: number; pk: string }>; // `${a}>${b}`: the record (and step) that made the crossing, and the propagate decision
 }
 
 /** What a run decided, for `rules explain` and the counts in `rules list`. */
@@ -73,9 +73,11 @@ export interface Derivation {
   trace: Trace;
   /** For tracing: how an impact got to an object, hop by hop, and which records decided. */
   why?: Why;
+  /** Per object in `opts.cover`: what its failure would explain or cover. */
+  covers?: Map<string, Coverage>;
 }
 
-export interface Hop { from: string; to: string; type: string; status: string; rule: string; step?: number; group?: string }
+export interface Hop { from: string; to: string; type: string; status: string; rule: string; step?: number; group?: string; lost: { id: string; by: string; why: string }[] }
 export interface Why {
   path(rootObj: string, rootType: string, to: string): Hop[];
   explainedBy: Map<string, { root: string; rule: string; effect: "derived" | "covered" }>; // `${obj}|${type}`
@@ -84,7 +86,13 @@ export interface Why {
 export interface DeriveOpts {
   /** Keep what `rules explain` needs: the crossings and the records behind them. */
   trace?: boolean;
+  /** Objects to fail as `operational` `critical`, each alone on the graph: what
+   *  each would explain or cover, per object (maintenance windows). */
+  cover?: string[];
 }
+
+/** Per object a simulated failure reached: the condition types it explains or covers there. */
+export type Coverage = Map<string, Set<string>>;
 
 const WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 const count = (n: number): string => WORDS[n] ?? String(n);
@@ -166,15 +174,13 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
   const reasonOf = new Map<State, string>();
 
   // Winners depend on inputs only (the edge, a type, a status, a reason): cached.
-  const ruleCache = new Map<string, Propagate | null>();
+  const ruleCache = new Map<string, Picked<Propagate>>();
   const edgeIndex = new Map(edges.map((e, i) => [e, i]));
+  const ruleKey = (e: Edge, type: string, status: string, st: State): string => `${edgeIndex.get(e)}|${type}|${status}|${reasonOf.get(st) ?? ""}`;
   const ruleFor = (e: Edge, type: string, status: string, st: State): Propagate | null => {
-    const reason = reasonOf.get(st);
-    const key = `${edgeIndex.get(e)}|${type}|${status}|${reason ?? ""}`;
-    if (ruleCache.has(key)) return ruleCache.get(key)!;
-    const w = choose(propagates, edgeCtx(e, type, status, reason)).winner;
-    ruleCache.set(key, w);
-    return w;
+    const key = ruleKey(e, type, status, st);
+    if (!ruleCache.has(key)) ruleCache.set(key, choose(propagates, edgeCtx(e, type, status, reasonOf.get(st))));
+    return ruleCache.get(key)!.winner;
   };
   // Groups: per combine record and key, the relations in it.
   const groupOf = new Map<Edge, { rec: Combine; key: string; name: string } | null>();
@@ -242,7 +248,7 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
             const to = S(e.dep, outType, em.status);
             if (add(crossed, st, to)) grew = true;
             const k = `${st}>${to}`;
-            if (!res.by.has(k)) res.by.set(k, { rec: g ? g.rec.id : rule.id, ...(g && em.step >= 0 ? { step: em.step } : {}) });
+            if (!res.by.has(k)) res.by.set(k, { rec: g ? g.rec.id : rule.id, ...(g && em.step >= 0 ? { step: em.step } : {}), pk: ruleKey(e, type, status, st) });
             if (g) {
               for (const x of [to, S(e.dep, outType, status)]) {
                 const kk = `${st}>${x}`;
@@ -378,7 +384,16 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
     s.cond.derived = true;
     const by = roots.find((r) => reachedBy(r, s)) ?? roots[0];
     s.cond.rootCause = by.obj;
-    if (opts.trace) explainedBy.set(`${s.obj}|${s.cond.type}`, { root: by.obj, rule: derivedBy(by, s)?.id ?? "", effect: "derived" });
+    const rule = derivedBy(by, s)?.id;
+    if (rule) s.cond.rule = rule;
+    if (opts.trace) explainedBy.set(`${s.obj}|${s.cond.type}`, { root: by.obj, rule: rule ?? "", effect: "derived" });
+  }
+  // The record behind each state: of the crossings into it, the first by id.
+  const into = new Map<State, string>();
+  for (const [k, by] of full.by) {
+    const b = k.slice(k.indexOf(">") + 1);
+    const had = into.get(b);
+    if (!had || by.rec < had) into.set(b, by.rec);
   }
   for (const [obj, { root, status, state }] of impacted) {
     const part = full.partial.get(state);
@@ -388,7 +403,7 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
         ? `${count(part.down)} of ${count(part.of)} in ${part.group} down: ${label(part.member)}${part.member === root.obj ? "" : ` (${label(root.obj)})`}: ${root.cond.message}`
         : `${label(root.obj)}: ${root.cond.message}`,
       since: now, lastChecked: now, source: SOURCE, owner: DERIVED, derived: true, rootCause: root.obj,
-      acknowledged: null, maintenance: null,
+      acknowledged: null, maintenance: null, ...(into.has(state) ? { rule: into.get(state) } : {}),
     }]);
   }
   // Covered: a root whose object another root's impact reached, where a record
@@ -408,6 +423,7 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
     const by = covered(s);
     if (!by) continue;
     s.cond.rootCause = by.obj;
+    s.cond.rule = coverRule.get(s);
     if (opts.trace) explainedBy.set(`${s.obj}|${s.cond.type}`, { root: by.obj, rule: coverRule.get(s) ?? "", effect: "covered" });
   }
   const rootCauses = roots
@@ -419,6 +435,47 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
   rollUpAll(objects, out, relations, rollupFor, isA, now, nowMs);
 
   const d: Derivation = { conditions: out, rootCauses, trace };
+
+  // What a failure of each object in opts.cover would explain or cover, on the
+  // graph alone: its own spread, with nothing else failing, judged against the
+  // conditions each reached object has.
+  if (opts.cover?.length) {
+    d.covers = new Map();
+    for (const id of new Set(opts.cover)) {
+      const o = byId.get(id);
+      if (!o) continue;
+      const sim: Seed = { obj: id, cond: { type: "operational", status: "critical", reason: "maintenance", message: "", since: new Date(0).toISOString(), lastChecked: now, source: SOURCE, derived: false, rootCause: null, acknowledged: null, maintenance: null } };
+      const start = stateOf(sim);
+      const r = run([sim]);
+      const hit = reach(start, r.crossed);
+      const expl = new Set<State>();
+      for (const st of [start, ...hit]) for (const x of r.explains.get(st) ?? []) expl.add(x);
+      const worst = new Map<string, { status: string; type: string }>();
+      for (const st of hit) {
+        const [obj, type, status] = st.split("|");
+        const had = worst.get(obj);
+        if (obj !== id && (!had || rank(status) > rank(had.status))) worst.set(obj, { status, type });
+      }
+      const cov: Coverage = new Map();
+      for (const [obj, w] of worst) {
+        const types = new Set<string>();
+        for (const c of out.get(obj) ?? []) {
+          const b: Seed = { obj, cond: c };
+          if (c.type === "impact") {
+            if (rank(w.status) >= rank(c.status)) types.add("impact");
+            continue;
+          }
+          const derivedHere = [...expl].some((st) => {
+            const [o2, type, status] = st.split("|");
+            return o2 === obj && rank(status) >= rank(c.status) && explainWinner("derived", type, status, b)?.effect === "derived";
+          });
+          if (derivedHere || explainWinner("covered", w.type, w.status, b)?.effect === "covered") types.add(c.type);
+        }
+        cov.set(obj, types);
+      }
+      d.covers.set(id, cov);
+    }
+  }
   if (opts.trace) {
     d.why = {
       explainedBy,
@@ -451,7 +508,8 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
           const [, type, status] = b.split("|");
           const by = full.by.get(`${a}>${b}`);
           const key = full.keys.get(`${a}>${b}`);
-          hops.unshift({ from: a.split("|")[0], to: b.split("|")[0], type, status, rule: by?.rec ?? "", ...(by?.step !== undefined ? { step: by.step } : {}), ...(key ? { group: key } : {}) });
+          const lost = (by ? ruleCache.get(by.pk)?.beaten ?? [] : []).map((x) => ({ id: x.rec.id, by: x.by.id, why: x.why }));
+          hops.unshift({ from: a.split("|")[0], to: b.split("|")[0], type, status, rule: by?.rec ?? "", ...(by?.step !== undefined ? { step: by.step } : {}), ...(key ? { group: key.slice(key.indexOf("|") + 1) } : {}), lost });
         }
         return hops;
       },
@@ -465,13 +523,13 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
 // reported, so ok. Derived: never a failure or a root of its own.
 function followUp(objects: CmdbItem[], out: Map<string, Condition[]>, relations: CmdbRel[], follows: Candidate<Follow>[], anc: Ancestors, now: string, objCtx: (prefix: string, id: string, cls: string) => (path: string) => unknown): void {
   const byId = new Map(objects.map((o) => [o.id, o]));
-  const parent = new Map<string, { up: string; types: string[] }>();
+  const parent = new Map<string, { up: string; types: string[]; rule: string }>();
   // The winning follow record per object, then its relation.
   const winner = new Map<string, Follow | null>();
   for (const o of objects) winner.set(o.id, pick(follows.filter((c) => matches(c.flat, objCtx("object", o.id, o.class), anc)), anc).winner);
   for (const r of relations) {
     const f = winner.get(r.from.id);
-    if (f && r.type === f.relation && byId.has(r.to.id)) parent.set(r.from.id, { up: r.to.id, types: f.types });
+    if (f && r.type === f.relation && byId.has(r.to.id)) parent.set(r.from.id, { up: r.to.id, types: f.types, rule: f.id });
   }
   const settled = new Set<string>();
   const colour = (id: string): void => {
@@ -491,7 +549,7 @@ function followUp(objects: CmdbItem[], out: Map<string, Condition[]>, relations:
       out.set(id, [...(out.get(id) ?? []), {
         type: t as Condition["type"], status, reason: "follows", message: `follows ${src.class} ${src.name}`,
         since: now, lastChecked: now, source: SOURCE, owner: DERIVED, derived: true, rootCause: failing({ status }) ? worst.rootCause ?? p.up : null,
-        acknowledged: null, maintenance: null,
+        acknowledged: null, maintenance: null, rule: p.rule,
       }]);
     }
   };
@@ -532,13 +590,18 @@ function rollUpAll(objects: CmdbItem[], out: Map<string, Condition[]>, relations
       const rec = rollupFor(o, type) ?? base;
       const mine = res.get(type);
       if (rec.fn === "own" && mine && mine.owner !== DERIVED) continue;
+      // An impact the spread gave stands: a cluster that lost quorum says so.
+      if (type === "impact" && mine) continue;
       const counted = members.flatMap((m) => m.filter((c) => c.type === type && !silenced(c, nowMs)));
       if (!counted.length) continue;
       let worst = counted.reduce<ConditionStatus>((w, c) => (RANK[c.status] > RANK[w] ? c.status : w), "ok");
       if (typeof rec.fn === "object") {
-        const k = (v: number | "half" | "all"): number => (v === "all" ? counted.length : v === "half" ? Math.ceil(counted.length / 2) : v);
-        const bad = counted.filter((c) => c.status === "critical").length;
-        const warn = counted.filter((c) => failing(c)).length;
+        // Of all the members: one with no condition of the type counts as up.
+        const n = members.length;
+        const k = (v: number | "half" | "all"): number => (v === "all" ? n : v === "half" ? Math.ceil(n / 2) : v);
+        const of = (st: (c: Condition) => boolean): number => members.filter((m) => m.some((c) => c.type === type && !silenced(c, nowMs) && st(c))).length;
+        const bad = of((c) => c.status === "critical");
+        const warn = of((c) => failing(c));
         worst = bad >= k(rec.fn.kOfN.critical) ? "critical" : warn >= k(rec.fn.kOfN.warning) ? "warning" : "ok";
       }
       if (mine && !mine.derived && RANK[mine.status] >= RANK[worst]) continue;
@@ -546,7 +609,7 @@ function rollUpAll(objects: CmdbItem[], out: Map<string, Condition[]>, relations
       res.set(type, {
         type, status: worst, reason: worst === "ok" ? "ok" : "roll-up", message: `${n} of ${counted.length} members ${worst}`,
         since: now, lastChecked: now, source: SOURCE, owner: DERIVED, derived: true, rootCause: null,
-        acknowledged: mine?.acknowledged ?? null, maintenance: mine?.maintenance ?? null,
+        acknowledged: mine?.acknowledged ?? null, maintenance: mine?.maintenance ?? null, rule: rec.id,
       });
     }
     if (res.size) out.set(o.id, [...res.values()]);

@@ -97,6 +97,7 @@ export class Metamodel {
   readonly classes = new Map<string, ClassDef>();
   readonly relations: RelationEnd[] = [];
   readonly records: HealthRecord[] = []; // the core health records (metamodel/health/), checked at load
+  readonly scenarios: unknown[] = []; // the contract scenarios beside them (metamodel/health/scenarios/), run by health-manager
   private fieldCache = new Map<string, Map<string, FieldDef>>();
 
   // ── reading the files ────────────────────────────────────────────────
@@ -130,6 +131,19 @@ export class Metamodel {
         const got = recordsOf(doc, f);
         if (got.problems.length) throw new Error(`metamodel/health/${f}: ${got.problems.map((p) => p.message).join("; ")}`);
         mm.records.push(...got.records);
+      }
+      const sdir = join(hdir, "scenarios");
+      if (existsSync(sdir)) {
+        for (const f of readdirSync(sdir).filter((x) => x.endsWith(".json")).sort()) {
+          let doc: unknown;
+          try {
+            doc = JSON.parse(readFileSync(join(sdir, f), "utf8"));
+          } catch (e) {
+            throw new Error(`metamodel/health/scenarios/${f}: ${e instanceof Error ? e.message : String(e)}`);
+          }
+          if (!isObj(doc) || !Array.isArray(doc.scenarios)) throw new Error(`metamodel/health/scenarios/${f}: expected { scenarios: [...] }`);
+          mm.scenarios.push(...doc.scenarios);
+        }
       }
     }
     const info = {

@@ -444,6 +444,7 @@ export class Store {
     const relations = new Map(this.mm.relations.map((r) => [r.name, { name: r.name, dependant: r.dependant, required: r.required, tree: r.tree }]));
     return {
       records: this.mm.records,
+      scenarios: this.mm.scenarios,
       relations: [...relations.values()],
       ancestors: Object.fromEntries([...this.mm.classes.keys()].map((c) => [c, this.mm.ancestors(c)])),
       fields: [...new Set([...this.mm.classes.keys()].flatMap((c) => [...this.mm.fields(c).keys()]))].sort(),
