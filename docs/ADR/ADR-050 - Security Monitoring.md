@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Accepted** (operator, 2026-11-12; no question open). Layer 1 (P0–P4) is this iteration; the Wazuh module is future work |
-| **Version** | 1.0 |
+| **Version** | 1.1 |
 | **Date** | 2026-11-12 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | #843 (a SIEM for TAPPaaS); the basis for #886 (the console's security view). Settles the SIEM part of ADR-040 O6. Would amend ADR-039 (a `type` label on security rules), ADR-041 and ADR-049 (security conditions that age out), and ADR-011 (a Windows layer, with the future Wazuh work). Analysis: [`docs/plans/siem-analysis.md`](../plans/siem-analysis.md). |
-| **Changelog** | v1.0 (2026-11-12): **Accepted** by the operator. Implementation starts with P0. · v0.5 (2026-11-12): D12, the ageing of security conditions, approved by the operator as proposed. No question is open. · v0.4 (2026-11-12): Suricata alerts first; IPS later on the WAN only (D5, operator). Only D12 is left for review. · v0.3 (2026-11-12): **operator's answers**: layer 1 is off at `small` (D1, D11); security streams kept 90 days at medium and 180 at large (D2); the security part rides on `logging:logs`, no new service (D9); host bouncers are future work, off-site lookups off by default, event management parked. **D12 proposes how a security condition ages.** Open: Suricata IDS or IPS. · v0.2 (2026-11-12): **operator's decisions**: this iteration builds layer 1 only, and the Wazuh module is future work (D1, Phases); security streams are kept 90 days (D2). The Sigma claim is corrected: Sigma gives about a third of the rules, the platform-specific rules are TAPPaaS's own (D3, Consequences). · v0.1 (2026-11-12): first draft from the analysis. Two layers: detection on the existing logging stack at every size, with Wazuh as an optional module at medium and large. |
+| **Changelog** | v1.1 (2026-11-12): **as built, first part** (see *Implementation status*): the switch is `site.json` `security.monitoring` beside `performance`, not a field of the logging module; guests' audit records go through journald's audit socket, no auditd daemon; the closure check is a health-manager gate over the systems update-os.sh records. · v1.0 (2026-11-12): **Accepted** by the operator. Implementation starts with P0. · v0.5 (2026-11-12): D12, the ageing of security conditions, approved by the operator as proposed. No question is open. · v0.4 (2026-11-12): Suricata alerts first; IPS later on the WAN only (D5, operator). Only D12 is left for review. · v0.3 (2026-11-12): **operator's answers**: layer 1 is off at `small` (D1, D11); security streams kept 90 days at medium and 180 at large (D2); the security part rides on `logging:logs`, no new service (D9); host bouncers are future work, off-site lookups off by default, event management parked. **D12 proposes how a security condition ages.** Open: Suricata IDS or IPS. · v0.2 (2026-11-12): **operator's decisions**: this iteration builds layer 1 only, and the Wazuh module is future work (D1, Phases); security streams are kept 90 days (D2). The Sigma claim is corrected: Sigma gives about a third of the rules, the platform-specific rules are TAPPaaS's own (D3, Consequences). · v0.1 (2026-11-12): first draft from the analysis. Two layers: detection on the existing logging stack at every size, with Wazuh as an optional module at medium and large. |
 
 TAPPaaS collects every guest's journal, the firewall log and the nodes' audit log in Loki. It
 alerts on single lines, bans abusive clients of published names with CrowdSec, and scans for
@@ -49,9 +49,10 @@ runs, and how it meets the CMDB.
 Layer 1 is the SIEM. Layer 2 adds depth where Wazuh's checks apply, and reports through layer 1.
 
 **At `small`, layer 1 is off** (operator, 2026-11-12). A small site keeps what it has today:
-CrowdSec on published names (#851), the nodes' auditd, the existing alerts. The logging module's
-`securityMonitoring: auto | on | off` decides, default `auto`: off at small, on at medium and
-large (the site's size, ADR-044 D3). An operator may set `on` at small and take the memory.
+CrowdSec on published names (#851), the nodes' auditd, the existing alerts. `site.json`
+`security.monitoring: on | off` decides; not set, it is off at small and on at medium and large
+(the site's size, ADR-044 D3), as `performance.level` is. An operator may set `on` at small and
+take the memory.
 
 **This iteration builds layer 1 only** (operator, 2026-11-12). Layer 2 is future work. What
 this ADR says about Wazuh (D7–D11) is the design to start from when it is taken up, not part of
@@ -67,7 +68,8 @@ These reach Loki, each line labelled with its CI (`tappaas_ci_id`):
   Suricata's `eve.json`, all over the existing syslog path.
 
 Security streams are kept by Loki's per-stream retention for **90 days at medium and 180 days at
-large** (operator, 2026-11-12). Everything else keeps 30.
+large** (operator, 2026-11-12), or `site.json` `security.retentionDays`. Everything else keeps
+30.
 
 ### D3. Detection content
 
@@ -139,8 +141,8 @@ rule or source (in Loki) → ADR-039 rule (type=security, tappaas_ci_id) → Gra
 Coverage uses the provider-service pattern that `logging:logs` already follows.
 
 - **Layer 1 rides on `logging:logs`** (operator, 2026-11-12). No new service: every module that
-  ships logs is covered. When `securityMonitoring` is on, `logging:logs`'s `install-service`
-  also writes the guest's auditd and FIM fragment, adds the module's log files and scenarios to
+  ships logs is covered. When security monitoring is on, `logging:logs`'s `install-service`
+  also writes the guest's audit and FIM fragment, adds the module's log files and scenarios to
   CrowdSec's acquisition, and applies its security rules. `delete-service` undoes it. A module
   adds to it through optional fields beside `dropUnits`: `securityPaths` (extra FIM watches) and
   `loginScenarios` (its web login).
@@ -232,12 +234,31 @@ This iteration is P0–P4.
 
 | Phase | Content | Done when |
 |---|---|---|
-| P0 | CI id on log lines; Caddy and CrowdSec logs into Loki; security retention; `assess` reads `type`; the hold and ack of D12; `securityMonitoring` by size | a labelled test alert becomes an ageing `security` condition on its CI |
+| P0 | CI id on log lines; Caddy and CrowdSec logs into Loki; security retention; `assess` reads `type`; the hold and ack of D12; `security.monitoring` by size | a labelled test alert becomes an ageing `security` condition on its CI |
 | P1 | the security part of `logging:logs`; CrowdSec processor on the logging VM with the firewall's LAPI; auth scenarios and rules | an SSH brute force from another zone is banned within a minute and shows on the CI |
 | P2 | auditd on guests; FIM paths; privilege, module-load and tamper rules; closure and store checks; hardening check at validate | a hand edit of `authorized_keys`, a hand `nixos-rebuild`, a stopped auditd each raise a condition |
 | P3 | Suricata IDS; egress logging and the flow baseline | an ET test signature raises an alert on the right CI |
 | P4 | CVE-aware severity; Proxmox tasks against CMDB changes; the sweep's coverage report; #886 | an exploit attempt against an open CVE mails a critical; a VM made by hand is flagged |
 | Future | the `wazuh` module, after Wazuh 5.0 GA; not this iteration | nodes, firewall and a Debian guest report SCA; a deleted guest's agent is removed |
+
+## Implementation status
+
+Branch `feat/adr050-security-monitoring`, 2026-11-12. Unit tests pass offline; nothing has run
+on a site yet.
+
+| Part | State |
+|---|---|
+| D12 hold and ack | **Built.** `siem.ts` (a source, owner `siem`); classify outcome `hold`; core records `core.classify.siem-warning` (24 h) and `siem-critical` (until-ack); a siem critical is never put in maintenance; a security alert is not also an operational one |
+| Hits recorded | **Built.** The alert receiver folds every `type=security` alert into `/var/lib/tappaas/siem-findings.json`: per rule, host and CI id, first, last and count; pruned at 7, 30 and 90 days by level |
+| Rule format | **Built.** `security: info \| warning \| critical` on an ADR-039 rule adds `type` and `level` labels; security rules are rendered only while monitoring is on |
+| Switch and retention (D1, D2) | **Built.** `site.json` `security` (`monitoring`, `retentionDays`); Loki's runtime config (`/etc/tappaas-loki/runtime.yaml`) keeps the security streams, written by logging's update |
+| Rule pack (D3) | **First part built**, hand-written: SSH brute force, login after a brute force (critical), password login, sudo refused, audit stopped, kernel module from a session (logging, scope all); Authentik login brute force, suspicious request, impersonation (identity); Proxmox sign-in failures (pvehost); firewall sign-in failures (network). The Sigma conversion is not done |
+| Guests' audit records (D6) | **Built.** NixOS guests: journald's audit socket, rules on `/etc/secrets`, `/root/.ssh`, `/etc/ssh` and kernel modules from a session, plus a module's `securityPaths` that exist; labelled `transport="audit"` |
+| Closure check (D6) | **Built** as the `guest-system` gate (critical): update-os.sh records each system it activates or stages in `config/.guest-systems/<vmname>` (the last 20); a profile or running system not in it fails. The weekly store verification is not built |
+| CrowdSec processor (D4), Suricata (D5), Caddy and CrowdSec logs into Loki (P0) | **Not built**: they change OPNsense's plugins and the logging VM's NixOS, and need a live firewall to be written against |
+| CI id on log lines (P0) | **Not built.** Placement by the authenticated `host` label works without it |
+| CVE-aware severity, coverage report, #886 (P4) | **Not built**: they wait for the sources above |
+| `debianhost` audit, the hardening check at validate | **Not built** |
 
 ## Settled in review
 

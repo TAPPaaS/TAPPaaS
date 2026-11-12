@@ -316,9 +316,9 @@ Rules for the lifecycle:
   logs is covered, with no extra declaration. A module adds to it through optional fields in
   `logging:logs`'s `fields.json`, beside `dropUnits`: `securityPaths` (extra FIM watches) and
   `loginScenarios` (its web login, for CrowdSec).
-- **On by size.** The logging module gets `securityMonitoring: auto | on | off`, default
-  `auto`: off at `small`, on at medium and large (the site's size, ADR-044 D3, since logging is
-  site-scoped). An operator may set `on` at small and take the memory. Turning it off removes
+- **On by size.** `site.json` gets `security.monitoring: on | off` (as built, beside
+  `performance`); not set, it is off at `small` and on at medium and large (the site's size,
+  ADR-044 D3). An operator may set `on` at small and take the memory. Turning it off removes
   the auditd fragment, the rules and the CrowdSec processor at the next update; the journal
   shipping stays.
 - **Layer 2, later.** `pvehost`, `debianhost`, `network` and `windows-server` would declare
@@ -482,7 +482,7 @@ start from. They are not part of this iteration and become their own issues when
 
 | Phase | Content | Done when | Size (ease/risk) |
 |---|---|---|---|
-| **P0: prerequisites** | (1) The `tappaas_ci_id` label on log lines: Alloy on guests from the deploy-time CI id; syslog stamped on the logging VM from the identity map (ADR-040 step 5). (2) Caddy access logs and CrowdSec's log into Loki over the existing OPNsense syslog path. (3) Loki per-stream retention for security streams (90 days medium, 180 large). (4) `assess` takes `type` from alert labels; `core.classify.siem`; the hold and ack of §3.3. (5) `securityMonitoring` on the logging module, `auto` by size | A test alert labelled `type=security, tappaas_ci_id=…` becomes a `security` warning on that CI and ages out after 24 h; a critical one waits for an ack; a `small` test site gets none of it | M / L |
+| **P0: prerequisites** | (1) The `tappaas_ci_id` label on log lines: Alloy on guests from the deploy-time CI id; syslog stamped on the logging VM from the identity map (ADR-040 step 5). (2) Caddy access logs and CrowdSec's log into Loki over the existing OPNsense syslog path. (3) Loki per-stream retention for security streams (90 days medium, 180 large). (4) `assess` takes `type` from alert labels; `core.classify.siem`; the hold and ack of §3.3. (5) `site.json` `security.monitoring`, by size when not set | A test alert labelled `type=security, tappaas_ci_id=…` becomes a `security` warning on that CI and ages out after 24 h; a critical one waits for an ack; a `small` test site gets none of it | M / L |
 | **P1: logins and bans** | The security part of `logging:logs`. A CrowdSec log processor on the logging VM with Loki as data source (sshd, Authentik, pvedaemon, PBS), registered with the firewall's LAPI over a mgmt pinhole. Scenarios: sshd, Authentik, the per-module web logins. The first rule pack: §4.1 and the decisions summary | An SSH brute force from a test VM in another zone is banned at the firewall within a minute, the ban shows in Grafana, and the target CI carries a `security` condition that ages out | M / M |
 | **P2: host integrity** | auditd on NixOS guests and `debianhost` through the generated fragment; the FIM watch set per module (`logging:logs` fields); the privilege, module-load and tamper rules (§4.3, §4.4, §4.10); the closure check and weekly store verification; the build-time hardening check | A hand-edited `authorized_keys`, a `nixos-rebuild` done on a guest by hand, and a stopped auditd each raise their condition on hrossen | M / M |
 | **P3: network IDS** | Suricata on OPNsense in IDS mode (ET Open), converged by the network module like CrowdSec; `eve.json` to Loki; the §4.2 rules; logging on zone egress rules and the flow baseline (§4.8); the network VM's sizing measured | An ET test signature (`testmyids`) from a guest raises an alert on that CI; the network VM stays inside its medium memory | M / M |
@@ -502,7 +502,7 @@ start from. They are not part of this iteration and become their own issues when
 
 **The small budget is untouched.** Layer 1 is off at `small` (operator, 2026-11-12), so the
 logging and network minimums stay as ADR-044 D6 has them. An operator who sets
-`securityMonitoring: on` at small takes about 512 MiB more on `logging`, which ADR-044 D4 allows
+`security.monitoring: on` at small takes about 512 MiB more on `logging`, which ADR-044 D4 allows
 as an operator's value.
 
 Note: the task brief described hrossen as having 4 GB-class nodes. The repository records its
