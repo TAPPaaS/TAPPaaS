@@ -226,7 +226,7 @@ What has to change:
 
 ### 3.3 Proposal: how a security condition ages
 
-*(For review. It would amend ADR-041 D1 and D4 and ADR-049 D5.)*
+*(Approved by the operator, 2026-11-12. It amends ADR-041 D1 and D4 and ADR-049 D5.)*
 
 A security finding is an event. The condition it raises is a **hold** on the CI: it stays until
 the finding ages out or someone acknowledges it.
@@ -540,10 +540,8 @@ at small). The binding limit is ADR-044's small budget, not a single node's size
   zones stay alert-only. That step is its own issue, with a rollback switch and a netmap test on
   the firewall VM.
 
-**For review:**
+- **The ageing rules of §3.3 are approved**: warnings held 24 h from the last hit, criticals
+  until acknowledged with a reason, one finding per CI and rule with a count, criticals mailed
+  even inside a maintenance window.
 
-1. **The ageing proposal (§3.3).** Warnings held 24 h from the last hit, criticals until
-   acknowledged with a reason, one finding per CI and rule with a count, criticals mailed even
-   inside a maintenance window.
-
-Nothing else is open.
+No question is open.
