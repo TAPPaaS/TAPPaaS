@@ -63,6 +63,10 @@ ignores("opnsense-login-failed", "/index.php: Successful login for user 'root' f
 catches("kernel-module-session", 'SYSCALL arch=c000003e syscall=313 success=yes exit=0 a0=3 items=0 ppid=1200 pid=1301 auid=1000 uid=0 comm="modprobe" exe="/run/current-system/sw/bin/kmod" key="tappaas-module"')
 ignores("kernel-module-session", 'SYSCALL arch=c000003e syscall=257 success=yes auid=1000 comm="install" key="tappaas-secrets"')
 ignores("kernel-module-session", 'level=info msg="query" query="{transport=\\"audit\\"} |~ \\"^SYSCALL .*key=\\\\\\"tappaas-module\\\\\\"\\""')
+catches("suricata-alert", '{"timestamp":"2026-11-12T18:00:00.000000+0100","flow_id":1,"in_iface":"vtnet1","event_type":"alert","src_ip":"203.0.113.9","src_port":4444,"dest_ip":"198.51.100.2","dest_port":443,"proto":"TCP","alert":{"action":"allowed","gid":1,"signature_id":2024897,"rev":3,"signature":"ET EXPLOIT Example","category":"Attempted Administrator Privilege Gain","severity":3}}', "203.0.113.9")
+catches("suricata-high", '{"timestamp":"2026-11-12T18:00:00.000000+0100","flow_id":1,"in_iface":"vtnet1","event_type":"alert","src_ip":"203.0.113.9","src_port":4444,"dest_ip":"198.51.100.2","dest_port":443,"proto":"TCP","alert":{"action":"allowed","gid":1,"signature_id":2024897,"rev":3,"signature":"ET EXPLOIT Example","category":"Attempted Administrator Privilege Gain","severity":1}}', "203.0.113.9")
+ignores("suricata-high", '{"timestamp":"2026-11-12T18:00:00.000000+0100","flow_id":1,"in_iface":"vtnet1","event_type":"alert","src_ip":"203.0.113.9","src_port":4444,"dest_ip":"198.51.100.2","dest_port":443,"proto":"TCP","alert":{"action":"allowed","gid":1,"signature_id":2024897,"rev":3,"signature":"ET EXPLOIT Example","category":"Attempted Administrator Privilege Gain","severity":3}}')
+ignores("suricata-alert", '{"timestamp":"2026-11-12T18:00:00","event_type":"stats","stats":{}}')
 # The success-after-burst rule is an expression; its two filters, alone:
 e = rules["ssh-login-after-bf"]["expr"]
 fails, oks = re.findall(r'\|~ "(.*?)"', e)

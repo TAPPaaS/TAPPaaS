@@ -55,5 +55,13 @@ r="$(render_loki_runtime)"
 has "${r}" "overrides: {}" "off: no override"
 eq "$(grep -c 'selector:' <<<"${r}")" 0 "off: no stream kept longer"
 
+export SECURITY_CROWDSEC_PW_FILE="${T}/cs-pw" SECURITY_FIREWALL_IP=10.0.0.1
+c1="$(render_crowdsec_credentials)"
+has "${c1}" "url: http://10.0.0.1:8080/" "CrowdSec reports to the firewall's local API on its mgmt address"
+has "${c1}" "login: tappaas-logging" "as the logging machine"
+[[ "$(stat -c %a "${T}/cs-pw" 2>/dev/null || stat -f %Lp "${T}/cs-pw")" == 600 ]] && ok || no "the machine password is kept 0600"
+eq "$(render_crowdsec_credentials)" "${c1}" "the password is made once and kept"
+eq "$(grep -c '^password: [A-Za-z0-9]\{40\}$' <<<"${c1}")" 1 "a 40-character password"
+
 echo "Results: ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]

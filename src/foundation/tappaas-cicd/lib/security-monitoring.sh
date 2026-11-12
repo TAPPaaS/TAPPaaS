@@ -18,7 +18,18 @@
 #   security_retention_days          days
 #   security_streams                 the LogQL selectors that are security streams, one per line
 #   render_loki_runtime              the runtime config, on stdout
-#   security_sync_logging            the runtime config onto the logging VM
+#   security_sync_logging            the runtime config and CrowdSec's credentials onto
+#                                    the logging VM
+#   security_crowdsec_password       the logging VM's CrowdSec machine password (made
+#                                    on first use, kept on the mothership)
+#   security_firewall_lapi           the firewall's local API address (its mgmt address)
+#   render_crowdsec_credentials      the logging VM's local_api_credentials.yaml, on stdout
+#
+# CrowdSec (ADR-050 D4): the logging VM runs a CrowdSec log processor that reads
+# Loki (sshd, Authentik, Proxmox's API) and reports to the local API on the
+# firewall, whose bouncer bans in pf. network's crowdsec-converge.sh registers
+# the machine there with the same password; this writes its credentials to the
+# logging VM. The processor runs only while the credentials file exists.
 
 if [[ -z "${_SECURITY_MONITORING_LOADED:-}" ]]; then
 _SECURITY_MONITORING_LOADED=1
@@ -27,6 +38,33 @@ _SECURITY_MONITORING_LOADED=1
 . "${METRICS_SHIPPING_LIB:-$(dirname "${BASH_SOURCE[0]}")/metrics-shipping.sh}"
 
 SECURITY_LOKI_RUNTIME="/etc/tappaas-loki/runtime.yaml"
+SECURITY_CROWDSEC_CREDS="/etc/secrets/crowdsec-lapi.yaml"
+SECURITY_CROWDSEC_MACHINE="tappaas-logging"
+SECURITY_CROWDSEC_PW_FILE="${SECURITY_CROWDSEC_PW_FILE:-/home/tappaas/.crowdsec-logging-machine}"
+SECURITY_LAPI_PORT=8080
+
+security_crowdsec_password() {
+    if [[ ! -s "${SECURITY_CROWDSEC_PW_FILE}" ]]; then
+        ( umask 077; head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 40 > "${SECURITY_CROWDSEC_PW_FILE}" ) || return 1
+    fi
+    cat "${SECURITY_CROWDSEC_PW_FILE}"
+}
+
+# The firewall's mgmt address: where its local API listens for the logging VM.
+security_firewall_lapi() {
+    local ip
+    [[ -n "${SECURITY_FIREWALL_IP:-}" ]] && { echo "${SECURITY_FIREWALL_IP}"; return; }
+    ip="$(getent hosts "${FIREWALL_FQDN:-firewall.mgmt.internal}" 2>/dev/null | awk '{print $1; exit}')"
+    [[ "${ip}" =~ ^[0-9.]+$ ]] || { echo "security: cannot resolve the firewall's mgmt address" >&2; return 1; }
+    echo "${ip}"
+}
+
+render_crowdsec_credentials() {
+    local pw ip
+    pw="$(security_crowdsec_password)" || return 1
+    ip="$(security_firewall_lapi)" || return 1
+    printf 'url: http://%s:%s/\nlogin: %s\npassword: %s\n' "${ip}" "${SECURITY_LAPI_PORT}" "${SECURITY_CROWDSEC_MACHINE}" "${pw}"
+}
 
 # security_monitoring is log-shipping.sh's: the NixOS fragment reads it too.
 
@@ -77,8 +115,17 @@ security_sync_logging() {
     _ms_put "${vm}" "${SECURITY_LOKI_RUNTIME}" 0644 root:root "${content}
 " >/dev/null || return 1
     if [[ "$(security_monitoring)" == on ]]; then
-        echo "security: monitoring on, security logs kept $(security_retention_days) days"
+        # CrowdSec's credentials; the processor (re)starts when they changed or
+        # it is not running. The group exists once logging's NixOS has it.
+        local creds c
+        creds="$(render_crowdsec_credentials)" || return 1
+        c="$(_ms_put "${vm}" "${SECURITY_CROWDSEC_CREDS}" 0640 root:crowdsec "${creds}")" || return 1
+        ssh -o BatchMode=yes -o ConnectTimeout=10 "${vm}" \
+            "if [ -n '${c}' ] || ! systemctl is-active -q crowdsec; then sudo systemctl restart crowdsec; fi" || return 1
+        echo "security: monitoring on, security logs kept $(security_retention_days) days, CrowdSec reads Loki"
     else
+        ssh -o BatchMode=yes -o ConnectTimeout=10 "${vm}" \
+            "sudo rm -f ${SECURITY_CROWDSEC_CREDS}; sudo systemctl stop crowdsec 2>/dev/null || true" || return 1
         echo "security: monitoring off"
     fi
 }
