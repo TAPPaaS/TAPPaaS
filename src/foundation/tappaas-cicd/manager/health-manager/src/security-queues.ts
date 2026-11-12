@@ -150,9 +150,18 @@ export function buildQueues(s: ScanStatus, opts: { configDir: string; now: numbe
       text: `${ids(rs).length} unread${bySeverity(rs)}${common}${(rs.some((r) => r.item.kev)) ? "; KNOWN EXPLOITED" : ""}`,
       action: k ? `cve-triage.sh component ${k.module === "templates" ? "baseline" : k.module} ${k.source} --eco ${k.eco} …` : undefined });
   }
-  const reviewRows = rows.filter((r) => r.item.mark === "rule" || r.item.mark === "review" || (r.item.flags ?? []).some((f) => ["review-due", "needs-use", "expired"].includes(f)));
+  // A migrated record only lacks its use statement: one card per module, not
+  // one per component (the migration made hundreds at once).
+  const needsUse = rows.filter((r) => (r.item.flags ?? []).includes("needs-use") && r.item.mark === "confirmed" && !(r.item.flags ?? []).some((f) => ["review-due", "expired"].includes(f)));
+  for (const [mod, rs] of groupBy(needsUse, (r) => splitKey(r.item.component ?? "")?.module ?? r.unit)) {
+    const comps = [...new Set(rs.map((r) => r.item.component ?? ""))].sort();
+    mt.review.push({ queue: "review", title: `${mod === "templates" ? "the NixOS baseline" : mod}: migrated records`, units: unitsOf(rs), cves: ids(rs), worst: "low",
+      text: `${comps.length} component record(s) migrated from hand-kept VEX need their use statement; their decisions work meanwhile`,
+      action: `cve-triage.sh component ${mod === "templates" ? "baseline" : mod} <source> --use "<how the module uses it>" --reason <reason>` });
+  }
+  const reviewRows = rows.filter((r) => r.item.mark === "rule" || r.item.mark === "review" || (r.item.flags ?? []).some((f) => ["review-due", "expired"].includes(f)));
   for (const [comp, rs] of groupBy(reviewRows, (r) => r.item.component ?? r.item.pkg)) {
-    const why = [...new Set(rs.flatMap((r) => r.item.mark === "rule" ? ["by rule, unread"] : (r.item.flags ?? []).filter((f) => ["kev", "epss", "upstream-changed", "version", "expired", "review-due", "needs-use", "assumption"].includes(f))))];
+    const why = [...new Set(rs.flatMap((r) => r.item.mark === "rule" ? ["by rule, unread"] : (r.item.flags ?? []).filter((f) => ["kev", "epss", "upstream-changed", "version", "expired", "review-due", "assumption"].includes(f))))];
     const k = splitKey(comp);
     mt.review.push({ queue: "review", title: componentTitle(comp), component: comp, units: unitsOf(rs), cves: ids(rs), worst: worstOf(rs),
       text: `${ids(rs).length} CVE(s): ${why.join(", ") || "to review"}`,

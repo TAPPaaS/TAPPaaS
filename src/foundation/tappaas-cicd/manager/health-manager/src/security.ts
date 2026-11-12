@@ -771,10 +771,21 @@ export function decideFinding(f: Finding, vex: VexStatement[], dec: TargetDecisi
   const { key, record } = recordFor(f, dec);
   const fx = facts[f.id];
   const subject = { id: f.id, severity: f.severity, version: f.installed, facts: fx, firstSeen: dec.firstSeen(`${f.id} ${f.pkg}`) };
-  let d: Decision;
-  if (record) {
+  // A fix nixpkgs applies to the build is a fact, not a judgement: it wins over
+  // any record, and needs no person.
+  const patched = vexDeciders(f, vex).find((s) => s.source === PATCH_SOURCE);
+  let d: Decision | null = null;
+  if (patched) {
+    const upstream = categoryOf(f.severity);
+    d = { component: key, upstream, level: "none", mark: "confirmed", counted: false, flags: [], why: "fixed by a patch nixpkgs applies",
+      vex: { state: "resolved" }, reason: "patched" };
+  } else if (record) {
     d = decideCentral(subject, key, record, { now: dec.now, guardSince: (g) => dec.guardSince(key, f.id, g) });
-  } else {
+    // What the record does not decide, a hand-kept statement still may (a
+    // Community module's, or one not migrated yet).
+    if (d.mark === "unread" && !d.flags.length && vexDeciders(f, vex).length + vexTriage(f, vex).length > 0) d = null;
+  }
+  if (!d) {
     const upstream = categoryOf(f.severity);
     const up: EffLevel = upstream ?? "none";
     const base: Decision = { component: key, upstream, level: up, mark: "unread", counted: false, flags: [] };

@@ -58,6 +58,9 @@ check(dc.text.startsWith("2 unread (1 critical, 1 high), all AV:N/PR:N/UI:R") &&
   "decide: a component's unread CVEs, what their vectors share, and the command");
 check(q.maintainer!.decide.find((c) => c.component === SQL)?.action?.includes("component baseline sqlite") === true, "…the baseline's is decided as baseline");
 check(q.maintainer!.review.some((c) => c.component === "immich/nix:imagemagick" && c.text.includes("by rule, unread")), "review: a rule's result nobody read");
+const mig = buildQueues({ ...s, targets: [tg("x", "nix", [it("A", { component: "x/nix:a", mark: "confirmed", state: "risk", flags: ["needs-use"] }),
+  it("B", { component: "x/nix:b", mark: "confirmed", state: "risk", flags: ["needs-use"] })])] }, { configDir: cfg, now: NOW, maintainer: true });
+check(mig.maintainer!.review.length === 1 && mig.maintainer!.review[0].text.startsWith("2 component record(s) migrated"), "migrated records without their use statement: one card per module");
 check(q.maintainer!.deferred[0]?.text === "1 CVE(s) until 2026-11-23: fix in 2.5", "deferred: until when, and why");
 check(buildQueues(s, { configDir: cfg, now: NOW, maintainer: false }).maintainer === undefined, "a site without the train sees no maintainers' queues");
 const text = renderQueues(q).join("\n");
