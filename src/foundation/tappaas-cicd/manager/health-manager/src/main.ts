@@ -60,6 +60,7 @@ import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../
 import { CmdbRefused, CmdbReport, CmdbUnavailable, cmdbQuery, cmdbRelations, cmdbRequest } from "../../../lib/ts/src/cmdb";
 import { printOrSend, pruneRefused } from "../../../lib/ts/src/cmdb-reporter";
 import { AssessIO, AssessResult, Timer, assess } from "./assess";
+import { SIEM_STATE, readSiem } from "./siem";
 import { Declared, horizonOf } from "./assess-performance";
 import { curlReader, metricsEndpoint } from "./metrics-read";
 import { CmdbItem, CmdbRel, SOURCE, SiteIndex } from "./assess-model";
@@ -500,6 +501,7 @@ function assessIO(opts: Opts, client: ClusterClient, timed?: Timer): AssessIO {
     perfDeclared: () => perfDeclared(opts.configDir),
     horizonDays: () => horizonOf(readModuleJson(join(opts.configDir, "site.json"))),
     windows: () => readWindows(),
+    siem: () => readSiem(SIEM_STATE, (host, module) => placeAlert(host, module, opts.configDir)),
     write: writeAssessment,
   };
 }

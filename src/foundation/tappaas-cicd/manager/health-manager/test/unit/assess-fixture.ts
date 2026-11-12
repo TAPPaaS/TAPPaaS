@@ -117,6 +117,7 @@ export class StubIO implements AssessIO {
   security?: AssessIO["security"];
   metrics?: AssessIO["metrics"];
   windows?: AssessIO["windows"];
+  siem?: AssessIO["siem"];
   retired: CmdbItem[] = [];
 
   constructor(

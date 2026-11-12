@@ -59,7 +59,10 @@ interface Envelope {
   overrides?: string[];
   replaces?: string[];
 }
-export interface Classify extends Envelope { kind: "classify"; set?: { type?: string; status?: Status; reason?: string }; aggregate?: boolean; quiet?: boolean }
+// hold (ADR-050 D12): how long a finding that is an event holds its condition:
+// a duration from its last hit ("24h"), or "until-ack". Read by the source that
+// raises such findings (siem.ts); a record never makes a failure ok itself.
+export interface Classify extends Envelope { kind: "classify"; set?: { type?: string; status?: Status; reason?: string }; aggregate?: boolean; quiet?: boolean; hold?: string }
 export interface Propagate extends Envelope { kind: "propagate"; as: "none" | { status: Status; type?: string }; dependantEnd?: "from" | "to" }
 export interface Step { down?: number | "half" | "all"; upFewerThan?: number; as: "rule" | Status; reason?: string }
 export interface Combine extends Envelope { kind: "combine"; groupBy: "dependant" | { edgeAttr: string }; steps: Step[] }
@@ -215,7 +218,7 @@ const RANKS: Record<string, number> = { none: 0, digest: 1, "at-once": 2, warnin
 /** A record's outcome, as one comparable string: two records agree when equal. */
 export function outcome(r: HealthRecord): string {
   switch (r.kind) {
-    case "classify": return JSON.stringify([r.set ?? null, r.aggregate === true, r.quiet === true]);
+    case "classify": return JSON.stringify([r.set ?? null, r.aggregate === true, r.quiet === true, r.hold ?? null]);
     case "propagate": return JSON.stringify(r.as);
     case "combine": return JSON.stringify([r.groupBy, r.steps]);
     case "explain": return r.effect;
@@ -407,7 +410,8 @@ export function checkRecord(r: unknown, model: ModelInfo | null): Problem[] {
       }
       if (r.aggregate !== undefined && r.aggregate !== true) err("aggregate is true");
       if (r.quiet !== undefined && r.quiet !== true) err("quiet is true");
-      if (set === undefined && r.aggregate === undefined && r.quiet === undefined) err("a classify record sets, aggregates or quiets");
+      if (r.hold !== undefined && !(r.hold === "until-ack" || (typeof r.hold === "string" && durationMs(r.hold) > 0))) err('hold is a duration ("24h") or "until-ack"');
+      if (set === undefined && r.aggregate === undefined && r.quiet === undefined && r.hold === undefined) err("a classify record sets, aggregates, quiets or holds");
       if (r.quiet === true && !names(w.finding as Record<string, unknown>) && !namesObject(w.object)) err("a quiet record names a reason, a label or an object");
       break;
     }

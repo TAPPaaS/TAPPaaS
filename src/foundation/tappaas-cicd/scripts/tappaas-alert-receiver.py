@@ -126,6 +126,7 @@ DEFAULTS = {
     "loki": "http://logging.mgmt.internal:3100",
     "loki_admin_file": "/home/tappaas/.loki-admin-password",
     "alerts_log": "/var/lib/tappaas/alerts.jsonl",
+    "siem_state": "/var/lib/tappaas/siem-findings.json",
     "health": "/home/tappaas/bin/health-manager",
     "maintenance_dir": "/var/lib/tappaas/maintenance",
     "silent_burst_file": "/var/lib/tappaas/silent-burst.json",
@@ -134,6 +135,8 @@ DEFAULTS = {
     "burst_window": 600,
 }
 ALERTS_LOG_MAX = 2 << 20  # past 2 MB the record keeps its newer half
+SIEM_LEVELS = ("info", "warning", "critical")
+SIEM_KEEP_DAYS = {"info": 7, "warning": 30, "critical": 90}  # an entry's last hit older than this goes
 MAX_LINES = 20
 NO_LINES = "(log lines not mailed on this site — see the Explore link)"
 MAX_BODY = 1 << 20  # a Grafana notification is a few KB; refuse anything absurd
@@ -882,11 +885,68 @@ def record(args, payload):
         print(f"alert record NOT written: {e}", flush=True)
 
 
+# ── security hits (ADR-050 D12) ──────────────────────────────────────────
+def siem_record(args, payload, now=None):
+    """Fold every firing alert of a security rule (labels type=security) into one
+    entry per rule and CI: first and last hit and their count. health-manager's
+    siem source reads it and holds the condition (a warning 24 h from the last
+    hit, a critical until acknowledged). The resolve of an event rule says
+    nothing about the attack and is not a hit."""
+    now = now or datetime.now(timezone.utc)
+    stamp = now.isoformat(timespec="seconds")
+    hits = []
+    for a in payload.get("alerts") or []:
+        labels = a.get("labels") or {}
+        if labels.get("type") != "security" or a.get("status", payload.get("status", "firing")) != "firing":
+            continue
+        hits.append(labels)
+    try:
+        with open(args.siem_state, encoding="utf-8") as f:
+            doc = json.load(f)
+        if not isinstance(doc, dict) or not isinstance(doc.get("findings"), dict):
+            doc = {}
+    except (OSError, ValueError):
+        doc = {}
+    findings = doc.get("findings", {})
+    if not hits and not findings:
+        return
+    for labels in hits:
+        name, host = labels.get("alertname", ""), labels.get("host", "")
+        ci = labels.get("tappaas_ci_id", "")
+        level = labels.get("level") if labels.get("level") in SIEM_LEVELS else "warning"
+        key = f"{name}|{host}|{ci}"
+        e = findings.get(key) or {"alertname": name, "host": host, "module": labels.get("module", ""),
+                                  "first": stamp, "count": 0}
+        e.update({"level": level, "last": stamp, "count": int(e.get("count", 0)) + 1,
+                  "labels": {k: v for k, v in extra_labels(labels).items() if k not in ("type", "level", "tappaas_ci_id")}})
+        if ci:
+            e["ci"] = ci
+        findings[key] = e
+    for key in list(findings):
+        e = findings[key]
+        try:
+            last = datetime.fromisoformat(str(e.get("last")))
+        except ValueError:
+            del findings[key]
+            continue
+        if now - last > timedelta(days=SIEM_KEEP_DAYS.get(e.get("level"), 30)):
+            del findings[key]
+    try:
+        os.makedirs(os.path.dirname(args.siem_state) or ".", exist_ok=True)
+        tmp = f"{args.siem_state}.tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"version": 1, "findings": findings}, f, sort_keys=True)
+        os.replace(tmp, args.siem_state)
+    except OSError as e:
+        print(f"security hits NOT recorded: {e}", flush=True)
+
+
 # ── the health hook (ADR-041 D2) ─────────────────────────────────────────
 DIGEST_RULE = "HealthDailyDigest"
 HEALTH_RULES = {"HealthRootCause", "HealthRootRecovered", DIGEST_RULE}  # health-manager's own
 HEALTH_TIMEOUT = 300
 _health_lock = threading.Lock()
+_siem_lock = threading.Lock()
 _health_pending = set()
 _health_running = [False]
 
@@ -990,6 +1050,8 @@ def make_handler(args):
                 except OSError as e:
                     print(f"heartbeat NOT recorded: {e}", flush=True)
             record(args, payload)
+            with _siem_lock:
+                siem_record(args, payload)
             health_hook(args, payload)
             payload = fold_node_down(args, payload)
             if payload is None:
@@ -1042,6 +1104,7 @@ def main():
     p.add_argument("--cluster-cache", type=float, default=DEFAULTS["cluster_cache"])
     p.add_argument("--config-dir", default=DEFAULTS["config_dir"])
     p.add_argument("--alerts-log", default=DEFAULTS["alerts_log"])
+    p.add_argument("--siem-state", default=DEFAULTS["siem_state"])
     p.add_argument("--loki", default=DEFAULTS["loki"])
     p.add_argument("--loki-admin-file", default=DEFAULTS["loki_admin_file"])
     p.add_argument("--health", default=DEFAULTS["health"], help="health-manager, or nothing to run")

@@ -29,6 +29,7 @@ import { levelChanged } from "./events";
 import { Declared, PERF_OWNER, fromPerformance, fromTrends } from "./assess-performance";
 import { MetricsReader } from "./metrics-read";
 import { Covered, Window, asMaintenance, coveredBy, named, windowOf, isOpen } from "./windows";
+import { SIEM_OWNER, SiemItem, fromSiem } from "./siem";
 
 /** Everything assess reads and writes; tests stub it. */
 export interface AssessIO {
@@ -46,6 +47,7 @@ export interface AssessIO {
   perfDeclared?(): Declared[]; // the foundation modules' declared thresholds
   horizonDays?(): number; // capacity: "full within" this many days is a warning
   windows?(): Window[]; // the maintenance windows (windows.ts): what they cover is in maintenance
+  siem?(): SiemItem[] | null; // the receiver's security hits (ADR-050 D12); null: not readable
   write(report: CmdbReport): void;
 }
 
@@ -84,6 +86,7 @@ export interface AssessResult {
 // that one runs every time.
 function ownerOf(reason: string): string {
   if (reason.startsWith("alert-")) return "alerts";
+  if (reason.startsWith("siem-")) return SIEM_OWNER;
   if (reason.startsWith("sweep-")) return "sweep";
   if (reason.startsWith("cve-")) return "cve";
   if (["pool-usage", "pool-state", "datastore-usage", "link-down", "vpn-handshake-stale", "certificate-expiry"].includes(reason)) return "thresholds";
@@ -211,7 +214,9 @@ export const flapsOf = (o: CmdbItem): Record<string, { held: ConditionStatus }> 
 // Since, across no change of status; the maintenance of the open window that
 // covers the object (windows.ts), never carried over.
 function stamp(c: Condition, p: Condition | undefined, now: string, nowMs: number, cov: Covered | undefined, word: OperatorWord | undefined, flap: { held: ConditionStatus } | undefined): Condition {
-  const window: Window | undefined = coveredBy(c, cov);
+  // A security critical from a hit is told inside a window too (ADR-050 D12):
+  // an attacker does not keep to the update window.
+  const window: Window | undefined = c.type === "security" && c.owner === SIEM_OWNER && c.status === "critical" ? undefined : coveredBy(c, cov);
   const mnt = window ? asMaintenance(window) : null;
   const held = !!p && p.status === c.status && p.reason === c.reason;
   const until = (w: { until: string | null } | null): boolean => w !== null && (!w.until || Date.parse(w.until) > nowMs);
@@ -327,6 +332,12 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
   }
 
   const priorOf = (id: string): Condition[] => (idx.byId.get(id) ? conditionsOf(idx.byId.get(id)!) : []);
+  // Security hits (ADR-050 D12): held by the source, rated by the records.
+  const hits = io.siem ? t("siem", () => io.siem!()) : null;
+  if (hits) {
+    findings.push(...fromSiem(hits, idx, nowMs, (f) => classify([f], idx.byId, model.records, model.ancestors, priorOf, nowMs)[0]));
+    ran.add(SIEM_OWNER);
+  }
   const looked = (owner: string, id: string): boolean => {
     if (only && id !== only.id) return false;
     if (!ran.has(owner)) return false;

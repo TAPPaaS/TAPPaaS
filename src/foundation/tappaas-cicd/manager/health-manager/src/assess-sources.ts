@@ -120,6 +120,7 @@ export function fromAlerts(alerts: AlertItem[], idx: SiteIndex): Finding[] {
   const out: Finding[] = [];
   for (const a of [...alerts].sort((x, y) => x.alertname.localeCompare(y.alertname))) {
     if (HEALTH_RULES.has(a.alertname)) continue;
+    if (a.labels.type === "security") continue; // a hit: siem.ts holds it (ADR-050 D12)
     const id = CI_LABELS.map((k) => a.labels[k]).find((v) => v && idx.byId.has(v));
     const o = (id ? idx.byId.get(id) : null) ?? (a.subject ? idx.resolve(a.subject) : null) ?? idx.site;
     if (!o) continue;
