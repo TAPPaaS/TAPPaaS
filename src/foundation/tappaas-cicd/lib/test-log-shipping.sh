@@ -30,6 +30,7 @@ grep -q 'services.journald.audit = true;' "${T}/sec.nix" && ok || no "on: journa
 grep -q '"-w /etc/secrets -p wa -k tappaas-secrets"' "${T}/sec.nix" && ok || no "on: secrets are not watched"
 grep -q '"-w /var/lib/web/config -p wa -k tappaas-module-path"' "${T}/sec.nix" && ok || no "on: the module's path is not watched"
 grep -q '"d /var/lib/web/config' "${T}/sec.nix" && no "a module's path is never created" || ok
+grep -q 'audit-rules-nixos.after = \[ "systemd-tmpfiles-setup.service" \]' "${T}/sec.nix" && ok || no "the rules do not wait for tmpfiles"
 grep -q 'source_labels = \["__journal__transport"\]' "${T}/sec.nix" && ok || no "the audit transport is not labelled"
 command -v nix-instantiate >/dev/null && { nix-instantiate --parse "${T}/sec.nix" >/dev/null 2>&1 && ok || no "the fragment does not parse"; }
 CONFIG_DIR="${T}/cfg"; export CONFIG_DIR; mkdir -p "${CONFIG_DIR}"

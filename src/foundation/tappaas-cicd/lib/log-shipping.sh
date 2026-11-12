@@ -454,6 +454,9 @@ EOF
     "d /etc/secrets - - - -"
     "d /root/.ssh 0700 root root -"
   ];
+  # The rules load early in boot (audit-rules-nixos, before sysinit.target):
+  # after tmpfiles, so the directories above exist on a guest's first boot.
+  systemd.services.audit-rules-nixos.after = [ "systemd-tmpfiles-setup.service" ];
 
 EOF
     fi
