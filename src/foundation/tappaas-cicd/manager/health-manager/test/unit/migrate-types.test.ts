@@ -4,7 +4,7 @@
 // it (with a site edit and a site rule), and the CMDB objects as captured from
 // a running site, with acknowledgements, emit's cursor and the digest's keys.
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { HealthRecord, checkSet, migrateRecordTypes, recordsOf } from "../../../../lib/ts/src/health-records";
@@ -44,7 +44,10 @@ check(migrateDigestKey("vm/coturn security cve-high") === "vm/coturn vulnerabili
 console.log("the rule store");
 const dir = mkdtempSync(join(tmpdir(), "hm-migrate-"));
 try {
-  const oldRel = readCoreRelease(join(HERE, "fixtures/core-before-split"));
+  // As released before the split, raw: readCoreRelease would map it already.
+  const oldDir = join(HERE, "fixtures/core-before-split");
+  const oldRel = { records: ["classify", "combine", "explain", "follow", "notify", "propagate", "rollup"].flatMap((f) => recordsOf(JSON.parse(readFileSync(join(oldDir, `${f}.json`), "utf8")), f).records) };
+  check(readCoreRelease(oldDir).records.every((r) => migrateRecordTypes(r) === r), "a release from before the split reads under the new types");
   const hdir = join(dir, "config/health");
   const before = new RuleStore(hdir);
   before.base.set("core", oldRel.records);
@@ -85,6 +88,25 @@ try {
   check(!/"(security|maintenance)"/.test(readFileSync(join(hdir, "rules/core.json"), "utf8") + readFileSync(join(hdir, "state.json"), "utf8")), "…no old type is left in the files");
   check(!rel.records.some((r) => migrateRecordTypes(r) !== r), "the released core records name no old type");
   check(recordsOf({ records: oldRel.records.map(migrateRecordTypes) }, "x").problems.length === 0, "every old core record maps to one that reads");
+
+  // ── a late `security` from a branch that predates the split ────────
+  console.log("a late security record");
+  const lateDir = join(dir, "late");
+  mkdirSync(lateDir, { recursive: true });
+  for (const f of ["classify", "combine", "explain", "follow", "notify", "propagate", "rollup"]) writeFileSync(join(lateDir, `${f}.json`), readFileSync(join(CICD, "controller/cmdb-controller/metamodel/health", `${f}.json`), "utf8"));
+  const cls = JSON.parse(readFileSync(join(lateDir, "classify.json"), "utf8")) as { records: unknown[] };
+  cls.records.push(
+    { id: "core.classify.siem-closure", kind: "classify", description: "A closure mismatch is critical.", when: { finding: { source: "siem", type: "security", labels: { alertname: "ClosureMismatch" } } }, set: { status: "critical" }, hold: "until-ack", overrides: ["core.classify.siem-warning", "core.classify.siem-critical"] },
+    { id: "core.classify.signature-late", kind: "classify", description: "An unverified repository is critical.", when: { finding: { source: "signature-status", type: "security" } }, set: { status: "critical" } },
+  );
+  writeFileSync(join(lateDir, "classify.json"), JSON.stringify(cls));
+  const late = readCoreRelease(lateDir);
+  const recOf = (id: string) => late.records.find((r) => r.id === id) as unknown as { when: { finding: { type: unknown } } };
+  check(late.problems.length === 0 && recOf("core.classify.siem-closure").when.finding.type === "threat" && recOf("core.classify.signature-late").when.finding.type === "vulnerability", "a released record on security is read by its source: siem threat, a signature vulnerability");
+  const res2 = mergeReleases(store, new Map([["core", late]]), { now, model: shippedModel() });
+  check(res2.ok && res2.activate && !!store.find("core.classify.siem-closure"), "…and lands after a merge");
+  store.put("site", { id: "site.classify.mine", kind: "classify", description: "x", when: { finding: { source: "cve", type: "security" } }, aggregate: true } as unknown as HealthRecord);
+  check((store.find("site.classify.mine")!.rec as unknown as { when: { finding: { type: unknown } } }).when.finding.type === "vulnerability", "a rule put under security (a verb, the console) is put as it reads now");
 
   // ── the CMDB as captured from a running site ────────────────────────
   console.log("the CMDB, emit's cursor and the digest");

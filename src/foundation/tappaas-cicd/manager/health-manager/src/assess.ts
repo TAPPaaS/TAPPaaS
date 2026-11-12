@@ -23,7 +23,7 @@ import { STALE_DAYS, ScanStatus } from "./security";
 import { SiteSecurity, siteSecurity } from "./site-score";
 import { CheckResult } from "./types";
 import { CmdbReport } from "../../../lib/ts/src/cmdb";
-import { CONDITION_TYPES, ConditionStatus } from "../../../lib/ts/src/health-rules";
+import { CONDITION_TYPES, ConditionStatus, currentType } from "../../../lib/ts/src/health-rules";
 import { conflicts, recordHash, ruleSetHash } from "../../../lib/ts/src/health-records";
 import { levelChanged } from "./events";
 import { Declared, PERF_OWNER, fromPerformance, fromTrends } from "./assess-performance";
@@ -344,7 +344,7 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
   // Security hits (ADR-050 D12): held by the source, rated by the records.
   const hits = io.siem ? t("siem", () => io.siem!()) : null;
   if (hits) {
-    findings.push(...fromSiem(hits, idx, nowMs, (f) => classify([f], idx.byId, model.records, model.ancestors, priorOf, nowMs)[0]));
+    findings.push(...fromSiem(hits, idx, nowMs, (f) => classify([{ ...f, type: (currentType(f.type, f.reason, f.owner) ?? f.type) as Finding["type"] }], idx.byId, model.records, model.ancestors, priorOf, nowMs)[0]));
     ran.add(SIEM_OWNER);
   }
   const looked = (owner: string, id: string): boolean => {
@@ -357,6 +357,9 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
   };
   // classify: what each failing finding becomes under the records.
   const ruleConflicts = new Set<string>();
+  // A source still speaking a type from before the split (security,
+  // maintenance) is read by its reason and owner: vulnerability or threat.
+  for (const f of findings) if (!(CONDITION_TYPES as readonly string[]).includes(f.type)) f.type = (currentType(f.type, f.reason, f.owner) ?? f.type) as Finding["type"];
   const classified = t("classify", () => classify(findings, idx.byId, model.records, model.ancestors, priorOf, nowMs, ruleConflicts));
   const scoped = only ? classified.filter((f) => f.object === only.id) : classified;
   const source = t("settle", () => settle(priorOf, objects.map((o) => o.id), scoped, looked, time));

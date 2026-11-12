@@ -292,6 +292,21 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check(io.written.length === before, "--dry-run writes nothing");
 }
 
+// ── a source still speaking a type from before the split ──
+{
+  const s = fresh();
+  const io = new StubIO(s.items, s.rels);
+  const mod = { kind: "module" as const, name: "nextcloud" };
+  const was = { sig: GATES["signature-status"].type, sys: GATES["guest-system"].type };
+  (GATES["signature-status"] as { type: string }).type = "security";
+  (GATES["guest-system"] as { type: string }).type = "security";
+  io.checks = () => [gate("signature-status", "warn", [], { findings: [{ status: "warn", text: "unsigned", subject: mod }] }), gate("guest-system", "fail", [], { findings: [{ status: "fail", text: "hand-made", subject: mod }] })];
+  const r = assess(io, {}, NOW);
+  GATES["signature-status"].type = was.sig;
+  GATES["guest-system"].type = was.sys;
+  check(got(r, nc, "vulnerability")?.reason === "repository-unverified" && got(r, nc, "threat")?.reason === "system-not-built" && !got(r, nc, "security" as never), "a source that still says security lands as vulnerability or threat, by its reason and source");
+}
+
 // ── a finding the CMDB cannot place lands on the site, and the gate takes it back ──
 {
   const s = fresh();

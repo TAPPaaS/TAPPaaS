@@ -198,8 +198,10 @@ export class RuleStore {
     return !b || st.reviewed !== recordHash(b);
   }
 
-  /** Put a record in its origin's file, replacing one of the same id, or add it. */
-  put(origin: string, rec: HealthRecord): void {
+  /** Put a record in its origin's file, replacing one of the same id, or add it.
+   *  One naming a type from before the split is put as it reads now. */
+  put(origin: string, given: HealthRecord): void {
+    const rec = migrateRecordTypes(given);
     const recs = this.rules.get(origin) ?? [];
     const at = recs.findIndex((r) => r.id === rec.id);
     if (at >= 0) recs[at] = rec;
@@ -210,6 +212,13 @@ export class RuleStore {
   drop(id: string): void {
     for (const [o, recs] of this.rules) this.rules.set(o, recs.filter((r) => r.id !== id));
   }
+}
+
+// A scenario's conditions under a type from before the split, as now.
+function migrateScenarioTypes(sc: Scenario): Scenario {
+  const conds = (sc as unknown as { conditions?: { type: string; reason?: string }[] }).conditions;
+  if (!conds?.some((c) => c.type === "security" || c.type === "maintenance")) return sc;
+  return { ...sc, conditions: conds.map((c) => ({ ...c, type: currentType(c.type, c.reason) ?? c.type })) } as unknown as Scenario;
 }
 
 // ── the releases ──────────────────────────────────────────────────────
@@ -257,7 +266,8 @@ export function readCoreRelease(dir: string): Release {
   for (const f of readdirSync(dir).filter((x) => x.endsWith(".json")).sort()) {
     try {
       const got = recordsOf(readJson(join(dir, f)), f);
-      rel.records.push(...got.records);
+      // A release written before the condition types split reads as now.
+      rel.records.push(...got.records.map(migrateRecordTypes));
       rel.problems.push(...got.problems.map((p) => `${f}: ${p.message}`));
     } catch (e) {
       rel.problems.push(`${f}: ${(e as Error).message}`);
@@ -268,7 +278,7 @@ export function readCoreRelease(dir: string): Release {
     for (const f of readdirSync(sdir).filter((x) => x.endsWith(".json")).sort()) {
       try {
         const doc = readJson(join(sdir, f));
-        if (isObj(doc) && Array.isArray(doc.scenarios)) rel.scenarios.push(...(doc.scenarios as Scenario[]));
+        if (isObj(doc) && Array.isArray(doc.scenarios)) rel.scenarios.push(...(doc.scenarios as Scenario[]).map(migrateScenarioTypes));
         else rel.problems.push(`scenarios/${f}: expected { scenarios: [...] }`);
       } catch (e) {
         rel.problems.push(`scenarios/${f}: ${(e as Error).message}`);
@@ -297,9 +307,9 @@ export function releases(configDir: string): Map<string, Release> {
       try {
         const doc = readJson(file);
         const got = recordsOf(doc, file);
-        rel.records = got.records;
+        rel.records = got.records.map(migrateRecordTypes);
         rel.problems = got.problems.map((p) => p.message);
-        if (isObj(doc) && Array.isArray(doc.scenarios)) rel.scenarios = doc.scenarios as Scenario[];
+        if (isObj(doc) && Array.isArray(doc.scenarios)) rel.scenarios = (doc.scenarios as Scenario[]).map(migrateScenarioTypes);
       } catch (e) {
         rel.problems.push((e as Error).message);
       }
