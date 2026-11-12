@@ -88,6 +88,14 @@ The acceptance check found that an accepted row hidden behind another row of
 the same CVE (jellyfin's own glibc and the baseline's) ended as "gone" at the
 same scan; fixed on the branch after the deploy, so it needs the next deploy.
 
+## The NixOS baseline CI, deployed on hrossen 2026-11-12
+
+Main at d25735c4, OS rebuilt (the CMDB loads the new class at start; the
+console builds the new symbol). The first sweep created the one
+`nixos-baseline` CI with 15 templates/* components and listed it once as
+"appeared" (a drift warning on it until the next sweep, which does not list
+it); its `cve-baseline` condition is a security root and in the digest's NEW.
+
 ## What is not done
 
 - Units set only by the baseline: the cve source labels their finding
