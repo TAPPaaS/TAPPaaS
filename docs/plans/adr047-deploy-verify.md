@@ -76,9 +76,17 @@ review date (180 days for code reasons, a year for deployment reasons).
 |---|---|---|
 | Queues | `health-manager report security` | opens with FOR YOU / WAITING / FOR THE MAINTAINERS |
 | Console | Security page | the cards above the table; a module's CVEs show their mark |
-| Health | `health-manager list --type security` | messages end with "· N unread" where something is unread |
+| Health | `health-manager list --type security` | messages end with "· N unread" where something is unread; a condition keeps its message until its status changes, so old conditions show the old wording |
 | Pin candidates | `cat ~/config/pin-candidates.json` after 05:30 | proposals, or notes saying why none |
 | Acceptance | `health-manager accept <unit> <CVE> --note … --until …`, then a rescan | the CVE shows as accepted and the unit's score drops |
+
+## Deployed on hrossen, 2026-11-12
+
+Main at a09ebb09, OS rebuilt, one full scan in the scan unit's context:
+6557 findings before the scan fix, 6226 after; the rescan agrees (6226).
+The acceptance check found that an accepted row hidden behind another row of
+the same CVE (jellyfin's own glibc and the baseline's) ended as "gone" at the
+same scan; fixed on the branch after the deploy, so it needs the next deploy.
 
 ## What is not done
 
@@ -86,7 +94,12 @@ review date (180 days for code reasons, a year for deployment reasons).
   `labels.setBy = baseline` and adds one site finding, reason `cve-baseline`.
   Making the labelled ones derived (never a root) is ADR-049's
   `core.classify.cve-baseline`, agreed with the ADR-049 session; until that
-  lands they are roots as today.
+  lands they are roots as today. The health store keeps one security
+  condition per object and stores no labels, so the site's `cve-baseline`
+  finding is hidden under the site's own roll-up until then.
+- The U/R/C/V/A column counts the row a CVE is shown by: an acceptance of a
+  row hidden behind another row of the same CVE lowers the score but shows
+  as 0 accepted; `health-manager accept --list` shows it.
 - Known-exploited CVEs: on hrossen today brotli (CVE-2026-111497) and redis
   (CVE-2022-0543) reopen judgements made before they were listed. Each needs a
   person to read it again (`cve-triage.sh read …`) or a new decision.
