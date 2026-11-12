@@ -11,7 +11,7 @@ import { CmdbItem } from "../../src/assess-model";
 import { assess } from "../../src/assess";
 import { Condition, HealthCmdb, HealthObject, Period, splitRef } from "../../src/emit-cmdb";
 import { Cursor, deliverNotices, emit } from "../../src/emit";
-import { CORE_NOTIFY, NotifyRules } from "../../src/notices";
+import { CORE_NOTIFY, NotifyRules, notifyOf } from "../../src/notices";
 import { HealthRecord } from "../../../../lib/ts/src/health-records";
 import { StubIO, coreRecords, obj, rel, shippedModel } from "./assess-fixture";
 import { classify } from "../../src/classify";
@@ -172,6 +172,21 @@ function site(extra: HealthRecord[]) {
   const src = new Map(fs.map((f) => [f.object, [{ type: f.type, status: f.status, reason: f.reason, message: f.message, since: at(0).toISOString(), lastChecked: at(0).toISOString(), source: "health-manager", owner: f.owner, derived: false, rootCause: null, acknowledged: null, maintenance: null, ...(f.aggregate ? { aggregate: true } : {}) } as never]]));
   const d = derive([vm, st], src, [], m, at(0).toISOString());
   check(d.rootCauses.length === 1 && d.rootCauses[0].id === st.id, "…so the one root is the site's baseline finding");
+}
+
+// ── the NixOS baseline as a CI of its own: a root no roll-up overwrites, told in the digest ──
+{
+  const m = shippedModel();
+  const base = obj("nixos-baseline", "nixos-baseline");
+  const vm = obj("vm", "coturn");
+  const st = obj("site", "rossen");
+  const c = (o: CmdbItem, status: "warning" | "critical", reason: string, extra: object = {}) => [o.id, [{ type: "security", status, reason, message: reason, since: at(0).toISOString(), lastChecked: at(0).toISOString(), source: "health-manager", owner: "cve", derived: false, rootCause: null, acknowledged: null, maintenance: null, ...extra } as never]] as [string, never[]];
+  const d = derive([base, vm, st], new Map([c(base, "critical", "cve-baseline"), c(vm, "critical", "cve-critical", { aggregate: true }), c(st, "warning", "cve-medium")]), [], m, at(0).toISOString());
+  check(d.rootCauses.some((r) => r.id === base.id && r.type === "security") && !d.rootCauses.some((r) => r.id === vm.id), "the baseline's own CI is the root; the unit it sets is a sum");
+  check(d.conditions.get(base.id)?.find((x) => x.type === "security")?.reason === "cve-baseline", "…its condition is its own, whatever the site's roll-up says");
+  const rules = { records: m.records, ancestors: m.ancestors };
+  const cond = d.conditions.get(base.id)!.find((x) => x.type === "security")!;
+  check(notifyOf({ id: base.id, class: base.class, name: base.name, attributes: {} } as never, cond as never, rules) === "digest", "…a critical baseline is told in the digest, as a module's CVE level is");
 }
 
 console.log(`\nResults: ${passed} passed, ${failed} failed`);

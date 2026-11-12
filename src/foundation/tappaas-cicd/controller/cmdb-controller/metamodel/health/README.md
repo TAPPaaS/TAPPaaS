@@ -341,6 +341,6 @@ with the records that matched and lost. Neither writes anything.
 - `core.notify.root`: a root cause with a warning or critical condition is told in the daily digest.
 - `core.notify.critical-root`: a root cause with a critical condition is told at once.
 - `core.notify.performance`: a root cause with a performance condition is told in the daily digest.
-- `core.notify.cve-level`: a root cause with a security condition (cve-medium or cve-high or cve-critical) is told in the daily digest.
+- `core.notify.cve-level`: a root cause with a security condition (cve-medium or cve-high or cve-critical or cve-baseline) is told in the daily digest.
 - `core.notify.site-own`: a root cause with a condition on a site or zone or environment is told in the daily digest.
 <!-- standard-rules:end -->
