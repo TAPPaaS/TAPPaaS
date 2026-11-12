@@ -47,7 +47,8 @@ ssh cicd-hrossen 'flock ~/config/.security-scan.lock health-manager scan securit
 Verify the next morning:
 
 - `jq '[.targets[].findings] | add' ~/config/sbom/cve-status.json` is the same
-  after the 02:00 scan and the 04:30 rescan (scratch proof: 6213 both).
+  after the scan that follows the nightly sweep and the 04:30 rescan
+  (scratch proof: 6227 and 6226).
 - `journalctl -t tappaas-security --since yesterday` has no `cve-new` with
   hundreds of items (the first-seen ledger, `config/sbom/first-seen.json`).
 
