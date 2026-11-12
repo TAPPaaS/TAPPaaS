@@ -15,6 +15,12 @@ Sources:
 - Upstream releases, licences and nixpkgs (master, `nixos-25.11`, `nixos-26.05`), checked
   2026-11-12. Figures marked *est.* are estimates, not measurements.
 
+**Decided by the operator, 2026-11-12:**
+
+- **This iteration implements layer 1 only** (P0–P4).
+- **Wazuh (layer 2) is future work**, kept here as the design to start from when it is taken up.
+- **Security streams are kept 90 days.**
+
 ## Summary
 
 **Recommendation: build the SIEM in two layers. Do not make Wazuh the base.**
@@ -23,8 +29,9 @@ Sources:
    - Loki already holds every guest's journal, the firewall log and the Proxmox audit log. Add
      the missing sources: auditd on NixOS guests, Caddy's access logs, CrowdSec's decisions and
      Suricata's alerts.
-   - A security rule pack (Sigma rules converted to LogQL, plus our own rules) runs on the
-     ADR-039 path.
+   - A security rule pack runs on the ADR-039 path. About a third of it is Sigma rules
+     converted to LogQL (generic Linux host and web-attack rules). The rest are TAPPaaS's own
+     rules for its apps, the firewall, Proxmox, drift and the CVE correlation (§4.0).
    - One CrowdSec log processor on the logging VM reads Loki, and its bans land in the
      firewall's existing pf bouncer.
    - A NixOS-native integrity check compares each guest's running system with what the
@@ -33,7 +40,8 @@ Sources:
      the console with no new pipeline.
    - Cost: about 0.5–1 GiB more memory and some disk on the logging VM, and Suricata on the
      firewall at medium and large.
-2. **Layer 2, optional, medium and large: a `wazuh` module**, installed after Wazuh 5.0 is GA.
+2. **Layer 2, future work, not this iteration: an optional `wazuh` module** for medium and
+   large sites, installed after Wazuh 5.0 is GA.
    - Agents run on what Wazuh understands: the Proxmox nodes, Debian hosts and guests, OPNsense
      and Windows.
    - It adds CIS checks (SCA), file-integrity monitoring and rootcheck on those machines, plus
@@ -128,7 +136,7 @@ and the CMDB.**
   adds no second store or second alert pipeline.
 
 **Layer 2, deep host checks where they work: an optional `wazuh` module at medium and large,
-after 5.0 GA.**
+after 5.0 GA. Future work: not part of this iteration (operator, 2026-11-12).**
 
 - It covers CIS (SCA), syscheck and rootcheck on the Proxmox nodes, Debian, OPNsense and Windows,
   and gives an investigation UI.
@@ -198,7 +206,7 @@ What has to change:
    Today an `event` alert from outside Grafana's state would be visible from the breadcrumb for
    24 hours. For SIEM findings, the condition should stay at its level until **acknowledged or
    aged out** (a `ttl` on the classify record: 24 h for a warning, until ack for a critical).
-   This is a small amendment to ADR-041/049 (Q5).
+   This is a small amendment to ADR-041/049 (Q4).
 3. **What does not go into the CMDB.** Attacker IPs, single log lines and CrowdSec decisions are
    not CIs. They stay in Loki (and in Wazuh). The CMDB gets the *state* of the CI that was hit,
    and a count per CI (bans per published route) as a metric for ADR-046.
@@ -219,7 +227,7 @@ What has to change:
   `pkg audit` already cover them. A second opinion with different matching would be a second
   truth to triage. It may be turned on for **Windows** guests, the one layer our scanner lacks,
   with its findings imported as a CVE layer (`windows`) into the same states and score. That is
-  an ADR-011 amendment if wanted (Q6).
+  an ADR-011 amendment, decided with the Wazuh work.
 - **Where the two meet is prioritisation:**
   - **An attack on a known CVE.** CrowdSec's `http-cve` scenarios and Suricata's ET rules name
     the CVE they detect. A hit against a CI is looked up in that module's CVE units:
@@ -266,8 +274,34 @@ Rules for the lifecycle:
 
 ## 4. What it detects and protects
 
-Key: **D** detects (alert, condition), **R** also responds automatically. Layer 1 is the default.
-Layer 2 is the optional Wazuh module. *New* marks a source that does not reach Loki today.
+### 4.0 Where the rules come from
+
+Sigma is a vendor-neutral YAML format for detection rules, and the SigmaHQ repository holds
+roughly 3,000 of them. Its coverage is uneven for TAPPaaS:
+
+| Sigma area | Size (approx.) | Use here |
+|---|---|---|
+| Windows (Sysmon, PowerShell, Security log, registry, Defender) | about two thirds of all rules | only `windows-server` guests, and only once they ship their event logs: future work |
+| Linux: auditd (execve, syscalls, file watches), sshd, sudo, su, cron, user changes | a few hundred | **yes**: privilege escalation, persistence, reverse shells, log clearing (§4.4, §4.10). Many process rules assume Sysmon for Linux, which TAPPaaS does not run; with auditd only part of them apply |
+| Web servers and proxies: traversal, injection, webshells, scanners, known exploit URLs | some dozens | **yes**, on Caddy's access logs (§4.2) |
+| Network: Zeek, DNS, generic firewall, a few vendors | small | little: no Zeek, and no OPNsense `filterlog` rules |
+| Cloud and SaaS (AWS, Azure, GCP, M365, Okta, GitHub) | sizeable | none |
+| Applications (Kubernetes audit, Spring, SQL errors) | small | little |
+
+Sigma v2 also has correlation rules (event counts, distinct-value counts, sequences). The Loki
+backend converts the counting types, not the ordered sequences.
+
+So **Sigma gives about a third of the detection list below**: the generic Linux host and web
+attack rules. Even those need a **field mapping** (a pySigma pipeline) from Sigma's field names
+to auditd's, the journal's and Caddy's JSON. **Nothing in Sigma covers** Authentik, Proxmox,
+PBS, OPNsense's `filterlog` and audit log, Suricata's output, CrowdSec's decisions, the NixOS
+closure check, or anything that needs the CMDB (zone, tier, CVE state). Those are TAPPaaS's own
+rules, written and tested in the phase that needs them (§5). The converted Sigma rules are
+committed, so a stalled converter stops new conversions, not detection.
+
+Key: **D** detects (alert, condition), **R** also responds automatically. Layer 1 is this
+iteration. Layer 2 is the Wazuh module, future work. *New* marks a source that does not reach
+Loki today.
 
 ### 4.1 Authentication attacks and brute force
 
@@ -291,7 +325,7 @@ Layer 2 is the optional Wazuh module. *New* marks a source that does not reach L
 | Port scans and probing from the WAN | **R** (CrowdSec on `filterlog`: `crowdsecurity/pf-scan-multi_ports`) | OPNsense `filterlog` | Layer 1 (CrowdSec on the firewall reads it locally) |
 | Blocked outbound bursts from a guest (a compromised guest calling out) | D | `filterlog` (outbound blocks per source) | Layer 1 rule |
 | Lateral movement: blocked attempts from one zone into mgmt or into another tenant's zone | D (critical into tier 0) | `filterlog` | Layer 1 rule |
-| IDS alerts: exploit attempts, malware command-and-control, known-bad TLS fingerprints, policy hits | D. IPS mode (drop) later, per zone (Q8) | Suricata `eve.json` (*new*) → syslog → Loki | Layer 1: Suricata on OPNsense, ET Open rules, IDS mode on the WAN and on the client zones |
+| IDS alerts: exploit attempts, malware command-and-control, known-bad TLS fingerprints, policy hits | D. IPS mode (drop) later, per zone (Q6) | Suricata `eve.json` (*new*) → syslog → Loki | Layer 1: Suricata on OPNsense, ET Open rules, IDS mode on the WAN and on the client zones |
 | Exploit attempt against a CVE open on the target module (§3.3) | D, critical; **R** through the CrowdSec ban | CrowdSec `http-cve`, Suricata ET with CVE metadata | Layer 1 correlation |
 | DNS requests to blocklisted or threat domains | D (repeated hits from one guest) | Unbound blocklist hits | Layer 1 rule |
 | CrowdSec decisions themselves (who was banned, why, how often) | D (a summary, and a warning when one site user is banned) | CrowdSec log (*new*) → syslog → Loki | Layer 1 |
@@ -327,7 +361,7 @@ Layer 2 is the optional Wazuh module. *New* marks a source that does not reach L
 | Kernel or rootkit tampering on NixOS: closure and store verification, module loads | D | §4.3, §4.4 | Layer 1 |
 | Rootkit checks on Debian, PVE and Windows (hidden processes and ports, known rootkit files) | D | Wazuh rootcheck | Layer 2 |
 | Malware in user uploads (Nextcloud and others) | D, and the app quarantines | ClamAV in the app module (Nextcloud's antivirus app) | Per module, opt-in: ~1 GiB for signatures, so not by default |
-| YARA or VirusTotal on FIM hits | D | Wazuh integrations | Layer 2, opt-in. VirusTotal sends hashes off-site (Q9) |
+| YARA or VirusTotal on FIM hits | D | Wazuh integrations | Layer 2, opt-in. VirusTotal sends hashes off-site (Q7) |
 
 ### 4.6 Config drift and CIS/hardening compliance
 
@@ -346,7 +380,7 @@ Layer 2 is the optional Wazuh module. *New* marks a source that does not reach L
 |---|---|---|---|
 | CVEs by layer, with states, score and the decision feed | D. Response is the daily patch stream (ADR-048) | ADR-011 scanners | **unchanged**: the authority |
 | An exploit attempt against an open CVE | D critical, **R** ban | §3.3 | Layer 1 correlation |
-| Windows guest CVEs | D | the Wazuh vulnerability detector | Layer 2, imported as a CVE layer (Q6) |
+| Windows guest CVEs | D | the Wazuh vulnerability detector | Layer 2, imported as a CVE layer (decided with the Wazuh work) |
 
 ### 4.8 Anomalous network flows
 
@@ -355,7 +389,7 @@ Layer 2 is the optional Wazuh module. *New* marks a source that does not reach L
 | A guest talking to a destination class it never used (server zone to internet on new ports) | D | `filterlog` pass logs on outbound rules (*new*: logging turned on for zone egress rules) | Layer 1: a LogQL baseline per CI, over the last 7 days against today |
 | Beaconing (regular small connections to one address) | D | Suricata flow and TLS events | Layer 1 rule, best effort |
 | Volume anomalies per guest | D | ADR-046 NIC metrics | an ADR-046 metric rule (`source: metrics`) |
-| Full flow records (NetFlow, Zeek) | – | needs a mirror port | **later** (P6): Zeek on a switch SPAN once the switch model can set one |
+| Full flow records (NetFlow, Zeek) | – | needs a mirror port | **future work**: Zeek on a switch SPAN once the switch model can set one |
 
 ### 4.9 Container and VM events
 
@@ -363,7 +397,7 @@ Layer 2 is the optional Wazuh module. *New* marks a source that does not reach L
 |---|---|---|---|
 | A VM or LXC created, destroyed, migrated or given a console without a TAPPaaS change | D | Proxmox task log (syslog `pvedaemon`/`pvestatd`) plus the CMDB `change` rows | Layer 1: correlate the Proxmox task with a CMDB change of the same VMID within minutes, else `security` warning |
 | A guest disk attached to another VM, or a snapshot or backup restored outside a job | D | Proxmox task log | Layer 1 |
-| Containers on guests: a new container or image not in the module's pins, privileged runs, `docker exec` into a container | D | Docker/Podman events in the journal | Layer 1 rule. **Falco** later, when `services.falco` reaches a stable NixOS release (P6) |
+| Containers on guests: a new container or image not in the module's pins, privileged runs, `docker exec` into a container | D | Docker/Podman events in the journal | Layer 1 rule. **Falco** later, when `services.falco` reaches a stable NixOS release (future work) |
 | A container image digest that is not the pinned one | D | the module test and CVE scan (they read the running digest) | already exists, raised as `security` |
 
 ### 4.10 Log tampering and loss of visibility
@@ -376,22 +410,25 @@ Layer 2 is the optional Wazuh module. *New* marks a source that does not reach L
 | Loki write attempts under another host's name | prevented: the server sets `host` from the credential | exists |
 | Deleting lines from Loki | prevented for guests (push-only credential). Admin-only on the logging VM, and every use of the delete API is logged | Layer 1 rule on the logging VM's nginx log |
 | The logging VM itself down | D | the alert watchdog on the mothership and the backup pulse (exist) | exists |
-| Security streams kept longer than the general 30 days | – | Loki per-stream retention: 90 days for `{type="security"}`, auditd and `filterlog` blocks (Q3) | Layer 1 |
+| Security streams kept longer than the general 30 days | – | Loki per-stream retention: 90 days for `{type="security"}`, auditd and `filterlog` blocks (settled: 90 days) | Layer 1 |
 
 ## 5. Phased plan
 
 Each phase ends in something that runs on hrossen and is tested there before the next starts.
 The order front-loads the cheap and high-value parts: logins and bans first.
 
+**This iteration is P0–P4: layer 1.** The two rows marked *Future* are kept as the design to
+start from. They are not part of this iteration and become their own issues when taken up.
+
 | Phase | Content | Done when | Size (ease/risk) |
 |---|---|---|---|
-| **P0: prerequisites** | (1) The `tappaas_ci_id` label on log lines: Alloy on guests from the deploy-time CI id; syslog stamped on the logging VM from the identity map (ADR-040 step 5). (2) Caddy access logs and CrowdSec's log into Loki over the existing OPNsense syslog path. (3) Loki per-stream retention for security streams. (4) `assess` takes `type` from alert labels; `core.classify.siem`; the security condition's `ttl` (Q5) | A test alert labelled `type=security, tappaas_ci_id=…` becomes a `security` warning on that CI and ages out | M / L |
+| **P0: prerequisites** | (1) The `tappaas_ci_id` label on log lines: Alloy on guests from the deploy-time CI id; syslog stamped on the logging VM from the identity map (ADR-040 step 5). (2) Caddy access logs and CrowdSec's log into Loki over the existing OPNsense syslog path. (3) Loki per-stream retention for security streams. (4) `assess` takes `type` from alert labels; `core.classify.siem`; the security condition's `ttl` (Q4) | A test alert labelled `type=security, tappaas_ci_id=…` becomes a `security` warning on that CI and ages out | M / L |
 | **P1: logins and bans** | The `logging:security` service. A CrowdSec log processor on the logging VM with Loki as data source (sshd, Authentik, pvedaemon, PBS), registered with the firewall's LAPI over a mgmt pinhole. Scenarios: sshd, Authentik, the per-module web logins. The first rule pack: §4.1 and the decisions summary | An SSH brute force from a test VM in another zone is banned at the firewall within a minute, the ban shows in Grafana, and the target CI carries a `security` condition that ages out | M / M |
 | **P2: host integrity** | auditd on NixOS guests and `debianhost` through the generated fragment; the FIM watch set per module (`logging:security` fields); the privilege, module-load and tamper rules (§4.3, §4.4, §4.10); the closure check and weekly store verification; the build-time hardening check | A hand-edited `authorized_keys`, a `nixos-rebuild` done on a guest by hand, and a stopped auditd each raise their condition on hrossen | M / M |
 | **P3: network IDS** | Suricata on OPNsense in IDS mode (ET Open), converged by the network module like CrowdSec; `eve.json` to Loki; the §4.2 rules; logging on zone egress rules and the flow baseline (§4.8); the network VM's sizing measured | An ET test signature (`testmyids`) from a guest raises an alert on that CI; the network VM stays inside its medium memory | M / M |
 | **P4: correlation and views** | CVE-aware severity (§3.3); Proxmox tasks correlated with CMDB changes (§4.9); the sweep's `siem` coverage report (*unmonitored*); the console's security view (#886) reading conditions and the Loki summary | A `http-cve` hit on a module with that CVE open mails a critical; a VM created by hand in the PVE UI is flagged; #886 lists open security conditions per node and module | M / L |
-| **P5: the `wazuh` module** (optional, after Wazuh 5.0 GA) | A NixOS VM in the `security` stack running Wazuh manager, indexer and dashboard as pinned OCI images; Authentik SAML; the `wazuh:agent` service for `pvehost`, `debianhost`, `network` (`os-wazuh-agent`), Debian guests and `windows-server`; CMDB-derived names, labels and groups; agent removal on delete; SCA, syscheck and rootcheck on; the vulnerability detector off except Windows (Q6); alerts shipped to Loki by the VM's own Alloy and matched by `wazuh-alerts.json` | Every node, the firewall and a Debian guest report SCA results; deleting a test Debian guest removes its agent; a Wazuh level ≥ 10 alert becomes a `security` condition on the right CI | H / M |
-| **P6: later** | Falco on container guests when `services.falco` is in a stable NixOS release; Zeek on a SPAN port; host bouncers (nftables) on guests for traffic within a zone; Suricata IPS per zone; CrowdSec community list (#926), already its own issue | each its own issue | – |
+| **Future: the `wazuh` module** (not this iteration; optional, after Wazuh 5.0 GA) | A NixOS VM in the `security` stack running Wazuh manager, indexer and dashboard as pinned OCI images; Authentik SAML; the `wazuh:agent` service for `pvehost`, `debianhost`, `network` (`os-wazuh-agent`), Debian guests and `windows-server`; CMDB-derived names, labels and groups; agent removal on delete; SCA, syscheck and rootcheck on; the vulnerability detector off except Windows (decided then); alerts shipped to Loki by the VM's own Alloy and matched by `wazuh-alerts.json` | Every node, the firewall and a Debian guest report SCA results; deleting a test Debian guest removes its agent; a Wazuh level ≥ 10 alert becomes a `security` condition on the right CI | H / M |
+| **Future: later** | Falco on container guests when `services.falco` is in a stable NixOS release; Zeek on a SPAN port; host bouncers (nftables) on guests for traffic within a zone; Suricata IPS per zone; CrowdSec community list (#926), already its own issue | each its own issue | – |
 
 ### Sizing (ADR-044)
 
@@ -401,12 +438,12 @@ The order front-loads the cheap and high-value parts: logins and bans first.
 | `logging` with layer 1 | 1 / 2 / 4 | **2560** / **4608** / 8192 | **24G** / **48G** / 256G | *est.*: CrowdSec processor ~150–250 MB, more Loki streams and ruler queries, 90-day security retention. Confirm by measuring on hrossen in P1/P2 (ADR-044 D6 says small minimums are first estimates) |
 | `network` with Suricata | 2 / 4 / 8 | 2048 / 4096 / 8192 (unchanged) | – | Suricata **off by default at `small`**. At medium, 4 GiB is expected to hold OPNsense, Caddy, CrowdSec (~140 MiB) and Suricata with ET Open (~1–1.5 GB *est.*); measured in P3, raised if not |
 | NixOS guests (auditd) | – | +10–20 MiB each *est.* | – | auditd plus rules, negligible |
-| `wazuh` (layer 2) | 4 / 4 / 8 | **6144** / 8192 / 16384 | 64G / 100G / 500G | vendor: 4 vCPU, 8 GiB, 50 GB for 1–25 agents at 90 days. Small is a hint, not a block (ADR-044 D1), but the install guide says "not for small sites" and the module is not in any default stack |
+| `wazuh` (layer 2, future) | 4 / 4 / 8 | **6144** / 8192 / 16384 | 64G / 100G / 500G | vendor: 4 vCPU, 8 GiB, 50 GB for 1–25 agents at 90 days. Small is a hint, not a block (ADR-044 D1), but the install guide says "not for small sites" and the module is not in any default stack |
 
 **The small budget.** Layer 1 adds about 512 MiB at `small` (logging only). ADR-044 D6 leaves
 0.25 GiB of margin on a 32 GB node, and its note says the next module that grows its small memory
 has to give it back elsewhere. Candidates: `identity` 2048 → 1792, or `logging`'s Prometheus at
-`performance` level `off` by default at small. This is Q2.
+`performance` level `off` by default at small. This is Q1.
 
 Note: the task brief described hrossen as having 4 GB-class nodes. The repository records its
 nodes at about 30–32 GB (`docs/plans/mikrotik-mlag-test-plan.md:179`; the ADR-044 32 GB install
@@ -414,35 +451,41 @@ at small). The binding limit is ADR-044's small budget, not a single node's size
 
 ### Effort, roughly
 
-P0–P4 (layer 1) is content and wiring on existing components, about the size of #851 plus #165
-per phase. P5 (Wazuh) is a new module with images, SSO, an agent service for four platforms and
-a 5.0 upgrade path to watch: the largest piece, and optional.
+- **The wiring of P0–P4 (layer 1)** is work on existing components, about the size of #851
+  plus #165 per phase.
+- **The rules are mostly ours.** Sigma gives about a third of the detection list (§4.0), and
+  even those need a field mapping for auditd, the journal and Caddy's JSON. P1 writes the auth
+  rules and scenarios for Authentik, Proxmox, PBS, OPNsense and each module's web login. P2
+  writes the closure, drift and tamper rules. P3 writes the `filterlog` and Suricata rules. P4
+  writes the CMDB correlations. Count that rule work in each phase, beside the wiring.
+- **The Wazuh module (future)** is a new module with images, SSO, an agent service for four
+  platforms and a 5.0 upgrade path to watch. It is the largest piece and is optional.
 
 ## 6. Open questions for Lars
 
-1. **Two layers instead of Wazuh first.** Do you accept layer 1 (Loki, rules, CrowdSec,
-   Suricata, auditd, CMDB) as *the* SIEM, with Wazuh as an optional module? Or should Wazuh be
-   the base even though it is blind on NixOS and too heavy for small?
-2. **The small budget.** Layer 1 needs about 512 MiB more on `logging` at small. Where does it
+**Settled 2026-11-12 (operator):**
+
+- Two layers. This iteration builds layer 1 only, and Wazuh is future work (was Q1).
+- Security streams are kept 90 days (was Q3).
+- Windows CVEs through Wazuh (was Q6) and Wazuh's timing (was Q10) wait for the Wazuh work.
+
+**Still open:**
+
+1. **The small budget.** Layer 1 needs about 512 MiB more on `logging` at small. Where does it
    come from (identity down 256 MiB, Prometheus off at small, or accept a thinner margin)?
-3. **Retention.** 90 days for security streams (auditd, `filterlog` blocks, security alerts,
-   Authentik events), against 30 for the rest? Longer at large?
-4. **The service name and shape.** Is `logging:security` a new service of `logging`, or should
+2. **Retention at large.** 90 days everywhere, or longer at `large`?
+3. **The service name and shape.** Is `logging:security` a new service of `logging`, or should
    `logging:logs` carry the security part for every consumer with no extra declaration? (The
    first lets a module declare its FIM paths and login scenarios; the second is zero-config.)
-5. **How security events age.** A `ttl` on classify records (warning 24 h; critical until
+4. **How security events age.** A `ttl` on classify records (warning 24 h; critical until
    acknowledged), as an amendment to ADR-041/049?
-6. **Windows CVEs.** Turn on Wazuh's vulnerability detector for `windows-server` guests and import
-   it as a CVE layer under ADR-011, or leave Windows outside the CVE score?
-7. **Response reach.** Bans at the firewall only cover traffic that crosses it. Do you also want
+5. **Response reach.** Bans at the firewall only cover traffic that crosses it. Do you also want
    host bouncers (nftables on guests) for attacks inside a zone, at the cost of an agent per
-   guest (P6)?
-8. **Suricata mode.** IDS only (alert), or IPS (drop) on the WAN from the start? IPS can break a
+   guest (future work)?
+6. **Suricata mode.** IDS only (alert), or IPS (drop) on the WAN from the start? IPS can break a
    published service on a false positive.
-9. **Off-site lookups.** VirusTotal hash lookups in Wazuh and the CrowdSec community list (#926)
-   send data off-site. Both off by default, as #926 already proposes?
-10. **Wazuh timing.** Wait for 5.0 GA (rc2 on 2026-10-30) before P5, or start on 4.14 and accept a
-    rebuild?
-11. **Event management (ADR-040 O6).** This plan settles the SIEM part of O6 (events stay in
-    Loki and Wazuh; the CMDB holds the CI state). Is incidents and on-call still a separate ADR,
-    or out of scope for now?
+7. **Off-site lookups.** The CrowdSec community list (#926), and later VirusTotal in Wazuh, send
+   data off-site. Off by default, as #926 already proposes?
+8. **Event management (ADR-040 O6).** This plan settles the SIEM part of O6 (events stay in
+   Loki; the CMDB holds the CI state). Are incidents and on-call still a separate ADR, or out of
+   scope for now?

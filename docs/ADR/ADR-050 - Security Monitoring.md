@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed**: draft for the operator's review; open questions below |
-| **Version** | 0.1 |
+| **Status** | **Proposed**: for the operator's review; open questions below |
+| **Version** | 0.2 |
 | **Date** | 2026-11-12 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
-| **Closes / addresses** | #843 (a SIEM for TAPPaaS); the basis for #886 (the console's security view). Settles the SIEM part of ADR-040 O6. Would amend ADR-039 (a `type` label on security rules), ADR-041 and ADR-049 (security conditions that age out), and ADR-011 (a Windows layer, if Q6 says so). Analysis: [`docs/plans/siem-analysis.md`](../plans/siem-analysis.md). |
-| **Changelog** | v0.1 (2026-11-12): first draft from the analysis. Two layers: detection on the existing logging stack at every size, with Wazuh as an optional module at medium and large. |
+| **Closes / addresses** | #843 (a SIEM for TAPPaaS); the basis for #886 (the console's security view). Settles the SIEM part of ADR-040 O6. Would amend ADR-039 (a `type` label on security rules), ADR-041 and ADR-049 (security conditions that age out), and ADR-011 (a Windows layer, with the future Wazuh work). Analysis: [`docs/plans/siem-analysis.md`](../plans/siem-analysis.md). |
+| **Changelog** | v0.2 (2026-11-12): **operator's decisions**: this iteration builds layer 1 only, and the Wazuh module is future work (D1, Phases); security streams are kept 90 days (D2). The Sigma claim is corrected: Sigma gives about a third of the rules, the platform-specific rules are TAPPaaS's own (D3, Consequences). · v0.1 (2026-11-12): first draft from the analysis. Two layers: detection on the existing logging stack at every size, with Wazuh as an optional module at medium and large. |
 
 TAPPaaS collects every guest's journal, the firewall log and the nodes' audit log in Loki. It
 alerts on single lines, bans abusive clients of published names with CrowdSec, and scans for
@@ -44,9 +44,13 @@ runs, and how it meets the CMDB.
 | Layer | Where | What |
 |---|---|---|
 | **1: security monitoring** | every site, every size; the `logging` and `network` modules and the NixOS templates | security sources into Loki; a security rule pack on the ADR-039 path; CrowdSec as the response; Suricata as the network IDS; auditd and a closure check on guests; findings as `security` conditions on CIs |
-| **2: deep host checks** | optional `wazuh` module in the `security` stack, for medium and large sites | Wazuh manager, indexer and dashboard for the machines Wazuh understands: Proxmox nodes, Debian hosts and guests, OPNsense, Windows. CIS checks (SCA), syscheck, rootcheck, and an investigation UI |
+| **2: deep host checks** (future work) | optional `wazuh` module in the `security` stack, for medium and large sites | Wazuh manager, indexer and dashboard for the machines Wazuh understands: Proxmox nodes, Debian hosts and guests, OPNsense, Windows. CIS checks (SCA), syscheck, rootcheck, and an investigation UI |
 
 Layer 1 is the SIEM. Layer 2 adds depth where Wazuh's checks apply, and reports through layer 1.
+
+**This iteration builds layer 1 only** (operator, 2026-11-12). Layer 2 is future work. What
+this ADR says about Wazuh (D7–D11) is the design to start from when it is taken up, not part of
+this iteration's scope.
 
 ### D2. Sources
 
@@ -57,15 +61,21 @@ These reach Loki, each line labelled with its CI (`tappaas_ci_id`):
 - new: auditd on NixOS guests and `debianhost`, Caddy's access logs, CrowdSec's log, and
   Suricata's `eve.json`, all over the existing syslog path.
 
-Security streams are kept 90 days by Loki's per-stream retention (Q3), the rest 30.
+Security streams are kept **90 days** by Loki's per-stream retention (operator, 2026-11-12), the
+rest 30.
 
 ### D3. Detection content
 
-- A **security rule pack** of Sigma rules converted to LogQL at build time (`sigma-cli` with the
-  Loki backend, both in nixpkgs), plus TAPPaaS's own rules.
-- It is shipped as ADR-039 rule files: `logging-security-alerts.json` for site-wide rules, and a
-  module's own file for its app.
-- Each rule carries `type=security`.
+- A **security rule pack**, shipped as ADR-039 rule files: `logging-security-alerts.json` for
+  site-wide rules, and a module's own file for its app. Each rule carries `type=security`.
+- **About a third comes from Sigma.** These are the generic Linux rules (auditd, sshd, sudo:
+  privilege escalation, persistence, log clearing) and the web-attack rules for Caddy's logs. They
+  are converted to LogQL at build time (`sigma-cli` with the Loki backend, both in nixpkgs),
+  through a field mapping from Sigma's names to auditd's, the journal's and Caddy's. The converted
+  rules are committed.
+- **The rest are TAPPaaS's own.** Sigma has nothing for Authentik, Proxmox, PBS, OPNsense's
+  `filterlog` and audit log, Suricata, CrowdSec, the closure check, or anything that needs the
+  CMDB. Most of Sigma (Windows, cloud) does not apply.
 
 ### D4. Response through CrowdSec
 
@@ -74,12 +84,12 @@ Security streams are kept 90 days by Loki's per-stream retention (Q3), the rest 
 - Scenarios cover sshd, Authentik, the Proxmox and PBS interfaces, and the web logins each module
   declares.
 - No agent runs on the guests. Bans affect traffic that crosses the firewall. Bans inside a zone
-  are deferred (Q7).
+  are future work (Q5).
 
 ### D5. Network IDS
 
 Suricata on OPNsense in **IDS mode** with ET Open, converged by the network module as CrowdSec is.
-It is off by default at `small`. IPS is a later, per-zone choice (Q8).
+It is off by default at `small`. IPS is a later, per-zone choice (Q6).
 
 ### D6. Integrity of NixOS guests is checked against the build
 
@@ -102,7 +112,7 @@ rule or source (in Loki) → ADR-039 rule (type=security, tappaas_ci_id) → Gra
 
 - `assess` takes the condition type from the alert's labels.
 - A security condition **ages out or waits for an acknowledgement** as its classify record says
-  (Q5).
+  (Q4).
 - Attacker addresses, log lines and decisions are not CIs and stay in Loki. Wazuh alerts take
   the same path: the `wazuh` VM's own Alloy ships them to Loki, and `wazuh-alerts.json` matches
   them.
@@ -110,7 +120,7 @@ rule or source (in Loki) → ADR-039 rule (type=security, tappaas_ci_id) → Gra
 ### D8. CVEs stay with ADR-011/045/047
 
 - The CVE pipeline remains the one authority on vulnerable packages.
-- Wazuh's vulnerability detector is **off**, except for Windows if Q6 says so, as a new CVE layer.
+- Wazuh's vulnerability detector is **off**, except perhaps for Windows as a new CVE layer, decided with the Wazuh work.
 - The SIEM uses the CVE states for severity: an exploit attempt (CrowdSec `http-cve`, Suricata
   ET) against a CVE that is `open` or `risk` on the target module, or on the KEV list, is
   critical.
@@ -146,7 +156,7 @@ Grafana (already on Authentik) and the console.
 | `wazuh` | 4 / 4 / 8 | 6144 / 8192 / 16384 | 64G / 100G / 500G |
 
 The values are first estimates, to be confirmed by measurement. The 512 MiB that `logging` adds
-at small must be given back elsewhere (Q2).
+at small must be given back elsewhere (Q1).
 
 ## Consequences
 
@@ -155,10 +165,11 @@ at small must be given back elsewhere (Q2).
   - Findings sit on CIs, so root cause and impact (ADR-041) correlate them with everything else.
   - The CVE work gains an operational use: exploit attempts are rated by it.
 - **Cost.**
-  - A rule pack to maintain. Sigma upstream carries most of it; the TAPPaaS rules are ours.
+  - A rule pack to write and maintain. Sigma gives about a third (generic Linux and web
+    rules); the platform-specific two thirds are ours, written and tested phase by phase.
   - auditd and a closure check on every guest.
   - Suricata on the firewall.
-  - A Wazuh module to package and follow upstream, for those who want it.
+  - Later, a Wazuh module to package and follow upstream, for those who want it.
 - **Risk.**
   - LogQL's correlation is weaker than a SIEM engine's. Mitigated by doing correlation over the
     CMDB, not in queries.
@@ -179,6 +190,8 @@ at small must be given back elsewhere (Q2).
 
 ## Phases
 
+This iteration is P0–P4.
+
 | Phase | Content | Done when |
 |---|---|---|
 | P0 | CI id on log lines; Caddy and CrowdSec logs into Loki; security retention; `assess` reads `type`; security conditions age out | a labelled test alert becomes an ageing `security` condition on its CI |
@@ -186,18 +199,23 @@ at small must be given back elsewhere (Q2).
 | P2 | auditd on guests; FIM paths; privilege, module-load and tamper rules; closure and store checks; hardening check at validate | a hand edit of `authorized_keys`, a hand `nixos-rebuild`, a stopped auditd each raise a condition |
 | P3 | Suricata IDS; egress logging and the flow baseline | an ET test signature raises an alert on the right CI |
 | P4 | CVE-aware severity; Proxmox tasks against CMDB changes; the sweep's coverage report; #886 | an exploit attempt against an open CVE mails a critical; a VM made by hand is flagged |
-| P5 | the `wazuh` module, after Wazuh 5.0 GA | nodes, firewall and a Debian guest report SCA; a deleted guest's agent is removed |
+| Future | the `wazuh` module, after Wazuh 5.0 GA; not this iteration | nodes, firewall and a Debian guest report SCA; a deleted guest's agent is removed |
+
+## Settled in review
+
+Settled 2026-11-12 (operator):
+
+- Two layers, with layer 1 built in this iteration and the Wazuh module as future work.
+- Security streams are kept 90 days.
+- Windows CVEs through Wazuh, and whether to wait for Wazuh 5.0, are decided with the Wazuh work.
 
 ## Open questions
 
-1. Two layers, or Wazuh as the base?
-2. Where the 512 MiB for `logging` at small comes from.
-3. Retention for security streams: 90 days?
-4. `logging:security` as its own service, or folded into `logging:logs`?
-5. Ageing of security conditions: a `ttl` on classify records (warning 24 h, critical until ack)?
-6. Windows CVEs from Wazuh as an ADR-011 layer?
-7. Host bouncers on guests for attacks inside a zone?
-8. Suricata IDS only, or IPS on the WAN from the start?
-9. Off-site lookups (VirusTotal, the CrowdSec community list) off by default?
-10. Wait for Wazuh 5.0 GA, or start on 4.14?
-11. Incidents and on-call: a separate event-management ADR, or out of scope?
+1. Where the 512 MiB for `logging` at small comes from.
+2. Retention at `large`: 90 days, or longer?
+3. `logging:security` as its own service, or folded into `logging:logs`?
+4. Ageing of security conditions: a `ttl` on classify records (warning 24 h, critical until ack)?
+5. Host bouncers on guests for attacks inside a zone (future work)?
+6. Suricata IDS only, or IPS on the WAN from the start?
+7. Off-site lookups (the CrowdSec community list, later VirusTotal) off by default?
+8. Incidents and on-call: a separate event-management ADR, or out of scope?
