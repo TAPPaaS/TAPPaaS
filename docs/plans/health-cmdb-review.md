@@ -469,8 +469,8 @@ receiver's burst at 791 → 790). ADR-046 added four interactions the review cou
 | L9 relations never stale | **fixed** for `depends-on` | reports may be `complete` for a relation type; module-manager uses it. Other n:m reporters (`provides`, `member-of`, `serves`) can adopt it the same way: not done here. |
 | L10 burst swallows hosts | **fixed** | a silent host after the burst's window is mailed on its own. |
 | L11 unknown reason | **fixed** | the owner is stored on the condition. |
-| L11 drift as old as the sweep | **fixed** | a `changed` attribute whose store drift mark a change cleared stops showing at the next assess. |
-| L11 placeholders | **fixed** | a placeholder nothing reported within its class's expiry is an orphan the sweep retires (15 on hrossen, from 2026-10-30). |
+| L11 drift as old as the sweep | **fixed** | a `changed` attribute whose store drift mark a change cleared stops showing at the next assess. The difference is placed by the object's id where the sweep gives one (found live: three pools named `tanka1`, the drift moving between them every run). |
+| L11 placeholders | **fixed** | a placeholder nothing reported within its class's expiry, and that no object seen within that expiry refers to, is an orphan the sweep retires (12 of 15 on hrossen; the age-only rule, found live, also retired the three that asset-manager's `allocated-to` still names, and the next refresh made them again). |
 | L11 node-down when removed | **fixed** | closed as "left the cluster". |
 | L11 concurrent writers | **fixed** | the ack verbs write `acknowledgements`, emit writes `flapping`; assess alone writes `conditions`. The timer's assess and the receiver's `assess --alert` can still overlap: two writers of the same projection from the same inputs, last one wins, nothing operator-set is lost. |
 | L11 `rootcause` events | **fixed** | no longer written. |
@@ -509,6 +509,42 @@ Nothing else was running (pgrep before each step).
 
 Not provable without deploying: emit's delivery (it mails and moves the cursor), and the site's
 first run of the new assess (it rewrites conditions).
+
+### Live verification on hrossen (2026-11-12)
+
+hrossen was brought to `f646d7b7` (main with these fixes) by a manual start of
+`update-tappaas.service`, the sweep in its own unit context (07:58–08:39, stall watch every
+10 minutes, nothing else running). tappaas-cicd rebuilt its OS; health-assess.service has
+`/var/lib/tappaas` writable. Results:
+
+| Check | Result |
+|---|---|
+| logging:metrics re-apply on tappaas1–3 | **pass**: all three converge (failed on all three the night before). |
+| Sweep result | one failure, not from this work: cluster's `test-guest-hook.sh` "the firewall's own start never waits" measured 1 s (a `$SECONDS` boundary; cluster code unchanged in the merge). |
+| assess and emit in the unit | **pass**: exit 0 every run, ~72 s, no write error; Grafana's `module-tappaas-cicd` group holds HealthDailyDigest, CveNewCritical and CveLevelUp only, so no `HealthRoot*` rule is left to mail twice. |
+| L1 roots | **pass**: critical first; no warning hides a critical; no site, zone or address among the roots. |
+| L2 cycles | **pass**: 0 `depends-on` from a machine; `rules check` and the sweep: no cycle. |
+| L5 anonymous site critical | **pass**: the site carries derived roll-ups only. |
+| L6 stale inputs | **pass**: the four switches, the AP and their ports `unknown`, "not observed since 2026-10-30"; `environment/vitest` and `ssid/TAPPaaS-Test` likewise. |
+| L7 legacy oks | **pass**: 633 conditions, every one with an owner, none of the old "ok"-owned oks. |
+| L6 reached/missed | **pass**: the sweep lists switch-manager missing crs-a, crs-b and the USW, ap-manager missing the Nano HD; 0 sources failed. |
+| L11 placeholders | **pass with a fix**: 15 → 3. The three left were retired and made again within a minute (see the status row); fixed in the controller, not yet deployed. |
+| L4 window silences | **pass**: `maintenance vm/deconz-test --until 30m`, VM stopped: operational critical, stamped with the window, `silenced`, its two services symptoms; no notice, no mail. |
+| L3 window end | **pass**: `maintenance end` with the VM still stopped: one ALERT "critical root cause deconz-test (impacts 2 service)" on the next run. |
+| L3/S3 ack, unack | **pass**: ack: one RESOLVED (acknowledged, "by tappaas: …"); unack: one new ALERT. An ack made while a run is reading shows at the following run. |
+| L3 recovery | **pass**: VM started: one RESOLVED (recovered). |
+| Notices and the outbox | **pass**: the cursor's open notices and `site-notify.sh --list-open`'s `health-root:` keys matched at every step. |
+| L11 drift placement | **fixed, not yet deployed**: the `tanka1` size drift alternated between two of the three same-named pools, two transitions every run. |
+| L10, node left the cluster | not exercised live (needs a node outage); unit-tested in the receiver suite. |
+
+Teardown: deconz-test running and ok on every condition, its window file gone, no open notice
+in the cursor or the outbox, no window in the cursor. Left: the `acknowledgements` attribute
+on vm/deconz-test holds the unack (`ack: null`), which is the record the design keeps. Two
+expired window files from 2026-11-09 (`restart-demo`, `restart-test-vmdrift`) belong to other
+work and were left.
+
+The two fixes found here (`fix(cmdb)` placeholders, `fix(health)` drift by id) are on
+`fix/health-review` after the merge and need a push and a tappaas-cicd update to take effect.
 
 ### Overlap with other work
 
