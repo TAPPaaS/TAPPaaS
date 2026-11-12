@@ -242,6 +242,37 @@ EOF
     _rnc "unresolvable vmname returns nothing" "totally-unknown-thing" ""
 
     rm -rf -- "${_tmp}"
+
+    echo ""
+    echo "== reboot_guest opens a maintenance window first, closes it when no reboot ran =="
+    _tmp="$(mktemp -d)"
+    cat > "${_tmp}/tappaas-maintenance.sh" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "${_tmp}/mw.log"
+EOF
+    chmod +x "${_tmp}/tappaas-maintenance.sh"
+    _rg() {  # _rg <vmname> <ssh-rc>: run reboot_guest with every remote step stubbed
+        (
+            export TAPPAAS_BIN="${here}/../../lib" PATH="${_tmp}:${PATH}"
+            source "$UPDATE_OS"
+            set +e
+            _ssh_rc="$2"
+            ssh() { echo "reboot" >> "${_tmp}/mw.log"; return "${_ssh_rc}"; }
+            wait_for_vm_unlock() { :; }; update_ssh_known_hosts() { :; }; wait_for_ssh() { :; }
+            wait_for_guest_settled() { :; }; wait_for_module_ready() { :; }; vm_lock_holder() { echo ""; }
+            die() { echo "die" >> "${_tmp}/mw.log"; return 1; }
+            info() { :; }
+            reboot_guest "$1" 361 tappaas1 10.0.0.9
+        ) >/dev/null 2>&1 || true
+    }
+    _rg immich 0
+    [[ "$(sed -n '1p;2p' "${_tmp}/mw.log" | tr '\n' '|')" == "open --name restart-immich --scope immich --minutes 60 --reason immich rebooted to take its new configuration|reboot|" ]] \
+        && ok "the window opens before the reboot, on the guest" || bad "window before reboot (got: $(tr '\n' '|' < "${_tmp}/mw.log"))"
+    : > "${_tmp}/mw.log"; _rg network 0
+    grep -q -- "--scope site" "${_tmp}/mw.log" && ok "the firewall's reboot holds the whole site" || bad "firewall scope (got: $(tr '\n' '|' < "${_tmp}/mw.log"))"
+    : > "${_tmp}/mw.log"; _rg immich 1
+    grep -q "^close --name restart-immich" "${_tmp}/mw.log" && ok "a reboot that did not run closes its window" || bad "close on failed reboot (got: $(tr '\n' '|' < "${_tmp}/mw.log"))"
+    rm -rf -- "${_tmp}"
 else
     bad "update-os.sh not found"
 fi
