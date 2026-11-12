@@ -23,4 +23,5 @@ esac
 logs_reconcile_consumer_rules
 logs_sync_credentials
 logs_apply_client
+logs_apply_metrics
 logs_apply_alerts

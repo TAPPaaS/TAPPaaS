@@ -244,6 +244,20 @@ check "the server as of the first report had the first cpu" "E5-2680v4" "$(cmdb 
 check "a query as of then sees the first cpu" "E5-2680v4" "$(cmdb query server --at "${T1b}" --json | jq -r '.[0].attributes.cpu')"
 check "drift on the server: what cpu was, from whom" "E5-2680v4 health-manager" "$(cmdb show srv-01 --json | jq -r '"\(.drift.attributes.cpu.was) \(.drift.source)"')"
 cmdb history srv-01 >"${T}/hist.txt" 2>&1 && grep -q "E5-2690v4" "${T}/hist.txt" && ok "cmdb history prints a table" || bad "history text: $(head -3 "${T}/hist.txt")"
+# An investigation set and ended: its periods, any object, with the change that ended it.
+cmdb report --json >/dev/null <<JSON
+{ "source": "health-manager", "kind": "change", "verb": "perf nextcloud --level trace", "actor": "lars", "time": "${T1b}",
+  "objects": [ { "class": "vm", "name": "nextcloud", "attributes": { "investigation": { "level": "trace", "until": "${T2}" } } } ] }
+JSON
+cmdb report --json >/dev/null <<JSON
+{ "source": "health-manager", "kind": "change", "verb": "perf nextcloud expired", "time": "${T2}",
+  "objects": [ { "class": "vm", "name": "nextcloud", "attributes": { "investigation": null } } ] }
+JSON
+check "periods: the investigation that ended, with the change that ended it" "vm/nextcloud trace ${T1b} ${T2} perf nextcloud expired" \
+    "$(curl -s --unix-socket "${CMDB_SOCKET}" "http://cmdb/v1/periods?attribute=investigation" | jq -r '[.data[] | select(.value != null) | "\(.object.class)/\(.object.name) \(.value.level) \(.from) \(.to) \(.ended.verb)"] | join("|")')"
+check "periods: since after its end leaves it out" "0" \
+    "$(curl -s --unix-socket "${CMDB_SOCKET}" "http://cmdb/v1/periods?attribute=investigation&since=${T3}" | jq '[.data[] | select(.value != null)] | length')"
+check "periods: no attribute named is a 400" "400" "$(curl -s -o /dev/null -w '%{http_code}' --unix-socket "${CMDB_SOCKET}" "http://cmdb/v1/periods")"
 cat >"${T}/r3.json" <<JSON
 { "source": "asset-manager", "kind": "change", "verb": "asset modify", "job": "J-1", "actor": "lars", "time": "${T3}",
   "objects": [ { "class": "server", "name": "srv-01", "attributes": { "assetTag": "T-0001" } },
@@ -448,6 +462,11 @@ cmdb report --json >/dev/null <<JSON
   "relations": [ { "type": "backs-up", "from": { "class": "datastore", "name": "ph-ds" }, "to": { "class": "vm", "name": "ph-old" } } ] }
 JSON
 check "a placeholder has not been seen, so it does not expire" "null" "$(cmdb show vm/ph-old --json | jq -r '.attributes.stage.value')"
+_far="$(date -u -d '+30 days' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v+30d +%Y-%m-%dT%H:%M:%SZ)"
+_orph() { curl -s --unix-socket "${CMDB_SOCKET}" -X POST -H 'Content-Type: application/json' -d "$1" http://cmdb/v1/retire; }
+check "…but one nothing reported within its class's expiry is an orphan, retired by the sweep" "yes" \
+    "$(_orph "{\"orphans\":true,\"now\":\"${_far}\"}" | jq -r 'if ([.data.retire[] | select(.name == "ph-old" and (.reason | startswith("a placeholder")))] | length) == 1 then "yes" else "no" end')"
+check "…not before" "0" "$(_orph "{\"orphans\":true,\"now\":\"${OLD}\"}" | jq '[.data.retire[] | select(.name == "ph-old")] | length')"
 refuse "a reference to a class that does not exist is refused" 4 "no class nope" \
     '{"source":"t","objects":[{"class":"zone","name":"z9"}],"relations":[{"type":"serves","from":{"class":"nope","name":"x"},"to":{"class":"environment","name":"e"}}]}'
 
@@ -523,7 +542,7 @@ check "…and it was rewritten in place" "2026-10-30T03:00:00Z" "$(cmdb show "${
 check "an assessment is no sighting: lastSeen stands" "${_seen}" "$(cmdb show "${_pid}" --json | jq -r '.lastSeen')"
 refuse "an assessment names objects by id" 4 "by id" \
     '{"source":"health-manager","assessment":true,"objects":[{"class":"zone","name":"nope","attributes":{"conditions":[]}}]}'
-check "the rules are served: runs-on's dependant, the shipped set" "from 7" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '"\(.data.relations[] | select(.name == "runs-on") | .dependant) \(.data.rules | length)"')"
+check "the rules are served: runs-on's dependant, the shipped set" "from 11" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '"\(.data.relations[] | select(.name == "runs-on") | .dependant) \(.data.rules | length)"')"
 check "…a rule's dependant clause, and the attributes one may name" "true true" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '"\(any(.data.rules[]; .dependant.haNode == true)) \(.data.fields | index("haNode") != null)"')"
 check "the containment is served: each relation type's tree end" "to from both null" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '[.data.relations[] | select(.name == ("allocated-to", "runs-on", "connects", "depends-on")) | .tree | tostring] | join(" ")')"
 refuse "a pool needs its node" 4 "no key" '{"source":"t","objects":[{"class":"storage-pool","name":"tanka1"}]}'
@@ -557,6 +576,17 @@ JSON
 check "every field a discover report sends is declared" "true" "$(jq -r '.delivered' <<<"${out}" 2>/dev/null || echo "${out}")"
 out="$(cmdb report --json <<<'{"source":"switch-manager","objects":[{"class":"port","name":"p1","attributes":{"asset":"deep-srv","link":"down","seen":[],"poe":{"draw":0}}},{"class":"device","name":"sw9","attributes":{"uptime":200,"clients":[{"mac":"bb"}]}}]}')"
 check "what moves on every read is no drift" "0" "$(jq '[.result.objects[].drift[]] | length' <<<"${out}")"
+
+echo "== a complete report closes what it no longer names =="
+cmdb report --json >/dev/null <<<'{"source":"module-manager","objects":[{"ref":"a","class":"vm","name":"cp-app"},{"ref":"s1","class":"service","name":"cp:one","attributes":{"onNode":{"ref":"a"}}},{"ref":"s2","class":"service","name":"cp:two","attributes":{"onNode":{"ref":"a"}}},{"ref":"s3","class":"service","name":"cp:three","attributes":{"onNode":{"ref":"a"}}}],"relations":[{"type":"depends-on","from":{"ref":"a"},"to":{"ref":"s1"}},{"type":"depends-on","from":{"ref":"a"},"to":{"ref":"s2"}}]}'
+cmdb report --json >/dev/null <<<'{"source":"recorded","relations":[{"type":"depends-on","from":{"class":"vm","name":"cp-app"},"to":{"class":"service","name":"cp:three"}}]}'
+check "before: two observed dependencies and a recorded one" "cp:one,cp:three,cp:two" \
+    "$(cmdb relations --type depends-on --json | jq -r '[.[] | select(.from.name == "cp-app") | .to.name] | sort | join(",")')"
+cmdb report --json >/dev/null <<<'{"source":"module-manager","objects":[{"ref":"a","class":"vm","name":"cp-app"}],"relations":[{"type":"depends-on","from":{"ref":"a"},"to":{"class":"service","name":"cp:one"}}],"complete":[{"type":"depends-on","from":{"ref":"a"}}]}'
+check "a complete report ends the dependency it dropped; an operator's recorded one stays" "cp:one,cp:three" \
+    "$(cmdb relations --type depends-on --json | jq -r '[.[] | select(.from.name == "cp-app") | .to.name] | sort | join(",")')"
+check "an object's query row says when each source last saw it" "true" \
+    "$(cmdb query vm --json | jq -r '.[] | select(.name == "cp-app") | .seen["module-manager"] != null')"
 
 echo "== the discovery sweep (D15) =="
 # A clean store and config/ of its own: the fixture site. The sources are stubs
@@ -700,6 +730,43 @@ cmdb report --json >/dev/null <<<'{"source":"switch-manager","relations":[{"type
 out="$(sweep)"
 check "an observed change of the cable, the words kept, is drift" "changed false null" \
     "$(jq -r '.differences[] | select(.name == "w1" and ((.attribute // "") | startswith("→connects"))) | "\(.kind) \(.expected) \(.reason)"' <<<"${out}")"
+
+# A dependency cycle over required relations: a machine that depends on a
+# service its own guest runs (the identity stop of 2026-11-05). Not expected,
+# whatever reported it: the sweep warns, naming every member.
+cmdb report --json >/dev/null <<<'{"source":"module-manager","objects":[{"ref":"m","class":"machine","name":"cy-node"},{"ref":"v","class":"vm","name":"cy-vm","attributes":{"onNode":{"ref":"m"}}},{"ref":"s","class":"service","name":"cy:svc","attributes":{"onNode":{"ref":"v"}}}],"relations":[{"type":"depends-on","from":{"ref":"m"},"to":{"ref":"s"}}]}'
+out="$(sweep)"
+check "a dependency cycle is a difference of its own, not expected" "cycle false 3" \
+    "$(jq -r '[.differences[] | select(.kind == "cycle")][0] | "\(.kind) \(.expected) \(.after | length)"' <<<"${out}")"
+check "…counted, and the sweep warns" "1 1" "$(jq -r '"\(.counts.cycles) \(.exitCode)"' <<<"${out}")"
+cmdb report --json >/dev/null <<<'{"source":"module-manager","relations":[{"type":"depends-on","from":{"class":"machine","name":"cy-node"},"to":{"class":"service","name":"cy:svc"},"end":true}]}'
+out="$(sweep)"
+check "…and is gone once the relation ends" "0" "$(jq -r '.counts.cycles' <<<"${out}")"
+
+# A leased address appearing is expected; a reserved one appearing is not.
+jq '.objects += [{"class":"address","name":"10.0.0.77","attributes":{"ip":"10.0.0.77","leaseUntil":"2026-12-01T00:00:00Z"}},{"class":"address","name":"10.0.0.78","attributes":{"ip":"10.0.0.78","leaseUntil":"2026-12-01T00:00:00Z","reservation":"aa:bb:cc:dd:ee:ff"}}]' "${SW}/site.json" >"${SW}/s2" && cp "${SW}/s2" "${SW}/site.json"
+out="$(sweep)"
+check "a leased address appearing is expected, reason lease; a reserved one is drift" "true lease|false null" \
+    "$(jq -r '[.differences[] | select(.class == "address" and .attribute == null) | "\(.expected) \(.reason)"] | join("|")' <<<"${out}")"
+jq '.objects |= map(select(.class != "address"))' "${SW}/site.json" >"${SW}/s2" && cp "${SW}/s2" "${SW}/site.json"
+cmdb report --json >/dev/null <<<'{"source":"site-src","objects":[{"class":"address","name":"10.0.0.77","end":true},{"class":"address","name":"10.0.0.78","end":true}]}'
+out="$(sweep)"
+check "a leased address that went is expected too; a reserved one going is drift" "true lease|false null" \
+    "$(jq -r '[.differences[] | select(.class == "address" and .attribute == null) | "\(.expected) \(.reason)"] | join("|")' <<<"${out}")"
+
+# A discover source says which devices it reached: one it reported before and
+# not now is listed; a source that reached none of them has failed, whatever
+# it exited with.
+jq '.objects += [{"class":"server","name":"dev-1"},{"class":"server","name":"dev-2"}]' "${SW}/site.json" >"${SW}/s2" && cp "${SW}/s2" "${SW}/site.json"
+out="$(sweep)"
+check "a source that reached its devices: reached 2, none missed" "2 0" "$(jq -r '.sources[] | select(.source == "site-src") | "\(.reached) \(.missed | length)"' <<<"${out}")"
+jq '.objects |= map(select(.name != "dev-2"))' "${SW}/site.json" >"${SW}/s2" && cp "${SW}/s2" "${SW}/site.json"
+out="$(sweep)"
+check "a device it no longer reached is a difference of its own; the source stays ok" "unread not reached by site-src true true" \
+    "$(jq -r '[.differences[] | select(.name == "dev-2")][0] | "\(.kind) \(.after) \(.expected == false)"' <<<"${out}") $(jq -r '.sources[] | select(.source == "site-src") | .ok' <<<"${out}")"
+jq '.objects |= map(select(.class != "server"))' "${SW}/site.json" >"${SW}/s2" && cp "${SW}/s2" "${SW}/site.json"
+out="$(sweep)"
+check "a source that ran and reached none of its devices has failed" "false 2" "$(jq -r '"\(.sources[] | select(.source == "site-src") | .ok) \(.exitCode)"' <<<"${out}")"
 
 echo "== the store's invariant =="
 _ov="$(sql "INSERT INTO attribute (object, name, value, source, validity)

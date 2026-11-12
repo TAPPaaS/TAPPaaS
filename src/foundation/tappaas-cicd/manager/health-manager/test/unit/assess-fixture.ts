@@ -58,6 +58,8 @@ export class StubIO implements AssessIO {
   sweepRecord: ReturnType<AssessIO["sweep"]> = { time: NOW.toISOString(), counts: { expected: 0, drift: 0, desired: 0, unmanaged: 0, missing: 0, unread: 0, sourcesFailed: 0 } };
   scan: ReturnType<AssessIO["cve"]> = null;
   security?: AssessIO["security"];
+  metrics?: AssessIO["metrics"];
+  windows?: AssessIO["windows"];
   retired: CmdbItem[] = [];
 
   constructor(

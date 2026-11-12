@@ -1,0 +1,6 @@
+{
+  "$schema": "../../../schemas/service-fields.json",
+  "service": "logging:traces",
+  "description": "The consumer's spans in the site's trace store (Tempo on the logging VM), pushed as OTLP to logging's push receiver on tcp/3120 (/v1/traces) with the consumer's own credential; the spans' identity is set from that credential. The store runs only while some CI is raised to trace (health-manager perf <ci> --level trace --until <time>).",
+  "fields": {}
+}

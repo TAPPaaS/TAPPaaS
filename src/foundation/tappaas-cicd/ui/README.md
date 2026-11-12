@@ -617,6 +617,105 @@ on loopback, so the read role; a proposal is printed as its preview and apply co
 never run; an opened wizard as its address, `https://console.<domain>/…`. `tappaas ask` with no question is a short conversation; `--conversation <id>` goes
 on with one. Without the AI stack, or with the console down, it says why and exits 1.
 
+## Performance (ADR-046 D7)
+
+The **Performance** menu, under Health, in four tabs (`web/src/pages/Performance.tsx`); the CI
+panel's Performance section and Browse's charts are one component (`web/src/perfpanel.tsx`).
+The server reads (`src/perf.ts`, wired in `src/perfwire.ts`), each `{data, at, ageSeconds,
+refreshing, error}` with the types of `web/src/perftypes.ts`:
+
+| Route | Answers |
+|---|---|
+| `GET performance/overview` | `PerfOverview`: the site's level and where it comes from, the store's state (`off` \| `on` \| `unreachable`), the `performance` root causes the CMDB carries with what they slow, the eight most saturated resources (USE) and published services (RED), each with its 24 h sparkline and last change; `basicCost` when the site is off |
+| `GET performance/levels` | `PerfLevels`: the cascade as rows (site, environments, modules), each `{level, set, from, resolution, cost}`, the total against the logging VM's memory and disk, `measuredSeries` the store holds |
+| `GET performance/investigations` | `PerfInvestigations`: `health-manager perf list --json`, checked against the contract below |
+| `GET performance/ci/<id>?range=24h\|7d\|30d\|90d` | `PerfCi`: the CI's effective level, its class's signals over the range (24 h and 7 d from the store, 30 d and 90 d from the 5-minute trends), the CMDB changes in the range as markers, links to Grafana and its root cause. The signal its own `performance` condition names (reason `perf-<signal>`) is `judged`, at the condition's status when that is worse than its line: a short list of charts always leads with it |
+
+**The store** is asked by the server only, with the queries `src/perf.ts`'s signal catalogue
+builds; no PromQL comes from a request and the credential never leaves the server. It is the
+logging VM's Prometheus at `https://logging.mgmt.internal:3121` (`/trends/` the 90-day one) with
+the mothership's admin credential, the Loki one (`~/.loki-admin-password`, user `tappaas`;
+`CONSOLE_METRICS_URL`, `CONSOLE_METRICS_PASSWORD_FILE` override). TLS trusts the site's CA through
+the unit's `NODE_EXTRA_CA_CERTS`; the home directory is readable under the sandbox, so no unit
+change is needed. Series are selected by `tappaas_ci_id`; a pool's by its node's id and
+`pool="<name>"` (the node's sampler pushes it); a published service's (Caddy, P3) by the
+proxy-route CI's id. Change markers are the CI's CMDB changes of kind `change` with a verb, not
+the sweep's.
+
+**Fixture mode** answers from a synthetic store (`src/perffixture.ts`, over
+`test/fixtures/perf/metrics.json`, written by `make-metrics.py`): the same client, queries and
+parsing. `fixture-server.sh --overlay test/fixtures/variants/off` is the same site at `small`
+with no level and no investigation.
+
+### The contract P2 and P4 implement
+
+The console works against these now, in fixture mode; the verbs below are in the fixture's
+`health-manager` manifest (`test/fixtures/reads/health-manager-help-json.out`) exactly as the
+console expects them, and the buttons stay disabled, with the reason beside them, while a site's
+health-manager lacks them.
+
+**The field (P2)** — `performance.level` and `performance.resolution`, a declared field at three
+scopes, most specific wins:
+
+| Scope | Record | Changed by |
+|---|---|---|
+| site | `site.json` `performance.{level,resolution,retentionDays}` | `site-manager site modify --set performance.level=<l> [--check]` |
+| environment | `config/environments/<env>.json` `performance.{level,resolution}` | `environment-manager modify <env> --set performance.level=<l>` (offered once `environment-fields.json` has `performance`) |
+| module instance | `config/<module>.json` `performance.{level,resolution}` | `module-manager modify <m> --set performance.level=<l> [--dry-run]`, `--unset performance.level` to inherit |
+
+`level` is `off` \| `basic` \| `service` (never `trace`: a record that says `trace` is read as
+`service`); `resolution` is `normal` \| `fine`. Unset: inherit; the site's default by size
+(`small` off, else basic). A module's CIs (its guest, its machine, its routes) take its level.
+
+**The verbs (P2 for `perf`, `perf stop`, `perf list`; P4 adds the conditions)** — health-manager:
+
+```
+health-manager perf <ci> --level basic|service|trace [--resolution fine] --until <time> [--note <n>]
+health-manager perf stop <ci>
+health-manager perf list [--json]
+```
+
+- `perf` raises one CI (its id, as the other health verbs take it) until `--until` (an ISO time or
+  `30m`, `2h`, `7d` from now). `--until` is required for every raise: a raise at CI scope is always
+  timed, and `trace` exists only this way. Run on a CI already raised it replaces the raise (the
+  console's *Extend* runs it again with a later `--until`). It writes a CMDB change on the CI
+  (verb `perf <name> --level … --until …`, actor the job's), which becomes a chart marker. Manifest:
+  `effect: write`, `preview.kind: none`. Exit 0 on success, 1 with `[Error] …` on a refusal.
+- `perf stop` ends it now (a change on the CI). `effect: write`, `preview.kind: none`.
+- `perf list --json` (`effect: read`) prints:
+
+```json
+{
+  "now": "2026-11-01T08:54:11Z",
+  "investigations": [
+    { "ci": { "id": "<uuid>", "class": "vm", "name": "identity" },
+      "level": "trace", "resolution": "fine", "from": "basic",
+      "by": "lars", "note": "logins slow since the update",
+      "started": "2026-11-01T07:40:12Z", "until": "2026-11-01T10:40:12Z",
+      "ended": null, "endedHow": null, "endedBy": null, "change": 1901 }
+  ],
+  "history": [
+    { "...": "the same row", "ended": "2026-10-30T19:02:40Z", "endedHow": "stopped" , "endedBy": "lars" }
+  ]
+}
+```
+
+  `investigations` the raises in force, `history` those ended in the last 90 days, newest first
+  — from `config/performance-raises.json`, and from the CMDB's periods of each CI's
+  `investigation` attribute (`GET /v1/periods`) for what the file no longer lists;
+  `from` the cascaded level it raised from; `endedHow` `expired` or `stopped`. A row in
+  `investigations` whose `until` has passed is shown as history (expired); a row missing `ci.id`,
+  `ci.name`, `started`, `until` or a level of `basic`/`service`/`trace` is dropped.
+
+**The condition (P4)** — a `performance` condition on the CI, as ADR-041's others: `{type:
+"performance", status, reason ("perf-<signal>", "perf-no-numbers"), message, since, lastChecked,
+source, derived, rootCause (an id or null), acknowledged, maintenance}`. A slow pool or a
+pressured node crosses `stored-on` / `runs-on` as an `impact` warning on what depends on it
+(`derived: true`, `rootCause` the pool's id), and the dependant's own `performance` condition, if
+any, is then `derived` with the same `rootCause`. The Overview lists a CI with a non-derived
+`performance` condition as a root cause with what it slows (its impacts), Browse colours the tree
+by the condition, and a symptom's panel links its root.
+
 ## The verb manifest
 
 At start the console reads every manager's `--help --json` (lib/ts `renderManifest`) and the
@@ -702,7 +801,7 @@ from the laptop.
 ### Fixture mode: no live system
 
 ```bash
-ui/fixture-server.sh [--port 9097] [--fixtures <dir>]
+ui/fixture-server.sh [--port 9097] [--fixtures <dir>] [--overlay <dir>]
 ```
 
 The whole console on a laptop, from what `test/fixtures/capture.sh` recorded (`test/fixtures/README.md`). The script builds `src` when it has changed, stops the clock at the capture and serves the committed `web/dist` on 127.0.0.1; after changing the front end, `cd web && npm run build`. Behind it, `CONSOLE_RUNNER=fixtures` with `CONSOLE_FIXTURES=<dir>` has `main.ts` build the server on `src/fixtures.ts`:
@@ -710,6 +809,7 @@ The whole console on a laptop, from what `test/fixtures/capture.sh` recorded (`t
 - **Nothing is executed.** Reads answer from the captured files. A job's preview says `jobs/<slug>.preview.txt` if there is one, else its argv; an apply says `jobs/<slug>.apply.txt`, else `applied (fixture)`, exit 0. A `jobs/<slug>.<phase>.pace` beside it (`<first> <ms>`) says its first lines at once and then one line every `<ms>` ms, so a page shows a job still running, with its status line and Stop; Stop ends it (exit 130). Every call goes to a journal (`CONSOLE_FIXTURES_JOURNAL`, default `<dir>/journal.jsonl`; the script's, `/tmp/tappaas-console-fixtures-<port>/journal.jsonl`), one JSON line of `{at, kind, argv}` with kind `read`, `preview` or `apply`, so a test can assert on argv. A secret on stdin is never journalled.
 - **No sign-in.** The `X-Console-Actor` header says who, default `operator` (`CONSOLE_ACTOR`), as an installer. Outside the mode the header means nothing.
 - **`CONSOLE_NOW=<iso>`** stops the server's clock: ages, the last sweep, acks. The browser's own clock is not the server's: a capture stops that one too (Playwright's `page.clock`).
+- **`--overlay <dir>`** (`CONSOLE_FIXTURES_OVERLAY`) lays a variant's `config/` and `reads/` over the fixtures': `test/fixtures/variants/off` is the site at `small` with no performance level.
 - The config is a copy under the state directory, and the repository a link there, so a run writes nothing into the fixtures, `$HOME` or the worktree; anything else the server looks for gets a harmless default (`openFixtures`).
 
 A module with no icon answers 404 on `modules/<name>/icon`, here as on a site: the page draws its initial, and the browser logs the 404.

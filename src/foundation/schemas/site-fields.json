@@ -104,6 +104,43 @@
       "minLength": 1,
       "changeClass": "in-place"
     },
+    "performance": {
+      "description": "Performance monitoring: how much the site measures of how well its nodes, guests and services run, and how long it keeps the numbers. Collected in the logging module's metrics store.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "description": "What is collected: off (nothing), basic (CPU, memory, disk and network of the nodes, guests, pools and the backup server, once a minute), service (basic and the published services' requests; not collected yet). Not set: off on a small site, basic on a medium or large one. Tracing is never a standing level: it is switched on for one object for a time.",
+          "type": "string",
+          "enum": ["off", "basic", "service"],
+          "changeClass": "in-place",
+          "changeNote": "Applied by logging's update and by site-manager's and backup-manager's reconcile: the Proxmox and PBS metric servers are set or removed. Lowering the level stops collection at once; what was collected ages out with the retention."
+        },
+        "resolution": {
+          "description": "normal (once a minute) or fine (every 15 seconds: four times the samples), for every module that does not set its own.",
+          "type": "string",
+          "enum": ["normal", "fine"],
+          "changeClass": "in-place"
+        },
+        "retentionDays": {
+          "description": "How many days the metrics store keeps the numbers. Not set: 7 on a small site, 15 on a medium, 30 on a large one. The 5-minute trends are kept 90 days whatever this says.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365,
+          "changeClass": "in-place",
+          "changeNote": "The store restarts with the new retention at logging's next update or metrics reconcile; a shorter one deletes the older numbers."
+        },
+        "capacityHorizonDays": {
+          "description": "How far ahead a capacity projection warns: a pool, a backup datastore or a node's memory that will be full within this many days, at the last seven days' rate, is a capacity warning. Not set: 14.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365,
+          "changeClass": "in-place",
+          "changeNote": "Read by the next health-manager assess."
+        }
+      },
+      "changeClass": "in-place"
+    },
     "owner": {
       "description": "Reference to the site-owner Organization.name (config/identities/organizations/<owner>.json).",
       "references": "organizations",

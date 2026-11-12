@@ -1,46 +1,12 @@
 {
-  "_comment": "The platform's rules over the mothership's own logs. health-manager emit writes one JSON line per health event, identifier tappaas-health (ADR-041 D4); cmdb sweep writes one per difference, identifier cmdb-sweep (ADR-040 D15). A critical root cause is mailed at once; a warning, a symptom, or a sweep finding waits for the daily digest; a silenced event (acknowledged, in maintenance) is recorded and not mailed. All three are event rules: an alert over a log line resolves when its window moves on, not when the root recovers, so the recovery is a line of its own and a mail of its own. Which events leave the site is this file's choice, as ADR-039 D1 intends: edit the match. The security scan writes one line per scan, identifier tappaas-security: new open critical/high CVEs are mailed at once (cve-new-critical), other changes wait for the digest; a module's CVE risk level rising to high or critical is a health event of its own (cve-level-up).",
+  "_comment": "The platform's rules over the mothership's own logs. health-manager emit writes one JSON line per health event, identifier tappaas-health (ADR-041 D4); cmdb sweep writes one per difference, identifier cmdb-sweep (ADR-040 D15). A critical root cause is not a rule here: health-manager emit mails it itself, one notice from when it becomes a root cause to when it stops being one, for whatever reason. A warning, a performance root or a sweep finding waits for the daily digest; a silenced event (acknowledged, in maintenance) is recorded and not mailed. These are event rules: an alert over a log line resolves when its window moves on. Which events leave the site is this file's choice, as ADR-039 D1 intends: edit the match. The security scan writes one line per scan, identifier tappaas-security: new open critical/high CVEs are mailed at once (cve-new-critical), other changes wait for the digest; a module's CVE risk level rising to high or critical is a health event of its own (cve-level-up).",
   "rules": [
-    {
-      "name": "health-root-cause",
-      "title": "HealthRootCause",
-      "headline": "Critical root cause",
-      "kind": "event",
-      "match": "\"to\":\"critical\".*\"kind\":\"causal\".*\"silenced\":false}",
-      "capture": {
-        "name": "\"name\":\"(?P<name>[^\"]+)\"",
-        "reason": "\"reason\":\"(?P<reason>[^\"]*)\"",
-        "impacted": "\"impacted\":\"(?P<impacted>[^\"]*)\""
-      },
-      "window": 300,
-      "summary": "A condition became a critical root cause: the failure nothing else explains, with what it impacts by class. What it impacts is not mailed separately; a warning root waits for the daily digest. A module whose CVE risk rose to critical is mailed by cve-level-up instead (its line ends in levelUp), so it gets one mail, not two.",
-      "mail": {
-        "subject": "{state}: critical root cause {label.name} (impacts {label.impacted})",
-        "body": "== Critical root cause: {label.name}\nreason: {label.reason}\nimpacts: {label.impacted}\nsince: {since}\n\nhealth-manager roots shows what it impacts; health-manager ack {label.name} --note <why> silences it and its symptoms.\nIn Grafana (Explore, Loki): {query}"
-      }
-    },
-    {
-      "name": "health-root-recovered",
-      "title": "HealthRootRecovered",
-      "headline": "Critical root cause recovered",
-      "kind": "event",
-      "match": "\"from\":\"critical\".*\"kind\":\"recovery\".*\"root\":true.*\"silenced\":false",
-      "capture": {
-        "name": "\"name\":\"(?P<name>[^\"]+)\""
-      },
-      "window": 300,
-      "summary": "A critical root cause returned to ok. A root that eased to warning first recovers in the digest, not here.",
-      "mail": {
-        "subject": "RESOLVED: critical root cause {label.name}",
-        "body": "== Critical root cause recovered: {label.name}\nsince: {since}\n\nhealth-manager list shows what is still not ok.\nIn Grafana (Explore, Loki): {query}"
-      }
-    },
     {
       "name": "health-daily-digest",
       "title": "HealthDailyDigest",
       "headline": "Daily digest",
       "kind": "event",
-      "match": "(\"to\":\"warning\".*\"kind\":\"causal\".*\"silenced\":false|\"expected\":false|\"event\":\"cve-changes\")",
+      "match": "(\"to\":\"warning\".*\"kind\":\"causal\".*\"silenced\":false|\"to\":\"critical\".*\"kind\":\"causal\".*\"silenced\":false,\"digestOnly\":true|\"expected\":false|\"event\":\"cve-changes\")",
       "window": 86400,
       "repeat": "24h",
       "summary": "In the last 24 hours a condition became a warning root cause, the security scan saw CVE changes that need no mail of their own (a new analysed or carried item, a level going down), or the discovery sweep found drift, something unmanaged, missing, or differing from config/. One mail a day while this fires; nothing when a day passes quietly. health-manager digest writes the mail, an ALERT when it has something new and a STATUS when not; the template below goes out only when it cannot.",

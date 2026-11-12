@@ -1139,6 +1139,16 @@
    "drift": false
   },
   {
+   "id": 1880,
+   "kind": "change",
+   "source": "module-manager",
+   "job": "20261031125510-77c0aa",
+   "verb": "update litellm",
+   "actor": "lars",
+   "time": "2026-10-31T12:55:10.000Z",
+   "drift": false
+  },
+  {
    "id": 6203,
    "kind": "change",
    "source": "module-manager",

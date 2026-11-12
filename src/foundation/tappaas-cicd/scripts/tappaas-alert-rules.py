@@ -13,6 +13,13 @@ The rules go to the logging VM's Grafana through its provisioning API, one rule
 group per module in the folder "TAPPaaS modules", beside the core rules, and
 are mailed through the existing contact point (tappaas-alert-receiver).
 
+A rule with `source: "metrics"` (ADR-046 D6) names a signal the platform
+measures (lib/ts/src/perf-signals.ts; SIGNALS below), a threshold (`above`) and a
+window: it fires when the signal has stayed over the threshold for the whole
+window on one of the module's guests or published services. It is built over
+Prometheus, never written as PromQL by the module; delivery, labels and the
+mail are a log rule's.
+
 Usage:
   tappaas-alert-rules.py validate <file> [--foundation]
   tappaas-alert-rules.py render   <module> [--file F] [--hosts a,b] [--foundation] [--config-dir D]
@@ -51,7 +58,21 @@ PLACEHOLDERS = {"state", "title", "host", "hosts", "module", "labels", "summary"
 RESERVED_LABELS = {"host", "kind", "module", "bundle", "lines", "alertname", "unit",
                    "severity", "zone", "source", "job", "grafana_folder", "container"}
 RULE_KEYS = {"name", "title", "headline", "kind", "match", "unit", "capture", "window",
-             "above", "absent", "repeat", "summary", "mail", "include"}
+             "above", "absent", "repeat", "summary", "mail", "include", "source", "signal"}
+# The signals a metrics rule may name: lib/ts/src/perf-signals.ts's names and
+# expressions (a test holds the two equal). __SEL__ is the label selector.
+SIGNALS = {
+    "pool_write_latency_seconds": ("storage-pool", "max by (tappaas_ci_id, pool) (tappaas_zpool_write_wait_seconds{__SEL__})"),
+    "pool_read_latency_seconds": ("storage-pool", "max by (tappaas_ci_id, pool) (tappaas_zpool_read_wait_seconds{__SEL__})"),
+    "cpu_pressure_percent": ("guest", "max by (tappaas_ci_id) (proxmox_vm_pressurecpusome{__SEL__})"),
+    "memory_pressure_percent": ("guest", "max by (tappaas_ci_id) (proxmox_vm_pressurememorysome{__SEL__})"),
+    "io_pressure_percent": ("guest", "max by (tappaas_ci_id) (proxmox_vm_pressureiosome{__SEL__})"),
+    "node_memory_pressure_percent": ("machine", 'max by (tappaas_ci_id) (tappaas_node_psi_some_avg60{__SEL__, resource="memory"})'),
+    "node_io_pressure_percent": ("machine", 'max by (tappaas_ci_id) (tappaas_node_psi_some_avg60{__SEL__, resource="io"})'),
+    "http_p95_seconds": ("route", "histogram_quantile(0.95, sum by (tappaas_ci_id, le) (rate(caddy_http_request_duration_seconds_bucket{__SEL__}[5m])))"),
+    "http_5xx_ratio": ("route", 'sum by (tappaas_ci_id) (rate(caddy_http_request_duration_seconds_count{__SEL__, code="5xx"}[5m])) / sum by (tappaas_ci_id) (rate(caddy_http_request_duration_seconds_count{__SEL__}[5m]))'),
+    "probe_seconds": ("route", "max by (tappaas_ci_id) (probe_duration_seconds{__SEL__})"),
+}
 FOUNDATION_KEYS = {"scope", "expr", "query"}
 
 
@@ -112,6 +133,25 @@ def validate(doc, foundation=False):
         w = r.get("window")
         if not (isinstance(w, int) and not isinstance(w, bool) and 60 <= w <= 86400):
             errs.append(f"{where}: 'window' must be whole seconds, 60–86400")
+        if r.get("source", "logs") not in ("logs", "metrics"):
+            errs.append(f"{where}: 'source' is 'logs' (the default) or 'metrics'")
+        if r.get("source") == "metrics":
+            if r.get("signal") not in SIGNALS:
+                errs.append(f"{where}: 'signal' must be one the platform measures: {', '.join(sorted(SIGNALS))}")
+            a = r.get("above")
+            if not (isinstance(a, (int, float)) and not isinstance(a, bool) and a >= 0):
+                errs.append(f"{where}: a metrics rule needs 'above', the threshold, a number in the signal's unit")
+            for k in ("match", "unit", "capture", "absent", "expr", "query", "include"):
+                if k in r:
+                    errs.append(f"{where}: '{k}' does not go with a metrics rule (the signal says it)")
+            for part in ("subject", "body"):
+                t = (r.get("mail") or {}).get(part) if isinstance(r.get("mail"), dict) else None
+                for ph in PLACEHOLDER.findall(t or ""):
+                    if ph.startswith("label.") or ph.split(".")[0] not in PLACEHOLDERS - {"lines"}:
+                        errs.append(f"{where}: mail.{part} uses {{{ph}}}, which a metrics rule has not")
+            continue
+        elif "signal" in r:
+            errs.append(f"{where}: 'signal' goes with source 'metrics'")
         expr = r.get("expr")
         absent = r.get("absent", False)
         if not isinstance(absent, bool):
@@ -232,7 +272,30 @@ def expression(hosts, rule):
     return e
 
 
+def metrics_selector(hosts, rule):
+    """A metrics rule's series: its module's guests (by their name, the
+    identity the store stamps), or for a route signal its module's published
+    services (tappaas_module, stamped from the mothership's map)."""
+    cls = SIGNALS[rule["signal"]][0]
+    if hosts == "*":
+        return 'tappaas_ci_id!=""'
+    for h in hosts:
+        if not DNS.match(h):
+            raise ValueError(f"bad name '{h}'")
+    if not hosts:
+        raise ValueError("no hosts in scope")
+    key = "tappaas_module" if cls == "route" else "service_name"
+    return f"{key}=~" + _q("^(" + "|".join(sorted(set(hosts))) + ")$")
+
+
+def metrics_expression(hosts, rule):
+    base = SIGNALS[rule["signal"]][1].replace("__SEL__", metrics_selector(hosts, rule))
+    return f"min_over_time(({base})[{rule['window']}s:1m]) > {rule['above']}"
+
+
 def explore_query(hosts, rule):
+    if rule.get("source") == "metrics":
+        return SIGNALS[rule["signal"]][1].replace("__SEL__", metrics_selector(hosts, rule))
     if "query" in rule:
         return rule["query"].replace("__SELECTOR__", selector(hosts, rule))
     sel = selector(hosts, rule)
@@ -249,8 +312,11 @@ def rule_uid(module, rule):
 def grafana_rule(module, rule, hosts):
     """One rule in Grafana's provisioning shape — the same shape logging.nix's
     alertRule builds for the core rules (A: Loki, B: last, C: > 0)."""
+    metrics = rule.get("source") == "metrics"
     w = rule["window"] + (3600 if rule.get("absent") else 0)
     labels = {"kind": rule["kind"], "module": module}
+    if metrics:
+        labels["source"] = "metrics"
     for x in rule.get("include", []):
         labels[x] = "true"
     ann = {"summary": rule["summary"], "query": explore_query(hosts, rule)}
@@ -272,9 +338,9 @@ def grafana_rule(module, rule, hosts):
         "title": rule["title"],
         "condition": "C",
         "data": [
-            {"refId": "A", "datasourceUid": "loki",
+            {"refId": "A", "datasourceUid": "prometheus" if metrics else "loki",
              "relativeTimeRange": {"from": w, "to": 0},
-             "model": {"refId": "A", "expr": expression(hosts, rule), "queryType": "instant", "editorMode": "code"}},
+             "model": {"refId": "A", "expr": metrics_expression(hosts, rule) if metrics else expression(hosts, rule), "instant": True, "queryType": "instant", "editorMode": "code"}},
             {"refId": "B", "datasourceUid": "__expr__",
              "model": {"refId": "B", "type": "reduce", "expression": "A", "reducer": "last",
                        "datasource": {"type": "__expr__", "uid": "__expr__"}}},
@@ -321,6 +387,11 @@ def rule_hosts(module, rule, scopes):
 def render_group(module, doc, scopes):
     rules = []
     for r in doc["rules"]:
+        if r.get("source") == "metrics" and SIGNALS[r["signal"]][0] == "route":
+            sc = r.get("scope")
+            hs = "*" if sc == "all" else (sc if isinstance(sc, list) else [module])
+            rules.append(grafana_rule(module, r, hs))
+            continue
         hs = rule_hosts(module, r, scopes)
         if not hs and "expr" not in r:
             continue  # nothing in scope yet (no instance): no rule to evaluate

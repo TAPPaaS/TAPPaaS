@@ -137,14 +137,23 @@ export function moduleObservation(configDir: string, guests: RunningGuest[]): Cm
   const mods = listModules(configDir).filter((m) => m.status !== "archived");
   const b = build(configDir, mods, guests);
 
-  // depends-on: a node (an application's host) on the service it needs.
+  const complete: NonNullable<CmdbReport["complete"]> = [];
+  // depends-on: the node, or the application, that needs the service. Never an
+  // application's host: the host would then depend on services that run on it.
   for (const m of mods) {
     const host = b.hostRef.get(m.name);
     if (!host) continue;
-    const from = typeof host === "string" ? { ref: host } : host;
+    const from = m.kind === "application" ? { ref: nodeRef(m.name) } : typeof host === "string" ? { ref: host } : host;
+    // Complete: a dependency dropped from the record ends here, and so does one
+    // an earlier release put on the application's host.
+    complete.push({ type: "depends-on", from });
+    if (m.kind === "application") complete.push({ type: "depends-on", from: typeof host === "string" ? { ref: host } : host });
     for (const dep of m.dependsOn ?? []) {
       const list = b.services.get(dep);
       if (!list) continue;
+      // A module that provides the service itself does not depend on it: that
+      // would be a dependency cycle of one.
+      if (list.some((x) => x.provider === m.name)) continue;
       b.relations.push({ type: "depends-on", from, to: { ref: providerOf(list, dep.split(":")[0]) } });
     }
   }
@@ -170,8 +179,10 @@ export function moduleObservation(configDir: string, guests: RunningGuest[]): Cm
       }),
     });
   }
-  return { source: SOURCE, kind: "observation", objects: b.objects, relations: b.relations };
+  return { source: SOURCE, kind: "observation", objects: b.objects, relations: b.relations, complete: dedupe(complete) };
 }
+
+const dedupe = <T>(xs: T[]): T[] => [...new Map(xs.map((x) => [JSON.stringify(x), x])).values()];
 
 /** The end of an instance. A node's: its software ends with it (the store). An
  *  application's: the app and its services, which run on a node that stays, by

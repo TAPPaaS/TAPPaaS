@@ -13,6 +13,9 @@
   "image": "pbs",
   "imageLocation": "http://download.proxmox.com/debian/pbs",
   "dependsOn": [],
+  "integratesWith": [
+    "logging:metrics"
+  ],
   "provides": [
     "vm",
     "filesystem"

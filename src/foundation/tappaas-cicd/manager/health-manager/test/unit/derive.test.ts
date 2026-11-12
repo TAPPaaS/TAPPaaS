@@ -1,8 +1,8 @@
 // derive.test.ts — ADR-041 D3 over a small graph: a node down takes its guests,
 // its services and what depends on them; a redundancy group partly down
 // degrades its dependant, wholly down crosses; a warning crosses nothing,
-// unless a rule says so; a rule may read the dependant (HA); a common ancestor
-// is the root; a cable's two ends; roll-ups.
+// unless a rule says so; a rule may read the dependant (HA); a warning above
+// never takes a critical's root; a cable's two ends; roll-ups.
 
 import { CmdbItem, Condition } from "../../src/assess-model";
 import { derive } from "../../src/derive";
@@ -171,25 +171,49 @@ const rels = [
   check(at(d.conditions, b, "operational")?.derived === true && at(d.conditions, a, "operational")?.derived === false, "…the other derived");
 }
 
-// ── the lowest common ancestor ──
+// ── a warning above never takes a critical's root ──
 {
   const d = derive(all, src(
     [m1, [cond("operational", "warning", "lan-uplink")]],
     [vm1, [cond("operational", "critical", "guest-stopped")]],
     [vm3, [cond("operational", "critical", "guest-stopped")]],
   ), rels, shippedModel(), now);
-  check(d.rootCauses.length === 1 && d.rootCauses[0].id === m1.id && d.rootCauses[0].impactedCount === 2, "two failing guests under a warning node: the node is the root");
-  check(at(d.conditions, vm1, "operational")?.rootCause === m1.id, "…they name it");
-  check(at(d.conditions, vm1, "operational")?.derived === false, "…and keep their own critical: validate still fails");
-  const one = derive(all, src([m1, [cond("operational", "warning")]], [vm1, [cond("operational", "critical")]]), rels, shippedModel(), now);
-  check(one.rootCauses.length === 2, "one failing guest under a warning node: both stand");
+  const ids = d.rootCauses.map((r) => r.id);
+  check(ids.includes(vm1.id) && ids.includes(vm3.id), "two failing guests under a warning node: each is a root of its own");
+  check(ids.includes(m1.id) && ids.indexOf(m1.id) > ids.indexOf(vm1.id) && ids.indexOf(m1.id) > ids.indexOf(vm3.id), "…the node's warning is a root too, after the criticals");
+  check(at(d.conditions, vm1, "operational")?.rootCause === null && at(d.conditions, vm1, "operational")?.derived === false, "…the guests name no other root");
   const up = derive(all, src(
     [cluster, [cond("operational", "warning", "quorum-at-risk", { since: "2026-10-29T00:00:00.000Z" })]],
-    [m1, [cond("operational", "warning", "lan-uplink")]],
     [vm1, [cond("operational", "critical")]], [vm3, [cond("operational", "critical")]],
   ), rels, shippedModel(), now);
-  check(up.rootCauses.some((r) => r.id === m1.id) && !up.rootCauses.some((r) => r.id === vm1.id), "the lowest ancestor takes them, not the one above it");
+  check(up.rootCauses.filter((r) => r.id === vm1.id || r.id === vm3.id).length === 2, "a warning on the cluster takes nothing either");
   check(T0 < now, "fixture times hold");
+}
+
+// ── a slow node does not explain a guest that stopped ──
+{
+  const d = derive(all, src(
+    [m1, [cond("performance", "warning", "perf-cpu")]],
+    [vm1, [cond("operational", "critical", "guest-stopped")]],
+  ), rels, shippedModel(), now);
+  check(at(d.conditions, vm1, "impact")?.status === "warning" && at(d.conditions, vm1, "impact")?.rootCause === m1.id, "a node's performance warning degrades its guest");
+  check(d.rootCauses.some((r) => r.id === vm1.id && r.type === "operational"), "…and the guest that stopped is still a root");
+  check(d.rootCauses[0].id === vm1.id, "…ahead of the warning");
+  const down = derive(all, src(
+    [m1, [cond("operational", "critical", "node-down")]],
+    [vm1, [cond("capacity", "warning", "disk-full")]],
+  ), rels, shippedModel(), now);
+  check(!down.rootCauses.some((r) => r.id === vm1.id) && at(down.conditions, vm1, "capacity")?.rootCause === m1.id, "a full disk on a guest whose node is down is no root of its own");
+}
+
+// ── two independent faults: both roots ──
+{
+  const d = derive(all, src(
+    [m2, [cond("operational", "critical", "node-down", { since: "2026-10-30T02:14:00.000Z" })]],
+    [vm3, [cond("operational", "critical", "guest-stopped", { since: "2026-10-30T03:00:00.000Z" })]],
+  ), rels, shippedModel(), now);
+  check(d.rootCauses.length === 2 && d.rootCauses.some((r) => r.id === m2.id) && d.rootCauses.some((r) => r.id === vm3.id), "a node down and an unrelated guest stopped: two roots");
+  check(at(d.conditions, vm3, "operational")?.derived === false, "…the guest is not a symptom of the node");
 }
 
 // ── roll-ups ──

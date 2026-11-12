@@ -139,26 +139,17 @@ hm = json.load(open(os.path.join(root, "tappaas-cicd-alerts.json")))
 ck(ar.validate(hm, True) == [], f"tappaas-cicd-alerts.json validates as foundation ({ar.validate(hm, True)})")
 hg = ar.render_group("tappaas-cicd", hm, lambda m: ["tappaas-cicd"])
 ck(ar.validate(hm, False) == [], "…and needs nothing a foundation rule alone may do")
-ck([r["title"] for r in hg["rules"]] == ["HealthRootCause", "HealthRootRecovered", "HealthDailyDigest", "CveNewCritical", "CveLevelUp"], "the five rules render")
+ck([r["title"] for r in hg["rules"]] == ["HealthDailyDigest", "CveNewCritical", "CveLevelUp"], "the three rules render (health-manager emit mails a critical root itself)")
 line = lambda **k: json.dumps({"event": "transition", "name": "tappaas2", "from": k.get("frm", "ok"), "to": k.get("to", "critical"), "reason": "node-down", "kind": k["kind"], "root": k["root"], "symptoms": 6, "impacted": "4 vm, 2 service", "silenced": k["silenced"]}, separators=(",", ":"))
 sweep = lambda expected: json.dumps({"kind": "changed", "class": "node", "name": "tappaas2", "source": "site-manager", "attribute": "memory", "before": 1, "after": 2, "expected": expected}, separators=(",", ":"))
-cause, back, digest, cvenew, levelup = [re.compile(r["match"]) for r in hm["rules"]]
-ck(cause.search(line(kind="causal", root=True, silenced=False)), "a critical root's causal line matches")
-ck(not cause.search(line(kind="causal", root=True, silenced=False, to="warning")), "a warning root waits for the digest")
-ck(not cause.search(line(kind="symptom", root=False, silenced=False)), "a symptom never does")
-ck(not cause.search(line(kind="causal", root=True, silenced=True)), "a silenced root does not")
-ck(back.search(line(kind="recovery", root=True, silenced=False, frm="critical", to="ok")), "a critical root's recovery matches")
-ck(not back.search(line(kind="recovery", root=True, silenced=False, frm="warning", to="ok")), "a warning root's recovery does not")
-ck(not back.search(line(kind="recovery", root=False, silenced=False, frm="critical", to="ok")), "a symptom's recovery does not")
+digest, cvenew, levelup = [re.compile(r["match"]) for r in hm["rules"]]
+ck(not digest.search(line(kind="causal", root=True, silenced=False)), "the digest does not take a critical root: emit mails it")
 ck(digest.search(line(kind="causal", root=True, silenced=False, to="warning")), "the digest takes a warning root")
 ck(not digest.search(line(kind="causal", root=True, silenced=True, to="warning")), "…not a silenced one")
 ck(not digest.search(line(kind="symptom", root=False, silenced=False, to="warning")), "…not a symptom")
 ck(digest.search(sweep(False)), "the digest takes a sweep difference nothing explains")
 ck(not digest.search(sweep(True)), "…not an expected one")
-ck(hm["rules"][2]["repeat"] == "24h" and hm["rules"][2]["window"] == 86400, "the digest is one mail a day")
-for r in hm["rules"][:3]:
-    for lbl, rx in r.get("capture", {}).items():
-        ck(re.search(rx, line(kind="causal", root=True, silenced=False)), f"{r['name']}: {lbl} is read from the line")
+ck(hm["rules"][0]["repeat"] == "24h" and hm["rules"][0]["window"] == 86400, "the digest is one mail a day")
 # ADR-045 D4: the security scan's lines, and a module's level rising
 cnew = lambda silenced=False: json.dumps({"event": "cve-new", "scan": "2026-11-08T03:00:00Z", "count": 2, "modules": "immich", "items": "CVE-2026-1 critical brotli 1.1.0 (immich); CVE-2026-2 high zlib 1.3 (immich)", "silenced": silenced}, separators=(",", ":"))
 cchg = json.dumps({"event": "cve-changes", "scan": "x", "count": 1, "what": "immich: 1 new risk", "silenced": False}, separators=(",", ":"))
@@ -169,17 +160,14 @@ ck(digest.search(cchg), "the digest takes the other changes")
 ck(levelup.search(lvl(True)), "cve-level-up takes a module's level rising")
 ck(not levelup.search(lvl(False)), "…not a level change that is no rise")
 ck(not levelup.search(lvl(True, silenced=True)), "…not an acknowledged module")
-ck(not cause.search(lvl(True)), "a level rising to high is no critical root cause")
 crit = lambda up: lvl(up).replace('"to":"warning"', '"to":"critical"').replace('"reason":"cve-high"', '"reason":"cve-critical"')
-ck(levelup.search(crit(True)) and not cause.search(crit(True)), "a module rising to critical is one mail: cve-level-up, not also a critical root cause")
-ck(cause.search(crit(False)), "…a security condition turning critical without a rise is still a critical root cause")
-for lbl, rx in hm["rules"][3]["capture"].items():
+ck(levelup.search(crit(True)), "a module rising to critical is mailed by cve-level-up (a CVE level is no root notice of its own)")
+for lbl, rx in hm["rules"][1]["capture"].items():
     ck(re.search(rx, cnew()), f"cve-new-critical: {lbl} is read from the line")
-ck(re.search(hm["rules"][3]["capture"]["items"], cnew()).group("items").startswith("CVE-2026-1 critical brotli"), "the mail lists the items")
-for lbl, rx in hm["rules"][4]["capture"].items():
+ck(re.search(hm["rules"][1]["capture"]["items"], cnew()).group("items").startswith("CVE-2026-1 critical brotli"), "the mail lists the items")
+for lbl, rx in hm["rules"][2]["capture"].items():
     ck(re.search(rx, lvl(True)), f"cve-level-up: {lbl} is read from the line")
-ck(re.search(hm["rules"][4]["capture"]["level"], lvl(True)).group("level") == "high", "the level-up mail names the level")
-ck(re.search(hm["rules"][0]["capture"]["impacted"], line(kind="causal", root=True, silenced=False)).group("impacted") == "4 vm, 2 service", "a critical root's mail says what it impacts, by class")
+ck(re.search(hm["rules"][2]["capture"]["level"], lvl(True)).group("level") == "high", "the level-up mail names the level")
 
 # ── the core rules, moved out of logging.nix into their modules (ADR-039 D6) ──
 import os
@@ -201,6 +189,27 @@ for m in ("pvehost", "cluster", "network", "backup", "logging"):
         for k in g:
             ck(got[k] == g[k], f"{r['title']}.{k}: {got[k]!r} != {g[k]!r}")
 ck(seen == set(gold), f"every core rule is in a module file ({sorted(set(gold) - seen)})")
+
+# ── source: metrics (ADR-046 D6) ────────────────────────────────────
+mr = {"name": "slow-logins", "title": "Logins slow", "kind": "state", "source": "metrics", "signal": "http_p95_seconds",
+      "above": 1.5, "window": 900, "summary": "The login page's p95 stayed over 1.5 s for 15 minutes.",
+      "mail": {"subject": "{state}: {title}", "body": "{summary}\n{query}"}}
+ck(ar.validate({"rules": [mr]}) == [], f"a metrics rule validates ({ar.validate({'rules': [mr]})})")
+bad = dict(mr, signal="made_up", above="1", match="x")
+errs = ar.validate({"rules": [bad]})
+ck(any("signal" in e for e in errs) and any("'above'" in e for e in errs) and any("'match' does not go" in e for e in errs), f"a bad metrics rule says why ({errs})")
+ck(any("'signal' goes with" in e for e in ar.validate({"rules": [dict(mr, source="logs", match="y")]})), "a signal on a log rule is refused")
+ck(any("label." in e for e in ar.validate({"rules": [dict(mr, mail={"body": "{label.x}"})]})), "a metrics rule has no captured labels")
+g = ar.render_group("identity", {"rules": [mr]}, lambda m: ["identity"])["rules"][0]
+ck(g["data"][0]["datasourceUid"] == "prometheus", "a metrics rule reads Prometheus")
+ck(g["data"][0]["model"]["expr"] == 'min_over_time((histogram_quantile(0.95, sum by (tappaas_ci_id, le) (rate(caddy_http_request_duration_seconds_bucket{tappaas_module=~"^(identity)$"}[5m]))))[900s:1m]) > 1.5',
+   f"held over the threshold for the window, on the module's routes ({g['data'][0]['model']['expr']})")
+ck(g["labels"] == {"kind": "state", "module": "identity", "source": "metrics"}, f"its labels ({g['labels']})")
+ck(g["data"][1]["model"]["reducer"] == "last" and g["data"][2]["model"]["conditions"][0]["evaluator"] == {"type": "gt", "params": [0]}, "delivery as a log rule's")
+ck(g["annotations"]["mailSubject"] == "{state}: {title}", "the mail unchanged")
+gm = ar.render_group("nextcloud", {"rules": [dict(mr, signal="memory_pressure_percent", above=20)]}, lambda m: ["nextcloud"])["rules"][0]
+ck('service_name=~"^(nextcloud)$"' in gm["data"][0]["model"]["expr"], "a guest signal: the module's guests by name")
+ck(ar.render_group("nextcloud", {"rules": [dict(mr, signal="memory_pressure_percent")]}, lambda m: [])["rules"] == [], "no guest in scope: no rule")
 
 print(f"alert-rules: {passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

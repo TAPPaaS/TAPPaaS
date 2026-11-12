@@ -20,7 +20,7 @@ const LOCATION: ShortcutTable = {
 };
 const ENVIRONMENT: ShortcutTable = {
   displayName: "--display", ownerOrg: "--owner", zone: "--zone", "domains.primary": "--domain", "domains.dnsMode": "--dns-mode",
-  size: "--size",
+  size: "--size", "performance.level": "--performance-level", "performance.resolution": "--performance-resolution",
 };
 
 export const MODIFY_SHORTCUTS = {
@@ -37,6 +37,7 @@ export const MODIFY_SHORTCUTS = {
     "diskAutoGrow.minGrowGB": "--diskAutoGrowMinGrowGB", "diskAutoGrow.poolCeiling": "--diskAutoGrowPoolCeiling",
     "updateSchedule.frequency": "--updateFrequency", "updateSchedule.weekday": "--updateWeekday", "updateSchedule.hour": "--updateHour",
     "health.assessInterval": "--healthAssessInterval", "alerts.includeLines": "--alertsIncludeLines",
+    "performance.level": "--performanceLevel", "performance.resolution": "--performanceResolution", "performance.retentionDays": "--performanceRetentionDays",
   },
   location: LOCATION,
   environment: ENVIRONMENT,

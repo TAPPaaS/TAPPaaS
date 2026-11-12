@@ -68,6 +68,11 @@ LOG_SHIPPING_ADMIN_FILE="${LOG_SHIPPING_ADMIN_FILE:-/home/tappaas/.loki-admin-pa
 LOG_SHIPPING_ADMIN_USER="tappaas"
 LOG_SHIPPING_QUERY_URL="${LOG_SHIPPING_QUERY_URL:-}"
 LOG_SHIPPING_HOST="${LOG_SHIPPING_HOST:-logging.mgmt.internal}"
+# The level-driven metrics pipeline (lib/metrics-shipping.sh writes it).
+LOG_SHIPPING_PERF_FILE="/var/lib/alloy-perf/perf.alloy"
+# Alloy does not register an empty declare, and an import that defines nothing
+# stops Alloy at start: the empty pipeline takes one optional argument.
+LOG_SHIPPING_PERF_DEFAULT='declare "pipeline" { argument "off" { optional = true } }'
 # Units every TAPPaaS VM may have that write secrets: never shipped.
 LOG_SHIPPING_BASE_DROP="generate-.*-secrets.*"
 
@@ -319,6 +324,15 @@ EOF
         }
       }
     }
+
+    // The level-driven part (ADR-046 D3): this guest's own numbers, written by
+    // the mothership into a runtime file and re-read when it changes, so a
+    // level change needs no rebuild. Level off is an empty pipeline.
+    import.file "perf" {
+      filename = "${LOG_SHIPPING_PERF_FILE}"
+    }
+
+    perf.pipeline "guest" { }
 EOF
 }
 
@@ -333,7 +347,7 @@ render_logging_nix() {
 # Written on every update while the module declares logging:logs and logging is
 # deployed; removed otherwise. Safe if the target is down: Alloy buffers and
 # retries.
-{ ... }:
+{ pkgs, ... }:
 {
   # A line every 5 minutes, so a healthy VM is never silent (#770). HostSilent
   # alerts on a host with no line for 15 minutes; near-idle VMs (coturn,
@@ -352,6 +366,15 @@ render_logging_nix() {
   # The push secret (#165 §1), handed to Alloy by systemd: readable by the
   # service whatever user it runs as, and never in the store.
   systemd.services.alloy.serviceConfig.LoadCredential = [ "loki-push:${LOG_SHIPPING_VM_SECRET}" ];
+
+  # The metrics pipeline's runtime file (ADR-046): the mothership writes it on
+  # a level change; until then, and at level off, an empty pipeline.
+  systemd.services.alloy.serviceConfig.ExecStartPre = [
+    "+\${pkgs.writeShellScript "alloy-perf-default" ''
+      install -d -m 0755 /var/lib/alloy-perf
+      [ -s ${LOG_SHIPPING_PERF_FILE} ] || echo '${LOG_SHIPPING_PERF_DEFAULT}' > ${LOG_SHIPPING_PERF_FILE}
+    ''}"
+  ];
 
   services.alloy = {
     enable = true;
@@ -575,6 +598,8 @@ put /etc/systemd/system/alloy.service.d/tappaas.conf 0644 '$(printf '%s' "${drop
 put /etc/systemd/system/tappaas-log-heartbeat.service 0644 '$(printf '%s' "${hbs}" | _ls_b64)'
 put /etc/systemd/system/tappaas-log-heartbeat.timer 0644 '$(printf '%s' "${hbt}" | _ls_b64)'
 touch /etc/alloy/.tappaas-managed
+install -d -m 0755 /var/lib/alloy-perf
+[ -s ${LOG_SHIPPING_PERF_FILE} ] || printf '%s\n' '${LOG_SHIPPING_PERF_DEFAULT}' > ${LOG_SHIPPING_PERF_FILE}
 usermod -a -G systemd-journal alloy 2>/dev/null || true
 systemctl daemon-reload
 systemctl enable --now tappaas-log-heartbeat.timer >/dev/null 2>&1
@@ -593,7 +618,7 @@ set -eu
 systemctl disable --now tappaas-log-heartbeat.timer alloy >/dev/null 2>&1 || true
 apt-mark unhold alloy >/dev/null 2>&1 || true
 DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq alloy >/dev/null 2>&1 || true
-rm -rf /etc/alloy /etc/systemd/system/alloy.service.d /etc/default/alloy
+rm -rf /etc/alloy /etc/systemd/system/alloy.service.d /etc/default/alloy /var/lib/alloy-perf
 rm -f ${LOG_SHIPPING_VM_SECRET} /etc/apt/sources.list.d/tappaas-grafana.list /etc/apt/keyrings/tappaas-grafana.asc
 rm -f /etc/systemd/system/tappaas-log-heartbeat.service /etc/systemd/system/tappaas-log-heartbeat.timer
 systemctl daemon-reload

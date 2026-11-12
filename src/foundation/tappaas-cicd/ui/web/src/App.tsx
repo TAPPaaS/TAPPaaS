@@ -20,6 +20,7 @@ import { Modules } from "./pages/Modules";
 import { Operations } from "./pages/Operations";
 import { Security } from "./pages/Security";
 import { Overview } from "./pages/Overview";
+import { Performance, perfTabOf } from "./pages/Performance";
 import { MOVED_PATHS, viewOfPath } from "./physical/views";
 import { AssistantStatus, Me, SiteRead } from "./types";
 import { Link, MeContext, replacePath, usePath } from "./ui";
@@ -30,6 +31,7 @@ const NAV: { to: string; label: string; live: boolean }[] = [
   { to: "/setup/day1", label: "Day 1 setup wizard", live: true },
   { to: "/setup/day2", label: "Day 2 wizards", live: true },
   { to: "/health", label: "Health", live: true },
+  { to: "/performance", label: "Performance", live: true },
   { to: "/operations", label: "Operations", live: true },
   { to: "/site", label: "Site", live: true },
   { to: "/environments", label: "Environments", live: true },
@@ -86,6 +88,7 @@ export function App() {
   else if (path === "/setup/day1") page = <Setup tab="Day 1" />;
   else if (path === "/setup/day2") page = <Setup tab="Day 2" />;
   else if (path === "/health") page = <Health />;
+  else if (path === "/performance" || path.startsWith("/performance/")) page = <Performance tab={perfTabOf(path)} />;
   else if (path === "/operations") page = <Operations />;
   else if (view) page = <Site view={view} />;
   else if (path === "/modules") page = <Modules />;

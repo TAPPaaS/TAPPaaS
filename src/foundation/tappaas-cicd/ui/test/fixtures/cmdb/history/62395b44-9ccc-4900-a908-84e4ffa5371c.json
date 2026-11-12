@@ -1109,6 +1109,16 @@
    "drift": false
   },
   {
+   "id": 1890,
+   "kind": "change",
+   "source": "module-manager",
+   "job": "20261031183001-0b55e2",
+   "verb": "modify nomad --set memory=6144",
+   "actor": "lars",
+   "time": "2026-10-31T18:30:01.000Z",
+   "drift": false
+  },
+  {
    "id": 6270,
    "kind": "change",
    "source": "module-manager",

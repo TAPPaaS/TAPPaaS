@@ -12,7 +12,8 @@
   "dependsOn": [],
   "integratesWith": [
     "backup:filesystem",
-    "logging:logs"
+    "logging:logs",
+    "logging:metrics"
   ],
   "backup": {
     "filesystemPaths": [

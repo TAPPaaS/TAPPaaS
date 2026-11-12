@@ -21,9 +21,11 @@
 
 import { closeSync, existsSync, openSync, readFileSync, statSync } from "fs";
 import { join } from "path";
-import { cloneObjects, endedBeforeEmit, reconcileAcks, silenced } from "./ack";
-import { Condition, HealthCmdb, HealthObject, Period, RootEntry, Status, conditionsOf, rootsOf, rootsOfSite, worse } from "./emit-cmdb";
-import { EventKind, HealthEvent, Journal, RootCauseEvent, TransitionEvent, eventLine, levelChanged, levelRose } from "./events";
+import { cloneObjects, endedBeforeEmit, silenced } from "./ack";
+import { Condition, Flaps, HealthCmdb, HealthObject, Period, RootEntry, Status, conditionsOf, rootsOf, rootsOfSite, worse } from "./emit-cmdb";
+import { EventKind, HealthEvent, Journal, MaintenanceEvent, TransitionEvent, eventLine, levelChanged, levelRose } from "./events";
+import { Window, isOpen, readWindows } from "./windows";
+import { Deliver, Notice, NoticeEvent, NoticePlan, closeMail, noticeKey, openMail, planNotices, siteNotify, wantedNotices } from "./notices";
 import { renameGuarded, simulating, unlinkGuarded, writeFileGuarded } from "../../../lib/ts/src/config-io";
 
 export const CURSOR_FILE = ".health-emit-cursor";
@@ -52,12 +54,14 @@ export interface Cursor {
   time: string;
   change: number | null;
   roots: Record<string, RootSeen>; // by <ci>:<type>
+  notices?: Record<string, Notice>; // the critical-root notices open (notices.ts), by <ci>:<type>
+  windows?: Record<string, { until: number; reason: string; scope: string }>; // the maintenance windows told open
 }
 
 export function readCursor(configDir: string): Cursor | null {
   try {
     const c = JSON.parse(readFileSync(join(configDir, CURSOR_FILE), "utf8")) as Cursor;
-    return typeof c.time === "string" && !Number.isNaN(Date.parse(c.time)) ? { time: c.time, change: c.change ?? null, roots: c.roots ?? {} } : null;
+    return typeof c.time === "string" && !Number.isNaN(Date.parse(c.time)) ? { time: c.time, change: c.change ?? null, roots: c.roots ?? {}, notices: c.notices ?? {}, windows: c.windows ?? {} } : null;
   } catch {
     return null;
   }
@@ -139,11 +143,32 @@ export interface EmitInput {
   now: Date;
   intervalMin: number;
   since?: string; // --since: everything after this, whatever the cursor says
+  windows?: Window[]; // the maintenance windows (windows.ts); runEmit reads them
+}
+
+/** A window that opened or ended since the last run, told once each. */
+export function windowEvents(was: NonNullable<Cursor["windows"]>, windows: Window[], now: Date): { events: MaintenanceEvent[]; seen: NonNullable<Cursor["windows"]> } {
+  const at = now.toISOString();
+  const seen: NonNullable<Cursor["windows"]> = {};
+  const events: MaintenanceEvent[] = [];
+  const scopeOf = (w: Window): string => (w.scope === "site" ? "site" : w.scope.join(","));
+  const ev = (phase: "start" | "end", name: string, w: { until: number; reason: string; scope: string }, why: "operator" | "expired"): MaintenanceEvent => ({
+    event: "maintenance", phase, ci: w.scope, class: "window", name, by: "", note: w.reason, until: new Date(w.until * 1000).toISOString(), why, at,
+  });
+  for (const w of windows.filter((x) => isOpen(x, now.getTime()))) {
+    seen[w.name] = { until: w.until, reason: w.reason, scope: scopeOf(w) };
+    if (!was[w.name]) events.push(ev("start", w.name, seen[w.name], "operator"));
+  }
+  for (const [name, w] of Object.entries(was)) {
+    if (!seen[name]) events.push(ev("end", name, w, w.until * 1000 <= now.getTime() ? "expired" : "operator"));
+  }
+  return { events, seen };
 }
 
 export interface EmitResult {
   events: HealthEvent[];
   cursor: Cursor;
+  notices: NoticePlan; // what runEmit delivers: notices to open, and to close
 }
 
 const rootKey = (id: string, type: string | undefined): string => `${id}:${type ?? ""}`;
@@ -168,17 +193,6 @@ function rootSet(objects: HealthObject[], roots: RootEntry[]): Record<string, Ro
       .map((x) => x.id)
       .sort();
     out[rootKey(r.id, r.type)] = { ci: r.id, class: o?.class ?? "", name: o?.name ?? "", type: r.type ?? "", symptoms, impacted: byClass(symptoms, objects) };
-  }
-  return out;
-}
-
-function rootEvents(was: Record<string, RootSeen>, now: Record<string, RootSeen>, at: string): RootCauseEvent[] {
-  const out: RootCauseEvent[] = [];
-  for (const [k, r] of Object.entries(now)) {
-    if (was[k]?.symptoms.join() !== r.symptoms.join()) out.push({ event: "rootcause", ...r, impacted: r.impacted ?? "nothing", cleared: false, at });
-  }
-  for (const [k, r] of Object.entries(was)) {
-    if (!now[k]) out.push({ event: "rootcause", ...r, symptoms: [], impacted: "nothing", cleared: true, at });
   }
   return out;
 }
@@ -218,8 +232,8 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
   const from = input.since ?? cursor?.time;
   const before = from ? cmdb.objects(from) : [];
   const gone = endedBeforeEmit(before, objects, input.now);
-  const r = reconcileAcks(objects, roots, input.now);
-  const dirty = new Set(r.dirty);
+  const dirty = new Set<string>();
+  const flapsOf = (o: HealthObject): Flaps => (o.attributes.flapping ??= {});
   const told: TransitionEvent[] = [];
   let change = cursor?.change ?? null;
 
@@ -228,11 +242,12 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
     const isNew = (t: Transition): boolean =>
       input.since !== undefined || cursor?.change === null || cursor === null ? Date.parse(t.at) > fromMs : t.change > cursor.change!;
     for (const o of candidates(objects, before, fromMs)) {
+      const flaps = flapsOf(o);
       const periods = cmdb.periods(o.id);
       for (const p of periods) change = Math.max(change ?? 0, Number(p.change));
       const all = transitions(periods);
       const conds = conditionsOf(o);
-      for (const type of new Set([...all.map((t) => t.type), ...conds.filter((c) => c.flapping).map((c) => c.type)])) {
+      for (const type of new Set([...all.map((t) => t.type), ...Object.keys(flaps)])) {
         const ofType = all.filter((t) => t.type === type);
         const fresh = ofType.filter(isNew);
         const c = conds.find((x) => x.type === type);
@@ -264,24 +279,33 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
             impacted: (now[rootKey(o.id, type)] ?? now[rootKey(o.id, "")])?.impacted ?? "nothing",
             silenced: silenced(c, input.now),
             ...(t.after && levelRose(o.class, type, t.before, t.after) ? { levelUp: true as const } : {}),
+            // Performance is told in the daily digest (ADR-046 D6): after
+            // `silenced`, so the critical-root mail (which ends its match there)
+            // never fires for it, and the digest's match takes it.
+            ...(type === "performance" ? { digestOnly: true as const } : {}),
           };
         };
         const windowMs = BUCKETS * intervalMs;
         const recent = ofType.filter((t) => Date.parse(t.at) > input.now.getTime() - windowMs);
-        const was = c?.flapping === true;
+        // Its own attribute is what emit holds; the condition's copy is assess's projection.
+        const was = !!flaps[type] || c?.flapping === true;
         const flapping = c ? flappingNow(was, flapPercent(recent.map((t) => Date.parse(t.at)), input.now.getTime(), intervalMs)) : false;
         if (c && !was && flapping && fresh.length) {
           const held = recent.reduce<Status>((w, t) => worse(worse(w, t.from), t.to), "ok");
+          flaps[type] = { held };
           c.flapping = true;
           c.flappingHeld = held;
           dirty.add(o.id);
           told.push(event({ from: fresh[0].from, to: held, at, after: c }, { event: "flapping", phase: "start", flapping: true }));
-        } else if (c && was && !flapping) {
-          const held = c.flappingHeld ?? c.status;
-          c.flapping = false;
-          delete c.flappingHeld;
+        } else if (was && !flapping) {
+          const held = flaps[type]?.held ?? c?.flappingHeld ?? c?.status ?? "ok";
+          delete flaps[type];
+          if (c) {
+            c.flapping = false;
+            delete c.flappingHeld;
+          }
           dirty.add(o.id);
-          told.push(event({ from: held, to: c.status, at, after: c }, { event: "flapping", phase: "end" }));
+          told.push(event({ from: held, to: c?.status ?? "ok", at, after: c }, { event: "flapping", phase: "end" }));
         } else if (!was) {
           for (const t of fresh) told.push(event(t, {}));
         }
@@ -290,8 +314,14 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
     correlate(told);
   }
 
-  const events: HealthEvent[] = [...gone, ...r.events, ...told, ...rootEvents(seen, now, at)];
-  return { events, cursor: { time: at, change, roots: now }, writes: dirty, objects };
+  // The critical-root notices, from the set as it is now (after the acks above).
+  const impactedOf = (k: string): string => now[k]?.impacted ?? now[`${k.slice(0, k.lastIndexOf(":"))}:`]?.impacted ?? "nothing";
+  const notices = planNotices(cursor?.notices ?? {}, wantedNotices(objects, roots, impactedOf, input.now), objects, roots, input.now);
+
+  const w = windowEvents(cursor?.windows ?? {}, input.windows ?? [], input.now);
+
+  const events: HealthEvent[] = [...gone, ...w.events, ...told];
+  return { events, cursor: { time: at, change, roots: now, notices: cursor?.notices ?? {}, windows: w.seen }, notices, writes: dirty, objects };
 }
 
 /** One run: under a lock, as the timer and the alert receiver may overlap. false
@@ -320,12 +350,34 @@ export function withEmitLock(configDir: string, fn: () => void): boolean {
   return true;
 }
 
+/** Deliver the plan's notices; the cursor's open notices as they are after it.
+ *  One that did not go out is tried again on the next run. */
+export function deliverNotices(plan: NoticePlan, open: Record<string, Notice>, deliver: Deliver, at: string): { open: Record<string, Notice>; events: NoticeEvent[] } {
+  const next = { ...open };
+  const events: NoticeEvent[] = [];
+  const base = (n: Omit<Notice, "opened">) => ({ event: "notice" as const, ci: n.ci, class: n.class, name: n.name, type: n.type, reason: n.reason, message: n.message, impacted: n.impacted });
+  for (const c of plan.close) {
+    const sent = deliver(closeMail(c.notice, c.why, c.detail), noticeKey(c.notice), true);
+    if (sent) delete next[c.notice.key];
+    events.push({ ...base(c.notice), phase: "close", why: c.why, ...(c.detail ? { detail: c.detail } : {}), sent, at });
+  }
+  for (const n of plan.open) {
+    const sent = deliver(openMail(n), noticeKey(n), false);
+    if (sent) next[n.key] = { ...n, opened: at };
+    events.push({ ...base(n), phase: "open", sent, at });
+  }
+  return { open: next, events };
+}
+
 /** Write what the run changed, tell it, and only then move the cursor: a crash
- *  between the two tells an event twice rather than never. */
-export function runEmit(cmdb: HealthCmdb, journal: Journal, configDir: string, input: Omit<EmitInput, "intervalMin">): HealthEvent[] {
-  const r = emit(cmdb, readCursor(configDir), { ...input, intervalMin: assessInterval(configDir) });
-  for (const o of r.objects) if (r.writes.has(o.id)) cmdb.write(o, conditionsOf(o), { kind: "observation" });
-  journal(r.events.map(eventLine));
-  writeCursor(configDir, r.cursor);
-  return r.events;
+ *  between the two tells an event twice rather than never. A notice is
+ *  delivered before the cursor records it open, for the same reason. */
+export function runEmit(cmdb: HealthCmdb, journal: Journal, configDir: string, input: Omit<EmitInput, "intervalMin">, deliver: Deliver = siteNotify): HealthEvent[] {
+  const r = emit(cmdb, readCursor(configDir), { windows: readWindows(), ...input, intervalMin: assessInterval(configDir) });
+  for (const o of r.objects) if (r.writes.has(o.id)) cmdb.write(o, { flapping: o.attributes.flapping ?? {} }, { kind: "observation" });
+  const n = deliverNotices(r.notices, r.cursor.notices ?? {}, deliver, r.cursor.time);
+  const events: HealthEvent[] = [...r.events, ...n.events];
+  journal(events.map(eventLine));
+  writeCursor(configDir, { ...r.cursor, notices: n.open });
+  return events;
 }

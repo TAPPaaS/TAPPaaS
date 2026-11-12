@@ -18,6 +18,7 @@ import { JobCoverage, BucketMembership, Client, JobStatus, PurgeResult, RawDisco
 export class BackupControllerUnreachable extends Error {}
 
 const BIN = process.env.BACKUP_CONTROLLER_BIN ?? "pbs-controller";
+const METRICS_TARGET = (): string => process.env.BACKUP_METRICS_TARGET_BIN ?? "tappaas-metrics-target.sh";
 
 function run(args: string[]): string {
   // The controller reads CONFIG_DIR (module/site JSONs live there); the lib's
@@ -204,5 +205,16 @@ export class CliClient implements Client {
   }
   keyStamp(dir: string, label: string | null): void {
     process.stdout.write(run([...this.ep(), "key", "stamp", "--dir", dir, ...(label ? ["--label", label] : [])]));
+  }
+  // PBS's metric server (ADR-046): the script prints "pbs <state>".
+  metricsTargetState(): string | null {
+    const r = captureResult(METRICS_TARGET(), ["pbs", "status"]);
+    if (!r.ran) return null;
+    const s = r.stdout.trim().split(/\s+/)[1] ?? "";
+    return s === "" || s === "unknown" ? null : s;
+  }
+  applyMetricsTarget(): void {
+    const r = captureResult(METRICS_TARGET(), ["pbs", "apply"]);
+    if (!r.ran || r.rc !== 0) throw new Error(`PBS metric server not set: ${(r.stderr || r.stdout).trim()}`);
   }
 }

@@ -14,28 +14,53 @@
         "description": { "type": "string", "description": "Free text." },
         "placeholder": { "type": "boolean", "derived": true, "description": "Set on an object made because a report named it by class and name before its owner reported it: a name and nothing else. Its owner's report merges into it and clears this." },
         "drift": { "type": "object", "derived": true, "description": "Set when an observation differs from the last with no change behind it (D6): since, source, the attributes with what they were and are. A change that touches the object clears it." },
+        "investigation": {
+          "type": "object",
+          "properties": {
+            "level": { "type": "string", "enum": ["basic", "service", "trace"] },
+            "resolution": { "type": "string", "enum": ["normal", "fine"] },
+            "from": { "type": "string", "description": "The level it would have without the raise (its cascade)." },
+            "by": { "type": "string" },
+            "note": { "type": "string" },
+            "started": { "type": "string" },
+            "until": { "type": "string" }
+          },
+          "description": "A timed raise of its performance level (ADR-046 D3): health-manager perf sets it and ends it (unset) when it is stopped or expires. Its history is the object's investigations; each change is a marker on its charts."
+        },
+        "acknowledgements": {
+          "type": "object",
+          "volatile": true,
+          "description": "The operator's last word per condition type: { <type>: { ack: {by, note, until, sticky, at} | null, at } }. health-manager ack and unack are its only writers; assess takes a word newer than a condition's operatorAt and keeps the ack's lifecycle on the condition."
+        },
+        "flapping": {
+          "type": "object",
+          "volatile": true,
+          "description": "health-manager emit's, its only writer: per condition type that flaps, the status held while it does ({ <type>: { held } }). assess projects it onto the condition."
+        },
         "conditions": {
           "type": "array",
           "volatile": true,
           "items": {
             "type": "object",
             "properties": {
-              "type": { "type": "string", "required": true, "enum": ["operational", "drift", "capacity", "security", "maintenance", "backup", "impact"] },
+              "type": { "type": "string", "required": true, "enum": ["operational", "drift", "capacity", "performance", "security", "maintenance", "backup", "impact"] },
               "status": { "type": "string", "required": true, "enum": ["ok", "warning", "critical", "unknown"] },
               "reason": { "type": "string", "description": "Why, as a word: guest-stopped." },
               "message": { "type": "string" },
               "since": { "type": "string", "description": "When the status or reason last changed." },
               "lastChecked": { "type": "string", "volatile": true, "description": "When it was last confirmed: rewritten in place, never history." },
               "source": { "type": "string" },
+              "owner": { "type": "string", "description": "The source that raised it, which alone takes it back: a gate, alerts, sweep, thresholds, observations, cve, performance; derive for impact, roll-ups and follows." },
               "derived": { "type": "boolean", "description": "It follows from another object's failure (rootCause), or is a roll-up: not a failure of its own." },
               "rootCause": { "type": ["string", "null"], "description": "The id of the object it follows from." },
               "acknowledged": { "type": ["object", "null"], "properties": { "by": { "type": "string" }, "note": { "type": "string" }, "until": { "type": "string" }, "sticky": { "type": "boolean" } }, "description": "An operator's acknowledgement: it keeps its status and stops counting." },
-              "maintenance": { "type": ["object", "null"], "properties": { "until": { "type": "string" }, "note": { "type": "string" } }, "description": "A maintenance window: transitions are recorded, not counted." },
-              "flapping": { "description": "health-manager emit's: assess carries it over." },
-              "flappingHeld": { "description": "health-manager emit's: assess carries it over." }
+              "maintenance": { "type": ["object", "null"], "properties": { "until": { "type": "string" }, "note": { "type": "string" }, "by": { "type": "string" } }, "description": "The open maintenance window that covers the object (health-manager assess, from the window files): transitions are recorded, not counted." },
+              "flapping": { "description": "emit's flapping attribute, projected by assess." },
+              "flappingHeld": { "description": "emit's flapping attribute, projected by assess." },
+              "operatorAt": { "type": "string", "description": "The operator's last word (acknowledgements) assess took for it." }
             }
           },
-          "description": "Its health, one per kind, as Kubernetes gives a resource's status.conditions. health-manager assess is the only writer. Volatile: never drift. Every change but lastChecked opens a new period, so its history is the object's health history."
+          "description": "Its health, one per kind, as Kubernetes gives a resource's status.conditions. health-manager assess is the only writer; acknowledgements and flapping are projected onto it. Volatile: never drift. Every change but lastChecked opens a new period, so its history is the object's health history."
         }
       }
     },

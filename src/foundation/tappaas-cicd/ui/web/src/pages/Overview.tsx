@@ -85,6 +85,8 @@ export function Overview({ setupIncomplete = false }: { setupIncomplete?: boolea
   const t = topo.env?.data;
   const line = summary ? conditionLine(summary) : null;
   const backups = summary?.byType.backup;
+  // Performance stays quiet until it matters (ADR-046 D7): a card only while a CI is slow.
+  const slow = (summary?.byType.performance?.items ?? []).filter((i) => i.status !== "ok" && !i.silenced);
   const def = ((s ?? {}) as { defaultEnvironment?: string }).defaultEnvironment ?? null;
 
   const siteT = useMemo(() => siteTile(sd, storage.env?.data, h?.gates, hs), [sd, storage.env, h, hs]);
@@ -258,6 +260,14 @@ export function Overview({ setupIncomplete = false }: { setupIncomplete?: boolea
           sub={(t?.outside ?? []).filter((o) => o.kind === "buddy").map((o) => `buddy ${o.name}: ${o.state ?? "?"}`).join(" · ") || undefined}
           level={summary ? CONDITION_LEVEL[backups?.status ?? "ok"] : backup?.status ?? "unknown"}
         />
+        {slow.length ? (
+          <Card
+            title={<Link to="/performance">Performance</Link>}
+            value={`${plural(slow.length, "object")} slow`}
+            sub={slow.slice(0, 3).map((i) => i.label).join(" · ")}
+            level={CONDITION_LEVEL[summary?.byType.performance?.status ?? "warning"]}
+          />
+        ) : null}
         <Card
           title="Release"
           value={s?.channel ? `channel ${s.channel}` : "…"}

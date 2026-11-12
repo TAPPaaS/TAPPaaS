@@ -36,13 +36,13 @@
 // Exit codes: ok=0, error / failed-health-gate = 1.
 
 import { spawnGuarded } from "../../../lib/ts/src/exec";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
 import { hostname } from "os";
 import { join } from "path";
 import { defaultConfigDir, loadConfigModules, readModuleJson } from "./config";
 import { CliClusterClient } from "./client";
 import { checkUpdateCapacity, probeTarget, runHealthGates } from "./checks";
-import { ALERTS_LOG, alertLine, fetchGrafanaAlerts, filterAlerts, openAlerts, recentEvents } from "./alerts";
+import { ALERTS_LOG, alertLine, fetchGrafanaAlerts, filterAlerts, openAlerts, recentEvents, placeAlert } from "./alerts";
 import { checkRoom } from "./room";
 import { nodeGuests } from "./guests";
 import { reachLines, runVlanReach, writeReach } from "./vlanreach";
@@ -59,10 +59,13 @@ import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../
 import { CmdbRefused, CmdbReport, CmdbUnavailable, cmdbQuery, cmdbRelations, cmdbRequest } from "../../../lib/ts/src/cmdb";
 import { pruneRefused } from "../../../lib/ts/src/cmdb-reporter";
 import { AssessIO, AssessResult, Timer, assess } from "./assess";
+import { Declared, horizonOf } from "./assess-performance";
+import { curlReader, metricsEndpoint } from "./metrics-read";
 import { CmdbItem, CmdbRel, SiteIndex } from "./assess-model";
 import { assessmentOf, readValidate } from "./assess-validate";
 import { readLastSweep } from "./cmdbsweep";
 import { cmdRules, readRules } from "./rules";
+import { readWindows } from "./windows";
 import { cmdScore } from "./score-verb";
 // ── ADR-041 emit half ──
 import { EMIT_HELP, liveEmitContext, runEmitVerb } from "./emit-verbs";
@@ -198,7 +201,8 @@ export const HELP: HelpSpec = {
     {
       usage: "assess [--only <ci>] [--json] [--dry-run] [--timing] [--threshold PCT] [--memory-threshold PCT] [--config-dir DIR]", effect: "read",
       options: [
-        ["--only <ci>", "One object, by id or name: alerts, sweep, thresholds and the scan speak for it and no gate runs; impact and root causes are worked out again. The alert receiver's call."],
+        ["--only <ci>", "One object, by id or name: alerts, sweep, thresholds and the scan speak for it and no gate runs; impact and root causes are worked out again."],
+        ["--alert <host>[,<module>]", "--only for what an alert is about: the instance whose host it is, else the rule's module; neither is the whole site. The alert receiver's call."],
         ["--json", "Print the objects' conditions, the root causes and the transitions."],
         ["--dry-run", "Work it all out and write nothing."],
         ["--timing", "Print each phase's duration on stderr as it ends: the CMDB reads, every gate, the alerts, sweep and scan, the working out and the write."],
@@ -377,8 +381,36 @@ function assessIO(opts: Opts, client: ClusterClient, timed?: Timer): AssessIO {
     },
     cve: () => readStatus(join(sbomDir(opts.configDir), STATUS_FILE)),
     security: (scan) => loadSiteSecurity(opts.configDir, scan),
+    metrics: () => {
+      const ep = metricsEndpoint(opts.configDir);
+      return ep ? curlReader(ep) : null;
+    },
+    perfDeclared: () => perfDeclared(opts.configDir),
+    modules: () => new Set(instanceNames(opts.configDir)),
+    horizonDays: () => horizonOf(readModuleJson(join(opts.configDir, "site.json"))),
+    windows: () => readWindows(),
     write: writeAssessment,
   };
+}
+
+// The thresholds the foundation modules declare (ADR-046 D5): an instance's
+// config carries its module's `performance` block; any other source's is not read.
+function instanceNames(configDir: string): string[] {
+  try {
+    return readdirSync(configDir).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5));
+  } catch {
+    return [];
+  }
+}
+function perfDeclared(configDir: string): Declared[] {
+  const out: Declared[] = [];
+  for (const m of instanceNames(configDir)) {
+    const cfg = readModuleJson(join(configDir, `${m}.json`));
+    const p = (cfg?.performance ?? null) as { thresholds?: unknown } | null;
+    if (!cfg || (cfg.source ?? "official") !== "official" || !p || !Array.isArray(p.thresholds)) continue;
+    out.push({ module: m, thresholds: p.thresholds as Declared["thresholds"] });
+  }
+  return out;
 }
 
 function assessLine(r: AssessResult): string {
@@ -395,6 +427,15 @@ export function cmdAssess(opts: Opts, client: ClusterClient, io?: (timed?: Timer
     return i < 0 ? undefined : opts.rest[i + 1];
   };
   if (opts.rest.includes("--only") && !val("--only")) die("assess: --only needs an object");
+  if (opts.rest.includes("--alert") && !val("--alert")) die("assess: --alert needs <host>[,<module>]");
+  // --alert: what an alert is about, placed as `health-manager alerts` places
+  // it; nothing placed is the whole site.
+  let only = val("--only");
+  const alert = val("--alert");
+  if (alert && !only) {
+    const [host, module = ""] = alert.split(",");
+    only = placeAlert(host, module, opts.configDir)?.name;
+  }
   if (cmdbOff()) {
     info("assess: the CMDB is off here (TAPPAAS_CMDB=off) — nothing to write");
     return 0;
@@ -406,7 +447,7 @@ export function cmdAssess(opts: Opts, client: ClusterClient, io?: (timed?: Timer
     : undefined;
   let r: AssessResult;
   try {
-    r = assess((io ?? ((t) => assessIO(opts, client, t)))(timed), { only: val("--only"), dryRun: opts.rest.includes("--dry-run"), timed }, new Date());
+    r = assess((io ?? ((t) => assessIO(opts, client, t)))(timed), { only, dryRun: opts.rest.includes("--dry-run"), timed }, new Date());
   } catch (e) {
     if (!(e instanceof CmdbUnavailable)) throw e;
     warn(`assess: nothing assessed, the CMDB did not answer (${e.message}) — the next run writes`);
@@ -850,7 +891,7 @@ export function run(argv: string[], client: ClusterClient): number {
       case "assess":
         return cmdAssess(opts, client);
       case "rules":
-        return cmdRules(opts.rest, readRules(), info);
+        return cmdRules(opts.rest, readRules(), info, () => cmdbRelations({}) as unknown as CmdbRel[]);
       // end ADR-041 assess verbs
       default:
         usage();

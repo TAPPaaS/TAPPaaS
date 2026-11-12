@@ -1,0 +1,3 @@
+[Info] raised to trace, every 15 seconds, until 2026-11-01T10:54:11Z (it was basic)
+[Info] the logging VM renders the new pipeline: traces kept for its requests
+[Info] recorded as a change on the object

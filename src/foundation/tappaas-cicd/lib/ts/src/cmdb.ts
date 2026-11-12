@@ -75,6 +75,9 @@ export interface CmdbReport {
   assessment?: boolean; // conclusions about objects named by id, not a sighting of them (ADR-041 D2)
   objects?: CmdbObject[];
   relations?: CmdbRelation[];
+  // Every relation of `type` from `from` is in this report: the store closes an
+  // open one it does not name (an operator's recorded one stays).
+  complete?: { type: string; from: CmdbRelation["from"] }[];
 }
 
 export interface ReportOutcome {
@@ -231,6 +234,22 @@ export interface CmdbRelationQuery {
 /** Current relations (or as of a time) by type and either end. */
 export function cmdbRelations(query: CmdbRelationQuery, o: CmdbOptions = {}): Obj[] {
   return cmdbRequest("POST", "/v1/relations", query, o) as Obj[];
+}
+
+export interface CmdbPeriod {
+  object: { id: string; class: string; name: string };
+  value: unknown;
+  source: string;
+  change: number | null;
+  from: string;
+  to: string | null; // null: still in force
+  ended: { change: number; verb: string | null; actor: string | null } | null;
+}
+
+/** Every period of one attribute on any object, in force at or after `since`, the newest first. */
+export function cmdbPeriods(attribute: string, since?: string, o: CmdbOptions = {}): CmdbPeriod[] {
+  const qs = `attribute=${encodeURIComponent(attribute)}${since ? `&since=${encodeURIComponent(since)}` : ""}`;
+  return cmdbRequest("GET", `/v1/periods?${qs}`, undefined, o) as CmdbPeriod[];
 }
 
 /** One object by id or name (class-qualified where a name is not unique). */

@@ -7,6 +7,7 @@
 
 import { spawnGuarded } from "../../../lib/ts/src/exec";
 import { Status } from "./emit-cmdb";
+import type { NoticeEvent } from "./notices";
 
 export const IDENTIFIER = "tappaas-health";
 
@@ -36,6 +37,7 @@ export interface TransitionEvent {
   impacted: string; // on a root: what it impacts by class, "3 vm, 2 service"; else "nothing"
   silenced: boolean; // acknowledged or in maintenance: recorded, never mailed
   levelUp?: true; // a module's CVE risk level rose to high or critical (cve-level-up mails it)
+  digestOnly?: true; // a performance condition: told in the daily digest, never mailed on its own
 }
 
 // The CVE risk level a security condition's reason names (ADR-045 D4): 0 for
@@ -89,19 +91,7 @@ export interface MaintenanceEvent {
   at: string;
 }
 
-export interface RootCauseEvent {
-  event: "rootcause";
-  ci: string;
-  class: string;
-  name: string;
-  type: string;
-  symptoms: string[];
-  impacted: string; // the symptoms by class, "3 vm, 2 service"
-  cleared: boolean;
-  at: string;
-}
-
-export type HealthEvent = TransitionEvent | AckEvent | MaintenanceEvent | RootCauseEvent;
+export type HealthEvent = TransitionEvent | AckEvent | MaintenanceEvent | NoticeEvent;
 
 export type Journal = (lines: string[]) => void;
 

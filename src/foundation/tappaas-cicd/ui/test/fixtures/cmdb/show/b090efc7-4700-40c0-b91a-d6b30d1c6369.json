@@ -977,6 +977,11 @@
           "id": "247b3ada-42ab-4fbd-b57f-91eaf7939874",
           "type": "operational",
           "impactedCount": 0
+        },
+        {
+          "id": "33394b2f-6716-4deb-aefd-76295bd61baa",
+          "type": "security",
+          "impactedCount": 0
         }
       ],
       "source": "health-manager",

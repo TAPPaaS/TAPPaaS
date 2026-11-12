@@ -6,7 +6,7 @@ import { CheckSubject } from "./types";
 import { ConditionStatus, ConditionType } from "../../../lib/ts/src/health-rules";
 
 export interface Acknowledged { by: string; note: string; until: string | null; sticky: boolean; at?: string; via?: string[] }
-export interface Maintenance { until: string | null; note: string }
+export interface Maintenance { until: string | null; note: string; by?: string }
 
 export interface Condition {
   type: ConditionType;
@@ -16,12 +16,14 @@ export interface Condition {
   since: string;
   lastChecked: string;
   source: string;
+  owner?: string; // the source that raised it and alone takes it back (a gate, alerts, sweep, …); "derive" for impact, roll-ups, follows
   derived: boolean;
   rootCause: string | null;
   acknowledged: Acknowledged | null;
   maintenance: Maintenance | null;
-  flapping?: unknown; // emit's, carried over as they are
-  flappingHeld?: unknown;
+  flapping?: boolean; // emit's (its `flapping` attribute), projected by assess
+  flappingHeld?: ConditionStatus;
+  operatorAt?: string; // the operator's last word on it (acknowledgements) that assess took
 }
 
 export interface CmdbItem {
@@ -29,6 +31,8 @@ export interface CmdbItem {
   class: string;
   name: string;
   attributes: Record<string, unknown>;
+  lastSeen?: string | null; // when any source last reported it
+  seen?: Record<string, string>; // when each source last reported it
 }
 
 export interface CmdbEnd { id: string; class: string; name: string }
@@ -43,6 +47,13 @@ export interface CmdbRel {
 export interface RootCause { id: string; type: string; impactedCount: number }
 
 export const SOURCE = "health-manager";
+
+// The owner of what derive.ts computes whole every run: impact, roll-ups, follows.
+export const DERIVED = "derive";
+
+/** Computed by derive.ts, not raised by a source: dropped before each run. */
+export const isDerivedKind = (c: { owner?: string; type: string; reason: string }): boolean =>
+  c.owner === DERIVED || c.type === "impact" || c.reason === "roll-up" || c.reason === "follows";
 
 // The order a colour is read in: unknown ranks between ok and warning (D1).
 export const RANK: Record<ConditionStatus, number> = { ok: 0, unknown: 1, warning: 2, critical: 3 };

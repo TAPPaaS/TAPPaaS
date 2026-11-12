@@ -32,6 +32,20 @@ if [[ -z "${n}" ]]; then
 fi
 if [[ "${n}" =~ ^[0-9]+$ && "${n}" -gt 0 ]]; then
     info "    ${GN}✓${CL} ${HOST}'s ${WHAT} is in Loki (${n} lines in 15 min)"
+    # Its own performance numbers ride on the same client (ADR-046): said, never
+    # failed — a guest gets them after its first OS update with this release.
+    if [[ -z "${KIND}" && -f "${METRICS_SHIPPING_LIB:-/home/tappaas/bin/metrics-shipping.sh}" ]]; then
+        # shellcheck source=../../../tappaas-cicd/lib/metrics-shipping.sh
+        . "${METRICS_SHIPPING_LIB:-/home/tappaas/bin/metrics-shipping.sh}"
+        lvl="$(metrics_effective "${CONSUMER}" 2>/dev/null | jq -r '.level // "off"')"
+        if metrics_wanted && [[ "${lvl}" != off ]]; then
+            m="$(metrics_curl_admin -fsS --max-time 15 -G "$(metrics_query_url)/api/v1/query" \
+                    --data-urlencode "query=count(count_over_time(node_load1{host=\"${HOST}\",tappaas_ci_id!=\"\"}[5m]))" 2>/dev/null \
+                 | jq -r '.data.result[0].value[1] // "0"' 2>/dev/null || echo "")"
+            if [[ "${m}" =~ ^[1-9] ]]; then info "    ${GN}✓${CL} ${HOST}'s own numbers are in the metrics store (level ${lvl})"
+            else warn "    ${HOST} is at performance level ${lvl}, but none of its own numbers reached the store in 5 min — its next OS update brings the collector"; fi
+        fi
+    fi
     exit 0
 fi
 case "${KIND}" in

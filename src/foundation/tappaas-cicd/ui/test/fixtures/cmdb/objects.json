@@ -29104,6 +29104,11 @@
           "id": "247b3ada-42ab-4fbd-b57f-91eaf7939874",
           "type": "operational",
           "impactedCount": 0
+        },
+        {
+          "id": "33394b2f-6716-4deb-aefd-76295bd61baa",
+          "type": "security",
+          "impactedCount": 0
         }
       ],
       "stage": "operational",
@@ -30407,6 +30412,19 @@
           "lastChecked": "2026-11-01T08:50:02.363Z",
           "maintenance": null,
           "acknowledged": null
+        },
+        {
+          "type": "performance",
+          "since": "2026-10-30T11:05:00.000Z",
+          "reason": "threshold",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": false,
+          "message": "tankc1: write latency 38 ms, over 25 ms for 15 min",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
         }
       ],
       "drift": {
@@ -30743,11 +30761,11 @@
         {
           "type": "security",
           "since": "2026-10-30T09:40:04.146Z",
-          "reason": "ok",
+          "reason": "cve-act",
           "source": "health-manager",
-          "status": "ok",
+          "status": "warning",
           "derived": false,
-          "message": "",
+          "message": "score 14, medium: 3 high",
           "rootCause": null,
           "lastChecked": "2026-11-01T08:50:02.363Z",
           "maintenance": null,
@@ -30774,6 +30792,19 @@
           "status": "ok",
           "derived": false,
           "message": "newest restore point 0 day(s) old",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "performance",
+          "since": "2026-11-01T08:40:00.000Z",
+          "reason": "perf-cpu-pressure-percent",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": false,
+          "message": "coturn: CPU pressure (steal) 0.4 %, over 0.0 % for 2 min (coturn's threshold)",
           "rootCause": null,
           "lastChecked": "2026-11-01T08:50:02.363Z",
           "maintenance": null,
@@ -32498,6 +32529,32 @@
           "derived": false,
           "message": "newest restore point 0 day(s) old",
           "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "performance",
+          "since": "2026-10-30T11:20:00.000Z",
+          "reason": "threshold",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": true,
+          "message": "karakeep: I/O pressure 24 %, its pool tankc1 is slow",
+          "rootCause": "0a7d1804-da8c-415e-879c-b077276ae2cd",
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "impact",
+          "since": "2026-10-30T11:20:00.000Z",
+          "reason": "stored-on",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": true,
+          "message": "slowed by tankc1 (stored-on)",
+          "rootCause": "0a7d1804-da8c-415e-879c-b077276ae2cd",
           "lastChecked": "2026-11-01T08:50:02.363Z",
           "maintenance": null,
           "acknowledged": null
@@ -47065,6 +47122,32 @@
           "derived": false,
           "message": "newest restore point 0 day(s) old",
           "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "performance",
+          "since": "2026-10-30T11:20:00.000Z",
+          "reason": "threshold",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": true,
+          "message": "nomad: I/O pressure 24 %, its pool tankc1 is slow",
+          "rootCause": "0a7d1804-da8c-415e-879c-b077276ae2cd",
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
+        },
+        {
+          "type": "impact",
+          "since": "2026-10-30T11:20:00.000Z",
+          "reason": "stored-on",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": true,
+          "message": "slowed by tankc1 (stored-on)",
+          "rootCause": "0a7d1804-da8c-415e-879c-b077276ae2cd",
           "lastChecked": "2026-11-01T08:50:02.363Z",
           "maintenance": null,
           "acknowledged": null

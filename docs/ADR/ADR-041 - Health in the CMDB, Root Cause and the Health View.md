@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Accepted** (operator, 2026-10-30; every open question closed) |
-| **Version** | 1.5 |
-| **Date** | 2026-11-09 |
+| **Version** | 1.6 |
+| **Date** | 2026-11-11 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | #908. Amends ADR-007e (Health as a lens: the lens now reads and writes the CMDB), ADR-040 D10 and D11 (the `health` attribute becomes conditions; the Operations view becomes the Health view), ADR-039 D8 (open alerts are one source of a condition). Related: ADR-034 (console), ADR-031 (the pulse), ADR-011 (the CVE scan), ADR-017 (the update sweep's capacity checks), IT4IT 3.0.1 Event (§9.2.3.1: Type causal or symptom, Is Correlated) and the Configuration component's duty to "calculate and provide the business impact of the Event". |
-| **Changelog** | v1.5 (2026-11-09) — **`stored-on` (operator):** a guest (`vm`, `lxc`) and a backup `datastore` are `stored-on` the storage pools their data is on (site-manager from a guest's disks, rootfs and mount points; backup-manager from the datastore's path), dependant the guest or datastore, required. It carries `critical` only, like every other relation: a `FAULTED` pool takes down what is stored on it, a `DEGRADED` pool (a warning) reaches nothing. · v1.4 (2026-10-31) — **O6 closed (operator): redundancy degrades.** A partly failed redundancy group gives its dependant a `warning` impact naming the failed member; the groups are set from the start by site-manager (bonded uplinks) and switch-manager (MLAG peer links and LAG legs); a rule may read the dependant, and the shipped `runs-on` rule degrades an HA-protected guest where it fails one without HA; a pool's ZFS state stays the disk case until disks are CIs. Mails carry the root's consequence by class. · v1.3 (2026-10-30) — **plan step 2 done, sources beyond the gates:** `assess` judges every class from the CMDB's observations and asks no plane (O3's direction): ports, addresses, DNS names, proxy routes, zones and VLANs, SSIDs, software, assets, datastore GC, restore points, backup peers, shares, and a CI's lifecycle (`unseen`). What nothing can judge follows its parent (`FOLLOWS`, derived, never a root). site-manager reports a NIC's link and negotiated speed on its port. The health-manager README's *What judges which class* is the map. · v1.2 (2026-10-30) — **D5 redesigned (operator):** the one-graph-of-everything did not work in practice; the Health view becomes a containment tree, an ego graph one hop deep with plus/minus expansion, and the CI panel. · v1.1 (2026-10-30) — **critical roots only (operator):** `HealthRootCause` mails a critical root at once; warnings and the sweep's findings go to a daily digest rule (D4). · v1.0 (2026-10-30) — **Accepted** by the operator with O3, O5 and O6 open. O1: no hardcoded propagation — the rules are data, per relation type and class (D3); O2: the interval is a site setting (D2); O4: an acknowledgement on a root cause covers its symptoms (D4). Implementation starts on the plan below, on the `adr-040` branch. · v0.1 (2026-10-30) — first draft, from the operator's direction of 2026-10-30: health is stored on every CMDB object as several conditions; health-manager is split into an assessing half that writes them and an emitting half that raises events and answers questions; root causes are derived along the CMDB's relations and the console's new Health view centres on them. |
+| **Changelog** | v1.6 (2026-11-11) — **as built after the health and CMDB review** (`docs/plans/health-cmdb-review.md`): the common-ancestor rule is gone, so a critical is never the symptom of a warning, and a root stays a root unless a critical impact reaches its object; an application's `depends-on` is its own, never its host's, and `rules check` and the sweep report dependency cycles over required relations. The critical-root mail follows the root-cause set: emit opens one notice when a critical root enters it and closes it when it leaves for any reason, saying which, delivered by `site-notify.sh` on the mothership instead of a log rule; `HealthRootCause`, `HealthRootRecovered` and the `rootcause` event are gone. One maintenance model: the window files the alert receiver reads (the update's, and `health-manager maintenance`'s) put the conditions of what they cover in maintenance. Judgements age: a condition stores its `owner`, an ok its owner no longer confirms is unknown after an hour (a failure after a day), a judgement over an object no source reported for 48 h is unknown, and what derive computes is recomputed whole every run. `conditions` has one writer again: the operator's acks are the `acknowledgements` attribute and emit's flapping the `flapping` attribute, both projected onto the conditions by assess. A zone's and an environment's CVE score is derived, never a root; a site fallback names its subject; a guest the CMDB lacks is a `drift` finding. · v1.5 (2026-11-09) — **`stored-on` (operator):** a guest (`vm`, `lxc`) and a backup `datastore` are `stored-on` the storage pools their data is on (site-manager from a guest's disks, rootfs and mount points; backup-manager from the datastore's path), dependant the guest or datastore, required. It carries `critical` only, like every other relation: a `FAULTED` pool takes down what is stored on it, a `DEGRADED` pool (a warning) reaches nothing. · v1.4 (2026-10-31) — **O6 closed (operator): redundancy degrades.** A partly failed redundancy group gives its dependant a `warning` impact naming the failed member; the groups are set from the start by site-manager (bonded uplinks) and switch-manager (MLAG peer links and LAG legs); a rule may read the dependant, and the shipped `runs-on` rule degrades an HA-protected guest where it fails one without HA; a pool's ZFS state stays the disk case until disks are CIs. Mails carry the root's consequence by class. · v1.3 (2026-10-30) — **plan step 2 done, sources beyond the gates:** `assess` judges every class from the CMDB's observations and asks no plane (O3's direction): ports, addresses, DNS names, proxy routes, zones and VLANs, SSIDs, software, assets, datastore GC, restore points, backup peers, shares, and a CI's lifecycle (`unseen`). What nothing can judge follows its parent (`FOLLOWS`, derived, never a root). site-manager reports a NIC's link and negotiated speed on its port. The health-manager README's *What judges which class* is the map. · v1.2 (2026-10-30) — **D5 redesigned (operator):** the one-graph-of-everything did not work in practice; the Health view becomes a containment tree, an ego graph one hop deep with plus/minus expansion, and the CI panel. · v1.1 (2026-10-30) — **critical roots only (operator):** `HealthRootCause` mails a critical root at once; warnings and the sweep's findings go to a daily digest rule (D4). · v1.0 (2026-10-30) — **Accepted** by the operator with O3, O5 and O6 open. O1: no hardcoded propagation — the rules are data, per relation type and class (D3); O2: the interval is a site setting (D2); O4: an acknowledgement on a root cause covers its symptoms (D4). Implementation starts on the plan below, on the `adr-040` branch. · v0.1 (2026-10-30) — first draft, from the operator's direction of 2026-10-30: health is stored on every CMDB object as several conditions; health-manager is split into an assessing half that writes them and an emitting half that raises events and answers questions; root causes are derived along the CMDB's relations and the console's new Health view centres on them. |
 
 Health in TAPPaaS today is a verdict computed on demand and forgotten: `health-manager validate`
 runs its gates against the live cluster, prints a table, exits 0 or 1, and the console caches the
@@ -98,14 +98,26 @@ health, in the shape Kubernetes gives a resource's `status.conditions`:
 would lose the difference between a disk at 85 % and a disk full.
 
 `status` is `ok`, `warning`, `critical`, `unknown`, and a condition may be in **maintenance**
-(a window the operator set, or the update sweep's own, during which transitions are recorded but
-neither mailed nor counted). `since` is when the status last changed, not
+(an open maintenance window that covers its object, during which transitions are recorded but
+neither mailed nor counted). A window is a file in `/var/lib/tappaas/maintenance`, the one model
+the alert receiver reads too: the update sweep opens one before a restart (the guest's host, or
+the site for the firewall; a node's for its cluster stack), `health-manager maintenance <ci>`
+opens one for a CI, and it covers what it names and everything that runs on it. `since` is when the status last changed, not
 when it was last confirmed, so "how long has this been so" is a read. An object's **worst
 condition** is its colour (D5); `unknown` ranks between ok and warning and is shown as grey, not
 hidden, because an object nobody can assess is a finding. The old gates stay as the *checks* that
 feed conditions; a gate's row becomes the condition of the object it was about (a guest, a node, a
 pool) rather than a line in a site-wide table. The site's own health (the `site` CI's conditions)
 is the roll-up of D3.
+
+**Every judgement has an age and an owner (v1.6).** A condition stores the `owner` that raised
+it (a gate, `alerts`, `sweep`, `thresholds`, `observations`, `cve`, `performance`; `derive` for
+impact, roll-ups and follows), and only that owner, having looked again, takes it back. An `ok` or
+a failure whose owner has not looked for its interval (an hour; the sweep's 49 hours; the scan's
+staleness plus a day; a failure at least a day) becomes `unknown`, "not checked since …"; an
+`unknown` nobody looks at for a week is dropped. A judgement over an object that no source has
+reported for 48 hours (the store's per-source `seen`) is `unknown`, "not observed since …": a
+switch that died does not leave its ports green.
 
 `conditions` is an attribute like any other in the store (ADR-040 D13): every change of `status`
 opens a new validity row, so the history of an object's health is its attribute history, and
@@ -118,7 +130,10 @@ halves with one direction of data flow between them:
 
 **`health-manager assess`** — the calculating half. It gathers what the sources know and writes
 conditions to the CMDB; it is the *only* writer of `conditions` (through the controller's API,
-like any reporter). It:
+like any reporter). What others keep on a condition has an attribute of its own, one writer each,
+which assess projects onto the conditions so every reader reads one shape: the operator's
+acknowledgements (`acknowledgements`, written by the ack verbs: per type the last word, an ack or
+none) and emit's flapping (`flapping`). An ack made while assess runs is therefore never lost. It:
 
 - runs the checks (the gates of today, each now naming the object it judged by class and name);
 - reads the open alerts from Grafana and the receiver's record (ADR-039 D8) and turns each into an
@@ -136,7 +151,8 @@ like any reporter). It:
 It runs from `health-assess.timer` every `health.assessInterval` minutes (a `site.json` setting,
 default 5; a one-box site may set 15), after every `cmdb sweep`, and when the alert
 receiver gets an ALERT or RESOLVED (the receiver already runs on the mothership; it calls
-`health-manager assess --only <ci>` for the one object). One run is a few seconds: everything it
+`health-manager assess --alert <host>,<module>`, which places the alert on its object as
+`health-manager alerts` does, the one placement there is). One run is a few seconds: everything it
 needs is in the CMDB or a cached plane read; it never polls what the sweep polls.
 
 **`health-manager emit`** — the telling half, and the read side. It never computes health; it
@@ -144,6 +160,8 @@ reads conditions and their history from the CMDB and:
 
 - emits one **health event** per condition transition (D4) to the journal — the stream Loki holds
   and ADR-039's rules and the alert receiver act on — and to the console's change stream;
+- mails each **critical root cause** itself, from the root-cause set (D4), through
+  `site-notify.sh` on the same host;
 - answers questions: `health-manager show <ci>` (its conditions, since when, its root cause or
   what it impacts), `health-manager list [--type drift] [--status critical] [--class vm]
   [--root-causes]`, `health-manager history <ci> [--since]`, `health-manager roots` (the
@@ -202,26 +220,36 @@ environment's modules. The impact condition names its `rootCause` (the CI id) an
 reason ("node tappaas2 down"). An impacted object's own `operational` condition, when a check
 would also mark it critical ("VM not running" — of course it is not), is marked `derived: true`
 and does **not** count as its own failure: this is Icinga's *unreachable* and Nagios's *parent*
-rule, applied over typed relations instead of one host tree.
+rule, applied over typed relations instead of one host tree. As shipped, the rules cross
+`runs-on`, `depends-on`, `member-of`, `connects`, `built-on` and `stored-on`; a faulty asset
+reaches its machine, and a switch its ports, by colour only (`follows`), not as an impact.
 
 **Root cause (upstream).** A root cause is an object with a non-derived `critical` or `warning`
 condition that no object it depends on explains: walking its outgoing dependency relations
 (`runs-on`, `depends-on`, `connects` toward the uplink, `member-of` toward the cluster,
 `allocated-to` toward the asset) finds nothing failing. Everything else failing is a symptom of
-one or more roots. Where two roots explain one symptom, both are listed; where several failing
-objects share one ancestor that reaches all of them, that ancestor is the root even when it is
-only `warning` itself (the lowest common ancestor of the failing set), and among candidates the
-one whose transition came first wins — Dynatrace's ranking by impact, without the learning. The derivation is a
+one or more roots. Where two roots explain one symptom, both are listed. A failure that reaches
+an object explains only its own type there, at no lesser status: a slow node (a performance
+warning) does not explain a guest that stopped. A root whose object a **critical** impact reached
+(a guest with a full disk on a node that is down) is not listed as a root of its own; one that a
+warning reached stays a root, and **a critical never becomes the symptom of a warning** (v1.6: the
+earlier "lowest common ancestor" rule made a standing warning on a machine the root of unrelated
+stopped guests, and was removed). Roots are listed critical first, then by what they impact.
+**Cycles (v1.6):** a dependency cycle over required relations makes one failure reach everything
+on it and come back; `health-manager rules check` and the nightly sweep report every cycle, and
+an application's `depends-on` starts at the application, never at its host. The derivation is a
 topological walk over the current relation graph, cheap at a site's size (a few hundred objects),
 and is recomputed on every `assess`; no learning, no time windows: the site's dependency graph is
-known, so correlation by cause beats correlation by time. Time enters only as a tie-breaker in the
-event stream (D4): a symptom whose event precedes its root's by more than a check interval is
-flagged, because that usually means a relation is missing in the CMDB.
+known, so correlation by cause beats correlation by time. Time enters only as a tie-breaker: of
+two failures that reach each other (a cable's two ends), the earlier is the root. (Flagging a
+symptom whose event precedes its root's is not built.)
 
 **Roll-ups.** A `collection` (site, cluster, environment) and a `place` (location, room, rack)
 carry the worst status of their members as a derived condition of each type, counted ("3 of 12
 vms critical"), so the Overview's one line and the Health view's collapsed groups come from the
-same rows. A roll-up is never a root cause.
+same rows, recomputed every run with their counts. A roll-up is never a root cause, and neither is
+a zone's or an environment's CVE score: it carries the zone's multiplier, so it is the object's
+own number, but it is derived from the modules that set it (v1.6).
 
 ### D4 — Health events: one per transition, typed causal or symptom
 
@@ -240,18 +268,28 @@ line (identifier `tappaas-health`) and sent on the console's change stream:
 | `since`, `at` | when the status changed, when the event was emitted |
 | `flapping` | Nagios's rule over the last 20 transitions, newest weighted higher: flapping starts above 30 % changes and ends below 25 %; while flapping, the status is held at its worse value and one `flapping` start and end event replace the storm |
 
-Beside the transition there are four more event kinds, the set every tool has: `ack` and `unack`
-(who, sticky or not, expiry), `maintenance` start, end and cancel, and `rootcause` (the root's id
-and its symptoms' ids, written once per `assess` run that changes the set).
+Beside the transition there are more event kinds, the set every tool has: `ack` and `unack`
+(who, sticky or not, expiry), `maintenance` start and end (a window opening and ending), and
+`notice` (a critical-root notice opened or closed, and whether it went out).
 
-ADR-039's rules and the alert receiver work on these lines as on any log line, and the rule file
-is where the operator says which events leave the site (ADR-039 D1): `HealthRootCause` mails a
-**critical** root cause with the count of its symptoms, at once; `HealthRootRecovered` its
-recovery; `HealthDailyDigest` collects warning roots and the sweep's unexplained differences
-(ADR-040 D15: drift, new discoveries, unmanaged, missing) into one mail a day, none on a quiet
-day. Nothing mails a symptom — which is how three mails about one node become one. An operator may **acknowledge** a condition (`health-manager ack <ci> --type … --until …
+**The critical-root mail follows the root-cause set, not the transitions (v1.6).** emit keeps the
+notices it has open in its cursor. When a critical root cause enters the set — by its own
+transition, or without one: a guest that stays down after its node came back, a fault that
+outlived an acknowledgement or a window — one ALERT goes, with what it impacts by class. When it
+leaves the set, for any reason, one RESOLVED goes on the same key, saying why: recovered, eased to
+a warning, no longer checked, retired from the CMDB, acknowledged, in maintenance, or now explained
+by another root. A notice that could not be delivered is tried again on the next run; a flapping
+root holds its notice as it is. emit delivers through `site-notify.sh` on the mothership, so the
+mail does not wait for the logging VM, and the journal line stays the record. A warning root, a
+performance root, a module's CVE level (mailed by `cve-level-up`) and a zone's score are no notice
+of their own. The rule file keeps what is still a log rule: `HealthDailyDigest` collects warning
+roots, performance roots and the sweep's unexplained differences (ADR-040 D15: drift, new
+discoveries, unmanaged, missing) into one mail a day, none on a quiet day; its match is tested
+against the lines emit writes. Nothing mails a symptom — which is how three mails about one node
+become one. An operator may **acknowledge** a condition (`health-manager ack <ci> --type … --until …
 --note …`, a job from the console): the condition keeps its status but stops counting for
-`validate`, mails and the Overview, and the acknowledgement is an attribute with history.
+`validate`, mails and the Overview, and the acknowledgement is an attribute with history (the
+object's `acknowledgements`; it shows on the condition from the next assess).
 Acknowledging a **root cause** acknowledges its symptoms with it: every `impact` condition that
 names the root is silenced for as long as the root's acknowledgement holds, and a symptom that
 later gets a root of its own is heard again. A condition can also be acknowledged on its own.

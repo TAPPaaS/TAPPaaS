@@ -220,6 +220,26 @@ in
   };
 
   # ============================================================================
+  # EXPORTERS (ADR-046 D5) — localhost only; this VM's Alloy scrapes them at
+  # performance level service, keeping the names identity.json declares.
+  # ============================================================================
+
+  services.prometheus.exporters.postgres = {
+    enable = true;
+    listenAddress = "127.0.0.1";
+    port = 9187;
+    # Peer authentication as the local superuser over the socket: no password.
+    runAsLocalSuperUser = true;
+  };
+
+  services.prometheus.exporters.redis = {
+    enable = ak.redis;
+    listenAddress = "127.0.0.1";
+    port = 9121;
+    extraFlags = [ "--redis.addr=redis://127.0.0.1:6379" ];
+  };
+
+  # ============================================================================
   # CONTAINER RUNTIME
   # ============================================================================
 

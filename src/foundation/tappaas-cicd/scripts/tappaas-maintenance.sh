@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 #
-# tappaas-maintenance.sh — maintenance windows the alert receiver honours.
+# tappaas-maintenance.sh — maintenance windows, the one model for the alert
+# receiver and the site's health.
 #
-# A window names hosts (or the whole site) and an end time. While it is open,
-# tappaas-alert-receiver records a HostSilent from those hosts instead of
-# mailing it, and its RESOLVED then finds no ALERT to answer. An update that is
+# A window names hosts or CIs (or the whole site) and an end time. While it is
+# open, tappaas-alert-receiver records a HostSilent from those hosts instead of
+# mailing it, and health-manager assess puts the conditions of what it names,
+# and of everything that runs on it, in maintenance: a planned restart mails no
+# critical root cause. `health-manager maintenance <ci>` writes the same kind of
+# file. An update that is
 # allowed to restart a guest opens one before it does (converge-lib.sh): the
 # guest's own host, or the whole site when the guest is the firewall, since
 # every zone's traffic to the logging VM passes through it.

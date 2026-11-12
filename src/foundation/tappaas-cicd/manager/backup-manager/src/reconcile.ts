@@ -46,7 +46,7 @@ export function jobBucketIndex(job: JobStatus): Map<string, ScheduleBucket> {
   return idx;
 }
 
-export function computePlan(configDir: string, job: JobStatus): Plan {
+export function computePlan(configDir: string, job: JobStatus, metricsState: string | null = null): Plan {
   const actions: Action[] = [];
   const warnings: string[] = [];
 
@@ -109,6 +109,19 @@ export function computePlan(configDir: string, job: JobStatus): Plan {
       kind: "apply-schedule",
       target: `${bucket} PBS job schedule`,
       apply: (client: Client) => client.applySchedule(bucket),
+    });
+  }
+
+  // PBS's metric server (ADR-046 D1): pointed at the logging VM's metrics store
+  // while the site's performance level is not off, removed when it is.
+  if (metricsState !== null && metricsState !== "in-sync" && metricsState !== "absent") {
+    actions.push({
+      kind: "metrics-target",
+      target:
+        metricsState === "unwanted"
+          ? "PBS metric server → remove (the site's performance level is off)"
+          : `PBS metric server → push to the logging VM's metrics store (${metricsState === "missing" ? "not set" : "differs"})`,
+      apply: (client: Client) => client.applyMetricsTarget?.(),
     });
   }
 

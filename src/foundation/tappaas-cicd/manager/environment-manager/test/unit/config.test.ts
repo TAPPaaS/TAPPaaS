@@ -21,6 +21,7 @@ import {
 } from "../../src/config";
 import { bootstrap, buildBootstrapEnvironments, firstOrg, resolveName } from "../../src/bootstrap";
 import { CliModuleClient } from "../../src/clients";
+import { parseEnvironment as parseEnvironmentFor } from "../../src/config";
 import { Environment } from "../../src/types";
 
 let passed = 0;
@@ -181,6 +182,18 @@ try {
   check(res2.wrote.length === 0 && res2.skipped.length === 2, "bootstrap is idempotent without --force");
 } finally {
   rmSync(root, { recursive: true, force: true });
+}
+
+
+// ADR-046: an environment's performance level survives a parse and a write;
+// trace reads as service; nothing else comes in.
+{
+  const e = parseEnvironmentFor({ name: "lab", displayName: "Lab", ownerOrg: "o", performance: { level: "service", resolution: "fine" } });
+  check(e.performance?.level === "service" && e.performance?.resolution === "fine", "performance is read");
+  check(JSON.parse(serializeEnvironment(e)).performance.level === "service", "performance is written back");
+  check(parseEnvironmentFor({ name: "lab", performance: { level: "trace" } }).performance?.level === "service", "a record saying trace reads as service");
+  check(parseEnvironmentFor({ name: "lab", performance: { level: "loud", colour: "red" } }).performance === undefined, "an unknown level is not read");
+  check(!("performance" in JSON.parse(serializeEnvironment(parseEnvironmentFor({ name: "lab", displayName: "Lab", ownerOrg: "o" })))), "no performance, none written");
 }
 
 console.log(`\n${passed} passed, ${failed} failed.`);

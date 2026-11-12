@@ -59,6 +59,33 @@ export function grafanaExplore(ctx: JumpContext, host: string): string | null {
   return `https://${g}/explore?schemaVersion=1&orgId=1&panes=${enc(JSON.stringify(panes))}`;
 }
 
+// The shipped dashboard of a CI's class (logging's dashboards.nix), at that CI:
+// var-ci, or for a pool its node and name.
+const DASHBOARD: Record<string, string> = { machine: "tappaas-node", vm: "tappaas-guest", lxc: "tappaas-guest", "storage-pool": "tappaas-pool", datastore: "tappaas-datastore", "proxy-route": "tappaas-service" };
+export function grafanaDashboard(ctx: JumpContext, cls: string, labels: Record<string, string>): string | null {
+  const g = publicName(ctx, "logging");
+  const uid = DASHBOARD[cls];
+  if (!g || !uid) return null;
+  const vars = cls === "storage-pool" ? `var-node=${enc(labels.tappaas_ci_id ?? "")}&var-pool=${enc(labels.pool ?? "")}` : `var-ci=${enc(labels.tappaas_ci_id ?? "")}`;
+  return `https://${g}/d/${uid}/?orgId=1&${vars}`;
+}
+
+// The CI's traces (ADR-046 D7, P6): Grafana's Explore on the Tempo data source,
+// a TraceQL search by the CI's id, the last hour. Null where Grafana is not
+// published, as for the dashboards.
+export function grafanaTraces(ctx: JumpContext, ciId: string): string | null {
+  const g = publicName(ctx, "logging");
+  if (!g || !/^[0-9a-f-]{36}$/.test(ciId)) return null;
+  const panes = {
+    t: {
+      datasource: "tempo",
+      queries: [{ refId: "A", datasource: { type: "tempo", uid: "tempo" }, queryType: "traceql", query: `{ resource.tappaas.ci.id = "${ciId}" }` }],
+      range: { from: "now-1h", to: "now" },
+    },
+  };
+  return `https://${g}/explore?schemaVersion=1&orgId=1&panes=${enc(JSON.stringify(panes))}`;
+}
+
 function opnsense(ctx: JumpContext, path = "/"): string {
   return `https://firewall.${ctx.mgmtDomain}:8443${path}`;
 }

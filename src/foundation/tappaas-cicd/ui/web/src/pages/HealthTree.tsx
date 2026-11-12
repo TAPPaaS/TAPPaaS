@@ -89,8 +89,13 @@ export function useTree(): TreeModel {
   return { doc, read, kids, open, toggle, reveal, revealed, patch, reload: read.reload };
 }
 
-function Row({ n, depth, trail, m, selected, select, filters }: { n: TreeNode; depth: number; trail: string[]; m: TreeModel; selected: string | null; select: (id: string) => void; filters: Filters }) {
+// A lens colours the tree by one condition type (Performance's Browse: the
+// `performance` condition) instead of the worst of all.
+const statusIn = (n: TreeRollup, lens: string | undefined): HealthStatus => (lens ? n.types[lens] ?? "ok" : n.status);
+
+function Row({ n, depth, trail, m, selected, select, filters, lens }: { n: TreeNode; depth: number; trail: string[]; m: TreeModel; selected: string | null; select: (id: string) => void; filters: Filters; lens?: string }) {
   const facet = n.class === "facet";
+  const status = statusIn(n, lens);
   const isOpen = m.open.has(n.id);
   const here = useRef<HTMLDivElement>(null);
   const on = selected === n.id && !facet;
@@ -99,13 +104,13 @@ function Row({ n, depth, trail, m, selected, select, filters }: { n: TreeNode; d
   }, [on, m.revealed, n.id]);
   // A loop in the data is not walked twice.
   const rows = isOpen ? (m.kids[n.id] ?? []).filter((c) => !trail.includes(c.id)) : [];
-  const title = `${n.status}${n.notOk ? ` · ${n.notOk} need a look` : ""}${n.unknown ? ` · ${n.unknown} unknown` : ""}`;
+  const title = lens ? `${lens}: ${status}` : `${n.status}${n.notOk ? ` · ${n.notOk} need a look` : ""}${n.unknown ? ` · ${n.unknown} unknown` : ""}`;
   return (
     <li>
       <div ref={here} className={`ht-row${on ? " ht-on" : ""}${keptRollup(n, filters) ? "" : " ht-dim"}`} style={{ paddingLeft: 4 + depth * 14 }}>
         {n.children ? <button className="ht-caret" onClick={() => m.toggle(n.id)} aria-label={isOpen ? `Close ${n.label}` : `Open ${n.label}`} aria-expanded={isOpen}>{isOpen ? "▾" : "▸"}</button> : <span className="ht-caret" />}
         <button className={`ht-name${facet ? " ht-facet" : ""}`} onClick={() => (facet ? m.toggle(n.id) : select(n.id))} title={title}>
-          <Dot level={LEVEL[n.status]} title={title} />
+          <Dot level={LEVEL[status]} title={title} />
           {facet ? null : <ClassIcon cls={n.class} size={17} />}
           <span className="hc-name">{n.label}</span>
           {n.isRoot ? <span className="ht-root" title="a root cause">◎</span> : null}
@@ -113,11 +118,11 @@ function Row({ n, depth, trail, m, selected, select, filters }: { n: TreeNode; d
           {n.acknowledged ? <span className="hc-mark" title="acknowledged">✓</span> : null}
           {n.maintenance ? <span className="hc-mark" title="in a maintenance window">⏸</span> : null}
         </button>
-        {n.notOk ? <span className={`ht-count ht-count-${n.status}`}>{n.notOk}</span> : null}
+        {n.notOk && !lens ? <span className={`ht-count ht-count-${n.status}`}>{n.notOk}</span> : null}
       </div>
       {isOpen && rows.length ? (
         <ul className="ht-list">
-          {rows.map((c) => <Row key={c.id} n={c} depth={depth + 1} trail={[...trail, n.id]} m={m} selected={selected} select={select} filters={filters} />)}
+          {rows.map((c) => <Row key={c.id} n={c} depth={depth + 1} trail={[...trail, n.id]} m={m} selected={selected} select={select} filters={filters} lens={lens} />)}
         </ul>
       ) : null}
     </li>
@@ -142,7 +147,7 @@ function RootList({ roots, selected, choose }: { roots: HealthRoot[]; selected: 
   );
 }
 
-function Matches({ q, selected, select }: { q: string; selected: string | null; select: (id: string) => void }) {
+export function Matches({ q, selected, select, lens }: { q: string; selected: string | null; select: (id: string) => void; lens?: string }) {
   const found = useRead<TreeMatch[]>(`health/tree?q=${encodeURIComponent(q)}`, 600_000);
   const rows = found.env?.data ?? null;
   if (!rows) return <p className="muted small">Searching…</p>;
@@ -152,7 +157,7 @@ function Matches({ q, selected, select }: { q: string; selected: string | null; 
       {rows.map((n) => (
         <li key={n.id}>
           <button className={`ht-match${selected === n.id ? " ht-on" : ""}`} onClick={() => select(n.id)}>
-            <span className="ht-name"><Dot level={LEVEL[n.status]} title={n.status} /> <ClassIcon cls={n.class} size={17} /> <span className="hc-name">{n.label}</span></span>
+            <span className="ht-name"><Dot level={LEVEL[statusIn(n, lens)]} title={statusIn(n, lens)} /> <ClassIcon cls={n.class} size={17} /> <span className="hc-name">{n.label}</span></span>
             <span className="muted small">{n.where || n.class}</span>
           </button>
         </li>
@@ -161,7 +166,7 @@ function Matches({ q, selected, select }: { q: string; selected: string | null; 
   );
 }
 
-export function TreePane({ m, selected, select, chooseRoot, filters, open }: { m: TreeModel; selected: string | null; select: (id: string) => void; chooseRoot: (id: string) => void; filters: Filters; open: boolean }) {
+export function TreePane({ m, selected, select, chooseRoot, filters, open, lens, roots: given }: { m: TreeModel; selected: string | null; select: (id: string) => void; chooseRoot: (id: string) => void; filters: Filters; open: boolean; lens?: string; roots?: HealthRoot[] }) {
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
   useEffect(() => {
@@ -169,19 +174,21 @@ export function TreePane({ m, selected, select, chooseRoot, filters, open }: { m
     return () => clearTimeout(t);
   }, [text]);
   const doc = m.doc;
+  // A lens lists its own roots (Performance: from the performance condition).
+  const roots = given ?? doc?.roots ?? [];
   return (
     <div className={`health-side${open ? " health-side-open" : ""}`}>
       <input className="ht-search" type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder="Find an object" aria-label="find an object in the CMDB" />
-      {q ? <Matches q={q} selected={selected} select={select} /> : (
+      {q ? <Matches q={q} selected={selected} select={select} lens={lens} /> : (
         <>
-          {doc?.roots.length ? (
+          {roots.length ? (
             <>
-              <h3>Root causes ({doc.roots.length})</h3>
-              <RootList roots={doc.roots} selected={selected} choose={chooseRoot} />
+              <h3>Root causes ({roots.length})</h3>
+              <RootList roots={roots} selected={selected} choose={chooseRoot} />
             </>
-          ) : doc?.hasConditions ? <p className="muted"><Tag level="ok" /> Nothing is wrong.</p> : null}
+          ) : doc?.hasConditions ? <p className="muted"><Tag level="ok" /> {lens ? `No ${lens} root cause.` : "Nothing is wrong."}</p> : null}
           <ul className="ht-list ht-top">
-            {(doc?.facets ?? []).map((f) => <Row key={f.id} n={f} depth={0} trail={[]} m={m} selected={selected} select={select} filters={filters} />)}
+            {(doc?.facets ?? []).map((f) => <Row key={f.id} n={f} depth={0} trail={[]} m={m} selected={selected} select={select} filters={filters} lens={lens} />)}
           </ul>
         </>
       )}

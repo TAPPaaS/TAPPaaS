@@ -3,18 +3,21 @@
 // `conditions` attribute, and a write of one object's conditions. An interface,
 // so the logic runs against a stub in the tests.
 //
-// `conditions` is one attribute: every write replaces the array. assess carries
-// `acknowledged`, `maintenance`, `flapping` and `flappingHeld` over when it
-// rewrites one, and drops an ack or window that has ended; here they are read,
-// changed and written back whole.
+// `conditions` has one writer, assess. What the operator says (acknowledgements)
+// and what emit holds while a condition flaps (flapping) are attributes of their
+// own, each with one writer; assess projects both onto the conditions.
 
-import { cmdbQuery, cmdbReport, cmdbRequest, cmdbShow, objectPath } from "../../../lib/ts/src/cmdb";
+import { cmdbPeriods, cmdbQuery, cmdbReport, cmdbRequest, cmdbShow, objectPath } from "../../../lib/ts/src/cmdb";
+import type { InvestigationPeriod } from "./perf";
 import { changeJob } from "../../../lib/ts/src/job";
+import { RANK } from "./assess-model";
+import type { ConditionStatus } from "../../../lib/ts/src/health-rules";
 
 const SOURCE = "health-manager";
 
-export type Status = "ok" | "warning" | "critical" | "unknown";
-const RANK: Record<Status, number> = { ok: 0, unknown: 1, warning: 2, critical: 3 };
+// One status and one rank for every reader (assess-model.ts holds them).
+export type Status = ConditionStatus;
+export { RANK };
 
 export const worse = (a: Status, b: Status): Status => (RANK[b] > RANK[a] ? b : a);
 
@@ -55,11 +58,16 @@ export interface RootEntry {
   impactedCount?: number;
 }
 
+// The operator's last word per condition type (the ack verbs), and what emit
+// holds while a condition flaps: attributes of their own, one writer each.
+export interface OperatorWord { ack: Ack | null; at: string }
+export type Flaps = Record<string, { held: Status }>;
+
 export interface HealthObject {
   id: string;
   class: string;
   name: string;
-  attributes: { conditions?: Condition[]; rootCauses?: RootEntry[] };
+  attributes: { conditions?: Condition[]; rootCauses?: RootEntry[]; acknowledgements?: Record<string, OperatorWord>; flapping?: Flaps };
 }
 
 /** One period of the `conditions` attribute, from the CMDB's history. */
@@ -81,7 +89,10 @@ export interface HealthCmdb {
   objectsOfClass(cls: string): HealthObject[]; // subclasses too
   resolve(ref: string): HealthObject;
   periods(id: string): Period[];
-  write(o: HealthObject, conditions: Condition[], meta: WriteMeta): void;
+  /** Every period of the `investigation` attribute since a time; null when the CMDB has no such read. */
+  investigations?(since: string): InvestigationPeriod[] | null;
+  /** Writes the named attributes of one object (never `conditions`: assess alone writes those). */
+  write(o: HealthObject, attributes: Partial<Pick<HealthObject["attributes"], "acknowledgements" | "flapping">>, meta: WriteMeta): void;
 }
 
 export const conditionsOf = (o: HealthObject): Condition[] => (Array.isArray(o.attributes.conditions) ? o.attributes.conditions : []);
@@ -128,15 +139,24 @@ export class LiveHealthCmdb implements HealthCmdb {
     return h.attributes.filter((a) => a.name === "conditions");
   }
 
+  // A controller without the periods route (404) has no record to read back.
+  investigations(since: string): InvestigationPeriod[] | null {
+    try {
+      return cmdbPeriods("investigation", since) as InvestigationPeriod[];
+    } catch {
+      return null;
+    }
+  }
+
   // An assessment: the object by id, no sighting, so a write here neither holds
   // off a CI's expiry nor revives an unseen one (ADR-041 D2).
-  write(o: HealthObject, conditions: Condition[], meta: WriteMeta): void {
+  write(o: HealthObject, attributes: Partial<Pick<HealthObject["attributes"], "acknowledgements" | "flapping">>, meta: WriteMeta): void {
     cmdbReport({
       source: SOURCE,
       kind: meta.kind,
       assessment: true,
       ...(meta.kind === "change" ? { verb: meta.verb, ...changeJob() } : {}),
-      objects: [{ id: o.id, class: o.class, name: o.name, attributes: { conditions } }],
+      objects: [{ id: o.id, class: o.class, name: o.name, attributes }],
     });
   }
 }

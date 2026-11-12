@@ -45,6 +45,7 @@ import { DnsTlsClient, Environment, ModuleClient, NetworkClient, RefSources } fr
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { MODIFY_SHORTCUTS, SetError, expandSet } from "../../../lib/ts/src/setfields";
 import { RD, GN, CL, debug, die, guarded, info, warn } from "../../../lib/ts/src/cli";
+import { captureResult } from "../../../lib/ts/src/exec";
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { reportChange, sendObservation } from "../../../lib/ts/src/cmdb-source";
 import { SOURCE, environmentObservation } from "./cmdb-report";
@@ -78,6 +79,7 @@ export const HELP: HelpSpec = {
     {
       usage: "add [<env>] [--name N] [--domain D] [--owner ORG]\n" +
         "                          [--zone Z] [--create-zone] [--display D] [--size S]\n" +
+        "                          [--performance-level L] [--performance-resolution R]\n" +
         "                          [--dns-mode M] [--force]", effect: { noPreview: "writes config/environments/<env>.json (with --create-zone also a zone); environment-manager reconcile <env> --apply makes it live" },
       name: "add",
       hidden: ["--dnsMode M"],
@@ -92,6 +94,8 @@ export const HELP: HelpSpec = {
           "                   mistyped --zone cannot create a stray zone."],
         ["--display D", "The name people see (default: the environment's name, capitalised)."],
         ["--size S", "small, medium or large: the cores, memory and disk its modules get (default: the site's size)."],
+        ["--performance-level L", "off, basic or service: what its modules collect of their own performance (default: the site's)."],
+        ["--performance-resolution R", "normal (a minute) or fine (15 seconds) (default: the site's)."],
         [
           "--dns-mode M",
           "How its certificates are issued: per-service (default: Caddy gets one per host)\n" +
@@ -102,7 +106,8 @@ export const HELP: HelpSpec = {
     },
     {
       usage: "modify <env> [--set <field>=<value>]... [--domain D] [--owner ORG] [--zone Z]\n" +
-        "                          [--display D] [--size S] [--dns-mode M]", effect: { noPreview: "writes config/environments/<env>.json; environment-manager reconcile <env> --apply makes it live" },
+        "                          [--display D] [--size S] [--performance-level L]\n" +
+        "                          [--performance-resolution R] [--dns-mode M]", effect: { noPreview: "writes config/environments/<env>.json; environment-manager reconcile <env> --apply makes it live" },
       name: "modify",
       hidden: ["--dnsMode M"],
       options: [
@@ -116,6 +121,9 @@ export const HELP: HelpSpec = {
         ["--display D", "The name people see."],
         ["--size S", "small, medium or large: the cores, memory and disk its modules get. Installed\n" +
           "                   modules follow at their next update; disks only grow."],
+        ["--performance-level L", "off, basic or service: what its modules collect of their own performance, unless\n" +
+          "                   a module sets its own; inherit: the site's. Applied to the modules at once."],
+        ["--performance-resolution R", "normal (a minute) or fine (15 seconds); inherit: the site's."],
         [
           "--dns-mode M",
           "How its certificates are issued: per-service (Caddy gets one per host)\n" +
@@ -180,6 +188,9 @@ interface Opts {
   createZone: boolean;
   display?: string;
   size?: "small" | "medium" | "large";
+  // ADR-046: "inherit" removes the key (the site's then).
+  perfLevel?: "off" | "basic" | "service" | "inherit";
+  perfResolution?: "normal" | "fine" | "inherit";
   dnsMode?: "per-service" | "wildcard" | "local";
   schemaDir?: string;
   zones?: string;
@@ -236,6 +247,21 @@ export function parseOpts(args: string[]): Opts {
       case "--display":
         o.display = need("--display");
         break;
+      case "--performance-level":
+      case "--performanceLevel": {
+        const v = need("--performance-level");
+        if (v === "trace") die("--performance-level: trace is not a standing level — raise one object for a time: health-manager perf <ci> --level trace --until <time>");
+        if (v !== "off" && v !== "basic" && v !== "service" && v !== "inherit") die(`--performance-level must be off, basic, service or inherit (got '${v}')`);
+        o.perfLevel = v;
+        break;
+      }
+      case "--performance-resolution":
+      case "--performanceResolution": {
+        const v = need("--performance-resolution");
+        if (v !== "normal" && v !== "fine" && v !== "inherit") die(`--performance-resolution must be normal, fine or inherit (got '${v}')`);
+        o.perfResolution = v;
+        break;
+      }
       case "--size": {
         const v = need("--size");
         if (v !== "small" && v !== "medium" && v !== "large") die(`--size must be small, medium or large (got '${v}')`);
@@ -475,6 +501,11 @@ function cmdAdd(opts: Opts, net: NetworkClient): void {
     ownerOrg: owner,
     ...(opts.size ? { size: opts.size } : {}),
   };
+  const perf = {
+    ...(opts.perfLevel && opts.perfLevel !== "inherit" ? { level: opts.perfLevel } : {}),
+    ...(opts.perfResolution && opts.perfResolution !== "inherit" ? { resolution: opts.perfResolution } : {}),
+  };
+  if (perf.level || perf.resolution) env.performance = perf;
   const zone = opts.zone ?? name;
   if (opts.domain || opts.dnsMode) {
     env.domains = {
@@ -537,6 +568,15 @@ function cmdModify(opts: Opts, net: NetworkClient): void {
   const env = parseEnvironment(raw, name);
   if (opts.display) env.displayName = opts.display;
   if (opts.size) env.size = opts.size;
+  const perfChanged = opts.perfLevel !== undefined || opts.perfResolution !== undefined;
+  if (perfChanged) {
+    const p = { ...(env.performance ?? {}) };
+    if (opts.perfLevel === "inherit") delete p.level;
+    else if (opts.perfLevel) p.level = opts.perfLevel;
+    if (opts.perfResolution === "inherit") delete p.resolution;
+    else if (opts.perfResolution) p.resolution = opts.perfResolution;
+    env.performance = p.level || p.resolution ? p : undefined;
+  }
   if (opts.owner) env.ownerOrg = opts.owner;
   if (opts.domain || opts.dnsMode) {
     env.domains = {
@@ -557,6 +597,7 @@ function cmdModify(opts: Opts, net: NetworkClient): void {
   assertValid(env, env, zone !== undefined ? withBinding(refs, zone, name) : refs);
   const written = writeEnvironment(opts.configDir, env);
   info(`${GN}Updated ${written}${CL}`);
+  if (perfChanged) applyPerformance(opts.configDir, name);
   if (moving) {
     const old = ownZones(refs.zones, name);
     try {
@@ -784,6 +825,30 @@ function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient, dt: Dns
     if (e instanceof NetworkUnreachable) die(`reconcile failed: ${e.message}`);
     throw e;
   }
+}
+
+// ADR-046 D3: an environment's level reaches its modules' own pipelines at
+// once — each guest's runtime file, no rebuild (tappaas-metrics-target.sh).
+function applyPerformance(configDir: string, env: string): void {
+  const bin = process.env.ENV_METRICS_TARGET_BIN ?? "tappaas-metrics-target.sh";
+  let n = 0;
+  for (const f of readdirSync(configDir).filter((x) => x.endsWith(".json")).sort()) {
+    let cfg: Record<string, unknown>;
+    try {
+      cfg = JSON.parse(readFileSync(join(configDir, f), "utf8")) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    if (cfg.environment !== env || (cfg.kind !== "vm" && cfg.kind !== "lxc")) continue;
+    const r = captureResult(bin, ["guest", f.slice(0, -5), "apply"]);
+    if (!r.ran) {
+      warn(`the modules' metrics pipelines were not rewritten (${bin} not found) — their next update does it`);
+      return;
+    }
+    if (r.rc !== 0) warn(`${f.slice(0, -5)}: its metrics pipeline was not rewritten: ${(r.stderr || r.stdout).trim().split("\n").pop()}`);
+    else if (/^changed/m.test(r.stdout)) n++;
+  }
+  info(`  the performance level reaches ${n} module(s) of ${env} now`);
 }
 
 // ADR-020 D11: `modify --set field=value` becomes the field's shortcut flag.

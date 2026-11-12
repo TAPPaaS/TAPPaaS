@@ -61,10 +61,10 @@
       "ends": [["node", "cluster"], ["node", "environment"], ["user", "group"], ["address", "zone"]]
     },
     "depends-on": {
-      "description": "A node depends on a service (the module's dependsOn).",
+      "description": "A node, or an application, depends on a service (the module's dependsOn). An application's dependencies are its own, never its host's.",
       "dependant": "from", "required": true,
       "cardinality": "n:m",
-      "ends": [["node", "service"]]
+      "ends": [["node", "service"], ["app", "service"]]
     },
     "provides": {
       "description": "A node provides a service (the module's provides).",

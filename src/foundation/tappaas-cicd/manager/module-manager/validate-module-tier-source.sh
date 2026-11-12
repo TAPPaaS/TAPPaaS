@@ -191,6 +191,28 @@ main() {
         lint_warn "${base}: source:community — peer-reviewed but not officially supported (🟡)"
     fi
 
+    # ── performance declaration (ADR-046 D5, O8) ─────────────────────────
+    # A module may declare exporters, traces and thresholds under
+    # `performance` — a foundation module only, until the format has settled.
+    # The full shape is checked by `module-manager validate`
+    # (lib/ts/src/perf-declaration.ts); here, what refuses an install.
+    if jq -e '(.performance // {}) | type == "object" and (has("exporters") or has("traces") or has("thresholds"))' "$TARGET" >/dev/null 2>&1; then
+        if [[ "$source" != "official" ]]; then
+            lint_error "${base}: a ${source} module may not declare performance exporters, traces or thresholds yet: only foundation modules do, until the format has settled"
+        else
+            local bad
+            bad="$(jq -r '[(.performance.exporters // [])[] | select(((.name // "") | test("^[a-z][a-z0-9-]*$") | not)
+                     or ((.port | type) != "number") or ((.keep // []) | length == 0)
+                     or ((.keep // []) | any(test("^[A-Za-z_:*][A-Za-z0-9_:*]*$") | not)) or ((.keep // []) | any(. == "*")))
+                     | (.name // "?")] | join(", ")' "$TARGET" 2>/dev/null || echo "?")"
+            [[ -z "$bad" ]] || lint_error "${base}: performance.exporters ${bad}: each needs a name, a port and a keep-list of metric names"
+            # Software known not to emit spans (lib/ts/src/perf-declaration.ts NO_OTLP).
+            if [[ "${base%.json}" == identity ]] && jq -e '.performance.traces.otlp == true' "$TARGET" >/dev/null 2>&1; then
+                lint_warn "${base}: performance.traces.otlp is true, but authentik ships no OpenTelemetry exporter (Sentry only): no spans will arrive — set it false until it does"
+            fi
+        fi
+    fi
+
     # ── maturity: status + version (#248) ────────────────────────────────
     local status version major
     status="$(jq -r '.status // empty' "$TARGET")"

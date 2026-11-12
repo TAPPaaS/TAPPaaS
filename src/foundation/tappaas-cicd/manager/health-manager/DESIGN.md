@@ -24,7 +24,12 @@ are **N/A**. The surface:
 | `list vm` | — | **MOVED out of health-manager** (was the port of the retired `inspect-cluster.sh`) |
 | `list vm --diff` | — | **MOVED** → `module-manager list --diff` (per-module drift rollup) |
 | `show vm <name>` | — | **MOVED** → `module-manager reconcile <m>` (read-only), native `module-manager/src/inspect.ts` |
-| `validate` | the `check-*.sh` gates | **special**: asserts the *live* system is healthy (below) |
+| `assess [--only <ci> \| --alert <host>,<module>] [--dry-run]` | the gates, alerts, sweep, thresholds, observations, metrics, scan | the one writer of `conditions`: settles, ages, derives, writes one report (below) |
+| `emit` | the CMDB's history of `conditions` | health events to the journal, critical-root notices through `site-notify.sh`, flapping |
+| `show`, `list`, `roots [--all]`, `history` | the conditions | reads |
+| `ack`, `unack`, `maintenance <ci> \| end <ci>` | the `acknowledgements` attribute; a window file | the operator's word; assess projects it |
+| `rules list\|check` | the correlation rules, the relations | `check` also reports dependency cycles |
+| `validate` | the conditions (`--live`: assess first) | **special**: asserts the *live* system is healthy (below) |
 | `update-os <name> <vmid> <node>` | `update-os.sh` | special **action**; thin pass-through to the script |
 | `reboot <module>` | `reboot-guest.sh` | special **action** (#730): resolves the module to its VMID and live node, then update-os.sh's own `reboot_guest` path |
 
@@ -112,46 +117,75 @@ a full one shows up as the placement problem it is.
   tests inject `FakeClusterClient` and never touch SSH.
 - `src/main.ts` — verb dispatch, option parsing, table/JSON rendering, entry guard.
 - `src/emit.ts`, `events.ts`, `ack.ts`, `emit-read.ts`, `emit-verbs.ts`, `emit-cmdb.ts` — the
-  emitting half (ADR-041 D2, D4); see below. The CMDB is behind `HealthCmdb`, so the unit tests
-  run on a stub.
+  emitting half; see below. The CMDB is behind `HealthCmdb`, so the unit tests run on a stub.
+- `src/notices.ts` — the critical-root mail: notices opened and closed from the root-cause set.
+- `src/windows.ts` — the maintenance windows (the files the alert receiver reads too).
 
-## The emitting half (ADR-041 D2, D4)
+## The emitting half
 
 - **What changed is read from the attribute's periods**, not from `since`: two transitions between
   runs, and a condition that went away, leave no trace in the current value. Reading every
   object's history per run would be a request per object, so `candidates` picks those with a
-  recent `since`, a different status set from the object as of the cursor (`at`), or `flapping`.
+  recent `since`, a different status set from the object as of the cursor (`at`), or flapping.
 - **The cursor is a change id**, because a report's time is when its run began: a slow `assess
   --only` can commit behind a time cursor that a faster run has already moved. Reports from two
-  overlapping assess runs can still commit out of id order; that window is one transaction.
+  overlapping assess runs can still commit out of id order; that window is one transaction. The
+  cursor also keeps the root set told, the critical-root notices open and the windows told open.
 - **Flapping counts intervals, not transitions.** Nagios's percentage is of results that changed,
   and the history holds changes only, so "the last 20 transitions" would always be 100 %. Twenty
   intervals give the same ratio, with `health.assessInterval` as the check period, and let a
   condition stop flapping with no further transition.
-- **`conditions` is one attribute**, so an ack is a read-modify-write of the array, and `assess`
-  rewrites it from what it read at its start: an ack made during an assess run is lost. `assess &&
-  emit` is safe; an ack from the console during a run is the exposed case. The members emit owns
-  (`acknowledged`, `maintenance`, `flapping`, `flappingHeld`) are carried by assess.
+- **One writer per attribute.** assess alone writes `conditions`. The ack verbs write the object's
+  `acknowledgements` (per condition type the operator's last word, an ack or none, with its time),
+  emit writes `flapping` (per type the status held while it flaps). assess takes a word newer than
+  the one a condition last took (`operatorAt`), keeps the ack's lifecycle (its `until`, a status
+  change for a plain ack, ok for a sticky one), computes a root's ack onto its impacts (`via`), and
+  projects flapping, so every reader reads one shape. An ack made during an assess run is written
+  to an attribute that run does not write, so it is never lost; it shows on the condition at the
+  next run.
 - **Every write is an assessment** (`assessment: true`, the object by id): no sighting, so it
   neither holds off a CI's expiry nor revives an unseen one.
-- **assess drops an ack or window that has ended**, so emit often sees it gone rather than ending:
-  `endedBeforeEmit` compares with the objects as of the cursor and tells the `unack` or `maintenance`
-  end. A root's ack on a symptom is sticky to assess: `reconcileAcks` alone decides it.
-- **`reconcileAcks` is the one place** that ends acks and windows and spreads a root's ack, run by
-  the verbs and by every emit, so a symptom that appears after the ack is silenced too.
-- **The mail needs `root` and `silenced` on the line**: a rule has only the line, and a recovered
-  root is no longer in `rootCauses`, so emit remembers the set in the cursor. Keys keep their
-  order, as the rule's `match` reads them in order.
+- **assess ends an ack**, so emit sees it gone rather than ending: `endedBeforeEmit` compares with
+  the objects as of the cursor and tells the `unack` (expired, recovered, changed). An unack by the
+  verb told its own event.
+- **The critical-root mail follows the root-cause set** (`notices.ts`). A notice opens when a
+  critical root that is not silenced enters the set, whether or not its own status changed, and
+  closes when it leaves, for any reason, saying which: recovered, eased, no longer checked,
+  retired, acknowledged, in maintenance, now a symptom. emit plans them; `runEmit` delivers them
+  through `site-notify.sh` (`--key health-root:<ci>:<type>`, `--resolve` for the close, so the
+  RESOLVED threads under its ALERT) before the cursor records them, and one that did not go out is
+  tried again on the next run. A flapping root holds its notice. Not a notice of its own: a
+  warning, a performance root, a module's CVE level (cve-level-up mails it), a zone's score.
+- **Maintenance windows** are files (`windows.ts`); emit tells one opening and ending from the
+  cursor's list.
+- **What stays a log rule** is matched on the line, so keys keep their order: the digest reads
+  `"to":"warning"…"kind":"causal"…"silenced":false`, a performance root's `digestOnly` after
+  `silenced`; `emit.test.ts` runs the rule file's matches against `eventLine` output.
 
 ## Assess: what is expected, what is derived
 
 ADR-041 D2 and D3 decide the what. The decisions under them:
 
 **Who may take a failure back.** A condition has one writer but several sources.
-`settle()` applies one rule: a failure recovers only when its owner (found from
-its `reason`) ran and looked at that object. So a gate reports `judged`, the
-objects it actually reached; without that, a guest that stopped answering its
-disk probe would turn green. Skips are no judgement: below ok among findings.
+Each condition stores its `owner` (the gate or source that raised it; `derive`
+for what derivation computes). `settle()` applies one rule: a failure recovers
+only when its owner ran and looked at that object. So a gate reports `judged`,
+the objects it actually reached; without that, a guest that stopped answering its
+disk probe would turn green. Skips are no judgement: below ok among findings. A
+condition stored before the owner was gets it from its reason.
+
+**Ageing.** When the owner looked and has nothing to say, a failure is over (ok)
+and an ok or unknown it no longer gives is dropped: absent reads as ok. When the
+owner did not look, the judgement holds for its interval (an hour; the sweep 49
+hours; the scan its staleness plus a day; a failure at least a day) and is then
+`unknown`, "not checked since …"; an unknown nobody looks at for a week goes. An
+ok stored before the owner was, that nothing gives now, is dropped at once. A
+threshold or observation over an object no source has reported for 48 hours (its
+`seen`, its `lastSeen`) is `unknown`, "not observed since …".
+
+**What derive computes is computed again, whole.** Impact, roll-ups and follows
+(owner `derive`) are dropped before `settle`, and their message is recomputed
+every run; one that was failing and is no longer produced is written once as ok.
 
 **Expected or derived.** A failure spreads from a provider to its dependant where
 a rule matches the failure, in a fixpoint, because a `redundancyGroup` is crossed
@@ -178,12 +212,25 @@ is no root either while the node is down.
 **Cycles.** `connects` has no direction, so both ends of a dead cable reach each
 other. Of two that reach each other the earlier `since` is the root.
 
-**The common ancestor.** A failing ancestor no rule crosses from (a warning)
-becomes the root of the dependants below it only when it covers two or more of
-them in the same type, and only for types a rule names as a source: one guest down
-under a node with a warning is two facts, not a cause. Lowest first, then earliest.
-They keep `derived: false`: the root may be a warning, and `validate` must still
-fail for what is critical beneath it.
+**Roots.** A root is a failing condition no other failure explains, unless a
+critical impact reached its object (a full disk on a guest whose node is down).
+A warning that reached it never takes a critical's place: a slow node does not
+explain a guest that stopped. Roots are ordered critical first, then by what they
+impact. A zone's and an environment's CVE score is derived, never a root. There is
+no common-ancestor rule: a standing warning on a machine was made the root of
+unrelated stopped guests by it.
+
+**Dependency cycles.** A cycle over required relations makes one failure reach
+everything on it and come back. `rules check` reads the CMDB's relations for them,
+and the sweep lists each as a difference.
+
+**What the CMDB cannot place** lands on the site, naming its subject (`module
+ghost: …`). A guest the cluster runs and the CMDB does not have is a `drift`
+warning (`not-in-cmdb`), not a site outage.
+
+**Maintenance.** The open window that covers an object (`windows.ts`: the site,
+or what a window names and what runs on it) is the `maintenance` of every one of
+its conditions; nothing carries a window over.
 
 **Why `validate` keeps a stored table.** The console and scripts read each gate's
 rows, with detail no condition keeps (one condition per type per object, so two
@@ -194,6 +241,29 @@ conditions'.
 **History.** `conditions` is one attribute, so any change but `lastChecked` opens
 a period. The store compares without the members marked `volatile` and rewrites a
 value that differs only there, which is why an unchanged site costs no rows.
+
+## Performance and trend capacity (ADR-046 D6, `assess-performance.ts`)
+
+`assess` reads the metrics store (logging's Prometheus on :3121, its trends under `/trends/`,
+the mothership's admin credential on curl's stdin; `metrics-read.ts`) when logging and the
+credential are here.
+
+- **`performance`**: each signal of `lib/ts/src/perf-signals.ts` with a threshold for the CI's
+  class (D6's defaults: pool write latency, guest CPU pressure — the steal it sees —, memory and
+  I/O pressure of guests and nodes, a route's p95 and 5xx ratio), a foundation module's declared
+  `performance.thresholds` over them on its guest and its routes. A level is entered once held
+  for the whole window (`min_over_time` over `for`) and left once under it for the window
+  (`max_over_time`). Reason `perf-<signal>`; a CI measured before with no numbers now is
+  `unknown` (`perf-no-numbers`), never critical. A store that does not answer judges nothing,
+  and what this source set stands (owner `performance`, not looked).
+- **trend `capacity`**: pools (Proxmox's storage numbers, by node and storage name), backup
+  datastores (PBS's) and node memory, "full in N days" from the last 7 days' slope; within the
+  site's `performance.capacityHorizonDays` (14) a warning (`capacity-trend`), beside the usage
+  thresholds.
+- **correlation**: `health-rules.json` crosses a pool's performance warning or critical over
+  `stored-on`, and a node's over `runs-on`, as a `warning` impact.
+- **mail**: a performance root is no critical-root notice of its own; its transition carries
+  `digestOnly` after `silenced`, so the daily digest's match takes it; symptoms are never mailed.
 
 ## State it reads
 

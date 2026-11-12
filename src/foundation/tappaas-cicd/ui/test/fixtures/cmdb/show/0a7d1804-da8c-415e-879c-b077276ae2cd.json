@@ -61,6 +61,19 @@
           "lastChecked": "2026-11-01T08:50:02.363Z",
           "maintenance": null,
           "acknowledged": null
+        },
+        {
+          "type": "performance",
+          "since": "2026-10-30T11:05:00.000Z",
+          "reason": "threshold",
+          "source": "health-manager",
+          "status": "warning",
+          "derived": false,
+          "message": "tankc1: write latency 38 ms, over 25 ms for 15 min",
+          "rootCause": null,
+          "lastChecked": "2026-11-01T08:50:02.363Z",
+          "maintenance": null,
+          "acknowledged": null
         }
       ],
       "source": "health-manager",

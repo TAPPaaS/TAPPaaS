@@ -1079,7 +1079,7 @@ function cmdReconcile(opts: Opts, client: Client): void {
     // Controller unreachable → preview against an empty/offline job.
     job = { jobId: null, vmids: [], storage: null, buckets: [], reachable: false };
   }
-  const plan = computePlan(opts.configDir, job);
+  const plan = computePlan(opts.configDir, job, client.metricsTargetState ? client.metricsTargetState() : null);
 
   info(`Plan: ${plan.actions.length} action(s), ${plan.warnings.length} warning(s)`);
   for (const w of plan.warnings) warn(w);

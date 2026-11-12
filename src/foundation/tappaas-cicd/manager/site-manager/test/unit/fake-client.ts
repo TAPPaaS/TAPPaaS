@@ -55,6 +55,17 @@ export class FakeSiteClient implements SiteClient {
   // Default matches the fixture node so the node slice is a clean no-op.
   livePools = new Map<string, string[]>([["tappaas1", ["tanka1"]]]);
   registeredNodes: string[] = [];
+  // The cluster's metric server state (null = not readable).
+  metricsState: string | null = "in-sync";
+  metricsApplied = 0;
+  metricsTargetState(): string | null {
+    return this.metricsState;
+  }
+  applyMetricsTarget(): number {
+    this.metricsApplied++;
+    this.metricsState = "in-sync";
+    return 0;
+  }
   clusterNodes(_candidates: string[]): string[] | null {
     return this.liveNodes === null ? null : [...this.liveNodes];
   }

@@ -70,13 +70,16 @@ its matching log lines, fetched from Loki for the alert's host and put through
 support-anonymize.py's scrubbing, as a bundle's journals are, but only on a
 site that opted in: site.json `alerts.includeLines` (default false).
 
-Every alert that arrives, ALERT or RESOLVED, also moves the site's health
-(ADR-041 D2): the host or module it is about is resolved as health-manager's
-alerts.ts places it, and a worker thread runs `health-manager assess --only
-<ci>` and then `health-manager emit`, so a webhook never waits for them. A burst
-is one worker: what arrives while it runs joins its next round. An alert about
-no object assesses the site. health-manager's own rules are not assessed again:
-they read what emit wrote.
+Every alert that arrives, ALERT or RESOLVED, also moves the site's health: a
+worker thread runs `health-manager assess --alert <host>,<module>` (which
+places it, the only placement there is) and then `health-manager emit`, so a
+webhook never waits for them. A burst is one worker: what arrives while it
+runs joins its next round. An alert about no object assesses the site.
+health-manager's own rules are not assessed again: they read what emit wrote.
+emit mails a critical root cause itself; correlation and silencing live in
+health-manager. This receiver delivers Grafana's mails, folds a node down and
+a burst of silent hosts, honours the maintenance windows for them, and keeps
+the heartbeat the watchdog reads.
 
 The daily digest (HealthDailyDigest) is a mail health-manager writes: `digest
 --json` says what is new since the last one, and whether that makes it an ALERT
@@ -580,6 +583,17 @@ def node_back_mail(node, state, incident):
     return f"RESOLVED: node {node} is back", "\n".join(lines) + "\n"
 
 
+def node_left_mail(node, incident):
+    """The RESOLVED for a node down that is no longer in the cluster at all:
+    removed, not back. (subject, body)"""
+    lines = [f"Node {node} is no longer a member of the cluster (down since {incident.get('since', '?')}).",
+             "It was removed, not brought back: its incident is closed.", ""]
+    if incident.get("guests"):
+        lines += ["The guests it ran:"] + [f"  {g}" for g in incident["guests"]] + [""]
+    lines += ["Sent by the logging module's alert rules through tappaas-alert-receiver."]
+    return f"RESOLVED: node {node} left the cluster", "\n".join(lines) + "\n"
+
+
 def _incident_path(args, node):
     return f"{args.node_down_dir}/{re.sub(r'[^A-Za-z0-9_.-]', '-', node)}.json"
 
@@ -628,9 +642,10 @@ def fold_node_down(args, payload):
         if state is None:
             return payload  # cannot tell: every host is mailed on its own
         offline = offline_nodes(state)
+        members = {n.get("name") for n in state.get("nodes", [])}
         for node, inc in incidents.items():
             if node not in offline:
-                subject, body = node_back_mail(node, state, inc)
+                subject, body = node_back_mail(node, state, inc) if node in members else node_left_mail(node, inc)
                 ok, out = notify(args, subject, body, key=f"grafana:NodeDown:{node}", resolve=True)
                 print(f"{'sent' if ok else 'NOT sent'}: {subject}" + (f" — {out}" if out and not ok else ""), flush=True)
                 if ok:
@@ -788,12 +803,17 @@ def fold_quiet(args, payload):
             if not _is_silent(a):
                 keep.append(a)
                 continue
-            if b.get("open"):
+            # A burst takes the hosts that fall silent within its window; one
+            # that falls silent later is a fault of its own, mailed as usual.
+            if b.get("open") and now - b.get("mailed", b.get("since", now)) <= args.burst_window:
                 if host not in b["members"]:
                     b["members"].append(host)
                     changed = True
                 print(f"folded: HostSilent on {host} into the silent burst", flush=True)
                 breadcrumb(args, f"alert folded into the silent burst: HostSilent on {host}")
+                continue
+            if b.get("open"):
+                keep.append(a)
                 continue
             recent[host] = now
             changed = True
@@ -871,33 +891,17 @@ _health_pending = set()
 _health_running = [False]
 
 
-def place_alert(host, module, config_dir):
-    """The object an alert is about, as alerts.ts's placeAlert: the instance
-    whose vmname (or config name) is its host, else the rule's module."""
-    short = host.split(".")[0]
-    if short and re.match(r"^[A-Za-z0-9][A-Za-z0-9-]*$", short):
-        for path in sorted(glob.glob(f"{config_dir}/*.json")):
-            inst = os.path.basename(path)[:-5]
-            try:
-                with open(path, encoding="utf-8") as f:
-                    raw = json.load(f)
-            except (OSError, ValueError):
-                continue
-            if not isinstance(raw, dict) or str(raw.get("status") or "").lower() == "archived":
-                continue
-            if (raw.get("vmname") or inst) == short and (raw.get("moduleSource") or raw.get("location")):
-                return inst
-    return module or None
-
-
 def health_targets(payload, config_dir):
-    """What the webhook's alerts are about; None stands for the whole site."""
+    """What the webhook's alerts are about, as "<host>,<module>" for
+    `health-manager assess --alert`, which places them (alerts.ts's placeAlert,
+    the one placement there is); None stands for the whole site."""
     out = set()
     for a in payload.get("alerts") or []:
         labels = a.get("labels") or {}
         if is_heartbeat(a) or labels.get("alertname") in HEALTH_RULES:
             continue
-        out.add(place_alert(labels.get("host", ""), labels.get("module", ""), config_dir))
+        host, module = labels.get("host", ""), labels.get("module", "")
+        out.add(f"{host},{module}" if host or module else None)
     return out
 
 
@@ -921,7 +925,7 @@ def _health_worker(args):
             batch = set(_health_pending)
             _health_pending.clear()
         # The whole site covers every object in the round.
-        rounds = [[]] if None in batch else [["--only", ci] for ci in sorted(batch)]
+        rounds = [[]] if None in batch else [["--alert", t] for t in sorted(batch)]
         ok = [_health_run([args.health, "assess"] + r) for r in rounds]
         if any(ok):
             _health_run([args.health, "emit"])

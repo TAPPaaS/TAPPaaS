@@ -195,6 +195,38 @@ run_lint "$tf"  && bad "lint: no stack, tier:foundation + community should FAIL 
                 || ok "lint: no stack → the retired tier still decides, for one release"
 run_lint "$ct"  && ok "lint: a tier contradicting the stack is ignored — stack communication is environment-scoped" \
                 || bad "lint: stack communication + tier:foundation + community should pass (the stack decides)"
+# A performance declaration (ADR-046 D5, O8): foundation modules only, well formed.
+pd='"performance":{"level":"service","exporters":[{"name":"authentik","port":9301,"keep":["authentik_*_total"]}]}'
+pf="${LWORK}/perf-official.json"; printf '%s\n' "{\"stack\":\"foundation\",${pd}}" > "$pf"
+pc="${LWORK}/perf-community.json"; printf '%s\n' "{\"stack\":\"ai\",\"source\":\"community\",${pd}}" > "$pc"
+pl="${LWORK}/perf-level-only.json"; printf '%s\n' '{"stack":"ai","source":"community","performance":{"level":"service"}}' > "$pl"
+pk="${LWORK}/perf-keepall.json"; printf '%s\n' '{"stack":"foundation","performance":{"exporters":[{"name":"x","port":1,"keep":["*"]}]}}' > "$pk"
+run_lint "$pf" && ok "lint: a foundation module may declare exporters" || bad "lint: a foundation module's performance declaration should pass"
+run_lint "$pc" && bad "lint: a Community module's performance declaration should FAIL" || ok "lint: a Community module's performance declaration is refused"
+_lo="$(lint_out "$pc")"
+grep -q "may not declare performance exporters" <<<"$_lo" && ok "lint: the refusal says why" || bad "lint: refusal reason missing: ${_lo}"
+run_lint "$pl" && ok "lint: a Community module may still set its own level" || bad "lint: performance.level alone should pass for any module"
+run_lint "$pk" && bad "lint: keep ['*'] should FAIL" || ok "lint: an exporter that keeps everything is refused"
+
+# The schema (module-fields.json performance) against the foundation declarations and a bad one.
+if python3 -c "import jsonschema" 2>/dev/null; then
+    _sv="$(python3 -I - "${HERE}/../../../schemas/module-fields.json" "${HERE}/../../../identity/identity.json" "${HERE}/../../../logging/logging.json" <<'PY'
+import json, sys, jsonschema
+schema = json.load(open(sys.argv[1]))["fields"]["performance"]
+v = jsonschema.Draft202012Validator({k: x for k, x in schema.items() if k in ("type", "properties", "additionalProperties")})
+for f in sys.argv[2:]:
+    errs = list(v.iter_errors(json.load(open(f))["performance"]))
+    print(f"{f.split('/')[-1]}: {len(errs)}" + "".join(f" {e.message}" for e in errs[:2]))
+bad = {"exporters": [{"name": "X", "port": "1", "keep": ["*"]}], "dashboards": 1}
+print(f"bad: {len(list(v.iter_errors(bad)))}")
+PY
+)"
+    grep -q "^identity.json: 0$" <<<"$_sv" && grep -q "^logging.json: 0$" <<<"$_sv" && ok "schema: the foundation performance declarations validate" || bad "schema: ${_sv}"
+    grep -qE "^bad: [4-9]" <<<"$_sv" && ok "schema: a malformed declaration does not" || bad "schema: the bad declaration passed: ${_sv}"
+else
+    echo "  skip: schema: python3 jsonschema not installed"
+fi
+
 # Captured, not piped: `grep -q` stops at the first match and the lint then
 # dies of SIGPIPE, which pipefail reports as a failure.
 _lo="$(lint_out "$ct")"
@@ -2216,6 +2248,53 @@ run_cset --check --set 'proxyAllowedZones=["internet"]'; _rc=$?
 run_cset --check --set 'proxyAllowedZones=notjson'; _rc=$?
 [[ "${_rc}" -eq 3 ]] && unchanged && ok "--check still checks the value's type" || bad "--check type rc=${_rc}"
 rm -rf -- "${CDIR}"
+
+# ---------------------------------------------------------------------------
+# Unit: a key inside a declared object field (ADR-046: performance.level) —
+# written at its path, refused outside its enum, unset to inherit, and the
+# object (not the key) in the operator ledger, which the 3-way merge reads.
+# ---------------------------------------------------------------------------
+PDIR="$(mktemp -d "${TMPDIR:-/tmp}/modmgr-perf.XXXXXX")"
+mkdir -p "${PDIR}/config"
+cat > "${PDIR}/schema.json" <<'JSON'
+{ "fields": { "vmname": { "type": "string" }, "cores": { "type": "integer" },
+  "performance": { "type": "object", "usedBy": ["general"],
+    "properties": { "level": { "type": "string", "enum": ["off", "basic", "service"] },
+                    "resolution": { "type": "string", "enum": ["normal", "fine"] } } } } }
+JSON
+printf '{"vmname":"perftest","cores":2}\n' > "${PDIR}/config/perftest.json"
+run_pset() {
+    TAPPAAS_CONFIG="${PDIR}/config" TAPPAAS_SCHEMA_FILE="${PDIR}/schema.json" \
+        bash "$SETF" perftest "$@" > "${PDIR}/out" 2>&1
+}
+pcfg() { jq -c "$1" "${PDIR}/config/perftest.json"; }
+run_pset --set performance.level=service; _rc=$?
+[[ "${_rc}" -eq 0 && "$(pcfg '.performance')" == '{"level":"service"}' ]] \
+    && ok "--set performance.level=service writes performance: {level: service}" \
+    || bad "performance.level not written as a key of performance (rc=${_rc}): $(pcfg .) $(tail -1 "${PDIR}/out")"
+run_pset --set performance.resolution=fine
+[[ "$(pcfg '.performance')" == '{"level":"service","resolution":"fine"}' ]] \
+    && ok "a second key joins the object" || bad "performance.resolution: $(pcfg .performance)"
+jq -e 'index("performance") != null and (map(test("\\.")) | any | not)' "${PDIR}/config/perftest.json.operator" >/dev/null \
+    && ok "the ledger records performance, not performance.level" || bad "ledger: $(cat "${PDIR}/config/perftest.json.operator" 2>/dev/null)"
+cp "${PDIR}/config/perftest.json" "${PDIR}/before.json"
+run_pset --set performance.level=trace; _rc=$?
+[[ "${_rc}" -eq 3 ]] && cmp -s "${PDIR}/before.json" "${PDIR}/config/perftest.json" \
+    && ok "performance.level=trace is refused (exit 3), nothing written" || bad "trace: rc=${_rc}: $(pcfg .performance)"
+run_pset --set performance.colour=red; _rc=$?
+[[ "${_rc}" -ne 0 ]] || [[ "$(pcfg '.performance.colour // "none"')" == '"none"' ]] \
+    && ok "a key the object does not declare is not written as one" || bad "performance.colour written: $(pcfg .performance)"
+printf '{"vmname":"perftest","cores":2,"performance":{"level":"service","resolution":"fine"}}\n' > "${PDIR}/config/perftest.json"
+run_pset --unset performance.level; _rc=$?
+[[ "${_rc}" -eq 0 && "$(pcfg '.performance')" == '{"resolution":"fine"}' ]] \
+    && ok "--unset performance.level inherits again, the other key stays" || bad "unset level: rc=${_rc}: $(pcfg .) $(tail -1 "${PDIR}/out")"
+run_pset --unset performance.resolution
+[[ "$(pcfg 'has("performance")')" == "false" ]] \
+    && ok "unsetting the last key removes the object" || bad "empty performance left: $(pcfg .)"
+run_pset --unset performance.level; _rc=$?
+[[ "${_rc}" -eq 3 ]] && grep -q "already inherits" "${PDIR}/out" \
+    && ok "--unset of a key not set says it already inherits (exit 3)" || bad "unset unset key: rc=${_rc}: $(tail -1 "${PDIR}/out")"
+rm -rf -- "${PDIR}"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"

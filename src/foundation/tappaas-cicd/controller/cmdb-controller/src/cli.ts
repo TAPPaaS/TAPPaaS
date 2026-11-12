@@ -118,14 +118,14 @@ function showText(d: Obj): string {
   return lines.join("\n");
 }
 
-const KIND_WORD: Record<string, string> = { changed: "changed", appeared: "appeared", gone: "gone", desired: "differs from desired", unmanaged: "actual without desired", missing: "desired without actual", unread: "could not be compared" };
+const KIND_WORD: Record<string, string> = { changed: "changed", appeared: "appeared", gone: "gone", desired: "differs from desired", unmanaged: "actual without desired", missing: "desired without actual", unread: "could not be compared", cycle: "a dependency cycle" };
 
 // Grouped by object, each difference with its source and verdict.
 function sweepText(d: Obj): string {
   const c = (d.counts ?? {}) as Record<string, number>;
   const lines = [
     `sweep ${String(d.id)} at ${String(d.time)}: ${String(d.status)}${d.since ? ` (since ${String(d.since)})` : " (the baseline: the next one lists what changed)"}`,
-    `  ${c.expected} expected (${c.new ?? 0} new, ${c.words ?? 0} words), ${c.drift} drift, ${c.desired} from desired, ${c.unmanaged} unmanaged, ${c.missing} missing, ${c.unread} unread, ${c.sourcesFailed} source(s) failed`,
+    `  ${c.expected} expected (${c.new ?? 0} new, ${c.words ?? 0} words), ${c.drift} drift, ${c.desired} from desired, ${c.unmanaged} unmanaged, ${c.missing} missing, ${c.unread} unread, ${c.cycles ?? 0} cycle(s), ${c.sourcesFailed} source(s) failed`,
   ];
   for (const s of (d.sources ?? []) as Obj[]) if (!s.ok || s.fallback) lines.push(`  source ${String(s.source)}: ${s.ok ? "no --discover yet, asked plainly" : `FAILED ${String(s.error ?? `exit ${String(s.exitCode)}`)}`}`);
   let last = "";
@@ -133,12 +133,14 @@ function sweepText(d: Obj): string {
     const head = `${String(x.class)} ${String(x.name)}`;
     if (head !== last) lines.push("", head);
     last = head;
-    const what = x.attribute ? `${String(x.attribute)}: ${x.kind === "appeared" ? cell(x.after) : x.kind === "gone" ? cell(x.before) : `${cell(x.before)} → ${cell(x.after)}`}` : "";
+    const what = x.kind === "cycle" ? `with ${(Array.isArray(x.after) ? (x.after as string[]) : []).join(", ")}` : x.attribute ? `${String(x.attribute)}: ${x.kind === "appeared" ? cell(x.after) : x.kind === "gone" ? cell(x.before) : `${cell(x.before)} → ${cell(x.after)}`}` : "";
     const verdict = x.expected
       ? x.reason === "new"
         ? `new${x.verb || x.owner ? ` (${[x.owner ? `of ${String(x.owner)}` : "", x.verb ? String(x.verb) : ""].filter(Boolean).join(", ")})` : ""}`
         : x.reason === "words"
           ? "expected (words: required, redundancyGroup)"
+          : x.reason === "lease"
+            ? "expected (a lease)"
           : `expected${x.verb ? ` (${String(x.verb)})` : ""}`
       : ["changed", "appeared", "gone"].includes(String(x.kind)) ? "DRIFT" : "";
     lines.push(`  ${KIND_WORD[String(x.kind)] ?? String(x.kind)}${what ? ` ${what}` : ""}  [${String(x.source)}]${verdict ? ` ${verdict}` : ""}`);

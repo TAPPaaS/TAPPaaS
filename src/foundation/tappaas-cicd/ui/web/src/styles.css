@@ -933,3 +933,53 @@ body.dragging-place, body.dragging-place * { cursor: grabbing !important; user-s
   .sec-d2 { padding-left: var(--sp-24); }
   .sec-d3 { padding-left: var(--sp-32); }
 }
+
+/* ── Performance (ADR-046 D7): the menu's four tabs, the charts, the CI panel's section ── */
+.pc-spark { width: 100%; height: 30px; display: block; }
+.pc-line { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+.pc-warn { stroke: var(--warn); stroke-width: 1; stroke-dasharray: 4 3; }
+.pc-crit { stroke: var(--fail); stroke-width: 1; stroke-dasharray: 4 3; }
+.pc-mark { stroke: var(--slate-500); stroke-width: 1; }
+.pc-grid { stroke: var(--line); stroke-width: 1; }
+.pc-chart { margin: var(--sp-12) 0; }
+.pc-chart figcaption { font-size: 13px; margin-bottom: var(--sp-4); }
+.pc-now { font-weight: 600; margin-left: var(--sp-4); }
+.pc-warning { color: var(--warn-ink); }
+.pc-critical { color: var(--fail-ink); }
+.pc-plot { position: relative; height: 120px; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: var(--sp-24); }
+.pc-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.pc-y { position: absolute; left: var(--sp-4); font-size: 11px; color: var(--muted); background: var(--panel); padding: 0 var(--sp-4); }
+.pc-y-top { top: 0; }
+.pc-y-mid { top: calc(50% - 8px); }
+.pc-x { position: absolute; left: 0; right: 0; bottom: -20px; display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+.pc-mark-n { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; border-radius: var(--radius-control); background: var(--slate-600); color: var(--white); font-size: 10px; font-weight: 600; }
+.pc-mark-at { position: absolute; top: -8px; transform: translateX(-50%); }
+.pc-marks { list-style: none; margin: var(--sp-4) 0; padding: 0; display: grid; gap: var(--sp-4); font-size: 13px; }
+.perf-ci .perf-ranges { margin: var(--sp-8) 0 var(--sp-4); }
+.perf-links { display: flex; flex-wrap: wrap; gap: var(--sp-8) var(--sp-16); align-items: baseline; }
+.perf-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-8); }
+.perf-row { display: grid; grid-template-columns: minmax(180px, 1.2fr) minmax(140px, 1fr) minmax(160px, 1.4fr); gap: var(--sp-4) var(--sp-16); align-items: center; padding: var(--sp-8) var(--sp-12); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-panel); }
+.perf-row-name { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4) var(--sp-8); }
+.perf-row-spark { display: grid; gap: var(--sp-4); }
+.perf-off { background: var(--info-bg); border: 1px solid var(--line-info); border-radius: var(--radius-panel); padding: var(--sp-12) var(--sp-16); margin: var(--sp-12) 0; }
+.perf-off h2 { margin: 0 0 var(--sp-8); font-size: 16px; }
+.perf-browse-bar { margin-top: var(--sp-12); }
+.perf-browse-main { flex: 1; min-width: 0; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-panel); padding: var(--sp-12) var(--sp-16); }
+.perf-object-head { display: flex; align-items: baseline; gap: var(--sp-8); flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: var(--sp-8); margin-bottom: var(--sp-8); }
+.perf-meters { display: grid; gap: var(--sp-8); max-width: 640px; }
+.perf-meter { display: grid; grid-template-columns: 200px 1fr auto; gap: var(--sp-8); align-items: center; }
+.perf-meter-bar { height: 10px; background: var(--slate-100); border-radius: var(--radius-sm); overflow: hidden; }
+.perf-meter-bar > span { display: block; height: 100%; background: var(--accent); }
+.perf-meter-high > span { background: var(--warn); }
+.perf-levels td { vertical-align: middle; }
+.perf-col-act { text-align: right; white-space: nowrap; }
+.perf-inv { padding: var(--sp-8) 0; border-bottom: 1px solid var(--line); display: grid; gap: var(--sp-4); }
+.perf-inv-head { display: flex; align-items: center; gap: var(--sp-8); flex-wrap: wrap; }
+.perf-start { display: grid; gap: var(--sp-8); max-width: 560px; }
+@media (max-width: var(--bp-sm)) {
+  .perf-row { grid-template-columns: 1fr; }
+  .perf-meter { grid-template-columns: 1fr; }
+  .perf-col-cost { display: none; }
+  .perf-browse { flex-direction: column; height: auto; }
+  .perf-browse-main { overflow: visible; }
+}

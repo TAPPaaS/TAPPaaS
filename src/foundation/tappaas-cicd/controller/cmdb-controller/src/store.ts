@@ -56,6 +56,10 @@ export interface Report {
   assessment?: boolean;
   objects?: ReportObject[];
   relations?: ReportRelation[];
+  // The report names every relation of `type` from `from` (ADR-040 D4): an
+  // open one it does not name has ended, and is closed. One an operator
+  // recorded is left alone.
+  complete?: { type: string; from: Ref }[];
 }
 
 export interface Problem {
@@ -272,6 +276,8 @@ export class Store {
       run.prescan(objects);
       for (let i = 0; i < objects.length; i++) await run.object(i, objects[i]);
       for (let i = 0; i < relations.length; i++) await run.relation(i, relations[i]);
+      const complete = Array.isArray(r.complete) ? r.complete : [];
+      for (let i = 0; i < complete.length; i++) await run.complete(i, complete[i]);
       if (run.problems.length) {
         throw new ReportError(run.problems.some((p) => p.candidates || /conflict|immutable|matches/.test(p.error)) ? 409 : 422, run.problems);
       }
@@ -304,9 +310,24 @@ export class Store {
    *  relation to it, D5) and with no such relation open, the last one to an
    *  object that has ended — a pool of a node removed before a node's end
    *  took its pools with it. Nothing can find them again. */
-  async orphans(): Promise<RetireCandidate[]> {
+  async orphans(now: Date = new Date()): Promise<RetireCandidate[]> {
+    // A placeholder (made for a reference to something not reported yet) that
+    // no owner reported within its class's expiry never will be: it goes too.
+    const expiries: Record<string, number> = {};
+    for (const c of this.mm.classes.keys()) expiries[c] = this.mm.expirySeconds(c) ?? 7 * 86400;
+    const stale = (
+      await this.pg.query(
+        `SELECT o.id, o.class, o.name, e.value::double precision AS secs FROM object o
+           JOIN jsonb_each_text($1::jsonb) e ON e.key = o.class
+          WHERE o.ended IS NULL
+            AND EXISTS (SELECT 1 FROM attribute ph WHERE ph.object = o.id AND ph.name = 'placeholder' AND upper_inf(ph.validity))
+            AND o.created + make_interval(secs => e.value::double precision) < $2::timestamptz
+          ORDER BY o.class, o.name, o.id`,
+        [expiries, now.toISOString()],
+      )
+    ).rows.map((r) => ({ id: String(r.id), class: String(r.class), name: String(r.name), reason: `a placeholder nothing reported within ${Math.round(Number(r.secs) / 86400)} day(s)` }));
     const keyed = this.mm.keyedOn();
-    if (!keyed.length) return [];
+    if (!keyed.length) return stale;
     const rows = (
       await this.pg.query(
         `SELECT DISTINCT o.id, o.class, o.name, t.class AS on_class, t.name AS on_name, t.id AS on_id
@@ -321,7 +342,7 @@ export class Store {
         [JSON.stringify(keyed)],
       )
     ).rows;
-    return rows.map((r) => ({ id: String(r.id), class: String(r.class), name: String(r.name), reason: `its ${String(r.on_class)} ${String(r.on_name)} is retired`, on: String(r.on_id) }));
+    return [...stale, ...rows.filter((r) => !stale.some((x) => x.id === String(r.id))).map((r) => ({ id: String(r.id), class: String(r.class), name: String(r.name), reason: `its ${String(r.on_class)} ${String(r.on_name)} is retired`, on: String(r.on_id) }))];
   }
 
   /** Retire live CIs (D7): by id, or the orphans. A preview unless apply;
@@ -332,7 +353,8 @@ export class Store {
     const apply = body.apply === true;
     const ids = Array.isArray(body.ids) ? body.ids.map(String) : [];
     if (!ids.length && body.orphans !== true) throw new HttpError(400, "retire: name ids, or orphans: true");
-    const want: RetireCandidate[] = body.orphans === true ? await this.orphans() : [];
+    const at = typeof body.now === "string" && !Number.isNaN(Date.parse(body.now)) ? new Date(body.now) : new Date();
+    const want: RetireCandidate[] = body.orphans === true ? await this.orphans(at) : [];
     for (const id of ids) {
       if (!UUID_RE.test(id)) throw new HttpError(400, `retire: ${id} is not an id`);
       const r = (await this.pg.query("SELECT id, class, name, ended FROM object WHERE id = $1", [id])).rows[0];
@@ -468,7 +490,7 @@ export class Store {
     const limit = Number.isInteger(body.limit) ? Number(body.limit) : 10000;
     const rows = (
       await this.pg.query(
-        `SELECT o.id, o.class, o.name, o.display_name, o.created, o.ended, o.last_seen, o.recorded, c.physical
+        `SELECT o.id, o.class, o.name, o.display_name, o.created, o.ended, o.last_seen, o.seen, o.recorded, c.physical
            FROM object o JOIN class c ON c.name = o.class
           WHERE ${conds.join(" AND ")}
           ORDER BY o.class, o.name LIMIT ${limit}`,
@@ -486,6 +508,7 @@ export class Store {
       created: r.created,
       ended: r.ended,
       lastSeen: r.last_seen,
+      seen: r.seen ?? {}, // when each source last reported it
       attributes: Object.fromEntries((attrs.get(String(r.id)) ?? []).map((a) => [a.name, a.value])),
     }));
   }
@@ -641,6 +664,40 @@ export class Store {
       recorded: r.recorded,
       since: r.since,
       until: r.until,
+    }));
+  }
+
+  /** Every period of one attribute, on any object, that was in force at or
+   *  after `since` (the newest first): what a CI carried and when, with the
+   *  change that ended it — e.g. the investigations that have ended, read back
+   *  when the file that listed them is gone. */
+  async periods(attribute: string, since: string | null): Promise<Obj[]> {
+    if (!attribute) throw new HttpError(400, "periods names an attribute");
+    if (since !== null && Number.isNaN(Date.parse(since))) throw new HttpError(400, `since ${since} is not a date`);
+    const rows = (
+      await this.pg.query(
+        `SELECT o.id, o.class, o.name, a.value, a.source, a.change,
+                lower(a.validity) AS "from", upper(a.validity) AS "to",
+                e.id AS ended_change, e.verb AS ended_verb, e.actor AS ended_actor
+           FROM attribute a JOIN object o ON o.id = a.object
+           LEFT JOIN LATERAL (
+             SELECT c.id, c.verb, c.actor FROM change c
+              WHERE NOT upper_inf(a.validity) AND c.time = upper(a.validity) AND c.objects @> ARRAY[a.object]
+              ORDER BY c.id DESC LIMIT 1) e ON true
+          WHERE a.name = $1 AND NOT isempty(a.validity)
+            AND ($2::timestamptz IS NULL OR upper_inf(a.validity) OR upper(a.validity) >= $2::timestamptz)
+          ORDER BY lower(a.validity) DESC, o.name`,
+        [attribute, since === null ? null : new Date(since).toISOString()],
+      )
+    ).rows;
+    return rows.map((r) => ({
+      object: { id: r.id, class: r.class, name: r.name },
+      value: r.value,
+      source: r.source,
+      change: r.change,
+      from: r.from,
+      to: r.to,
+      ended: r.ended_change === null ? null : { change: r.ended_change, verb: r.ended_verb, actor: r.ended_actor },
     }));
   }
 
@@ -850,6 +907,7 @@ class ReportRun {
   problems: Problem[] = [];
   touched = new Set<string>();
   relationIds = new Set<number>();
+  private named = new Set<string>(); // type|from|to of every relation this report put
   drift = false;
   results: ReportResult["objects"] = [];
   private refs = new Map<string, Target>();
@@ -1473,5 +1531,21 @@ class ReportRun {
       return;
     }
     await this.putRelation(r.type, from.id, to.id, isObj(r.attributes) ? r.attributes : {}, this.allRecorded || r.recorded === true);
+    this.named.add(`${r.type}|${from.id}|${to.id}`);
+  }
+
+  /** A complete statement: close what the report no longer names. */
+  async complete(i: number, c: { type: string; from: Ref }): Promise<void> {
+    const at = `complete[${i}]`;
+    if (!isObj(c) || typeof c.type !== "string" || !this.mm.relationEnds(c.type).length) return this.problem(at, "a complete names a relation type and a from");
+    const from = await this.target(`${at}.from`, c.from, null);
+    if (!from) return;
+    const open = (await this.q("SELECT id, to_object FROM relation WHERE type = $1 AND from_object = $2 AND upper_inf(validity) AND NOT recorded", [c.type, from.id])).rows;
+    for (const x of open) {
+      if (this.named.has(`${c.type}|${from.id}|${String(x.to_object)}`)) continue;
+      await this.closeRelation(Number(x.id));
+      this.touched.add(from.id);
+      this.touched.add(String(x.to_object));
+    }
   }
 }

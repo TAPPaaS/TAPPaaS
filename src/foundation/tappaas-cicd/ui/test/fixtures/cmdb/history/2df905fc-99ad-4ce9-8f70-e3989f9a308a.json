@@ -212,7 +212,7 @@
      "source": "health-manager",
      "status": "warning",
      "derived": false,
-     "message": "tappaas3 every leg reaches the same switch (USW-Pro-XG-10-PoE) \u2014 redundant ports, not redundant switches",
+     "message": "tappaas3 every leg reaches the same switch (USW-Pro-XG-10-PoE) — redundant ports, not redundant switches",
      "rootCause": null,
      "lastChecked": "2026-10-31T09:52:08.978Z",
      "maintenance": null,
@@ -385,7 +385,7 @@
      "source": "health-manager",
      "status": "warning",
      "derived": false,
-     "message": "tappaas3 every leg reaches the same switch (USW-Pro-XG-10-PoE) \u2014 redundant ports, not redundant switches",
+     "message": "tappaas3 every leg reaches the same switch (USW-Pro-XG-10-PoE) — redundant ports, not redundant switches",
      "rootCause": null,
      "lastChecked": "2026-10-31T15:45:02.582Z",
      "maintenance": null,
@@ -934,7 +934,7 @@
      "source": "health-manager",
      "status": "warning",
      "derived": false,
-     "message": "tappaas3 every leg reaches the same switch (USW-Pro-XG-10-PoE) \u2014 redundant ports, not redundant switches",
+     "message": "tappaas3 every leg reaches the same switch (USW-Pro-XG-10-PoE) — redundant ports, not redundant switches",
      "rootCause": null,
      "lastChecked": "2026-11-01T08:50:02.363Z",
      "maintenance": null,
@@ -1917,6 +1917,16 @@
   }
  ],
  "changes": [
+  {
+   "id": 1862,
+   "kind": "change",
+   "source": "storage-manager",
+   "job": "20261030104402-5c1d0e",
+   "verb": "pool scrub tankc1",
+   "actor": "lars",
+   "time": "2026-10-30T10:44:02.000Z",
+   "drift": false
+  },
   {
    "id": 2343,
    "kind": "observation",

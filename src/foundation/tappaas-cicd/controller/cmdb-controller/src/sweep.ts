@@ -25,6 +25,7 @@ import { spawn } from "child_process";
 import { RescanResult, runCommand, rescan, rescanSources } from "./rescan";
 import { CONTROLLER_SOURCE, ChangeEvent, DEPENDENCY_WORDS, Store } from "./store";
 import { Query } from "./pg";
+import { CycleRelation, dependencyCycles } from "../../../lib/ts/src/health-rules";
 
 type Obj = Record<string, unknown>;
 
@@ -35,7 +36,8 @@ export type DifferenceKind =
   | "desired" // ADR-020's differ: the record says one thing, the plane another
   | "unmanaged" // actual without desired
   | "missing" // desired without actual
-  | "unread"; // the differ could not read this module
+  | "unread" // the differ could not read this module
+  | "cycle"; // required relations that reach back to where they started
 
 export interface Difference {
   kind: DifferenceKind;
@@ -56,8 +58,19 @@ export interface Difference {
   // "words": a relation whose ends and type stay and whose only change is its
   // dependency words (required, redundancyGroup): words a report classifies
   // the relation with, not an observation that differs, so never drift.
-  reason?: "new" | "words";
+  reason?: "new" | "words" | "lease";
   owner?: string;
+}
+
+// An address with a lease and no reservation: one a DHCP server handed out.
+// A live one by what it holds now; an ended one by what it last held.
+async function leased(pg: Query, id: string, ended = false): Promise<boolean> {
+  const r = await pg(
+    `SELECT bool_or(name = 'leaseUntil') AS lease, bool_or(name = 'reservation') AS reserved FROM attribute
+      WHERE object = $1 AND ${ended ? "NOT isempty(validity)" : "upper_inf(validity)"}`,
+    [id],
+  );
+  return r.rows[0]?.lease === true && r.rows[0]?.reserved !== true;
 }
 
 // What makes something a part of its owner, for "new" (from → to: the part
@@ -77,6 +90,7 @@ export interface SweepCounts {
   unmanaged: number;
   missing: number;
   unread: number;
+  cycles?: number; // dependency cycles over required relations
   sourcesFailed: number;
 }
 
@@ -349,6 +363,7 @@ export class Sweep {
 
     d.log(`sweep: asking every source${since ? ` (the last sweep: ${since})` : " (the first: this one is the baseline)"}`);
     const sources = await (d.rescanAll ?? (async () => (await rescan(d.log, rescanSources(), { discover: true })).asked))();
+    await this.reach(sources, started);
     await this.store.expire(now());
     // What a retired object left behind is retired with it (D7), as a change,
     // so the differences below list it as expected.
@@ -358,6 +373,8 @@ export class Sweep {
 
     const differences: Difference[] = since ? await this.sinceLast(since, until) : [];
     differences.push(...(await this.fromDesired(started, d.differ ?? moduleDiffer)));
+    differences.push(...(await this.cycles()));
+    differences.push(...this.missedDevices(sources));
     differences.sort((a, b) => a.class.localeCompare(b.class) || a.name.localeCompare(b.name) || (a.attribute ?? "").localeCompare(b.attribute ?? ""));
 
     const counts: SweepCounts = {
@@ -369,9 +386,10 @@ export class Sweep {
       unmanaged: differences.filter((x) => x.kind === "unmanaged").length,
       missing: differences.filter((x) => x.kind === "missing").length,
       unread: differences.filter((x) => x.kind === "unread").length,
+      cycles: differences.filter((x) => x.kind === "cycle").length,
       sourcesFailed: sources.filter((s) => !s.ok).length,
     };
-    const exitCode: 0 | 1 | 2 = counts.missing || counts.sourcesFailed ? 2 : counts.drift || counts.desired || counts.unmanaged || counts.unread ? 1 : 0;
+    const exitCode: 0 | 1 | 2 = counts.missing || counts.sourcesFailed ? 2 : counts.drift || counts.desired || counts.unmanaged || counts.unread || counts.cycles ? 1 : 0;
     const status = exitCode === 2 ? "critical" : exitCode === 1 ? "warning" : "healthy";
 
     const body = { since, counts, status, exitCode, sources, differences };
@@ -412,6 +430,56 @@ export class Sweep {
     return { id, time: until, since, counts, status, exitCode, sources, differences };
   }
 
+  // Which devices each source reached (the store's per-source sighting): a
+  // source that ran and reached none of what it reported before has failed,
+  // however it exited; one that missed some says which. A device is a physical
+  // object that is not a part (a port, a disk follow theirs).
+  private async reach(sources: RescanResult[], started: string): Promise<void> {
+    for (const s of sources) {
+      if (!s.ok) continue;
+      const rows = (
+        await this.store.pg.query(
+          `SELECT o.class, o.name, (o.seen->>$1) AS at FROM object o JOIN class c ON c.name = o.class
+            WHERE o.ended IS NULL AND o.seen ? $1 AND c.physical AND o.class NOT IN ('port', 'disk')
+            ORDER BY o.class, o.name`,
+          [s.source],
+        )
+      ).rows;
+      const t0 = Date.parse(started);
+      s.reached = rows.filter((r) => Date.parse(String(r.at)) >= t0).length;
+      s.missed = rows.filter((r) => Date.parse(String(r.at)) < t0).map((r) => `${String(r.class)}/${String(r.name)}`);
+      if (s.reached === 0 && s.missed.length) Object.assign(s, { ok: false, error: `reached none of the ${s.missed.length} device(s) it reported before` });
+    }
+  }
+
+  private missedDevices(sources: RescanResult[]): Difference[] {
+    return sources
+      .filter((s) => s.ok && s.missed?.length)
+      .flatMap((s) =>
+        s.missed!.map((m) => {
+          const slash = m.indexOf("/");
+          return { kind: "unread" as const, class: m.slice(0, slash), name: m.slice(slash + 1), source: s.source, attribute: null, before: null, after: `not reached by ${s.source}`, expected: false };
+        }),
+      );
+  }
+
+  // A dependency cycle over required relations: a failure on one reaches all
+  // of them and comes back, so one stopped guest would take its own host.
+  // Listed on the member that sorts first, naming the others.
+  private async cycles(): Promise<Difference[]> {
+    const rels = (await this.store.relations({})) as unknown as CycleRelation[];
+    const meta = [...new Map(this.store.mm.relations.map((r) => [r.name, { name: r.name, dependant: r.dependant, required: r.required }])).values()];
+    const label = new Map<string, { class: string; name: string }>();
+    for (const r of rels) for (const e of [r.from, r.to]) label.set(e.id, { class: String(e.class), name: String(e.name) });
+    return dependencyCycles(rels, meta).map((c) => {
+      const first = label.get(c[0])!;
+      return {
+        kind: "cycle" as const, class: first.class, name: first.name, id: c[0], source: CONTROLLER_SOURCE, attribute: null,
+        before: null, after: c.map((id) => `${label.get(id)?.class}/${label.get(id)?.name}`), expected: false,
+      };
+    });
+  }
+
   // Step 2: every attribute and relation whose value at the last sweep is not
   // its value now, from the history (D6). Volatile and derived attributes are
   // left out: they are not differences anyone should read.
@@ -437,6 +505,7 @@ export class Sweep {
     // The objects that appeared in this window and are expected (by their own
     // verb or as new): what a relation of theirs that appeared is part of.
     const appearedExpected = new Map<string, Pick<Difference, "verb" | "job">>();
+    const leases = new Set<string>(); // the leased addresses that came or went
 
     const objects = (await pg.query(
       `SELECT o.id, o.class, o.name, o.created, o.ended, o.seen, ${PLACEHOLDER("o")} AS placeholder FROM object o
@@ -453,6 +522,12 @@ export class Sweep {
       if (!ended && !verdict.expected) {
         const part = await isNew.partOfNew(id);
         if (part) verdict = { expected: true, verb: part.origin.verb, job: part.origin.job, reason: "new", owner: part.owner };
+      }
+      // A leased address appearing, or going when its lease ran out, is what a
+      // DHCP server does: expected, and so is its zone membership with it.
+      if (!verdict.expected && String(o.class) === "address" && (await leased((sql, params) => pg.query(sql, params), id, ended))) {
+        verdict = { expected: true, reason: "lease" };
+        leases.add(id);
       }
       if (!ended && verdict.expected) appearedExpected.set(id, { verb: verdict.verb, job: verdict.job });
       out.push({
@@ -550,7 +625,8 @@ export class Sweep {
       if (before !== undefined && after !== undefined && !byVerb && canon(withoutWords(before)) === canon(withoutWords(after))) {
         partOf = { expected: true, verb: null, job: null, reason: "words" };
       }
-      if (before === undefined && after !== undefined && !byVerb) {
+      if ((before === undefined || after === undefined) && (leases.has(from) || leases.has(to))) partOf = { expected: true, verb: null, job: null, reason: "lease" };
+      else if (before === undefined && after !== undefined && !byVerb) {
         const a = appearedExpected.get(from) ?? appearedExpected.get(to);
         if (a) partOf = { expected: true, verb: a.verb, job: a.job, reason: "new" };
         else if (first.had !== true) {

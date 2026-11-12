@@ -695,8 +695,11 @@ in
       ];
       ProtectSystem = "strict";
       ProtectHome = "read-only";
+      # /var/lib/tappaas: emit mails a critical root cause itself, and
+      # site-notify.sh keeps the open notices in alerts-open/.
       ReadWritePaths = [
         "/home/tappaas/config"
+        "/var/lib/tappaas"
         "-/home/tappaas/.ssh/known_hosts"
       ];
       PrivateTmp = true;

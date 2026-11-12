@@ -113,6 +113,10 @@ placeholder of another concrete class (the reporter guessed `machine`, the
 owner reports a `vm`) is not merged and stays visible. Port placeholders named
 without their asset match only by name, so two by one name are a conflict.
 
+A placeholder that nothing reported within its class's expiry never will be: it
+counts as an orphan (`orphans()`), so the sweep's first step, `retire --orphans`,
+ends it with its relations.
+
 ## Unseen (D5)
 
 A class's `expiry` (declared on `ci` as `7d`, inherited, refinable per class)
@@ -124,6 +128,19 @@ own (verb `expire`), which the change stream carries. Nothing is deleted. An
 observation of an unseen CI makes it `operational` again (D7), unless the
 report sets the stage itself. Resources and places do not expire: an asset on
 a shelf is not reported by anyone, and is not missing.
+
+## Complete reports and sightings
+
+A report says what a source saw, not what is gone. `complete: [{type, from}]`
+says the report names every relation of that type from that object: after its
+relations are applied, the store closes each open one of that type from that
+object the report did not name, unless an operator recorded it. module-manager
+sends it for every instance's `depends-on`, and for an application's host, so a
+dependency dropped from a record ends.
+
+`object.seen` keeps, per source, when it last reported the object; the query
+returns it beside `lastSeen`, so a judgement can tell an observation that is
+eleven days old.
 
 ## Checks
 
@@ -194,6 +211,21 @@ makes everything only it reports missing. That is true and is exit 2 either way.
 Records are enumerated from `config/` (`desiredRecords`): modules, zones, shares,
 environments, identities. A switch's or AP's record comes in through its CI's
 `desired`, so a switch never reported at all is not seen.
+
+**What each source reached.** After the rescan, each source that ran is read
+back from `seen`: how many devices (physical objects that are not a port or a
+disk) it reported in this sweep (`reached`), and which it reported before and
+not now (`missed`). Each missed device is an `unread` difference; a source that
+reached none of what it reported before has failed, whatever it exited with: a
+switch-manager that cannot reach its switches is not a healthy source.
+
+**Leases.** An address with a lease and no reservation that appears or goes is
+expected (reason `lease`), and so is its zone membership with it.
+
+**Dependency cycles.** Every cycle over required relations (a relation type with
+one dependant end; a cable has two and is left out) is a `cycle` difference on
+its first member, naming the others: a failure on one would reach all of them
+and come back. It counts as a warning (exit 1).
 
 **The timer** is rendered, not declared, because its hour is `site.json`'s. The
 sweep is nightly even for a weekly update, and `Persistent`, unlike the update.

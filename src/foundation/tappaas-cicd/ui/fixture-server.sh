@@ -2,13 +2,15 @@
 #
 # fixture-server.sh — the console with no live system, on this machine.
 #
-#   ui/fixture-server.sh [--port 9097] [--fixtures <dir>]
+#   ui/fixture-server.sh [--port 9097] [--fixtures <dir>] [--overlay <dir>]
 #
 # Builds ui/src into ui/dist when a source is newer (the front end is the
 # committed web/dist; `cd web && npm run build` after changing it), and runs the
 # server in fixture mode (src/fixtures.ts) in the foreground on 127.0.0.1. Every
 # verb answers from <dir>, default test/fixtures; nothing is executed. The clock
-# stands at the capture unless CONSOLE_NOW is set. Stop it with ^C.
+# stands at the capture unless CONSOLE_NOW is set. --overlay lays a variant's
+# config/ over the fixtures' (test/fixtures/variants/off: a small site that
+# collects no performance numbers). Stop it with ^C.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,7 +20,8 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --port) PORT="$2"; shift 2 ;;
         --fixtures) FIXTURES="$(cd "$2" && pwd)"; shift 2 ;;
-        *) echo "usage: fixture-server.sh [--port 9097] [--fixtures <dir>]" >&2; exit 2 ;;
+        --overlay) export CONSOLE_FIXTURES_OVERLAY="$(cd "$2" && pwd)"; shift 2 ;;
+        *) echo "usage: fixture-server.sh [--port 9097] [--fixtures <dir>] [--overlay <dir>]" >&2; exit 2 ;;
     esac
 done
 
