@@ -108,7 +108,7 @@ export function stateLine(store: RuleStore, id: string): string {
   const local = store.localOf(id);
   if (local) bits.push(local);
   if (st?.held) bits.push(`held: ${st.held.detail}`);
-  if (store.pending(id)) bits.push(`pending: changed ${st?.upstream === "removed" ? "(removed)" : ""} upstream`.replace(" )", ")").replace("changed (removed)", "removed"));
+  if (store.pending(id)) bits.push(st?.upstream === "removed" ? "pending: removed upstream" : "pending: changed upstream");
   if (st?.reach) bits.push(`reach ${st.reach.with}${st.reach.leaves ? ", beyond its module" : ""}`);
   const origin = originOf(id);
   if (store.state.origins[origin]?.disabled) bits.push(`origin ${origin} off`);
@@ -169,7 +169,16 @@ export function cmdRulesWrite(rest: string[], env: RulesEnv, print: (l: string) 
       print("nothing written: --apply writes it");
       return 0;
     }
-    if (failing.length) for (const f of failing) for (const id of ids) if (work.state.rules[id]?.local) work.state.rules[id] = { ...work.state.rules[id], note: `${work.state.rules[id].note ? `${work.state.rules[id].note}; ` : ""}written with --force over scenario ${f.id}` };
+    // Forced over failing scenarios: said once, on the rules this write changed.
+    if (failing.length) {
+      const over = `written with --force over ${failing.map((f) => `scenario ${f.id}`).join(", ")}`;
+      for (const id of ids) {
+        const a = was.find((r) => r.id === id), b = is.find((r) => r.id === id);
+        const st = work.state.rules[id];
+        if (same(a, b) || !st?.local) continue;
+        work.state.rules[id] = { ...st, note: `${st.note ? `${st.note}; ` : ""}${over}` };
+      }
+    }
     work.write();
     for (const l of lines) print(l);
     if (ruleSetHash(was) !== ruleSetHash(is)) env.recalc?.();
@@ -189,7 +198,7 @@ export function cmdRulesWrite(rest: string[], env: RulesEnv, print: (l: string) 
         const snap = env.snapshot();
         decides = simulate(snap, model(s.active()), now, []).derivation.trace.fired.get(id) ?? 0;
       }
-      const out = { id, origin: originOf(id), state: stateLine(s, id) || "as released", record: f?.rec ?? null, released: base, overrides: f?.rec.overrides ?? [], overriddenBy: by, decidesNow: decides, local: s.state.rules[id] ?? null };
+      const out = { id, origin: originOf(id), state: stateLine(s, id) || "as released", sentence: sentence(f?.rec ?? base!), record: f?.rec ?? null, released: base, overrides: f?.rec.overrides ?? [], overriddenBy: by, decidesNow: decides, local: s.state.rules[id] ?? null };
       if (json) print(JSON.stringify(out, null, 2));
       else {
         print(`${id} (${out.origin}): ${f ? sentence(f.rec) : "deleted here"}`);

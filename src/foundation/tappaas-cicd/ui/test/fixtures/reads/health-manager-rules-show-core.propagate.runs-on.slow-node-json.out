@@ -1,0 +1,52 @@
+{
+  "id": "core.propagate.runs-on.slow-node",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "a warning or critical performance failure on a machine crosses runs-on to its dependant as a warning impact",
+  "record": {
+    "id": "core.propagate.runs-on.slow-node",
+    "kind": "propagate",
+    "description": "A node under CPU or memory pressure slows the guests on it; they still run.",
+    "when": {
+      "relation": "runs-on",
+      "provider": {
+        "class": "machine"
+      },
+      "condition": {
+        "type": "performance",
+        "status": [
+          "warning",
+          "critical"
+        ]
+      }
+    },
+    "as": {
+      "status": "warning"
+    }
+  },
+  "released": {
+    "id": "core.propagate.runs-on.slow-node",
+    "kind": "propagate",
+    "description": "A node under CPU or memory pressure slows the guests on it; they still run.",
+    "when": {
+      "relation": "runs-on",
+      "provider": {
+        "class": "machine"
+      },
+      "condition": {
+        "type": "performance",
+        "status": [
+          "warning",
+          "critical"
+        ]
+      }
+    },
+    "as": {
+      "status": "warning"
+    }
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": null
+}

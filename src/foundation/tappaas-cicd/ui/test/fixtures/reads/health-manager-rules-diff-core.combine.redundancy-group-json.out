@@ -1,0 +1,44 @@
+[
+  {
+    "field": "description",
+    "released": "\"Relations in one redundancy group: one down degrades the dependant, all down is the failure itself.\"",
+    "here": "\"Relations in one redundancy group: one down degrades the dependant, all down is the failure itself.\"",
+    "now": "\"Relations in one redundancy group: one down degrades the dependant, all down is the failure itself.\"",
+    "mark": ""
+  },
+  {
+    "field": "groupBy",
+    "released": "{\"edgeAttr\":\"redundancyGroup\"}",
+    "here": "{\"edgeAttr\":\"redundancyGroup\"}",
+    "now": "{\"edgeAttr\":\"redundancyGroup\"}",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.combine.redundancy-group\"",
+    "here": "\"core.combine.redundancy-group\"",
+    "now": "\"core.combine.redundancy-group\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"combine\"",
+    "here": "\"combine\"",
+    "now": "\"combine\"",
+    "mark": ""
+  },
+  {
+    "field": "steps",
+    "released": "[{\"as\":\"warning\",\"down\":1,\"reason\":\"redundancy-degraded\"},{\"as\":\"rule\",\"down\":\"all\"}]",
+    "here": "[{\"as\":\"warning\",\"down\":1,\"reason\":\"redundancy-degraded\"},{\"as\":\"rule\",\"down\":\"all\"}]",
+    "now": "[{\"as\":\"warning\",\"down\":1,\"reason\":\"redundancy-degraded\"},{\"as\":\"rule\",\"down\":\"all\"}]",
+    "mark": ""
+  },
+  {
+    "field": "when.edge.attr.redundancyGroup",
+    "released": "{\"exists\":true}",
+    "here": "{\"exists\":true}",
+    "now": "{\"exists\":true}",
+    "mark": ""
+  }
+]

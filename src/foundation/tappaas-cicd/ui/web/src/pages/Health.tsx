@@ -12,7 +12,7 @@ import { GEdge, GNode, edgeTypes, layout, nodeTypes } from "../graph";
 import { Anchor, Card, EgoState, Filters, NO_FILTERS, boundsOf, egoCards, expand, fold, hubsOf, kept, patchEgo, patchPaths, rollup, shapeOf, statusClass, viewFor, wrapRanks } from "../healthgraph";
 import { ClassIcon, ModuleIcon } from "../moduleicon";
 import { HealthEgo, HealthPath, HealthPatch, HealthView } from "../types";
-import { ReadState, replacePath, when } from "../ui";
+import { Link, ReadState, replacePath, when } from "../ui";
 import { HealthPanel } from "./HealthPanel";
 import { TreePane, useTree } from "./HealthTree";
 
@@ -285,6 +285,7 @@ export function Health() {
         <span className="muted">
           {c ? `${c.critical} critical · ${c.warning} warning · ${c.acknowledged} silenced · ${c.unknown} unknown · ${c.ok} ok` : "…"} · {doc?.generated ? `read ${when(doc.generated)}` : ""}
         </span>
+        <Link to="/health/rules">Rules</Link>
         <span className="spacer" />
         <button className="btn health-sheet-btn" onClick={() => setSheet(!sheet)}>Tree</button>
         <button className="btn" disabled={!center} onClick={() => setPanel(!panel)}>Details</button>

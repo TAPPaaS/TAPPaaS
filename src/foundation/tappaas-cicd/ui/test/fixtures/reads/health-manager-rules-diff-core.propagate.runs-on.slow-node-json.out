@@ -1,0 +1,58 @@
+[
+  {
+    "field": "as",
+    "released": "{\"status\":\"warning\"}",
+    "here": "{\"status\":\"warning\"}",
+    "now": "{\"status\":\"warning\"}",
+    "mark": ""
+  },
+  {
+    "field": "description",
+    "released": "\"A node under CPU or memory pressure slows the guests on it; they still run.\"",
+    "here": "\"A node under CPU or memory pressure slows the guests on it; they still run.\"",
+    "now": "\"A node under CPU or memory pressure slows the guests on it; they still run.\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.propagate.runs-on.slow-node\"",
+    "here": "\"core.propagate.runs-on.slow-node\"",
+    "now": "\"core.propagate.runs-on.slow-node\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"propagate\"",
+    "here": "\"propagate\"",
+    "now": "\"propagate\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.status",
+    "released": "[\"warning\",\"critical\"]",
+    "here": "[\"warning\",\"critical\"]",
+    "now": "[\"warning\",\"critical\"]",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.type",
+    "released": "\"performance\"",
+    "here": "\"performance\"",
+    "now": "\"performance\"",
+    "mark": ""
+  },
+  {
+    "field": "when.provider.class",
+    "released": "{\"isA\":[\"machine\"]}",
+    "here": "{\"isA\":[\"machine\"]}",
+    "now": "{\"isA\":[\"machine\"]}",
+    "mark": ""
+  },
+  {
+    "field": "when.relation",
+    "released": "\"runs-on\"",
+    "here": "\"runs-on\"",
+    "now": "\"runs-on\"",
+    "mark": ""
+  }
+]

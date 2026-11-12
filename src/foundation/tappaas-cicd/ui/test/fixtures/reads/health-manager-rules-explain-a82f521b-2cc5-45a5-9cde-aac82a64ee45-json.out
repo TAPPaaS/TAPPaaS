@@ -1,0 +1,30 @@
+{
+  "object": {
+    "id": "a82f521b-2cc5-45a5-9cde-aac82a64ee45",
+    "class": "server",
+    "name": "srv-03"
+  },
+  "conditions": [
+    {
+      "type": "drift",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "maintenance",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "operational",
+      "status": "warning",
+      "reason": "follows",
+      "how": "follows",
+      "rootCause": "2df905fc-99ad-4ce9-8f70-e3989f9a308a",
+      "rule": "core.follow.asset",
+      "ruleText": "an asset nothing judges takes the operational colour of what it is allocated-to"
+    }
+  ]
+}

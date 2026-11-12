@@ -1,0 +1,22 @@
+{
+  "object": {
+    "id": "c5d5c280-5b33-4079-99d9-a856e4861e9f",
+    "class": "zone",
+    "name": "test1"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "critical",
+      "reason": "sweep-missing",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

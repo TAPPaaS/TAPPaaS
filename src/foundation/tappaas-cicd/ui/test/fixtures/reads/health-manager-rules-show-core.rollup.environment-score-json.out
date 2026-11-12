@@ -1,0 +1,38 @@
+{
+  "id": "core.rollup.environment-score",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "an environment's security is its own, not a sum of its members",
+  "record": {
+    "id": "core.rollup.environment-score",
+    "kind": "rollup",
+    "description": "An environment's security is its own risk score, not the worst of its members; the modules that set it are the roots.",
+    "when": {
+      "object": {
+        "class": "environment"
+      },
+      "condition": {
+        "type": "security"
+      }
+    },
+    "fn": "own"
+  },
+  "released": {
+    "id": "core.rollup.environment-score",
+    "kind": "rollup",
+    "description": "An environment's security is its own risk score, not the worst of its members; the modules that set it are the roots.",
+    "when": {
+      "object": {
+        "class": "environment"
+      },
+      "condition": {
+        "type": "security"
+      }
+    },
+    "fn": "own"
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 3,
+  "local": null
+}

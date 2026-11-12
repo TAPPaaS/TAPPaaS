@@ -1,0 +1,53 @@
+{
+  "object": {
+    "id": "62395b44-9ccc-4900-a908-84e4ffa5371c",
+    "class": "vm",
+    "name": "nomad"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "capacity",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "security",
+      "status": "warning",
+      "reason": "cve-act",
+      "how": "root",
+      "impacts": 0
+    },
+    {
+      "type": "maintenance",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "backup",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "performance",
+      "status": "warning",
+      "reason": "threshold",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

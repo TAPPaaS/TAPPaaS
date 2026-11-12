@@ -1,0 +1,28 @@
+{
+  "object": {
+    "id": "401ee131-c949-4578-b486-814c57849b2d",
+    "class": "vm",
+    "name": "test-hadrift"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "critical",
+      "reason": "sweep-missing",
+      "how": "root",
+      "impacts": 0
+    },
+    {
+      "type": "capacity",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    }
+  ]
+}

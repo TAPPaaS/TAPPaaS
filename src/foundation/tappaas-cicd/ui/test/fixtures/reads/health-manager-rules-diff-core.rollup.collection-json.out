@@ -1,0 +1,44 @@
+[
+  {
+    "field": "description",
+    "released": "\"A cluster, an environment or a group is the worst of its members and what serves it.\"",
+    "here": "\"A cluster, an environment or a group is the worst of its members and what serves it.\"",
+    "now": "\"A cluster, an environment or a group is the worst of its members and what serves it.\"",
+    "mark": ""
+  },
+  {
+    "field": "fn",
+    "released": "\"worst\"",
+    "here": "\"worst\"",
+    "now": "\"worst\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.rollup.collection\"",
+    "here": "\"core.rollup.collection\"",
+    "now": "\"core.rollup.collection\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"rollup\"",
+    "here": "\"rollup\"",
+    "now": "\"rollup\"",
+    "mark": ""
+  },
+  {
+    "field": "members",
+    "released": "[{\"relations\":[\"member-of\",\"serves\"],\"walk\":\"inbound\"}]",
+    "here": "[{\"relations\":[\"member-of\",\"serves\"],\"walk\":\"inbound\"}]",
+    "now": "[{\"relations\":[\"member-of\",\"serves\"],\"walk\":\"inbound\"}]",
+    "mark": ""
+  },
+  {
+    "field": "when.object.class",
+    "released": "{\"isA\":[\"collection\"]}",
+    "here": "{\"isA\":[\"collection\"]}",
+    "now": "{\"isA\":[\"collection\"]}",
+    "mark": ""
+  }
+]

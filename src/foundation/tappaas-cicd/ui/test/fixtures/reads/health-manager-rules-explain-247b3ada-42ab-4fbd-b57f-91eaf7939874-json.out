@@ -1,0 +1,16 @@
+{
+  "object": {
+    "id": "247b3ada-42ab-4fbd-b57f-91eaf7939874",
+    "class": "ssid",
+    "name": "TAPPaaS-Test"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "warning",
+      "reason": "ssid-no-zone",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

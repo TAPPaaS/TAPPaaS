@@ -1,0 +1,32 @@
+{
+  "id": "core.explain.down-covers",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "a critical failure reaching an object with a condition of its own covers it: not a root while that stands",
+  "record": {
+    "id": "core.explain.down-covers",
+    "kind": "explain",
+    "description": "While something critical has reached an object, its own failures are not roots of their own.",
+    "when": {
+      "cause": {
+        "status": "critical"
+      }
+    },
+    "effect": "covered"
+  },
+  "released": {
+    "id": "core.explain.down-covers",
+    "kind": "explain",
+    "description": "While something critical has reached an object, its own failures are not roots of their own.",
+    "when": {
+      "cause": {
+        "status": "critical"
+      }
+    },
+    "effect": "covered"
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": null
+}

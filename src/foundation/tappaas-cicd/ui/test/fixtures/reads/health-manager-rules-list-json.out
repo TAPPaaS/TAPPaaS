@@ -1,0 +1,702 @@
+[
+  {
+    "id": "core.classify.alert",
+    "kind": "classify",
+    "description": "An open alert is a warning on what it is about: the mail went, a rule never fails the site.",
+    "when": {
+      "finding": {
+        "source": "alerts"
+      }
+    },
+    "set": {
+      "type": "operational",
+      "status": "warning"
+    },
+    "origin": "core",
+    "sentence": "a finding from alerts is operational warning",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.classify.alert-security",
+    "kind": "classify",
+    "description": "The alerts that say something is exposed are security warnings.",
+    "when": {
+      "finding": {
+        "source": "alerts",
+        "labels": {
+          "alertname": [
+            "RootKeyChanged",
+            "FirewallCertChanged"
+          ]
+        }
+      }
+    },
+    "set": {
+      "type": "security",
+      "status": "warning"
+    },
+    "origin": "core",
+    "sentence": "a finding from alerts, alertname RootKeyChanged or FirewallCertChanged is security warning",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.classify.zone-score",
+    "kind": "classify",
+    "description": "A zone's and an environment's CVE score is the sum of their modules': never a root.",
+    "when": {
+      "finding": {
+        "source": "cve"
+      },
+      "object": {
+        "class": [
+          "zone",
+          "environment"
+        ]
+      }
+    },
+    "aggregate": true,
+    "origin": "core",
+    "sentence": "a finding from cve on a zone or environment is a sum of others, never a root",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.classify.long-warning",
+    "kind": "classify",
+    "enabled": false,
+    "description": "An operational warning nobody dealt with for a day becomes critical.",
+    "when": {
+      "finding": {
+        "type": "operational",
+        "status": "warning",
+        "age": {
+          "over": "24h"
+        }
+      }
+    },
+    "set": {
+      "status": "critical"
+    },
+    "origin": "core",
+    "sentence": "a warning operational finding standing older than 24h is critical",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.combine.redundancy-group",
+    "kind": "combine",
+    "description": "Relations in one redundancy group: one down degrades the dependant, all down is the failure itself.",
+    "when": {
+      "edge": {
+        "attr": {
+          "redundancyGroup": {
+            "exists": true
+          }
+        }
+      }
+    },
+    "groupBy": {
+      "edgeAttr": "redundancyGroup"
+    },
+    "steps": [
+      {
+        "down": 1,
+        "as": "warning",
+        "reason": "redundancy-degraded"
+      },
+      {
+        "down": "all",
+        "as": "rule"
+      }
+    ],
+    "origin": "core",
+    "sentence": "relations with redundancyGroup count together by redundancyGroup: 1 down: a warning (redundancy-degraded); all down: the rule's impact",
+    "state": "",
+    "decidesNow": 16
+  },
+  {
+    "id": "core.combine.many-providers-degraded",
+    "kind": "combine",
+    "enabled": false,
+    "description": "Three or more of what a module depends on degraded at once is an outage for it.",
+    "when": {
+      "relation": "depends-on"
+    },
+    "groupBy": "dependant",
+    "steps": [
+      {
+        "down": 1,
+        "as": "rule"
+      },
+      {
+        "down": 3,
+        "as": "critical"
+      }
+    ],
+    "origin": "core",
+    "sentence": "depends-on relations count together per dependant: 1 down: the rule's impact; 3 down: a critical",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.explain.same-failure",
+    "kind": "explain",
+    "description": "A failure that reaches an object explains its own condition of the same type.",
+    "when": {
+      "cause": {
+        "sameType": true
+      }
+    },
+    "effect": "derived",
+    "origin": "core",
+    "sentence": "a failure of the same type reaching an object with a condition of its own explains it: derived",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.explain.down-covers",
+    "kind": "explain",
+    "description": "While something critical has reached an object, its own failures are not roots of their own.",
+    "when": {
+      "cause": {
+        "status": "critical"
+      }
+    },
+    "effect": "covered",
+    "origin": "core",
+    "sentence": "a critical failure reaching an object with a condition of its own covers it: not a root while that stands",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.follow.port",
+    "kind": "follow",
+    "description": "A port nothing judges takes its device's colour.",
+    "when": {
+      "object": {
+        "class": "port"
+      }
+    },
+    "relation": "part-of",
+    "types": [
+      "operational"
+    ],
+    "origin": "core",
+    "sentence": "a port nothing judges takes the operational colour of what it is part-of",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.follow.disk",
+    "kind": "follow",
+    "description": "A disk nothing judges takes its asset's colour.",
+    "when": {
+      "object": {
+        "class": "disk"
+      }
+    },
+    "relation": "part-of",
+    "types": [
+      "operational"
+    ],
+    "enabled": false,
+    "origin": "core",
+    "sentence": "a disk nothing judges takes the operational colour of what it is part-of",
+    "state": "edited",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.follow.asset",
+    "kind": "follow",
+    "description": "An asset nothing judges takes the colour of the node it is allocated to.",
+    "when": {
+      "object": {
+        "class": "asset"
+      }
+    },
+    "relation": "allocated-to",
+    "types": [
+      "operational"
+    ],
+    "origin": "core",
+    "sentence": "an asset nothing judges takes the operational colour of what it is allocated-to",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.notify.root",
+    "kind": "notify",
+    "description": "A root cause is in the daily digest.",
+    "when": {
+      "condition": {
+        "status": [
+          "warning",
+          "critical"
+        ]
+      }
+    },
+    "notify": "digest",
+    "origin": "core",
+    "sentence": "a root cause with a warning or critical condition is told in the daily digest",
+    "state": "",
+    "decidesNow": 35
+  },
+  {
+    "id": "core.notify.critical-root",
+    "kind": "notify",
+    "description": "A critical root cause is mailed at once.",
+    "when": {
+      "condition": {
+        "status": "critical"
+      }
+    },
+    "notify": "at-once",
+    "origin": "core",
+    "sentence": "a root cause with a critical condition is told at once",
+    "state": "",
+    "decidesNow": 16
+  },
+  {
+    "id": "core.notify.performance",
+    "kind": "notify",
+    "description": "Performance is trend, not outage: the digest.",
+    "when": {
+      "condition": {
+        "type": "performance"
+      }
+    },
+    "notify": "digest",
+    "overrides": [
+      "core.notify.critical-root"
+    ],
+    "origin": "core",
+    "sentence": "a root cause with a performance condition is told in the daily digest",
+    "state": "",
+    "decidesNow": 4
+  },
+  {
+    "id": "core.notify.cve-level",
+    "kind": "notify",
+    "description": "A module's CVE level is mailed when it rises, by its own event.",
+    "when": {
+      "condition": {
+        "type": "security",
+        "reason": [
+          "cve-medium",
+          "cve-high",
+          "cve-critical"
+        ]
+      }
+    },
+    "notify": "digest",
+    "overrides": [
+      "core.notify.critical-root"
+    ],
+    "origin": "core",
+    "sentence": "a root cause with a security condition (cve-medium or cve-high or cve-critical) is told in the daily digest",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.notify.site-own",
+    "kind": "notify",
+    "description": "What is about the site, a zone or an environment as a whole is told in the digest.",
+    "when": {
+      "object": {
+        "class": [
+          "site",
+          "zone",
+          "environment"
+        ]
+      }
+    },
+    "notify": "digest",
+    "overrides": [
+      "core.notify.critical-root"
+    ],
+    "origin": "core",
+    "sentence": "a root cause with a condition on a site or zone or environment is told in the daily digest",
+    "state": "",
+    "decidesNow": 10
+  },
+  {
+    "id": "core.propagate.runs-on.down",
+    "kind": "propagate",
+    "description": "A node or guest that is down takes down what runs on it.",
+    "when": {
+      "relation": "runs-on",
+      "condition": {
+        "type": "operational",
+        "status": "critical"
+      }
+    },
+    "as": {
+      "status": "critical"
+    },
+    "origin": "core",
+    "sentence": "a critical operational failure crosses runs-on to its dependant as a critical impact",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.propagate.runs-on.down-ha",
+    "kind": "propagate",
+    "description": "An HA-protected guest whose node fails is moving or has moved: degraded, not down.",
+    "when": {
+      "relation": "runs-on",
+      "dependant": {
+        "attr": {
+          "haNode": {
+            "exists": true
+          }
+        }
+      },
+      "condition": {
+        "type": "operational",
+        "status": "critical"
+      }
+    },
+    "as": {
+      "status": "critical"
+    },
+    "origin": "core",
+    "sentence": "a critical operational failure crosses runs-on to its dependant with haNode as a critical impact",
+    "state": "edited; pending: changed upstream",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.propagate.depends-on.down",
+    "kind": "propagate",
+    "description": "What depends on a service that is down is down too.",
+    "when": {
+      "relation": "depends-on",
+      "condition": {
+        "type": "operational",
+        "status": "critical"
+      }
+    },
+    "as": {
+      "status": "critical"
+    },
+    "origin": "core",
+    "sentence": "a critical operational failure crosses depends-on to its dependant as a critical impact",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.propagate.member-of.down",
+    "kind": "propagate",
+    "description": "A node in a cluster or an environment that is down is cut off with it.",
+    "when": {
+      "relation": "member-of",
+      "provider": {
+        "class": [
+          "cluster",
+          "environment"
+        ]
+      },
+      "dependant": {
+        "class": "node"
+      },
+      "condition": {
+        "type": "operational",
+        "status": "critical"
+      }
+    },
+    "as": {
+      "status": "critical"
+    },
+    "origin": "core",
+    "sentence": "a critical operational failure on a cluster or environment crosses member-of to a node as a critical impact",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.propagate.member-of.group-down",
+    "kind": "propagate",
+    "description": "A user in a group that is down is cut off with it.",
+    "when": {
+      "relation": "member-of",
+      "provider": {
+        "class": "group"
+      },
+      "dependant": {
+        "class": "user"
+      },
+      "condition": {
+        "type": "operational",
+        "status": "critical"
+      }
+    },
+    "as": {
+      "status": "critical"
+    },
+    "origin": "core",
+    "sentence": "a critical operational failure on a group crosses member-of to an user as a critical impact",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.propagate.member-of.zone-address",
+    "kind": "propagate",
+    "description": "An address in a zone that is down is cut off with it. What else is in a zone is the network module's to say.",
+    "when": {
+      "relation": "member-of",
+      "provider": {
+        "class": "zone"
+      },
+      "dependant": {
+        "class": "address"
+      },
+      "condition": {
+        "type": "operational",
+        "status": "critical"
+      }
+    },
+    "as": {
+      "status": "critical"
+    },
+    "origin": "core",
+    "sentence": "a critical operational failure on a zone crosses member-of to an address as a critical impact",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.propagate.connects.down",
+    "kind": "propagate",
+    "description": "A cable whose one end is down takes the other end down.",
+    "when": {
+      "relation": "connects",
+      "condition": {
+        "type": "operational",
+        "status": "critical"
+      }
+    },
+    "as": {
+      "status": "critical"
+    },
+    "origin": "core",
+    "sentence": "a critical operational failure crosses connects to its dependant as a critical impact",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.propagate.built-on.down",
+    "kind": "propagate",
+    "description": "A failed disk takes its pool down; in a mirror or raidz vdev the group rule degrades it first.",
+    "when": {
+      "relation": "built-on",
+      "condition": {
+        "type": "operational",
+        "status": "critical"
+      }
+    },
+    "as": {
+      "status": "critical"
+    },
+    "origin": "core",
+    "sentence": "a critical operational failure crosses built-on to its dependant as a critical impact",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.propagate.stored-on.down",
+    "kind": "propagate",
+    "description": "A failed pool takes down the guests and datastores whose data is on it; a degraded pool reaches none of them.",
+    "when": {
+      "relation": "stored-on",
+      "condition": {
+        "type": "operational",
+        "status": "critical"
+      }
+    },
+    "as": {
+      "status": "critical"
+    },
+    "origin": "core",
+    "sentence": "a critical operational failure crosses stored-on to its dependant as a critical impact",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.propagate.stored-on.slow-pool",
+    "kind": "propagate",
+    "description": "A slow pool slows what is stored on it; it is not down, so the impact stays a warning.",
+    "when": {
+      "relation": "stored-on",
+      "provider": {
+        "class": "storage-pool"
+      },
+      "condition": {
+        "type": "performance",
+        "status": [
+          "warning",
+          "critical"
+        ]
+      }
+    },
+    "as": {
+      "status": "warning"
+    },
+    "origin": "core",
+    "sentence": "a warning or critical performance failure on a storage-pool crosses stored-on to its dependant as a warning impact",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.propagate.runs-on.slow-node",
+    "kind": "propagate",
+    "description": "A node under CPU or memory pressure slows the guests on it; they still run.",
+    "when": {
+      "relation": "runs-on",
+      "provider": {
+        "class": "machine"
+      },
+      "condition": {
+        "type": "performance",
+        "status": [
+          "warning",
+          "critical"
+        ]
+      }
+    },
+    "as": {
+      "status": "warning"
+    },
+    "origin": "core",
+    "sentence": "a warning or critical performance failure on a machine crosses runs-on to its dependant as a warning impact",
+    "state": "",
+    "decidesNow": 0
+  },
+  {
+    "id": "core.rollup.site",
+    "kind": "rollup",
+    "description": "The site is the worst of everything on it that is not itself a sum.",
+    "when": {
+      "object": {
+        "class": "site"
+      }
+    },
+    "members": "all",
+    "fn": "worst",
+    "origin": "core",
+    "sentence": "a site is the worst of everything that is not a sum",
+    "state": "",
+    "decidesNow": 32
+  },
+  {
+    "id": "core.rollup.collection",
+    "kind": "rollup",
+    "description": "A cluster, an environment or a group is the worst of its members and what serves it.",
+    "when": {
+      "object": {
+        "class": "collection"
+      }
+    },
+    "members": [
+      {
+        "relations": [
+          "member-of",
+          "serves"
+        ],
+        "walk": "inbound"
+      }
+    ],
+    "fn": "worst",
+    "origin": "core",
+    "sentence": "a collection is the worst of what is member-of or serves it",
+    "state": "",
+    "decidesNow": 45
+  },
+  {
+    "id": "core.rollup.place",
+    "kind": "rollup",
+    "description": "A room or a rack is the worst of what is placed in it and the nodes its assets are allocated to.",
+    "when": {
+      "object": {
+        "class": "place"
+      }
+    },
+    "members": [
+      {
+        "relations": [
+          "placed-in",
+          "at"
+        ],
+        "walk": "inbound",
+        "transitive": true
+      },
+      {
+        "relations": [
+          "allocated-to"
+        ],
+        "walk": "outbound"
+      }
+    ],
+    "fn": "worst",
+    "origin": "core",
+    "sentence": "a place is the worst of what is placed-in or at it, all the way, then allocated-to from it",
+    "state": "",
+    "decidesNow": 51
+  },
+  {
+    "id": "core.rollup.environment-score",
+    "kind": "rollup",
+    "description": "An environment's security is its own risk score, not the worst of its members; the modules that set it are the roots.",
+    "when": {
+      "object": {
+        "class": "environment"
+      },
+      "condition": {
+        "type": "security"
+      }
+    },
+    "fn": "own",
+    "origin": "core",
+    "sentence": "an environment's security is its own, not a sum of its members",
+    "state": "",
+    "decidesNow": 3
+  },
+  {
+    "id": "core.rollup.zone-score",
+    "kind": "rollup",
+    "description": "A zone's security is its own risk score, the sum of its modules': never a root.",
+    "when": {
+      "object": {
+        "class": "zone"
+      },
+      "condition": {
+        "type": "security"
+      }
+    },
+    "fn": "own",
+    "enabled": false,
+    "origin": "core",
+    "sentence": "a zone's security is its own, not a sum of its members",
+    "state": "held: an example of a held rule",
+    "decidesNow": 0
+  },
+  {
+    "id": "site.classify.quiet-root-key",
+    "kind": "classify",
+    "description": "The root key on the cluster was rotated on purpose.",
+    "when": {
+      "finding": {
+        "source": "alerts",
+        "labels": {
+          "alertname": "RootKeyChanged"
+        }
+      },
+      "object": {
+        "name": "cluster"
+      }
+    },
+    "quiet": true,
+    "origin": "site",
+    "sentence": "a finding from alerts, alertname RootKeyChanged on an object named cluster is kept and quiet",
+    "state": "added",
+    "decidesNow": 0
+  }
+]

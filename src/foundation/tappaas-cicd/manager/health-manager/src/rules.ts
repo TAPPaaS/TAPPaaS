@@ -12,9 +12,8 @@ import { CycleRelation, dependencyCycles } from "../../../lib/ts/src/health-rule
 import { HealthRecord, KINDS, ModelInfo, Problem, anchorProblem, checkSet, originOf, recordsOf } from "../../../lib/ts/src/health-records";
 import { sentence } from "./rule-text";
 import { Scenario, runScenarios } from "./scenarios";
-import { Snapshot, diffLines, diffSim, explainLines, explainObject, parseFailure, simLines, simulate } from "./rules-tools";
+import { Snapshot, decisions, diffLines, diffSim, explainLines, explainObject, parseFailure, simLines, simulate } from "./rules-tools";
 import { RuleStore } from "./rulestore";
-import { conditionsOf } from "./assess-model";
 import { stateLine } from "./rules-verbs";
 
 export interface RelationMeta {
@@ -133,13 +132,10 @@ export function cmdRules(rest: string[], model: RulesDoc, print: (l: string) => 
     let fired: Map<string, number> | null = null;
     if (site.snapshot && !args.includes("--markdown")) {
       const snap = site.snapshot();
-      fired = simulate(snap, model, now(), []).derivation.trace.fired;
-      // A classify record: the conditions it quiets or re-rates now, as stored.
-      for (const o of snap.objects) {
-        for (const c of conditionsOf(o)) {
-          for (const id of [c.quieted && !c.quieted.via ? c.quieted.rule : null, c.raw?.rule ?? null]) if (id) fired.set(id, (fired.get(id) ?? 0) + 1);
-        }
-      }
+      const sim = simulate(snap, model, now(), []);
+      fired = sim.derivation.trace.fired;
+      // classify and notify: the stored findings each classifies, the roots each tells.
+      for (const [id, n] of decisions(snap, model, now(), sim.derivation.rootCauses)) fired.set(id, (fired.get(id) ?? 0) + n);
     }
     const recs = pool.filter((r) => (!kind || r.kind === kind) && (!origin || originOf(r.id) === origin) && inState(r));
     const note = (r: HealthRecord): string => (st ? stateLine(st, r.id) : "") || "";

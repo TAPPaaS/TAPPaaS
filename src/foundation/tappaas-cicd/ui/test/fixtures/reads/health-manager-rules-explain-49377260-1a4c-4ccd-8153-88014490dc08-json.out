@@ -1,0 +1,23 @@
+{
+  "object": {
+    "id": "49377260-1a4c-4ccd-8153-88014490dc08",
+    "class": "zone",
+    "name": "testIot"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "warning",
+      "reason": "zone-no-interface",
+      "how": "root",
+      "impacts": 0
+    },
+    {
+      "type": "drift",
+      "status": "critical",
+      "reason": "sweep-missing",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

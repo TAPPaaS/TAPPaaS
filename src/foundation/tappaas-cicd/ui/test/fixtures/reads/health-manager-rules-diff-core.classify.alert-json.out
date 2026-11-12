@@ -1,0 +1,37 @@
+[
+  {
+    "field": "description",
+    "released": "\"An open alert is a warning on what it is about: the mail went, a rule never fails the site.\"",
+    "here": "\"An open alert is a warning on what it is about: the mail went, a rule never fails the site.\"",
+    "now": "\"An open alert is a warning on what it is about: the mail went, a rule never fails the site.\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.classify.alert\"",
+    "here": "\"core.classify.alert\"",
+    "now": "\"core.classify.alert\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"classify\"",
+    "here": "\"classify\"",
+    "now": "\"classify\"",
+    "mark": ""
+  },
+  {
+    "field": "set",
+    "released": "{\"status\":\"warning\",\"type\":\"operational\"}",
+    "here": "{\"status\":\"warning\",\"type\":\"operational\"}",
+    "now": "{\"status\":\"warning\",\"type\":\"operational\"}",
+    "mark": ""
+  },
+  {
+    "field": "when.finding.source",
+    "released": "\"alerts\"",
+    "here": "\"alerts\"",
+    "now": "\"alerts\"",
+    "mark": ""
+  }
+]

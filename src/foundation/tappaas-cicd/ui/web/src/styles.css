@@ -983,3 +983,27 @@ body.dragging-place, body.dragging-place * { cursor: grabbing !important; user-s
   .perf-browse { flex-direction: column; height: auto; }
   .perf-browse-main { overflow: visible; }
 }
+
+/* Health rules (pages/Rules.tsx) and the CI panel's Why */
+.rules-list { list-style: none; padding: 0; margin: 0; }
+.rules-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp-4) var(--sp-12); align-items: center; padding: var(--sp-8) 0; border-top: 1px solid var(--line); }
+.rules-sentence { overflow-wrap: anywhere; }
+.rules-meta { grid-column: 1; overflow-wrap: anywhere; }
+.rules-row > .btn { grid-column: 2; grid-row: 1 / span 2; }
+.rules-off .rules-sentence { color: var(--muted); }
+.rules-actions { display: flex; flex-wrap: wrap; gap: var(--sp-8); margin: var(--sp-8) 0 var(--sp-12); }
+.rules-diff { display: grid; gap: var(--sp-4); }
+.rules-diff-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: var(--sp-8); padding: var(--sp-4) 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.rules-diff-field { color: var(--muted); }
+.rules-field { display: flex; flex-wrap: wrap; gap: var(--sp-4); align-items: center; }
+.rules-field input { flex: 1 1 140px; min-width: 0; }
+.att-quiet .att-text { color: var(--muted); }
+.why { list-style: none; padding: 0; margin: 0; }
+.why > li { padding: var(--sp-8) 0; border-top: 1px solid var(--line); }
+.why-path { margin: var(--sp-4) 0 0; padding-left: var(--sp-16); }
+@media (max-width: var(--bp-sm)) {
+  .rules-row { grid-template-columns: minmax(0, 1fr); }
+  .rules-row > .btn { grid-column: 1; grid-row: auto; justify-self: start; }
+  .rules-diff-row { grid-template-columns: minmax(0, 1fr); }
+  .rules-diff-row > [data-col]::before { content: attr(data-col) ": "; color: var(--muted); font-family: inherit; }
+}

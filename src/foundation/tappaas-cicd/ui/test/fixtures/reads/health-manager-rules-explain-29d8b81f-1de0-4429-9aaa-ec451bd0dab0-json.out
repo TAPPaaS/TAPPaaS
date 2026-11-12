@@ -1,0 +1,22 @@
+{
+  "object": {
+    "id": "29d8b81f-1de0-4429-9aaa-ec451bd0dab0",
+    "class": "zone",
+    "name": "swdeepA"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "critical",
+      "reason": "sweep-missing",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

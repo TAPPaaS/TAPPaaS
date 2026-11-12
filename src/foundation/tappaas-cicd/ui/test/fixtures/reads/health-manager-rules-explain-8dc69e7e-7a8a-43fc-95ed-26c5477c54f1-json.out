@@ -1,0 +1,34 @@
+{
+  "object": {
+    "id": "8dc69e7e-7a8a-43fc-95ed-26c5477c54f1",
+    "class": "app",
+    "name": "mikrotik"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "security",
+      "status": "warning",
+      "reason": "controller-unverified",
+      "how": "root",
+      "impacts": 0
+    },
+    {
+      "type": "maintenance",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    }
+  ]
+}

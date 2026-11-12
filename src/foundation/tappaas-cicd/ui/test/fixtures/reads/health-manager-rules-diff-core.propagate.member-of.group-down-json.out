@@ -1,0 +1,65 @@
+[
+  {
+    "field": "as",
+    "released": "{\"status\":\"critical\"}",
+    "here": "{\"status\":\"critical\"}",
+    "now": "{\"status\":\"critical\"}",
+    "mark": ""
+  },
+  {
+    "field": "description",
+    "released": "\"A user in a group that is down is cut off with it.\"",
+    "here": "\"A user in a group that is down is cut off with it.\"",
+    "now": "\"A user in a group that is down is cut off with it.\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.propagate.member-of.group-down\"",
+    "here": "\"core.propagate.member-of.group-down\"",
+    "now": "\"core.propagate.member-of.group-down\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"propagate\"",
+    "here": "\"propagate\"",
+    "now": "\"propagate\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.status",
+    "released": "\"critical\"",
+    "here": "\"critical\"",
+    "now": "\"critical\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.type",
+    "released": "\"operational\"",
+    "here": "\"operational\"",
+    "now": "\"operational\"",
+    "mark": ""
+  },
+  {
+    "field": "when.dependant.class",
+    "released": "{\"isA\":[\"user\"]}",
+    "here": "{\"isA\":[\"user\"]}",
+    "now": "{\"isA\":[\"user\"]}",
+    "mark": ""
+  },
+  {
+    "field": "when.provider.class",
+    "released": "{\"isA\":[\"group\"]}",
+    "here": "{\"isA\":[\"group\"]}",
+    "now": "{\"isA\":[\"group\"]}",
+    "mark": ""
+  },
+  {
+    "field": "when.relation",
+    "released": "\"member-of\"",
+    "here": "\"member-of\"",
+    "now": "\"member-of\"",
+    "mark": ""
+  }
+]

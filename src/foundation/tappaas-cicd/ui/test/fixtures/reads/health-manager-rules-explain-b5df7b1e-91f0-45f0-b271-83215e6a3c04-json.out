@@ -1,0 +1,22 @@
+{
+  "object": {
+    "id": "b5df7b1e-91f0-45f0-b271-83215e6a3c04",
+    "class": "disk",
+    "name": "dsk-08"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "warning",
+      "reason": "smart",
+      "how": "root",
+      "impacts": 0
+    },
+    {
+      "type": "maintenance",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    }
+  ]
+}

@@ -104,7 +104,7 @@
           "arg": "<module>",
           "choices": null,
           "repeatable": false,
-          "description": "Instead: would starting this suspended module fit on its node, and which pauseOk modules there — lowest pausePriority first — would make it fit. Exit 1 when even that does not."
+          "description": "Instead: would starting this suspended module fit on its node, and which pauseOk modules there \u2014 lowest pausePriority first \u2014 would make it fit. Exit 1 when even that does not."
         },
         {
           "flag": "--drain",
@@ -296,7 +296,7 @@
       ],
       "usage": "scan security [--if-new-sweep] [--notify]",
       "note": null,
-      "details": "Inventories every target — the mothership, each module's VM or container, the containers\nrunning inside them (by registry digest), the nodes and the firewall — and matches each\nagainst its layer's CVE source. Read-only on every target. Writes\n~/config/sbom/site.cdx.json (CycloneDX) and ~/config/sbom/cve-status.json; the previous\nstatus is kept as cve-status.previous.json. Runs after every sweep (tappaas-security-scan).",
+      "details": "Inventories every target \u2014 the mothership, each module's VM or container, the containers\nrunning inside them (by registry digest), the nodes and the firewall \u2014 and matches each\nagainst its layer's CVE source. Read-only on every target. Writes\n~/config/sbom/site.cdx.json (CycloneDX) and ~/config/sbom/cve-status.json; the previous\nstatus is kept as cve-status.previous.json. Runs after every sweep (tappaas-security-scan).",
       "positionals": [],
       "options": [
         {
@@ -355,7 +355,7 @@
           "arg": "<file>",
           "choices": null,
           "repeatable": false,
-          "description": "JSON array of {name, version} — the packages to match (required)."
+          "description": "JSON array of {name, version} \u2014 the packages to match (required)."
         },
         {
           "flag": "--nixpkgs",
@@ -421,7 +421,7 @@
           "arg": "<file>",
           "choices": null,
           "repeatable": false,
-          "description": "JSON array of image references (`<image>:<tag>` or `<image>@sha256:…`) (required)."
+          "description": "JSON array of image references (`<image>:<tag>` or `<image>@sha256:\u2026`) (required)."
         },
         {
           "flag": "--no-db-update",
@@ -469,7 +469,7 @@
       ],
       "usage": "score [--details <file>] [--items <file>] [--json]",
       "note": null,
-      "details": "The one CVE risk score (ADR-045 D3). Per counted CVE: risk 25/10/3/1 by its TAPPaaS rating,\nopen or carried 20/8 by its severity. Only a module's highest category counts, each further\nitem at half the one before. Levels: ok 0, low <7, medium <16, high <30, critical ≥30. A zone\nis its highest module times its tier's multiplier (0 ×2, 1 ×1, 2 ×0.75, 3 ×0.5, 4 ×0.25,\n5–6 ×0.1, none ×1); an environment the highest of its zones; the site the highest of its\nenvironments and of the zones in none. A release has no zones: its highest module. Writes nothing.",
+      "details": "The one CVE risk score (ADR-045 D3). Per counted CVE: risk 25/10/3/1 by its TAPPaaS rating,\nopen or carried 20/8 by its severity. Only a module's highest category counts, each further\nitem at half the one before. Levels: ok 0, low <7, medium <16, high <30, critical \u226530. A zone\nis its highest module times its tier's multiplier (0 \u00d72, 1 \u00d71, 2 \u00d70.75, 3 \u00d70.5, 4 \u00d70.25,\n5\u20136 \u00d70.1, none \u00d71); an environment the highest of its zones; the site the highest of its\nenvironments and of the zones in none. A release has no zones: its highest module. Writes nothing.",
       "positionals": [],
       "options": [
         {
@@ -653,7 +653,7 @@
       "disruptions": []
     },
     {
-      "verb": "rules list|check",
+      "verb": "rules list|show|diff|check|explain|simulate",
       "keys": [
         [
           "rules",
@@ -661,21 +661,99 @@
         ],
         [
           "rules",
+          "show"
+        ],
+        [
+          "rules",
+          "diff"
+        ],
+        [
+          "rules",
           "check"
+        ],
+        [
+          "rules",
+          "explain"
+        ],
+        [
+          "rules",
+          "simulate"
         ]
       ],
-      "usage": "rules list|check [--file F] [--json]",
+      "usage": "rules list|show|diff|check|explain|simulate [<target>] [--kind K] [--origin O] [--state S] [--file F] [--fail O[:T[:S]]]... [--with F] [--without ID]... [--diff] [--json|--markdown]",
       "note": null,
-      "details": "The correlation rules of metamodel/health-rules.json. check exits 1 on a rule it cannot place.",
-      "positionals": [],
+      "details": "The health records that decide what a finding becomes, how a failure spreads, what explains what, who follows whom, how collections sum up and how a root cause is told; one sentence each. show <id> and diff <id> one rule: its state, what it decides now, and edited here against released. check refuses a record it cannot place, two records that decide one case differently, and a set under which a contract scenario no longer holds, and exits 1. explain <object> shows how each of its conditions came about, hop by hop, with the record that decided it. simulate runs the derivation on the site as it is with extra failures or changed records. None writes.",
+      "positionals": [
+        {
+          "name": "target",
+          "optional": true,
+          "repeatable": false
+        }
+      ],
       "options": [
+        {
+          "flag": "--kind",
+          "takesValue": true,
+          "arg": "K",
+          "choices": null,
+          "repeatable": false,
+          "description": "list: only records of this kind (classify, propagate, combine, explain, follow, rollup, notify)."
+        },
+        {
+          "flag": "--origin",
+          "takesValue": true,
+          "arg": "O",
+          "choices": null,
+          "repeatable": false,
+          "description": "list: only records released by core, a module, or the site; check --file: the module the file is of."
+        },
+        {
+          "flag": "--state",
+          "takesValue": true,
+          "arg": "S",
+          "choices": null,
+          "repeatable": false,
+          "description": "list: only rules edited here, pending a decision, held, disabled or deleted."
+        },
         {
           "flag": "--file",
           "takesValue": true,
           "arg": "F",
           "choices": null,
           "repeatable": false,
-          "description": "check: this candidate file instead of the rules in use."
+          "description": "check: this candidate file with the rules in use."
+        },
+        {
+          "flag": "--fail",
+          "takesValue": true,
+          "arg": "O",
+          "choices": null,
+          "repeatable": false,
+          "description": "simulate: fail this object (operational critical unless a type and status are given); repeatable."
+        },
+        {
+          "flag": "--with",
+          "takesValue": true,
+          "arg": "F",
+          "choices": null,
+          "repeatable": false,
+          "description": "simulate: add the records of this file, replacing any of the same id."
+        },
+        {
+          "flag": "--without",
+          "takesValue": true,
+          "arg": "ID",
+          "choices": null,
+          "repeatable": true,
+          "description": "simulate: take this record out; repeatable."
+        },
+        {
+          "flag": "--diff",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "simulate: print what changes from now: roots that appear or go, objects whose colour changes."
         },
         {
           "flag": "--json",
@@ -683,7 +761,15 @@
           "arg": null,
           "choices": null,
           "repeatable": false,
-          "description": "Print the rules, or the problems."
+          "description": "Print the records, the problems, the explanation or the result as JSON."
+        },
+        {
+          "flag": "--markdown",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "list: the records by kind, one line each, as the rule language's README shows them."
         },
         {
           "flag": "--config-dir",
@@ -706,6 +792,314 @@
       "disruptions": []
     },
     {
+      "verb": "rules scenario list",
+      "keys": [
+        [
+          "rules",
+          "scenario",
+          "list"
+        ]
+      ],
+      "usage": "rules scenario list [--json]",
+      "note": null,
+      "details": "The contract scenarios shipped beside the rules, and those this site retired.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Print the contract scenarios and their state as JSON."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "rules add|edit|enable|disable|delete|restore|take|keep|accept",
+      "keys": [
+        [
+          "rules",
+          "add"
+        ],
+        [
+          "rules",
+          "edit"
+        ],
+        [
+          "rules",
+          "enable"
+        ],
+        [
+          "rules",
+          "disable"
+        ],
+        [
+          "rules",
+          "delete"
+        ],
+        [
+          "rules",
+          "restore"
+        ],
+        [
+          "rules",
+          "take"
+        ],
+        [
+          "rules",
+          "keep"
+        ],
+        [
+          "rules",
+          "accept"
+        ]
+      ],
+      "usage": "rules add|edit|enable|disable|delete|restore|take|keep|accept [<target>] [--set path=value]... [--unset path]... [--file F] [--field F] [--origin O] [--note N] [--apply] [--force]",
+      "note": null,
+      "details": "Change what this site runs, kept in config/health/: an update never changes a rule edited here and never brings back one deleted here. delete is undone by restore; take takes the release (or one field), keep keeps the edit and marks it reviewed, accept runs a held rule. An apply that changes the active set recalculates health at once.",
+      "positionals": [
+        {
+          "name": "target",
+          "optional": true,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--set",
+          "takesValue": true,
+          "arg": "path=value",
+          "choices": null,
+          "repeatable": true,
+          "description": "edit: set a field of the record (as.status=warning, when.dependant.zone=dmz); repeatable."
+        },
+        {
+          "flag": "--unset",
+          "takesValue": true,
+          "arg": "path",
+          "choices": null,
+          "repeatable": true,
+          "description": "edit: remove a field; repeatable."
+        },
+        {
+          "flag": "--file",
+          "takesValue": true,
+          "arg": "F",
+          "choices": null,
+          "repeatable": false,
+          "description": "add: the site's own records; edit: the record whole."
+        },
+        {
+          "flag": "--field",
+          "takesValue": true,
+          "arg": "F",
+          "choices": null,
+          "repeatable": false,
+          "description": "take: one field from the release, not the whole record."
+        },
+        {
+          "flag": "--origin",
+          "takesValue": true,
+          "arg": "O",
+          "choices": null,
+          "repeatable": false,
+          "description": "enable/disable: every rule of a module, as local state."
+        },
+        {
+          "flag": "--note",
+          "takesValue": true,
+          "arg": "N",
+          "choices": null,
+          "repeatable": false,
+          "description": "Why: kept with the rule's local state."
+        },
+        {
+          "flag": "--apply",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Write it; without, print what would change (the records, the check, the scenarios, and on the site as it is: roots, colours, what goes quiet, how roots are told)."
+        },
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Write it though a contract scenario no longer holds; the rule's note records it."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "apply-flag",
+        "flag": "--apply"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "Write it though a contract scenario no longer holds; the rule's note records it."
+        }
+      ]
+    },
+    {
+      "verb": "rules merge",
+      "keys": [
+        [
+          "rules",
+          "merge"
+        ]
+      ],
+      "usage": "rules merge [--origin O]... [--apply]",
+      "note": null,
+      "details": "Merge the released rules into what this site runs, per rule: what the update and module install, update and delete run.",
+      "positionals": [],
+      "options": [
+        {
+          "flag": "--origin",
+          "takesValue": true,
+          "arg": "O",
+          "choices": null,
+          "repeatable": true,
+          "description": "Only this origin: core, or a module; repeatable."
+        },
+        {
+          "flag": "--apply",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Write it; without, print what the merge would do."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "apply-flag",
+        "flag": "--apply"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    },
+    {
+      "verb": "rules scenario retire|restore",
+      "keys": [
+        [
+          "rules",
+          "scenario",
+          "retire"
+        ],
+        [
+          "rules",
+          "scenario",
+          "restore"
+        ]
+      ],
+      "usage": "rules scenario retire|restore <id> [--note N] [--apply] [--force]",
+      "note": null,
+      "details": "Retire a contract scenario this site no longer holds to, or take it back: local state an update keeps.",
+      "positionals": [
+        {
+          "name": "id",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--note",
+          "takesValue": true,
+          "arg": "N",
+          "choices": null,
+          "repeatable": false,
+          "description": "retire: why this site no longer holds to it (needed)."
+        },
+        {
+          "flag": "--apply",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Write it; without, print what would change."
+        },
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Write it though another contract scenario no longer holds."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "apply-flag",
+        "flag": "--apply"
+      },
+      "destructive": true,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "Write it though another contract scenario no longer holds."
+        }
+      ]
+    },
+    {
       "verb": "report security",
       "keys": [
         [
@@ -715,7 +1109,7 @@
       ],
       "usage": "report security [--all] [--json]",
       "note": null,
-      "details": "Prints the last scan: per target its coverage, counts and verdict — ACT, SCAN FAILED,\ntriage (Nix), watch — then what to act on.",
+      "details": "Prints the last scan: per target its coverage, counts and verdict \u2014 ACT, SCAN FAILED,\ntriage (Nix), watch \u2014 then what to act on.",
       "positionals": [],
       "options": [
         {
@@ -763,7 +1157,7 @@
       ],
       "usage": "reboot <module>",
       "note": null,
-      "details": "Reboots the module's VM (or restarts its container) and waits until the module can serve —\nthe reboot update-os takes after a rebuild, on demand, without updating. For a guest validate\nreports as pending-reboot.",
+      "details": "Reboots the module's VM (or restarts its container) and waits until the module can serve \u2014\nthe reboot update-os takes after a rebuild, on demand, without updating. For a guest validate\nreports as pending-reboot.",
       "positionals": [
         {
           "name": "module",
@@ -802,7 +1196,7 @@
       ],
       "usage": "alerts [--module M] [--host H] [--node N] [--json]",
       "note": null,
-      "details": "The site's alerts: open — state alerts firing now, from Grafana on the logging VM;\nrecent — event alerts of the last 24 hours, from the mothership's alert receiver. Each is\nplaced on the module, machine or node it is about. The heartbeat is never listed.",
+      "details": "The site's alerts: open \u2014 state alerts firing now, from Grafana on the logging VM;\nrecent \u2014 event alerts of the last 24 hours, from the mothership's alert receiver. Each is\nplaced on the module, machine or node it is about. The heartbeat is never listed.",
       "positionals": [],
       "options": [
         {

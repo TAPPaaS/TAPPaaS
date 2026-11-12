@@ -1,0 +1,22 @@
+{
+  "object": {
+    "id": "2594e55e-d5a5-4204-8100-2a61dfff901d",
+    "class": "device",
+    "name": "testap"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "critical",
+      "reason": "sweep-missing",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

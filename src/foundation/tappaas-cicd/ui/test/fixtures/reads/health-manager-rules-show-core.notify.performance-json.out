@@ -1,0 +1,40 @@
+{
+  "id": "core.notify.performance",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "a root cause with a performance condition is told in the daily digest",
+  "record": {
+    "id": "core.notify.performance",
+    "kind": "notify",
+    "description": "Performance is trend, not outage: the digest.",
+    "when": {
+      "condition": {
+        "type": "performance"
+      }
+    },
+    "notify": "digest",
+    "overrides": [
+      "core.notify.critical-root"
+    ]
+  },
+  "released": {
+    "id": "core.notify.performance",
+    "kind": "notify",
+    "description": "Performance is trend, not outage: the digest.",
+    "when": {
+      "condition": {
+        "type": "performance"
+      }
+    },
+    "notify": "digest",
+    "overrides": [
+      "core.notify.critical-root"
+    ]
+  },
+  "overrides": [
+    "core.notify.critical-root"
+  ],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": null
+}

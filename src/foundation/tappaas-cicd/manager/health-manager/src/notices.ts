@@ -95,6 +95,11 @@ const candidates = (r: NotifyRules): Candidate<Notify>[] => {
 
 /** How a root's condition is told under the records: at once, in the digest, or not at all. */
 export function notifyOf(o: HealthObject, c: Condition, rules: NotifyRules = DEFAULT_NOTIFY): "at-once" | "digest" | "none" {
+  return notifyRecord(o, c, rules)?.notify ?? "none";
+}
+
+/** The notify record that decides how a root's condition is told; null when none matches. */
+export function notifyRecord(o: HealthObject, c: Condition, rules: NotifyRules = DEFAULT_NOTIFY): Notify | null {
   const ctx = (k: string): unknown => {
     if (k === "condition.type") return c.type;
     if (k === "condition.status") return c.status;
@@ -106,7 +111,7 @@ export function notifyOf(o: HealthObject, c: Condition, rules: NotifyRules = DEF
     if (k.startsWith("object.")) return (o.attributes as Record<string, unknown>)[k.slice(7)];
     return undefined;
   };
-  return pick(candidates(rules).filter((x) => matches(x.flat, ctx, rules.ancestors)), rules.ancestors).winner?.notify ?? "none";
+  return pick(candidates(rules).filter((x) => matches(x.flat, ctx, rules.ancestors)), rules.ancestors).winner;
 }
 
 const conditionOf = (o: HealthObject | undefined, type: string): Condition | undefined => (o ? conditionsOf(o).find((c) => c.type === type) : undefined);

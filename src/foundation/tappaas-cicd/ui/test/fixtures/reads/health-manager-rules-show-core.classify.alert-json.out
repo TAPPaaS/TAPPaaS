@@ -1,0 +1,38 @@
+{
+  "id": "core.classify.alert",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "a finding from alerts is operational warning",
+  "record": {
+    "id": "core.classify.alert",
+    "kind": "classify",
+    "description": "An open alert is a warning on what it is about: the mail went, a rule never fails the site.",
+    "when": {
+      "finding": {
+        "source": "alerts"
+      }
+    },
+    "set": {
+      "type": "operational",
+      "status": "warning"
+    }
+  },
+  "released": {
+    "id": "core.classify.alert",
+    "kind": "classify",
+    "description": "An open alert is a warning on what it is about: the mail went, a rule never fails the site.",
+    "when": {
+      "finding": {
+        "source": "alerts"
+      }
+    },
+    "set": {
+      "type": "operational",
+      "status": "warning"
+    }
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": null
+}

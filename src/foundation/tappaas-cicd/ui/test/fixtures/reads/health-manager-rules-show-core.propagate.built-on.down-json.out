@@ -1,0 +1,40 @@
+{
+  "id": "core.propagate.built-on.down",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "a critical operational failure crosses built-on to its dependant as a critical impact",
+  "record": {
+    "id": "core.propagate.built-on.down",
+    "kind": "propagate",
+    "description": "A failed disk takes its pool down; in a mirror or raidz vdev the group rule degrades it first.",
+    "when": {
+      "relation": "built-on",
+      "condition": {
+        "type": "operational",
+        "status": "critical"
+      }
+    },
+    "as": {
+      "status": "critical"
+    }
+  },
+  "released": {
+    "id": "core.propagate.built-on.down",
+    "kind": "propagate",
+    "description": "A failed disk takes its pool down; in a mirror or raidz vdev the group rule degrades it first.",
+    "when": {
+      "relation": "built-on",
+      "condition": {
+        "type": "operational",
+        "status": "critical"
+      }
+    },
+    "as": {
+      "status": "critical"
+    }
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": null
+}

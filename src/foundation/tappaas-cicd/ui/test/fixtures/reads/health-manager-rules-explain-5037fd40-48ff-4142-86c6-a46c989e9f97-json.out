@@ -1,0 +1,34 @@
+{
+  "object": {
+    "id": "5037fd40-48ff-4142-86c6-a46c989e9f97",
+    "class": "app",
+    "name": "cluster"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "security",
+      "status": "warning",
+      "reason": "alert-root-key-changed",
+      "how": "root",
+      "impacts": 0
+    },
+    {
+      "type": "maintenance",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    }
+  ]
+}

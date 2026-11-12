@@ -1,0 +1,44 @@
+{
+  "id": "core.classify.zone-score",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "a finding from cve on a zone or environment is a sum of others, never a root",
+  "record": {
+    "id": "core.classify.zone-score",
+    "kind": "classify",
+    "description": "A zone's and an environment's CVE score is the sum of their modules': never a root.",
+    "when": {
+      "finding": {
+        "source": "cve"
+      },
+      "object": {
+        "class": [
+          "zone",
+          "environment"
+        ]
+      }
+    },
+    "aggregate": true
+  },
+  "released": {
+    "id": "core.classify.zone-score",
+    "kind": "classify",
+    "description": "A zone's and an environment's CVE score is the sum of their modules': never a root.",
+    "when": {
+      "finding": {
+        "source": "cve"
+      },
+      "object": {
+        "class": [
+          "zone",
+          "environment"
+        ]
+      }
+    },
+    "aggregate": true
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": null
+}

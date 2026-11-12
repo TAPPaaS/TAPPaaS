@@ -35,7 +35,7 @@
 //
 // Exit codes: ok=0, error / failed-health-gate = 1.
 
-import { spawnGuarded } from "../../../lib/ts/src/exec";
+import { simulating, spawnGuarded } from "../../../lib/ts/src/exec";
 import { readFileSync, readdirSync } from "fs";
 import { hostname } from "os";
 import { join } from "path";
@@ -219,34 +219,56 @@ export const HELP: HelpSpec = {
         "stands until the source that raised it has looked again.",
     },
     {
-      usage: "rules list|show|diff|check|explain|simulate|scenario list [<id>|<object>] [--kind K] [--origin O] [--state S] [--file F] [--fail O[:T[:S]]]... [--with F] [--without ID]... [--diff] [--json|--markdown]", effect: "read",
+      usage: "rules list|show|diff|check|explain|simulate [<target>] [--kind K] [--origin O] [--state S] [--file F] [--fail O[:T[:S]]]... [--with F] [--without ID]... [--diff] [--json|--markdown]", effect: "read",
       options: [
         ["--kind K", "list: only records of this kind (classify, propagate, combine, explain, follow, rollup, notify)."],
-        ["--origin O", "list: only records released by core, a module, or the site."],
+        ["--origin O", "list: only records released by core, a module, or the site; check --file: the module the file is of."],
         ["--state S", "list: only rules edited here, pending a decision, held, disabled or deleted."],
         ["--file F", "check: this candidate file with the rules in use."],
-        ["--json", "Print the records, or the problems."],
-        ["--markdown", "list: the records by kind, one line each, as the rule language's README shows them."],
         ["--fail O[:T[:S]]", "simulate: fail this object (operational critical unless a type and status are given); repeatable."],
         ["--with F", "simulate: add the records of this file, replacing any of the same id."],
         ["--without ID", "simulate: take this record out; repeatable."],
         ["--diff", "simulate: print what changes from now: roots that appear or go, objects whose colour changes."],
+        ["--json", "Print the records, the problems, the explanation or the result as JSON."],
+        ["--markdown", "list: the records by kind, one line each, as the rule language's README shows them."],
       ],
-      details: "The health records that decide how a failure spreads, what explains what, who follows whom and how collections sum up; one sentence each. check refuses a record it cannot place, two records that decide one case differently, and a set under which a contract scenario no longer holds, and exits 1. explain <object> shows how each of its conditions came about, hop by hop, with the record that decided it. simulate runs the derivation on the site as it is with extra failures or changed records. Neither writes.",
+      details: "The health records that decide what a finding becomes, how a failure spreads, what explains what, who follows whom, how collections sum up and how a root cause is told; one sentence each. show <id> and diff <id> one rule: its state, what it decides now, and edited here against released. check refuses a record it cannot place, two records that decide one case differently, and a set under which a contract scenario no longer holds, and exits 1. explain <object> shows how each of its conditions came about, hop by hop, with the record that decided it. simulate runs the derivation on the site as it is with extra failures or changed records. None writes.",
     },
     {
-      usage: "rules add|edit|enable|disable|delete|restore|take|keep|accept|merge|scenario retire|scenario restore [<id>|<file>] [--set path=value]... [--unset path]... [--file F] [--field F] [--origin O] [--note N] [--apply] [--force]", effect: { apply: "--apply" },
+      usage: "rules scenario list [--json]", effect: "read",
+      options: [["--json", "Print the contract scenarios and their state as JSON."]],
+      details: "The contract scenarios shipped beside the rules, and those this site retired.",
+    },
+    {
+      usage: "rules add|edit|enable|disable|delete|restore|take|keep|accept [<target>] [--set path=value]... [--unset path]... [--file F] [--field F] [--origin O] [--note N] [--apply] [--force]", effect: { apply: "--apply" },
       options: [
-        ["--apply", "Write it; without, print what would change (the records, the check, the scenarios, and on the site as it is: roots, colours, what goes quiet, how roots are told)."],
-        ["--force", "Write it though a contract scenario no longer holds; the rule's note records it."],
         ["--set path=value", "edit: set a field of the record (as.status=warning, when.dependant.zone=dmz); repeatable."],
         ["--unset path", "edit: remove a field; repeatable."],
         ["--file F", "add: the site's own records; edit: the record whole."],
         ["--field F", "take: one field from the release, not the whole record."],
-        ["--origin O", "enable/disable: every rule of a module; merge: only this origin (repeatable)."],
-        ["--note N", "Why: kept with the rule's local state; scenario retire needs it."],
+        ["--origin O", "enable/disable: every rule of a module, as local state."],
+        ["--note N", "Why: kept with the rule's local state."],
+        ["--apply", "Write it; without, print what would change (the records, the check, the scenarios, and on the site as it is: roots, colours, what goes quiet, how roots are told)."],
+        ["--force", "Write it though a contract scenario no longer holds; the rule's note records it."],
       ],
-      details: "Change what this site runs, kept in config/health/: an update merges each release per rule, never changes a rule edited here and never brings back one deleted here. merge is what the update and module install, update and delete run. An apply that changes the active set recalculates health at once.",
+      details: "Change what this site runs, kept in config/health/: an update never changes a rule edited here and never brings back one deleted here. delete is undone by restore; take takes the release (or one field), keep keeps the edit and marks it reviewed, accept runs a held rule. An apply that changes the active set recalculates health at once.",
+    },
+    {
+      usage: "rules merge [--origin O]... [--apply]", effect: { apply: "--apply" },
+      options: [
+        ["--origin O", "Only this origin: core, or a module; repeatable."],
+        ["--apply", "Write it; without, print what the merge would do."],
+      ],
+      details: "Merge the released rules into what this site runs, per rule: what the update and module install, update and delete run.",
+    },
+    {
+      usage: "rules scenario retire|restore <id> [--note N] [--apply] [--force]", effect: { apply: "--apply" },
+      options: [
+        ["--note N", "retire: why this site no longer holds to it (needed)."],
+        ["--apply", "Write it; without, print what would change."],
+        ["--force", "Write it though another contract scenario no longer holds."],
+      ],
+      details: "Retire a contract scenario this site no longer holds to, or take it back: local state an update keeps.",
     },
     // ── end ADR-041 assess ──
     {
@@ -386,6 +408,8 @@ function rulesModel(configDir: string): RulesDoc {
 /** Health under the rules now in force, at once: assess, then emit, as the
  *  alert receiver runs them. */
 function recalculate(): void {
+  // A simulated run (the console's simulate mode, a scratch test) changes no health.
+  if (simulating()) return info("rules: simulated — health is not recalculated");
   for (const verb of ["assess", "emit"]) {
     const r = spawnGuarded(process.execPath, [process.argv[1], verb], { encoding: "utf8", stdio: "inherit", timeout: 600_000 });
     if (r.error || r.status !== 0) {

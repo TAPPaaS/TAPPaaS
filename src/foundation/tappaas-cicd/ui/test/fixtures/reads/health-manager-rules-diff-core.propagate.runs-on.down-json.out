@@ -1,0 +1,51 @@
+[
+  {
+    "field": "as",
+    "released": "{\"status\":\"critical\"}",
+    "here": "{\"status\":\"critical\"}",
+    "now": "{\"status\":\"critical\"}",
+    "mark": ""
+  },
+  {
+    "field": "description",
+    "released": "\"A node or guest that is down takes down what runs on it.\"",
+    "here": "\"A node or guest that is down takes down what runs on it.\"",
+    "now": "\"A node or guest that is down takes down what runs on it.\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.propagate.runs-on.down\"",
+    "here": "\"core.propagate.runs-on.down\"",
+    "now": "\"core.propagate.runs-on.down\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"propagate\"",
+    "here": "\"propagate\"",
+    "now": "\"propagate\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.status",
+    "released": "\"critical\"",
+    "here": "\"critical\"",
+    "now": "\"critical\"",
+    "mark": ""
+  },
+  {
+    "field": "when.condition.type",
+    "released": "\"operational\"",
+    "here": "\"operational\"",
+    "now": "\"operational\"",
+    "mark": ""
+  },
+  {
+    "field": "when.relation",
+    "released": "\"runs-on\"",
+    "here": "\"runs-on\"",
+    "now": "\"runs-on\"",
+    "mark": ""
+  }
+]

@@ -1,0 +1,82 @@
+{
+  "id": "core.propagate.runs-on.down-ha",
+  "origin": "core",
+  "state": "edited; pending: changed upstream",
+  "sentence": "a critical operational failure crosses runs-on to its dependant with haNode as a critical impact",
+  "record": {
+    "id": "core.propagate.runs-on.down-ha",
+    "kind": "propagate",
+    "description": "An HA-protected guest whose node fails is moving or has moved: degraded, not down.",
+    "when": {
+      "relation": "runs-on",
+      "dependant": {
+        "attr": {
+          "haNode": {
+            "exists": true
+          }
+        }
+      },
+      "condition": {
+        "type": "operational",
+        "status": "critical"
+      }
+    },
+    "as": {
+      "status": "critical"
+    }
+  },
+  "released": {
+    "id": "core.propagate.runs-on.down-ha",
+    "kind": "propagate",
+    "description": "An HA-protected guest whose node fails is moving or has moved: degraded, not down, while HA has a node for it.",
+    "when": {
+      "relation": "runs-on",
+      "dependant": {
+        "attr": {
+          "haNode": {
+            "exists": true
+          }
+        }
+      },
+      "condition": {
+        "type": "operational",
+        "status": "critical"
+      }
+    },
+    "as": {
+      "status": "warning"
+    }
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": {
+    "local": "edited",
+    "by": "lars",
+    "at": "2026-11-01T09:00:00.000Z",
+    "editedFrom": {
+      "id": "core.propagate.runs-on.down-ha",
+      "kind": "propagate",
+      "description": "An HA-protected guest whose node fails is moving or has moved: degraded, not down.",
+      "when": {
+        "relation": "runs-on",
+        "dependant": {
+          "attr": {
+            "haNode": {
+              "exists": true
+            }
+          }
+        },
+        "condition": {
+          "type": "operational",
+          "status": "critical"
+        }
+      },
+      "as": {
+        "status": "warning"
+      }
+    },
+    "note": "no HA on this site yet; written with --force over scenario core.scenario.ha-guest",
+    "upstream": "changed"
+  }
+}

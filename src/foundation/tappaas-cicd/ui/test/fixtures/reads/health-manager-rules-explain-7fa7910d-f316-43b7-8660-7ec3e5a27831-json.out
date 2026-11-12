@@ -1,0 +1,46 @@
+{
+  "object": {
+    "id": "7fa7910d-f316-43b7-8660-7ec3e5a27831",
+    "class": "vm",
+    "name": "identity"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "capacity",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "security",
+      "status": "warning",
+      "reason": "cve-act",
+      "how": "root",
+      "impacts": 0
+    },
+    {
+      "type": "maintenance",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "backup",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    }
+  ]
+}

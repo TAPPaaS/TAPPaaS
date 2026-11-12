@@ -1,0 +1,44 @@
+[
+  {
+    "field": "description",
+    "released": "\"The alerts that say something is exposed are security warnings.\"",
+    "here": "\"The alerts that say something is exposed are security warnings.\"",
+    "now": "\"The alerts that say something is exposed are security warnings.\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.classify.alert-security\"",
+    "here": "\"core.classify.alert-security\"",
+    "now": "\"core.classify.alert-security\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"classify\"",
+    "here": "\"classify\"",
+    "now": "\"classify\"",
+    "mark": ""
+  },
+  {
+    "field": "set",
+    "released": "{\"status\":\"warning\",\"type\":\"security\"}",
+    "here": "{\"status\":\"warning\",\"type\":\"security\"}",
+    "now": "{\"status\":\"warning\",\"type\":\"security\"}",
+    "mark": ""
+  },
+  {
+    "field": "when.finding.labels.alertname",
+    "released": "[\"RootKeyChanged\",\"FirewallCertChanged\"]",
+    "here": "[\"RootKeyChanged\",\"FirewallCertChanged\"]",
+    "now": "[\"RootKeyChanged\",\"FirewallCertChanged\"]",
+    "mark": ""
+  },
+  {
+    "field": "when.finding.source",
+    "released": "\"alerts\"",
+    "here": "\"alerts\"",
+    "now": "\"alerts\"",
+    "mark": ""
+  }
+]

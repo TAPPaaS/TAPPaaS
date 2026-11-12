@@ -1,0 +1,22 @@
+{
+  "object": {
+    "id": "ab1ce443-0026-4d0c-9579-2cf6c2904a9b",
+    "class": "device",
+    "name": "crs-a"
+  },
+  "conditions": [
+    {
+      "type": "operational",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "warning",
+      "reason": "vlan-undeclared",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

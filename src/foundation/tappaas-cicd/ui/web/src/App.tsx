@@ -11,6 +11,7 @@ import { Assets } from "./pages/Assets";
 import { Backup } from "./pages/Backup";
 import { Environments } from "./pages/Environments";
 import { Health } from "./pages/Health";
+import { RulePage, RulesPage } from "./pages/Rules";
 import { ZonesPage } from "./pages/Zones";
 import { Identity } from "./pages/Identity";
 import { Setup } from "./pages/Setup";
@@ -88,6 +89,8 @@ export function App() {
   else if (path === "/setup/day1") page = <Setup tab="Day 1" />;
   else if (path === "/setup/day2") page = <Setup tab="Day 2" />;
   else if (path === "/health") page = <Health />;
+  else if (path === "/health/rules") page = <RulesPage />;
+  else if (path.startsWith("/health/rules/")) page = <RulePage id={decodeURIComponent(path.slice("/health/rules/".length))} />;
   else if (path === "/performance" || path.startsWith("/performance/")) page = <Performance tab={perfTabOf(path)} />;
   else if (path === "/operations") page = <Operations />;
   else if (view) page = <Site view={view} />;

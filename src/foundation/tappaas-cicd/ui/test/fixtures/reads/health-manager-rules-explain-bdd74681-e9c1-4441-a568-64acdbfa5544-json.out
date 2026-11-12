@@ -1,0 +1,16 @@
+{
+  "object": {
+    "id": "bdd74681-e9c1-4441-a568-64acdbfa5544",
+    "class": "port",
+    "name": "1"
+  },
+  "conditions": [
+    {
+      "type": "drift",
+      "status": "warning",
+      "reason": "sweep-changed",
+      "how": "root",
+      "impacts": 0
+    }
+  ]
+}

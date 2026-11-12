@@ -1,0 +1,46 @@
+{
+  "id": "core.classify.long-warning",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "a warning operational finding standing older than 24h is critical",
+  "record": {
+    "id": "core.classify.long-warning",
+    "kind": "classify",
+    "enabled": false,
+    "description": "An operational warning nobody dealt with for a day becomes critical.",
+    "when": {
+      "finding": {
+        "type": "operational",
+        "status": "warning",
+        "age": {
+          "over": "24h"
+        }
+      }
+    },
+    "set": {
+      "status": "critical"
+    }
+  },
+  "released": {
+    "id": "core.classify.long-warning",
+    "kind": "classify",
+    "enabled": false,
+    "description": "An operational warning nobody dealt with for a day becomes critical.",
+    "when": {
+      "finding": {
+        "type": "operational",
+        "status": "warning",
+        "age": {
+          "over": "24h"
+        }
+      }
+    },
+    "set": {
+      "status": "critical"
+    }
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": null
+}

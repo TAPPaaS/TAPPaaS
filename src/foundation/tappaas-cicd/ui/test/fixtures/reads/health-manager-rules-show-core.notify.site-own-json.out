@@ -1,0 +1,48 @@
+{
+  "id": "core.notify.site-own",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "a root cause with a condition on a site or zone or environment is told in the daily digest",
+  "record": {
+    "id": "core.notify.site-own",
+    "kind": "notify",
+    "description": "What is about the site, a zone or an environment as a whole is told in the digest.",
+    "when": {
+      "object": {
+        "class": [
+          "site",
+          "zone",
+          "environment"
+        ]
+      }
+    },
+    "notify": "digest",
+    "overrides": [
+      "core.notify.critical-root"
+    ]
+  },
+  "released": {
+    "id": "core.notify.site-own",
+    "kind": "notify",
+    "description": "What is about the site, a zone or an environment as a whole is told in the digest.",
+    "when": {
+      "object": {
+        "class": [
+          "site",
+          "zone",
+          "environment"
+        ]
+      }
+    },
+    "notify": "digest",
+    "overrides": [
+      "core.notify.critical-root"
+    ]
+  },
+  "overrides": [
+    "core.notify.critical-root"
+  ],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": null
+}

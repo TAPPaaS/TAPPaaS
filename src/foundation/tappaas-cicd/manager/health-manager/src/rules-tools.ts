@@ -13,7 +13,7 @@ import { sentence } from "./rule-text";
 import { ConditionStatus, ConditionType } from "../../../lib/ts/src/health-rules";
 import { HealthRecord } from "../../../lib/ts/src/health-records";
 import { Classified, classify } from "./classify";
-import { NotifyRules, notifyOf } from "./notices";
+import { NotifyRules, notifyOf, notifyRecord } from "./notices";
 
 export interface Snapshot { objects: CmdbItem[]; relations: CmdbRel[] }
 
@@ -200,6 +200,30 @@ export function tellingLines(before: ReturnType<typeof telling>, after: ReturnTy
   for (const [k, w] of after.told) {
     const was = before.told.get(k);
     if (was && was !== w) out.push(`${name(k)}: told ${was === "at-once" ? "at once" : was === "digest" ? "in the digest" : "nowhere"} → ${w === "at-once" ? "at once" : w === "digest" ? "in the digest" : "nowhere"}`);
+  }
+  return out;
+}
+
+/** How many cases each classify and notify record decides on the site as it is:
+ *  the stored failing findings it classifies, the roots it tells. */
+export function decisions(snap: Snapshot, model: RulesDoc, now: string, roots: { id: string; type: string }[]): Map<string, number> {
+  const out = new Map<string, number>();
+  const bump = (id: string): void => void out.set(id, (out.get(id) ?? 0) + 1);
+  const byId = new Map(snap.objects.map((o) => [o.id, o]));
+  const findings: Classified[] = [];
+  for (const o of snap.objects) {
+    for (const c of conditionsOf(o)) {
+      if (isDerivedKind(c) || c.derived || !failing({ status: c.raw?.status ?? c.status })) continue;
+      findings.push({ object: o.id, type: c.type, status: c.raw?.status ?? c.status, reason: c.reason, message: c.message, owner: c.owner ?? "" });
+    }
+  }
+  classify(findings, byId, model.records, model.ancestors, () => [], Date.parse(now), undefined, bump);
+  const rules: NotifyRules = { records: model.records, ancestors: model.ancestors };
+  for (const r of roots) {
+    const o = byId.get(r.id);
+    const c = conditionsOf(o ?? ({ attributes: {} } as CmdbItem)).find((x) => x.type === r.type);
+    const w = o && c ? notifyRecord(o as never, c as never, rules) : null;
+    if (w) bump(w.id);
   }
   return out;
 }

@@ -33,7 +33,7 @@ function ageOf(f: Finding, prior: Condition | undefined, nowMs: number): number 
 
 /** Apply the classify records to each failing finding. `priorOf` gives an
  *  object's stored conditions (for age). Conflicts are reported in `conflicts`. */
-export function classify(findings: Finding[], byId: Map<string, CmdbItem>, records: HealthRecord[], anc: Ancestors, priorOf: (id: string) => Condition[], nowMs: number, conflicts?: Set<string>): Classified[] {
+export function classify(findings: Finding[], byId: Map<string, CmdbItem>, records: HealthRecord[], anc: Ancestors, priorOf: (id: string) => Condition[], nowMs: number, conflicts?: Set<string>, onWin?: (id: string) => void): Classified[] {
   const cands: Candidate<Classify>[] = records.filter((r): r is Classify => r.kind === "classify" && r.enabled !== false).map((rec) => ({ rec, flat: flatten(rec) }));
   if (!cands.length) return findings;
   return findings.map((f) => {
@@ -60,6 +60,7 @@ export function classify(findings: Finding[], byId: Map<string, CmdbItem>, recor
     if (picked.conflict.length) conflicts?.add(picked.conflict.map((c) => c.id).sort().join(" ~ "));
     const w = picked.winner;
     if (!w) return f;
+    onWin?.(w.id);
     const out: Classified = { ...f };
     if (w.set?.type) out.type = w.set.type as ConditionType;
     if (w.set?.reason) out.reason = w.set.reason;

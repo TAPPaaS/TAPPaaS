@@ -1,0 +1,37 @@
+[
+  {
+    "field": "description",
+    "released": "\"A failure that reaches an object explains its own condition of the same type.\"",
+    "here": "\"A failure that reaches an object explains its own condition of the same type.\"",
+    "now": "\"A failure that reaches an object explains its own condition of the same type.\"",
+    "mark": ""
+  },
+  {
+    "field": "effect",
+    "released": "\"derived\"",
+    "here": "\"derived\"",
+    "now": "\"derived\"",
+    "mark": ""
+  },
+  {
+    "field": "id",
+    "released": "\"core.explain.same-failure\"",
+    "here": "\"core.explain.same-failure\"",
+    "now": "\"core.explain.same-failure\"",
+    "mark": ""
+  },
+  {
+    "field": "kind",
+    "released": "\"explain\"",
+    "here": "\"explain\"",
+    "now": "\"explain\"",
+    "mark": ""
+  },
+  {
+    "field": "when.cause.sameType",
+    "released": "true",
+    "here": "true",
+    "now": "true",
+    "mark": ""
+  }
+]

@@ -1,0 +1,44 @@
+{
+  "id": "core.rollup.zone-score",
+  "origin": "core",
+  "state": "held: an example of a held rule",
+  "sentence": "a zone's security is its own, not a sum of its members",
+  "record": {
+    "id": "core.rollup.zone-score",
+    "kind": "rollup",
+    "description": "A zone's security is its own risk score, the sum of its modules': never a root.",
+    "when": {
+      "object": {
+        "class": "zone"
+      },
+      "condition": {
+        "type": "security"
+      }
+    },
+    "fn": "own"
+  },
+  "released": {
+    "id": "core.rollup.zone-score",
+    "kind": "rollup",
+    "description": "A zone's security is its own risk score, the sum of its modules': never a root.",
+    "when": {
+      "object": {
+        "class": "zone"
+      },
+      "condition": {
+        "type": "security"
+      }
+    },
+    "fn": "own"
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 0,
+  "local": {
+    "held": {
+      "why": "reach",
+      "detail": "an example of a held rule",
+      "at": "2026-11-01T09:00:00.000Z"
+    }
+  }
+}

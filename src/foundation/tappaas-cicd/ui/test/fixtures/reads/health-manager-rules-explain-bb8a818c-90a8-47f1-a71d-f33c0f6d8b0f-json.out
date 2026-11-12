@@ -1,0 +1,53 @@
+{
+  "object": {
+    "id": "bb8a818c-90a8-47f1-a71d-f33c0f6d8b0f",
+    "class": "environment",
+    "name": "mgmt"
+  },
+  "conditions": [
+    {
+      "type": "drift",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "backup",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "operational",
+      "status": "warning",
+      "reason": "roll-up",
+      "how": "roll-up",
+      "rule": "core.rollup.collection",
+      "ruleText": "a collection is the worst of what is member-of or serves it"
+    },
+    {
+      "type": "capacity",
+      "status": "unknown",
+      "reason": "roll-up",
+      "how": "roll-up",
+      "rule": "core.rollup.collection",
+      "ruleText": "a collection is the worst of what is member-of or serves it"
+    },
+    {
+      "type": "security",
+      "status": "warning",
+      "reason": "roll-up",
+      "how": "roll-up",
+      "rule": "core.rollup.environment-score",
+      "ruleText": "an environment's security is its own, not a sum of its members"
+    },
+    {
+      "type": "maintenance",
+      "status": "warning",
+      "reason": "roll-up",
+      "how": "roll-up",
+      "rule": "core.rollup.collection",
+      "ruleText": "a collection is the worst of what is member-of or serves it"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "object": {
+    "id": "3f835640-96ae-430e-91d5-3fd2355326cf",
+    "class": "room",
+    "name": "basement"
+  },
+  "conditions": [
+    {
+      "type": "capacity",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "security",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "maintenance",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "backup",
+      "status": "ok",
+      "reason": "ok",
+      "how": "ok"
+    },
+    {
+      "type": "drift",
+      "status": "warning",
+      "reason": "roll-up",
+      "how": "roll-up",
+      "rule": "core.rollup.place",
+      "ruleText": "a place is the worst of what is placed-in or at it, all the way, then allocated-to from it"
+    },
+    {
+      "type": "operational",
+      "status": "warning",
+      "reason": "roll-up",
+      "how": "roll-up",
+      "rule": "core.rollup.place",
+      "ruleText": "a place is the worst of what is placed-in or at it, all the way, then allocated-to from it"
+    }
+  ]
+}

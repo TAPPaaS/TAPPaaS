@@ -1,0 +1,50 @@
+{
+  "id": "core.rollup.collection",
+  "origin": "core",
+  "state": "as released",
+  "sentence": "a collection is the worst of what is member-of or serves it",
+  "record": {
+    "id": "core.rollup.collection",
+    "kind": "rollup",
+    "description": "A cluster, an environment or a group is the worst of its members and what serves it.",
+    "when": {
+      "object": {
+        "class": "collection"
+      }
+    },
+    "members": [
+      {
+        "relations": [
+          "member-of",
+          "serves"
+        ],
+        "walk": "inbound"
+      }
+    ],
+    "fn": "worst"
+  },
+  "released": {
+    "id": "core.rollup.collection",
+    "kind": "rollup",
+    "description": "A cluster, an environment or a group is the worst of its members and what serves it.",
+    "when": {
+      "object": {
+        "class": "collection"
+      }
+    },
+    "members": [
+      {
+        "relations": [
+          "member-of",
+          "serves"
+        ],
+        "walk": "inbound"
+      }
+    ],
+    "fn": "worst"
+  },
+  "overrides": [],
+  "overriddenBy": [],
+  "decidesNow": 45,
+  "local": null
+}
