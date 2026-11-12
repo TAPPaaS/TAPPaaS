@@ -921,6 +921,12 @@ body.dragging-place, body.dragging-place * { cursor: grabbing !important; user-s
 .sec-cve { padding: var(--sp-4) 0; border-bottom: 1px dashed var(--line); }
 .sec-cve-head { display: flex; flex-wrap: wrap; gap: var(--sp-8); align-items: baseline; }
 .sec-cve-note { color: var(--muted); margin-top: var(--sp-4); overflow-wrap: anywhere; }
+.sec-queue { margin-bottom: var(--sp-12); }
+.sec-queue-title { font-size: 13px; margin: var(--sp-8) 0 var(--sp-4); }
+.sec-cards { list-style: none; margin: 0; padding: 0; }
+.sec-card { padding: var(--sp-8) 0; border-bottom: 1px solid var(--line); }
+.sec-card-head { display: flex; flex-wrap: wrap; gap: var(--sp-8); align-items: baseline; margin-bottom: var(--sp-4); }
+.sec-card-action { margin-top: var(--sp-4); overflow-wrap: anywhere; }
 @media (max-width: var(--bp-sm)) {
   .sec-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name level" "by trend" "counts counts"; row-gap: 0; }
   .sec-name { grid-area: name; }

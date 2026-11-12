@@ -26,7 +26,8 @@ const immich = rossen.zones[0].units.find((u) => u.name === "immich")!;
 check(immich.level === "high" && immich.score === 20 && immich.setBy === "1 critical", "a module: level, score, what counts");
 check(immich.counts.open === 2 && immich.counts.risk === 1 && immich.counts.carried === 1 && immich.counts.decided === 1, "…its CVEs by state");
 check(immich.cves.length === 5 && immich.cves.some((c) => c.state === "carried" && c.carriedFrom === "4.7.1" && !!c.analysis), "…and its counted CVEs with their analysis");
-check(immich.cves.map((c) => c.state).join() === "open,open,risk,carried,decided" && immich.cves[0].severity === "Critical", "…what counts most first: open (critical first), risk, carried, decided");
+check(immich.cves[0].severity === "Critical" && immich.cves[0].mark === "unread" && immich.cves[immich.cves.length - 1].level === "none",
+  `…what counts most first: by effective level, what needs someone before what is settled (${immich.cves.map((c) => `${c.level}/${c.mark}`).join()})`);
 check(rossen.zones[0].units[0].score >= rossen.zones[0].units[rossen.zones[0].units.length - 1].score, "modules worst first");
 const mgmt = v.environments.find((e) => e.name === "mgmt")!.zones[0];
 check(mgmt.multiplier === 2 && mgmt.units.some((u) => u.kind === "firewall") && mgmt.units.some((u) => u.kind === "node"), "the management zone ×2, with the firewall and the nodes");
@@ -54,10 +55,15 @@ check(riskTone("ok") === "pass" && riskTone("low") === "pass" && riskTone("mediu
 check(riskText({ level: "high", score: 20 }) === "high, 20" && riskText({ level: "ok", score: 0 }) === "ok", "level and score as one phrase");
 check(unitLabel({ ...immich, kind: "node", name: "tappaas1" }) === "node tappaas1" && unitLabel({ ...immich, kind: "firewall", name: "network" }) === "network (firewall)", "platform targets named as such");
 const risk = immich.cves.find((c) => c.state === "risk")!;
-check(cveCategory(risk) === "medium, rated here", "a risk CVE counts at the rating given here");
-check(cveNote(immich.cves.find((c) => c.state === "open")!) === "Not analysed yet.", "an open CVE: not analysed yet");
-check(/^Analysed for 4\.7\.1: .*Confirm it for 4\.7\.2\.$/.test(cveNote(immich.cves.find((c) => c.state === "carried")!) ?? ""), "a carried CVE: the earlier analysis, and what to confirm");
-check(countsText(immich.counts) === "2 open, 1 risk, 1 carried, 1 decided" && countsText({ open: 0, risk: 0, carried: 0, decided: 0 }) === "none", "the counts, only what is there");
+check(/ → medium$/.test(cveCategory(risk)) && risk.mark === "confirmed" && risk.level === "medium", "a rated CVE: upstream → effective level, confirmed");
+check(cveNote(immich.cves.find((c) => c.state === "open")!) === "Not decided yet.", "an unread CVE: not decided yet");
+check(/^Analysed for 4\.7\.1: /.test(cveNote(immich.cves.find((c) => c.state === "carried")!) ?? ""), "a CVE to review: the earlier analysis");
+check(countsText(immich.counts, immich.marks) === "2 unread, 1 to review, 2 confirmed", `the marks, only what is there (${countsText(immich.counts, immich.marks)})`);
+check(countsText({ open: 0, risk: 0, carried: 0, decided: 0 }) === "none", "…none when nothing is there");
+const marked = securityView({ ...raw, queues: { operator: { decision: [{ title: "nextcloud: imagemagick on nextcloud", text: "assumes internal only", worst: "critical", units: ["nextcloud"], cves: ["CVE-1", "CVE-2"], action: "health-manager accept …" }] }, maintainer: null } })!;
+check(marked.queues?.operator.decision[0].count === 2 && marked.queues.operator.decision[0].action === "health-manager accept …" && marked.queues.maintainer === null,
+  "the queues pass through as cards: title, text, count, the action");
+check(v.queues === null, "…none from a scan that has none");
 const pts = sparkPoints([0, null, 10, 20, null, null, 5], 60, 20);
 check(pts.length === 3 && pts[0] === "0.0,19.0" && pts[1].split(" ").length === 2 && pts[2] === "60.0,14.5", "the sparkline: gaps where no scan wrote, scaled to the highest");
 check(sparkPoints([0, 0], 10, 10)[0] === "0.0,9.0 10.0,9.0", "…a flat zero sits on the floor");

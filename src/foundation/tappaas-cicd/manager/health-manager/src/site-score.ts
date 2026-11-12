@@ -38,6 +38,7 @@ export interface UnitScore extends ModuleScore {
   targets: string[]; // the scan targets it is made of
   failed: string[]; // those whose scan failed: not counted, and said so
   items: CveItem[];
+  baselineOnly?: boolean; // every CVE that sets its level is the shared NixOS baseline's
 }
 
 export interface SiteSecurity {
@@ -123,7 +124,12 @@ export function siteSecurity(s: ScanStatus, place: { placement: Record<string, s
     units: {},
     history,
   };
-  for (const [k, u] of Object.entries(units)) out.units[k] = { ...sc.modules[k], ...u, zones: place.placement[k] ?? [] };
+  for (const [k, u] of Object.entries(units)) {
+    const m = sc.modules[k];
+    const top = m.category ? u.items.filter((i) => i.counted !== false && (i.level ?? "") === m.category) : [];
+    const baselineOnly = top.length > 0 && top.every((i) => (i.component ?? "").startsWith("templates/"));
+    out.units[k] = { ...m, ...u, zones: place.placement[k] ?? [], ...(baselineOnly ? { baselineOnly } : {}) };
+  }
   return out;
 }
 
@@ -235,7 +241,7 @@ export function renderSecurity(sec: SiteSecurity, now: number, opts: { items?: b
     const us = Object.entries(sec.units).filter(([, u]) => u.zones.includes(z)).sort((x, y) => y[1].raw - x[1].raw || x[1].name.localeCompare(y[1].name));
     for (const [k, u] of us) {
       const label = `${indent}  ${u.kind === "module" ? "" : `${u.kind} `}${u.name}`;
-      out.push(row(label, u as unknown as Aggregate, u.category ? `${u.counted} ${u.category}` : u.failed.length ? "scan failed" : "", countsText(u.marks), sparkline(sec.history, (h) => h.units[k], today)));
+      out.push(row(label, u as unknown as Aggregate, u.category ? `${u.counted} ${u.category}${u.baselineOnly ? ", baseline" : ""}` : u.failed.length ? "scan failed" : "", countsText(u.marks), sparkline(sec.history, (h) => h.units[k], today)));
       if (opts.items) {
         for (const i of u.items) out.push(...itemLines(i, `${indent}      `));
       }

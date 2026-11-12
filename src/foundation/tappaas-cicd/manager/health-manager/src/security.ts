@@ -135,6 +135,7 @@ export interface CveItem {
   epss?: number;
   vector?: string;
   modifiedVector?: string;
+  fixed?: string; // the version the installed distribution or channel already offers ("" or absent: none)
 }
 
 export interface ScanStatus {
@@ -822,6 +823,7 @@ export function decisionItems(all: Finding[], decisions: Map<Finding, Decision>,
       ...(d.flags.length ? { flags: d.flags } : {}), ...(d.old ? { old: d.old } : {}), ...(d.note ? { note: d.note } : {}),
       ...(fx?.kev ? { kev: fx.kev } : {}), ...(typeof fx?.epss === "number" ? { epss: fx.epss } : {}), ...(fx?.vector ? { vector: fx.vector } : {}),
       ...(d.modifiedVector ? { modifiedVector: d.modifiedVector } : {}),
+      ...(f.fixed ? { fixed: f.fixed } : {}),
     };
     const weight = (d.counted ? 10 + levelRankOf(d.level) : levelRankOf(d.level)) * 10 + (5 - MARK_RANK[d.mark]);
     const had = by.get(f.id);

@@ -272,7 +272,7 @@ export function fromCve(s: ScanStatus | null, sec: SiteSecurity | null, nowMs: n
   const units = sec?.units ?? {};
   for (const u of Object.values(units)) {
     const o = idx.resolve(u.subject);
-    const why = [u.category ? `${u.counted} ${u.category}` : "", marksText(u.marks)].filter(Boolean).join(" · ");
+    const why = [u.category ? `${u.counted} ${u.category}` : "", u.baselineOnly ? "from the NixOS baseline" : "", marksText(u.marks)].filter(Boolean).join(" · ");
     add(o, levelStatus(u.level), levelReason(u.level), scoreMessage(u, why));
     if (u.failed.length > 0) {
       const t = s.targets.filter((x) => u.failed.includes(x.id));

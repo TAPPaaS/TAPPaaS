@@ -1,15 +1,17 @@
-// Security — the site's CVE risk, from the last security scan: the site's
-// level and score, then each environment, its zones (with their multiplier)
-// and the modules and platform targets in them; the zones in no environment
-// sit directly under the site. Each row says its level, its score, what sets
-// it, its CVEs by state and its last seven days. A module opens to the CVEs
-// it counts, with state, category, package, version and the analysis.
-// Whether a fix exists is not shown here.
+// Security — the site's CVE risk, from the last security scan. First what to
+// do, one card per component or update: for you (update, coming, your
+// decision), waiting (with TAPPaaS, with upstream) and, where the release train
+// runs, for the maintainers. Then the site's level and score, each
+// environment, its zones (with their multiplier) and the modules and platform
+// targets in them. A module opens to its CVEs: the mark (unread, by rule,
+// confirmed, deferred, to review, accepted), upstream → effective level,
+// package, version and why.
 
 import { useState } from "react";
 import { useRead } from "../api";
 import {
-  STATE_WORD, SecurityCve, SecurityRow, SecurityUnit, SecurityView, SecurityZone, countsText, cveCategory, cveNote, levelsText, riskText, riskTone, sparkPoints, sparkTitle, unitLabel,
+  MAINTAINER_QUEUES, OPERATOR_QUEUES, QueueCard, SecurityCve, SecurityQueues, SecurityRow, SecurityUnit, SecurityView, SecurityZone, cardTone, countsText, cveCategory, cveNote,
+  levelsText, markTone, markWord, riskText, riskTone, sparkPoints, sparkTitle, unitLabel,
 } from "../security";
 import { Badge, Link, ReadState, Section, since, when } from "../ui";
 
@@ -57,7 +59,7 @@ function Cves({ cves }: { cves: SecurityCve[] }) {
       {cves.map((c) => (
         <li key={`${c.id}-${c.state}`} className="sec-cve">
           <div className="sec-cve-head">
-            <Badge level={c.state === "decided" ? "skip" : c.state === "risk" ? "info" : "warn"}>{STATE_WORD[c.state]}</Badge>
+            <Badge level={markTone(c)}>{markWord(c)}</Badge>
             <span className="mono">{c.id}</span>
             <span className="muted">{cveCategory(c)}</span>
             <span><span className="mono">{c.pkg}</span> <span className="muted mono">{c.version}</span></span>
@@ -73,7 +75,7 @@ function Unit({ u, depth, days }: { u: SecurityUnit; depth: number; days: string
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Row depth={depth} label={unitLabel(u)} row={u} counts={u.failed ? "the scan failed: not counted" : countsText(u.counts)} days={days} open={open} onToggle={() => setOpen(!open)} />
+      <Row depth={depth} label={unitLabel(u)} row={u} counts={u.failed ? "the scan failed: not counted" : countsText(u.counts, u.marks)} days={days} open={open} onToggle={() => setOpen(!open)} />
       {open ? <div className={`sec-d${depth + 1}`}><Cves cves={u.cves} /></div> : null}
     </>
   );
@@ -85,6 +87,53 @@ function Zone({ z, depth, days }: { z: SecurityZone; depth: number; days: string
       <Row depth={depth} label={`zone ${z.name} ×${z.multiplier}`} row={z} days={days} />
       {z.units.map((u) => <Unit key={u.key} u={u} depth={depth + 1} days={days} />)}
       {z.units.length === 0 ? <div className={`sec-row sec-d${depth + 1} muted small`}>nothing scanned runs here</div> : null}
+    </>
+  );
+}
+
+function Card({ c }: { c: QueueCard }) {
+  return (
+    <li className="sec-card">
+      <div className="sec-card-head">
+        <Badge level={cardTone(c)}>{c.worst || "low"}</Badge>
+        <b>{c.title}</b>
+        {c.baseline ? <span className="muted small">NixOS baseline, shown once</span> : null}
+      </div>
+      <div className="small">{c.text}</div>
+      {c.action ? <div className="sec-card-action mono small muted">{c.action}</div> : null}
+    </li>
+  );
+}
+
+function Queue({ title, empty, cards }: { title: string; empty: string; cards: QueueCard[] }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? cards : cards.slice(0, 5);
+  return (
+    <div className="sec-queue">
+      <h3 className="sec-queue-title">{title}{cards.length ? <span className="muted small"> · {cards.length}</span> : null}</h3>
+      {cards.length === 0 ? <p className="muted small">{empty}</p> : (
+        <ul className="sec-cards">{shown.map((c) => <Card key={`${c.title}-${c.text}`} c={c} />)}</ul>
+      )}
+      {cards.length > 5 ? <button className="sec-toggle small" onClick={() => setAll(!all)}>{all ? "Show the first five" : `Show all ${cards.length}`}</button> : null}
+    </div>
+  );
+}
+
+function Queues({ q }: { q: SecurityQueues }) {
+  const ops = (keys: string[]) => OPERATOR_QUEUES.filter((x) => keys.includes(x.key));
+  return (
+    <>
+      <Section title="For you" aside="what this site's operator can do">
+        {ops(["update", "coming", "decision"]).map((x) => <Queue key={x.key} title={x.title} empty={x.empty} cards={q.operator[x.key] ?? []} />)}
+      </Section>
+      <Section title="Waiting" aside="nothing for you to do: counted until it is decided or fixed">
+        {ops(["tappaas", "upstream"]).map((x) => <Queue key={x.key} title={x.title} empty={x.empty} cards={q.operator[x.key] ?? []} />)}
+      </Section>
+      {q.maintainer ? (
+        <Section title="For the maintainers" aside="where the release train runs">
+          {MAINTAINER_QUEUES.map((x) => <Queue key={x.key} title={x.title} empty={x.empty} cards={q.maintainer?.[x.key] ?? []} />)}
+        </Section>
+      ) : null}
     </>
   );
 }
@@ -112,6 +161,7 @@ export function Security() {
             </div>
             {v.levels?.length ? <p className="muted small">Score per level: {levelsText(v.levels)}.</p> : null}
           </Section>
+          {v.queues ? <Queues q={v.queues} /> : null}
           <Section title="Environments, zones and modules" aside="open a module for its CVEs">
             <div className="sec-head sec-row">
               <span className="sec-name">name</span>
@@ -136,9 +186,10 @@ export function Security() {
             {v.failed.length ? <p className="muted small">The scan failed for {v.failed.join(", ")}: not counted. <Link to="/health">Health</Link> has the reason.</p> : null}
           </Section>
           <p className="muted small">
-            A module counts only its highest category; each further CVE in it counts half the one before. A zone takes its highest module times its tier&apos;s
-            multiplier; an environment and the site take their highest. Decided CVEs count nothing. Open: not analysed. Risk: analysed, counted at the rating given here.
-            Carried: analysed for another version of the package.
+            Each CVE counts at its effective level: critical 20, high 8, medium 3, low 1; one decided not to affect this site counts nothing. A module counts only
+            its highest level; each further CVE in it counts half the one before. A zone takes its highest module times its tier&apos;s multiplier; an environment
+            and the site take their highest. Unread: nobody has decided it. By rule: a rule lowered it and nobody has read it yet. To review: a decision no longer
+            holds. Accepted: this site accepted it until a date; it counts nothing here.
           </p>
         </>
       ) : null}

@@ -69,6 +69,7 @@ import { cmdRules, readRules } from "./rules";
 import { readWindows } from "./windows";
 import { cmdScore } from "./score-verb";
 import { cmdAccept, cmdCve, cmdUnaccept } from "./cve-verb";
+import { buildQueues, renderQueues, runsTrain } from "./security-queues";
 import { Ended, settleAcceptances, siteDecisions } from "./site-decisions";
 // ── ADR-041 emit half ──
 import { EMIT_HELP, liveEmitContext, runEmitVerb } from "./emit-verbs";
@@ -259,14 +260,19 @@ export const HELP: HelpSpec = {
     },
     // ── end ADR-041 assess ──
     {
-      usage: "report security [--cves] [--scan [--all]] [--json]", effect: "read",
+      usage: "report security [--cves] [--table] [--maintainer] [--scan [--all]] [--json]", effect: "read",
       options: [
-        ["--cves", "List each module's counted CVEs under it, with state, rating and analysis."],
+        ["--cves", "List each module's CVEs under it, with mark, upstream and effective level, and why."],
+        ["--table", "Only the table, without the list of things to do."],
+        ["--maintainer", "Add the maintainers' queues (shown anyway where the release train runs)."],
         ["--scan", "Print the scan per target instead: coverage, counts and verdict."],
         ["--all", "With --scan: every finding to act on, not the first ten per target."],
-        ["--json", "Print cve-status.json, with the risk scores under `score`."],
+        ["--json", "Print cve-status.json, with the risk scores under `score` and the queues under `queues`."],
       ],
-      details: "The risk score of the site, then each environment, zone and module: level, score, what sets\nit, open/risk/carried/decided counts and the last 7 days.",
+      details: "What to do first, one card per component or update: for you (update, coming, your decision),\n" +
+        "waiting (with TAPPaaS, with upstream) and, where the train runs, for the maintainers (move a pin,\n" +
+        "decide, review, deferred). Then the risk score of the site, each environment, zone and module:\n" +
+        "level, score, what sets it, unread/rule/confirmed/review/accepted counts and the last 7 days.",
     },
     {
       usage: "reboot <module>", effect: { noPreview: "reboots the module's guest" },
@@ -724,8 +730,9 @@ function tellSecurity(opts: Opts, prevStatus: ScanStatus | null, status: ScanSta
 function cmdReportSecurity(opts: Opts): number {
   const s = readStatus(join(sbomDir(opts.configDir), STATUS_FILE));
   if (!s) die("no security scan yet — run: health-manager scan security");
+  const queues = buildQueues(s, { configDir: opts.configDir, now: Date.now(), maintainer: opts.rest.includes("--maintainer") || runsTrain(opts.configDir) });
   if (opts.rest.includes("--json")) {
-    console.log(JSON.stringify({ ...s, score: loadSiteSecurity(opts.configDir, s) }, null, 1));
+    console.log(JSON.stringify({ ...s, score: loadSiteSecurity(opts.configDir, s), queues }, null, 1));
     return 0;
   }
   info(`${BOLD}TAPPaaS Security Report${CL}`);
@@ -733,6 +740,10 @@ function cmdReportSecurity(opts: Opts): number {
     const tag = (l: string): string => l.replace(/ACT\b/, `${RD}ACT${CL}`).replace(/SCAN FAILED/, `${YW}SCAN FAILED${CL}`);
     for (const l of renderReport(s, opts.rest.includes("--all"), Date.now())) info(tag(l));
     return 0;
+  }
+  if (!opts.rest.includes("--table")) {
+    for (const l of renderQueues(queues)) info(l);
+    info("");
   }
   for (const l of renderSecurity(loadSiteSecurity(opts.configDir, s), Date.now(), { items: opts.rest.includes("--cves") })) info(l);
   return 0;
