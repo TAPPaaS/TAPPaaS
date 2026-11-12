@@ -2,20 +2,20 @@
 
 | | |
 |---|---|
-| **Status** | **Draft** — for the operator's review |
-| **Version** | 0.1 |
+| **Status** | **Proposed** — every question settled with the operator; for his review |
+| **Version** | 0.2 |
 | **Date** | 2026-11-12 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
-| **Closes / addresses** | Amends ADR-041 D3 (derivation: the correlation rules become six kinds of record, and the logic at each node is data) and D2 (how a source's finding becomes a condition). Amends ADR-046 D6 (its shipped correlation rules become records). Builds on the review in [`docs/plans/health-cmdb-review.md`](../plans/health-cmdb-review.md). Related: ADR-040 (CMDB, metamodel), ADR-039 (module alert rules: the pattern for a module file), ADR-047 (central and site decisions: the layering this ADR does *not* copy), ADR-034 (console). |
-| **Changelog** | v0.1 (2026-11-12): first draft, from the operator's direction of 2026-11-11 and his answers on cross-module rules, the update merge, escalation and raising severity. The proposal was tested against a prototype before it was written down; what changed because of that is in *What changed from the proposal*. |
+| **Closes / addresses** | Amends ADR-041 D3 (derivation: the correlation rules become seven kinds of record, and the logic at each node is data), D2 (how a source's finding becomes a condition), D1 (what a maintenance window covers) and D4 (which roots are told at once is a record). Amends ADR-046 D6 (its shipped correlation rules become records), ADR-040 D3 (`member-of` from a node and an app to a zone; a `module` attribute) and ADR-048 D2 (a corrected health rule is patch content). Builds on the review in [`docs/plans/health-cmdb-review.md`](../plans/health-cmdb-review.md). Related: ADR-040 (CMDB, metamodel), ADR-039 (module alert rules: the pattern for a module file), ADR-047 (central and site decisions: the layering this ADR does *not* copy), ADR-034 (console). |
+| **Changelog** | v0.2 (2026-11-12): **Proposed**, with the operator's answers to all ten open questions. A site rule may **quiet** a condition for good (D2.3, `classify`). A seventh kind, **`notify`**, says which roots are told at once, in the digest or not at all (D5). A **maintenance window covers what its object would impact under the rules** (D14). The **module of a CI is a CMDB attribute**, and a node and an app are `member-of` their zone (D13). **Foundation modules' rules are never held for reach** (D8). Corrected rules may arrive by the security stream, and **a changed rule set recalculates health at once** (D7). A site may **retire a contract scenario** (D11). A roll-up never replaces an impact the spread gave (D5). Numeric predicates are specified, not shipped (D3). P0 has a precise fix specification. Where the rule language, the standard rules and the verbs are documented, and that the language is published under *Develop* (D15). · v0.1 (2026-11-12): first draft, from the operator's direction of 2026-11-11 and his answers on cross-module rules, the update merge, escalation and raising severity. The proposal was tested against a prototype before it was written down; what changed because of that is in *What changed from the proposal*. |
 
 Health propagation and root-cause selection are one algorithm in `derive.ts`. Part of what it
 decides at each object is data already (`health-rules.json`: which failure crosses which
 relation); the rest is code: redundancy groups, "explains only its own type", roll-ups, which
 classes carry their own score, what follows its parent, and that every Grafana alert is a warning.
 This ADR keeps one hard-coded engine and moves every decision made *at a node* into declarative
-records with one match language. Core and modules ship them, a site edits them through verbs and
+records of seven kinds with one match language. Core and modules ship them, a site edits them through verbs and
 the console, and an update merges new releases without touching what the site changed.
 
 ## Context
@@ -59,7 +59,7 @@ They must be fixed before P1, or the golden comparison would preserve them.
 
 ## Decision
 
-### D1 — One engine, six kinds of record, five stages
+### D1 — One engine, seven kinds of record, six stages
 
 The engine is code and is the same on every site. At each point where it has to decide something
 about a particular node, edge or condition, it asks the records.
@@ -71,9 +71,10 @@ about a particular node, edge or condition, it asks the records.
 | 3. Roots | Finds which failing conditions are explained by another and which stand as root causes; counts impact | `explain`: which arriving failure explains, or covers, which own condition |
 | 4. Follow | Colours what nothing judges | `follow`: whose colour it takes |
 | 5. Roll up | Sums collections and places from a snapshot of stages 1 to 4 | `rollup`: who the members are and how they are summed |
+| 6. Tell | Writes the conditions; emits one event per transition; keeps one notice per root that is told at once, from when it enters the root set to when it leaves | `notify`: whether a root is told at once, in the daily digest, or not at all |
 
-After stage 5 the engine writes the conditions and `emit` tells the changes; the notice
-lifecycle, flapping and the digest are unchanged and are not rules (D12).
+Stages 1 to 5 are `assess`, stage 6 is `emit`, as today. Both read the same records. The notice
+lifecycle and flapping are unchanged and are not rules (D12).
 
 ### D2 — Invariants no record can break
 
@@ -85,8 +86,11 @@ in the schema, or is clamped at run time, so `rules check` does not have to be t
    did to its severity (D6).
 2. **Only the owner clears.** A record never turns a failing finding into `ok` or `unknown`, and
    never touches an `ok`. A condition goes away when its source takes it back.
-3. **A record re-rates or routes; it never deletes.** `classify` has no "drop" outcome. Quieting
-   one condition on one CI is what an acknowledgement is for: it has an author, a note and an end.
+3. **A record re-rates, routes or quiets; it never deletes.** `classify` has no "drop" outcome.
+   A site rule may quiet a condition for good, with no end date (D5). A quieted condition is
+   still stored with the status its source gave it, still shown in the console and in `rules
+   explain` with the rule that quieted it, and still cleared by its owner and nobody else. The
+   moment the rule is edited, disabled or no longer matches, the condition is heard again.
 4. **Records read inputs only.** A match may read the CMDB (classes, attributes, relations) and
    the source's finding. It may not read what the engine derived (an impact, a root, a roll-up).
    This is what keeps the spread a monotone computation with one answer (D6).
@@ -128,9 +132,16 @@ Every record has the same envelope:
 true}` is "set to something" (today's `dependant: {haNode: true}`). `{"glob": "alert-*"}` is a
 pattern with `*` at either end only. `age` is `{"over": "24h"}`. There is no negation: an
 exception is written as a more specific record (D4), which keeps "is A more specific than B"
-decidable. Numeric comparison is an open question (O6).
+decidable.
 
-`module` is the module a CI belongs to (an instance of it, or what runs on that instance).
+**Numeric predicates, specified but not shipped in P1.** `{"gte": n}`, `{"lte": n}` or both
+together are an interval over a numeric attribute (`tier`, `cores`). For D4, an interval is more
+specific than another when it lies inside it; a literal number is more specific than an interval
+that contains it, and a list when every member is inside; two intervals overlap when they share a
+number. They are added, with these rules, in the release that ships the first record needing
+one. Until then `rules check` refuses them.
+
+`module` reads the CI's `module` attribute (D13): the catalog name of the module it belongs to.
 `zone` and `environment` read the CI's attributes of those names.
 
 ### D4 — The more specific record wins; overlap without an order is a conflict
@@ -163,16 +174,19 @@ Layer never enters. A site that wants a core rule to behave differently edits th
 site that wants an exception for one object writes a record that names the object, which is more
 specific than anything shipped.
 
-### D5 — The six kinds
+### D5 — The seven kinds
 
 #### `classify` — what a finding becomes
 
 Replaces "every Grafana alert is an operational warning" and the two named security alerts, and
 is the one place a site sets a severity. It applies to every source, not only alerts.
 
-`when`: `finding`, `object`. Outcome: `set: {type?, status?, reason?}`, where `status` is
-`warning` or `critical` and applies only to a failing finding (D2.2); and `aggregate: true`,
-which marks the condition as a sum of others: derived, never a root.
+`when`: `finding`, `object`. Outcome, any of:
+
+- `set: {type?, status?, reason?}`, where `status` is `warning` or `critical` and applies only to
+  a failing finding (D2.2);
+- `aggregate: true`, which marks the condition as a sum of others: derived, never a root;
+- `quiet: true`, which keeps the condition and silences it (below).
 
 ```json
 { "id": "core.classify.alert", "kind": "classify",
@@ -204,6 +218,34 @@ A local severity override, raising and lowering:
   "when": { "finding": { "reason": "pool-usage", "status": "critical" }, "object": { "name": "tanklab" } },
   "set": { "status": "warning" } }
 ```
+
+**Quieting.** A site that has decided a condition is not worth hearing about says so once:
+
+```json
+{ "id": "site.classify.quiet-ups-selftest", "kind": "classify",
+  "description": "The UPS runs a self-test every Monday and logs it as a fault. Not news.",
+  "when": { "finding": { "source": "alerts", "labels": { "alertname": "UpsOnBattery" }, "reason": "alert-ups-on-battery" },
+            "object": { "name": "ups-rack1" } },
+  "quiet": true }
+```
+
+The condition is stored as its source gave it, with `quieted: {rule, since}` beside it:
+
+```json
+{ "type": "operational", "status": "warning", "reason": "alert-ups-on-battery",
+  "message": "UpsOnBattery on ups-rack1 since 2026-11-09T03:00:00Z", "owner": "alerts",
+  "quieted": { "rule": "site.classify.quiet-ups-selftest", "since": "2026-11-09T03:05:00Z" } }
+```
+
+A quieted condition behaves as an acknowledged one does today, without an author's expiry: it
+does not fail `validate`, is not counted in a roll-up, is not listed or told as a root, and the
+impacts that name it as their only root are quiet with it. It still spreads, so what it would
+impact is still marked, quietly. The console shows it greyed with "quiet by <rule>", `roots
+--all` and `rules explain` list it, and `rules list` gives each quieting rule's count of
+conditions quieted now. Three limits keep it from becoming a blanket: a `quiet` record must name
+a `reason`, a label or an object (not a bare type or status); a module's `quiet` record reaches
+only its own findings (D8.4); and the preview before apply lists every condition that would go
+quiet.
 
 A re-rated condition keeps what its source said beside what the rule made of it:
 `raw: {status, since, rule}`. The owner still clears it, `since` of the effective status is when
@@ -460,8 +502,76 @@ stands, no sum), or `{"kOfN": {"warning": n, "critical": n | "half" | "all"}}`.
 `core.rollup.site` is strictly more specific than `core.rollup.collection` (a site is a
 collection), and the score record than both for `security`. A roll-up is computed from a snapshot
 taken before any roll-up, so a room does not count its rack's sum as a member (today it does,
-depending on order: *Found on the way*). A roll-up is never a root and never spreads. A sum that
-should spread, like the quorum, is a `combine`.
+depending on order: *Found on the way*). A roll-up is never a root and never spreads, and it never replaces an
+impact the spread gave: a cluster that lost quorum keeps "quorum lost" and is not overwritten by
+"2 of 3 members critical". A sum that should spread, like the quorum, is a `combine`.
+
+#### `notify` — how a root cause is told
+
+Replaces `noticeable` in `notices.ts`: critical, not `performance`, not a CVE level, not on a
+zone, an environment or the site.
+
+`when`: `object` (the root's object), `condition` (the root's own condition). Outcome: `notify:
+"at-once" | "digest" | "none"`. `at-once` is a notice (one ALERT, one RESOLVED) and a line in the
+daily digest; `digest` is the digest only; `none` is neither, and the condition stays visible.
+
+```json
+{ "id": "core.notify.root", "kind": "notify",
+  "description": "A root cause is in the daily digest.",
+  "when": { "condition": { "status": ["warning", "critical"] } }, "notify": "digest" }
+
+{ "id": "core.notify.critical-root", "kind": "notify",
+  "description": "A critical root cause is mailed at once.",
+  "when": { "condition": { "status": "critical" } }, "notify": "at-once" }
+
+{ "id": "core.notify.performance", "kind": "notify",
+  "description": "Performance is trend, not outage: the digest.",
+  "when": { "condition": { "type": "performance" } }, "notify": "digest",
+  "overrides": ["core.notify.critical-root"] }
+
+{ "id": "core.notify.cve-level", "kind": "notify",
+  "description": "A module's CVE level is mailed by cve-level-up when it rises.",
+  "when": { "condition": { "type": "security", "reason": { "glob": "cve-*" } } }, "notify": "digest",
+  "overrides": ["core.notify.critical-root"] }
+
+{ "id": "core.notify.site-own", "kind": "notify",
+  "description": "What is about the site, a zone or an environment as a whole is told in the digest.",
+  "when": { "object": { "class": ["site", "zone", "environment"] } }, "notify": "digest",
+  "overrides": ["core.notify.critical-root"] }
+```
+
+`core.notify.critical-root` is strictly more specific than `core.notify.root`; the other three
+overlap it without being more specific, so each names it in `overrides`. That is D4 at work: the
+order that was an `if` chain in `noticeable` is written on the records.
+
+A site that wants a slow pool mailed at once, or one noisy root kept out of the digest:
+
+```json
+{ "id": "site.notify.pool-latency", "kind": "notify",
+  "when": { "object": { "class": "storage-pool" }, "condition": { "type": "performance", "status": "critical" } },
+  "notify": "at-once" }
+```
+
+How it fits the notice lifecycle of `notices.ts`, which stays code:
+
+- The engine still decides *who can be told*: only a root, never a derived or covered condition,
+  never an impact, never one that is acknowledged, in maintenance or quiet. A `notify` record
+  cannot make a symptom mail.
+- `wantedNotices` asks the records instead of `noticeable`: a root whose winning record says
+  `at-once` wants a notice. Keys, the cursor, retry of an undelivered mail, a flapping root
+  holding its notice, and `site-notify.sh` are unchanged.
+- A notice closes when its root no longer wants one. The reasons are today's (recovered, eased,
+  unchecked, retired, acknowledged, maintenance, symptom, digest) plus two: **quiet** (a rule
+  quieted it) and **rules** (the `notify` record that applied changed). `digest` remains "still a
+  root, now told in the digest", which is what a root gets when its record says `digest`.
+- A warning root may be `at-once`. The mail's subject then says "root cause", not "critical root
+  cause", and "eased to a warning" no longer closes it while a record still says `at-once`.
+- The digest lists every root whose record says `at-once` or `digest`, as today, and leaves out
+  `none`.
+
+`notify: "none"` on a critical root is the one record that can hide an outage, so it is held to
+the same limits as `quiet`: it must name a reason, a label or an object; a module's reaches only
+its own objects; the preview shows which roots would no longer be told.
 
 ### D6 — The engine rules that make it sound
 
@@ -511,10 +621,15 @@ time is `classify` with `age`, and it reads `raw.since`, when the *source's* sta
 changed. If it read the effective `since`, an age-based raise would reset its own clock and
 flip back on the next run. Windows (`for`), rates and flapping are not record matters (D12).
 
-**Rule changes are not health changes.** Each assess run records the hash of the active rule set
-(D11). On a run whose hash differs from the previous one, the transitions it causes are marked as
-caused by the rules: they do not count toward flapping, and a notice that opens or closes says
-"rules changed", so an edit cannot look like an outage or a recovery.
+**Rule changes are not health changes, and they take effect at once.** Each assess run records
+the hash of the active rule set (D11). Whatever changes the active set (a verb, the console, a
+merge after an update, a module install, corrected rules from the security stream) ends by
+calling `health-manager assess` and then `emit`, as the alert receiver does today, so health is
+recalculated under the new rules immediately and not at the next timer. On a run whose hash
+differs from the previous one, the transitions it causes carry `cause: "rules"` and the ids that
+changed: they do not count toward flapping, they are listed under their own heading in the
+digest, and a notice that opens or closes says "rules changed". An edit or a correction cannot
+look like an outage or a recovery.
 
 ### D7 — Where rules live, and the merge on update
 
@@ -537,11 +652,12 @@ The engine reads `config/health/rules/`. That is the one truth of what runs, and
 operator edits. `base/` is a verbatim copy of what was last installed, so that "what did I
 change" and "what did the release change" are both a diff. `state.json` holds, per rule the site
 touched: `local` (`edited`, `deleted`, `added`), who, when, a note, and `reviewed` (the hash of
-the release the site last looked at for this rule). A rule edited by hand in the file is found
+the release the site last looked at for this rule); and the same for a contract scenario the
+site retired (D11). A rule edited by hand in the file is found
 by comparing it with `base/` and is treated like any other edit, author unknown.
 
-**The merge** runs on every system update and on every module install, update and removal, per
-rule id, over three versions: `base` (last installed release), `theirs` (the new release) and
+**The merge** runs on every system update, on every module install, update and removal, and
+when corrected rules arrive by the security stream (below), per rule id, over three versions: `base` (last installed release), `theirs` (the new release) and
 `ours` (what is installed).
 
 | ours compared with base | theirs compared with base | Result |
@@ -579,6 +695,15 @@ a newly released rule conflicts with a local one, that rule is installed *held* 
 and the rest is activated. If the released files themselves do not parse or validate, nothing
 changes and the site gets a `drift` warning. The rules that ran yesterday keep running either way.
 
+**Corrections by the security stream (ADR-048).** A wrong released rule is "a check that reports
+wrongly", which ADR-048 D2 already takes as a patch between boundaries. A commit that corrects a
+released rule file is patch content (commit type `fix(health-rules)` with its `Patch:` trailer)
+and reaches subscribers with the daily patch and the public line with the port. The merge does
+not care how `theirs` arrived: the step that applies a patch calls `health-manager rules merge`,
+and a merge that changed the active set recalculates at once (D6). If rules later join the
+same-day decision feed as signed data, the feed's apply step calls the same merge; that is
+ADR-048's choice and needs nothing more here.
+
 ### D8 — Module rules that cross into other modules
 
 Settled: a module may write `propagate` rules that reach other modules' objects (the network
@@ -586,12 +711,13 @@ module to everything in a zone). The guardrails:
 
 1. **Anchored at one end.** A module-origin record must name the module on one side: the
    `provider` or the `dependant` (or the `object`, the `finding`'s object) is selected by
-   `module: <itself>` or by a class its controller or manager reports. A module can say how its
+   `module: <itself>`, which reads the CI's `module` attribute (D13), or by a class its
+   controller or manager is registered to report (ADR-035). A module can say how its
    failures hurt others and how others' failures hurt it. It cannot say how a third module's
    failure hurts a fourth. Core and site records are not restricted.
 2. **Only along relations.** D2.5. To reach everything in a zone there has to be a relation from
-   those things to the zone. Today a node's zone is an attribute only, so this example needs
-   `member-of` to accept `[node, zone]`, reported from the declared `zone` field (O2):
+   those things to the zone. D13 adds it: a node and an app are `member-of` their zone. The
+   network module, which reports zones, then ships:
 
    ```json
    { "id": "network.propagate.zone-down", "kind": "propagate",
@@ -605,14 +731,22 @@ module to everything in a zone). The guardrails:
    makes more things red but cannot turn another module's critical into a symptom of the module's
    warning. A softening rule makes *more* roots, not fewer: what is no longer explained stands on
    its own. So the failure mode of a bad cross-module rule is noise, not silence.
-4. **A module's `classify` records touch only its own findings**: alerts carrying its `module`
-   label, findings on its objects.
+   So that this stays the network module's decision, `core.propagate.member-of.down` is limited
+   in the same release to the ends `member-of` has today (a node in a cluster or an environment,
+   a user in a group, an address in a zone). That changes no result of P1.
+4. **A module's `classify` and `notify` records touch only its own**: alerts carrying its
+   `module` label, findings on its objects, roots on its objects. That includes `quiet` and
+   `notify: "none"`.
 5. **Reach is shown before it is active.** At install the merge simulates each new or changed
    rule on the site's snapshot and records its reach: the most objects one failure it matches can
    impact, with and without the rule. A module rule whose reach leaves the module is listed as
-   such; one that reaches more than a quarter of the site's CIs is installed *held* until the
-   operator accepts it (the console and `rules accept` show the number). The threshold is a
-   `site.json` setting.
+   such. An **app module's** rule that reaches more than the site's threshold (`site.json`
+   `health.rules.reachHold`, default a quarter of the CIs) is installed *held* until the operator
+   accepts it; the console and `rules accept` show the number. A **foundation module's** rule is
+   never held for reach: its reach is recorded and shown the same way, and it runs. A module is
+   foundation when its files are under `src/foundation/` in the TAPPaaS release the site
+   verified (ADR-033). The merge reads the rule file from that path, so the origin cannot be
+   claimed by a module from another catalog or by anything a site edits.
 6. **Conflicts are refused, not resolved.** A module rule that conflicts with a core rule or
    another module's must name it in `overrides` or be more specific. The check runs in the
    repository's CI for shipped modules and at install on the site.
@@ -622,7 +756,8 @@ module to everything in a zone). The guardrails:
 ### D9 — Verbs
 
 All in `health-manager rules`, each a preview first and an apply second, as the console's jobs
-are; each write goes through the check.
+are; each write goes through the check, and an apply that changes the active set recalculates health at
+once (D6).
 
 | Verb | Does |
 |---|---|
@@ -633,6 +768,7 @@ are; each write goes through the check.
 | `delete <id>` · `restore <id>` | A tombstone; back to as released |
 | `diff <id>` · `take <id> [--field F]` · `keep <id>` | The three-way view; take upstream; mark as reviewed |
 | `accept <id>` | Release a held rule (reach, or a resolved conflict) |
+| `scenario list` · `scenario retire <id> --note …` · `scenario restore <id>` | The contract scenarios and their state; retire one this site no longer holds to; take it back |
 | `merge [--origin O]` | What the update and module-manager call |
 | `check [--file F]` · `explain <object>` · `simulate …` | D11 |
 
@@ -671,14 +807,22 @@ browser would drift at the first local edit.
 | A record that can never win (always overridden or always less specific) | warning | warning |
 | A record that matches nothing on this site | — | note |
 | A class the record names that no installed module has | — | note: the rule is dormant |
-| A contract scenario that no longer holds | error | warning; the write needs `--force`, and says so in `state.json` |
-| Reach over the threshold (D8.5) | — | held |
+| A contract scenario that no longer holds | error | warning; the write needs `--force`, and says so in `state.json`. A retired scenario is not run |
+| A `quiet` or `notify: "none"` record that names no reason, label or object | error | error |
+| A numeric predicate, until the release that ships them (D3) | error | error |
+| Reach over the threshold (D8.5) | — | an app module's rule: held. A foundation module's: shown |
 
 **Contract scenarios** are small fixtures shipped beside the rules: a handful of objects, a
 failure, and what must come out ("a node down: the node is the one root, its guests are
 impacted"). Core ships the cases of `derive.test.ts`; a module may ship its own. They are the
 check for "valid but wrong": a rule set can pass every static test and still stop naming a dead
 node as a root.
+
+A site that changed behaviour on purpose can **retire a scenario**: `rules scenario retire <id>
+--note …`. It is local state in `state.json` with who, when and why, exactly like a deleted
+rule: an update never brings it back, an upstream change to it is noted in `scenario list`, and
+`scenario restore` takes the released one again. A retired scenario is listed in the console's
+Rules page under the rules' state, so support sees it with the edited rules.
 
 **`rules explain <object>`** recomputes the current derivation with tracing on and prints, for
 that object, each condition and how it came about: the finding and the `classify` record that
@@ -703,10 +847,93 @@ answer after the rules have changed.
 | Thresholds and `for` windows (ADR-046 D5, D6), rates ("five in ten minutes") | They need history. The source that has the history decides, and reports a finding. |
 | Ageing of judgements, staleness of observations | A property of the evidence, the same for every rule. |
 | Flapping | A property of the transition history, kept by emit. |
-| Maintenance windows and acknowledgements, and that a root's acknowledgement covers its symptoms | Operator state with an author and an end. What a window covers is open (O4). |
-| The notice lifecycle, which roots mail at once and which go to the digest | Open (O3); today critical non-performance roots mail at once. |
+| Maintenance windows and acknowledgements, and that a root's acknowledgement covers its symptoms | Operator state with an author and an end. *What* a window covers follows the rules (D14). |
+| The notice lifecycle: one ALERT and one RESOLVED per root told at once, keys, retry, why it closed | The same for every root. *Which* roots are told at once is `notify` (D5). |
 | Reachability over arbitrary paths ("is there any route to the internet") | Not a per-edge decision. It stays a check (`vlanreach`) that reports a finding. |
 | Inferring a common cause from several symptoms | Removed in the review (L1) for naming wrong roots. Root cause stays deduction along declared dependencies. |
+
+### D13 — What the CMDB gains
+
+**The module of a CI is an attribute.** Class `ci` gains `module`: the catalog name of the module
+the CI belongs to (`nextcloud`, not the instance `nextcloud-test`; the instance is the node's
+name). Who reports it:
+
+| CI | Reported by | From |
+|---|---|---|
+| A module instance's node (`vm`, `lxc`, `machine`, `device`) and an `app` | module-manager, in the report it already writes per instance | the instance's `moduleSource` in `config/` |
+| The `software`, `service`, `controller` and `manager` CIs of an instance | module-manager, same report | the instance they belong to (a service's `provider` already names it) |
+| A `proxy-route` and a `dns-name` made for a module | the network module's manager | the module the route or name was declared by (today read back out of the route's description) |
+| A `datastore` and a `share` made for a module | their manager | the declaring module |
+| Everything else (ports, disks, assets, zones, addresses, places) | nobody | they belong to no module; a record selects them by class |
+
+`moduleOfCi` in `assess-performance.ts`, which works this out from names and a description, goes.
+The `module` selector (D3) and the anchoring of D8.1 read the attribute and nothing else, so a CI
+without it is simply not "of" any module.
+
+**A node and an app are `member-of` their zone.** `relations.json` `member-of` gains the ends
+`[node, zone]` and `[app, zone]`, dependant the node or app, required. module-manager reports the
+relation from the instance's declared zone field, in the same report as `module`, as a `complete`
+report for that relation type so a zone change ends the old one (the review's L9). A node on
+several zones is a member of each; whether losing one of them is an outage for it is then a
+`combine` record over those relations, not a special case.
+
+### D14 — A maintenance window covers what the rules say
+
+Today `windows.ts` covers each object a window names and everything that `runs-on` it, down the
+chain, and puts every condition of those objects in maintenance. That is a second, hard-coded
+propagation.
+
+Decision: a window covers each object it names and **everything that object would impact if it
+failed**, which is `rules simulate --fail <object>:operational:critical` on the current
+snapshot under the active rules. On a named object every condition is in maintenance, as today.
+On an object the simulation reaches, a condition is in maintenance when the simulated failure
+would *explain or cover* it there (the `explain` records, D5): what the planned outage accounts
+for is silent, what it does not account for is still heard. A window with scope `site` covers
+everything, as today.
+
+What that changes for who is silenced, with the shipped records:
+
+| Case | Today | With this |
+|---|---|---|
+| A guest, software and services on a node in a window | covered, every condition | the same: a critical impact covers every own condition (`core.explain.down-covers`) |
+| What `depends-on` a service of a guest in a window (nextcloud while identity is updated) | not covered: its alerts about the missing login are heard, as symptoms | covered: silent for the window |
+| Guests and datastores `stored-on` a pool whose node is in a window | covered only if they also run on that node | covered wherever they run |
+| An HA guest on a node in a window (reached as a warning) | covered, every condition | only what a degraded node explains: its `operational` condition. A full disk on it is heard |
+| A NIC behind one switch of a bond, the switch in a window | not covered | its "one of two down" is silent; if the other leg fails too, that is not what the window simulated, and it is heard |
+| A relation row marked `required: false` under the named object | covered (the walk ignores `required`) | not covered: no rule carries a failure over it |
+| The nodes of a zone, the zone in a window (with D13) | not covered | covered |
+
+So the window gets wider along real dependencies and narrower where the rules say the outage
+would not explain a condition. A site rule changes it with everything else: soften a crossing
+and the window stops covering the far side.
+
+The alert receiver keeps reading the same window files by the names in them, for Grafana's own
+`HostSilent` mails; that is the safety net the review kept on purpose and it does not use the
+rules. `health-manager maintenance <ci>` and the update's windows are written as today. The cost
+is one spread per open window per run, a few milliseconds each.
+
+### D15 — Where it is documented
+
+The rules are something a module author designs with and an operator works with, so they are
+documented where those two read, and published. Each text lands in the same change as the code it
+describes, never before it.
+
+| What | Where | Published |
+|---|---|---|
+| **The rule language**: the envelope, the selectors and predicates, how a winner is chosen, the seven kinds with one example each | `controller/cmdb-controller/metamodel/health/README.md`, beside the core rule files | On the documentation site under **Develop**, as *Health Rules*, a page of its own |
+| **The standard rules**: every core record as one sentence, by kind, with its id | The same README, in a block generated from the rule files by `health-manager rules list --origin core --markdown`; `test.sh` fails when the block and the files differ | With the page above |
+| **Health rules as an aspect of module design**: when a module needs a rule, `<module>-health.json`, anchoring, reach, what foundation means, how to try a rule with `simulate` | A section in the module template's README (the source of *Develop a Module*), next to alert rules, with an example `<module>-health.json` in the template | In *Develop a Module*, linking to *Health Rules* |
+| **A module's own rules** | That module's README, a short "Health rules" section: what each says and why | With the module's page, as today |
+| **The engine**: the stages, the invariants, the rules of D6, what is not a rule | `manager/health-manager/DESIGN.md` | Not published (ADR-013); linked from the README above |
+| **The verbs** `rules …` and `rules scenario …`, the files in `config/health/`, the merge and what an update does to a local edit, maintenance coverage | `manager/health-manager/README.md` | With the managers' pages, as today |
+| **What module-manager does**: calls the merge on install, update and removal; reports `module` and `member-of` a zone | `manager/module-manager/README.md` | as today |
+| **What the metamodel gains**: the `health/` directory, the new `member-of` ends, the `module` attribute; that the controller no longer serves rules | `controller/cmdb-controller/README.md` | With the controllers' pages, as today |
+
+For the site this needs one line in the documentation repository's sync list (the new README to
+a *Health Rules* page), one entry under *Develop* in its navigation, and the new README in the
+path filter of `.woodpecker/docs-trigger.yml` so an edit rebuilds the site. The managers' and
+controllers' READMEs are synced already. The published pages describe what the rules do and how
+to use them; they carry no decision history and cite no ADR or issue.
 
 ## Generality and soundness
 
@@ -722,6 +949,8 @@ answer after the rules have changed.
 | `OWN_SECURITY` | `core.classify.zone-score` (aggregate) and the `own` roll-up | same |
 | `FOLLOWS`, `membersOf`, worst-of | `follow` and `rollup` records | same |
 | Alerts are operational warnings | `core.classify.alert*` | by construction; not in the prototype (P4) |
+| Which roots mail at once (`noticeable`) | The five `core.notify.*` records | by construction; not in the prototype (P4) |
+| A window covers what runs on its object (`windows.ts`) | The rules themselves, by simulation (D14) | deliberately not identical: the table in D14 |
 | Cable seen from both ends: the earlier is the root; cycles | Engine | same |
 
 **The ADR-046 cases.**
@@ -734,7 +963,7 @@ answer after the rules have changed.
 | A performance root on an object a warning reached stays a root | `core.explain.down-covers` asks for a critical cause |
 | A threshold must hold for a window; "full in N days" | The source's (D12) |
 | A missing metric is `unknown`, never critical | The source's; and `classify` cannot rate an `unknown` (D2.2) |
-| Performance roots go to the digest | emit's (O3) |
+| Performance roots go to the digest | `core.notify.performance` |
 
 **Is "most specific wins" predictable?** Not as a score. Cases that broke it: an HA guest in a
 zone the site rates critical (two one-field rules); `class: vm` against `class: node` plus an
@@ -773,13 +1002,13 @@ at most a thousand spreads of a few milliseconds, at install only.
 | conflicts | refused or held | check, before write |
 | floods (a common warning made a site-wide critical) | red everywhere, but real criticals stay roots (D2.1) | reach: held over the threshold; the preview shows it |
 | softens too much (`as: "none"` on a real dependency) | more roots and more mail, not fewer | contract scenarios; the preview |
-| rates a real critical down (`classify`) | no at-once mail for it | **not caught by the check**: it is valid. Bounded by D8.4 for modules; for the site it is the operator's decision, visible as `raw` on the condition, in `rules list --state edited`, and in the preview |
+| rates a real critical down, quiets it, or sets `notify: "none"` on its root | no at-once mail for it | **not caught by the check** when it names what it is about: it is valid, and the operator settled that a site may. Bounded by D8.4 for modules and by the must-name-something rule for all; visible as `raw` or `quieted` on the condition, in the console, in `rules list`, and in the preview before it is applied |
 | raises round a cycle | everything on the cycle critical | check |
 | never matches | nothing | check, as a note |
 
 **What cannot be expressed.** The rows of D12, and three more: a rule that depends on what was
 derived ("cross unless already impacted"), by design; a join that is not a relation (D2.5); and
-numeric comparison on attributes, until O6 is decided.
+numeric comparison on attributes, until the first rule that needs it (D3).
 
 ## What changed from the proposal
 
@@ -799,15 +1028,20 @@ numeric comparison on attributes, until O6 is decided.
    (D5). Thresholds are not `classify`.
 7. **Matches read inputs only, and there is no negation** (D2.4, D3). This is the price of one
    answer on a cycle.
-8. **Rules do not invent edges** (D2.5), so "everything in a zone" needs a relation (O2).
+8. **Rules do not invent edges** (D2.5), so "everything in a zone" needs a relation, which D13
+   adds.
 9. **Added to the tooling**: contract scenarios, reach, held rules, preview on every write,
    rule-caused transitions told as such (D6, D8, D11).
 10. **A phase before P1** for the two faults below.
+11. **A seventh kind, `notify`**, and the right to **quiet** a condition for good, both from the
+    operator's answers in v0.2. Each is held to "must name what it is about" and to the preview.
+12. **Two more hard-coded propagations found and folded in**: what a maintenance window covers
+    (D14) and how the module of a CI is worked out (D13).
 
 ## Found on the way
 
-Two faults in `derive.ts` on `fix/health-review`, found by the differential run. Neither is
-fixed here (design only).
+Two faults in `derive.ts` on `fix/health-review`, and one cosmetic one, found by the differential
+run. None is fixed here (design only); the fix is specified under *Migration*, P0.
 
 1. **A critical can be covered by a warning root.** `impacted` keeps the first root that reached
    an object and raises the status when a later root reaches it harder, so the pair can be "root
@@ -821,17 +1055,25 @@ fixed here (design only).
 2. **Roll-up counts depend on the order objects are visited.** A room's members include its rack;
    if the rack was rolled up first, its sum is counted as a member ("2 of 2 members ok" against
    "1 of 1"). Statuses do not differ with worst-of; they would with k-of-n.
+3. **Which member a group's message names depends on iteration order** ("two of three in … down:
+   disk d001" or "disk d002"). 7 of 1,500 shuffled sites.
 
 ## Consequences
 
 - One place decides each thing, and `rules explain` can say which record it was.
 - A site can change health behaviour without a fork, and an update cannot undo it.
-- `health-rules.json`, `FOLLOWS`, `OWN_SECURITY`, `membersOf` and the alert constants go.
+- `health-rules.json`, `FOLLOWS`, `OWN_SECURITY`, `membersOf`, the alert constants, `noticeable`,
+  the `runs-on` walk in `windows.ts` and `moduleOfCi` go.
   cmdb-controller keeps serving the metamodel (classes, relations) but no longer the rules;
   health-manager reads `config/health/rules/`.
-- A condition gains `raw` (when re-rated) and `rule`; the site's `assessment` gains the rule-set
+- A condition gains `raw` (when re-rated), `quieted` (when quiet) and `rule`; a CI gains `module`;
+  a node and an app gain `member-of` their zone; the site's `assessment` gains the rule-set
   hash. ADR-041 D1's shape is otherwise unchanged.
-- More to learn: six kinds. The sentence form in the list and the form editor are how most
+- A maintenance window silences more along real dependencies and less where the outage would not
+  explain a condition (D14). Operators should be told once, in the release notes.
+- A site can now hide a real fault with a rule that names it. That is the operator's decision;
+  what the design guarantees is that it is never invisible and never survives the rule.
+- More to learn: seven kinds. The sentence form in the list and the form editor are how most
   operators will meet them; the JSON is for authors.
 - The console's own root computation is removed rather than kept in step.
 - A site that edits rules has rules nobody else has. `rules list --state edited` and the hash on
@@ -847,7 +1089,7 @@ fixed here (design only).
 | All matching records apply, worst wins | Cannot express an exception that softens (HA), which is the first rule shipped. |
 | Keep three layers, the site layer patching by id (the ADR-047 pattern) | ADR-047's site layer holds a different kind of record (an acceptance) from the central one. Here the site changes the *same* rule, so a patch layer is a second copy of it that an update can make meaningless. |
 | Field-level automatic three-way merge | An update would modify a rule the site edited (D7). |
-| A general rule language (Datalog, CEL, Rego) | Far more than six kinds need, no "is this more specific" test, and negation brings back the cycle problem. |
+| A general rule language (Datalog, CEL, Rego) | Far more than seven kinds need, no "is this more specific" test, and negation brings back the cycle problem. |
 | Rules that may read derived state | No single answer on a cycle; order-dependent results (D6). |
 | Counterfactual root selection (recompute without each failing object) | Prototyped first. Right for two dead nodes of three, wrong for three (each is "explained" by the other two), and one extra spread per object on a cycle. The group-member rule is simpler and right in both. |
 
@@ -855,45 +1097,117 @@ fixed here (design only).
 
 | Phase | Content | Proof |
 |---|---|---|
-| **P0** | Fix the two faults of *Found on the way* in `derive.ts`, with tests | New cases in `derive.test.ts`; the 3-object case above |
-| **P1** | The engine reads records; core records are today's behaviour (`propagate`, the one `combine`, the two `explain`, `follow`, `rollup`), still shipped in the metamodel. `rules list` and `check` over records, with the conflict check | `derive.test.ts`, `assess.test.ts`, `health-flow.test.ts` (the 2026-11-05 identity stop) unchanged and green. A differential suite keeps the old `derive` as an oracle: identical output on a few thousand random sites, in CI, for one release; then the old code goes |
-| **P2** | `combine` steps and k-of-n, `dependantEnd`, type change, `explain` records, the three engine rules of D6; `rules explain`, `simulate`, the hash, contract scenarios | The quorum, raise and type-change cases as unit tests; core scenarios pass; shuffled-input determinism test |
-| **P3** | `config/health/`, the merge, the verbs, module files and D8's guardrails; module-manager calls the merge | Merge table of D7 as a test per row; an update over an edited, a deleted and a conflicting rule on a scratch config; live on the test system: install a module with a rule, edit it, update |
-| **P4** | `classify` and `raw`; the console's Rules page and the Why view; the console's own root computation removed | Alert findings identical with the core `classify` records; a local override raises and clears with its source; console review by the console-gui checklist |
+| **P0** | Fix the three faults of *Found on the way* in `derive.ts`, to the specification below | The new cases below in `derive.test.ts`; every existing check still green |
+| **P1** | The engine reads records; core records are today's behaviour (`propagate`, the one `combine`, the two `explain`, `follow`, `rollup`), still shipped in the metamodel. `rules list` and `check` over records, with the conflict check. Docs (D15): the language README with the generated standard-rules block, published under *Develop*; health-manager's DESIGN | `derive.test.ts`, `assess.test.ts`, `health-flow.test.ts` (the 2026-11-05 identity stop) unchanged and green. A differential suite keeps the P0 `derive` as an oracle: identical output on a few thousand random sites, in CI, for one release; then the old code goes |
+| **P2** | `combine` steps and k-of-n, `dependantEnd`, type change, `explain` records, the three engine rules of D6, a roll-up never replacing an impact; `rules explain`, `simulate`, the hash, contract scenarios; maintenance coverage by simulation (D14). Docs (D15): the new kinds and outcomes in the language README; `explain`, `simulate` and maintenance coverage in health-manager's README | The quorum, raise and type-change cases as unit tests; core scenarios pass; shuffled-input determinism test; each row of D14's table as a test |
+| **P3** | `config/health/`, the merge, the verbs, module files and D8's guardrails; the `module` attribute and `member-of` a zone (D13), the network module's zone record; module-manager and the patch step call the merge; recalculation at once on a changed set. Docs (D15): the verbs, files and merge in health-manager's README; module-manager's and cmdb-controller's READMEs; the module template's section and example file | Merge table of D7 as a test per row; an update over an edited, a deleted and a conflicting rule, and a retired scenario, on a scratch config; live on the test system: install a module with a rule, edit it, update, and take a corrected rule as a patch |
+| **P4** | `classify` with `raw` and `quiet`; `notify` and `notices.ts` reading it; the console's Rules page and the Why view; the console's own root computation removed. Docs (D15): `classify` and `notify` added to the language README and the verbs' README | Alert findings identical with the core `classify` records; `emit.test.ts` and `health-flow.test.ts` unchanged and green with the core `notify` records; a local override raises and clears with its source; a quieted condition closes its notice as "quiet" and is heard again when the rule goes; console review by the console-gui checklist |
 
-Each phase is shippable alone. P1 changes no behaviour; P2 adds expressiveness nobody uses until
-a rule does; P3 is the first that touches a site's `config/`.
+Each phase is shippable alone. P1 changes no behaviour; P2 changes what a maintenance window
+covers and otherwise adds expressiveness nobody uses until a rule does; P3 is the first that
+touches a site's `config/` and adds the zone relation; P4 moves the last two constants to
+records.
+
+### P0 — the fix specification
+
+All three are in `manager/health-manager/src/derive.ts` on `fix/health-review`. Nothing else
+changes; `health-rules.json` is untouched.
+
+**F1. An impact names the root that gave its worst status.**
+
+- *Where.* In `derive()`, the loop that fills `impacted` from each root's `objs`. Today, when a
+  later root reaches an object harder, it does `Object.assign(had, { status, state })` and keeps
+  `had.root`.
+- *Change.* Replace the root with the status: `Object.assign(had, { root: r, status, state })`.
+  Roots are already iterated in `earlier` order and the comparison stays strictly greater, so
+  among roots that give the same worst status the earliest still wins.
+- *And in `covered`*, add the invariant as a guard, so it holds even if a later rule can raise: a
+  root `s` is covered by `hit.root` only when `hit.status === "critical"` **and**
+  `RANK[hit.root.cond.status] >= RANK[s.cond.status]`.
+- *What follows from it, unchanged code.* The impact's `reason`, `message` and `rootCause` come
+  from the root that made it critical. `viaAcks` in `assess.ts` then silences an impact by the
+  acknowledgement of that root, not of an earlier, weaker one. `impactCount` is unchanged.
+- *Tests to add to `derive.test.ts`.*
+  1. Machine `tappaas1` `performance` `warning` (`cpu-pressure`, since 01:00); pool `tank`
+     `operational` `critical` (`pool-state`, since 02:00); guest `nextcloud` `runs-on` the machine
+     and `stored-on` the pool, with `capacity` `critical` (`disk-full`, since 03:00). Expect: the
+     guest's `impact` is `critical`, `rootCause` the pool, message `storage-pool tank: pool-state`;
+     the guest's `capacity` has `derived: false` and `rootCause` the pool; `rootCauses` is the
+     pool (impacts 1) then the machine (impacts 1), and the guest is not in it.
+  2. The same without the pool's failure. Expect: the guest's `impact` is `warning` naming the
+     machine; its `capacity` critical is a root, `rootCause` null, listed before the machine.
+  3. Test 1 with the machine's and the pool's `since` swapped. Expect the same result as test 1.
+
+**F2. Roll-ups read a snapshot.**
+
+- *Where.* In `derive()`, the final loop over `rolled`: `membersOf(...).map((id) => out.get(id) ??
+  [])` reads `out`, into which earlier iterations of the same loop have written roll-ups.
+- *Change.* Before the loop, `const settled = new Map(out)`; read members from `settled`; keep
+  writing to `out`. The conditions arrays are not mutated in the loop, so a shallow copy is
+  enough. `rollUp`'s `own` argument stays `out.get(o.id)`, the object's own conditions, which no
+  earlier iteration wrote.
+- *Effect.* A place or collection that is itself a member of another contributes its own
+  conditions and `follows`, never its roll-up. Counts become independent of order; no status
+  changes with worst-of.
+- *Tests.* A room, a rack `placed-in` it, a server `placed-in` the rack and `allocated-to` a
+  machine with an `operational` `critical`. Run `derive` with `objects` as `[room, rack, …]` and
+  as `[rack, room, …]`. Expect the room's `operational` roll-up to be `critical` with the message
+  `1 of 1 members critical` both times, and the two results deeply equal.
+
+**F3. A group's message names a member chosen by rule.**
+
+- *Where.* `spread()` sets `partial.set(to, part)` with `member: obj`, the provider being
+  processed when the entry was first made, and the counts as they were then.
+- *Change.* After the fixpoint loop in `spread()`, recompute every `partial` entry: `down` and
+  `of` from `groupDown` as it stands at the end, and `member` as the first, in `earlier` order,
+  of the seeds that are on a provider counted as down for that group in the entry's type and
+  status; if none of the down members has a seed of its own (it is down by reach), the down
+  member with the lowest id. `spread()` needs the seeds it is already given and the entry's edge,
+  type and status, so keep those with the entry while the loop runs.
+- *Tests.* A three-member group with two members down, the sources given in both orders: the same
+  message both times, naming the member that failed first. The existing "one of two in uplinks
+  down: port uplink-a" and "switch down behind one leg" checks stay green.
+
+**Order of work and the gate for P1.** F1, F2, F3, each with its tests, then the whole
+health-manager suite. The prototype in the shared notes folder already implements F1 and F3 as
+specified (run it without `LEGACY_COVER`); after P0 the differential run against it should show
+no difference at all outside roll-up counts, which the prototype does not snapshot yet. That zero
+is the starting point for P1's oracle.
+
+## Settled in review
+
+All ten open questions of v0.1 were answered by the operator on 2026-11-12.
+
+| | Question | Answer | Where |
+|---|---|---|---|
+| O1 | May a site rule quiet a condition completely? | Yes, as a standing rule without an end. It stays visible with the rule that quieted it, and only the owner clears it | D2.3, D5 `classify` |
+| O2 | A relation from a node to its zone | Yes: `member-of [node, zone]` and `[app, zone]`, from the declared zone field | D13, D8.2 |
+| O3 | Is "which roots mail at once" a kind? | Yes: `notify` | D5 `notify` |
+| O4 | What a maintenance window covers | What its object would impact under the rules | D14 |
+| O5 | The module of a CI as a CMDB attribute | Yes | D13 |
+| O6 | Numeric comparison | Added when a real rule needs it; specified now | D3 |
+| O7 | Rules by the security stream | Yes, and a corrected set recalculates at once | D7, D6 |
+| O8 | The reach threshold and foundation modules | Foundation modules pass; app modules are held at the site's threshold | D8.5 |
+| O9 | Retiring a contract scenario | Yes, as local state that survives updates | D11 |
+| O10 | A roll-up over an impact the spread gave | The roll-up never replaces it | D5 `rollup` |
 
 ## Open questions
 
-- **O1. May a site rule quiet a condition completely?** D2.3 says no: the lowest a `classify`
-  can set is `warning`, and silence is an acknowledgement, which has an end. A standing "this is
-  only information here" would need a status below warning, or an acknowledgement without an end
-  written by a rule. Recommendation: keep D2.3 and see whether sticky acknowledgements are enough.
-- **O2. A relation from a node to its zone.** The cross-module example needs `member-of [node,
-  zone]` (and `[app, zone]`), reported from the declared `zone` field. Recommendation: add it;
-  the alternative, letting a rule join on an attribute, breaks D2.5 and hides the dependency from
-  the graph and the cycle check.
-- **O3. Is "which roots mail at once" a seventh kind?** Today: critical, not performance, not a
-  CVE level. A site that wants a performance critical mailed at once can re-rate nothing to get
-  it. A `notify` kind (root selector → at once, digest, none) would fit the same language.
-  Recommendation: not in this ADR; decide after P4.
-- **O4. What a maintenance window covers** is a hard-coded walk down `runs-on` (`windows.ts`). It
-  could be "everything the window's object would impact if it failed", which is `simulate`, and
-  would then follow the rules. That changes who is silenced (dependants over `depends-on` too).
-- **O5. The `module` of a CI** is worked out from `config/` today (`moduleOfCi`). D8's anchoring
-  and the `module` selector want it as an attribute in the CMDB.
-- **O6. Numeric comparison in predicates** (`tier >= 4`, `cores < 2`). It is sound (inputs only)
-  but "more specific than" needs interval containment. Recommendation: add `{"gte": n}` and
-  `{"lte": n}` in P2 if a real rule needs one.
-- **O7. Do rules ride the security stream (ADR-048)** so a correction reaches sites faster than
-  a release? The merge does not care where `theirs` comes from.
-- **O8. The reach threshold** of D8.5: a quarter of the site's CIs is a guess. The network
-  module's zone rule will exceed it on most sites and be held at first install; is that the
-  intended experience for a foundation module, or do foundation modules pass?
-- **O9. Contract scenarios on a site that changed behaviour on purpose.** D11 makes a failing
-  scenario a warning that needs `--force`. Should a site be able to retire a scenario, as it can
-  delete a rule?
-- **O10. A collection that takes part in the spread** (the cluster in the quorum example) also
-  gets a roll-up, and today the roll-up of `impact` replaces its own impact condition, losing
-  "quorum lost". Recommendation: a roll-up never replaces an impact the spread gave.
+None. Five choices made while writing v0.2 that the answers did not spell out, for the operator
+to confirm or change at review:
+
+1. **A quieted condition still spreads**, quietly (D5), as an acknowledged one does today. The
+   alternative, that a quieted failure reaches nothing, would make dependants' symptoms roots of
+   their own.
+2. **`quiet` and `notify: "none"` must name a reason, a label or an object** (D5, D11). A site
+   cannot write "quiet every warning". If that should be allowed too, the check row goes.
+3. **`core.propagate.member-of.down` is limited to today's ends** when the zone relation
+   arrives, so that "a zone down takes its nodes" is the network module's record and not a side
+   effect of adding a relation (D8.2).
+4. **On an object a window reaches, only what the outage would explain or cover is silenced**
+   (D14). With the shipped records that is everything on a critically reached object, and only
+   the `operational` condition of an HA guest. The simpler reading of the answer, every condition
+   of every reached object, silences more.
+5. **Rule corrections ride the daily patch as `fix(health-rules)` commits** (D7), not a new
+   signed feed. ADR-048 needs one line in D2 to recognise the commit type; that edit belongs to
+   ADR-048's branch.
