@@ -53,8 +53,10 @@ metrics_converge() {
         || warn "  could not write the metrics identities to logging — ${CONSUMER}'s numbers carry no identity until they are"
     case "${kind}" in
         node|pbs)
+            # In sync, apply says nothing: that is success, so no bare `[[ ]] &&`
+            # here — as the function's last command it would return 1.
             if out="$("${METRICS_TARGET}" "${kind/node/pve}" apply 2>&1)"; then
-                [[ -n "${out}" ]] && debug "  ${out//$'\n'/; }"
+                if [[ -n "${out}" ]]; then debug "  ${out//$'\n'/; }"; fi
             else
                 warn "  ${CONSUMER}: the metric server is not set: ${out//$'\n'/; }"
             fi ;;
