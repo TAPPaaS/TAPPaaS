@@ -156,15 +156,20 @@ sub node_psi {
 }
 
 # Each ZFS pool's average total wait over one second (zpool iostat -l), in seconds.
+# A pool that did no reads (writes) in that second shows "-" for the wait: that is
+# no wait, 0, not a missing number — else an idle pool reads as unmeasured.
 sub zpool_wait {
     my ($node) = @_;
     my (@r, @w);
+    my $wait = sub { my ($ops, $w) = @_; $w =~ /^[0-9]+$/ ? $w / 1e9 : ($w eq '-' && $ops =~ /^0$/) ? 0 : undef };
     open(my $fh, '-|', 'zpool', 'iostat', '-Hpl', '-y', '1', '1') or return ();
     while (my $l = <$fh>) {
+        chomp $l;
         my @c = split /\t/, $l;
         next unless @c >= 9;
-        push @r, dp($c[7] / 1e9, node => $node, pool => $c[0]) if $c[7] =~ /^[0-9]+$/;
-        push @w, dp($c[8] / 1e9, node => $node, pool => $c[0]) if $c[8] =~ /^[0-9]+$/;
+        my ($rw, $ww) = ($wait->($c[3], $c[7]), $wait->($c[4], $c[8]));
+        push @r, dp($rw, node => $node, pool => $c[0]) if defined $rw;
+        push @w, dp($ww, node => $node, pool => $c[0]) if defined $ww;
     }
     close($fh);
     return (@r ? { name => 'tappaas_zpool_read_wait_seconds',  gauge => { dataPoints => \@r } } : (),
