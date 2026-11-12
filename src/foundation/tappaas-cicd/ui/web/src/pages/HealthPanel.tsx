@@ -79,6 +79,7 @@ function Verbs({ o }: { o: HealthObject }) {
 const HOW: Record<HealthWhy["conditions"][number]["how"], string> = {
   root: "a root cause",
   derived: "the same failure as its root, seen from here",
+  sum: "a sum of others, never a root (a health rule says so)",
   covered: "its own, but not a root while its root stands",
   impact: "reached from its root",
   follows: "takes its parent's colour",

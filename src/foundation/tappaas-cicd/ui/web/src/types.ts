@@ -937,7 +937,7 @@ export interface HealthWhy {
     type: string;
     status: HealthStatus;
     reason: string;
-    how: "root" | "derived" | "covered" | "impact" | "follows" | "roll-up" | "ok";
+    how: "root" | "derived" | "sum" | "covered" | "impact" | "follows" | "roll-up" | "ok";
     rootCause?: string;
     rule?: string;
     ruleText?: string;

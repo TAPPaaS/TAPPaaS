@@ -36,7 +36,7 @@ export interface ExplainedCondition {
   type: string;
   status: string;
   reason: string;
-  how: "root" | "derived" | "covered" | "impact" | "follows" | "roll-up" | "ok";
+  how: "root" | "derived" | "sum" | "covered" | "impact" | "follows" | "roll-up" | "ok";
   rootCause?: string;
   rule?: string;
   ruleText?: string;
@@ -64,6 +64,7 @@ export function explainObject(snap: Snapshot, model: RulesDoc, now: string, ref:
     } else if (c.reason === "follows") out.push({ ...base, how: "follows", rootCause: c.rootCause ?? undefined, ...withRule(c.rule) });
     else if (c.reason === "roll-up") out.push({ ...base, how: "roll-up", ...withRule(c.rule) });
     else if (!failing(c)) out.push({ ...base, how: "ok" });
+    else if (c.aggregate) out.push({ ...base, how: "sum" });
     else if (c.derived) out.push({ ...base, how: "derived", rootCause: c.rootCause ?? undefined, ...withRule(c.rule ?? d.why!.explainedBy.get(`${o.id}|${c.type}`)?.rule) });
     else if (c.rootCause) out.push({ ...base, how: "covered", rootCause: c.rootCause, ...withRule(c.rule) });
     else out.push({ ...base, how: "root", impacts: d.rootCauses.find((r) => r.id === o.id && r.type === c.type)?.impactedCount ?? 0 });
@@ -83,6 +84,7 @@ export function explainLines(x: ReturnType<typeof explainObject>, objects: CmdbI
     switch (c.how) {
       case "root": lines.push(`${head}: a root cause, impacting ${c.impacts}`); break;
       case "derived": lines.push(`${head}: the same failure as ${root}, derived${rule}`); break;
+      case "sum": lines.push(`${head}: a sum of others (a classify rule says so), never a root`); break;
       case "covered": lines.push(`${head}: its own, not a root while ${root} stands${rule}`); break;
       case "follows": lines.push(`${head}: follows its parent${rule}`); break;
       case "roll-up": lines.push(`${head}: a sum of its members${rule}`); break;
