@@ -49,6 +49,11 @@
 #                                          NEW, FIXED and SAME, the image and packages that change
 #   tappaas-train ack [--module <m>] --note "<why>"   accept what the last preview reported (one
 #                                          module's with --module; acks add up); the boundary goes on
+#   tappaas-train candidates               would moving a pin help? every image pin's newer patch and
+#                                          latest tag scanned by reference, the nixpkgs pin from the
+#                                          last preview: config/pin-candidates.json (the daily check)
+#   tappaas-train candidates apply <m>     the proposed move on a branch pin/<m>-<tag>, in a worktree
+#                                          of its own; live-test and merge it yourself
 #   tappaas-train releases                 every version, its commit, when it reached each channel
 #   tappaas-train releases --render        re-render RELEASES.md from release/releases.json (after a hand edit)
 #
@@ -2365,7 +2370,7 @@ cmd_releases() {
 
 # The range must cover the whole header block above: extend it when the header
 # grows, or --help quietly stops before its last line.
-usage() { sed -n '3,62p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '3,67p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 command -v jq >/dev/null 2>&1 || die "jq is required"
 NO_FETCH=0; DRY_RUN=0; RESUME=0; FORCE_BOUNDARY=0
@@ -2474,8 +2479,9 @@ case "${1:-}" in
     releases) cmd_releases ;;
     preview)  cmd_preview ;;
     ack)      cmd_ack ;;
+    candidates) shift; python3 "${TRAIN_SCRIPTS}/pin-candidates.py" --repo "${REPO_DIR}" --config "${CONFIG_DIR}" "$@" ;;
     staging-site) shift; cmd_staging_site "$@" ;;
     canary)   shift; cmd_canary "$@" ;;
     -h|--help|help|"") usage ;;
-    *) die "unknown command '${1}' (status | init | boundary | staging-site | canary | fault | patch | preview | ack | releases)" ;;
+    *) die "unknown command '${1}' (status | init | boundary | staging-site | canary | fault | patch | preview | ack | candidates | releases)" ;;
 esac
