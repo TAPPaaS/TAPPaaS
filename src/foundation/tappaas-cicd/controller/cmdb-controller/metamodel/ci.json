@@ -57,7 +57,11 @@
               "maintenance": { "type": ["object", "null"], "properties": { "until": { "type": "string" }, "note": { "type": "string" }, "by": { "type": "string" } }, "description": "The open maintenance window that covers the object (health-manager assess, from the window files): transitions are recorded, not counted." },
               "flapping": { "description": "emit's flapping attribute, projected by assess." },
               "flappingHeld": { "description": "emit's flapping attribute, projected by assess." },
-              "operatorAt": { "type": "string", "description": "The operator's last word (acknowledgements) assess took for it." }
+              "operatorAt": { "type": "string", "description": "The operator's last word (acknowledgements) assess took for it." },
+              "rule": { "type": "string", "description": "The health record that decided a derived condition." },
+              "raw": { "type": "object", "description": "Re-rated by a health record: the status its source gave, since when, and the record." },
+              "quieted": { "type": "object", "description": "Quieted by a health record: the record and since when; via, the root whose quiet it shares." },
+              "aggregate": { "type": "boolean", "description": "A sum of others by a health record: derived, never a root." }
             }
           },
           "description": "Its health, one per kind, as Kubernetes gives a resource's status.conditions. health-manager assess is the only writer; acknowledgements and flapping are projected onto it. Volatile: never drift. Every change but lastChecked opens a new period, so its history is the object's health history."
