@@ -109,6 +109,12 @@ ck "an alert that is not security is no hit" "1" "$(jq '.findings | length' "${T
 jq '.findings[].last = "2026-01-01T00:00:00+00:00"' "${TMP}/siem.json" > "${TMP}/s2" && mv "${TMP}/s2" "${TMP}/siem.json"
 post sekret "$(sec firing warning identity)" >/dev/null
 ck "an entry past its keep is pruned on the next hit" "identity" "$(jq -r '.findings[].host' "${TMP}/siem.json")"
+n="$(sent)"
+ck "an info hit is accepted" "200" "$(post sekret "$(sec firing info jellyfin)")"
+ck "…recorded" "info" "$(jq -r '.findings[] | select(.host == "jellyfin") | .level' "${TMP}/siem.json")"
+ck "…and not mailed" "${n}" "$(sent)"
+ck "a warning hit is mailed" "200" "$(post sekret "$(sec firing warning jellyfin)")"
+ck "…as any alert" "$((n + 1))" "$(sent)"
 
 n="$(sent)"
 ck "an event rule's resolve is accepted" "200" "$(post sekret "$(wh resolved event QuorumLost tappaas1)")"

@@ -45,8 +45,8 @@ security_streams() {
 {transport="audit"}
 {unit=~"sshd.*"}
 {host="identity", container=~"authentik-.*"}
-{source="opnsense", unit=~"filterlog|audit|sshd|crowdsec.*|suricata"}
-{source="proxmox", unit=~"sshd|pvedaemon|pveproxy|audisp.*|audit.*"}
+{source="opnsense", unit=~"filterlog|audit|api|sshd.*|crowdsec.*|suricata"}
+{source="proxmox", unit=~"sshd.*|pvedaemon|pveproxy|audisp.*|audit.*"}
 EOF
 }
 

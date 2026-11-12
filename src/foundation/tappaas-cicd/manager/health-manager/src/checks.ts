@@ -49,6 +49,10 @@ const nodeOf = (name: string): CheckSubject => ({ kind: "node", name });
 export function guestTarget(configDir: string, module: string): string | null {
   const raw = readModuleJson(join(configDir, `${module}.json`));
   if (!raw) return null;
+  // The firewall (OPNsense) has no tappaas user: its own controller reaches it
+  // as root. Probing it as tappaas failed every gate's every run, four sshd
+  // "Invalid user" lines each time, which a brute-force rule reads (ADR-050).
+  if (/\/network\/?$/.test(String(raw.moduleSource ?? raw.location ?? ""))) return null;
   // Pattern A keeps zone0 (and possibly vmname) under .config: a flat read
   // sent every such guest to <name>.mgmt.internal, which does not resolve.
   const vn = configField(raw, "vmname");

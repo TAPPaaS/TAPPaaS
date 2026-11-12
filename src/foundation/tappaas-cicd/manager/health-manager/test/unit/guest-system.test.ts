@@ -7,7 +7,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { checkGuestSystem, knownSystems } from "../../src/checks";
+import { checkGuestSystem, guestTarget, knownSystems } from "../../src/checks";
 import { GATES } from "../../src/assess-sources";
 import { FakeClusterClient } from "./fake-client";
 
@@ -57,6 +57,8 @@ c.systems.set("karakeep.rossen.internal", { booted: B, current: X, profile: B })
 check(checkGuestSystem(c, dir, "tappaas1").status === "fail", "an activated system that is not the profile nor the booted one (nixos-rebuild test) fails");
 check(checkGuestSystem(new FakeClusterClient(), dir, "tappaas1").status === "skip", "nothing answers: skip");
 check(GATES["guest-system"]?.type === "security", "its finding is a security condition");
+cfg("network", { vmid: 100, vmname: "network", zone0: "mgmt", moduleSource: "/home/tappaas/TAPPaaS/src/foundation/network" });
+check(guestTarget(dir, "network") === null && guestTarget(dir, "nextcloud") === "nextcloud.rossen.internal", "the firewall is never probed as tappaas: it has no such user");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

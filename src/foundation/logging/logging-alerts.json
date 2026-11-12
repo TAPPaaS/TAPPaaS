@@ -35,16 +35,16 @@
       "title": "SshBruteForce",
       "headline": "SSH brute force",
       "kind": "event",
-      "security": "warning",
+      "security": "info",
       "window": 300,
       "scope": "all",
       "above": 10,
-      "_comment": "Anchored: Loki and Grafana log every rule's query text on the logging VM, which is in scope all, so an unanchored rule would match its own query. Per host and per source address.",
+      "_comment": "Anchored: Loki and Grafana log every rule's query text on the logging VM, which is in scope all, so an unanchored rule would match its own query. Per host and per source address. Info: an internet-facing sshd sees scanners all day (hrossen: 75-150 a day per address on the mothership).",
       "match": "^(Failed password for|Invalid user|Connection closed by authenticating user|Disconnected from authenticating user)",
       "capture": {
         "src_ip": "(?:from|authenticating user \\S+) (?P<src_ip>[0-9a-fA-F:.]+) port"
       },
-      "summary": "More than ten failed SSH logins from one address in five minutes. Key-only SSH makes them harmless, but the address is probing. CrowdSec bans it at the firewall when it crosses it.",
+      "summary": "More than ten failed SSH logins from one address in five minutes. Key-only SSH makes them harmless: recorded, not raised. A login that then succeeds from that address is SshLoginAfterBruteForce.",
       "query": "{host=\"<host>\"} |~ \"^(Failed password|Invalid user)\"",
       "unit": "sshd.*"
     },

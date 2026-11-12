@@ -35,6 +35,7 @@ def ignores(name, line):
 
 catches("ssh-brute-force", "Failed password for root from 203.0.113.9 port 51022 ssh2", "203.0.113.9")
 catches("ssh-brute-force", "Invalid user admin from 2001:db8::7 port 4022", "2001:db8::7")
+catches("ssh-brute-force", "Invalid user tappaas from 10.0.0.144 port 60122", "10.0.0.144")
 catches("ssh-brute-force", "Connection closed by authenticating user root 198.51.100.4 port 40112 [preauth]", "198.51.100.4")
 ignores("ssh-brute-force", "Accepted publickey for tappaas from 10.0.0.209 port 50122 ssh2: ED25519 SHA256:x")
 ignores("ssh-brute-force", 'level=info msg="query" query="{host=~\\"^(a)$\\"} |~ \\"^(Failed password for|Invalid user)\\""')
@@ -53,7 +54,7 @@ catches("authentik-login-bf", '{"action":"login_failed","client_ip":"2001:db8::1
 ignores("authentik-login-bf", '{"action": "login", "client_ip": "203.0.113.9", "event": "Created Event"}')
 catches("authentik-suspicious", '{"action": "suspicious_request", "client_ip": "203.0.113.9"}', "203.0.113.9")
 catches("authentik-impersonation", '{"action": "impersonation_started", "user": {"username": "admin"}}')
-catches("pve-auth-failure", "authentication failure; rhost=::ffff:203.0.113.9 user=root@pam msg=Authentication failure", "203.0.113.9")
+catches("pve-auth-failure", " authentication failure; rhost=::ffff:203.0.113.9 user=root@pam msg=Authentication failure", "203.0.113.9")
 catches("pve-auth-failure", "authentication failure; rhost=10.0.0.5 user=lars@pve msg=no such user", "10.0.0.5")
 catches("opnsense-login-failed", "/index.php: Web GUI authentication error for user 'root' from: 203.0.113.9", "203.0.113.9")
 catches("opnsense-login-failed", "/index.php: Web GUI authentication error for 'root' from 203.0.113.9", "203.0.113.9")
