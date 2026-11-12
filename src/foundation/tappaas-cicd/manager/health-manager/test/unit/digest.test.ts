@@ -21,7 +21,7 @@ function check(c: boolean, what: string): void {
 }
 
 const row = (name: string, over: Partial<ListRow> = {}): ListRow =>
-  ({ id: name, class: "vm", name, type: "security", status: "warning", reason: "cve-act", message: `${name} has a CVE`, since: "2026-10-30T09:40:04Z", derived: false, rootCause: null, acknowledged: null, maintenance: null, ...over }) as unknown as ListRow;
+  ({ id: name, class: "vm", name, type: "vulnerability", status: "warning", reason: "cve-act", message: `${name} has a CVE`, since: "2026-10-30T09:40:04Z", derived: false, rootCause: null, acknowledged: null, maintenance: null, ...over }) as unknown as ListRow;
 const sweep = (differences: SweepRecord["differences"]): SweepRecord => ({
   time: "2026-11-02T00:02:02.651Z",
   counts: { expected: 0, drift: 0, desired: 0, unmanaged: 0, missing: 0, unread: 0, sourcesFailed: 0 },
@@ -35,7 +35,7 @@ check(first.word === "ALERT" && first.new === 1 && first.body.includes("The firs
 
 const same = buildDigest([row("a"), row("b")], null, { at: AT, keys: buildDigest([row("a"), row("b")], null, null).keys });
 check(same.word === "STATUS" && same.subject === "STATUS: daily digest, nothing new, 2 still open", "nothing new: a STATUS, with what is still open");
-check(same.body.includes("security cve-act (2): vm/a, vm/b") && !same.body.includes("NEW\n"), "…grouped by reason, with no NEW section");
+check(same.body.includes("vulnerability cve-act (2): vm/a, vm/b") && !same.body.includes("NEW\n"), "…grouped by reason, with no NEW section");
 check(same.body.includes("since the last digest (2026-11-01 13:12 UTC)"), "…saying when the last one was");
 
 const one = buildDigest([row("a"), row("b")], null, { at: AT, keys: buildDigest([row("a")], null, null).keys });
@@ -43,7 +43,7 @@ check(one.word === "ALERT" && one.subject === "ALERT: daily digest, 1 new, 1 sti
 check(/NEW\n {2}vm\/b {2}b has a CVE\n/.test(one.body), "…the new one by name and message");
 
 const back = buildDigest([row("a")], null, { at: AT, keys: buildDigest([row("a"), row("b")], null, null).keys });
-check(back.word === "STATUS" && back.body.includes("CLEARED (1)") && back.body.includes("vm/b security cve-act"), "what cleared is told, and is no ALERT");
+check(back.word === "STATUS" && back.body.includes("CLEARED (1)") && back.body.includes("vm/b vulnerability cve-act"), "what cleared is told, and is no ALERT");
 
 const none = buildDigest([], null, { at: AT, keys: [] });
 check(none.subject === "STATUS: daily digest, all clear", "nothing open: all clear");

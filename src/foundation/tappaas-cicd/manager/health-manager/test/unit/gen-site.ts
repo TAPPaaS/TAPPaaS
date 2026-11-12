@@ -46,7 +46,7 @@ export function site(seed: number, scale = 1, faults = 0.12, cycles = true): Sit
   }
   const ds = mk("datastore", "ds"); L.push(rel("stored-on", ds, pickOf(pools)), rel("runs-on", ds, pickOf(vms)), rel("backs-up", ds, pickOf(vms)));
   const src = new Map<string, Condition[]>();
-  const types = ["operational", "operational", "operational", "performance", "capacity", "security", "drift"] as const;
+  const types = ["operational", "operational", "operational", "performance", "capacity", "vulnerability", "drift"] as const;
   const times = ["2026-10-30T02:00:00.000Z", "2026-10-30T02:05:00.000Z", "2026-10-30T03:00:00.000Z", "2026-10-30T08:00:00.000Z"];
   for (const o of O) {
     const cs: Condition[] = [];

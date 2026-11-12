@@ -42,15 +42,15 @@ export interface TransitionEvent {
   digestOnly?: true; // a performance condition: told in the daily digest, never mailed on its own
 }
 
-// The CVE risk level a security condition's reason names (ADR-045 D4): 0 for
+// The CVE risk level a vulnerability condition's reason names (ADR-045 D4): 0 for
 // any other reason (ok, low, or another source's), 2–4 for medium to critical.
 export const CVE_LEVEL_RANK: Record<string, number> = { "cve-medium": 2, "cve-high": 3, "cve-critical": 4 };
 export const cveLevelRank = (reason: string | undefined): number => CVE_LEVEL_RANK[reason ?? ""] ?? 0;
 
-/** A security condition whose level changed while its status did not
+/** A vulnerability condition whose level changed while its status did not
  *  (medium to high: both warning) is a transition all the same. */
 export function levelChanged(type: string, before: { reason?: string } | undefined, after: { reason?: string } | undefined): boolean {
-  if (type !== "security" || !before || !after || before.reason === after.reason) return false;
+  if (type !== "vulnerability" || !before || !after || before.reason === after.reason) return false;
   return cveLevelRank(before.reason) > 0 || cveLevelRank(after.reason) > 0;
 }
 
@@ -60,7 +60,7 @@ const NOT_A_MODULE = new Set(["zone", "environment", "site"]);
 
 /** Did a module's (or a node's) level rise to high or critical? */
 export function levelRose(cls: string, type: string, before: { reason?: string } | undefined, after: { reason?: string } | undefined): boolean {
-  if (type !== "security" || NOT_A_MODULE.has(cls)) return false;
+  if (type !== "vulnerability" || NOT_A_MODULE.has(cls)) return false;
   const to = cveLevelRank(after?.reason);
   return to >= 3 && to > cveLevelRank(before?.reason);
 }

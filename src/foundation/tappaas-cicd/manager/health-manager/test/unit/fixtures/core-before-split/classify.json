@@ -1,0 +1,33 @@
+{
+  "description": "What a source's finding becomes: the condition type, status and reason, whether it is a sum of others, whether it is heard. A record re-rates, routes or quiets a failing finding; it never makes one ok and never touches an ok.",
+  "records": [
+    { "id": "core.classify.alert", "kind": "classify",
+      "description": "An open alert is a warning on what it is about: the mail went, a rule never fails the site.",
+      "when": { "finding": { "source": "alerts" } },
+      "set": { "type": "operational", "status": "warning" } },
+    { "id": "core.classify.alert-security", "kind": "classify",
+      "description": "The alerts that say something is exposed are security warnings.",
+      "when": { "finding": { "source": "alerts", "labels": { "alertname": ["RootKeyChanged", "FirewallCertChanged"] } } },
+      "set": { "type": "security", "status": "warning" } },
+    { "id": "core.classify.siem-warning", "kind": "classify",
+      "description": "A security hit at warning holds for a day from its last hit (ADR-050 D12): an attack still going keeps it open.",
+      "when": { "finding": { "source": "siem", "labels": { "level": "warning" } } },
+      "hold": "24h" },
+    { "id": "core.classify.siem-critical", "kind": "classify",
+      "description": "A security hit at critical holds until someone acknowledges it with a reason (ADR-050 D12); a new hit opens it again.",
+      "when": { "finding": { "source": "siem", "labels": { "level": "critical" } } },
+      "hold": "until-ack" },
+    { "id": "core.classify.zone-score", "kind": "classify",
+      "description": "A zone's and an environment's CVE score is the sum of their modules': never a root.",
+      "when": { "finding": { "source": "cve" }, "object": { "class": ["zone", "environment"] } },
+      "aggregate": true },
+    { "id": "core.classify.cve-baseline", "kind": "classify",
+      "description": "A module whose CVE level only the NixOS baseline sets is not a root of its own: the site's one baseline finding is.",
+      "when": { "finding": { "source": "cve", "labels": { "setBy": "baseline" } } },
+      "aggregate": true },
+    { "id": "core.classify.long-warning", "kind": "classify", "enabled": false,
+      "description": "An operational warning nobody dealt with for a day becomes critical.",
+      "when": { "finding": { "type": "operational", "status": "warning", "age": { "over": "24h" } } },
+      "set": { "status": "critical" } }
+  ]
+}

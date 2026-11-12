@@ -40,7 +40,7 @@ function run(io: StubIO & { hits?: SiemItem[] }, at: number): Condition | undefi
   io.siem = () => io.hits ?? [];
   assess(io, {}, new Date(at));
   const cs = (io.items.find((o) => o.id === nc.id)!.attributes.conditions ?? []) as Condition[];
-  return cs.find((c) => c.type === "security");
+  return cs.find((c) => c.type === "threat");
 }
 
 function fresh(extra: HealthRecord[] = []): StubIO & { hits?: SiemItem[] } {
@@ -60,7 +60,7 @@ console.log("== warning: 24 h from the last hit ==");
   const io = fresh();
   io.hits = [hit("SshBruteForce", "warning", T)];
   let c = run(io, T + H);
-  check(c?.status === "warning" && c.owner === "siem" && c.reason === "siem-ssh-brute-force", "a warning hit is a security warning on its CI, owned by siem");
+  check(c?.status === "warning" && c.owner === "siem" && c.reason === "siem-ssh-brute-force", "a warning hit is a threat warning on its CI, owned by siem");
   check(!!c?.message.includes("7 hits"), "one finding with the count");
   c = run(io, T + 23 * H);
   check(c?.status === "warning", "still held after 23 h");

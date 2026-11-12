@@ -56,7 +56,7 @@ check(checkGuestSystem(c, dir, "tappaas1").status === "pass", "back on a recorde
 c.systems.set("karakeep.rossen.internal", { booted: B, current: X, profile: B });
 check(checkGuestSystem(c, dir, "tappaas1").status === "fail", "an activated system that is not the profile nor the booted one (nixos-rebuild test) fails");
 check(checkGuestSystem(new FakeClusterClient(), dir, "tappaas1").status === "skip", "nothing answers: skip");
-check(GATES["guest-system"]?.type === "security", "its finding is a security condition");
+check(GATES["guest-system"]?.type === "threat", "its finding is a threat condition");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

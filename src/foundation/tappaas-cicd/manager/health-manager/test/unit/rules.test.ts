@@ -72,7 +72,7 @@ const errors = (r: unknown): string[] => checkRecord(r, info).filter((p) => p.le
   check(ov.winner?.id === zc.id && ov.conflict.length === 0 && ov.beaten[0]?.why === "overridden", "…an override decides, and says so");
   const e1: HealthRecord = { id: "core.explain.a", kind: "explain", when: { cause: { sameType: true } }, effect: "derived" };
   const e2: HealthRecord = { id: "core.explain.b", kind: "explain", when: { cause: { status: "critical" } }, effect: "covered" };
-  const e3: HealthRecord = { id: "site.explain.sec", kind: "explain", when: { cause: { status: "critical" }, condition: { type: "security" } }, effect: "none" };
+  const e3: HealthRecord = { id: "site.explain.sec", kind: "explain", when: { cause: { status: "critical" }, condition: { type: "vulnerability" } }, effect: "none" };
   check(conflicts([e1, e2, e3], anc).length === 0, "explain: derived and covered answer different questions; a none is an exception to what it beats");
 }
 

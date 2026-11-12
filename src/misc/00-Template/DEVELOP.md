@@ -184,7 +184,7 @@ shipped at all.
 | `above` | optional: fire only when more than this many lines matched in the window |
 | `absent` | optional: fire when **no** line matched in the window (a heartbeat that stopped) |
 | `repeat` | optional: how often a firing alert is mailed again, `1h`–`24h` (default 4 h) |
-| `security` | optional: `info`, `warning` or `critical` — the rule is a security hit (ADR-050). Each hit is kept per rule and machine with its count; a warning holds its security condition 24 h from the last hit, a critical until someone acknowledges it (`health-manager ack <ci> --type security --note …`), and info raises nothing. Rendered only while the site's security monitoring is on (`site.json` `security.monitoring`; off on a small site) |
+| `security` | optional: `info`, `warning` or `critical` — the rule is a security hit (ADR-050). Each hit is kept per rule and machine with its count; a warning holds its threat condition 24 h from the last hit, a critical until someone acknowledges it (`health-manager ack <ci> --type threat --note …`), and info raises nothing. Rendered only while the site's security monitoring is on (`site.json` `security.monitoring`; off on a small site) |
 | `summary` | the explanation in the mail |
 | `mail` | optional: your own `subject` and `body`, with `{state}`, `{title}`, `{host}`, `{hosts}`, `{module}`, `{labels}`, `{label.<name>}`, `{summary}`, `{since}`, `{resolved}`, `{query}`, `{lines}` |
 | `include` | optional: `"bundle"` attaches the site's support bundle; `"lines"` adds up to 20 matching log lines |

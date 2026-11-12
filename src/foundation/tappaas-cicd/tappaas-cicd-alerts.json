@@ -27,10 +27,10 @@
         "items": "\"items\":\"(?P<items>[^\"]*)\""
       },
       "window": 300,
-      "summary": "The security scan (after a sweep, or the daily rescan) found critical or high CVEs that are new since the last scan and that nobody has decided, or a CVE that joined the known-exploited list whatever was decided for it. One mail per scan, listing them. A module whose security condition is acknowledged or in maintenance is left out.",
+      "summary": "The security scan (after a sweep, or the daily rescan) found critical or high CVEs that are new since the last scan and that nobody has decided, or a CVE that joined the known-exploited list whatever was decided for it. One mail per scan, listing them. A module whose vulnerability condition is acknowledged or in maintenance is left out.",
       "mail": {
         "subject": "{state}: {label.count} new open critical/high CVE(s) in {label.modules}",
-        "body": "== New open critical/high CVEs: {label.count}\nmodules: {label.modules}\n\n{label.items}\n\nhealth-manager report security --cves shows each module's CVEs and its risk score.\nTo decide one: cve-triage.sh component <module> <source>. To quiet a module: health-manager ack <module> --type security --note <why>.\nIn Grafana (Explore, Loki): {query}"
+        "body": "== New open critical/high CVEs: {label.count}\nmodules: {label.modules}\n\n{label.items}\n\nhealth-manager report security --cves shows each module's CVEs and its risk score.\nTo decide one: cve-triage.sh component <module> <source>. To quiet a module: health-manager ack <module> --type vulnerability --note <why>.\nIn Grafana (Explore, Loki): {query}"
       }
     },
     {
@@ -38,7 +38,7 @@
       "title": "CveLevelUp",
       "headline": "A module's CVE risk level rose to high or critical",
       "kind": "event",
-      "match": "\"type\":\"security\".*\"silenced\":false.*\"levelUp\":true",
+      "match": "\"type\":\"vulnerability\".*\"silenced\":false.*\"levelUp\":true",
       "capture": {
         "name": "\"name\":\"(?P<name>[^\"]+)\"",
         "level": "\"reason\":\"cve-(?P<level>[a-z]+)\"",
@@ -48,7 +48,7 @@
       "summary": "A module's or a node's CVE risk level rose to high or critical. A level going down, and every other change, waits for the daily digest.",
       "mail": {
         "subject": "{state}: CVE risk of {label.name} is now {label.level}",
-        "body": "== CVE risk level up: {label.name}\nnow: {label.message}\nsince: {since}\n\nhealth-manager report security --cves shows what counts.\nhealth-manager ack {label.name} --type security --note <why> silences it until the level changes.\nIn Grafana (Explore, Loki): {query}"
+        "body": "== CVE risk level up: {label.name}\nnow: {label.message}\nsince: {since}\n\nhealth-manager report security --cves shows what counts.\nhealth-manager ack {label.name} --type vulnerability --note <why> silences it until the level changes.\nIn Grafana (Explore, Loki): {query}"
       }
     }
   ]

@@ -1,0 +1,11 @@
+{
+  "description": "Which arriving failure accounts for which own condition: derived (the same failure seen from below) or covered (a failure of its own, not listed as a root while the arriving one stands).",
+  "records": [
+    { "id": "core.explain.same-failure", "kind": "explain",
+      "description": "A failure that reaches an object explains its own condition of the same type.",
+      "when": { "cause": { "sameType": true } }, "effect": "derived" },
+    { "id": "core.explain.down-covers", "kind": "explain",
+      "description": "While something critical has reached an object, its own failures are not roots of their own.",
+      "when": { "cause": { "status": "critical" } }, "effect": "covered" }
+  ]
+}

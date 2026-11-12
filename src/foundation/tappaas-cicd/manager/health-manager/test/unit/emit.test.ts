@@ -101,7 +101,7 @@ console.log("transitions");
 
 console.log("transitions: a CVE risk level (ADR-045 D4)");
 {
-  const sec = (status: Condition["status"], reason: string, since: string): Condition => ({ type: "security", status, reason, message: reason, since });
+  const sec = (status: Condition["status"], reason: string, since: string): Condition => ({ type: "vulnerability", status, reason, message: reason, since });
   const ts = transitions([
     period([sec("warning", "cve-medium", T(-30))], T(-30), 1),
     period([sec("warning", "cve-high", T(-20))], T(-20), 2),
@@ -211,8 +211,8 @@ console.log("emit: notices follow the root-cause set");
   // Not a notice of its own: performance, a module's CVE level, a zone's score, a warning.
   const objs = [
     object("perf", "vm", [cond("performance", "critical", T(-3), { reason: "perf-cpu" })]),
-    object("cve", "vm", [cond("security", "critical", T(-3), { reason: "cve-critical" })]),
-    object("zone", "zone", [cond("security", "critical", T(-3), { reason: "cve-critical" })]),
+    object("cve", "vm", [cond("vulnerability", "critical", T(-3), { reason: "cve-critical" })]),
+    object("zone", "zone", [cond("vulnerability", "critical", T(-3), { reason: "cve-critical" })]),
     object("warn", "vm", [cond("operational", "warning", T(-3))]),
     object("site1", "site", []),
   ];

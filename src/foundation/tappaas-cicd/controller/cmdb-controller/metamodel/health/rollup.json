@@ -11,10 +11,10 @@
       "members": [ { "relations": ["placed-in", "at"], "walk": "inbound", "transitive": true },
                    { "relations": ["allocated-to"], "walk": "outbound" } ], "fn": "worst" },
     { "id": "core.rollup.environment-score", "kind": "rollup",
-      "description": "An environment's security is its own risk score, not the worst of its members; the modules that set it are the roots.",
-      "when": { "object": { "class": "environment" }, "condition": { "type": "security" } }, "fn": "own" },
+      "description": "An environment's vulnerability is its own risk score, not the worst of its members; the modules that set it are the roots.",
+      "when": { "object": { "class": "environment" }, "condition": { "type": "vulnerability" } }, "fn": "own" },
     { "id": "core.rollup.zone-score", "kind": "rollup",
-      "description": "A zone's security is its own risk score, the sum of its modules': never a root.",
-      "when": { "object": { "class": "zone" }, "condition": { "type": "security" } }, "fn": "own" }
+      "description": "A zone's vulnerability is its own risk score, the sum of its modules': never a root.",
+      "when": { "object": { "class": "zone" }, "condition": { "type": "vulnerability" } }, "fn": "own" }
   ]
 }

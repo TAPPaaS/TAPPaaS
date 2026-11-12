@@ -89,7 +89,7 @@ const rels = [
   check(d.rootCauses.length === 1, "…and is no root while its node is down");
 }
 {
-  const d = derive(all, src([vm1, [cond("maintenance", "warning", "reboot-pending")]]), rels, shippedModel(), now);
+  const d = derive(all, src([vm1, [cond("upkeep", "warning", "reboot-pending")]]), rels, shippedModel(), now);
   check(d.rootCauses.length === 1 && d.rootCauses[0].impactedCount === 0, "a warning nothing explains is a root of nothing");
 }
 

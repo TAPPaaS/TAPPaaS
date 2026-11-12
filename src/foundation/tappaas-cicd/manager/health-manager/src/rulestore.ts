@@ -18,7 +18,8 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { moduleOfLocation, moduleSourceOf } from "../../../lib/ts/src/instance";
-import { Ancestors, HealthRecord, ModelInfo, Problem, anchorProblem, canonical, checkSet, conflicts, recordHash, recordsOf, ruleSetHash } from "../../../lib/ts/src/health-records";
+import { Ancestors, HealthRecord, ModelInfo, Problem, anchorProblem, canonical, checkSet, conflicts, migrateRecordTypes, recordHash, recordsOf, ruleSetHash } from "../../../lib/ts/src/health-records";
+import { currentType } from "../../../lib/ts/src/health-rules";
 import { Scenario, runScenarios } from "./scenarios";
 import { RulesDoc } from "./rules";
 import { CmdbItem, CmdbRel, Condition, SOURCE } from "./assess-model";
@@ -96,7 +97,42 @@ export class RuleStore {
       const st = readJson(join(dir, "state.json"));
       if (isObj(st)) s.state = { ...emptyState(), ...(st as Partial<State>) } as State;
     }
+    s.migrateTypes();
     return s;
+  }
+
+  /** The records, bases, edits and scenarios written before the condition
+   *  types split, as they read now (health-rules.ts LEGACY_TYPES): base and
+   *  ours the same way, so the three-way merge still sees what the site edited
+   *  and keeps it. The ids of what changed; written by the next write. */
+  migratedTypes: string[] = [];
+  migrateTypes(): string[] {
+    const changed = new Set<string>();
+    const recs = (m: Map<string, HealthRecord[]>): void => {
+      for (const [o, rs] of m) m.set(o, rs.map((r) => { const n = migrateRecordTypes(r); if (n !== r) changed.add(r.id); return n; }));
+    };
+    // A rule the site reviewed stays reviewed: the hash it noted is of base as written then.
+    const rehash = new Map<string, string>();
+    for (const rs of this.base.values()) for (const r of rs) { const n = migrateRecordTypes(r); if (n !== r) rehash.set(recordHash(r), recordHash(n)); }
+    for (const st of Object.values(this.state.rules)) if (st.reviewed && rehash.has(st.reviewed)) st.reviewed = rehash.get(st.reviewed);
+    recs(this.rules);
+    recs(this.base);
+    for (const [id, st] of Object.entries(this.state.rules)) {
+      if (!st.editedFrom) continue;
+      const n = migrateRecordTypes(st.editedFrom);
+      if (n !== st.editedFrom) { st.editedFrom = n; changed.add(id); }
+    }
+    for (const scs of this.scenarios.values()) {
+      for (const sc of scs) {
+        const conds = (sc as unknown as { conditions?: { type: string; reason?: string }[] }).conditions ?? [];
+        for (const c of conds) {
+          const t = currentType(c.type, c.reason);
+          if (t && t !== c.type) { c.type = t; changed.add(sc.id); }
+        }
+      }
+    }
+    this.migratedTypes = [...changed].sort();
+    return this.migratedTypes;
   }
 
   write(): void {

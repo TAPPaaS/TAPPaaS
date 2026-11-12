@@ -1,14 +1,15 @@
 // siem.ts — security findings that are events (ADR-050 D12).
 //
 // An alert whose rule says `security` (ADR-039, labels type=security and
-// level=info|warning|critical) is a hit, not a state: a brute force ends, a
+// level=info|warning|critical; the rules keep that word, the condition it
+// raises is a threat) is a hit, not a state: a brute force ends, a
 // file changed once. The alert receiver folds every such hit into one entry
 // per rule and CI (first, last, count) in its state file; this source turns
-// each entry into a `security` finding that *holds* its condition:
+// each entry into a `threat` finding that *holds* its condition:
 //
 //   info      no condition (the line stays in Loki)
 //   warning   held for 24 h from the last hit, then over
-//   critical  held until acknowledged: an ack of the CI's security condition
+//   critical  held until acknowledged: an ack of the CI's threat condition
 //             made after the last hit ends it; a new hit opens it again
 //
 // A classify record may re-rate a finding and set its `hold` ("12h", "7d",
@@ -76,11 +77,11 @@ export function readSiem(path: string, place: (host: string, module: string) => 
   return out;
 }
 
-/** When the operator last acknowledged the object's security condition, in ms;
+/** When the operator last acknowledged the object's threat condition, in ms;
  *  null without a live ack. */
 export function securityAckAt(o: CmdbItem): number | null {
   const words = (o.attributes.acknowledgements ?? {}) as Record<string, { ack: unknown; at: string } | undefined>;
-  const w = words.security;
+  const w = words.threat ?? words.security; // security: an ack written before the split
   if (!w || !w.ack) return null;
   const t = Date.parse(w.at);
   return Number.isNaN(t) ? null : t;
@@ -108,7 +109,7 @@ export function fromSiem(items: SiemItem[], idx: SiteIndex, nowMs: number, rate:
     const extra = Object.entries(e.labels).filter(([k]) => k !== "type" && k !== "level").map(([k, v]) => `${k} ${v}`).join(", ");
     const base: Finding = {
       object: o.id,
-      type: "security",
+      type: "threat",
       status: e.level as ConditionStatus,
       reason: `siem-${kebab(e.alertname)}`,
       message: `${e.alertname}${e.host ? ` on ${e.host}` : ""}: ${hits}, first ${e.first}, last ${e.last}${extra ? ` (${extra})` : ""}`,

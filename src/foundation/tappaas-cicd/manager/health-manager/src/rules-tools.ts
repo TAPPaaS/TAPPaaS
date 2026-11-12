@@ -10,7 +10,7 @@ import { CmdbItem, CmdbRel, Condition, RANK, SOURCE, conditionsOf, failing, isDe
 import { Derivation, derive } from "./derive";
 import { RulesDoc } from "./rules";
 import { sentence } from "./rule-text";
-import { ConditionStatus, ConditionType } from "../../../lib/ts/src/health-rules";
+import { CONDITION_TYPES, ConditionStatus, ConditionType } from "../../../lib/ts/src/health-rules";
 import { HealthRecord } from "../../../lib/ts/src/health-records";
 import { Classified, classify } from "./classify";
 import { NotifyRules, notifyOf, notifyRecord } from "./notices";
@@ -112,8 +112,8 @@ export function parseFailure(s: string): Failure {
   let status: ConditionStatus = "critical";
   let type: ConditionType = "operational";
   if (parts.length > 1 && statuses.includes(parts[parts.length - 1])) status = parts.pop() as ConditionStatus;
-  const TYPES = ["operational", "drift", "capacity", "performance", "security", "maintenance", "backup"];
-  if (parts.length > 1 && TYPES.includes(parts[parts.length - 1])) type = parts.pop() as ConditionType;
+  const TYPES = CONDITION_TYPES.filter((t) => t !== "impact");
+  if (parts.length > 1 && (TYPES as readonly string[]).includes(parts[parts.length - 1])) type = parts.pop() as ConditionType;
   return { object: parts.join(":"), type, status };
 }
 

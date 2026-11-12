@@ -58,6 +58,8 @@ import { CheckResult, CheckStatus, ClusterClient, HealthReport } from "./types";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
 import { CmdbRefused, CmdbReport, CmdbUnavailable, cmdbQuery, cmdbRelations, cmdbRequest } from "../../../lib/ts/src/cmdb";
+import { migrateStoredObjects } from "../../../lib/ts/src/health-migrate";
+import { MigrateObject, migrateLines, migrateTypes } from "./migrate-types";
 import { printOrSend, pruneRefused } from "../../../lib/ts/src/cmdb-reporter";
 import { AssessIO, AssessResult, Timer, assess } from "./assess";
 import { SIEM_STATE, readSiem } from "./siem";
@@ -291,6 +293,16 @@ export const HELP: HelpSpec = {
       details: "Change what this site runs, kept in config/health/: an update never changes a rule edited here and never brings back one deleted here. delete is undone by restore; take takes the release (or one field), keep keeps the edit and marks it reviewed, accept runs a held rule. An apply that changes the active set recalculates health at once.",
     },
     {
+      usage: "migrate types [--apply]", effect: { apply: "--apply" },
+      options: [["--apply", "Write it back; without: what it would change."]],
+      details:
+        "Writes back, once, what was stored under the condition types before maintenance became upkeep\n" +
+        "and security split into vulnerability and threat: the installed health rules (a rule the site\n" +
+        "edited stays edited, under its new type), the acknowledgements, emit's told roots and notices,\n" +
+        "the digest's lines. The next assess writes the conditions. Without --apply: what it would change\n" +
+        "(exit 2 when something would). update.sh runs it before the rules merge.",
+    },
+    {
       usage: "rules merge [--origin O]... [--apply]", effect: { apply: "--apply" },
       options: [
         ["--origin O", "Only this origin: core, or a module; repeatable."],
@@ -482,7 +494,7 @@ function writeAssessment(report: CmdbReport): void {
 
 function assessIO(opts: Opts, client: ClusterClient, timed?: Timer): AssessIO {
   return {
-    objects: () => cmdbQuery({ class: "object", limit: 100000 }) as unknown as CmdbItem[],
+    objects: () => migrateStoredObjects(cmdbQuery({ class: "object", limit: 100000 }) as unknown as CmdbItem[]),
     ended: () => (cmdbQuery({ class: "ci", includeEnded: true, limit: 100000 }) as unknown as (CmdbItem & { ended?: string | null })[]).filter((o) => o.ended),
     relations: () => cmdbRelations({}) as unknown as CmdbRel[],
     rules: () => rulesModel(opts.configDir),
@@ -784,7 +796,7 @@ function cmdScanSecurity(opts: Opts, client: ClusterClient): number {
 }
 
 // The scan's lines for the alert rules: new open critical/high (mailed at once)
-// and the other changes (the daily digest). A module whose security condition
+// and the other changes (the daily digest). A module whose vulnerability condition
 // is acknowledged or in maintenance is left out; without the CMDB nobody is.
 function tellSecurity(opts: Opts, prevStatus: ScanStatus | null, status: ScanStatus, sec: SiteSecurity, ended: Ended[] = []): void {
   let quiet = new Set<string>();
@@ -1040,6 +1052,18 @@ export function run(argv: string[], client: ClusterClient): number {
       // ADR-041 assess verbs
       case "assess":
         return cmdAssess(opts, client);
+      case "migrate": {
+        if (opts.rest[0] !== "types" || opts.rest.slice(1).some((a) => a !== "--apply")) die("migrate: expected 'types [--apply]'");
+        const apply = opts.rest.includes("--apply");
+        const cmdb = new LiveHealthCmdb();
+        const r = migrateTypes({
+          configDir: opts.configDir,
+          objects: () => cmdbQuery({ class: "object", limit: 100000 }) as unknown as MigrateObject[],
+          write: (o, attributes) => cmdb.write(o as never, attributes as never, { kind: "change", verb: "migrate" }),
+        }, apply);
+        for (const l of migrateLines(r, apply)) info(l);
+        return !apply && (r.rules.length || r.objects.length || r.cursor || r.digest) ? 2 : 0;
+      }
       case "rules":
       {
         const snapshot = (): { objects: CmdbItem[]; relations: CmdbRel[] } => ({ objects: (cmdbQuery({ class: "object", limit: 100000 }) as unknown as CmdbItem[]).filter((o) => o.attributes.placeholder !== true), relations: cmdbRelations({}) as unknown as CmdbRel[] });

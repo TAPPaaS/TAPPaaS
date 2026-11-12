@@ -214,9 +214,9 @@ export const flapsOf = (o: CmdbItem): Record<string, { held: ConditionStatus }> 
 // Since, across no change of status; the maintenance of the open window that
 // covers the object (windows.ts), never carried over.
 function stamp(c: Condition, p: Condition | undefined, now: string, nowMs: number, cov: Covered | undefined, word: OperatorWord | undefined, flap: { held: ConditionStatus } | undefined): Condition {
-  // A security critical from a hit is told inside a window too (ADR-050 D12):
+  // A threat critical from a hit is told inside a window too (ADR-050 D12):
   // an attacker does not keep to the update window.
-  const window: Window | undefined = c.type === "security" && c.owner === SIEM_OWNER && c.status === "critical" ? undefined : coveredBy(c, cov);
+  const window: Window | undefined = c.type === "threat" && c.owner === SIEM_OWNER && c.status === "critical" ? undefined : coveredBy(c, cov);
   const mnt = window ? asMaintenance(window) : null;
   const held = !!p && p.status === c.status && p.reason === c.reason;
   const until = (w: { until: string | null } | null): boolean => w !== null && (!w.until || Date.parse(w.until) > nowMs);

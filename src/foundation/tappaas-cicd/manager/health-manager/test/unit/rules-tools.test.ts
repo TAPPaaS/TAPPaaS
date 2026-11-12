@@ -73,9 +73,9 @@ const rels = [rel("runs-on", guest, node), rel("runs-on", ha, node), rel("runs-o
 
 // ── explain a sum of others (a classify record's aggregate) ──
 {
-  const unit = withConds(obj("vm", "coturn"), [{ ...cond("security", "warning", "cve-medium"), owner: "cve", aggregate: true }]);
+  const unit = withConds(obj("vm", "coturn"), [{ ...cond("vulnerability", "warning", "cve-medium"), owner: "cve", aggregate: true }]);
   const x = explainObject({ objects: [unit], relations: [] }, model, now, "coturn");
-  check(x.conditions.find((c) => c.type === "security")?.how === "sum", "explain: a condition a classify record made a sum is said to be one, never a root, and names no root");
+  check(x.conditions.find((c) => c.type === "vulnerability")?.how === "sum", "explain: a condition a classify record made a sum is said to be one, never a root, and names no root");
   const lines: string[] = [];
   cmdRules(["explain", "coturn"], model, (l) => lines.push(l), undefined, { snapshot: () => ({ objects: [unit], relations: [] }), now: () => now });
   check(lines.some((l) => l.includes("a sum of others") && !l.includes("same failure as ,")), "…and reads so");

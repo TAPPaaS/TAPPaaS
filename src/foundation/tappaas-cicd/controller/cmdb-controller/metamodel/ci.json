@@ -43,7 +43,7 @@
           "items": {
             "type": "object",
             "properties": {
-              "type": { "type": "string", "required": true, "enum": ["operational", "drift", "capacity", "performance", "security", "maintenance", "backup", "impact"] },
+              "type": { "type": "string", "required": true, "enum": ["operational", "drift", "capacity", "performance", "backup", "upkeep", "vulnerability", "threat", "impact"] },
               "status": { "type": "string", "required": true, "enum": ["ok", "warning", "critical", "unknown"] },
               "reason": { "type": "string", "description": "Why, as a word: guest-stopped." },
               "message": { "type": "string" },

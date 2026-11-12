@@ -10,7 +10,7 @@ import { join } from "path";
 import { AssessResult, assess } from "../../src/assess";
 import { CmdbItem, Condition, SiteIndex, conditionsOf } from "../../src/assess-model";
 import { assessmentOf, readValidate } from "../../src/assess-validate";
-import { GATES } from "../../src/assess-sources";
+import { GATES, fromGates } from "../../src/assess-sources";
 import { checkDiskThreshold, checkPendingReboot, checkPulse, checkQuorum, checkServiceLiveness, checkSiteTimezone, runHealthGates } from "../../src/checks";
 import { CveItem, ScanStatus } from "../../src/security";
 import { siteSecurity } from "../../src/site-score";
@@ -76,14 +76,16 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check(got(r, m1, "capacity")?.status === "ok", "memory-commitment: capacity on the machine");
   check(got(r, ct, "capacity")?.reason === "guest-memory-short", "guest-memory: capacity on the guest");
   check(got(r, nc, "backup")?.status === "critical", "backup-status: backup on the guest");
-  check(got(r, nc, "maintenance")?.reason === "reboot-pending" && got(r, m1, "maintenance")?.reason === "timezone-off", "pending-reboot, site-timezone: maintenance");
+  check(got(r, nc, "upkeep")?.reason === "reboot-pending" && got(r, m1, "upkeep")?.reason === "timezone-off", "pending-reboot, site-timezone: upkeep");
   check(got(r, cluster, "operational")?.reason === "quorum-at-risk", "quorum: operational on the cluster");
   check(got(r, m1, "operational")?.reason === "lan-uplink", "lan-uplink: operational on the machine");
   check(got(r, port, "operational")?.reason === "switch-port" && got(r, sw, "operational")?.reason === "switch-port", "switch-ports: on the port, and the device");
   check(got(r, peer, "operational")?.reason === "pulse", "pulse: operational on the backup-peer");
   check(got(r, net, "operational")?.reason === "ipv6-egress", "ipv6-egress: operational on the network vm");
   check(got(r, pool, "capacity")?.reason === "pool-usage", "storage-pools: capacity on the pool, found on its node");
-  check(got(r, site, "maintenance")?.message === "module ghost: the keys changed", "what the CMDB does not have lands on the site, naming its subject");
+  // On its own: the site's backup condition above is the roll-up of nextcloud's.
+  const keys = fromGates([gate("backup-keys", "warn", [], { findings: [{ status: "warn", text: "the keys changed", subject: mod("ghost") }] })], new SiteIndex(io.objects(), io.relations())).findings;
+  check(keys.some((f) => f.object === site.id && f.type === "backup" && f.message === "module ghost: the keys changed"), "what the CMDB does not have lands on the site, naming its subject");
   check(io.written.length === 1 && io.written[0].source === "health-manager" && io.written[0].assessment === true, "one report, an assessment, from health-manager");
   check((io.written[0].objects ?? []).every((o) => typeof o.id === "string"), "…naming its objects by id");
   check(Object.keys(GATES).length === 21, "every gate that is no source of its own is mapped");
@@ -130,7 +132,7 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   io.recent = [alert("HaFencing", {}, null, "recent")];
   const r = assess(io, {}, NOW);
   check(got(r, m1, "operational")?.reason === "alert-replication-failed", "the alert's CI id wins over its host");
-  check(got(r, net, "security")?.reason === "alert-firewall-cert-changed", "a rule that says exposed is security");
+  check(got(r, net, "threat")?.reason === "alert-firewall-cert-changed", "a rule that says exposed is a threat");
   check(got(r, site, "operational")?.status === "warning", "an event of the last day, placed nowhere: on the site");
   io.open = [];
   io.recent = [];
@@ -207,11 +209,11 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check(got(r, pa, "operational")?.reason === "link-down" && got(r, pb, "operational")?.status === "ok", "a cabled port's link");
   check(got(r, pc, "operational")?.status === "ok", "…a port with no cable that is down is no failure");
   check(got(r, wg, "operational")?.reason === "vpn-handshake-stale" && got(r, wg2, "operational")?.status === "ok", "a peer's last handshake");
-  check(got(r, net, "security")?.reason === "certificate-expiry" && got(r, net, "security")?.status === "warning", "a certificate: the newest of its name");
+  check(got(r, net, "upkeep")?.reason === "certificate-expiry" && got(r, net, "upkeep")?.status === "warning", "a certificate: the newest of its name");
   check(got(r, nc, "impact") === undefined, "…no plane was asked: the sources are the CMDB's");
 }
 
-// ── the CVE scan: the security condition from the risk level (ADR-045 D4) ──
+// ── the CVE scan: the vulnerability condition from the risk level (ADR-045 D4) ──
 {
   const s = fresh();
   const zr = obj("zone", "rossen");
@@ -229,34 +231,34 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   io.security = (sc) => siteSecurity(sc, place);
   io.scan = scan([target("nextcloud", "act", [crit("CVE-1")]), target("node:tappaas1", "watch", []), target("image:network/x", "failed", [])]);
   const r = assess(io, {}, NOW);
-  check(got(r, nc, "security")?.status === "warning" && got(r, nc, "security")?.reason === "cve-high", "one open critical: high, a warning on the module");
-  check(got(r, nc, "security")?.message === "score 20, high: 1 critical · 1 unread", "…the message gives the score, what counts and what nobody has read");
-  check(got(r, m1, "security")?.status === "ok", "…nothing counted is ok on the node");
-  check(got(r, net, "security")?.reason === "cve-scan-failed", "…a failed image is its module's warning");
-  check(got(r, zr, "security")?.reason === "cve-high" && got(r, zr, "security")?.message.includes("×1") === true, "the zone has its own score, with its multiplier");
-  check(got(r, env, "security")?.reason === "cve-high" && got(r, env, "security")?.derived === true && got(r, env, "security")?.owner === "cve", "…and the environment its own score, not a roll-up; derived from its modules, so never a root");
+  check(got(r, nc, "vulnerability")?.status === "warning" && got(r, nc, "vulnerability")?.reason === "cve-high", "one open critical: high, a warning on the module");
+  check(got(r, nc, "vulnerability")?.message === "score 20, high: 1 critical · 1 unread", "…the message gives the score, what counts and what nobody has read");
+  check(got(r, m1, "vulnerability")?.status === "ok", "…nothing counted is ok on the node");
+  check(got(r, net, "vulnerability")?.reason === "cve-scan-failed", "…a failed image is its module's warning");
+  check(got(r, zr, "vulnerability")?.reason === "cve-high" && got(r, zr, "vulnerability")?.message.includes("×1") === true, "the zone has its own score, with its multiplier");
+  check(got(r, env, "vulnerability")?.reason === "cve-high" && got(r, env, "vulnerability")?.derived === true && got(r, env, "vulnerability")?.owner === "cve", "…and the environment its own score, not a roll-up; derived from its modules, so never a root");
   check(!r.rootCauses.some((x) => x.id === env.id || x.id === zr.id), "…neither the zone nor the environment is a root cause");
 
   // The same critical in the management zone: ×2, critical there; the module stays high.
   io.scan = scan([target("nextcloud", "watch", []), target("node:tappaas1", "watch", [crit("CVE-2")], "debian")]);
   const r2 = assess(io, {}, later(5));
-  check(got(r2, m1, "security")?.status === "warning" && got(r2, m1, "security")?.reason === "cve-high", "a node's own level: high");
-  check(got(r2, zm, "security")?.status === "critical" && got(r2, zm, "security")?.reason === "cve-critical", "…the management zone ×2: critical");
-  check(got(r2, nc, "security")?.status === "ok", "a module whose CVEs went is ok again");
-  check(got(r2, env, "security")?.status === "ok" && got(r2, env, "security")?.owner === "cve", "the environment follows its own zones, not its node member's level");
+  check(got(r2, m1, "vulnerability")?.status === "warning" && got(r2, m1, "vulnerability")?.reason === "cve-high", "a node's own level: high");
+  check(got(r2, zm, "vulnerability")?.status === "critical" && got(r2, zm, "vulnerability")?.reason === "cve-critical", "…the management zone ×2: critical");
+  check(got(r2, nc, "vulnerability")?.status === "ok", "a module whose CVEs went is ok again");
+  check(got(r2, env, "vulnerability")?.status === "ok" && got(r2, env, "vulnerability")?.owner === "cve", "the environment follows its own zones, not its node member's level");
 
   // A level change inside warning is a transition: medium → high.
   io.scan = scan([target("nextcloud", "watch", [high("CVE-3")])]);
   const r3 = assess(io, {}, later(10));
-  check(got(r3, nc, "security")?.reason === "cve-medium", "one open high: medium");
+  check(got(r3, nc, "vulnerability")?.reason === "cve-medium", "one open high: medium");
   io.scan = scan([target("nextcloud", "watch", [crit("CVE-4")])]);
   const r4 = assess(io, {}, later(15));
-  check(r4.transitions.some((t) => t.id === nc.id && t.type === "security" && t.from === "warning" && t.to === "warning" && t.reason === "cve-high"), "medium → high is a transition, the status still warning");
-  check(got(r4, nc, "security")?.since === later(15).toISOString(), "…with a new since");
+  check(r4.transitions.some((t) => t.id === nc.id && t.type === "vulnerability" && t.from === "warning" && t.to === "warning" && t.reason === "cve-high"), "medium → high is a transition, the status still warning");
+  check(got(r4, nc, "vulnerability")?.since === later(15).toISOString(), "…with a new since");
 
   // Low is ok: an analysed low risk.
   io.scan = scan([target("nextcloud", "watch", [{ id: "CVE-5", state: "risk", rating: "low", severity: "Critical", pkg: "x", version: "1" }])]);
-  check(got(assess(io, {}, later(20)), nc, "security")?.status === "ok", "low is ok");
+  check(got(assess(io, {}, later(20)), nc, "vulnerability")?.status === "ok", "low is ok");
 }
 
 // ── since and lastChecked; held until the source looks ──

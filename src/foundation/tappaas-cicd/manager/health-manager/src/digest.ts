@@ -122,11 +122,11 @@ function sweepFindings(diffs: SweepDifference[]): Finding[] {
 // The CVE items that reach no mail of their own (ADR-045 D4): analysed risk
 // items and carried ones, per module. New open critical/high CVEs were mailed by
 // the scan, and a level rising to high or critical by health; a level change
-// shows here as the module's security condition. A module whose security
+// shows here as the module's vulnerability condition. A module whose vulnerability
 // condition is acknowledged or in maintenance is left out.
 function securityFindings(sec: SiteSecurity | null, rows: ListRow[]): Finding[] {
   if (!sec) return [];
-  const quiet = new Set(rows.filter((r) => r.type === "security" && (r.acknowledged || r.maintenance)).map((r) => r.name));
+  const quiet = new Set(rows.filter((r) => r.type === "vulnerability" && (r.acknowledged || r.maintenance)).map((r) => r.name));
   const out: Finding[] = [];
   for (const u of Object.values(sec.units)) {
     if (quiet.has(u.name)) continue;
@@ -136,7 +136,7 @@ function securityFindings(sec: SiteSecurity | null, rows: ListRow[]): Finding[] 
         key: `cve ${u.name} ${i.id} ${i.state}`,
         object: u.kind === "node" ? `node ${u.name}` : u.name,
         what: clip(`${how}: ${i.id} ${i.pkg} ${i.version}`),
-        group: `security cve ${i.state}`,
+        group: `vulnerability cve ${i.state}`,
         condition: true,
       });
     }
@@ -147,7 +147,7 @@ function securityFindings(sec: SiteSecurity | null, rows: ListRow[]): Finding[] 
 function securityLine(sec: SiteSecurity | null): string[] {
   if (!sec) return [];
   const by = sec.site.setBy.module ? `, set by ${sec.units[sec.site.setBy.module]?.name ?? sec.site.setBy.module}${sec.site.setBy.zone ? ` in ${sec.site.setBy.zone}` : ""}` : "";
-  return [`Security: the site's CVE risk is ${sec.site.level} (score ${sec.site.score}${by}).`, ""];
+  return [`Vulnerability: the site's CVE risk is ${sec.site.level} (score ${sec.site.score}${by}).`, ""];
 }
 
 function groupLines(found: Finding[]): string[] {

@@ -153,7 +153,7 @@ ck(hm["rules"][0]["repeat"] == "24h" and hm["rules"][0]["window"] == 86400, "the
 # ADR-045 D4: the security scan's lines, and a module's level rising
 cnew = lambda silenced=False: json.dumps({"event": "cve-new", "scan": "2026-11-08T03:00:00Z", "count": 2, "modules": "immich", "items": "CVE-2026-1 critical brotli 1.1.0 (immich); CVE-2026-2 high zlib 1.3 (immich)", "silenced": silenced}, separators=(",", ":"))
 cchg = json.dumps({"event": "cve-changes", "scan": "x", "count": 1, "what": "immich: 1 new risk", "silenced": False}, separators=(",", ":"))
-lvl = lambda up, silenced=False, cls="vm": json.dumps({"event": "transition", "class": cls, "name": "immich", "type": "security", "from": "warning", "to": "warning", "reason": "cve-high", "message": "score 20, high: 1 critical", "kind": "causal", "silenced": silenced, **({"levelUp": True} if up else {})}, separators=(",", ":"))
+lvl = lambda up, silenced=False, cls="vm": json.dumps({"event": "transition", "class": cls, "name": "immich", "type": "vulnerability", "from": "warning", "to": "warning", "reason": "cve-high", "message": "score 20, high: 1 critical", "kind": "causal", "silenced": silenced, **({"levelUp": True} if up else {})}, separators=(",", ":"))
 ck(cvenew.search(cnew()), "cve-new-critical takes the scan's new open items")
 ck(not cvenew.search(cchg), "…not the other changes")
 ck(digest.search(cchg), "the digest takes the other changes")

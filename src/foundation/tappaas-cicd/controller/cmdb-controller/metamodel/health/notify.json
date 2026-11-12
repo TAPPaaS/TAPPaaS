@@ -13,7 +13,7 @@
       "overrides": ["core.notify.critical-root"] },
     { "id": "core.notify.cve-level", "kind": "notify",
       "description": "A module's CVE level, and the NixOS baseline's, is mailed when it rises, by its own event.",
-      "when": { "condition": { "type": "security", "reason": ["cve-medium", "cve-high", "cve-critical", "cve-baseline"] } }, "notify": "digest",
+      "when": { "condition": { "type": "vulnerability", "reason": ["cve-medium", "cve-high", "cve-critical", "cve-baseline"] } }, "notify": "digest",
       "overrides": ["core.notify.critical-root"] },
     { "id": "core.notify.site-own", "kind": "notify",
       "description": "What is about the site, a zone or an environment as a whole is told in the digest.",
