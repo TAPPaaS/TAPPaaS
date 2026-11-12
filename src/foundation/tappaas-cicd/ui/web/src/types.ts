@@ -729,7 +729,14 @@ export interface HealthIssue {
   maintenance: boolean;
   flapping: boolean;
   quiet?: string; // the health rule that quieted it
+  hits?: HealthHits; // the events behind it
+  heldUntil?: string; // when its hold ends, or "ack": until acknowledged
+  heldBy?: string; // the health rule that set the hold
 }
+
+/** What a source that counts events saw: how many, the first and the last, the
+ *  alert rules and the query of their log lines. */
+export interface HealthHits { count: number; first: string; last: string; alerts?: string[]; query?: string }
 
 export interface HealthView {
   status: HealthStatus;
@@ -761,12 +768,29 @@ export interface HealthEdge {
   to: string;
 }
 
+export interface RootCondition {
+  type: string;
+  status: HealthStatus;
+  reason: string | null;
+  message: string | null;
+  since: string | null;
+  acknowledged: boolean;
+  maintenance: boolean;
+  hits?: HealthHits;
+  heldUntil?: string;
+  heldBy?: string;
+}
+
 export interface HealthRoot {
   id: string;
   class: string;
   name: string;
   label: string;
   type: string | null;
+  types?: string[]; // every type it is a root in (absent from a lens's own list)
+  conditions?: RootCondition[];
+  environment?: string | null;
+  maintenance?: boolean;
   status: HealthStatus;
   reason: string | null;
   message: string | null;
@@ -959,9 +983,15 @@ export interface HealthObject {
   relations: { id: string; type: string; direction: "in" | "out"; other: { id: string; class: string; name: string; status: HealthStatus | null } }[];
   history: { at: string; type: string; from: HealthStatus | null; to: HealthStatus; reason: string | null; message: string | null; source: string }[];
   changes: { id: number; kind: string; source: string; job: string | null; verb: string | null; actor: string | null; time: string }[];
+  isRoot?: boolean;
   rootCauses: { id: string; class: string; label: string; reason: string | null }[];
   impacts: { id: string; class: string; label: string; status: HealthStatus }[];
+  logs?: ObjectLogs;
 }
+
+/** Grafana Explore on an object's lines (its host), and per condition whose
+ *  source names a query (a threat's rule) that query. */
+export interface ObjectLogs { host: string | null; url: string | null; rules: { type: string; alert: string; url: string }[] }
 
 // GET cmdb/ci/<id> (the backend's cipanel.ts): a CI's record.
 export interface CiEnd {
@@ -1043,7 +1073,43 @@ export interface ModuleSection {
   operationErrors: string[];
 }
 
-// ── operations (ADR-040 D11, D15; src/operations.ts builds these) ──────
+// GET security/threats (the backend's threats.ts): the Threats tab.
+export interface ThreatRow {
+  id: string;
+  class: string;
+  name: string;
+  label: string;
+  module: string | null;
+  environment: string | null;
+  status: HealthStatus;
+  reason: string | null;
+  message: string | null;
+  since: string | null;
+  hits?: HealthHits;
+  heldUntil?: string;
+  heldBy?: string;
+  acknowledged: boolean;
+  maintenance: boolean;
+  cve: { status: HealthStatus; reason: string | null; message: string | null; open: boolean } | null;
+  logs?: ObjectLogs;
+}
+export interface ThreatAck { id: string; class: string; label: string; by: string; note: string; at: string; until: string | null }
+export interface ThreatsView {
+  generated: string | null;
+  hasConditions: boolean;
+  counts: { critical: number; warning: number; silenced: number };
+  open: ThreatRow[];
+  silenced: ThreatRow[];
+  acks: ThreatAck[];
+}
+
+// The header's counts under the Health page's filters (GET health/counts).
+export interface FilteredCounts { counts: HealthCounts; roots: number; rootsAll: number; filtered: boolean }
+
+// What changed on each root cause in the last day (GET health/changes).
+export interface RootChanges { windowHours: number; changes: Record<string, OpsChange[]>; changesError: Record<string, string>; changesSkipped: string[] }
+
+// ── open events, changes, the sweep (src/openevents.ts builds these) ──
 export interface OpsCondition {
   type: string;
   status: "critical" | "warning";

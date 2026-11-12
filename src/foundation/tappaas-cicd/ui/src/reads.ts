@@ -18,7 +18,7 @@ import { Cached, CachedMap, Entry } from "./cache";
 import { Cmdb, CmdbClassRow, CmdbError, CmdbHistory, CmdbRelationRow, CmdbShow } from "./cmdb";
 import { AssetPositions, AssetTree, DiskFacts, DiskPlacement, assetTree, diskPlacements } from "./assets";
 import { Backbone, CiHistoryRow, CiRecord, ModuleRef, TraceStep, adrRefs, ciHistory, ciRecord, issuesUrl, walkTrace, webUrlOf } from "./cipanel";
-import { Operations, SweepRunner, changeTargets, groupEvents, openEvents, operationsDoc } from "./operations";
+import { RootChanges, SweepRunner, rootChanges } from "./openevents";
 import { RepositoryCatalog, moduleSourceOf, repositoryCatalog } from "./catalog";
 import { ModuleFields, moduleFieldRows, moduleSchema, schemaDoc } from "./fields";
 import { composeFields } from "../../lib/ts/src/compose-fields";
@@ -26,6 +26,7 @@ import { DefaultRule, FieldDef, FieldKind, FieldManifest, FormMode, RefContext, 
 import { Runner, runJson } from "./run";
 import { SetupInputs, gatherSetup } from "./setup";
 import { HealthGraph, HealthObject, HealthRoot, RelationType, buildHealth, healthObject } from "./health";
+import { ObjectLogs, objectLogs } from "./jumps";
 import { ModuleIcon, moduleIcon } from "./icons";
 import { CONSOLE_SCHEMA, readConsoleFile } from "./consolefile";
 import { CmdbView, KindInput, NodeLive, kindSections } from "./kindsections";
@@ -270,7 +271,7 @@ export class Reads {
   readonly objectHistory: CachedMap<CmdbHistory>;
   readonly allocations: Cached<CmdbRelationRow[]>;
   readonly disks: Cached<DiskFacts>;
-  readonly sweeps: SweepRunner | null; // the discovery sweep the Operations page starts
+  readonly sweeps: SweepRunner | null; // the discovery sweep the Assets page starts
   private classRows: CmdbClassRow[] | null = null;
   private relationTypes: RelationType[] | null = null;
 
@@ -891,10 +892,12 @@ export class Reads {
 
   // The CI panel of one object: its record and history, and what the graph
   // says about it.
-  async healthObjectOf(id: string): Promise<HealthObject> {
+  async healthObjectOf(id: string): Promise<HealthObject & { logs: ObjectLogs }> {
     const cmdb = this.cmdbClient();
-    const [show, history, graph] = await Promise.all([cmdb.show(id), cmdb.history(id), this.healthGraph.get()]);
-    return healthObject(show, history.attributes, history.changes, graph.value, (this.cfg.now ?? Date.now)());
+    const [show, history, graph, m, e] = await Promise.all([cmdb.show(id), cmdb.history(id), this.healthGraph.get(), this.modules.get(), this.environments.get()]);
+    const o = healthObject(show, history.attributes, history.changes, graph.value, (this.cfg.now ?? Date.now)());
+    const ctx = { topology: this.topology.peek().value, modules: m.value?.modules ?? [], environments: e.value ?? [], mgmtDomain: "", pbsStore: "" };
+    return { ...o, logs: objectLogs(ctx, o, o.conditions) };
   }
 
   // A CI's panel (ADR-040 D10): by id, or by name and class.
@@ -971,13 +974,14 @@ export class Reads {
     return { name: m.name, version, issues: issuesUrl(web, m.name), adrs };
   }
 
-  // The Operations view (ADR-040 D11): the open events of the health document
-  // by root cause, and each event's changes of the last day from its history,
-  // the first OPERATIONS_HISTORIES of them in the page's order.
-  async operations(doc: HealthGraph | null): Promise<Operations> {
+  // What changed on each root cause in the last day, from its history: the
+  // first OPERATIONS_HISTORIES roots in the list's order (the Health page's
+  // "changed 2 h ago by …" line).
+  async rootChanges(doc: HealthGraph | null): Promise<RootChanges> {
     const now = (this.cfg.now ?? Date.now)();
-    const groups = doc ? groupEvents(doc, openEvents(doc)) : [];
-    const { read, skipped } = changeTargets(groups, OPERATIONS_HISTORIES);
+    const ids = [...new Set((doc?.roots ?? []).map((r) => r.id))];
+    const read = ids.slice(0, OPERATIONS_HISTORIES);
+    const skipped = ids.slice(OPERATIONS_HISTORIES);
     const histories = new Map<string, CmdbHistory | Error>();
     const one = async (id: string): Promise<void> => {
       if (!this.cfg.cmdb) return void histories.set(id, new CmdbError("this console has no CMDB client"));
@@ -986,7 +990,7 @@ export class Reads {
     };
     // A few at a time: the controller is one process, and the page waits.
     for (let i = 0; i < read.length; i += 8) await Promise.all(read.slice(i, i + 8).map(one));
-    return operationsDoc(doc, histories, skipped, now);
+    return rootChanges(histories, skipped, now);
   }
 
   // health-manager roots --json; the graph's own list when the verb cannot

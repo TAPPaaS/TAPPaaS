@@ -61,12 +61,16 @@ pool), **Environment** (each environment with its zone, its modules' maturity an
 it holds), **Modules** (how many are running, stopped, updating — an update job running — and
 archived, the last updates of a module or the sweep, the modules whose health fails or warns) and
 **Identity** (users, groups and roles, and the identity provider, the `identity` module: its run
-state and health). **Health**: the health line (critical, warning and ok objects, the open root
-causes, what is silenced and unknown), the last sweep, backups, the release and security (the
-site's CVE risk level and score, how many modules are high or critical, a link to Security).
-**Alerts**: the ten open events from `operations`, critical first and the newest first within each,
-one line each (status, class and name, what is wrong, since) opening it on the Operations page with
-its Health panel; a link to the Operations page for the rest. **Site** — the site as built, in four tabs, each at its own address: Overview
+state and health, and the release: its channel and each repository's branch). **Health**: the
+health line (critical, warning and ok objects, the open root causes, what is silenced and
+unknown), then one card per condition type in the filter's order (operational, drift, capacity,
+performance, backup, upkeep, vulnerability, threat, impact), each with what is open by status, the
+first names and what is silenced, its title opening the Health page filtered to that type
+(`/health?type=<type>`); vulnerability gives the site's CVE level and score, threat its open
+findings, backup the buddies' state. **Alerts**: the ten open events from `health/events`, critical
+first and the newest first within each, one line each (status, class and name, what is wrong,
+since) opening the object on the Health page (`/health?select=<id>`); a link to the Health page
+for the rest. **Site** — the site as built, in four tabs, each at its own address: Overview
 (`/site/overview`, also `/site`), Physical (`/site/physical`), Devices (`/site/devices`) and Storage
 (`/site/storage`); the earlier addresses (`/physical`, `/site/physical/<view>`) redirect to them.
 **Overview** sums the other three: the site in one line (nodes, switches, APs, racks, pools,
@@ -270,8 +274,15 @@ is any, holds what no facet reaches, so nothing is lost. An object with several 
 under each. Every row carries the roll-up of its subtree: a dot with the worst status and a count of
 the objects that need a look (warning or critical and not silenced; an unknown is grey in the dot and
 named in the tooltip, not counted, and the roll-up condition of a place or collection is not one
-more object). The current root causes stand above the facets, worst first; the search finds any
-object by name or class and says where it is. What is open is remembered in the browser.
+more object). The current root causes stand above the facets, worst first: one line per type the
+object is a root in, with what is wrong, its hits and its hold as columns (`7 hits`, `until
+acknowledged`, `5 h left`), what it impacts, and the last change on it in the last day ("changed 2 h
+ago by lars (modify)", from its CMDB history); a threat critical stays listed inside a maintenance
+window. The type, class and environment filters narrow the list as they narrow the tree and the
+graph, and the header counts with them ("3 of 24 root causes", the objects by that type's colour,
+**clear filter**); the filters and the selection live in the address (`/health?type=threat&select=<id>`),
+so the Overview's cards and other pages link into them; an `/operations` link lands here. The search finds any object by name or class and says where it is. What is open is
+remembered in the browser.
 
 **The ego graph (centre)** is laid out by dagre: the selected object, a pill per relation type and
 its neighbours through them, what it needs above it and what needs it below. Each pill's neighbours
@@ -286,11 +297,16 @@ green ok, hatched acknowledged, dotted in a maintenance window, ↯ flapping; a 
 laid out once per shape; a colour is patched over it, so a filter, the time slider or a change in
 the CMDB never moves a card.
 
-**The CI panel (right)**: conditions with their `since`, the root cause or what it impacts, drift,
-the conditions' history, the changes to it, relations both ways, the health verbs as jobs (Ack…,
-Unack…, Maintenance…, health-manager's own, offered once its manifest declares them; the dialog's
-title names the condition, the type is not a field, and **until** is a calendar that sends a date,
-ending at that day's midnight UTC, from tomorrow on), **Details**
+**The CI panel (right)**: conditions with their `since`, their hits (count, last; first in the
+tooltip) and their hold as fields, the root cause or what it impacts, drift, the conditions'
+history, the changes to it (a root cause's last day by default, every change on asking), relations
+both ways, **Logs** (Grafana Explore on the object's lines, and for a threat the query of the rule
+that raised it, the one its mail links; only when logging is installed), the health verbs as jobs
+(Ack…, Unack…, Maintenance…, health-manager's own, offered once its manifest declares them; the
+dialog's title names the condition, the type is not a field, the note is required, its words say
+what the ack does from the rule that holds the condition — a hit held until acknowledged ends at
+the next assessment, any other keeps its status and stops counting — and **until** is a calendar
+that sends a date, ending at that day's midnight UTC, from tomorrow on), **Details**
 at its top, the page that shows the object in full and where its operations are, and **Show in tree**, which opens the tree
 down to it. A panel shows status, not operations.
 
@@ -340,30 +356,15 @@ Health section, the Modules list's health badge and a module page's Health secti
 the worst condition of their objects from `health/summary` and `modules`, so every page agrees with the
 view; each falls back to `health` (validate) while the CMDB holds no conditions or does not answer.
 
-**Operations** (`/operations`) — what is wrong now and what changed. **Open events** are the objects
-with a failing condition of their own: critical or warning, not derived, not acknowledged and not in
-a maintenance window (an `impact` condition is a symptom, shown as its root's impact, never an event
-of its own). They are grouped by root cause: an event that another open event explains goes under
-it, following the chain to the top; the head of a group is marked *root cause* when other objects
-fail because of it. Critical groups come first, then the one that impacts most, then the oldest; in
-a group the head first, then critical before warning. Under each group, **impacts N** lists the
-objects that fail because of its head (the dependants whose derived condition names it). Beside
-each event, **what changed** on that object in the last 24 hours, newest first, from its CMDB
-history: each change with its verb or kind, source, actor and job, drift, and what it set — the
-attributes, a relation made (`+`) or ended (`−`). The assessment's own heartbeat (an observation
-that set only `conditions`, `lastSeen`, `used` or `leaseUntil`) is left out. The histories of the
-first 40 events are read, each at most a minute old. A row opens the object's panel, the same as
-on the Health page (`/operations?select=<id>`), with **Show in tree** to go there; the page reads
-again every 30 seconds and whenever the CMDB changes.
-
-**Discovery sweep** on the same page: **Run discovery sweep** (an installer's; it changes nothing
+**Discovery sweep**, on the Assets page below the tree: **Run discovery sweep** (an installer's; it changes nothing
 on the site, it asks every source for everything and compares with the last sweep and with
 `config/`) runs `cmdb sweep` behind the request and is disabled while one started here runs; the
 CMDB refuses a second one, from anywhere, while one runs, and the page says so. Below it the last
 sweep's record: when, its status, the sweep it compared with (none: the baseline), the counts, the
 sources that failed or were asked without `--discover`, and the findings — what no change explains:
-drift, differences from desired, unmanaged and missing objects — each object a link to its panel.
-The nightly sweep's record shows here the same way.
+drift, differences from desired, unmanaged and missing objects — each object opening on the Health
+page. The nightly sweep's record shows here the same way, and below it the last update sweep (when,
+succeeded or failed, how many modules, how many failed, the reboot).
 
 Every change is the operate dialog (`web/src/operate.tsx`, the flows in `web/src/flows.tsx`): a
 form built from the verb's manifest, the exact command (copyable), disruptions as labelled
@@ -454,7 +455,7 @@ room fields only.
 ## Side panels: the Details link
 
 A selection in the Physical, Devices (`/site/devices`) and Storage views, and an object in the Health
-and Operations views, opens a side panel with a condensed overview of it: its records, findings or
+and Security › Threats views, opens a side panel with a condensed overview of it: its records, findings or
 conditions, where it is, what it is connected to. The panel changes nothing. At its top, **Details**
 opens the page that shows the object in full and where it is changed (`web/src/details.ts`):
 
@@ -513,7 +514,14 @@ A page is served from the last answer with its age; a failed refresh keeps the l
 answer and says why. `POST /api/v1/refresh[?what=<read>]` refreshes the console's own cache
 now (it changes nothing on the site).
 
-**Security** (`/security`) — the site's CVE risk from the last security scan: the site's level and
+**Security** (`/security`) — the security workspace, two tabs. **Threats** (`/security?tab=threats`):
+what is happening on the running systems, from the threat conditions on the CIs — the open findings
+per node and module, critical first, then a hit on something with an open CVE, then the latest; each
+with what it is, its hits, first and last, the hold left, and the CVE state of the same object
+beside it (marked when one is open); per row Ack… (the rule's wording), Logs (the rule's query) and
+the object's panel; the acknowledged and windowed ones folded below; and the acknowledgements of the
+last 30 days with who and why, kept after the condition they ended. **Vulnerabilities** (`/security`):
+the site's CVE risk from the last security scan: the site's level and
 score and what sets it, then each environment, its zones with their tier multiplier and the modules
 and platform targets (nodes, the firewall) in them; the zones in no environment sit directly under
 the site. Each row has its level, score, what sets it (on a module: what counts, "1 critical"), its
@@ -536,13 +544,16 @@ change is a job as ever, `health-manager ack|unack|maintenance`, taken from its 
 
 | Route | Answers |
 |---|---|
-| `health/tree` | `{generated, hasConditions, site, counts, roots[], facets[]}`: a tree node is `{id, class, name, label, isRoot, children, status, notOk, unknown, acknowledged, maintenance, flapping, types{}, classes[], environments[]}`, `children` how many to open, the rest the roll-up of its subtree; a root is `{id, class, label, type, status, reason, message, since, acknowledged, flapping, impactedCount, impacted[], environments[]}` |
+| `health/tree` | `{generated, hasConditions, site, counts, roots[], facets[]}`: a tree node is `{id, class, name, label, isRoot, children, status, notOk, unknown, acknowledged, maintenance, flapping, types{}, classes[], environments[]}`, `children` how many to open, the rest the roll-up of its subtree; a root is `{id, class, label, type, types[], conditions[], environment, status, reason, message, since, acknowledged, maintenance, flapping, impactedCount, impacted[], environments[]}`, `types` every type it is a root in, `conditions` one per type with its hits and hold |
 | `health/tree?q=<text>` | up to 50 tree nodes by name or class, worst first, each with `where`, the way down to it as a line |
 | `health/tree/<id>/children` | one level: a facet's tops (`physical`, `environments`, `identity`, `elsewhere`) or an object's children |
 | `health/tree/<id>/path` | the first way down to an object, its facet first |
 | `health/ego/<id>[?depth=1..3][&at=<time>]` | `{generated, at, id, center, nodes[], groups[], edges[]}`: a node is the object with its worst condition `{id, class, name, label, environment, module, rootCause[], isRoot, types{}, issues[], status, type, reason, since, acknowledged, maintenance, flapping, more}`, `more` true when it has neighbours beyond those shown; a group `{key, anchor, type, direction, side, label, neighbours[]}`, `side` up for what the anchor needs. With `at`, the CMDB as of that moment, not cached |
 | `health/ego/<id>/path?to=root\|impact[&at=<time>]` | `{generated, at, id, to, nodes[], edges[]}`: the chain of the derivation, an edge `{id, type, provider, dependant, virtual}`, `virtual` when no relation shows the way |
-| `health/object/<id>` | the CI panel: `{id, class, ancestors, name, label, module, view, conditions[], drift, relations[], history[], changes[], rootCauses[], impacts[]}` |
+| `health/object/<id>` | the CI panel: `{id, class, ancestors, name, label, module, view, conditions[], drift, relations[], history[], changes[], isRoot, rootCauses[], impacts[], logs}`, a condition with `hits{count, first, last, alerts[], query}`, `heldUntil` (a time or `ack`) and `heldBy` where its source has them; `logs` `{host, url, rules[{type, alert, url}]}` |
+| `health/counts?type=&class=&environment=` | `{counts, roots, rootsAll, filtered}`: the header under the filters |
+| `health/events` | the open events by root cause: `{generated, hasConditions, counts{critical, warning, groups, silenced}, groups[]}`, a group `{root, status, since, events[], impact{count, objects[]}}` (the Overview's alerts) |
+| `health/changes` | `{windowHours, changes{}, changesError{}, changesSkipped[]}`: by root id, its changes of the last day, newest first, each `{id, time, kind, source, verb, job, actor, drift, what[]}`, from `GET /v1/objects/<id>/history` (the first 40 roots) |
 | `health/roots` | `{roots, from: "health-manager"\|"graph", error}`, `graph` the site's recorded root causes when health-manager does not answer |
 | `health/rules` | `health-manager rules list --json` and `rules scenario list --json`: `{records[] {…record, origin, sentence, state, decidesNow}, scenarios[], installed}`, `installed` false before the first merge |
 | `health/rules/<id>` | one rule: `{show, diff}` from `rules show <id> --json` and `rules diff <id> --json` |
@@ -560,13 +571,13 @@ services it provides) and take `badges.health` from it, a silenced condition cou
 The client's address and token: `CMDB_URL`, `CMDB_TOKEN_FILE` (default `http://127.0.0.1:9098`,
 `/etc/secrets/cmdb-token`).
 
-The Operations view (`src/operations.ts` shapes it):
+The discovery sweep on the Assets page and the Threats tab (`src/openevents.ts`, `src/threats.ts`):
 
 | Route | Answers |
 |---|---|
-| `GET operations` | `{generated, hasConditions, counts{critical, warning, groups, silenced}, groups[], windowHours, changes{}, changesError{}, changesSkipped[]}`: a group `{root, status, since, events[], impact{count, objects[]}}`, an event `{id, class, name, label, environment, module, type, status, reason, message, since, flapping, conditions[], isRoot, rootCause[]}`; `changes` by object id, each `{id, time, kind, source, verb, job, actor, drift, what[]}`, from `GET /v1/objects/<id>/history` |
-| `GET operations/sweep` | `{last, lastError, running, failed}`: `last` the last sweep's record (`GET /v1/sweep`) as `{id, time, since, status, counts{}, sources[], findings[], findingsTotal, expectedTotal}`, the first 200 findings; `running` `{started, by}` while one started here runs; `failed` when it did not finish |
-| `POST operations/sweep` | an installer's (or the setup token's), as JSON: starts `cmdb sweep --json` and answers 202 `{running}`; 409 while one runs, here or anywhere; 502 when the CMDB does not answer |
+| `GET assets/sweep` | `{last, lastError, running, failed}`: `last` the last sweep's record (`GET /v1/sweep`) as `{id, time, since, status, counts{}, sources[], findings[], findingsTotal, expectedTotal}`, the first 200 findings; `running` `{started, by}` while one started here runs; `failed` when it did not finish |
+| `POST assets/sweep` | an installer's (or the setup token's), as JSON: starts `cmdb sweep --json` and answers 202 `{running}`; 409 while one runs, here or anywhere; 502 when the CMDB does not answer |
+| `GET security/threats` | `{generated, hasConditions, counts{critical, warning, silenced}, open[], silenced[], acks[]}`: a row `{id, class, name, label, module, environment, status, reason, message, since, hits, heldUntil, heldBy, acknowledged, maintenance, cve{status, reason, message, open}, logs}`; an ack `{id, class, label, by, note, at, until}`, the last 30 days |
 Each answers `{data, at, ageSeconds, refreshing, error}`.
 
 ## Jobs — every change (ADR-034 D4)
@@ -844,7 +855,7 @@ ui/web/e2e/run.sh [--update-baseline] [--routes id,…] [--viewports phone,table
 
 One command for the loop of editing the front end: it builds `src` and the web app (into `e2e/out/web-dist`, never the committed `web/dist`), starts `fixture-server.sh` on it (`CONSOLE_WEB_DIR`), captures every route of `e2e/routes.json` at phone 390×844, tablet 820×1180, laptop 1366×768 and desktop 1920×1080, compares with the baseline, runs the flows (below) and prints the path of `e2e/out/report.md`: the changed routes first, a route × viewport table (the share of pixels that differ, a `diff/<viewport>/<id>.png` above 0.1 %, T when the accessibility text changed), the text diffs, and "N routes differ, M unchanged". A route that differs is captured once more, alone and serially, before the verdict: a graph that drew late under the parallel load comes back the same, a real change stays (the report says which routes were recaptured; the first pass stays in `out/report-first.md` and `out/diff-first/`). It exits 1 when a capture or a flow fails, or a route differs that `--allow` does not name. A full run takes about 3 minutes on the Mac (the flows about 30 s of it); `--routes overview --viewports laptop` about 8 s. Once: `cd web && npm ci && npx playwright install chromium`.
 
-- **Routes** (`routes.json`): `{id, path, open?, settle?}`. Every page, each module, `/health?select=` on one object of each class, one side panel of Operations, Physical, Devices, Storage and Assets, and each Day 2 wizard at step 1, opened by a click (`open: [{role: "button", name: "Add a node…"}]`) and captured at the viewport, not the page under it.
+- **Routes** (`routes.json`): `{id, path, open?, settle?}`. Every page, each module, `/health?select=` on one object of each class, the redirect of `/operations`, the Threats tab, `/health?type=threat` with its Ack… dialog, one side panel of Physical, Devices, Storage and Assets, and each Day 2 wizard at step 1, opened by a click (`open: [{role: "button", name: "Add a node…"}]`) and captured at the viewport, not the page under it.
 - **Capture** (`capture.ts`, Playwright, Chromium): the browser's clock fixed at the fixtures' `CAPTURED` time, reduced motion, no animation, transition, caret or scrollbar, a fixed locale and time zone; it waits for the network, the `settle` text, the fonts and a DOM quiet for 400 ms. A console error or a non-2xx response fails the route (the icon 404s aside). It writes `out/shots/<viewport>/<id>.png` and `.txt` (`ariaSnapshot`: role "name": value, one node per line).
 - **Baseline**: outside the repository and never committed, in `~/.cache/tappaas-console-e2e/<checkout>/` (`$E2E_BASELINE_DIR` to move it), stamped with its commit (`STAMP`). It is reused while the stamp lies between the merge base with `--base` (default `$E2E_BASE`, else `main`) and HEAD; otherwise made again from the merge base, in a temporary `git worktree` of it, or from the working tree when its console equals that commit's. So a run shows what the branch changes against main. `--update-baseline` makes the working tree the baseline, to compare the next steps of a change with.
 - **Flows** (`flows/*.spec.ts`, `flows/playwright.config.ts`): the wizards and operate buttons clicked through on the same fixture server after the capture, at phone and laptop, one at a time; each asserts on the page's text and on the journal's argv, never on pixels. `remove-node`: pick tappaas4 and the wipe, the step stays open with Continue, the check runs only then (`--erase`), the record removed, the button disabled with its hint until the name is typed exactly, the running status line with Stop and the output, step 3 in the chosen way, the apply's argv. `add-node`: declare tappaas5, stage 2 opens, stage 1 keeps one status line with Stop (no form, no output), Stop ends the job. `ack`: on dsk-09's warning the type is passed and not a field, the note blank, until blank with its grey default and then a calendar, the command shown quoted so that a shell splits it into the argv that runs. `output-stick`: 300 lines, the panel at the last; a wheel up stays put while lines come; back at the bottom it follows again. Their jobs say what `test/fixtures/jobs/` holds (paced where a running job is the point); after each flow its jobs are stopped. `--no-flows` skips them; alone, with a fixture server on 9097: `cd web && npx playwright test -c e2e/flows/playwright.config.ts`. A flow fails when its bug comes back: each was checked against its reintroduced bug when written.

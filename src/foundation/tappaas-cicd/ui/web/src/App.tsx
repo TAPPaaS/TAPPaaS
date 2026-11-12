@@ -18,7 +18,6 @@ import { Setup } from "./pages/Setup";
 import { Site } from "./pages/Site";
 import { ModulePage } from "./pages/ModulePage";
 import { Modules } from "./pages/Modules";
-import { Operations } from "./pages/Operations";
 import { Security } from "./pages/Security";
 import { Overview } from "./pages/Overview";
 import { Performance, perfTabOf } from "./pages/Performance";
@@ -33,7 +32,6 @@ const NAV: { to: string; label: string; live: boolean }[] = [
   { to: "/setup/day2", label: "Day 2 wizards", live: true },
   { to: "/health", label: "Health", live: true },
   { to: "/performance", label: "Performance", live: true },
-  { to: "/operations", label: "Operations", live: true },
   { to: "/site", label: "Site", live: true },
   { to: "/environments", label: "Environments", live: true },
   { to: "/zones", label: "Network", live: true },
@@ -65,6 +63,8 @@ export function App() {
     if (to) replacePath(`${to}${window.location.search}`);
     // A zone's earlier address: Environments with ?zone=, or /environments/zones.
     if ((path === "/environments" && new URLSearchParams(window.location.search).has("zone")) || path === "/environments/zones") replacePath(`/zones${window.location.search}`);
+    // The Operations page is gone: its root causes are Health's list, its sweep is on Assets.
+    if (path === "/operations") replacePath(`/health${window.location.search}`);
   }, [path]);
   const view = viewOfPath(path);
   const [busy, setBusy] = useState(false);
@@ -92,7 +92,7 @@ export function App() {
   else if (path === "/health/rules") page = <RulesPage />;
   else if (path.startsWith("/health/rules/")) page = <RulePage id={decodeURIComponent(path.slice("/health/rules/".length))} />;
   else if (path === "/performance" || path.startsWith("/performance/")) page = <Performance tab={perfTabOf(path)} />;
-  else if (path === "/operations") page = <Operations />;
+  else if (path === "/operations") page = null; // on its way to /health
   else if (view) page = <Site view={view} />;
   else if (path === "/modules") page = <Modules />;
   else if (path.startsWith("/modules/")) page = <ModulePage name={decodeURIComponent(path.slice("/modules/".length))} />;

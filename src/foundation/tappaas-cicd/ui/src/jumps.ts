@@ -47,16 +47,40 @@ export function proxmoxNodeTab(ctx: JumpContext, node: string, tab: "disks" | "z
 
 // Grafana Explore on the logs of one host (the logging module's Loki, uid "loki").
 export function grafanaExplore(ctx: JumpContext, host: string): string | null {
+  return grafanaLoki(ctx, `{host="${host}"}`);
+}
+
+// Grafana Explore on a LogQL query: a rule's prepared one (the query its alert
+// mail links), over the range given.
+export function grafanaLoki(ctx: JumpContext, expr: string, range: { from: string; to: string } = { from: "now-6h", to: "now" }): string | null {
   const g = publicName(ctx, "logging");
-  if (!g) return null;
+  if (!g || !installed(ctx, "logging")) return null;
   const panes = {
     a: {
       datasource: "loki",
-      queries: [{ refId: "A", expr: `{host="${host}"}`, datasource: { type: "loki", uid: "loki" } }],
-      range: { from: "now-6h", to: "now" },
+      queries: [{ refId: "A", expr, datasource: { type: "loki", uid: "loki" } }],
+      range,
     },
   };
   return `https://${g}/explore?schemaVersion=1&orgId=1&panes=${enc(JSON.stringify(panes))}`;
+}
+
+// The logs of a CMDB object (the Health panel's Logs link): the host its lines
+// carry (a guest's or a node's own name, a module's VM), and for each condition
+// whose source names a query (a threat's rule) that query, from an hour before
+// its first hit to now.
+export interface ObjectLogs { host: string | null; url: string | null; rules: { type: string; alert: string; url: string }[] }
+export function objectLogs(ctx: JumpContext, o: { class: string; name: string; module: string | null }, conds: { type: string; hits?: { first: string; alerts?: string[]; query?: string } }[]): ObjectLogs {
+  const m = o.module ? ctx.modules.find((x) => x.name === o.module) : undefined;
+  const host = ["vm", "lxc", "machine", "device"].includes(o.class) ? o.name : m ? m.vmname ?? m.name : null;
+  const rules: ObjectLogs["rules"] = [];
+  for (const c of conds) {
+    if (!c.hits?.query) continue;
+    const from = Date.parse(c.hits.first);
+    const url = grafanaLoki(ctx, c.hits.query, { from: Number.isNaN(from) ? "now-24h" : String(from - 3600_000), to: "now" });
+    if (url) rules.push({ type: c.type, alert: (c.hits.alerts ?? []).join(", "), url });
+  }
+  return { host, url: host ? grafanaExplore(ctx, host) : null, rules };
 }
 
 // The shipped dashboard of a CI's class (logging's dashboards.nix), at that CI:

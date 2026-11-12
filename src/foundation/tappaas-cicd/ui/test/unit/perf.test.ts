@@ -175,7 +175,7 @@ async function reads(): Promise<void> {
   // The health document as the console reads it: the CMDB's query leaves ended objects out.
   const healthRoots = buildHealth({ objects: site.objects.filter((x) => !(x as unknown as { ended?: unknown }).ended), relations: site.relations, classes: site.classes, relationTypes: site.relationTypes, modules: modules.map((x) => x.name), now: NOW }).roots;
   const healthRoot = healthRoots.find((r) => r.id === COTURN);
-  check(healthRoot?.type === "security" && healthRoot.message === "score 14, medium: 3 high", "the fixture: coturn's health root names its security condition (the bug's input)");
+  check(healthRoot?.type !== "performance" && healthRoot?.conditions.find((c) => c.type === "vulnerability")?.message === "score 14, medium: 3 high", "the fixture: coturn's health root names its vulnerability condition, stored as security, and its threat (the bug's input)");
   const browse = performanceRoots(o.roots, healthRoots);
   const cot = browse.find((r) => r.id === COTURN);
   check(browse.length === 2 && cot?.type === "performance" && cot.message === "coturn: CPU pressure (steal) 0.4 %, over 0.0 % for 2 min (coturn's threshold)" && cot.since === "2026-11-01T08:40:00.000Z", "Browse lists coturn by its performance condition: its line and since");

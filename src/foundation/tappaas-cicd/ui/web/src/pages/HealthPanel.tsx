@@ -17,6 +17,7 @@ import { ciDetails } from "../details";
 import { CiPanel } from "./CiPanel";
 import { ClassIcon } from "../moduleicon";
 import { PerfCharts } from "../perfpanel";
+import { ackEffect, hitsCount, holdText } from "../healthwords";
 
 const LEVEL: Record<HealthStatus, Level> = { ok: "pass", warning: "warn", critical: "fail", unknown: "skip" };
 const hm = (title: string, verb: string, id: string, extra: Partial<Step> = {}): Step => ({ title, bin: "health-manager", verb, fixed: [id], ...extra });
@@ -32,6 +33,15 @@ function Pick({ id, label, status, pick }: { id: string; label: string; status?:
       {status ? <Dot level={LEVEL[status]} title={status} /> : null} {label}
     </button>
   );
+}
+
+const DAY_MS = 86_400_000;
+
+/** The Ack… step for one condition: the type fixed, the note required, and what
+ *  the acknowledgement does said from the rule that holds it. Shared with the
+ *  Security page's Threats. */
+export function ackStep(target: { id: string; label: string }, c: { type: string; heldUntil?: string; heldBy?: string }): Step {
+  return hm(`health-manager ack ${target.label} --type ${c.type}`, "ack", target.id, { initial: { "--type": c.type }, hide: ["--type"], kinds: { "--until": "future-date" }, placeholders: { "--note": WHY, "--until": "when the condition recovers" }, labels: { "--note": "note", "--until": "until", "--sticky": "keep it when the status changes (a warning turning critical); it still ends when the condition recovers. Without it, the next status change ends it." }, descriptions: { "--note": "Required.", "--until": UNTIL, "--sticky": "" /* the label says it all; "" hides the verb's own help */ }, note: ackEffect(c) });
 }
 
 // The order of a list of conditions: what needs a look, then what is
@@ -52,16 +62,54 @@ function ConditionRow({ o, c, canAck, canUnack }: { o: HealthObject; c: HealthCo
           {c.derived ? " · derived" : ""}
           {c.flapping ? " · flapping" : ""}
         </span>
+        {c.hits ? <span className="att-col muted small" title={`first ${when(c.hits.first)}, last ${when(c.hits.last)}${c.hits.alerts?.length ? ` · ${c.hits.alerts.join(", ")}` : ""}`}> · {hitsCount(c.hits)}, last {when(c.hits.last)}</span> : null}
+        {c.heldUntil ? <span className="att-col muted small"> · held {holdText(c.heldUntil)}</span> : null}
         {c.ack ? <span className="muted small"> · acknowledged by {c.ack.by ?? "?"}{c.ack.until ? ` until ${when(c.ack.until)}` : ""}{c.ack.sticky ? ", sticky" : ""}{c.ack.note ? `: ${c.ack.note}` : ""}</span> : c.acknowledged ? <span className="muted small"> · silenced with its root</span> : null}
         {c.window ? <span className="muted small"> · maintenance{c.window.until ? ` until ${when(c.window.until)}` : ""}{c.window.note ? `: ${c.window.note}` : ""}</span> : null}
         {c.quieted ? <span className="muted small"> · quiet by <Link to={rulePath(c.quieted.rule)}>{c.quieted.rule}</Link>{c.quieted.via ? " (its root)" : ""}</span> : null}
         {c.raw ? <span className="muted small"> · its source said {c.raw.status}; rated {c.status} by <Link to={rulePath(c.raw.rule)}>{c.raw.rule}</Link></span> : null}
       </span>
       {c.status !== "ok" && !c.derived && !silenced ? (
-        <OperateButton label="Ack…" disabled={!canAck} hint={canAck ? undefined : "health-manager on this site has no ack verb"} title={`Acknowledge ${c.type} on ${o.label}`} steps={[hm(`health-manager ack ${o.label} --type ${c.type}`, "ack", o.id, { initial: { "--type": c.type }, hide: ["--type"], kinds: { "--until": "future-date" }, placeholders: { "--note": WHY, "--until": "when the condition recovers" }, labels: { "--note": "note", "--until": "until", "--sticky": "keep it when the status changes (a warning turning critical); it still ends when the condition recovers. Without it, the next status change ends it." }, descriptions: { "--note": "Required.", "--until": UNTIL, "--sticky": "" /* the label says it all; "" hides the verb's own help */ }, note: "The condition keeps its status but stops counting for validate, mails and the Overview. On a root cause it covers the symptoms too." })]} />
+        <OperateButton label="Ack…" disabled={!canAck} hint={canAck ? undefined : "health-manager on this site has no ack verb"} title={`Acknowledge ${c.type} on ${o.label}`} steps={[ackStep(o, c)]} />
       ) : null}
       {c.ack ? <OperateButton label="Unack…" disabled={!canUnack} hint={canUnack ? undefined : "health-manager on this site has no unack verb"} title={`Remove the acknowledgement of ${c.type} on ${o.label}`} steps={[hm(`health-manager unack ${o.label} --type ${c.type}`, "unack", o.id, { initial: { "--type": c.type }, hide: ["--type"] })]} /> : null}
     </li>
+  );
+}
+
+// Grafana Explore on the object's lines; a threat's own rule query beside it.
+function Logs({ o }: { o: HealthObject }) {
+  const l = o.logs;
+  if (!l || (!l.url && !l.rules.length)) return null;
+  return (
+    <>
+      {l.url ? <>{" · "}<a className="hlink" href={l.url} target="_blank" rel="noreferrer" title={`Grafana Explore: the lines of ${l.host}`}>Logs</a></> : null}
+      {l.rules.map((r) => <span key={`${r.type}${r.alert}`}>{" · "}<a className="hlink" href={r.url} target="_blank" rel="noreferrer" title="Grafana Explore: the query of the rule that raised it, as its mail has it">Logs: {r.alert || r.type}</a></span>)}
+    </>
+  );
+}
+
+// What changed on the object: a root cause's last day first, the question an
+// incident starts with; the rest on asking.
+function Changes({ o }: { o: HealthObject }) {
+  const [all, setAll] = useState(false);
+  useEffect(() => setAll(false), [o.id]);
+  if (!o.changes.length) return null;
+  const day = Date.now() - DAY_MS;
+  const recent = o.changes.filter((c) => Date.parse(c.time) >= day);
+  const lastDay = !!o.isRoot && !all;
+  const list = lastDay ? recent : o.changes.slice(0, 12);
+  return (
+    <>
+      <h3>{lastDay ? "Changes to it in the last day" : "Changes to it"}</h3>
+      {lastDay && !recent.length ? <p className="muted small">Nothing changed on it in the last day.</p> : null}
+      <ul className="findings">
+        {list.map((c) => (
+          <li key={c.id}><span className="nowrap">{when(c.time)}</span> {c.verb ?? c.kind} <span className="muted small">{c.source}{c.actor ? ` · ${c.actor}` : ""}</span></li>
+        ))}
+      </ul>
+      {o.isRoot ? <button className="hlink small" onClick={() => setAll(!all)}>{all ? "the last day only" : `every change (${o.changes.length})`}</button> : null}
+    </>
   );
 }
 
@@ -156,8 +204,9 @@ export function HealthPanel({ id, close, pick, showInTree }: { id: string; close
         <>
           <DetailsLinks targets={ciDetails(o)} />
           <p>
-            <button className="hlink" onClick={showInTree}>Show in tree</button>{" "}
+            <button className="hlink" onClick={showInTree}>Show in tree</button>{" · "}
             <button className="hlink" onClick={() => setRecord(true)}>CMDB record and trace</button>
+            <Logs o={o} />
           </p>
           <Verbs o={o} />
           <Section title="Conditions">
@@ -200,16 +249,7 @@ export function HealthPanel({ id, close, pick, showInTree }: { id: string; close
                 </li>
               ))}
             </ul>
-            {o.changes.length ? (
-              <>
-                <h3>Changes to it</h3>
-                <ul className="findings">
-                  {o.changes.slice(0, 12).map((c) => (
-                    <li key={c.id}><span className="nowrap">{when(c.time)}</span> {c.verb ?? c.kind} <span className="muted small">{c.source}{c.actor ? ` · ${c.actor}` : ""}</span></li>
-                  ))}
-                </ul>
-              </>
-            ) : null}
+            <Changes o={o} />
           </Section>
           <Section title="Relations">
             <ul className="plain">

@@ -11,7 +11,8 @@
 // no asset records opens beside the tree with its facts and its operations:
 // a room's and a rack's record changed or deleted, a room or a rack added, a
 // device recorded or placed. Read from the positions the topology carries
-// (asset-manager's record) and the CMDB's allocations: GET assets/tree.
+// (asset-manager's record) and the CMDB's allocations: GET assets/tree. Below
+// the tree, the discovery sweep: run it, and what the last one found (Sweep.tsx).
 
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useRead } from "../api";
@@ -27,6 +28,7 @@ import { AssetRow, AssetTree, AssetTreeItem, AssetTreeLocation, AssetTreePort, T
 import { ClassIcon } from "../moduleicon";
 import { CLASS_SYMBOL, assetClassOf } from "../classsymbol";
 import { Badge, KV, Level, Link, ReadState, Section, canOperate, replacePath, since, useMe } from "../ui";
+import { LastUpdateSweep, Sweep } from "./Sweep";
 
 export const STAGE_LEVEL: Record<string, Level> = { ordered: "info", stock: "skip", placed: "info", operational: "pass", disposed: "unknown" };
 
@@ -416,6 +418,8 @@ export function Assets() {
               {tree ? shown.map((l) => <LocationTree key={l.name || "-"} tree={tree} l={l} sel={sel} pick={pick} />) : null}
             </ul>
           </Section>
+          <Sweep onDone={() => r.reload()} />
+          <LastUpdateSweep />
         </div>
         {sel && tree ? <SelPanel sel={sel} tree={tree} t={t} close={() => pick(null)} /> : null}
       </div>

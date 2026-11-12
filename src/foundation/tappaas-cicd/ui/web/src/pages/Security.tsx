@@ -1,4 +1,6 @@
-// Security — the site's CVE risk, from the last security scan. First what to
+// Security — the security workspace, two tabs (?tab=threats). Threats
+// (Threats.tsx): what is happening on the running systems. Vulnerabilities:
+// the site's CVE risk, from the last security scan. First what to
 // do, one card per component or update: for you (update, coming, your
 // decision), waiting (with TAPPaaS, with upstream) and, where the release train
 // runs, for the maintainers. Then the site's level and score, each
@@ -13,7 +15,8 @@ import {
   MAINTAINER_QUEUES, OPERATOR_QUEUES, QueueCard, SecurityCve, SecurityQueues, SecurityRow, SecurityUnit, SecurityView, SecurityZone, cardTone, countsText, cveCategory, cveNote,
   levelsText, markTone, markWord, riskText, riskTone, sparkPoints, sparkTitle, unitLabel,
 } from "../security";
-import { Badge, Link, ReadState, Section, since, when } from "../ui";
+import { Badge, Link, ReadState, Section, replacePath, since, when } from "../ui";
+import { Threats } from "./Threats";
 
 const W = 84;
 const H = 20;
@@ -138,15 +141,43 @@ function Queues({ q }: { q: SecurityQueues }) {
   );
 }
 
+const TABS = [
+  { id: "vulnerabilities", name: "Vulnerabilities" },
+  { id: "threats", name: "Threats" },
+] as const;
+type Tab = (typeof TABS)[number]["id"];
+const tabOf = (search: string): Tab => (new URLSearchParams(search).get("tab") === "threats" ? "threats" : "vulnerabilities");
+
 export function Security() {
+  const [tab, setTab] = useState<Tab>(() => tabOf(window.location.search));
+  const go = (t: Tab): void => {
+    setTab(t);
+    replacePath(t === "vulnerabilities" ? "/security" : `/security?tab=${t}`);
+  };
+  return (
+    <div className={`page${tab === "threats" ? " page-wide" : ""}`}>
+      <div className="page-head">
+        <h1>Security</h1>
+        <span className="muted">{tab === "threats" ? "what is happening on the running systems" : "what could be attacked: the CVEs of what runs"}</span>
+      </div>
+      <div className="tabs" role="tablist">
+        {TABS.map((t) => (
+          <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? "tab tab-on" : "tab"} onClick={() => go(t.id)}>
+            {t.name}
+          </button>
+        ))}
+      </div>
+      {tab === "threats" ? <Threats /> : <Vulnerabilities />}
+    </div>
+  );
+}
+
+function Vulnerabilities() {
   const r = useRead<SecurityView>("security", 300_000);
   const v = r.env?.data ?? null;
   return (
-    <div className="page">
-      <div className="page-head">
-        <h1>Security</h1>
-        <span className="muted">CVE risk · health-manager report security · read {since(r.env?.at)}</span>
-      </div>
+    <>
+      <p className="muted small">CVE risk · health-manager report security · read {since(r.env?.at)}</p>
       <ReadState env={r.env} failure={r.failure} what="the security scan" />
       {r.env && !r.env.error && !v ? (
         <p className="readstate">No security scan yet. The first runs after the next sweep, or with health-manager scan security.</p>
@@ -193,6 +224,6 @@ export function Security() {
           </p>
         </>
       ) : null}
-    </div>
+    </>
   );
 }

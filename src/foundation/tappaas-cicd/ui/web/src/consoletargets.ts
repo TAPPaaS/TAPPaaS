@@ -76,7 +76,7 @@ export const WIZARDS: WizardDef[] = [
 
 // The pages, by path; <module> is a module's name.
 export const PAGES: { path: string; title: string }[] = [
-  { path: "/", title: "the Overview (four tiles: Site, Environment, Modules, Identity; Health, the health line and the gates; Alerts, the ten open events that matter most)" },
+  { path: "/", title: "the Overview (four tiles: Site, Environment, Modules, Identity; Health, the health line and one card per condition type; Alerts, the ten open events that matter most)" },
   { path: "/setup", title: "the Day 1 setup wizard until the site is set up, then the Day 2 wizards" },
   { path: "/setup/day1", title: "the Day 1 setup wizard" },
   { path: "/setup/day2", title: "the Day 2 wizards" },
@@ -90,9 +90,12 @@ export const PAGES: { path: string; title: string }[] = [
   { path: "/modules", title: "Modules" },
   { path: "/modules/<module>", title: "the module's page" },
   { path: "/identity", title: "Identity" },
-  { path: "/assets", title: "Assets (every asset by location, room and rack, with its stage, role and ports; a room's and a rack's operations)" },
+  { path: "/assets", title: "Assets (every asset by location, room and rack, with its stage, role and ports; a room's and a rack's operations; the discovery sweep and the last update sweep)" },
   { path: "/assets/<asset>", title: "the asset's page (its record, role, placement, ports and cables, disks by bay, allocations, CMDB record; its operations); a disk's (dsk-NN) has the asset it is in and the ones it has been in" },
   { path: "/backup", title: "Backup" },
+  { path: "/health", title: "Health (the root causes, the tree, the graph and an object's panel; ?type=, ?class=, ?environment= filter it)" },
+  { path: "/security", title: "Security, Vulnerabilities (the CVE risk, what to do, the zones and modules)" },
+  { path: "/security?tab=threats", title: "Security, Threats (the open findings on the running systems, their hits and hold, the acknowledgements)" },
   { path: "/activity", title: "Activity" },
 ];
 
@@ -156,9 +159,10 @@ export function resolveTarget(target: unknown, values?: unknown): Resolution {
       if (!ASSET_NAME.test(name)) return { ok: false, reason: `'${name}' is not an asset's name` };
       return { ok: true, target: path, kind: "page", path: `/assets/${encodeURIComponent(name)}`, title: `the asset ${name}'s page`, wizard: null, arg: name, values: {} };
     }
-    const p = PAGES.find((x) => x.path === path);
+    // A tab is a page of its own (/security?tab=threats); else the path alone.
+    const p = PAGES.find((x) => x.path === t) ?? PAGES.find((x) => x.path === path);
     if (!p) return { ok: false, reason: `no page ${path} (pages: ${PAGES.map((x) => x.path).join(", ")})` };
-    return { ok: true, target: path, kind: "page", path, title: p.title, wizard: null, arg: null, values: {} };
+    return { ok: true, target: p.path, kind: "page", path: p.path, title: p.title, wizard: null, arg: null, values: {} };
   }
   const [name, ...rest] = t.split(" ");
   const w = wizardOf(name);
