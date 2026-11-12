@@ -117,6 +117,11 @@ try {
   const rs = mergeReleases(s2, core([], [sc]), { now, model });
   check(rs.activate && rs.problems.some((p) => p.level === "warning" && p.id === "core.scenario.x"), "a scenario that fails after a merge: a warning, the set still runs");
 
+  // A module that ships no rules gets no files.
+  const empty = new RuleStore(join(dir, "e"));
+  mergeReleases(empty, new Map([["backup", { origin: "backup", records: [], scenarios: [], foundation: true, file: "", problems: [] }], ...core([mk("core.p.a")])]), { now, model });
+  check(!empty.rules.has("backup") && !empty.base.has("backup") && empty.rules.has("core"), "a module that ships no rules: no file of its own");
+
   // The files.
   store.write();
   const st = JSON.parse(readFileSync(join(dir, "health", "state.json"), "utf8"));

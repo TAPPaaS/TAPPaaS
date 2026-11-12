@@ -57,6 +57,8 @@ try {
   check(threw, "before any merge: a write says the rules are not installed yet");
   const preview = run("merge");
   check(preview.rc === 0 && preview.out.some((l) => l === "added: core.propagate.runs-on.down") && !store().installed, "merge previews what it would add, and writes nothing");
+  const tc = run("merge", "--origin", "tappaas-cicd");
+  check(tc.out.some((l) => l === "added: core.propagate.runs-on.down"), "merge --origin tappaas-cicd (what its own update runs) merges the core rules");
   const m = run("merge", "--apply");
   check(m.rc === 0 && store().installed && store().rules.get("core")!.length === model.records.length && recalcs === 1, "merge --apply installs core into config/health/ and recalculates at once");
   check(store().allScenarios().length >= 8, "…with the contract scenarios");

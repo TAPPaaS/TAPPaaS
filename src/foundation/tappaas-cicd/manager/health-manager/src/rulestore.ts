@@ -359,6 +359,8 @@ export function mergeReleases(store: RuleStore, rels: Map<string, Release>, opts
   const fresh = new Set<string>(); // ids this merge added or changed from a release
   for (const origin of origins) {
     const rel = rels.get(origin) ?? { origin, records: [], scenarios: [], foundation: false, file: "", problems: [] };
+    // A module that ships no rules, and never did here: nothing to install.
+    if (!rel.records.length && !rel.scenarios.length && !rel.problems.length && !store.base.has(origin) && !store.rules.has(origin) && !Object.keys(store.state.rules).some((id) => id.startsWith(`${origin}.`))) continue;
     // A release that does not parse or validate changes nothing.
     const relProblems = [...rel.problems];
     if (!relProblems.length) {

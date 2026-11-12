@@ -359,7 +359,8 @@ export function cmdRulesWrite(rest: string[], env: RulesEnv, print: (l: string) 
       throw new Error("rules scenario: list, retire or restore");
     }
     case "merge": {
-      const origins = all(args, "--origin");
+      // tappaas-cicd's own update brings the core rules.
+      const origins = all(args, "--origin").map((o) => (o === "tappaas-cicd" ? "core" : o));
       const store = RuleStore.read(dir);
       const snap = env.snapshot?.();
       const cis = snap ? snap.objects.filter((o) => (env.meta.ancestors[o.class] ?? []).includes("ci")).length : 0;
