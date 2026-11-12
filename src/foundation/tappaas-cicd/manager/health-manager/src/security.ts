@@ -98,6 +98,7 @@ export interface TargetStatus {
   new: string[]; // critHighKeys never counted on this target before (first-seen.json)
   items?: CveItem[]; // every CVE the risk score looks at, with its state (ADR-045 D1)
   newOpen?: string[]; // ids among `new` nobody has analysed (state open): what cve-new-critical mails
+  newKev?: string[]; // ids that joined the known-exploited list since the last scan: mailed with them, whatever was decided
   os?: { family: string; name: string }; // what trivy detected: the rescan matches the inventory as this system
 }
 
@@ -1050,6 +1051,8 @@ export function diffScans(cur: ScanStatus, prev: ScanStatus | null, seen: FirstS
     t.new = t.critHighKeys.filter((k) => !before.has(k));
     const open = new Set((t.items ?? []).filter((i) => (i.mark ? i.mark === "unread" : i.state === "open")).map((i) => i.id));
     t.newOpen = [...new Set(t.new.map((k) => k.split(" ")[0]).filter((id) => open.has(id)))].sort();
+    const wasKev = new Set((p?.items ?? []).filter((i) => i.kev).map((i) => i.id));
+    t.newKev = [...new Set((t.items ?? []).filter((i) => i.kev && !wasKev.has(i.id) && i.mark !== "accepted" && i.level !== "none").map((i) => i.id))].sort();
     if (t.verdict === "failed" && p?.verdict !== "failed") out.newlyFailed.push(t);
     const actBefore = new Set((p?.act ?? []).map((f) => `${f.id} ${f.pkg}`));
     const fresh = t.act.filter((f) => !actBefore.has(`${f.id} ${f.pkg}`));

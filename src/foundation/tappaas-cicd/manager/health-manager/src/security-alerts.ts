@@ -3,7 +3,8 @@
 // tappaas-security.
 //
 //   cve-new      the scan found new critical/high CVEs nobody has analysed
-//                (open): cve-new-critical mails it at once, listing them
+//                (unread), or a CVE joined the known-exploited list:
+//                cve-new-critical mails it at once, listing them
 //   cve-changes  anything else moved since the last scan (a new item in another
 //                state, a carried one, a level going down): the daily digest
 //                picks it up
@@ -43,9 +44,16 @@ export function cveNewEvent(s: ScanStatus, sec: SiteSecurity, quiet: Set<string>
   for (const [key, u] of Object.entries(sec.units)) {
     if (quiet.has(key)) continue;
     const fresh = new Set(s.targets.filter((t) => u.targets.includes(t.id)).flatMap((t) => t.newOpen ?? []));
-    for (const i of u.items.filter((x) => x.state === "open" && fresh.has(x.id))) {
+    const kev = new Set(s.targets.filter((t) => u.targets.includes(t.id)).flatMap((t) => t.newKev ?? []));
+    for (const i of u.items.filter((x) => (x.mark ? x.mark === "unread" : x.state === "open") && fresh.has(x.id) && !kev.has(x.id))) {
       mods.add(u.name);
       lines.push(`${i.id} ${i.severity.toLowerCase()} ${i.pkg} ${i.version} (${u.name})`);
+    }
+    // Known-exploited now: mailed whatever was decided for it — it counts at
+    // its upstream level until a person reads it again.
+    for (const i of u.items.filter((x) => kev.has(x.id))) {
+      mods.add(u.name);
+      lines.push(`${i.id} ${i.severity.toLowerCase()} ${i.pkg} ${i.version} (${u.name}, known exploited)`);
     }
   }
   if (lines.length === 0) return null;
