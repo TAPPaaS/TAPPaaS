@@ -3,202 +3,19 @@
   "specVersion": "1.5",
   "version": 1,
   "metadata": {
+    "timestamp": "2026-11-12",
     "component": {
       "type": "application",
       "name": "immich",
-      "description": "TAPPaaS module immich: triage of its own critical/high CVEs (#788). Immich 3.2.4 (from nixos-unstable) on NixOS: immich-server on :2283 plain HTTP, published through the firewall's Caddy to home, netbird and internet zones, ML service on 127.0.0.1:3003, PostgreSQL local, redis on a unix socket only. VM firewall opens only 22 and 2283 (a microservices worker also binds 0.0.0.0:33293 but the firewall blocks it). Verified live on hrossen: the immich Node processes load libraw 0.22.1, libtiff 4.7.2 and ImageMagick via vips (sharp) for thumbnails, so any user upload reaches them; libssh comes only via ffmpeg's sftp support; openssl 3.5.8 is loaded by Node and the Python ML worker as TLS clients only. All listed libraw/libtiff CVEs are fixed in the shipped upstream versions, the ImageMagick ones are 2014/2017 bugs long fixed, and no OpenSSL QUIC/DTLS/TLS-server path exists on the VM."
+      "description": "TAPPaaS module immich: generated from immich-components.json; do not edit."
     }
   },
   "vulnerabilities": [
     {
-      "id": "CVE-2014-9826",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "SUN coder error handling fixed in ImageMagick 6.8.9 (2014); 7.1.2-31 contains the fix, the match comes from a version-less CVE record.",
-        "justification": "code_not_present"
-      },
+      "id": "CVE-2026-111497",
       "affects": [
         {
-          "ref": "pkg:nix/imagemagick@7.1.2-31"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-20884",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "deflate_dng_load_raw integer overflow (TALOS-2026-2364) is fixed in upstream LibRaw 0.22.1 (commit aa4458e, Debian marks 0.22.1-1 fixed); the shipped libraw is 0.22.1.",
-        "justification": "code_not_present"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/libraw@0.22.1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-24450",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "uncompressed_fp_dng_load_raw overflow (TALOS-2026-2363) is fixed in upstream LibRaw 0.22.1 (commit c911c9b); the shipped libraw is 0.22.1.",
-        "justification": "code_not_present"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/libraw@0.22.1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2022-0543",
-      "analysis": {
-        "state": "false_positive",
-        "detail": "Debian/Ubuntu packaging bug (Lua loaded as a dynamic library, exposing package/loadlib); nixpkgs builds redis with its bundled Lua and this Immich instance listens only on a unix socket."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/redis"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2022-3734",
-      "analysis": {
-        "state": "false_positive",
-        "detail": "Concerns an unofficial Windows port (dbghelp.dll search path); upstream Redis on Linux is not affected."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/redis"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2017-5506",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Double free in profile.c fixed in 6.9.7-4 / 7.0.4-4; 7.1.2-31 contains the fix.",
-        "justification": "code_not_present"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/imagemagick@7.1.2-31"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-20911",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "HuffTable::initval overflow (TALOS-2026-2330) is fixed in upstream LibRaw 0.22.1 (commit 5357bb5); the shipped libraw is 0.22.1.",
-        "justification": "code_not_present"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/libraw@0.22.1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-21413",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "lossless_jpeg_load_raw overflow (TALOS-2026-2331) is fixed in upstream LibRaw 0.22.1 (commit 75ed2c1); the shipped libraw is 0.22.1.",
-        "justification": "code_not_present"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/libraw@0.22.1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-59850",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libssh is linked only into ffmpeg (jellyfin-ffmpeg, opencv's ffmpeg) for the sftp:// protocol; Immich hands ffmpeg local file paths only and never connects to an SSH server, so the channel callback path never runs.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/libssh@0.12.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-54873",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "QUIC stack packet-buffer retention; nothing on the immich VM uses OpenSSL's QUIC stack (immich-server and the ML service speak plain HTTP, outbound HTTPS from Node is TCP TLS).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/openssl@3.5.8"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-72897",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Needs a TLS server that swaps SSL_CTX mid-handshake with differing provider sigalgs; no process on the immich VM serves TLS with this OpenSSL (TLS ends at the firewall's Caddy, :2283 is plain HTTP).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/openssl@3.5.8"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-84782",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "DTLS retransmission bug; nothing on the immich VM speaks DTLS.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/openssl@3.5.8"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-84784",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "QUIC NEW_CONNECTION_ID flood; nothing on the immich VM uses OpenSSL's QUIC stack.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/openssl@3.5.8"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-0861",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "memalign alignment overflow in glibc 2.30 to 2.42 (the CVE's own text); NVD's range has no upper bound, and immich's glibc 2.44 carries the fix.",
-        "justification": "code_not_present"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/glibc@2.44-25"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-19499",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "strfmon width padding overflow, real in glibc 2.44; only reachable if a program calls strfmon with right-justified padding \u2014 immich's Node and Python services do not. Kept counted as glibc is."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/glibc@2.44-25"
+          "ref": "pkg:nix/brotli@1.2.1"
         }
       ],
       "ratings": [
@@ -206,378 +23,354 @@
           "source": {
             "name": "TAPPaaS"
           },
-          "severity": "low",
           "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2019-1010022",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Disputed upstream (a stack-guard bypass that needs an existing overflow); the record names no affected versions. Kept counted as glibc is."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/glibc@2.44-25"
+          "justification": "other: Brotli decoder buffer overflow (c/dec/decode.c, 1.0.3 to 1.2.0). v2.3.3 and earlier: the immich and immich-api node processes map libbrotlidec 1.2.0 (nixpkgs node uses the shared library), and immich 3.2.4's Express 5 / body-parser 2.3.0, registered globally by NestFactory, inflates request bodies sent with Content-Encoding: br before any guard runs: a POST of br-labelled garbage to /api/auth/validateToken returns 500 where the plain request returns 401 (probed on hrossen 2026-11-07, locally on port 2283). Risk there: critical: one unauthenticated HTTP request from the internet (network:proxy allows home, netbird, internet) reaches the decoder in immich-api, which runs as the immich user with the database and every photo; upgrade. Fixed after v2.3.3 (commit 54f16aab): immich.nix swaps the pinned brotli for the same package built from 1.2.1 (system.replaceDependencies); on hrossen 2026-11-07 immich, immich-api and the machine-learning worker map libbrotlidec.so.1.2.1. 1.2.0 stays in the closure only through the base system (template nixpkgs rev 1f607aa79b63: systemd's curl 8.22.0, freetype/fontconfig, nix), which decodes br only in HTTP responses to what the guest itself fetches; no immich process maps it.",
+          "severity": "critical"
         }
       ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2019-1010023",
       "analysis": {
         "state": "exploitable",
-        "detail": "Disputed upstream (ldd on a malicious ELF, treated by glibc as a non-security bug); the record names no affected versions. Kept counted as glibc is."
-      },
+        "detail": "immich/nix:brotli. Brotli decoder buffer overflow (c/dec/decode.c, 1.0.3 to 1.2.0). v2.3.3 and earlier: the immich and immich-api node processes map libbrotlidec 1.2.0 (nixpkgs node uses the shared library), and immich 3.2.4's Express 5 / body-parser 2.3.0, registered globally by NestFactory, inflates request bodies sent with Content-Encoding: br before any guard runs: a POST of br-labelled garbage to /api/auth/validateToken returns 500 where the plain request returns 401 (probed on hrossen 2026-11-07, locally on port 2283). Risk there: critical: one unauthenticated HTTP request from the internet (network:proxy allows home, netbird, internet) reaches the decoder in immich-api, which runs as the immich user with the database and every photo; upgrade. Fixed after v2.3.3 (commit 54f16aab): immich.nix swaps the pinned brotli for the same package built from 1.2.1 (system.replaceDependencies); on hrossen 2026-11-07 immich, immich-api and the machine-learning worker map libbrotlidec.so.1.2.1. 1.2.0 stays in the closure only through the base system (template nixpkgs rev 1f607aa79b63: systemd's curl 8.22.0, freetype/fontconfig, nix), which decodes br only in HTTP responses to what the guest itself fetches; no immich process maps it. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-107928",
       "affects": [
         {
-          "ref": "pkg:nix/glibc@2.44-25"
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
         }
       ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-64830",
       "analysis": {
         "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
         "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        }
-      ]
+      }
     },
     {
-      "id": "CVE-2026-64831",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
+      "id": "CVE-2026-107929",
       "affects": [
         {
-          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-64832",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
+          "ref": "pkg:nix/curl@8.22.0"
+        },
         {
-          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-64833",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-64834",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-64835",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-65703",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-65704",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-65705",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-65706",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-66036",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-66039",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-66040",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-66041",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-70628",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-70632",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-96611",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Signed integer overflow in the MOV/MP4 demuxer's HEIF ispe box: immich probes (ffprobe) and transcodes every uploaded video, and immich is published to the internet \u2014 reachable by any user with a login, as the immich user. Not in FFmpeg 8.1.3 (fixed upstream in 059eb2e, FFmpeg 9.0); jellyfin-ffmpeg 8.1.3-2 runs here (#807)."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+          "ref": "pkg:nix/curl@8.23.0"
         }
       ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "medium",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
-      "id": "CVE-2026-52297",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Out-of-bounds read from unpadded IAMF extradata in the MOV demuxer (mov_read_iacb): immich probes (ffprobe) and transcodes every uploaded video, and immich is published to the internet \u2014 reachable by any user with a login, as the immich user. A read past a buffer, not a write. Not in FFmpeg 8.1.3 (fixed upstream in 8439e02, FFmpeg 9.0)."
-      },
+      "id": "CVE-2026-86410",
       "affects": [
         {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
         }
       ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "low",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-52296",
       "analysis": {
         "state": "not_affected",
-        "detail": "The WMA encoder (libavcodec/wmaenc.c); immich encodes audio only as AAC or Opus, never WMA.",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
         "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
-        }
-      ]
+      }
     },
     {
-      "id": "CVE-2026-107696",
+      "id": "CVE-2026-86412",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "The RTSP client; immich gives ffmpeg uploaded local files only, and ffmpeg's protocol whitelist for a file input does not open rtsp.",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
         "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
-        }
-      ]
+      }
     },
     {
-      "id": "CVE-2026-70628",
-      "analysis": {
-        "state": "resolved",
-        "detail": "DVB subtitle parser signed overflow (libavcodec/dvbsub_parser.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-2 is built on \u2014 46ef25c9c, cherry-picked from 93f2a525e. NVD's range (before 9.0) misses the 8.1 backport."
-      },
+      "id": "CVE-2026-86413",
       "affects": [
         {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
-      "id": "CVE-2026-70632",
-      "analysis": {
-        "state": "resolved",
-        "detail": "CineForm HD transform-2 out-of-bounds write (libavcodec/cfhd.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-2 is built on \u2014 ea7210860, cherry-picked from db05df9d1. NVD's range (before 9.0) misses the 8.1 backport."
-      },
+      "id": "CVE-2026-86414",
       "affects": [
         {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-86415",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-87861",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-87862",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-87863",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-87865",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-87866",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-92386",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-92387",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-92388",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-92389",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-92390",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-92391",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-92392",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-94265",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-94266",
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        },
+        {
+          "ref": "pkg:nix/curl@8.23.0"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:curl. libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-107695",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-107696",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
@@ -585,66 +378,452 @@
         {
           "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-107696",
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-52296",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-52297",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-64830",
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-64831",
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-64832",
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-64833",
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-64834",
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-64835",
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-65703",
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-65704",
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-65705",
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-65706",
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-66036",
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-66039",
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-66040",
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-66041",
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-70628",
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-70632",
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-96611",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
         }
-      ]
-    },
-    {
-      "id": "CVE-2026-108693",
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "NTGhostscriptEXE() launching gswin64c.exe by bare name is Windows-only code; the immich VM runs Linux, where ImageMagick calls the gs binary from its own store path.",
+        "detail": "immich/nix:ffmpeg-headless. ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2019-1010022",
+      "affects": [
+        {
+          "ref": "pkg:nix/glibc@2.42-103"
+        },
+        {
+          "ref": "pkg:nix/glibc@2.44-25"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: Disputed upstream (a stack-guard bypass that needs an existing overflow); the record names no affected versions. Kept counted as glibc is.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "immich/nix:glibc. Disputed upstream (a stack-guard bypass that needs an existing overflow); the record names no affected versions. Kept counted as glibc is. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2019-1010023",
+      "affects": [
+        {
+          "ref": "pkg:nix/glibc@2.42-103"
+        },
+        {
+          "ref": "pkg:nix/glibc@2.44-25"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: Disputed upstream (ldd on a malicious ELF, treated by glibc as a non-security bug); the record names no affected versions. Kept counted as glibc is.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "immich/nix:glibc. Disputed upstream (ldd on a malicious ELF, treated by glibc as a non-security bug); the record names no affected versions. Kept counted as glibc is. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-0861",
+      "affects": [
+        {
+          "ref": "pkg:nix/glibc@2.42-103"
+        },
+        {
+          "ref": "pkg:nix/glibc@2.44-25"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:glibc. memalign alignment overflow in glibc 2.30 to 2.42 (the CVE's own text); NVD's range has no upper bound, and immich's glibc 2.44 carries the fix. Decided by migration 2026-11-12; review by 2027-05-11.",
         "justification": "code_not_present"
-      },
+      }
+    },
+    {
+      "id": "CVE-2026-19499",
+      "affects": [
+        {
+          "ref": "pkg:nix/glibc@2.42-103"
+        },
+        {
+          "ref": "pkg:nix/glibc@2.44-25"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: strfmon width padding overflow, real in glibc 2.44; only reachable if a program calls strfmon with right-justified padding \u2014 immich's Node and Python services do not. Kept counted as glibc is.",
+          "severity": "low"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "immich/nix:glibc. strfmon width padding overflow, real in glibc 2.44; only reachable if a program calls strfmon with right-justified padding \u2014 immich's Node and Python services do not. Kept counted as glibc is. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2014-9826",
       "affects": [
         {
           "ref": "pkg:nix/imagemagick@7.1.2-31"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:imagemagick. SUN coder error handling fixed in ImageMagick 6.8.9 (2014); 7.1.2-31 contains the fix, the match comes from a version-less CVE record. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_present"
+      }
+    },
+    {
+      "id": "CVE-2017-5506",
+      "affects": [
+        {
+          "ref": "pkg:nix/imagemagick@7.1.2-31"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:imagemagick. Double free in profile.c fixed in 6.9.7-4 / 7.0.4-4; 7.1.2-31 contains the fix. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_present"
+      }
     },
     {
       "id": "CVE-2026-106565",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Missing end-of-file check reading bzip2-compressed blob data (MagickCore/blob.c), an endless loop; fixed in 7.1.2-32. immich-api loads this ImageMagick through libvips (no VIPS_BLOCK_UNTRUSTED), which picks a loader by content, so a crafted upload from a signed-in user can reach it. Risk here: low: one media job spins, no memory corruption. Fix: an unstableSrc with imagemagick 7.1.2-32 or later (nixos-unstable has 7.1.2-34)."
-      },
       "affects": [
         {
           "ref": "pkg:nix/imagemagick@7.1.2-31"
@@ -655,307 +834,73 @@
           "source": {
             "name": "TAPPaaS"
           },
-          "severity": "low",
           "method": "other",
-          "justification": "risk in this deployment, from the triage"
+          "justification": "not-used: Missing end-of-file check reading bzip2-compressed blob data (MagickCore/blob.c), an endless loop; fixed in 7.1.2-32. immich-api loads this ImageMagick through libvips (no VIPS_BLOCK_UNTRUSTED), which picks a loader by content, so a crafted upload from a signed-in user can reach it. Risk here: low: one media job spins, no memory corruption. Fix: an unstableSrc with imagemagick 7.1.2-32 or later (nixos-unstable has 7.1.2-34).",
+          "severity": "low"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "immich/nix:imagemagick. Missing end-of-file check reading bzip2-compressed blob data (MagickCore/blob.c), an endless loop; fixed in 7.1.2-32. immich-api loads this ImageMagick through libvips (no VIPS_BLOCK_UNTRUSTED), which picks a loader by content, so a crafted upload from a signed-in user can reach it. Risk here: low: one media job spins, no memory corruption. Fix: an unstableSrc with imagemagick 7.1.2-32 or later (nixos-unstable has 7.1.2-34). Decided by migration 2026-11-12; review by 2027-05-11."
+      }
     },
     {
       "id": "CVE-2026-106567",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "PSD decoder integer-conversion loop on 32-bit builds only; the immich VM runs the x86_64 build.",
-        "justification": "requires_environment"
-      },
       "affects": [
         {
           "ref": "pkg:nix/imagemagick@7.1.2-31"
         }
-      ]
-    },
-    {
-      "id": "CVE-2026-86413",
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
+        "detail": "immich/nix:imagemagick. PSD decoder integer-conversion loop on 32-bit builds only; the immich VM runs the x86_64 build. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "requires_environment"
+      }
     },
     {
-      "id": "CVE-2026-86414",
+      "id": "CVE-2026-108693",
+      "affects": [
+        {
+          "ref": "pkg:nix/imagemagick@7.1.2-31"
+        }
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
+        "detail": "immich/nix:imagemagick. NTGhostscriptEXE() launching gswin64c.exe by bare name is Windows-only code; the immich VM runs Linux, where ImageMagick calls the gs binary from its own store path. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_present"
+      }
     },
     {
-      "id": "CVE-2026-87861",
+      "id": "CVE-2026-107696",
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+        }
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "detail": "immich/nix:jellyfin-ffmpeg. The RTSP client; immich gives ffmpeg uploaded local files only, and ffmpeg's protocol whitelist for a file input does not open rtsp. Decided by migration 2026-11-12; review by 2027-05-11.",
         "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
+      }
     },
     {
-      "id": "CVE-2026-87866",
+      "id": "CVE-2026-52296",
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+        }
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
+        "detail": "immich/nix:jellyfin-ffmpeg. The WMA encoder (libavcodec/wmaenc.c); immich encodes audio only as AAC or Opus, never WMA. Decided by migration 2026-11-12; review by 2027-05-11.",
         "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
+      }
     },
     {
-      "id": "CVE-2026-92388",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
+      "id": "CVE-2026-52297",
       "affects": [
         {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-94265",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-107928",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-107929",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-86410",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-86412",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-86415",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-87862",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-87863",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-87865",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-92386",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-92387",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-92389",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-92390",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-92391",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-92392",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-94266",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libcurl 8.22.0 (nixos-unstable) is loaded into immich and immich-api only as a dependency of libvips' poppler and cfitsio loaders. poppler uses curl only to open a document by http(s) URL and libvips passes it bytes; cfitsio only when the file name is a URL, and immich passes its own upload paths. PDF and FITS are not accepted upload types; immich's own HTTP goes through Node. The system services (nix-daemon, NetworkManager) use the stable curl. Checked live on hrossen 2026-11-07.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/curl@8.22.0"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-111497",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Brotli decoder buffer overflow (c/dec/decode.c, 1.0.3 to 1.2.0). v2.3.3 and earlier: the immich and immich-api node processes map libbrotlidec 1.2.0 (nixpkgs node uses the shared library), and immich 3.2.4's Express 5 / body-parser 2.3.0, registered globally by NestFactory, inflates request bodies sent with Content-Encoding: br before any guard runs: a POST of br-labelled garbage to /api/auth/validateToken returns 500 where the plain request returns 401 (probed on hrossen 2026-11-07, locally on port 2283). Risk there: critical: one unauthenticated HTTP request from the internet (network:proxy allows home, netbird, internet) reaches the decoder in immich-api, which runs as the immich user with the database and every photo; upgrade. Fixed after v2.3.3 (commit 54f16aab): immich.nix swaps the pinned brotli for the same package built from 1.2.1 (system.replaceDependencies); on hrossen 2026-11-07 immich, immich-api and the machine-learning worker map libbrotlidec.so.1.2.1. 1.2.0 stays in the closure only through the base system (template nixpkgs rev 1f607aa79b63: systemd's curl 8.22.0, freetype/fontconfig, nix), which decodes br only in HTTP responses to what the guest itself fetches; no immich process maps it."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/brotli@1.2.0"
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
         }
       ],
       "ratings": [
@@ -963,11 +908,214 @@
           "source": {
             "name": "TAPPaaS"
           },
-          "severity": "critical",
           "method": "other",
-          "justification": "risk in this deployment, from the triage"
+          "justification": "other: Out-of-bounds read from unpadded IAMF extradata in the MOV demuxer (mov_read_iacb): immich probes (ffprobe) and transcodes every uploaded video, and immich is published to the internet \u2014 reachable by any user with a login, as the immich user. A read past a buffer, not a write. Not in FFmpeg 8.1.3 (fixed upstream in 8439e02, FFmpeg 9.0).",
+          "severity": "low"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "immich/nix:jellyfin-ffmpeg. Out-of-bounds read from unpadded IAMF extradata in the MOV demuxer (mov_read_iacb): immich probes (ffprobe) and transcodes every uploaded video, and immich is published to the internet \u2014 reachable by any user with a login, as the immich user. A read past a buffer, not a write. Not in FFmpeg 8.1.3 (fixed upstream in 8439e02, FFmpeg 9.0). Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-70628",
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+        }
+      ],
+      "analysis": {
+        "state": "resolved",
+        "detail": "immich/nix:jellyfin-ffmpeg. DVB subtitle parser signed overflow (libavcodec/dvbsub_parser.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-2 is built on \u2014 46ef25c9c, cherry-picked from 93f2a525e. NVD's range (before 9.0) misses the 8.1 backport. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-70632",
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+        }
+      ],
+      "analysis": {
+        "state": "resolved",
+        "detail": "immich/nix:jellyfin-ffmpeg. CineForm HD transform-2 out-of-bounds write (libavcodec/cfhd.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-2 is built on \u2014 ea7210860, cherry-picked from db05df9d1. NVD's range (before 9.0) misses the 8.1 backport. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-96611",
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-2"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "method": "other",
+          "justification": "other: Signed integer overflow in the MOV/MP4 demuxer's HEIF ispe box: immich probes (ffprobe) and transcodes every uploaded video, and immich is published to the internet \u2014 reachable by any user with a login, as the immich user. Not in FFmpeg 8.1.3 (fixed upstream in 059eb2e, FFmpeg 9.0); jellyfin-ffmpeg 8.1.3-2 runs here (#807).",
+          "severity": "medium"
+        }
+      ],
+      "analysis": {
+        "state": "exploitable",
+        "detail": "immich/nix:jellyfin-ffmpeg. Signed integer overflow in the MOV/MP4 demuxer's HEIF ispe box: immich probes (ffprobe) and transcodes every uploaded video, and immich is published to the internet \u2014 reachable by any user with a login, as the immich user. Not in FFmpeg 8.1.3 (fixed upstream in 059eb2e, FFmpeg 9.0); jellyfin-ffmpeg 8.1.3-2 runs here (#807). Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2026-20884",
+      "affects": [
+        {
+          "ref": "pkg:nix/libraw@0.22.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:libraw. deflate_dng_load_raw integer overflow (TALOS-2026-2364) is fixed in upstream LibRaw 0.22.1 (commit aa4458e, Debian marks 0.22.1-1 fixed); the shipped libraw is 0.22.1. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_present"
+      }
+    },
+    {
+      "id": "CVE-2026-20911",
+      "affects": [
+        {
+          "ref": "pkg:nix/libraw@0.22.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:libraw. HuffTable::initval overflow (TALOS-2026-2330) is fixed in upstream LibRaw 0.22.1 (commit 5357bb5); the shipped libraw is 0.22.1. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_present"
+      }
+    },
+    {
+      "id": "CVE-2026-21413",
+      "affects": [
+        {
+          "ref": "pkg:nix/libraw@0.22.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:libraw. lossless_jpeg_load_raw overflow (TALOS-2026-2331) is fixed in upstream LibRaw 0.22.1 (commit 75ed2c1); the shipped libraw is 0.22.1. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_present"
+      }
+    },
+    {
+      "id": "CVE-2026-24450",
+      "affects": [
+        {
+          "ref": "pkg:nix/libraw@0.22.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:libraw. uncompressed_fp_dng_load_raw overflow (TALOS-2026-2363) is fixed in upstream LibRaw 0.22.1 (commit c911c9b); the shipped libraw is 0.22.1. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_present"
+      }
+    },
+    {
+      "id": "CVE-2026-59850",
+      "affects": [
+        {
+          "ref": "pkg:nix/libssh@0.12.2"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:libssh. libssh is linked only into ffmpeg (jellyfin-ffmpeg, opencv's ffmpeg) for the sftp:// protocol; Immich hands ffmpeg local file paths only and never connects to an SSH server, so the channel callback path never runs. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-54873",
+      "affects": [
+        {
+          "ref": "pkg:nix/openssl@3.5.8"
+        },
+        {
+          "ref": "pkg:nix/openssl@3.6.5"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:openssl. QUIC stack packet-buffer retention; nothing on the immich VM uses OpenSSL's QUIC stack (immich-server and the ML service speak plain HTTP, outbound HTTPS from Node is TCP TLS). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-72897",
+      "affects": [
+        {
+          "ref": "pkg:nix/openssl@3.5.8"
+        },
+        {
+          "ref": "pkg:nix/openssl@3.6.5"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:openssl. Needs a TLS server that swaps SSL_CTX mid-handshake with differing provider sigalgs; no process on the immich VM serves TLS with this OpenSSL (TLS ends at the firewall's Caddy, :2283 is plain HTTP). Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-84782",
+      "affects": [
+        {
+          "ref": "pkg:nix/openssl@3.5.8"
+        },
+        {
+          "ref": "pkg:nix/openssl@3.6.5"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:openssl. DTLS retransmission bug; nothing on the immich VM speaks DTLS. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-84784",
+      "affects": [
+        {
+          "ref": "pkg:nix/openssl@3.5.8"
+        },
+        {
+          "ref": "pkg:nix/openssl@3.6.5"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "immich/nix:openssl. QUIC NEW_CONNECTION_ID flood; nothing on the immich VM uses OpenSSL's QUIC stack. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2022-0543",
+      "affects": [
+        {
+          "ref": "pkg:nix/redis@8.8.4"
+        }
+      ],
+      "analysis": {
+        "state": "false_positive",
+        "detail": "immich/nix:redis. Debian/Ubuntu packaging bug (Lua loaded as a dynamic library, exposing package/loadlib); nixpkgs builds redis with its bundled Lua and this Immich instance listens only on a unix socket. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2022-3734",
+      "affects": [
+        {
+          "ref": "pkg:nix/redis@8.8.4"
+        }
+      ],
+      "analysis": {
+        "state": "false_positive",
+        "detail": "immich/nix:redis. Concerns an unofficial Windows port (dbghelp.dll search path); upstream Redis on Linux is not affected. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
     }
   ]
 }

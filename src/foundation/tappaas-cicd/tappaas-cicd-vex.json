@@ -3,38 +3,39 @@
   "specVersion": "1.5",
   "version": 1,
   "metadata": {
+    "timestamp": "2026-11-12",
     "component": {
       "type": "application",
       "name": "tappaas-cicd",
-      "description": "TAPPaaS module tappaas-cicd: triage of its own critical/high CVEs (#788). The mothership: runs TAPPaaS's managers, controllers and the nightly scans, reachable by SSH from the admin network only. Verified live on hrossen: libssh and libxslt are in the closure only through python3 ansible-core (ansible-pylibssh; lxml via ncclient/jxmlease), which opnsense-controller uses for module-spec validation only (controller DESIGN.md), never to open an SSH connection or run XSLT. curl's HTTP/3 is ngtcp2's own QUIC stack, OpenSSL only for its crypto; nothing on the VM uses OpenSSL's QUIC or DTLS. perl 5.42.0 is NixOS's own scripts plus git's perl helpers."
+      "description": "TAPPaaS module tappaas-cicd: generated from tappaas-cicd-components.json; do not edit."
     }
   },
   "vulnerabilities": [
     {
       "id": "CVE-2026-59850",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Channel callbacks after close in an SSH session; libssh is only ansible-pylibssh's, and ansible-core is used for module-spec validation, never to connect.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:nix/libssh@0.12.2"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "tappaas-cicd/nix:libssh. Channel callbacks after close in an SSH session; libssh is only ansible-pylibssh's, and ansible-core is used for module-spec validation, never to connect. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2025-7425",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "XSLT key() processing; libxslt is only lxml's, pulled in by ansible-core's validation-only dependencies, and no TAPPaaS code runs XSLT.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:nix/libxslt@1.1.45"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "tappaas-cicd/nix:libxslt. XSLT key() processing; libxslt is only lxml's, pulled in by ansible-core's validation-only dependencies, and no TAPPaaS code runs XSLT. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     }
   ]
 }

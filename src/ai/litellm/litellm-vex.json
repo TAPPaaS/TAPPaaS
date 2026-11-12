@@ -3,296 +3,297 @@
   "specVersion": "1.5",
   "version": 1,
   "metadata": {
+    "timestamp": "2026-11-12",
     "component": {
       "type": "application",
       "name": "litellm",
-      "description": "TAPPaaS module litellm: triage of its own critical/high CVEs (#788)."
+      "description": "TAPPaaS module litellm: generated from litellm-components.json; do not edit."
     }
   },
   "vulnerabilities": [
     {
-      "id": "CVE-2022-0543",
-      "analysis": {
-        "state": "false_positive",
-        "detail": "Debian/Ubuntu packaging bug (Lua loaded as a dynamic library, exposing package/loadlib); nixpkgs builds redis with its bundled Lua, and litellm's redis listens on 127.0.0.1 only."
-      },
+      "id": "CVE-2022-33065",
       "affects": [
         {
-          "ref": "pkg:nix/redis"
+          "ref": "pkg:generic/libsndfile@1.2.0"
         }
-      ]
-    },
-    {
-      "id": "CVE-2022-3734",
-      "analysis": {
-        "state": "false_positive",
-        "detail": "Concerns an unofficial Windows port (dbghelp.dll search path); upstream Redis on Linux is not affected."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/redis"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-104851",
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "Jinja rendering in fsspec's ReferenceFileSystem (Kerchunk reference JSON); fsspec is in the image only for huggingface_hub and polars, nothing in litellm opens a reference:// filesystem, and no request can supply one.",
-        "justification": "code_not_reachable"
-      },
+        "detail": "litellm/generic:libsndfile. libsndfile 1.2.0 bundled in soundfile 0.12.1 is loaded by every litellm worker, but litellm only decodes audio with it to measure duration after a successful /audio/transcriptions call or an Azure-speech/Transcribe pass-through; the site's only model is the vLLM text model and no pass-through is configured, so no uploaded audio reaches it. Adding a speech-to-text model would make crafted audio from API-key holders reach it. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "requires_configuration"
+      }
+    },
+    {
+      "id": "CVE-2025-52194",
       "affects": [
         {
-          "ref": "pkg:pypi/fsspec@2026.4.0"
+          "ref": "pkg:generic/libsndfile@1.2.0"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "litellm/generic:libsndfile. libsndfile 1.2.0 bundled in soundfile 0.12.1 is loaded by every litellm worker, but litellm only decodes audio with it to measure duration after a successful /audio/transcriptions call or an Azure-speech/Transcribe pass-through; the site's only model is the vLLM text model and no pass-through is configured, so no uploaded audio reaches it. Adding a speech-to-text model would make crafted audio from API-key holders reach it. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "requires_configuration"
+      }
     },
     {
       "id": "CVE-2026-14456",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:generic/openssl@4.0.1"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "litellm/generic:openssl. OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-14457",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:generic/openssl@4.0.1"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "litellm/generic:openssl. OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-18798",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:generic/openssl@4.0.1"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "litellm/generic:openssl. OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-54873",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:generic/openssl@4.0.1"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "litellm/generic:openssl. OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-54874",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:generic/openssl@4.0.1"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "litellm/generic:openssl. OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-54876",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:generic/openssl@4.0.1"
         }
-      ]
-    },
-    {
-      "id": "CVE-2026-63075",
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7.",
+        "detail": "litellm/generic:openssl. OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
         "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:generic/openssl@4.0.1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-72897",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:generic/openssl@4.0.1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-84782",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:generic/openssl@4.0.1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-84783",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:generic/openssl@4.0.1"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-84784",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:generic/openssl@4.0.1"
-        }
-      ]
+      }
     },
     {
       "id": "CVE-2026-63072",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. CMS and CMP are not exposed by cryptography and litellm calls neither. Verified live on hrossen with litellm:v1.106.7.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:generic/openssl@4.0.1"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "litellm/generic:openssl. OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. CMS and CMP are not exposed by cryptography and litellm calls neither. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-63073",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. CMS and CMP are not exposed by cryptography and litellm calls neither. Verified live on hrossen with litellm:v1.106.7.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:generic/openssl@4.0.1"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "litellm/generic:openssl. OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. CMS and CMP are not exposed by cryptography and litellm calls neither. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-63075",
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "litellm/generic:openssl. OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-63076",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. CMS and CMP are not exposed by cryptography and litellm calls neither. Verified live on hrossen with litellm:v1.106.7.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:generic/openssl@4.0.1"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "litellm/generic:openssl. OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. CMS and CMP are not exposed by cryptography and litellm calls neither. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-72897",
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "litellm/generic:openssl. OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-75803",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. The flaw needs a caller that finalises AEAD decryption with the one-shot EVP_Cipher(); cryptography's AEAD classes use EVP_CipherUpdate/EVP_CipherFinal with the tag set explicitly, and litellm encrypts stored secrets with PyNaCl, not with cryptography's ChaCha20-Poly1305 or AES-OCB. Verified live on hrossen with litellm:v1.106.7.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:generic/openssl@4.0.1"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "litellm/generic:openssl. OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. The flaw needs a caller that finalises AEAD decryption with the one-shot EVP_Cipher(); cryptography's AEAD classes use EVP_CipherUpdate/EVP_CipherFinal with the tag set explicitly, and litellm encrypts stored secrets with PyNaCl, not with cryptography's ChaCha20-Poly1305 or AES-OCB. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-84782",
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "litellm/generic:openssl. OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-84783",
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "litellm/generic:openssl. OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2026-84784",
+      "affects": [
+        {
+          "ref": "pkg:generic/openssl@4.0.1"
+        }
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "litellm/generic:openssl. OpenSSL 4.0.1 linked statically into the cryptography 50.0.0 wheel. The image has no pyOpenSSL, so nothing runs TLS, DTLS or QUIC through this copy: Python's ssl module uses Wolfi's libssl.so.4 (OpenSSL 4.0.3, fixed), psycopg its own bundled libssl, and cryptography's X.509 and PKCS#7 handling is its own Rust code. This is a QUIC/DTLS/TLS/OCSP/RPK code path. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
+    },
+    {
+      "id": "CVE-2022-0543",
+      "affects": [
+        {
+          "ref": "pkg:nix/redis@8.8.4"
+        }
+      ],
+      "analysis": {
+        "state": "false_positive",
+        "detail": "litellm/nix:redis. Debian/Ubuntu packaging bug (Lua loaded as a dynamic library, exposing package/loadlib); nixpkgs builds redis with its bundled Lua, and litellm's redis listens on 127.0.0.1 only. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
+    },
+    {
+      "id": "CVE-2022-3734",
+      "affects": [
+        {
+          "ref": "pkg:nix/redis@8.8.4"
+        }
+      ],
+      "analysis": {
+        "state": "false_positive",
+        "detail": "litellm/nix:redis. Concerns an unofficial Windows port (dbghelp.dll search path); upstream Redis on Linux is not affected. Decided by migration 2026-11-12; review by 2027-05-11."
+      }
     },
     {
       "id": "CVE-2026-112940",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Flaw is in filelock's SQLite-based ReadWriteLock and needs a local attacker with rename access in its directory; no installed package uses ReadWriteLock (grep), only the plain FileLock (huggingface_hub, tiktoken), and the container has no other local users. Verified live on hrossen with litellm:v1.106.7.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:pypi/filelock@3.32.7"
         }
-      ]
-    },
-    {
-      "id": "CVE-2022-33065",
+      ],
       "analysis": {
         "state": "not_affected",
-        "detail": "libsndfile 1.2.0 bundled in soundfile 0.12.1 is loaded by every litellm worker, but litellm only decodes audio with it to measure duration after a successful /audio/transcriptions call or an Azure-speech/Transcribe pass-through; the site's only model is the vLLM text model and no pass-through is configured, so no uploaded audio reaches it. Adding a speech-to-text model would make crafted audio from API-key holders reach it. Verified live on hrossen with litellm:v1.106.7.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:generic/libsndfile@1.2.0"
-        }
-      ]
+        "detail": "litellm/pypi:filelock. Flaw is in filelock's SQLite-based ReadWriteLock and needs a local attacker with rename access in its directory; no installed package uses ReadWriteLock (grep), only the plain FileLock (huggingface_hub, tiktoken), and the container has no other local users. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
-      "id": "CVE-2025-52194",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "libsndfile 1.2.0 bundled in soundfile 0.12.1 is loaded by every litellm worker, but litellm only decodes audio with it to measure duration after a successful /audio/transcriptions call or an Azure-speech/Transcribe pass-through; the site's only model is the vLLM text model and no pass-through is configured, so no uploaded audio reaches it. Adding a speech-to-text model would make crafted audio from API-key holders reach it. Verified live on hrossen with litellm:v1.106.7.",
-        "justification": "requires_configuration"
-      },
+      "id": "CVE-2026-104851",
       "affects": [
         {
-          "ref": "pkg:generic/libsndfile@1.2.0"
+          "ref": "pkg:pypi/fsspec@2026.7.0"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "litellm/pypi:fsspec. Jinja rendering in fsspec's ReferenceFileSystem (Kerchunk reference JSON); fsspec is in the image only for huggingface_hub and polars, nothing in litellm opens a reference:// filesystem, and no request can supply one. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     },
     {
       "id": "CVE-2026-49272",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "The flaw is in oauthlib's RFC 8628 device-code token endpoint (server side); litellm and fastapi_sso use only oauthlib's client-side WebApplicationClient for SSO, and litellm runs no OAuth device-flow server. Verified live on hrossen with litellm:v1.106.7.",
-        "justification": "code_not_reachable"
-      },
       "affects": [
         {
           "ref": "pkg:pypi/oauthlib@4.0.0"
         }
-      ]
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "detail": "litellm/pypi:oauthlib. The flaw is in oauthlib's RFC 8628 device-code token endpoint (server side); litellm and fastapi_sso use only oauthlib's client-side WebApplicationClient for SSO, and litellm runs no OAuth device-flow server. Verified live on hrossen with litellm:v1.106.7. Decided by migration 2026-11-12; review by 2027-05-11.",
+        "justification": "code_not_reachable"
+      }
     }
   ]
 }
