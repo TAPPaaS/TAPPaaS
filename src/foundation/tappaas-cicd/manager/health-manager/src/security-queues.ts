@@ -52,6 +52,10 @@ export interface Queues {
 interface Row { unit: string; target: string; layer: string; item: CveItem }
 
 const LV = ["critical", "high", "medium", "low", "none"];
+const FLAG_WORDS: Record<string, string> = {
+  kev: "known exploited since it was decided", epss: "likely to be exploited now", "upstream-changed": "upstream changed its score",
+  version: "a new major version", expired: "its review date passed", "review-due": "its review is due", assumption: "an assumption fails on a site",
+};
 const worstOf = (rows: Row[]): string => rows.map((r) => r.item.level ?? r.item.severity.toLowerCase()).sort((a, b) => LV.indexOf(a) - LV.indexOf(b))[0] ?? "low";
 const bySeverity = (rows: Row[]): string => {
   const n = (l: string): number => new Set(rows.filter((r) => (r.item.level ?? "") === l).map((r) => r.item.id)).size;
@@ -147,7 +151,7 @@ export function buildQueues(s: ScanStatus, opts: { configDir: string; now: numbe
     const common = vecs.size === 1 && rs.every((r) => r.item.vector) ? `, all ${[...vecs.keys()][0]}` : "";
     const k = splitKey(comp);
     mt.decide.push({ queue: "decide", title: componentTitle(comp), component: comp, units: unitsOf(rs), cves: ids(rs), worst: worstOf(rs), ...(comp.startsWith("templates/") ? { baseline: true } : {}),
-      text: `${ids(rs).length} unread${bySeverity(rs)}${common}${(rs.some((r) => r.item.kev)) ? "; KNOWN EXPLOITED" : ""}`,
+      text: `${ids(rs).length} unread${bySeverity(rs)}${common}${(rs.some((r) => r.item.kev)) ? "; known exploited" : ""}`,
       action: k ? `cve-triage.sh component ${k.module === "templates" ? "baseline" : k.module} ${k.source} --eco ${k.eco} …` : undefined });
   }
   // A migrated record only lacks its use statement: one card per module, not
@@ -161,7 +165,7 @@ export function buildQueues(s: ScanStatus, opts: { configDir: string; now: numbe
   }
   const reviewRows = rows.filter((r) => r.item.mark === "rule" || r.item.mark === "review" || (r.item.flags ?? []).some((f) => ["review-due", "expired"].includes(f)));
   for (const [comp, rs] of groupBy(reviewRows, (r) => r.item.component ?? r.item.pkg)) {
-    const why = [...new Set(rs.flatMap((r) => r.item.mark === "rule" ? ["by rule, unread"] : (r.item.flags ?? []).filter((f) => ["kev", "epss", "upstream-changed", "version", "expired", "review-due", "assumption"].includes(f))))];
+    const why = [...new Set(rs.flatMap((r) => r.item.mark === "rule" ? ["by rule, unread"] : (r.item.flags ?? []).filter((f) => f in FLAG_WORDS).map((f) => FLAG_WORDS[f])))];
     const k = splitKey(comp);
     mt.review.push({ queue: "review", title: componentTitle(comp), component: comp, units: unitsOf(rs), cves: ids(rs), worst: worstOf(rs),
       text: `${ids(rs).length} CVE(s): ${why.join(", ") || "to review"}`,
