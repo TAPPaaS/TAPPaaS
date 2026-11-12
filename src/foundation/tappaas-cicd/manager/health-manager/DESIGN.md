@@ -258,6 +258,21 @@ reaches, the conditions that failure would explain or cover there. One extra spr
 per object an open window names, with nothing else failing, so a second fault that the
 window did not plan for is still heard.
 
+**What a finding becomes** (`src/classify.ts`), before settle: each failing finding is
+matched against the `classify` records (its source, type, status, reason, labels and age,
+and the object). The winner may re-rate it (the condition keeps `raw`: the source's
+status, since when the source has said it, and the record; `finding.age` reads that
+since, so an age-based raise never resets its own clock), mark it a sum of others
+(`aggregate`: derived from the start, never a root), or quiet it (`quieted`: kept with the
+source's status, silenced like an acknowledgement without an end, and the impacts whose
+only root it is are quiet with it). An ok or unknown finding is never touched, so only
+its owner ever clears a condition.
+
+**How a root is told** (`src/notices.ts`): the engine still decides who can be told (a
+failing root of its own, nothing silenced); the `notify` record that wins for the root's
+object and condition says at once, in the digest, or not at all. With no installed set,
+emit uses the core notify records, kept equal to `notify.json` by a test.
+
 **Where the records come from** (`src/rulestore.ts`). The engine reads
 `config/health/rules/` (before the first merge, the core records of the release).
 `rules merge` compares, per origin and per rule id, what was last installed

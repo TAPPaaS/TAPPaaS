@@ -308,6 +308,25 @@ with source and since. **History**, folded: every period of every attribute and 
 change that touched it, the newest first, a change with its verb, actor and job. Every CI named in
 the record opens its own record in the panel; Back returns the way it came.
 
+**Why**, on the CI panel (on demand): how each condition came about, from `health-manager rules
+explain`: a root and what it impacts, a condition derived from or covered by its root with the rule
+that said so, an impact hop by hop from its root with the rule behind each hop and the rules that
+matched and lost. A condition a rule quieted is grey ("quiet by <rule>"); one a rule re-rated says
+what its source said. The root causes are the site's, as health-manager recorded them: the console
+computes none of its own.
+
+**Rules** (`/health/rules`, linked from the Health page): the health rules the site runs, one
+sentence each, grouped by what they decide, with who released them, what the site did to them and
+how many cases each decides now; filters for edited, pending, held and off; the contract scenarios
+with Retire and Hold to it again. A rule's page (`/health/rules/<id>`): its state, what it overrides
+and is overridden by, the record, and its changes as jobs: Edit (a form of the record's own fields:
+its matches, what it decides, its description), Turn off or on, Delete, Restore as released, and for
+a rule edited here and changed upstream the three columns with Take the release and Keep mine;
+Accept for a held rule. Each previews first (`health-manager rules … ` without `--apply`): the
+records that change, the check, and on the site as it is now the roots that appear or go, the
+colours that change, what would go quiet and how roots would be told. Before the first merge the
+page offers to install the rules on the site.
+
 **Entry.** `/health?select=<id>` opens on one object; a root opens with its symptoms expanded. With nothing asked for the page opens on the worst root, and
 on the site when nothing is wrong. A site that has not run `assess` gets grey dots and says so.
 **Filters** (condition type, class, environment) dim what they leave out in the tree and the graph,
@@ -524,7 +543,10 @@ change is a job as ever, `health-manager ack|unack|maintenance`, taken from its 
 | `health/ego/<id>[?depth=1..3][&at=<time>]` | `{generated, at, id, center, nodes[], groups[], edges[]}`: a node is the object with its worst condition `{id, class, name, label, environment, module, rootCause[], isRoot, types{}, issues[], status, type, reason, since, acknowledged, maintenance, flapping, more}`, `more` true when it has neighbours beyond those shown; a group `{key, anchor, type, direction, side, label, neighbours[]}`, `side` up for what the anchor needs. With `at`, the CMDB as of that moment, not cached |
 | `health/ego/<id>/path?to=root\|impact[&at=<time>]` | `{generated, at, id, to, nodes[], edges[]}`: the chain of the derivation, an edge `{id, type, provider, dependant, virtual}`, `virtual` when no relation shows the way |
 | `health/object/<id>` | the CI panel: `{id, class, ancestors, name, label, module, view, conditions[], drift, relations[], history[], changes[], rootCauses[], impacts[]}` |
-| `health/roots` | `{roots, from: "health-manager"\|"graph", error}`, `graph` being the console's own list |
+| `health/roots` | `{roots, from: "health-manager"\|"graph", error}`, `graph` the site's recorded root causes when health-manager does not answer |
+| `health/rules` | `health-manager rules list --json` and `rules scenario list --json`: `{records[] {…record, origin, sentence, state, decidesNow}, scenarios[], installed}`, `installed` false before the first merge |
+| `health/rules/<id>` | one rule: `{show, diff}` from `rules show <id> --json` and `rules diff <id> --json` |
+| `health/why/<id>` | `rules explain <id> --json`: each condition of the object and how it came about, an impact with its hops and the rule behind each |
 | `health/summary` | the worst per page: `{available, generated, site, counts, roots, byType{}, attention[]}`; `counts` the objects per colour, an object whose every failure is silenced in none, and `acknowledged` the silenced conditions, one by one (an acknowledged condition beside an open one on the same object counts); `available` false: keep `health` |
 | `cmdb/ci/<id>`, `cmdb/ci?name=<name>[&class=<class>]` | a CI's record: `{id, class, ancestors, name, label, attributes[] {name, value, source, since}, relations[] {id, type, direction, other, source, since}, drift, events[]}`, `events` its conditions that are not ok; by name, the class (or an ancestor of it) where the name is not unique |
 | `cmdb/ci/<id>/history` | `[{at, what: attribute\|relation\|change, name, value, source, until, detail, drift}]`, the newest first, 300 at most |
