@@ -58,7 +58,7 @@ HostSilent, watches (ADR-039). HAOS and Windows guests are not covered.
 
 ## Fields
 
-`logging:logs` owns **1** declared field(s). Each table below carries the field's full definition and, where the service applies it, what a change to it does (in place, a restart, a rebuild).
+`logging:logs` owns **2** declared field(s). Each table below carries the field's full definition and, where the service applies it, what a change to it does (in place, a restart, a rebuild).
 
 ### `dropUnits`
 
@@ -74,5 +74,20 @@ Units whose journal lines never leave the VM, on top of the platform's generate-
 | Apply mode | `reconcile` |
 
 **Why this change class.** The journal client is rewritten whole by update-os.sh on every OS update (/etc/nixos/tappaas-logging.nix) and applied by that rebuild; alloy reloads its config in place. No downtime for the module.
+
+### `securityPaths`
+
+Files or directories of the module whose changes are recorded as security events while the site's security monitoring is on (ADR-050): its own configuration or state that nothing but TAPPaaS should change. Absolute paths of plain characters; a path the guest does not have is left out. Beside the platform's own (/etc/secrets, /root/.ssh, /etc/ssh).
+
+| Attribute | Value |
+|---|---|
+| Type | `array` |
+| Default | *(none)* |
+| Required by | *(none)* |
+| Used by | `logging:logs` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**Why this change class.** Written into the journal client's fragment (/etc/nixos/tappaas-logging.nix) at the next OS update and applied by its rebuild. NixOS guests only.
 
 <!-- END GENERATED FIELDS -->

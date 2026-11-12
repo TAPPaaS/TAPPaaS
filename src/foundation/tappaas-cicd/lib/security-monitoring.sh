@@ -28,15 +28,7 @@ _SECURITY_MONITORING_LOADED=1
 
 SECURITY_LOKI_RUNTIME="/etc/tappaas-loki/runtime.yaml"
 
-security_monitoring() {
-    local m; m="$(jq -r '.security.monitoring // empty' "$(_ms_site)" 2>/dev/null || true)"
-    case "${m}" in
-        on|off) echo "${m}" ;;
-        "") [[ "$(_ms_size)" == small ]] && echo off || echo on ;;
-        *) echo "security: site.json security.monitoring '${m}' is not on or off; using the default" >&2
-           [[ "$(_ms_size)" == small ]] && echo off || echo on ;;
-    esac
-}
+# security_monitoring is log-shipping.sh's: the NixOS fragment reads it too.
 
 security_retention_days() {
     local d; d="$(jq -r '.security.retentionDays // empty' "$(_ms_site)" 2>/dev/null || true)"

@@ -103,6 +103,19 @@
       "match": "^(Stopping|Stopped) .*([Aa]udit(ing)? [Ss]ervice|auditd)|^audit: .*audit_enabled=0",
       "summary": "The audit daemon stopped, or auditing was switched off in the kernel: changes on this host are no longer recorded.",
       "query": "{host=\"<host>\"} |~ \"audit\""
+    },
+    {
+      "name": "kernel-module-session",
+      "title": "KernelModuleFromSession",
+      "headline": "Kernel module loaded from a session",
+      "kind": "event",
+      "security": "warning",
+      "window": 300,
+      "scope": "all",
+      "_comment": "Audit records on the journal's audit transport (ADR-050 P2; NixOS guests with security monitoring on). Anchored on the record type, so the rule never matches its own query text on the logging VM. Changes to /etc/secrets and SSH keys are recorded (kept 90 days) but raise nothing: updates write them.",
+      "match": "^SYSCALL .*key=\"tappaas-module\"",
+      "summary": "A kernel module was loaded or removed from a login session, not by the system at boot. Expected only while someone is debugging hardware; otherwise a sign of tampering.",
+      "query": "{host=\"<host>\", transport=\"audit\"} |= \"tappaas-module\""
     }
   ]
 }

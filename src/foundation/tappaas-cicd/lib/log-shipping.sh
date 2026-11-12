@@ -31,7 +31,11 @@
 #
 # Sourceable only. Functions:
 #   log_shipping_wanted <module>                  0 when the module should ship
-#   render_logging_nix <host> <zone> [dropRegex]  the NixOS fragment, on stdout
+#   render_logging_nix <host> <zone> [dropRegex] [on|off] [paths]
+#                                                 the NixOS fragment, on stdout; on adds
+#                                                 the audit records (ADR-050 P2)
+#   security_monitoring                           on | off (site.json security, by size)
+#   log_shipping_security_paths <module>          the module's extra watched paths
 #   log_shipping_drop_regex <module>              the unit regex to drop
 #   apply_log_shipping_nixos <ip> <module>        install (or remove) the fragment
 #                                                 and the VM's push secret; the
@@ -195,6 +199,33 @@ log_shipping_wanted() {
         "${cfg}/${module}.json" >/dev/null 2>&1
 }
 
+# The site's security monitoring (ADR-050 D1): site.json security.monitoring,
+# else off on a small site and on otherwise. lib/security-monitoring.sh and
+# tappaas-alert-rules.py read it the same way.
+security_monitoring() {
+    local site m s
+    site="$(_ls_config_dir)/site.json"
+    m="$(jq -r '.security.monitoring // empty' "${site}" 2>/dev/null || true)"
+    case "${m}" in on|off) echo "${m}"; return ;; "") ;;
+        *) echo "security: site.json security.monitoring '${m}' is not on or off; using the default" >&2 ;; esac
+    s="$(jq -r '.size // "medium"' "${site}" 2>/dev/null || echo medium)"
+    [[ "${s}" == small ]] && echo off || echo on
+}
+
+# The paths a module asks to have watched beside the platform's (its
+# config."logging:logs".securityPaths): absolute, plain characters only.
+log_shipping_security_paths() {
+    local module="$1" p
+    while IFS= read -r p; do
+        [[ -n "${p}" ]] || continue
+        if [[ "${p}" =~ ^/[A-Za-z0-9_./@-]+$ && "${p}" != *..* ]]; then
+            echo "${p}"
+        else
+            echo "log-shipping: ignoring securityPaths entry '${p}' of ${module} (an absolute path of plain characters)" >&2
+        fi
+    done < <(jq -r '(.securityPaths // .config["logging:logs"].securityPaths // [])[]' "$(_ls_config_dir)/${module}.json" 2>/dev/null)
+}
+
 # The regex of units whose lines never leave the VM. A module's dropUnits that
 # are not plain unit patterns are refused rather than pasted into the selector.
 log_shipping_drop_regex() {
@@ -284,6 +315,15 @@ EOF
         target_label  = "unit"
       }
 
+      // The kernel's audit records (ADR-050): the only lines on the journal's
+      // audit transport, kept longer than the rest (lib/security-monitoring.sh).
+      rule {
+        source_labels = ["__journal__transport"]
+        regex         = "audit"
+        replacement   = "audit"
+        target_label  = "transport"
+      }
+
       rule {
         source_labels = ["__journal_priority_keyword"]
         target_label  = "severity"
@@ -337,7 +377,7 @@ EOF
 }
 
 render_logging_nix() {
-    local host="$1" zone="${2:-}" drop="${3:-${LOG_SHIPPING_BASE_DROP}}"
+    local host="$1" zone="${2:-}" drop="${3:-${LOG_SHIPPING_BASE_DROP}}" security="${4:-off}" paths="${5:-}" p
     [[ "${host}" =~ ^[A-Za-z0-9-]+$ ]] || { echo "render_logging_nix: bad host '${host}'" >&2; return 1; }
     [[ -z "${zone}" || "${zone}" =~ ^[A-Za-z0-9-]+$ ]] || { echo "render_logging_nix: bad zone '${zone}'" >&2; return 1; }
     cat <<EOF
@@ -386,6 +426,38 @@ render_logging_nix() {
     ];
   };
 
+EOF
+    if [[ "${security}" == on ]]; then
+        cat <<'EOF'
+  # Security monitoring (ADR-050 P2): the kernel's audit records go to the
+  # journal (journald's audit socket, no auditd), and with it to Loki, labelled
+  # transport="audit". Changes to secrets and SSH keys, and kernel modules
+  # loaded or removed from a login session (boot's own loads have no auid).
+  # A watched path must exist when the rules load: the platform's directories
+  # are made here, a module's paths are only those the guest already has.
+  services.journald.audit = true;
+  security.audit = {
+    enable = true;
+    rules = [
+      "-w /etc/secrets -p wa -k tappaas-secrets"
+      "-w /root/.ssh -p wa -k tappaas-ssh"
+      "-w /etc/ssh -p wa -k tappaas-ssh"
+      "-a always,exit -F arch=b64 -S init_module,finit_module,delete_module -F auid!=unset -k tappaas-module"
+EOF
+        while IFS= read -r p; do
+            [[ -n "${p}" ]] && printf '      "-w %s -p wa -k tappaas-module-path"\n' "${p}"
+        done <<<"${paths}"
+        cat <<'EOF'
+    ];
+  };
+  systemd.tmpfiles.rules = [
+    "d /etc/secrets - - - -"
+    "d /root/.ssh 0700 root root -"
+  ];
+
+EOF
+    fi
+    cat <<EOF
   # In /etc, not the store, so alloy reloads it in place on switch.
   environment.etc."alloy/config.alloy".text = ''
 EOF
@@ -399,7 +471,7 @@ EOF
 # Install the fragment on a NixOS guest when the module ships, remove it when it
 # does not. The caller's nixos-rebuild applies either.
 apply_log_shipping_nixos() {
-    local ip="$1" module="$2" cfg host zone tmp pw
+    local ip="$1" module="$2" cfg host zone tmp pw sec paths
     cfg="$(_ls_config_dir)"
     if ! log_shipping_wanted "${module}"; then
         ssh -o BatchMode=yes "tappaas@${ip}" "sudo rm -f ${LOG_SHIPPING_FRAGMENT} ${LOG_SHIPPING_VM_SECRET}"
@@ -419,7 +491,15 @@ apply_log_shipping_nixos() {
         log_shipping_sync_logging || echo "log-shipping: could not add ${host:-${module}} to the logging VM's password file — its pushes are refused until logging's next update" >&2
     fi
     tmp="$(mktemp)" || return 1
-    if ! render_logging_nix "${host:-${module}}" "${zone}" "$(log_shipping_drop_regex "${module}")" > "${tmp}"; then
+    # A module's watched paths that the guest has: auditctl refuses the whole
+    # rule set over one path that does not exist.
+    sec="$(security_monitoring)"
+    paths=""
+    if [[ "${sec}" == on ]]; then
+        paths="$(log_shipping_security_paths "${module}" | ssh -o BatchMode=yes "tappaas@${ip}" \
+            'while IFS= read -r p; do [ -e "$p" ] && echo "$p"; done' 2>/dev/null || true)"
+    fi
+    if ! render_logging_nix "${host:-${module}}" "${zone}" "$(log_shipping_drop_regex "${module}")" "${sec}" "${paths}" > "${tmp}"; then
         rm -f "${tmp}"; return 1
     fi
     if ! scp -q -o StrictHostKeyChecking=accept-new -o BatchMode=yes "${tmp}" "tappaas@${ip}:/tmp/tappaas-logging.nix"; then

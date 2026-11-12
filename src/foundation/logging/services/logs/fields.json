@@ -18,6 +18,22 @@
       "class": "in-place",
       "apply": "reconcile",
       "changeNote": "The journal client is rewritten whole by update-os.sh on every OS update (/etc/nixos/tappaas-logging.nix) and applied by that rebuild; alloy reloads its config in place. No downtime for the module."
+    },
+    "securityPaths": {
+      "description": "Files or directories of the module whose changes are recorded as security events while the site's security monitoring is on (ADR-050): its own configuration or state that nothing but TAPPaaS should change. Absolute paths of plain characters; a path the guest does not have is left out. Beside the platform's own (/etc/secrets, /root/.ssh, /etc/ssh).",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "logging:logs"
+      ],
+      "default": [],
+      "items": {
+        "type": "string",
+        "example": "/var/lib/nextcloud/config"
+      },
+      "class": "in-place",
+      "apply": "reconcile",
+      "changeNote": "Written into the journal client's fragment (/etc/nixos/tappaas-logging.nix) at the next OS update and applied by its rebuild. NixOS guests only."
     }
   }
 }

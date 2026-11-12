@@ -58,6 +58,9 @@ catches("pve-auth-failure", "authentication failure; rhost=10.0.0.5 user=lars@pv
 catches("opnsense-login-failed", "/index.php: Web GUI authentication error for user 'root' from: 203.0.113.9", "203.0.113.9")
 catches("opnsense-login-failed", "/index.php: Web GUI authentication error for 'root' from 203.0.113.9", "203.0.113.9")
 ignores("opnsense-login-failed", "/index.php: Successful login for user 'root' from: 10.0.0.209")
+catches("kernel-module-session", 'SYSCALL arch=c000003e syscall=313 success=yes exit=0 a0=3 items=0 ppid=1200 pid=1301 auid=1000 uid=0 comm="modprobe" exe="/run/current-system/sw/bin/kmod" key="tappaas-module"')
+ignores("kernel-module-session", 'SYSCALL arch=c000003e syscall=257 success=yes auid=1000 comm="install" key="tappaas-secrets"')
+ignores("kernel-module-session", 'level=info msg="query" query="{transport=\\"audit\\"} |~ \\"^SYSCALL .*key=\\\\\\"tappaas-module\\\\\\"\\""')
 # The success-after-burst rule is an expression; its two filters, alone:
 e = rules["ssh-login-after-bf"]["expr"]
 fails, oks = re.findall(r'\|~ "(.*?)"', e)
