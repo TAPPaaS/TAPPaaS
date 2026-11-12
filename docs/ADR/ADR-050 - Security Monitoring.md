@@ -270,7 +270,9 @@ Merged to `main` 2026-11-12 (`00745bfe`), live-tested on hrossen the same day.
   with all 21 rule sets was killed for memory on the 4 GB firewall, whose `/var/log` takes
   about 740 MB of RAM (its filter log); turning sets off needs a rule update before the start,
   or their files still load. With the core set it runs in 200 MB, and an `id check returned
-  root` test reached the receiver as an info hit.
+  root` test reached the receiver as an info hit. The firewall now keeps its own logs two days in
+  its RAM disk, not 31 (`log-retention-converge.sh`; seven without the logging module): on
+  hrossen `/var/log` fell from 744 to 237 MB and about 500 MB of memory came back.
 - Found: an ack is per condition type (ADR-041), so an ack given on a security hit also silences
   a CVE warning on the same object until the status changes. D12's "an ack covers the finding"
   needs acks per finding.
