@@ -44,14 +44,17 @@ function targets(type: string, conds: StoredCondition[]): string[] {
 
 /** A map keyed by condition type (acknowledgements, flapping) with its old keys
  *  moved to the new types; a word already under the new type stays when it is
- *  newer. The same object when nothing was keyed by an old type. */
-export function migrateKeyed<W extends StoredWord>(words: Record<string, W> | undefined, conds: StoredCondition[]): Record<string, W> | undefined {
+ *  newer. The same object when nothing was keyed by an old type. `hit`: the
+ *  SIEM holds hits on this object, so a `security` word was said about them
+ *  (one ack covered both before the split): it goes to threat alone, and the
+ *  object's CVE level is heard again. */
+export function migrateKeyed<W extends StoredWord>(words: Record<string, W> | undefined, conds: StoredCondition[], hit = false): Record<string, W> | undefined {
   if (!words || !Object.keys(words).some(isLegacy)) return words;
   const out: Record<string, W> = {};
   for (const [k, w] of Object.entries(words)) if (!isLegacy(k)) out[k] = w;
   for (const [k, w] of Object.entries(words)) {
     if (!isLegacy(k)) continue;
-    for (const t of targets(k, conds)) {
+    for (const t of hit && k === "security" ? ["threat"] : targets(k, conds)) {
       const had = out[t];
       if (!had || (w.at && had.at && Date.parse(w.at) > Date.parse(had.at))) out[t] = w;
     }

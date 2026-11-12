@@ -1059,6 +1059,7 @@ export function run(argv: string[], client: ClusterClient): number {
         const r = migrateTypes({
           configDir: opts.configDir,
           objects: () => cmdbQuery({ class: "object", limit: 100000 }) as unknown as MigrateObject[],
+          hits: () => readSiem(SIEM_STATE, () => null) ?? [],
           write: (o, attributes) => cmdb.write(o as never, attributes as never, { kind: "change", verb: "migrate" }),
         }, apply);
         for (const l of migrateLines(r, apply)) info(l);

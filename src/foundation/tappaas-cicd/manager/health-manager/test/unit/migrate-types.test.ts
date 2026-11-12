@@ -136,6 +136,16 @@ try {
   check(seen.keys.join("|") === "vm/coturn vulnerability cve-act|app/cluster threat alert-root-key-changed|sweep x", "the digest's told lines move: nothing comes back as new");
   // After the write-back the objects carry the new keys; a second run moves nothing.
   for (const x of writes) Object.assign(objects.find((o) => o.id === x.id)!.attributes, x.attributes);
+  // The SIEM has hits on the firewall: its old security ack was about them, and goes to threat
+  // alone, so the firewall's CVE critical (which that ack silenced before the split) is heard again.
+  const fw = { id: "fw-1", class: "vm", name: "fw", attributes: { conditions: [{ type: "security", status: "critical", reason: "cve-critical", owner: "cve" }], acknowledgements: { security: { ack: { by: "tappaas", note: "probe, not an attack", until: null, sticky: false, at: now }, at: now } } } };
+  const fwWrites: { id: string; attributes: Record<string, unknown> }[] = [];
+  migrateTypes({ configDir: join(dir, "nothing"), objects: () => [fw], hits: () => [{ host: "fw" }], write: (o, attributes) => void fwWrites.push({ id: o.id, attributes }) }, true);
+  check(Object.keys(fwWrites[0]?.attributes.acknowledgements as object ?? {}).join() === "threat", "a security ack on an object the SIEM has hits for becomes threat alone: its CVE level is heard again");
+  fwWrites.length = 0;
+  migrateTypes({ configDir: join(dir, "nothing"), objects: () => [fw], hits: () => [], write: (o, attributes) => void fwWrites.push({ id: o.id, attributes }) }, true);
+  check(Object.keys(fwWrites[0]?.attributes.acknowledgements as object ?? {}).join() === "vulnerability", "…without hits it follows the object's own condition");
+
   const twice = migrateTypes(io, true);
   check(twice.objects.length === 0 && twice.cursor === 0 && twice.digest === 0 && twice.rules.length === 0, "a second run changes nothing");
   check(twice.conditions === legacy(objects), "…the conditions are left for the next assess, and said so");
