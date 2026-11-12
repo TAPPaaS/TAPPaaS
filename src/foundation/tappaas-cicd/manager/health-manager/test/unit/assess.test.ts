@@ -426,6 +426,26 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check(got(assess(io, {}, later(20)), site, "drift")?.message !== "3 of 3 ok" , "a roll-up nobody computes is not carried as a judgement of its own");
 }
 
+// ── an ack the split moved to another type no longer holds this one ──
+{
+  const s = fresh();
+  const vm = s.items.find((o) => o.id === nc.id)!;
+  const io = new StubIO(s.items, s.rels);
+  const mod = { kind: "module" as const, name: "nextcloud" };
+  io.checks = () => [gate("disk-threshold", "fail", [], { findings: [{ status: "fail", text: "t", subject: mod }], judged: [mod] })];
+  assess(io, {}, NOW);
+  const at = later(1).toISOString();
+  const word = { ack: { by: "lars", note: "about the hit", until: null, sticky: false, at }, at };
+  // Stored as the migration leaves it: the condition still carries the ack, the word stands under threat.
+  const carry = (): void => { for (const c of vm.attributes.conditions as Condition[]) if (c.type === "capacity") { c.acknowledged = word.ack; c.operatorAt = at; } };
+  carry();
+  vm.attributes.acknowledgements = { threat: word };
+  check(got(assess(io, {}, later(2)), nc, "capacity")?.acknowledged === null, "a carried ack whose word now stands under another type no longer holds the condition: it is heard again");
+  carry();
+  vm.attributes.acknowledgements = { capacity: word };
+  check(got(assess(io, {}, later(3)), nc, "capacity")?.acknowledged?.by === "lars", "…one whose word stands under its own type still holds");
+}
+
 // ── the operator's word and emit's flapping: attributes of their own ──
 {
   const s = fresh();
