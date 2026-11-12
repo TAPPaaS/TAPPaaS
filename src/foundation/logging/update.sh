@@ -224,6 +224,17 @@ else
     warn "  the Proxmox or PBS metric server is not set: ${_mt_out//$'\n'/; }"
 fi
 
+# ── Security monitoring (ADR-050) ────────────────────────────────────
+# How long Loki keeps the security streams: site.json security, by size (90
+# days, 180 at large; off at small). Loki re-reads its runtime config by itself.
+# shellcheck source=../tappaas-cicd/lib/security-monitoring.sh
+. /home/tappaas/bin/security-monitoring.sh
+if _sm_out="$(security_sync_logging 2>&1)"; then
+    debug "  ${_sm_out//$'\n'/; }"
+else
+    warn "  could not write Loki's security retention to ${VMNAME}: ${_sm_out//$'\n'/; }"
+fi
+
 # ── Module alert rules (ADR-039) ─────────────────────────────────────
 # Each module's rules live in Grafana's database, not in this VM's build: put
 # every module's group back, so a rebuilt or restored Grafana has them without

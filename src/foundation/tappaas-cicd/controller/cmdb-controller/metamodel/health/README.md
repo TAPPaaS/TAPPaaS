@@ -81,7 +81,7 @@ classes is not more specific than one naming an ancestor of only one of them.
 ### classify — what a finding becomes
 
 `when`: `finding`, `object`. Outcome, any of `set: {type?, status?, reason?}`,
-`aggregate: true`, `quiet: true`.
+`aggregate: true`, `quiet: true`, `hold`.
 
 - `set` re-rates: `status` is `warning` or `critical`, and a record applies only to a
   failing finding. A record never makes a failure ok and never touches an ok. A
@@ -94,6 +94,12 @@ classes is not more specific than one naming an ancestor of only one of them.
   record that quieted it. The moment the record is edited, turned off or no longer
   matches, the condition is heard again. A `quiet` record must name a reason, a
   label or an object.
+- `hold` (ADR-050 D12) applies to findings that are events, the security hits of
+  source `siem`: how long a hit holds its condition, a duration from the last hit
+  (`"24h"`, `"7d"`) or `"until-ack"` (until the CI's security condition is
+  acknowledged after the last hit). The source decides from it whether the hit is
+  still held; the record itself never makes a failure ok. Shipped: warning `24h`,
+  critical `until-ack`.
 
 Thresholds (a pool is a warning at 85 %) are the check's, not a record's: a source
 reports a finding with a status, and a record may then re-rate it.
@@ -294,6 +300,8 @@ with the records that matched and lost. Neither writes anything.
 
 - `core.classify.alert`: a finding from alerts is operational warning.
 - `core.classify.alert-security`: a finding from alerts, alertname RootKeyChanged or FirewallCertChanged is security warning.
+- `core.classify.siem-warning`: a finding from siem, level warning holds 24h from its last hit.
+- `core.classify.siem-critical`: a finding from siem, level critical holds until acknowledged.
 - `core.classify.zone-score`: a finding from cve on a zone or environment is a sum of others, never a root.
 - `core.classify.cve-baseline`: a finding from cve, setBy baseline is a sum of others, never a root.
 - `core.classify.long-warning` (off until a site turns it on): a warning operational finding standing older than 24h is critical.

@@ -511,6 +511,19 @@ else
     skip "lib/test-metrics-shipping.sh not found"
 fi
 
+# Security monitoring (ADR-050): the switch by size and the security log retention. Offline.
+info "${BOLD}Test 9c1s: security monitoring — switch, retention, Loki runtime config${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-security-monitoring.sh" ]]; then
+    if sm_out="$("${SCRIPT_DIR}/lib/test-security-monitoring.sh" 2>&1)"; then
+        pass "security-monitoring: $(tail -1 <<< "${sm_out}")"
+    else
+        fail "security-monitoring test failed"
+        sed 's/^/    /' <<< "${sm_out}"
+    fi
+else
+    skip "lib/test-security-monitoring.sh not found"
+fi
+
 # Test 9c1s: the service level (ADR-046 P3) — Caddy and probes for the routes at
 # service, a module's declared exporters, route identity, dashboards. Offline.
 info "${BOLD}Test 9c1s: service metrics — routes, exporters, identity, dashboards${CL}"

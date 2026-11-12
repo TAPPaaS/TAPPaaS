@@ -1,0 +1,46 @@
+{
+  "_comment": "Security rules over Authentik's events (ADR-050). Rendered only while the site's security monitoring is on.",
+  "rules": [
+    {
+      "name": "authentik-login-bf",
+      "title": "AuthentikLoginBruteForce",
+      "headline": "Authentik login brute force",
+      "kind": "event",
+      "security": "warning",
+      "window": 600,
+      "above": 10,
+      "_comment": "Authentik's events are JSON lines in the journal (identity.nix).",
+      "match": "\"action\": ?\"login_failed\"",
+      "capture": {
+        "src_ip": "\"client_ip\": ?\"(?P<src_ip>[^\"]+)\""
+      },
+      "summary": "More than ten failed sign-ins from one address in ten minutes. CrowdSec bans the address at the firewall on Authentik's token endpoint; this covers the sign-in flow too.",
+      "query": "{host=\"<host>\"} |= \"login_failed\" | json"
+    },
+    {
+      "name": "authentik-suspicious",
+      "title": "AuthentikSuspiciousRequest",
+      "headline": "Authentik suspicious request",
+      "kind": "event",
+      "security": "warning",
+      "window": 300,
+      "match": "\"action\": ?\"suspicious_request\"",
+      "capture": {
+        "src_ip": "\"client_ip\": ?\"(?P<src_ip>[^\"]+)\""
+      },
+      "summary": "Authentik flagged a request as suspicious (a reputation policy, a malformed or replayed request).",
+      "query": "{host=\"<host>\"} |= \"suspicious_request\" | json"
+    },
+    {
+      "name": "authentik-impersonation",
+      "title": "AuthentikImpersonation",
+      "headline": "Authentik impersonation",
+      "kind": "event",
+      "security": "warning",
+      "window": 300,
+      "match": "\"action\": ?\"impersonation_started\"",
+      "summary": "An administrator started impersonating a user in Authentik. Expected only when someone is helping that user.",
+      "query": "{host=\"<host>\"} |= \"impersonation\" | json"
+    }
+  ]
+}

@@ -60,7 +60,7 @@ export function sentence(r: HealthRecord): string {
   switch (r.kind) {
     case "classify": {
       const to = [r.set?.type, r.set?.status, r.set?.reason ? `(${r.set.reason})` : ""].filter(Boolean).join(" ");
-      const does = [to ? `is ${to}` : "", r.aggregate ? "is a sum of others, never a root" : "", r.quiet ? "is kept and quiet" : ""].filter(Boolean).join(", ");
+      const does = [to ? `is ${to}` : "", r.aggregate ? "is a sum of others, never a root" : "", r.quiet ? "is kept and quiet" : "", r.hold ? (r.hold === "until-ack" ? "holds until acknowledged" : `holds ${r.hold} from its last hit`) : ""].filter(Boolean).join(", ");
       return `${finding(w.finding)}${w.object ? ` on ${obj(w.object, "an object")}` : ""} ${does}`;
     }
     case "propagate": {

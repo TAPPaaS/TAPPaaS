@@ -67,7 +67,7 @@ echo '{"vmname":"site1","moduleSource":"/c/hosting"}' > "${TMP}/cfg/shop.json"
 PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')"
 python3 "${R}" --listen "127.0.0.1:${PORT}" --token-file "${TMP}/token" \
     --notify "${TMP}/notify" --bundle "${TMP}/bundle" --breadcrumb "${TMP}/crumbs" --heartbeat-file "${TMP}/heartbeat" \
-    --cluster "${TMP}/cluster" --node-down-dir "${TMP}/node-down" --cluster-cache 0 --alerts-log "${TMP}/alerts.jsonl" \
+    --cluster "${TMP}/cluster" --node-down-dir "${TMP}/node-down" --cluster-cache 0 --alerts-log "${TMP}/alerts.jsonl" --siem-state "${TMP}/siem.json" \
     --health "${TMP}/health" --config-dir "${TMP}/cfg" --silent-hold 0 --burst-min 1000 \
     --maintenance-dir "${TMP}/maint" --silent-burst-file "${TMP}/burst.json" > "${TMP}/log" 2>&1 &
 PID=$!
@@ -93,6 +93,22 @@ ck "a firing alert is accepted" "200" "$(post sekret "$(wh firing event QuorumLo
 ck "…and mailed" "ALERT: QuorumLost on tappaas1" "$(tail -1 "${TMP}/subjects")"
 ck "the body carries the summary" "yes" "$(grep -q 'QuorumLost on tappaas1' "${TMP}/bodies" && echo yes || echo no)"
 ck "the body carries the query to paste" "yes" "$(grep -q 'Explore, Loki): {host="tappaas1"}' "${TMP}/bodies" && echo yes || echo no)"
+
+# Security hits (ADR-050 D12): one entry per rule and CI, with the count.
+sec() {  # sec <status> <level> <host> — a security rule's webhook body
+    printf '{"status":"%s","alerts":[{"status":"%s","labels":{"alertname":"SshBruteForce","host":"%s","kind":"event","module":"logging","type":"security","level":"%s","src_ip":"203.0.113.9"},"annotations":{"summary":"brute force"},"startsAt":"2026-11-12T08:00:00Z"}]}' "$1" "$1" "$3" "$2"
+}
+post sekret "$(sec firing warning nextcloud)" >/dev/null
+post sekret "$(sec firing critical nextcloud)" >/dev/null
+post sekret "$(sec resolved critical nextcloud)" >/dev/null
+ck "two security hits are one entry" "1" "$(jq '.findings | length' "${TMP}/siem.json")"
+ck "…counted twice (a resolve is no hit)" "2" "$(jq '.findings[].count' "${TMP}/siem.json")"
+ck "…at the last hit's level" "critical" "$(jq -r '.findings[].level' "${TMP}/siem.json")"
+ck "…with what it captured, not type or level" '{"src_ip":"203.0.113.9"}' "$(jq -c '.findings[].labels' "${TMP}/siem.json")"
+ck "an alert that is not security is no hit" "1" "$(jq '.findings | length' "${TMP}/siem.json")"
+jq '.findings[].last = "2026-01-01T00:00:00+00:00"' "${TMP}/siem.json" > "${TMP}/s2" && mv "${TMP}/s2" "${TMP}/siem.json"
+post sekret "$(sec firing warning identity)" >/dev/null
+ck "an entry past its keep is pruned on the next hit" "identity" "$(jq -r '.findings[].host' "${TMP}/siem.json")"
 
 n="$(sent)"
 ck "an event rule's resolve is accepted" "200" "$(post sekret "$(wh resolved event QuorumLost tappaas1)")"
@@ -298,7 +314,7 @@ kill "${PID}" 2>/dev/null; wait "${PID}" 2>/dev/null
 PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')"
 python3 "${R}" --listen "127.0.0.1:${PORT}" --token-file "${TMP}/token" \
     --notify "${TMP}/notify" --bundle "${TMP}/bundle" --breadcrumb "${TMP}/crumbs2" --heartbeat-file "${TMP}/heartbeat" \
-    --cluster "${TMP}/cluster" --node-down-dir "${TMP}/node-down2" --cluster-cache 0 --alerts-log "${TMP}/alerts2.jsonl" \
+    --cluster "${TMP}/cluster" --node-down-dir "${TMP}/node-down2" --cluster-cache 0 --alerts-log "${TMP}/alerts2.jsonl" --siem-state "${TMP}/siem2.json" \
     --health "" --config-dir "${TMP}/cfg" --silent-hold 1 --burst-min 3 --burst-window 60 \
     --maintenance-dir "${TMP}/maint2" --silent-burst-file "${TMP}/burst2.json" > "${TMP}/log2" 2>&1 &
 PID=$!

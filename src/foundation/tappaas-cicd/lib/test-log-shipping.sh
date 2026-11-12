@@ -22,6 +22,26 @@ ok(){ pass=$((pass+1)); }
 no(){ fail=$((fail+1)); echo "FAIL: $1"; }
 T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT
 
+# ── security monitoring (ADR-050 P2) ─────────────────────────────────
+render_logging_nix web dmz "x" > "${T}/plain.nix"
+grep -q 'security.audit' "${T}/plain.nix" && no "off: the fragment carries audit" || ok
+render_logging_nix web dmz "x" on "/var/lib/web/config" > "${T}/sec.nix" || no "render with security on failed"
+grep -q 'services.journald.audit = true;' "${T}/sec.nix" && ok || no "on: journald does not take the audit records"
+grep -q '"-w /etc/secrets -p wa -k tappaas-secrets"' "${T}/sec.nix" && ok || no "on: secrets are not watched"
+grep -q '"-w /var/lib/web/config -p wa -k tappaas-module-path"' "${T}/sec.nix" && ok || no "on: the module's path is not watched"
+grep -q '"d /var/lib/web/config' "${T}/sec.nix" && no "a module's path is never created" || ok
+grep -q 'audit-rules-nixos.after = \[ "systemd-tmpfiles-setup.service" \]' "${T}/sec.nix" && ok || no "the rules do not wait for tmpfiles"
+grep -q 'source_labels = \["__journal__transport"\]' "${T}/sec.nix" && ok || no "the audit transport is not labelled"
+command -v nix-instantiate >/dev/null && { nix-instantiate --parse "${T}/sec.nix" >/dev/null 2>&1 && ok || no "the fragment does not parse"; }
+CONFIG_DIR="${T}/cfg"; export CONFIG_DIR; mkdir -p "${CONFIG_DIR}"
+echo '{"size":"small"}' > "${CONFIG_DIR}/site.json"
+[[ "$(security_monitoring)" == off ]] && ok || no "small: security monitoring is not off"
+echo '{"size":"small","security":{"monitoring":"on"}}' > "${CONFIG_DIR}/site.json"
+[[ "$(security_monitoring)" == on ]] && ok || no "site.json on is not taken"
+echo '{"config":{"logging:logs":{"securityPaths":["/var/lib/web","relative/path","/etc/../shadow","/etc/web conf"]}}}' > "${CONFIG_DIR}/web.json"
+[[ "$(log_shipping_security_paths web 2>/dev/null)" == "/var/lib/web" ]] && ok || no "securityPaths: only absolute plain paths are kept ($(log_shipping_security_paths web 2>/dev/null))"
+unset CONFIG_DIR
+
 # ── one pipeline, two wrappers ───────────────────────────────────────
 drop="generate-.*-secrets.*|secretd.service"
 render_logging_nix web dmz "${drop}" > "${T}/frag.nix" || no "render_logging_nix failed"

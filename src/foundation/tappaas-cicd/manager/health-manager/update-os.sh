@@ -756,6 +756,19 @@ guest_trusts_site_key() {
 
 # After a successful switch: <vmname>.new becomes .current, the old .current
 # becomes .previous. A failed switch drops .new.
+# The systems TAPPaaS activated or staged on a guest (ADR-050 P2), newest last,
+# the last 20 kept: what health-manager's guest-system gate accepts. A system
+# the guest runs or will boot that is not here was made by someone else.
+GUEST_SYSTEMS_DIR="${GUEST_SYSTEMS_DIR:-${CONFIG_DIR:-/home/tappaas/config}/.guest-systems}"
+guest_system_record() {
+    local vmname="$1" ip="$2" p f
+    p="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "tappaas@${ip}" "readlink -f /nix/var/nix/profiles/system" 2>/dev/null || true)"
+    [[ "${p}" == /nix/store/*-nixos-system-* ]] || return 0
+    mkdir -p "${GUEST_SYSTEMS_DIR}" 2>/dev/null || return 0
+    f="${GUEST_SYSTEMS_DIR}/${vmname}"
+    { grep -vxF "${p}" "${f}" 2>/dev/null || true; echo "${p}"; } | tail -n 20 > "${f}.tmp" && mv -f "${f}.tmp" "${f}"
+}
+
 guest_build_promote() {
     local vmname="$1" ok="$2"
     local r="${GUEST_BUILD_GCROOTS}/${vmname}"
@@ -1121,6 +1134,7 @@ update_nixos() {
     done
     [[ -n "${_built}" ]] && guest_build_promote "${vmname}" "${rebuilt}"
     [[ "$rebuilt" == "1" ]] || die "nixos-rebuild failed after 3 attempts (ssh connection lost each time)"
+    guest_system_record "${vmname}" "${vm_ip}" || true
 
     # nixos-rebuild switch already activated the new generation; the reboot
     # applies kernel/bootloader changes. Gated by tappaas.automaticReboot

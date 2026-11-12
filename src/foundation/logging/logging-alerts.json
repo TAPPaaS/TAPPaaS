@@ -29,6 +29,93 @@
       "_comment": "Every instance that ships (logging:logs, and the logging VM): a deleted one leaves the list in its delete, so it raises nothing (ADR-039 D4). Heartbeat stays in logging.nix.",
       "summary": "A host stopped logging 15 minutes ago: it is down, or its log forwarder is (rsyslog on a node, alloy on a VM).",
       "query": "{host=\"<host>\"}"
+    },
+    {
+      "name": "ssh-brute-force",
+      "title": "SshBruteForce",
+      "headline": "SSH brute force",
+      "kind": "event",
+      "security": "warning",
+      "window": 300,
+      "scope": "all",
+      "above": 10,
+      "_comment": "Anchored: Loki and Grafana log every rule's query text on the logging VM, which is in scope all, so an unanchored rule would match its own query. Per host and per source address.",
+      "match": "^(Failed password for|Invalid user|Connection closed by authenticating user|Disconnected from authenticating user)",
+      "capture": {
+        "src_ip": "(?:from|authenticating user \\S+) (?P<src_ip>[0-9a-fA-F:.]+) port"
+      },
+      "summary": "More than ten failed SSH logins from one address in five minutes. Key-only SSH makes them harmless, but the address is probing. CrowdSec bans it at the firewall when it crosses it.",
+      "query": "{host=\"<host>\"} |~ \"^(Failed password|Invalid user)\"",
+      "unit": "sshd.*"
+    },
+    {
+      "name": "ssh-login-after-bf",
+      "title": "SshLoginAfterBruteForce",
+      "headline": "SSH login after a brute force",
+      "kind": "event",
+      "security": "critical",
+      "window": 600,
+      "scope": "all",
+      "_comment": "Anchored: Loki and Grafana log every rule's query text on the logging VM, which is in scope all, so an unanchored rule would match its own query. A success from an address that failed more than five times in ten minutes, on the same host.",
+      "expr": "sum by (host, src_ip) (count_over_time(__SELECTOR__ |~ \"^(Failed password for|Invalid user)\" | regexp \"from (?P<src_ip>[0-9a-fA-F:.]+)\" [10m])) > 5 and on (host, src_ip) sum by (host, src_ip) (count_over_time(__SELECTOR__ |~ \"^Accepted (password|publickey|keyboard-interactive)\" | regexp \"from (?P<src_ip>[0-9a-fA-F:.]+)\" [10m])) > 0",
+      "summary": "An SSH login succeeded from an address that had just failed many times on the same host. Check who logged in, and acknowledge with the reason (health-manager ack <ci> --type security --note ...).",
+      "query": "{host=\"<host>\"} |~ \"^(Accepted|Failed password)\""
+    },
+    {
+      "name": "ssh-password-login",
+      "title": "SshPasswordLogin",
+      "headline": "SSH password login",
+      "kind": "event",
+      "security": "warning",
+      "window": 300,
+      "scope": "all",
+      "_comment": "Anchored: Loki and Grafana log every rule's query text on the logging VM, which is in scope all, so an unanchored rule would match its own query. TAPPaaS SSH is key-only: a password that works is a host whose sshd was changed.",
+      "match": "^Accepted (password|keyboard-interactive/pam) for",
+      "capture": {
+        "src_ip": "from (?P<src_ip>[0-9a-fA-F:.]+)"
+      },
+      "summary": "An SSH login with a password succeeded. TAPPaaS hosts take keys only, so this host's SSH configuration was changed.",
+      "query": "{host=\"<host>\"} |~ \"^Accepted (password|keyboard)\"",
+      "unit": "sshd.*"
+    },
+    {
+      "name": "sudo-refused",
+      "title": "SudoRefused",
+      "headline": "sudo refused",
+      "kind": "event",
+      "security": "warning",
+      "window": 300,
+      "scope": "all",
+      "_comment": "Anchored: Loki and Grafana log every rule's query text on the logging VM, which is in scope all, so an unanchored rule would match its own query. The tappaas user's sudo needs no password: a failure is someone else.",
+      "match": "^(pam_unix\\(sudo:auth\\): authentication failure|\\S+ : (user NOT in sudoers|\\d+ incorrect password attempts?))",
+      "summary": "sudo was refused on this host: a wrong password, or a user who may not use it.",
+      "query": "{host=\"<host>\"} |~ \"sudo\""
+    },
+    {
+      "name": "audit-stopped",
+      "title": "AuditStopped",
+      "headline": "Audit logging stopped",
+      "kind": "event",
+      "security": "warning",
+      "window": 300,
+      "scope": "all",
+      "_comment": "Anchored: Loki and Grafana log every rule's query text on the logging VM, which is in scope all, so an unanchored rule would match its own query. Also seen at a planned shutdown; a reboot outside the update window is worth a look anyway.",
+      "match": "^(Stopping|Stopped) .*([Aa]udit(ing)? [Ss]ervice|auditd)|^audit: .*audit_enabled=0",
+      "summary": "The audit daemon stopped, or auditing was switched off in the kernel: changes on this host are no longer recorded.",
+      "query": "{host=\"<host>\"} |~ \"audit\""
+    },
+    {
+      "name": "kernel-module-session",
+      "title": "KernelModuleFromSession",
+      "headline": "Kernel module loaded from a session",
+      "kind": "event",
+      "security": "warning",
+      "window": 300,
+      "scope": "all",
+      "_comment": "Audit records on the journal's audit transport (ADR-050 P2; NixOS guests with security monitoring on). Anchored on the record type, so the rule never matches its own query text on the logging VM. Changes to /etc/secrets and SSH keys are recorded (kept 90 days) but raise nothing: updates write them.",
+      "match": "^SYSCALL .*key=\"tappaas-module\"",
+      "summary": "A kernel module was loaded or removed from a login session, not by the system at boot. Expected only while someone is debugging hardware; otherwise a sign of tampering.",
+      "query": "{host=\"<host>\", transport=\"audit\"} |= \"tappaas-module\""
     }
   ]
 }

@@ -14,6 +14,23 @@
       "match": "tappaas-firewall-cert-(changed|expiring):",
       "summary": "The firewall's API certificate changed (expected after a firewall rebuild or a certificate renewal — otherwise something answers as the firewall), or expires within 30 days. The line names the old and new fingerprints.",
       "query": "__SELECTOR__ |= \"tappaas-firewall-cert\""
+    },
+    {
+      "name": "opnsense-login-failed",
+      "title": "FirewallLoginFailed",
+      "headline": "Firewall sign-in failures",
+      "kind": "event",
+      "security": "warning",
+      "window": 600,
+      "above": 3,
+      "unit": "audit",
+      "_comment": "OPNsense's audit log over syslog; the message text is to be confirmed on a live firewall.",
+      "match": "authentication error for",
+      "capture": {
+        "src_ip": "from:? (?P<src_ip>[0-9a-fA-F:.]+)"
+      },
+      "summary": "More than three failed sign-ins to the firewall's web UI from one address in ten minutes.",
+      "query": "{host=\"<host>\", unit=\"audit\"} |= \"authentication error\""
     }
   ]
 }

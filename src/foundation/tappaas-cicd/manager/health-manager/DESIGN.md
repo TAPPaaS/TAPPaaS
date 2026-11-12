@@ -53,6 +53,7 @@ non-zero on a critical one that counts** (see *Assess* below).
 | `guest-memory` | `pvesh` + one SSH per node (`ps`, `qm status`, balloon statistics) | a module using ≥ 90% of its declared memory (WARN ≥ 75%), or allocated above the declared limit | cluster unreachable / nothing running |
 | `backup-status` | `backup-manager list --json` | a module disabled, or enabled-but-not-in-PBS-job | backup tooling absent / unparseable |
 | `pending-reboot` | one SSH probe per guest (booted system vs profile; Debian `reboot-required`) | never — **WARN** per waiting guest (#730) | no reachable guest |
+| `guest-system` | one SSH probe per NixOS guest with a record (booted, running and profile systems) against `config/.guest-systems/<vmname>` | a profile or running system TAPPaaS did not record (ADR-050 P2) | no guest with a record answered |
 | `site-timezone` | the primary location's timezone (`site.json` `locations[primaryLocation].timezone`) + one `timedatectl` per node and per guest | never — **WARN** per node or guest on another zone, or when site.json has none (#837) | nothing answered |
 | `pulse` | the backup node's `tappaas-pulse --status` | never — **WARN** when its timer is not running or a target is down (ADR-031) | no backup node, or it does not answer |
 | `quorum` | `pvecm status` on the first answering node | never — **WARN** on two votes without a QDevice (#835) | no node answers |
@@ -64,7 +65,7 @@ cluster-wide. The disk gate is **read-only**: the 50%-auto-grow that
 `check-disk-threshold.sh` performs is a *mutation* and stays in the script — it
 is not part of the health assertion. The gate order is service-liveness →
 disk-threshold → memory-commitment → guest-memory → backup-status →
-pending-reboot → site-timezone → quorum → lan-uplink → ipv6-egress → switch-ports → pulse →
+pending-reboot → guest-system → site-timezone → quorum → lan-uplink → ipv6-egress → switch-ports → pulse →
 cve-status; `validate`
 returns 0 only when zero gates FAIL (SKIP does not fail the assertion).
 
