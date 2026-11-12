@@ -79,25 +79,21 @@ export function ciIndex(idx: SiteIndex): (s: PerfSignal, m: Record<string, strin
   return (s, m) => (s.classes.includes("storage-pool") ? pools.get(`${m.tappaas_ci_id}|${m.pool}`) : idx.byId.get(m.tappaas_ci_id ?? ""));
 }
 
-// A route's module, from the description network:proxy writes ("TAPPaaS: nextcloud").
-export function moduleOfCi(o: CmdbItem, modules: Set<string>): string | null {
-  if (o.class === "proxy-route") return /^TAPPaaS: ([a-z0-9-]+)/.exec(String(o.attributes.description ?? ""))?.[1] ?? null;
-  const provider = typeof o.attributes.provider === "string" ? o.attributes.provider : null;
-  return [provider, o.name].find((m) => m !== null && modules.has(m)) ?? null;
-}
+// The module a CI belongs to: its `module` attribute, as its reporter set it.
+const moduleOf = (o: CmdbItem): string | null => (typeof o.attributes.module === "string" && o.attributes.module ? o.attributes.module : null);
 
 const query = (r: MetricsReader, expr: string, trends = false): Sample[] | null => r.instant(expr, trends);
 const windowed = (fn: "min_over_time" | "max_over_time", s: PerfSignal, forS: number): string => `${fn}((${signalExpr(s, SITE_WIDE)})[${forS}s:1m])`;
 
 /** The performance findings: one per CI and signal judged, worst kept by assess. */
-export function fromPerformance(idx: SiteIndex, reader: MetricsReader, declared: Declared[], modules: Set<string>): { findings: Finding[]; looked: boolean } {
+export function fromPerformance(idx: SiteIndex, reader: MetricsReader, declared: Declared[]): { findings: Finding[]; looked: boolean } {
   const findings: Finding[] = [];
   const objectOf = ciIndex(idx);
   // Each signal once per window, site-wide: a declared window is a query of its own.
   const windows = new Map<string, Set<number>>();
   const perCi = new Map<string, Threshold[]>();
   for (const o of idx.objects) {
-    const ts = thresholdsFor(o.class, moduleOfCi(o, modules), declared);
+    const ts = thresholdsFor(o.class, moduleOf(o), declared);
     if (!ts.length) continue;
     perCi.set(o.id, ts);
     for (const t of ts) windows.set(t.signal.name, new Set([...(windows.get(t.signal.name) ?? []), t.forS]));

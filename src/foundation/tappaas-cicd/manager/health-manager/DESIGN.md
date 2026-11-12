@@ -258,6 +258,19 @@ reaches, the conditions that failure would explain or cover there. One extra spr
 per object an open window names, with nothing else failing, so a second fault that the
 window did not plan for is still heard.
 
+**Where the records come from** (`src/rulestore.ts`). The engine reads
+`config/health/rules/` (before the first merge, the core records of the release).
+`rules merge` compares, per origin and per rule id, what was last installed
+(`base/`), what is released now and what is installed, and never changes a rule the
+site edited or brings back one it deleted; the merged set is checked, a released
+rule that conflicts with a local one is held, and a module's rule must name the
+module at one end and has its reach measured by simulation. The verbs
+(`src/rules-verbs.ts`) change the installed set on a fresh copy, check it, run the
+contract scenarios and show the difference on the site before `--apply` writes. A
+changed active set runs assess and emit at once; emit marks that run's transitions
+`cause: "rules"` (by the site's `assessment.rules.hash` against its cursor's) and
+keeps them out of the flapping count.
+
 **Tracing.** Every derived condition carries `rule`: the record behind its crossing,
 explanation, follow or roll-up. With `trace` on (`rules explain`), the engine also
 keeps the crossings, the record and step behind each, and the records that matched

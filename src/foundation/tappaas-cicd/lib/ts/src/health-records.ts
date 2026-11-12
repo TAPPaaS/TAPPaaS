@@ -525,3 +525,29 @@ export function ruleSetHash(recs: HealthRecord[]): string {
 
 /** A record's own short hash: which records changed between two sets. */
 export const recordHash = (r: HealthRecord): string => createHash("sha256").update(canonical(r)).digest("hex").slice(0, 12);
+
+/** Does a module's record name the module at one end (an object selector by
+ *  `module: <it>`, or by a class the module's components are registered to
+ *  report), and do its classify and notify records touch only its own? null
+ *  when it does; the problem when not. Core and site records are not bound. */
+export function anchorProblem(r: HealthRecord, origin: string, reports: string[], anc: Ancestors): string | null {
+  const w = r.when ?? {};
+  const own = (sel: ObjSel | undefined): boolean => {
+    if (!sel) return false;
+    const m = sel.module;
+    if (m === origin || (Array.isArray(m) && m.length > 0 && m.every((x) => x === origin))) return true;
+    if (sel.class === undefined) return false;
+    const cs = Array.isArray(sel.class) ? sel.class : [sel.class];
+    return cs.length > 0 && cs.every((c) => reports.some((rc) => (anc[c] ?? [c]).includes(rc)));
+  };
+  const label = w.finding?.labels?.module;
+  switch (r.kind) {
+    case "propagate":
+    case "combine":
+      return own(w.provider) || own(w.dependant) || own(w.from) || own(w.to) ? null : `a ${origin} record names ${origin} at one end: module: ${origin}, or a class ${origin} reports, on its provider or dependant`;
+    case "classify":
+      return label === origin || own(w.object) ? null : `a ${origin} classify record touches only its own: finding.labels.module ${origin}, or its object`;
+    default:
+      return own(w.object) ? null : `a ${origin} ${r.kind} record touches only its own objects: module: ${origin} on its object`;
+  }
+}

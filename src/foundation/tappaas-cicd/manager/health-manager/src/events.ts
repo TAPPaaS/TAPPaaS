@@ -36,6 +36,8 @@ export interface TransitionEvent {
   symptoms: number; // on a root: what it impacts
   impacted: string; // on a root: what it impacts by class, "3 vm, 2 service"; else "nothing"
   silenced: boolean; // acknowledged or in maintenance: recorded, never mailed
+  cause?: "rules"; // the health rules changed: not a health change, not counted toward flapping
+  rules?: string[]; // the rules that changed, with cause "rules"
   levelUp?: true; // a module's CVE risk level rose to high or critical (cve-level-up mails it)
   digestOnly?: true; // a performance condition: told in the daily digest, never mailed on its own
 }

@@ -43,7 +43,6 @@ export interface AssessIO {
   // The metrics store (ADR-046 D6): null when logging or its credential is not here.
   metrics?(): MetricsReader | null;
   perfDeclared?(): Declared[]; // the foundation modules' declared thresholds
-  modules?(): Set<string>; // the instances, to tell a CI's module
   horizonDays?(): number; // capacity: "full within" this many days is a warning
   windows?(): Window[]; // the maintenance windows (windows.ts): what they cover is in maintenance
   write(report: CmdbReport): void;
@@ -269,7 +268,7 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
   ran.add("observations");
   const reader = io.metrics ? t("metrics", () => io.metrics!()) : null;
   if (reader) {
-    const p = t("performance", () => fromPerformance(idx, reader, io.perfDeclared?.() ?? [], io.modules?.() ?? new Set()));
+    const p = t("performance", () => fromPerformance(idx, reader, io.perfDeclared?.() ?? []));
     const tr = t("trends", () => fromTrends(idx, reader, io.horizonDays?.() ?? 14));
     findings.push(...p.findings, ...tr.findings);
     // Both or neither: one owner takes back what either set.
@@ -287,6 +286,11 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
   if (idx.site) {
     for (const [a, b] of conflicts(model.records, model.ancestors)) {
       findings.push({ object: idx.site.id, type: "drift", status: "warning", reason: "rules-conflict", message: `health records ${a.id} and ${b.id} decide one case differently — health-manager rules check`, owner: "rules" });
+    }
+    // A merge that did not hold left yesterday's rules running.
+    if (model.lastMerge && !model.lastMerge.ok) {
+      const errs = model.lastMerge.problems.filter((p) => p.startsWith("error")).map((p) => p.replace(/^error: /, ""));
+      findings.push({ object: idx.site.id, type: "drift", status: "warning", reason: "rules-merge", message: `the health rules of an update did not hold, the earlier ones still run: ${errs.slice(0, 3).join("; ")}${errs.length > 3 ? ` (+${errs.length - 3})` : ""} — health-manager rules merge`, owner: "rules" });
     }
     ran.add("rules");
   }

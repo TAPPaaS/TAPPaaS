@@ -39,6 +39,13 @@ health-manager report security [--cves] [--scan [--all]] [--json]
 health-manager scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update] [--no-vex]
 health-manager scan images --refs <file> [--no-db-update] [--no-vex]
 health-manager score [--details <file>] [--items <file>] [--json]
+health-manager rules list [--kind K] [--origin O] [--state edited|pending|held|disabled|deleted] [--json|--markdown]
+health-manager rules show <id> | diff <id> [--json]
+health-manager rules check [--file F [--origin O]] | explain <ci> | simulate --fail <ci>[:type[:status]] … [--with F] [--without <id>] [--diff]
+health-manager rules add <file> | edit <id> --set path=value … | --unset path | --file F   [--note N] [--apply] [--force]
+health-manager rules enable|disable <id> | --origin O · delete|restore|take [--field F]|keep|accept <id>   [--apply]
+health-manager rules scenario list | retire <id> --note N | restore <id>   [--apply]
+health-manager rules merge [--origin O] [--apply]
 ```
 
 `scan nix-list` matches a JSON list of `{name, version}` against the CVE database as if those
@@ -820,6 +827,68 @@ The site object carries the result as `rootCauses[]`, most impact first:
 Roll-ups: a `collection` and a `place` carry the worst of their members per type,
 derived and counted (`3 of 12 critical`), leaving out what is acknowledged or in
 maintenance. A collection's own worse condition stands. A roll-up is never a root.
+
+### The rules a site runs
+
+The site runs one set of health records, in `config/health/`:
+
+| Path | What |
+|---|---|
+| `rules/<origin>.json` | what runs, one file per origin: `core.json`, a module's (`network.json`), `site.json` for the site's own rules. The merge, the verbs and the console write it; an edit by hand counts as an edit |
+| `base/<origin>.json` | each release as it was last installed: the merge alone writes it, so "what did I change" and "what did the release change" are both a diff |
+| `scenarios/<origin>.json` | the contract scenarios as released |
+| `state.json` | per rule the site touched: edited, deleted or added, who, when, why, as released when edited, whether upstream changed it since; rules held; scenarios retired; origins switched off; the last merge |
+
+Before the first merge health-manager runs the core records as released. Every
+record's origin is who released it (core, a module, the site); it never decides
+which record wins.
+
+**The merge** runs on every system update, on every module install, update and
+removal, and wherever corrected rules arrive: `rules merge [--origin O] --apply`.
+Per rule, over three versions (as last installed, as released now, as installed
+here): an unchanged rule takes the release (added, updated or removed); a rule the
+site edited is kept exactly as edited and marked when the release changed or
+removed it (pending until the operator decides); a rule the site deleted stays
+deleted, and its tombstone goes when the release drops it too; an edit that
+matches the new release is in step again. A released rule that replaces one the
+site edited comes in held, so two rules for one case never both run. The merged
+set is checked before it runs: a released rule that conflicts with a local one is
+held, the rest runs; a release that does not hold changes nothing and is told as
+drift on the site (`rules-merge`). A module's rule must name the module at one end
+(`module: <it>`, or a class its managers report), and its reach (the most objects
+one failure it matches can impact) is recorded; an app module's rule over the
+site's `health.rules.reachHold` (a count, or under 1 a share of the CIs; a quarter
+by default) is installed held until accepted. A foundation module's rule is never
+held.
+
+**The verbs** each preview first: without `--apply` they print the records that
+change, what the check says, contract scenarios that would no longer hold, and on
+the site as it is now the roots that appear or go and the objects whose colour
+changes. `--apply` writes it. A write the check refuses is not written; one under
+which a contract scenario no longer holds needs `--force`, which the rule's note
+records.
+
+- `add <file>`: the site's own rules (ids `site.…`). `edit <id> --set path=value`
+  (`as.status=warning`, `when.dependant.zone=dmz`), `--unset path`, or `--file F`.
+- `enable|disable <id>`: as a local edit. `disable --origin <module>` turns all of a
+  module's rules off; they stay off across updates.
+- `delete <id>`: a tombstone; an update never brings it back. `restore <id>`: as released.
+- `diff <id>`: as released when edited, as it is here, as released now, field by
+  field, each marked changed here, upstream or in both. `take <id> [--field F]`
+  takes the release whole, or one field; `keep <id>` keeps the edit and marks it
+  reviewed.
+- `accept <id>`: runs a held rule.
+- `scenario list|retire <id> --note …|restore <id>`: a scenario retired here is not
+  run, an update never brings it back, and a change to it upstream is noted.
+- `list --state …`, `show <id>`: what each rule decides on the site now, its state,
+  what it overrides and is overridden by.
+
+An apply or a merge that changes the active set runs `assess` and `emit` at once:
+health under the new rules, not at the next timer. Such a run's transitions carry
+`cause: "rules"` and the records that changed, do not count toward flapping, and a
+notice that opens or closes in it says the rules changed. Every notice carries the
+first eight characters of the rule-set hash it was decided under, and the daily
+digest lists rule changes, pending and held rules under their own heading, once.
 
 ## Common options
 

@@ -8,7 +8,8 @@ import { CmdbUnavailable } from "../../../lib/ts/src/cmdb";
 import { currentJob } from "../../../lib/ts/src/job";
 import { VerbContext, ack, maintenanceStart, maintenanceStop, unack } from "./ack";
 import { SweepRecord, readLastSweep } from "./cmdbsweep";
-import { buildDigest, readSeen, writeSeen } from "./digest";
+import { DigestRules, buildDigest, readSeen, writeSeen } from "./digest";
+import { RuleStore, healthDir } from "./rulestore";
 import { HealthCmdb, LiveHealthCmdb, rootsOfSite } from "./emit-cmdb";
 import { runEmit, withEmitLock } from "./emit";
 import { historyLines, historyRows, listLines, listRows, rootDocs, rootLines, showDoc, showLines } from "./emit-read";
@@ -301,6 +302,16 @@ export function livePerfContext(ctx: EmitContext): PerfContext {
   };
 }
 
+/** The rules for the digest: the site's last assessment's, and the installed set's pending and held. */
+function digestRules(objects: { class: string; attributes: Record<string, unknown> }[], configDir: string): DigestRules | null {
+  const site = objects.find((o) => o.class === "site");
+  const records = ((site?.attributes.assessment as { rules?: { records?: Record<string, string> } } | undefined)?.rules?.records) ?? null;
+  if (!records) return null;
+  const store = RuleStore.read(healthDir(configDir));
+  const ids = store.all().map((r) => r.id);
+  return { records, pending: ids.filter((id) => store.pending(id)), held: ids.filter((id) => !!store.state.rules[id]?.held) };
+}
+
 function cmdDigest(ctx: EmitContext, rest: string[]): number {
   if (rest.includes("--mark")) {
     const { keys } = JSON.parse(readFileSync(0, "utf8")) as { keys: string[] };
@@ -310,7 +321,7 @@ function cmdDigest(ctx: EmitContext, rest: string[]): number {
   }
   const objects = ctx.cmdb.objects();
   const rows = listRows(objects, rootsOfSite(objects), {});
-  const doc = buildDigest(rows, (ctx.sweep ?? readLastSweep)(), readSeen(ctx.configDir), (ctx.security ?? readSecurity)(ctx.configDir));
+  const doc = buildDigest(rows, (ctx.sweep ?? readLastSweep)(), readSeen(ctx.configDir), (ctx.security ?? readSecurity)(ctx.configDir), digestRules(objects, ctx.configDir));
   info(rest.includes("--json") ? JSON.stringify(doc, null, 2) : `Subject: ${doc.subject}\n\n${doc.body}`);
   return 0;
 }

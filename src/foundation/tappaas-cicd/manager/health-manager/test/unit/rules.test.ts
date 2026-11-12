@@ -30,7 +30,7 @@ const errors = (r: unknown): string[] => checkRecord(r, info).filter((p) => p.le
   const kinds = new Set(model.records.map((r) => r.kind));
   check(["propagate", "combine", "explain", "follow", "rollup"].every((k) => kinds.has(k as HealthRecord["kind"])), "…every kind today's engine needs");
   check(model.records.every((r) => r.id.startsWith("core.")), "…all of origin core");
-  check(model.records.filter((r) => r.kind === "propagate").length === 9, "…today's eleven rules as nine propagate records");
+  check(model.records.filter((r) => r.kind === "propagate").length === 11, "…today's eleven rules as nine propagate records, member-of split by its ends today");
   const ha = byId("core.propagate.runs-on.down-ha");
   const down = byId("core.propagate.runs-on.down");
   check(strictlyMoreSpecific(flatten(ha), flatten(down), anc) && !strictlyMoreSpecific(flatten(down), flatten(ha), anc), "HA is strictly more specific than the plain runs-on record");

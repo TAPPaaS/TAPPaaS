@@ -75,7 +75,8 @@
       "fields": {
         "stage": { "type": "string", "volatile": true, "enum": ["created", "operational", "drifted", "unseen", "retired"], "description": "The CI's lifecycle stage (D7)." },
         "desired": { "type": "object", "properties": { "file": { "type": "string" }, "key": { "type": "string" } }, "description": "The desired record: config/<file>.json, and the key in it where the file holds several." },
-        "release": { "type": "object", "properties": { "module": { "type": "string" }, "version": { "type": "string" } }, "description": "The module and version this CI is an instance of (D1)." }
+        "release": { "type": "object", "properties": { "module": { "type": "string" }, "version": { "type": "string" } }, "description": "The module and version this CI is an instance of (D1)." },
+        "module": { "type": "string", "description": "The catalog name of the module the CI belongs to (nextcloud, not the instance nextcloud-test); what a health record's module selector reads." }
       }
     },
     "node": {

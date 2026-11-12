@@ -43,7 +43,7 @@ const pool = obj("storage-pool", "tankc1", { zfsState: "ONLINE" });
 const kk = obj("vm", "karakeep");
 const nm = obj("vm", "nomad");
 const id = obj("vm", "identity");
-const route = obj("proxy-route", "identity.hrossen.dk", { description: "TAPPaaS: identity", host: "identity.hrossen.dk" });
+const route = obj("proxy-route", "identity.hrossen.dk", { description: "TAPPaaS: identity", host: "identity.hrossen.dk", module: "identity" });
 const base = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => ({
   items: [site, m1, pool, kk, nm, id, route].map((o) => ({ ...o, attributes: { ...o.attributes } })),
   rels: [rel("runs-on", pool, m1), rel("runs-on", kk, m1), rel("runs-on", nm, m1), rel("runs-on", id, m1), rel("stored-on", kk, pool), rel("stored-on", nm, pool)],
@@ -71,35 +71,35 @@ const writeWait = (min: number, max: number): { has: string; samples: Sample[] }
 {
   const idx = (items: CmdbItem[], rels: ReturnType<typeof rel>[]) => new SiteIndex(items, rels);
   const b = base();
-  let f = fromPerformance(idx(b.items, b.rels), new FakeStore(writeWait(0.038, 0.06)), [], new Set());
+  let f = fromPerformance(idx(b.items, b.rels), new FakeStore(writeWait(0.038, 0.06)), []);
   const onPool = f.findings.filter((x) => x.object === pool.id);
   check(f.looked && onPool.length === 1 && onPool[0].status === "warning" && onPool[0].reason === "perf-pool-write-latency-seconds", "over 25 ms the whole window: a warning");
   check(/tankc1: write latency 38 ms, over 25 ms for 15 min/.test(onPool[0].message), `the message says it (${onPool[0].message})`);
-  f = fromPerformance(idx(b.items, b.rels), new FakeStore(writeWait(0.01, 0.2)), [], new Set());
+  f = fromPerformance(idx(b.items, b.rels), new FakeStore(writeWait(0.01, 0.2)), []);
   check(f.findings.find((x) => x.object === pool.id)!.status === "ok", "a spike, not held: still ok");
   const was = base();
   was.items.find((o) => o.id === pool.id)!.attributes.conditions = [cond("performance", "warning", "perf-pool-write-latency-seconds")];
-  f = fromPerformance(idx(was.items, was.rels), new FakeStore(writeWait(0.01, 0.03)), [], new Set());
+  f = fromPerformance(idx(was.items, was.rels), new FakeStore(writeWait(0.01, 0.03)), []);
   check(f.findings.find((x) => x.object === pool.id)!.status === "warning", "once a warning, one quiet minute does not end it");
-  f = fromPerformance(idx(was.items, was.rels), new FakeStore(writeWait(0.005, 0.02)), [], new Set());
+  f = fromPerformance(idx(was.items, was.rels), new FakeStore(writeWait(0.005, 0.02)), []);
   check(f.findings.find((x) => x.object === pool.id)!.status === "ok", "under it the whole window: over");
-  f = fromPerformance(idx(was.items, was.rels), new FakeStore(writeWait(0.12, 0.3)), [], new Set());
+  f = fromPerformance(idx(was.items, was.rels), new FakeStore(writeWait(0.12, 0.3)), []);
   check(f.findings.find((x) => x.object === pool.id)!.status === "critical", "held over 100 ms: critical");
   // A metric gone: unknown, never critical.
-  f = fromPerformance(idx(was.items, was.rels), new FakeStore([]), [], new Set());
+  f = fromPerformance(idx(was.items, was.rels), new FakeStore([]), []);
   const gone = f.findings.find((x) => x.object === pool.id)!;
   check(gone.status === "unknown" && gone.reason === "perf-no-numbers", "measured before, no numbers now: unknown");
-  check(!fromPerformance(idx(b.items, b.rels), new FakeStore([]), [], new Set()).findings.some((x) => x.object === pool.id), "never measured: no condition");
+  check(!fromPerformance(idx(b.items, b.rels), new FakeStore([]), []).findings.some((x) => x.object === pool.id), "never measured: no condition");
   const down = new FakeStore(writeWait(0.5, 0.5));
   down.down = true;
-  const fd = fromPerformance(idx(b.items, b.rels), down, [], new Set());
+  const fd = fromPerformance(idx(b.items, b.rels), down, []);
   check(!fd.looked && fd.findings.length === 0, "the store down: nothing judged, nothing looked");
   // A route, by its module's declared threshold.
   const st = new FakeStore([
     { has: "min_over_time((histogram_quantile", samples: [s({ tappaas_ci_id: route.id }, 0.8)] },
     { has: "max_over_time((histogram_quantile", samples: [s({ tappaas_ci_id: route.id }, 0.9)] },
   ]);
-  f = fromPerformance(idx(b.items, b.rels), st, [{ module: "identity", thresholds: [{ signal: "http_p95_seconds", warning: 0.5, for: "5m" }] }], new Set(["identity"]));
+  f = fromPerformance(idx(b.items, b.rels), st, [{ module: "identity", thresholds: [{ signal: "http_p95_seconds", warning: 0.5, for: "5m" }] }]);
   const r = f.findings.find((x) => x.object === route.id)!;
   check(r.status === "warning" && /\(identity's threshold\)/.test(r.message), `a route over its module's declared p95 (${r.message})`);
   check(st.asked.some((q) => q.includes("[300s:1m]")), "its declared window in the query");

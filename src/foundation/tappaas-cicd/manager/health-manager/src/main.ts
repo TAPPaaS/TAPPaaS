@@ -64,7 +64,10 @@ import { curlReader, metricsEndpoint } from "./metrics-read";
 import { CmdbItem, CmdbRel, SiteIndex } from "./assess-model";
 import { assessmentOf, readValidate } from "./assess-validate";
 import { readLastSweep } from "./cmdbsweep";
-import { cmdRules, readRules } from "./rules";
+import { RulesDoc, cmdRules, readRules } from "./rules";
+import { moduleOfLocation, moduleSourceOf } from "../../../lib/ts/src/instance";
+import { cmdRulesWrite } from "./rules-verbs";
+import { RuleStore, coreReleaseDir, healthDir, readCoreRelease, reportedClasses } from "./rulestore";
 import { readWindows } from "./windows";
 import { cmdScore } from "./score-verb";
 // ── ADR-041 emit half ──
@@ -354,6 +357,31 @@ const gates = (opts: Opts, client: ClusterClient, timed?: Timer): HealthReport =
   });
 
 // ── ADR-041 D2, D3: assess, rules, validate as a read ─────────────────
+
+/** The health records this site runs: config/health/rules/ once a merge has
+ *  installed them, else the core records as released (before the first merge),
+ *  with what a reader needs of the metamodel from the CMDB. */
+function rulesModel(configDir: string): RulesDoc {
+  const meta = readRules();
+  const store = RuleStore.read(healthDir(configDir));
+  if (store.installed) return { relations: meta.relations, ancestors: meta.ancestors, fields: meta.fields, records: store.active(), scenarios: store.allScenarios(), ...(store.state.lastMerge ? { lastMerge: store.state.lastMerge } : {}) };
+  const dir = coreReleaseDir(configDir);
+  const core = dir ? readCoreRelease(dir) : null;
+  if (!core || core.problems.length) throw new Error(`no health records: none installed in ${healthDir(configDir)}, and the release's core records ${dir ? `at ${dir} do not read (${core?.problems.join("; ")})` : "were not found (no tappaas-cicd instance in config/)"}`);
+  return { relations: meta.relations, ancestors: meta.ancestors, fields: meta.fields, records: core.records, scenarios: core.scenarios };
+}
+
+/** Health under the rules now in force, at once: assess, then emit, as the
+ *  alert receiver runs them. */
+function recalculate(): void {
+  for (const verb of ["assess", "emit"]) {
+    const r = spawnGuarded(process.execPath, [process.argv[1], verb], { encoding: "utf8", stdio: "inherit", timeout: 600_000 });
+    if (r.error || r.status !== 0) {
+      warn(`rules: health-manager ${verb} did not finish (${r.error?.message ?? `exit ${r.status}`}); the next run picks the new rules up`);
+      return;
+    }
+  }
+}
 const cmdbOff = (): boolean => (process.env.TAPPAAS_CMDB ?? "").toLowerCase() === "off";
 
 // A report that is not worth keeping: conditions are now, and a spooled one would
@@ -379,7 +407,7 @@ function assessIO(opts: Opts, client: ClusterClient, timed?: Timer): AssessIO {
     objects: () => cmdbQuery({ class: "object", limit: 100000 }) as unknown as CmdbItem[],
     ended: () => (cmdbQuery({ class: "ci", includeEnded: true, limit: 100000 }) as unknown as (CmdbItem & { ended?: string | null })[]).filter((o) => o.ended),
     relations: () => cmdbRelations({}) as unknown as CmdbRel[],
-    rules: readRules,
+    rules: () => rulesModel(opts.configDir),
     sweep: readLastSweep,
     gates: () => gates(opts, client, timed).checks,
     alerts: () => {
@@ -393,7 +421,6 @@ function assessIO(opts: Opts, client: ClusterClient, timed?: Timer): AssessIO {
       return ep ? curlReader(ep) : null;
     },
     perfDeclared: () => perfDeclared(opts.configDir),
-    modules: () => new Set(instanceNames(opts.configDir)),
     horizonDays: () => horizonOf(readModuleJson(join(opts.configDir, "site.json"))),
     windows: () => readWindows(),
     write: writeAssessment,
@@ -415,7 +442,9 @@ function perfDeclared(configDir: string): Declared[] {
     const cfg = readModuleJson(join(configDir, `${m}.json`));
     const p = (cfg?.performance ?? null) as { thresholds?: unknown } | null;
     if (!cfg || (cfg.source ?? "official") !== "official" || !p || !Array.isArray(p.thresholds)) continue;
-    out.push({ module: m, thresholds: p.thresholds as Declared["thresholds"] });
+    // By the module's catalog name: what a CI's module attribute says.
+    const src = moduleSourceOf(cfg);
+    out.push({ module: src ? moduleOfLocation(src) : m, thresholds: p.thresholds as Declared["thresholds"] });
   }
   return out;
 }
@@ -898,9 +927,15 @@ export function run(argv: string[], client: ClusterClient): number {
       case "assess":
         return cmdAssess(opts, client);
       case "rules":
-        return cmdRules(opts.rest, readRules(), info, () => cmdbRelations({}) as unknown as CmdbRel[], {
-          snapshot: () => ({ objects: (cmdbQuery({ class: "object", limit: 100000 }) as unknown as CmdbItem[]).filter((o) => o.attributes.placeholder !== true), relations: cmdbRelations({}) as unknown as CmdbRel[] }),
-        });
+      {
+        const snapshot = (): { objects: CmdbItem[]; relations: CmdbRel[] } => ({ objects: (cmdbQuery({ class: "object", limit: 100000 }) as unknown as CmdbItem[]).filter((o) => o.attributes.placeholder !== true), relations: cmdbRelations({}) as unknown as CmdbRel[] });
+        const meta = readRules();
+        const reachHold = (readModuleJson(join(opts.configDir, "site.json"))?.health as { rules?: { reachHold?: number } } | undefined)?.rules?.reachHold;
+        const wrote = cmdRulesWrite(opts.rest, { configDir: opts.configDir, meta, snapshot, now: () => new Date().toISOString(), recalc: recalculate, ...(typeof reachHold === "number" ? { reachHold } : {}) }, info);
+        if (wrote !== null) return wrote;
+        const store = RuleStore.read(healthDir(opts.configDir));
+        return cmdRules(opts.rest, rulesModel(opts.configDir), info, () => cmdbRelations({}) as unknown as CmdbRel[], { snapshot, store, retired: store.retired(), reports: reportedClasses(opts.configDir) });
+      }
       // end ADR-041 assess verbs
       default:
         usage();

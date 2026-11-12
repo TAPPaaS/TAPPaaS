@@ -457,5 +457,22 @@ console.log("the verbs");
   check(EMIT_HELP.every((v) => v.effect !== undefined), "every verb declares its effect");
 }
 
+console.log("a run under changed health rules");
+{
+  const s = nodeDown();
+  const site = s.all.find((o) => o.id === "site1")!;
+  (site.attributes as Record<string, unknown>).assessment = { time: T(-3), rules: { hash: "b".repeat(64), changed: ["site.propagate.x"] } };
+  const r = emit(s, { ...cursor(5, 6), rules: "a".repeat(64) }, { now: NOW, intervalMin: 5 });
+  const ts = transitionsIn(r.events);
+  check(ts.length > 0 && ts.every((t) => t.cause === "rules" && t.rules?.[0] === "site.propagate.x"), "its transitions carry cause rules and the records that changed");
+  check(r.cursor.rules === "b".repeat(64) && r.cursor.ruleRuns?.[0] === T(-3), "…the cursor keeps the hash, and when that run was");
+  check(r.notices.byRules === true && r.notices.open.every((n) => n.rules === "bbbbbbbb"), "…its notices say so and carry the rule-set hash");
+  const sent: { subject: string; body: string }[] = [];
+  const d = deliverNotices(r.notices, {}, (m) => (sent.push(m), true), NOW.toISOString());
+  check(sent.length > 0 && sent[0].subject.includes("(rules changed)") && sent[0].body.includes("health rules: bbbbbbbb") && d.events.every((e) => e.cause === "rules"), "…the mail says rules changed, and names the hash");
+  const same = emit(s, { ...cursor(5, 6), rules: "b".repeat(64) }, { now: NOW, intervalMin: 5 });
+  check(transitionsIn(same.events).every((t) => !t.cause), "under the same rules: an ordinary run");
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

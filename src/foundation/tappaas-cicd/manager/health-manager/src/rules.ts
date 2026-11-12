@@ -9,10 +9,12 @@
 import { readFileSync } from "fs";
 import { cmdbRequest } from "../../../lib/ts/src/cmdb";
 import { CycleRelation, dependencyCycles } from "../../../lib/ts/src/health-rules";
-import { HealthRecord, KINDS, ModelInfo, Problem, checkSet, originOf, recordsOf } from "../../../lib/ts/src/health-records";
+import { HealthRecord, KINDS, ModelInfo, Problem, anchorProblem, checkSet, originOf, recordsOf } from "../../../lib/ts/src/health-records";
 import { sentence } from "./rule-text";
 import { Scenario, runScenarios } from "./scenarios";
 import { Snapshot, diffLines, diffSim, explainLines, explainObject, parseFailure, simLines, simulate } from "./rules-tools";
+import { RuleStore } from "./rulestore";
+import { stateLine } from "./rules-verbs";
 
 export interface RelationMeta {
   name: string;
@@ -26,6 +28,7 @@ export interface RulesDoc {
   ancestors: Record<string, string[]>;
   fields?: string[]; // every attribute some class declares
   scenarios?: Scenario[]; // the contract scenarios shipped beside the records
+  lastMerge?: { ok: boolean; problems: string[]; at: string }; // the last merge, when it did not hold
 }
 
 /** What the verbs that read the site need, beyond the records. */
@@ -33,6 +36,8 @@ export interface RulesSite {
   snapshot?: () => Snapshot;
   now?: () => string;
   retired?: Set<string>; // contract scenarios the site retired
+  store?: RuleStore; // the installed set: its local state, for list --state
+  reports?: Map<string, string[]>; // the classes each module's components report (anchoring)
 }
 
 export const readRules = (): RulesDoc => cmdbRequest("GET", "/v1/rules") as RulesDoc;
@@ -109,10 +114,31 @@ export function cmdRules(rest: string[], model: RulesDoc, print: (l: string) => 
   if (verb === "list") {
     const kind = flag(args, "--kind");
     const origin = flag(args, "--origin");
-    const recs = model.records.filter((r) => (!kind || r.kind === kind) && (!origin || originOf(r.id) === origin));
-    if (json) print(JSON.stringify(recs.map((r) => ({ ...r, origin: originOf(r.id), sentence: sentence(r) })), null, 2));
+    const state = flag(args, "--state");
+    const st = site.store;
+    if (state && !["edited", "pending", "held", "disabled", "deleted"].includes(state)) throw new Error("rules list: --state is edited, pending, held, disabled or deleted");
+    // Deleted rules are not in the set: they are listed from what was released.
+    const deleted = st ? Object.entries(st.state.rules).filter(([, v]) => v.local === "deleted").map(([id]) => st.baseOf(id)).filter((r): r is HealthRecord => !!r) : [];
+    const pool = state === "deleted" ? deleted : model.records;
+    const inState = (r: HealthRecord): boolean => {
+      if (!state || state === "deleted") return true;
+      if (state === "disabled") return r.enabled === false;
+      if (!st) return false;
+      if (state === "edited") return ["edited", "added"].includes(st.localOf(r.id) ?? "");
+      if (state === "pending") return st.pending(r.id);
+      return !!st.state.rules[r.id]?.held;
+    };
+    // How many cases each record decides on the site now: one derivation.
+    let fired: Map<string, number> | null = null;
+    if (site.snapshot && !args.includes("--markdown")) {
+      const snap = site.snapshot();
+      fired = simulate(snap, model, now(), []).derivation.trace.fired;
+    }
+    const recs = pool.filter((r) => (!kind || r.kind === kind) && (!origin || originOf(r.id) === origin) && inState(r));
+    const note = (r: HealthRecord): string => (st ? stateLine(st, r.id) : "") || "";
+    if (json) print(JSON.stringify(recs.map((r) => ({ ...r, origin: originOf(r.id), sentence: sentence(r), state: note(r) || (state === "deleted" ? "deleted" : ""), ...(fired ? { decidesNow: fired.get(r.id) ?? 0 } : {}) })), null, 2));
     else if (args.includes("--markdown")) for (const l of markdownList(recs)) print(l);
-    else for (const r of recs) print(`${r.id}${r.enabled === false ? " [off]" : ""}: ${sentence(r)}`);
+    else for (const r of recs) print(`${r.id}${r.enabled === false ? " [off]" : ""}${note(r) ? ` [${note(r)}]` : ""}${fired ? ` (decides ${fired.get(r.id) ?? 0})` : ""}: ${sentence(r)}`);
     return 0;
   }
   if (verb !== "check") throw new Error("rules: expected list, check, explain or simulate");
@@ -125,6 +151,17 @@ export function cmdRules(rest: string[], model: RulesDoc, print: (l: string) => 
     // A candidate file is checked with the rules in use, except those it replaces.
     const ids = new Set(got.records.map((r) => r?.id));
     recs = [...model.records.filter((r) => !ids.has(r.id)), ...got.records];
+    // A module's file: each record of that origin, anchored at the module's own end.
+    const origin = flag(args, "--origin");
+    if (origin) {
+      for (const r of got.records) {
+        if (typeof r?.id !== "string" || originOf(r.id) !== origin) problems.push({ level: "error", id: String(r?.id), message: `a ${origin} record's id starts with ${origin}.` });
+        else {
+          const a = anchorProblem(r, origin, site.reports?.get(origin) ?? [], model.ancestors);
+          if (a) problems.push({ level: "error", id: r.id, message: a });
+        }
+      }
+    }
   }
   problems.push(...checkSet(recs, modelInfo(model)));
   // The contract scenarios: a set that passes every static check can still

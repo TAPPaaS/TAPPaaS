@@ -90,4 +90,13 @@ systemctl start update-tappaas-schedule.service 2>/dev/null \
 # run before this by the unit's prepare step (ADR-017 D3) or by pre-update.sh —
 # the second refresh that used to follow the rebuild here is gone.
 
+# The health rules of the release just built: merged into config/health/,
+# keeping every rule the site edited or deleted; a changed set recalculates
+# health at once. A merge that does not hold leaves the earlier rules running
+# and is told as drift on the site, so it never fails the update.
+if command -v health-manager >/dev/null 2>&1; then
+    health-manager rules merge --apply >/dev/null 2>&1 \
+        || warn "  the health rules did not merge cleanly — health-manager rules merge shows why"
+fi
+
 info "  ${GN}✓${CL} VM update completed successfully"

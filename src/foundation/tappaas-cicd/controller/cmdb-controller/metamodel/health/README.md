@@ -243,7 +243,9 @@ with the records that matched and lost. Neither writes anything.
 - `core.propagate.runs-on.down`: a critical operational failure crosses runs-on to its dependant as a critical impact.
 - `core.propagate.runs-on.down-ha`: a critical operational failure crosses runs-on to its dependant with haNode as a warning impact.
 - `core.propagate.depends-on.down`: a critical operational failure crosses depends-on to its dependant as a critical impact.
-- `core.propagate.member-of.down`: a critical operational failure crosses member-of to its dependant as a critical impact.
+- `core.propagate.member-of.down`: a critical operational failure on a cluster or environment crosses member-of to a node as a critical impact.
+- `core.propagate.member-of.group-down`: a critical operational failure on a group crosses member-of to an user as a critical impact.
+- `core.propagate.member-of.zone-address`: a critical operational failure on a zone crosses member-of to an address as a critical impact.
 - `core.propagate.connects.down`: a critical operational failure crosses connects to its dependant as a critical impact.
 - `core.propagate.built-on.down`: a critical operational failure crosses built-on to its dependant as a critical impact.
 - `core.propagate.stored-on.down`: a critical operational failure crosses stored-on to its dependant as a critical impact.

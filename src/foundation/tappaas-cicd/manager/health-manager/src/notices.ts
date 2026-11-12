@@ -34,6 +34,7 @@ export interface Notice {
   impacted: string; // what it impacts by class: "3 vm, 2 service", or "nothing"
   since: string; // the condition's since
   opened: string; // when the notice went out
+  rules?: string; // the first eight characters of the rule-set hash it was decided under
 }
 
 export type CloseWhy = "recovered" | "eased" | "unchecked" | "retired" | "acknowledged" | "maintenance" | "symptom" | "digest";
@@ -50,6 +51,8 @@ export interface NoticeEvent {
   impacted: string;
   why?: CloseWhy;
   detail?: string; // a close: what it is now
+  cause?: "rules"; // it opened or closed because the health rules changed
+  rules?: string; // the rule-set hash it was decided under (eight characters)
   sent: boolean;
   at: string;
 }
@@ -118,6 +121,7 @@ export function closeWhy(n: Notice, objects: HealthObject[], roots: RootEntry[],
 export interface NoticePlan {
   open: Omit<Notice, "opened">[];
   close: { notice: Notice; why: CloseWhy; detail: string }[];
+  byRules?: boolean; // decided in a run under changed health rules
 }
 
 /** What to open and what to close. A flapping condition holds its notice as it
@@ -136,15 +140,17 @@ export function planNotices(open: Record<string, Notice>, want: Map<string, Omit
 export const noticeKey = (n: { ci: string; type: string }): string => `health-root:${n.ci}:${n.type}`;
 
 /** The mail of an opened notice. */
-export function openMail(n: Omit<Notice, "opened">): { subject: string; body: string } {
+export function openMail(n: Omit<Notice, "opened">, rulesChanged = false): { subject: string; body: string } {
   return {
-    subject: `ALERT: critical root cause ${n.name} (impacts ${n.impacted})`,
+    subject: `ALERT: critical root cause ${n.name} (impacts ${n.impacted})${rulesChanged ? " (rules changed)" : ""}`,
     body: [
       `== Critical root cause: ${n.class} ${n.name}`,
+      ...(rulesChanged ? ["the health rules changed in this run: it is a root under the new rules"] : []),
       `condition: ${n.type}, ${n.reason}`,
       ...(n.message ? [`what: ${n.message}`] : []),
       `impacts: ${n.impacted}`,
       `since: ${n.since}`,
+      ...(n.rules ? [`health rules: ${n.rules}`] : []),
       "",
       "One RESOLVED follows when it is no longer a critical root cause, saying why.",
       `health-manager roots shows what it impacts; health-manager ack ${n.name} --note <why> silences it and its symptoms.`,
@@ -154,12 +160,13 @@ export function openMail(n: Omit<Notice, "opened">): { subject: string; body: st
 }
 
 /** The mail of a closed notice. */
-export function closeMail(n: Notice, why: CloseWhy, detail: string): { subject: string; body: string } {
+export function closeMail(n: Notice, why: CloseWhy, detail: string, rulesChanged = false): { subject: string; body: string } {
   return {
-    subject: `RESOLVED: critical root cause ${n.name} (${WHY[why]})`,
+    subject: `RESOLVED: critical root cause ${n.name} (${WHY[why]}${rulesChanged ? ", rules changed" : ""})`,
     body: [
       `== No longer a critical root cause: ${n.class} ${n.name}`,
       `why: ${WHY[why]}${detail ? ` — ${detail}` : ""}`,
+      ...(rulesChanged ? ["the health rules changed in this run: the condition did not"] : []),
       `condition: ${n.type}, ${n.reason}`,
       `opened: ${n.opened}`,
       "",

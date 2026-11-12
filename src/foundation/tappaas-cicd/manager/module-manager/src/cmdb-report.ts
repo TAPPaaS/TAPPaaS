@@ -15,6 +15,7 @@ import { compact, moduleCiAttributes, moduleNodeAttributes, nodeClassOf, release
 import { readJsonObject } from "../../../lib/ts/src/config-io";
 import { guestConfAttributes, parseGuestConf } from "../../../lib/ts/src/guest-conf";
 import { clusterNodeNames } from "../../../lib/ts/src/nodes";
+import { moduleOfLocation } from "../../../lib/ts/src/instance";
 import { listModules } from "./config";
 import { ModuleConfig, RunningGuest } from "./types";
 
@@ -23,6 +24,10 @@ type Obj = Record<string, unknown>;
 export const SOURCE = "module-manager";
 
 const nodeRef = (name: string): string => `node/${name}`;
+
+/** The catalog name of the module an instance belongs to: its source
+ *  directory's name (nextcloud, not the instance nextcloud-test). */
+export const moduleNameOf = (m: ModuleConfig): string => (m.moduleSource ? moduleOfLocation(m.moduleSource) : releaseOf(m.raw)?.module ?? m.name);
 const svcRef = (module: string, svc: string, provider: string): string => `service/${provider}/${module}:${svc}`;
 
 /** The services a module's source declares: its services/<service>/ dirs. */
@@ -48,12 +53,20 @@ interface Built {
   hostRef: Map<string, string | { class: string; name: string }>;
   // "<module>:<service>" → its object refs, by provider instance
   services: Map<string, { provider: string; ref: string }[]>;
+  // a node's or an app's zone: named whole, so a zone change ends the old one
+  complete: NonNullable<CmdbReport["complete"]>;
 }
 
 /** The CIs of the given instances. `guests` (the live cluster, may be empty)
  *  gives a guest's actual node and whether it runs. */
 function build(configDir: string, mods: ModuleConfig[], guests: RunningGuest[]): Built {
-  const b: Built = { objects: [], relations: [], hostRef: new Map(), services: new Map() };
+  const b: Built = { objects: [], relations: [], hostRef: new Map(), services: new Map(), complete: [] };
+  // A node and an app are member-of the zone of their record.
+  const zoned = (ref: string, m: ModuleConfig): void => {
+    const z = typeof m.raw.zone0 === "string" ? m.raw.zone0 : "";
+    if (z) b.relations.push({ type: "member-of", from: { ref }, to: { class: "zone", name: z } });
+    b.complete.push({ type: "member-of", from: { ref }, toClass: "zone" });
+  };
   const byVmid = new Map(guests.map((g) => [g.vmid, g]));
   const live = guests.length > 0;
   const installed = new Set(mods.map((m) => m.name));
@@ -63,7 +76,7 @@ function build(configDir: string, mods: ModuleConfig[], guests: RunningGuest[]):
   for (const m of mods) {
     const cls = nodeClassOf(m.kind);
     if (!cls) continue;
-    const a: Obj = moduleNodeAttributes(m.name, m.raw, cls);
+    const a: Obj = { ...moduleNodeAttributes(m.name, m.raw, cls), module: moduleNameOf(m) };
     if (cls === "vm" || cls === "lxc") {
       // Where it runs is what the cluster says: without a live read (a
       // change report) the config's node may be where it is not (a guest on
@@ -78,6 +91,7 @@ function build(configDir: string, mods: ModuleConfig[], guests: RunningGuest[]):
     }
     b.objects.push({ ref: nodeRef(m.name), class: cls, name: m.name, attributes: compact(a) });
     b.hostRef.set(m.name, nodeRef(m.name));
+    zoned(nodeRef(m.name), m);
   }
 
   // 2. Applications: an app on the node it names (ADR-022f D3); one that
@@ -101,9 +115,11 @@ function build(configDir: string, mods: ModuleConfig[], guests: RunningGuest[]):
         maturity: m.raw.status,
         environment: m.raw.environment,
         moduleNode: m.node,
+        module: moduleNameOf(m),
       }),
     });
     b.hostRef.set(m.name, on);
+    zoned(nodeRef(m.name), m);
   }
 
   // 3. Services: <module>:<service>, on the node of the instance providing it.
@@ -115,7 +131,7 @@ function build(configDir: string, mods: ModuleConfig[], guests: RunningGuest[]):
     for (const svc of serviceNames(m.moduleSource)) {
       const name = `${module}:${svc}`;
       const ref = svcRef(module, svc, m.name);
-      b.objects.push({ ref, class: "service", name, attributes: compact({ provider: m.name, version: versionOf(m), onNode: onRef }) });
+      b.objects.push({ ref, class: "service", name, attributes: compact({ provider: m.name, version: versionOf(m), onNode: onRef, module: moduleNameOf(m) }) });
       b.relations.push({ type: "provides", from: onRef, to: { ref } });
       b.services.set(name, [...(b.services.get(name) ?? []), { provider: m.name, ref }]);
     }
@@ -176,10 +192,11 @@ export function moduleObservation(configDir: string, guests: RunningGuest[]): Cm
         registry: c,
         aliases: Array.isArray(c.aliases) && c.aliases.length ? c.aliases : undefined,
         stage: "operational",
+        module: moduleNameOf(m),
       }),
     });
   }
-  return { source: SOURCE, kind: "observation", objects: b.objects, relations: b.relations, complete: dedupe(complete) };
+  return { source: SOURCE, kind: "observation", objects: b.objects, relations: b.relations, complete: dedupe([...complete, ...b.complete]) };
 }
 
 const dedupe = <T>(xs: T[]): T[] => [...new Map(xs.map((x) => [JSON.stringify(x), x])).values()];
@@ -214,7 +231,7 @@ export function moduleChangeObjects(
   name: string,
   before: ModuleConfig | null,
   confs: Map<number, string> = new Map(),
-): { objects: CmdbObject[]; relations: CmdbRelation[] } {
+): { objects: CmdbObject[]; relations: CmdbRelation[]; complete?: NonNullable<CmdbReport["complete"]> } {
   const now = listModules(configDir).find((m) => m.name === name) ?? null;
   if (!now || now.status === "archived") {
     const was = now ?? before;
@@ -227,7 +244,7 @@ export function moduleChangeObjects(
     const o = b.objects.find((x) => x.name === name && (x.class === "vm" || x.class === "lxc"));
     if (o) o.attributes = { ...o.attributes, ...guestConfAttributes(o.class as "vm" | "lxc", parseGuestConf(confs.get(now.vmid)!)) };
   }
-  return { objects: b.objects, relations: b.relations };
+  return { objects: b.objects, relations: b.relations, complete: b.complete };
 }
 
 /** config/<name>.json's modification time, per module: what a verb changed. */

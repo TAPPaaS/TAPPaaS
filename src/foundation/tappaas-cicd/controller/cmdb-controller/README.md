@@ -149,7 +149,7 @@ not fit the metamodel).
 | `POST /v1/rescan` | | what each source answered |
 | `POST /v1/sweep`, `GET /v1/sweep` | | a sweep and its record (409 while one runs); the last record (404 when none has) |
 | `GET /v1/classes`, `GET /v1/classes/<name>` | | the metamodel |
-| `GET /v1/rules` | | the core health records (`records`), each relation type's `dependant`, `required` and `tree`, each class's ancestors, and `fields`: every attribute some class declares, what a record's `attr` may name |
+| `GET /v1/rules` | | what a reader of the health records needs: each relation type's `dependant`, `required` and `tree`, each class's ancestors, and `fields`: every attribute some class declares, what a record's `attr` may name |
 | `GET /v1/stream` | | server-sent events: `event: change` with the change's id, kind, source, job, verb, time, objects, relations, drift |
 
 ```bash
@@ -244,10 +244,16 @@ object (an asset's ports' MACs, rank 2).
 
 `conditions[]` on `object` is health (ADR-041 D1): `type`, `status`, `reason`,
 `message`, `since`, `lastChecked`, `source`, `derived`, `rootCause`,
-`acknowledged`, `maintenance`, one per type. `health-manager assess` is its only
+`acknowledged`, `maintenance`, one per type; a derived one carries `rule`, the
+health record that decided it. `health-manager assess` is its only
 writer, by an **assessment**: a report with `"assessment": true`, naming objects
 by `id`, which creates nothing and is no sighting (no `lastSeen`, no way back
-from unseen). The `site` carries `rootCauses[]` and the last run's `assessment`.
+from unseen). The `site` carries `rootCauses[]` and the last run's `assessment`
+(with `rules`: the hash of the health records it ran under). A CI's `module` is the
+catalog name of the module it belongs to, which module-manager reports for each
+instance's node or app, services, controllers and managers. A node and an
+application are `member-of` their zone (the `zone0` of their record), so a record
+can carry a zone's failure to what is in it.
 
 On a relation type (`relations.json`): `dependant`, the end hurt when the other
 fails (`from`, `to`, `both`; none: it carries no health), and `required`. A
@@ -257,11 +263,13 @@ them; `null` unsets one, and a report giving nothing but these adds them to the
 relation's other attributes, so the source that knows the redundancy sets it.
 `tree` is the end the console's Health tree nests under the other (`from`, `to`,
 `both` when each end lists the other as a leaf, as a cable; none: no containment).
-[`health/`](./metamodel/health/README.md) holds the core health records, one file
+[`health/`](./metamodel/health/README.md) holds the core health records as released, one file
 per kind, and the rule language they are written in. A record the controller cannot
 place (an unknown class, relation, attribute or condition type), or two that decide
 one case differently, stop the load like any metamodel error, and `GET /v1/rules`
-serves them with what a reader needs.
+serves what a reader of them needs of the metamodel. The records a site runs are
+installed into its `config/health/` by health-manager, which reads them from there;
+the controller does not serve them.
 
 Disks: a **`disk`** (a resource beside `port`, physical) is a disk in an asset, `part-of`
 it — its `asset` and its `name` (the disk asset's tag, `dsk-NN`) are its key, and the asset

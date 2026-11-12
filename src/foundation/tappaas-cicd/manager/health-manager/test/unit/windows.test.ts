@@ -8,6 +8,9 @@ import { CmdbItem, CmdbRel, Condition } from "../../src/assess-model";
 import { derive } from "../../src/derive";
 import { Window, coveredBy, windowOf } from "../../src/windows";
 import { cond, obj, rel, shippedModel } from "./assess-fixture";
+import { readFileSync } from "fs";
+import { join } from "path";
+import { HealthRecord } from "../../../../lib/ts/src/health-records";
 
 let passed = 0;
 let failed = 0;
@@ -91,6 +94,18 @@ const node2 = obj("machine", "tappaas2");
   const is = covered([node, guest, svc, nc], [[nc, [cond("operational", "warning", "alert-login-failed")]]],
     [rel("runs-on", guest, node), rel("runs-on", svc, guest), rel("depends-on", nc, svc)], win(["identity"]), soft);
   check(is(nc, "operational") === false, "a site record that softens the crossing: the window no longer covers the far side");
+}
+
+// The nodes of a zone, the zone in a window: covered, by the network module's record.
+{
+  const zone = obj("zone", "srv");
+  const web = obj("vm", "web");
+  const net = JSON.parse(readFileSync(join(process.env.HM_CICD_DIR ?? join(__dirname, "../../../../../../.."), "../network/network-health.json"), "utf8")) as { records: HealthRecord[] };
+  const src: [CmdbItem, Condition[]][] = [[web, [cond("operational", "critical", "unreachable")]]];
+  const without = covered([zone, web], src, [rel("member-of", web, zone)], win(["srv"]));
+  check(without(web, "operational") === false, "a zone in a window, with core alone: its nodes are not covered (a zone down is the network module's to say)");
+  const withNet = covered([zone, web], src, [rel("member-of", web, zone)], win(["srv"]), shippedModel(net.records));
+  check(withNet(web, "operational") === true, "…with the network module's zone record: the nodes in it are covered");
 }
 
 // A site window covers everything; a named object is covered whole.

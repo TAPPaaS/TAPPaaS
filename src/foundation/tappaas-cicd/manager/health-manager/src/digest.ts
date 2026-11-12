@@ -31,6 +31,33 @@ export interface DigestSeen {
   keys: string[];
 }
 
+/** The health rules as the digest tells them: each active record's hash (from
+ *  the site's last assessment), and the rules pending a decision or held. */
+export interface DigestRules { records: Record<string, string>; pending: string[]; held: string[] }
+
+// The rules are told once each: a change, a rule pending review, a rule held.
+// Their keys ride with the findings' in what the last digest told.
+function rulesLines(rules: DigestRules | null, told: Set<string>): { lines: string[]; keys: string[] } {
+  if (!rules) return { lines: [], keys: [...told].filter((k) => k.startsWith("rule")) };
+  const keys = [...Object.entries(rules.records).map(([id, h]) => `rule:${id}@${h}`), ...rules.pending.map((id) => `rule-pending:${id}`), ...rules.held.map((id) => `rule-held:${id}`)];
+  const before = new Map([...told].filter((k) => k.startsWith("rule:")).map((k) => [k.slice(5, k.lastIndexOf("@")), k.slice(k.lastIndexOf("@") + 1)]));
+  const lines: string[] = [];
+  // The first digest that knows the rules records them silently.
+  if (before.size) {
+    const changed = Object.entries(rules.records).filter(([id, h]) => before.has(id) && before.get(id) !== h).map(([id]) => id);
+    const added = Object.keys(rules.records).filter((id) => !before.has(id));
+    const removed = [...before.keys()].filter((id) => !(id in rules.records));
+    if (changed.length) lines.push(`  changed: ${changed.slice(0, MAX_NAMES).join(", ")}${changed.length > MAX_NAMES ? `, +${changed.length - MAX_NAMES} more` : ""}`);
+    if (added.length) lines.push(`  added: ${added.slice(0, MAX_NAMES).join(", ")}${added.length > MAX_NAMES ? `, +${added.length - MAX_NAMES} more` : ""}`);
+    if (removed.length) lines.push(`  removed or off: ${removed.slice(0, MAX_NAMES).join(", ")}${removed.length > MAX_NAMES ? `, +${removed.length - MAX_NAMES} more` : ""}`);
+  }
+  const pending = rules.pending.filter((id) => !told.has(`rule-pending:${id}`));
+  const held = rules.held.filter((id) => !told.has(`rule-held:${id}`));
+  if (pending.length) lines.push(`  pending (edited here, changed upstream): ${pending.join(", ")} — health-manager rules diff <id>`);
+  if (held.length) lines.push(`  held: ${held.join(", ")} — health-manager rules show <id>, rules accept <id>`);
+  return { lines, keys };
+}
+
 export interface DigestDoc {
   word: "ALERT" | "STATUS";
   subject: string;
@@ -136,7 +163,7 @@ function groupLines(found: Finding[]): string[] {
 }
 
 /** The digest. Pure: seen is what the last one told, null before the first. */
-export function buildDigest(rows: ListRow[], sweep: SweepRecord | null, seen: DigestSeen | null, security: SiteSecurity | null = null): DigestDoc {
+export function buildDigest(rows: ListRow[], sweep: SweepRecord | null, seen: DigestSeen | null, security: SiteSecurity | null = null, rules: DigestRules | null = null): DigestDoc {
   const unexplained = (sweep?.differences ?? []).filter((d) => !d.expected);
   const addresses = unexplained.filter((d) => d.class === "address" && !d.attribute);
   const found = [...conditionFindings(rows), ...sweepFindings(unexplained.filter((d) => d.class !== "address")), ...securityFindings(security, rows)];
@@ -145,7 +172,8 @@ export function buildDigest(rows: ListRow[], sweep: SweepRecord | null, seen: Di
   const open = found.filter((f) => told.has(f.key));
   const keys = found.map((f) => f.key);
   const now = new Set(keys);
-  const cleared = (seen?.keys ?? []).filter((k) => !k.startsWith("sweep ") && !now.has(k));
+  const cleared = (seen?.keys ?? []).filter((k) => !k.startsWith("sweep ") && !k.startsWith("rule") && !now.has(k));
+  const r = rulesLines(rules, told);
 
   const word = fresh.length ? "ALERT" : "STATUS";
   const summary = fresh.length ? `${fresh.length} new` : "nothing new";
@@ -170,6 +198,7 @@ export function buildDigest(rows: ListRow[], sweep: SweepRecord | null, seen: Di
     if (cleared.length > MAX_NAMES) out.push(`  … and ${cleared.length - MAX_NAMES} more`);
     out.push("");
   }
+  if (r.lines.length) out.push("HEALTH RULES (changes to how health is worked out, not to the site)", ...r.lines, "");
   if (addresses.length) {
     const count = (k: string): string => `${addresses.filter((d) => d.kind === k).length} ${k}`;
     out.push(`Addresses in the last sweep: ${["appeared", "gone"].map(count).join(", ")} (leases come and go: not findings).`, "");
@@ -181,7 +210,7 @@ export function buildDigest(rows: ListRow[], sweep: SweepRecord | null, seen: Di
     "  health-manager ack <ci> --note <why>    a known warning: not told again",
     ...(security ? ["  health-manager report security --cves  the CVE risk of every module, and what counts"] : []),
   );
-  return { word, subject, body: `${out.join("\n")}\n`, new: fresh.length, open: found.length, keys };
+  return { word, subject, body: `${out.join("\n")}\n`, new: fresh.length, open: found.length, keys: [...keys, ...r.keys] };
 }
 
 export function readSeen(configDir: string): DigestSeen | null {
