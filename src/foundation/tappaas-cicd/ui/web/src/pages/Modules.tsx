@@ -161,6 +161,7 @@ export function Modules() {
           <input type="checkbox" checked={only === "attention"} onChange={(e) => setOnly(e.target.checked ? "attention" : "all")} /> needs attention
         </label>
       </div>
+      <div className="table-scroll">
       <table className="table">
         <thead>
           <tr>
@@ -183,6 +184,7 @@ export function Modules() {
           ))}
         </tbody>
       </table>
+      </div>
       </>
       )}
     </div>
@@ -274,6 +276,7 @@ function RepositoryTab({ r, deployed, ready, envOf, environments, defaultEnv, at
           <input type="checkbox" checked={only} onChange={(e) => setOnly(e.target.checked)} /> not installed only
         </label>
       </div>
+      <div className="table-scroll">
       <table className="table">
         <thead>
           <tr><th>module</th>{grouped ? null : <th>stack</th>}<th>description</th><th>maturity</th><th>installed</th><th /></tr>
@@ -288,6 +291,7 @@ function RepositoryTab({ r, deployed, ready, envOf, environments, defaultEnv, at
             : rows.map(row)}
         </tbody>
       </table>
+      </div>
     </>
   );
 }

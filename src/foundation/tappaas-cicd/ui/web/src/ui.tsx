@@ -1,7 +1,7 @@
 // ui.tsx — the small pieces every page uses: the router, links, badges, the
 // status dot, the "Open in" list and the read-state line.
 
-import { MouseEvent, ReactNode, createContext, useContext, useEffect, useState } from "react";
+import { MouseEvent, ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import { useJumps } from "./api";
 import { confirmMatches } from "./argv";
 import { Finding } from "./noderemove";
@@ -156,9 +156,19 @@ export function ReadState<T>({ env, failure, what }: { env: Envelope<T> | null; 
 }
 
 // A page's tabs, each its own address: Site, Environments, Wizards.
+// A row wider than the screen scrolls sideways: the selected tab is brought in.
 export function PageTabs({ tabs, on }: { tabs: { name: string; to: string }[]; on: string }) {
+  const row = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const r = row.current;
+    const t = r?.querySelector<HTMLElement>(".tab-on");
+    if (!r || !t) return;
+    const rr = r.getBoundingClientRect(), tr = t.getBoundingClientRect();
+    if (tr.right > rr.right) r.scrollLeft += tr.right - rr.right;
+    else if (tr.left < rr.left) r.scrollLeft -= rr.left - tr.left;
+  }, [on]);
   return (
-    <div className="tabs" role="tablist">
+    <div className="tabs" role="tablist" ref={row}>
       {tabs.map((t) => (
         <button key={t.to} role="tab" aria-selected={on === t.name} className={on === t.name ? "tab tab-on" : "tab"} onClick={() => navigate(t.to)}>
           {t.name}
