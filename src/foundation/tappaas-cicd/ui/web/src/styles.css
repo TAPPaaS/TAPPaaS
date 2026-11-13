@@ -1033,7 +1033,7 @@ body.dragging-place, body.dragging-place * { cursor: grabbing !important; user-s
 @media (max-width: var(--bp-sm)) {
   .section { overflow-x: auto; }
   .env-cards { grid-template-columns: minmax(0, 1fr); }
-  .zones-view, .assets-view { flex-direction: column; }
+  .zones-view, .assets-view { flex-direction: column; align-items: stretch; }
   .zones-view .sidepanel, .assets-view .sidepanel { width: auto; max-width: 100%; position: static; max-height: none; }
   .section-aside { min-width: 0; }
   /* A heading with a search box: the box goes under it, the full width. */
@@ -1044,6 +1044,6 @@ body.dragging-place, body.dragging-place * { cursor: grabbing !important; user-s
   .identity-view { grid-template-columns: minmax(0, 1fr); }
   .identity-side { min-width: 0; grid-template-columns: minmax(0, 1fr); }
   .identity-side .toolbar { flex-wrap: wrap; }
-  .thr-view { flex-direction: column; }
+  .thr-view { flex-direction: column; align-items: stretch; }
   .thr-view .health-panel { width: auto; max-width: 100%; position: static; max-height: none; }
 }
