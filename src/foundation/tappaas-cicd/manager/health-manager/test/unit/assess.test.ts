@@ -178,6 +178,13 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check(got(assess(io, {}, later(1)), nc, "drift")?.reason === "sweep-changed", "a drifted attribute the store still marks is drift");
   delete s.items.find((o) => o.id === nc.id)!.attributes.drift;
   check(got(assess(io, {}, later(2)), nc, "drift")?.status === "ok", "…and is over once a change cleared it, before the next sweep");
+  // What appeared (a new release reports a relation on every object): over
+  // once a change cleared the object's drift, not a root until the next night.
+  io.sweepRecord = { ...rec, differences: [{ kind: "appeared", class: "vm", name: "nextcloud", attribute: "→member-of zone/rossen", expected: false }] };
+  s.items.find((o) => o.id === nc.id)!.attributes.drift = { since: T0, attributes: { "→member-of zone/rossen": { was: null, now: {} } } };
+  check(got(assess(io, {}, later(2.2)), nc, "drift")?.reason === "sweep-appeared", "an appeared relation the store still marks is drift");
+  delete s.items.find((o) => o.id === nc.id)!.attributes.drift;
+  check(got(assess(io, {}, later(2.4)), nc, "drift")?.status === "ok", "…and is over once a change cleared it");
   // Names repeat (a pool per node): the sweep's id says which one drifted.
   const twin = { ...obj("storage-pool", "tanka1"), id: "pool-tanka1-on-tappaas2" };
   s.items.push({ ...twin, attributes: { drift: { since: T0, attributes: { size: { was: 1, now: 2 } } } } });

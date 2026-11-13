@@ -161,9 +161,12 @@ export function fromSweep(rec: SweepRecord | null, nowMs: number, idx: SiteIndex
     if (d.expected) continue; // a verb's change, new (part of what a verb made) or words (a relation's required/redundancyGroup): not drift
     // An attribute that drifted and that a change has since put right: the
     // store cleared the object's drift, so the night's record is over for it.
+    // The same for what appeared (an attribute or relation a new release
+    // reports on every object): a change has since taken it over.
     // By id where the sweep gives one: names repeat (a pool per node).
     const o = (d.id ? idx.byId.get(d.id) : undefined) ?? idx.named(d.name, [d.class]);
-    if (d.kind === "changed" && d.attribute && !d.attribute.startsWith("→") && o && !o.attributes.drift) continue;
+    const putRight = (d.kind === "changed" && !d.attribute?.startsWith("→")) || d.kind === "appeared";
+    if (putRight && d.attribute && o && !o.attributes.drift) continue;
     const members = d.kind === "cycle" && Array.isArray(d.after) ? `: ${(d.after as string[]).join(", ")}` : d.kind === "unread" && typeof d.after === "string" ? `: ${d.after}` : "";
     const message = `${d.class}/${d.name}: ${WORD[d.kind] ?? `drift: ${d.kind}`}${d.attribute ? ` ${d.attribute}` : ""}${members}`;
     const status: ConditionStatus = d.kind === "missing" ? "critical" : "warning";
