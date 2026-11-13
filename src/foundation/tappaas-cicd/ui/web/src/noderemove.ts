@@ -32,7 +32,7 @@ export interface Target {
 }
 export const moduleTarget = (m: string, label = m): Target => ({ to: `/modules/${encodeURIComponent(m)}`, label });
 export const BACKUP_TARGET: Target = { to: "/backup", label: "the Backup page" };
-export const assetTarget = (key: string): Target => ({ to: `/assets/${encodeURIComponent(key)}`, label: key });
+export const assetTarget = (key: string): Target => ({ to: `/site/assets/${encodeURIComponent(key)}`, label: key });
 // A switch is shown, selected, in the Physical view.
 export const switchTarget = (sw: string): Target => ({ to: `/site/physical?select=${encodeURIComponent(sw)}`, label: sw });
 

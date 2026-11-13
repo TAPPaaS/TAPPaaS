@@ -13,7 +13,7 @@ import { fieldsStep } from "../fields";
 import { FieldRow, ZoneFieldSpec, shortValue, zoneFieldRows } from "../forms";
 import { GEdge, GNode, Graph } from "../graph";
 import { OperateButton, Step } from "../operate";
-import { Dot, Link, ReadState, Section, since } from "../ui";
+import { Dot, Link, PageTabs, ReadState, Section, since } from "../ui";
 import { EnvironmentRow, SiteRead } from "../types";
 import { cardVerbs } from "../zoneverbs";
 import { PASSPHRASE_TEXT, SiteSsid, WIFI_ZONE_TYPES, isPlaceholderSsid, passphraseOf } from "../wizards";
@@ -250,12 +250,15 @@ function ipv6Note(v6: Ipv6Read | null): string {
   return `IPv6: each zone's /64 is its ipv6Subnet within ${v6.prefix} (${v6.source === "site.json" ? "routed to the site, site.json" : "delegated to the WAN, as the firewall holds it now"}); a zone without an ipv6Subnet has none.`;
 }
 
-// The Network page (/zones): the graph with its side card, and the zones' table
+// Environments' Zones tab (/environments/zones): the graph with its side card, and the zones' table
 // below it. A zone's verbs (network-manager modify / enable|disable /
 // bind / reconcile / add from it / delete, each as a job with its preview; a
 // delete needs the name typed) are on its card only: a click on its card or
 // its row opens it. ?zone=<name> (the assistant's modify-zone, the
 // Environments page's zone boxes, a selection here): that zone's card, open.
+// Environments' tabs: the environments, and the zones they run in.
+export const ENV_TABS = [{ name: "Environments", to: "/environments" }, { name: "Zones", to: "/environments/zones" }];
+
 export function ZonesPage() {
   const envs = useRead<EnvironmentRow[]>("environments");
   const zones = useRead<ZoneRead[]>("zones");
@@ -269,7 +272,7 @@ export function ZonesPage() {
   }, []);
   const pick = useCallback((name: string | null) => {
     setZone(name);
-    window.history.replaceState(null, "", name ? `/zones?zone=${encodeURIComponent(name)}` : "/zones");
+    window.history.replaceState(null, "", name ? `/environments/zones?zone=${encodeURIComponent(name)}` : "/environments/zones");
   }, []);
   const modify = useOpenRequest("modify-zone");
   useEffect(() => {
@@ -282,9 +285,10 @@ export function ZonesPage() {
   return (
     <div className="page">
       <div className="page-head">
-        <h1>Network</h1>
+        <h1>Environments</h1>
         <span className="muted">network-manager · read {since(zones.env?.at)}</span>
       </div>
+      <PageTabs tabs={ENV_TABS} on="Zones" />
       <Section
         title="Zones"
         aside={

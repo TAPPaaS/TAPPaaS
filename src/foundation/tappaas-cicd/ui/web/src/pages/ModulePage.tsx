@@ -10,7 +10,9 @@ import { useOpenRequest } from "../opener";
 import { AskAbout } from "../assistant";
 import { get, useRead } from "../api";
 import { Envelope, ModuleDetail, ModuleSection as ModuleSectionDoc, Topology } from "../types";
-import { Badge, Dot, KV, Link, OpenIn, ReadState, Section, Tag, canOperate, levelOf, since, useMe, when } from "../ui";
+import { Badge, Dot, KV, Link, OpenIn, ReadState, Section, Tag, canOperate, levelOf, navigate, since, useMe, when } from "../ui";
+import { PerfCharts } from "../perfpanel";
+import { PerfLevels, RANGES } from "../perftypes";
 import { ModuleBadges } from "./Modules";
 import { JobList } from "../jobs";
 import { ModuleConfig } from "./ModuleConfig";
@@ -19,7 +21,7 @@ import { SectionView } from "./ModuleSections";
 import { LocationLine, PlacementLine, useSiteLocations } from "../locations";
 import { PlaceActions } from "../physical/rackops";
 
-const TABS = ["Overview", "Config", "Drift", "Backup", "Activity"] as const;
+const TABS = ["Overview", "Performance", "Config", "Drift", "Backup", "Activity"] as const;
 type TabName = (typeof TABS)[number];
 
 function show(v: unknown): string {
@@ -218,6 +220,20 @@ function About({ d }: { d: ModuleDetail }) {
   );
 }
 
+// The Performance tab: the charts of the module's own VM, container or machine
+// (the CI the levels' cascade names for it), as Performance's Browse draws them.
+function ModulePerformance({ name }: { name: string }) {
+  const r = useRead<PerfLevels>("performance/levels", 600_000);
+  const row = r.env?.data?.rows.find((x) => x.scope === "module" && x.name === name) ?? null;
+  return (
+    <Section title="Performance — how well it runs, and since when" aside={row?.ciId ? <Link to={`/performance/browse?select=${encodeURIComponent(row.ciId)}`}>in Performance</Link> : null}>
+      <ReadState env={r.env} failure={r.failure} what="the performance levels" />
+      {r.env?.data && !row?.ciId ? <p className="muted">{name} has no VM, container or machine of its own in the CMDB: nothing of it is measured.</p> : null}
+      {row?.ciId ? <PerfCharts key={row.ciId} id={row.ciId} ranges={RANGES} pick={(id) => navigate(`/performance/browse?select=${encodeURIComponent(id)}`)} /> : null}
+    </Section>
+  );
+}
+
 // While the sections are read, and if they cannot be: the generic ones.
 const GENERIC_SECTIONS = ["health", "operate", "about"].map((id): ModuleSectionDoc => ({ id, title: id, layer: "generic", generic: true, source: null, at: null, error: null, blocks: [], operations: [], operationErrors: [] }));
 
@@ -275,6 +291,7 @@ export function ModulePage({ name }: { name: string }) {
           })}
         </>
       ) : null}
+      {tab === "Performance" ? <ModulePerformance name={name} /> : null}
       {d && tab === "Config" ? <ModuleConfig d={d} /> : null}
       {tab === "Drift" ? <Drift name={name} /> : null}
       {d && tab === "Backup" ? <Backup d={d} /> : null}

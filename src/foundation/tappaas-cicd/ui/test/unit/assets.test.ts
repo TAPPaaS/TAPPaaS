@@ -109,27 +109,27 @@ check(stageCounts(t).operational === 2 && stageCounts(t).disposed === 1 && stage
 
 const mods = new Set(["tappaas1", "nextcloud", "firewall"]);
 const to = (xs: { to: string }[]) => xs.map((x) => x.to).join(" ");
-check(assetPath("srv 01") === "/assets/srv%2001" && assetPath("core", "1/0") === "/assets/core#port-1_0" && portAnchor("eth0") === "port-eth0", "an asset's path, a port's anchor");
-check(to(selDetails({ kind: "node", id: "tappaas1" }, { modules: mods })) === "/modules/tappaas1 /assets/tappaas1", "a node with a page: its page, then its asset");
-check(to(selDetails({ kind: "node", id: "tappaas2" }, { modules: mods })) === "/assets/tappaas2", "a node without one: its asset");
-check(to(selDetails({ kind: "switch", id: "core" }, { modules: mods })) === "/assets/core" && to(selDetails({ kind: "ap", id: "ap1" }, { modules: mods })) === "/assets/ap1", "a switch, an access point: the asset");
-check(to(selDetails({ kind: "port", id: "7", switch: "core" }, { modules: mods })) === "/assets/core#port-7" && to(selDetails({ kind: "lag", id: "ae1", switch: "core" }, { modules: mods })) === "/assets/core", "a switch port: its row on the switch's page; a LAG the switch");
-check(to(selDetails({ kind: "panelport", id: "3", panel: "pp" }, { modules: mods })) === "/assets/pp#port-3", "a patch panel's port");
+check(assetPath("srv 01") === "/site/assets/srv%2001" && assetPath("core", "1/0") === "/site/assets/core#port-1_0" && portAnchor("eth0") === "port-eth0", "an asset's path, a port's anchor");
+check(to(selDetails({ kind: "node", id: "tappaas1" }, { modules: mods })) === "/modules/tappaas1 /site/assets/tappaas1", "a node with a page: its page, then its asset");
+check(to(selDetails({ kind: "node", id: "tappaas2" }, { modules: mods })) === "/site/assets/tappaas2", "a node without one: its asset");
+check(to(selDetails({ kind: "switch", id: "core" }, { modules: mods })) === "/site/assets/core" && to(selDetails({ kind: "ap", id: "ap1" }, { modules: mods })) === "/site/assets/ap1", "a switch, an access point: the asset");
+check(to(selDetails({ kind: "port", id: "7", switch: "core" }, { modules: mods })) === "/site/assets/core#port-7" && to(selDetails({ kind: "lag", id: "ae1", switch: "core" }, { modules: mods })) === "/site/assets/core", "a switch port: its row on the switch's page; a LAG the switch");
+check(to(selDetails({ kind: "panelport", id: "3", panel: "pp" }, { modules: mods })) === "/site/assets/pp#port-3", "a patch panel's port");
 check(to(selDetails({ kind: "guest", id: "nextcloud" }, { modules: mods })) === "/modules/nextcloud" && to(selDetails({ kind: "firewall", id: "x" }, { modules: mods, firewall: "firewall" })) === "/modules/firewall", "a guest, the firewall: the module's page");
-check(to(selDetails({ kind: "rack", id: "r1" }, { modules: mods })) === assetsSelectPath("rack", "r1") && to(selDetails({ kind: "room", id: "cellar" }, { modules: mods })) === "/assets?select=room%3Acellar", "a rack, a room: the Assets page with it selected");
-check(to(selDetails({ kind: "mount", id: "modem" }, { modules: mods })) === "/assets/modem" && to(selDetails({ kind: "mount", id: "x" }, { modules: mods, seen: true })) === "/assets?select=device%3Ax", "a recorded device its page; a seen one the Assets page");
-check(to(selDetails({ kind: "disk", id: "sda", node: "tappaas2" }, { modules: mods })) === "/assets/tappaas2" && to(selDetails({ kind: "pool", id: "tank", node: "tappaas1" }, { modules: mods })).startsWith("/modules/tappaas1"), "a disk its node's asset; a pool its node");
+check(to(selDetails({ kind: "rack", id: "r1" }, { modules: mods })) === assetsSelectPath("rack", "r1") && to(selDetails({ kind: "room", id: "cellar" }, { modules: mods })) === "/site/assets?select=room%3Acellar", "a rack, a room: the Assets page with it selected");
+check(to(selDetails({ kind: "mount", id: "modem" }, { modules: mods })) === "/site/assets/modem" && to(selDetails({ kind: "mount", id: "x" }, { modules: mods, seen: true })) === "/site/assets?select=device%3Ax", "a recorded device its page; a seen one the Assets page");
+check(to(selDetails({ kind: "disk", id: "sda", node: "tappaas2" }, { modules: mods })) === "/site/assets/tappaas2" && to(selDetails({ kind: "pool", id: "tank", node: "tappaas1" }, { modules: mods })).startsWith("/modules/tappaas1"), "a disk its node's asset; a pool its node");
 const link = selDetails({ kind: "link", id: "l" }, { modules: mods, linkEnds: ["core", "tappaas1"] });
-check(link.length === 2 && link[0].label === "Details · core" && link[1].to === "/assets/tappaas1" && selDetails({ kind: "link", id: "l" }, { modules: mods, linkEnds: ["core"] })[0].label === "Details", "a link: each end that is an asset");
+check(link.length === 2 && link[0].label === "Details · core" && link[1].to === "/site/assets/tappaas1" && selDetails({ kind: "link", id: "l" }, { modules: mods, linkEnds: ["core"] })[0].label === "Details", "a link: each end that is an asset");
 check(to(selDetails({ kind: "outside", id: "b" }, { modules: mods, outsideKind: "buddy" })) === "/backup" && to(selDetails({ kind: "isp", id: "isp" }, { modules: mods })) === "/site", "a buddy the Backup page, the ISP the Site page");
 
 const ci = (c: string, ancestors: string[], name: string, extra: Partial<Parameters<typeof ciDetails>[0]> = {}) => ciDetails({ class: c, ancestors, name, module: null, relations: [], ...extra });
-check(to(ci("server", ["asset", "resource", "object"], "srv-01")) === "/assets/srv-01", "an asset CI: its page");
-check(to(ci("port", ["resource", "object"], "eth0", { relations: [{ type: "part-of", direction: "out", other: { class: "server", name: "srv-01" } }] })) === "/assets/srv-01#port-eth0" && ci("port", [], "x").length === 0, "a port: its row on its asset's page");
-check(to(ci("machine", ["node", "ci"], "tappaas1", { module: "tappaas1", relations: [{ type: "allocated-to", direction: "in", other: { class: "server", name: "srv-01" } }] })) === "/modules/tappaas1 /assets/srv-01", "a node with a module: its page, then the asset that plays it");
-check(to(ci("machine", ["node", "ci"], "tappaas2")) === "/assets/tappaas2", "a node without: its asset by its name");
+check(to(ci("server", ["asset", "resource", "object"], "srv-01")) === "/site/assets/srv-01", "an asset CI: its page");
+check(to(ci("port", ["resource", "object"], "eth0", { relations: [{ type: "part-of", direction: "out", other: { class: "server", name: "srv-01" } }] })) === "/site/assets/srv-01#port-eth0" && ci("port", [], "x").length === 0, "a port: its row on its asset's page");
+check(to(ci("machine", ["node", "ci"], "tappaas1", { module: "tappaas1", relations: [{ type: "allocated-to", direction: "in", other: { class: "server", name: "srv-01" } }] })) === "/modules/tappaas1 /site/assets/srv-01", "a node with a module: its page, then the asset that plays it");
+check(to(ci("machine", ["node", "ci"], "tappaas2")) === "/site/assets/tappaas2", "a node without: its asset by its name");
 check(to(ci("vm", ["node", "ci"], "nextcloud", { module: "nextcloud" })) === "/modules/nextcloud", "a guest: its module");
-check(to(ci("zone", ["network-element", "ci"], "home")) === "/zones?zone=home" && to(ci("user", ["identity", "ci"], "lars")) === "/identity?select=user%3Alars" && to(ci("organization", ["identity"], "acme")) === "/identity?select=org%3Aacme", "a zone the Network page, a user or an organization Identity");
-check(to(ci("rack", ["place"], "r1")) === "/assets?select=rack%3Ar1" && to(ci("environment", ["collection"], "prod")) === "/environments?env=prod" && ci("dns-name", ["network-element"], "x").length === 0, "a rack, an environment; a class with no page has none");
+check(to(ci("zone", ["network-element", "ci"], "home")) === "/environments/zones?zone=home" && to(ci("user", ["identity", "ci"], "lars")) === "/identity?select=user%3Alars" && to(ci("organization", ["identity"], "acme")) === "/identity?select=org%3Aacme", "a zone the Network page, a user or an organization Identity");
+check(to(ci("rack", ["place"], "r1")) === "/site/assets?select=rack%3Ar1" && to(ci("environment", ["collection"], "prod")) === "/environments?env=prod" && ci("dns-name", ["network-element"], "x").length === 0, "a rack, an environment; a class with no page has none");
 
 done("assets");

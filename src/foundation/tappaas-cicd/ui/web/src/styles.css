@@ -207,8 +207,10 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 .nav-later { opacity: .45; cursor: default; }
 .nav-foot { margin-top: auto; padding: 10px; font-size: 11px; color: var(--skip); line-height: 1.6; }
 .main { flex: 1; min-width: 0; }
-.topbar { display: flex; align-items: center; gap: var(--sp-12); padding: 10px var(--sp-24); background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
-.user { color: var(--muted); font-size: 13px; }
+.nav-user { color: var(--nav-ink); font-size: 12px; }
+.nav-refresh { font: inherit; font-size: 11px; color: var(--nav-ink); background: none; border: 1px solid var(--nav-hover); border-radius: var(--radius-control); padding: 2px var(--sp-8); margin: var(--sp-4) 0; cursor: pointer; }
+.nav-refresh:hover:not(:disabled) { background: var(--nav-hover); }
+.nav-refresh:disabled { opacity: .6; cursor: default; }
 .btn { font: inherit; font-size: 13px; padding: 5px var(--sp-12); border: 1px solid var(--line); background: var(--white); border-radius: var(--radius-control); cursor: pointer; }
 .btn:hover:not(:disabled) { border-color: var(--line-strong); background: var(--slate-50); }
 .btn:disabled { opacity: .6; cursor: default; }
@@ -800,11 +802,12 @@ span.ht-caret { cursor: default; }
   /* A phone: the menu is a strip along the top, the page gets the width. */
   .shell { flex-direction: column; }
   .nav { width: 100%; height: auto; position: static; padding: var(--sp-8) 10px; }
-  .brand, .nav-foot { display: none; }
+  .nav-foot { display: none; }
+  .brand { display: flex; gap: var(--sp-8); align-items: baseline; padding: 0 var(--sp-4) var(--sp-8); }
+  .brand-site { margin-top: 0; }
   .nav ul { display: flex; gap: 2px; overflow-x: auto; }
   .nav-item { white-space: nowrap; margin-bottom: 0; }
   .page { padding: var(--sp-12) var(--sp-12) 28px; }
-  .topbar { padding: var(--sp-8) var(--sp-12); }
   .health-view { height: calc(100vh - 250px); min-height: 380px; }
   .health-sheet-btn { display: inline-block; }
   .health-side { display: none; position: fixed; left: 0; right: 0; bottom: 0; width: auto; max-height: 60vh; z-index: 30; border-radius: 12px 12px 0 0; box-shadow: 0 -8px 24px var(--slate-900-a18); }

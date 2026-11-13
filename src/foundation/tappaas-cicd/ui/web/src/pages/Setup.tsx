@@ -14,7 +14,7 @@ import { OperateButton, Step } from "../operate";
 import { fieldsStep } from "../fields";
 import { useJobRun } from "../run";
 import { JobSummary, SiteRead } from "../types";
-import { Dot, Link, ReadState, canOperate, replacePath, since, useMe } from "../ui";
+import { Dot, Link, PageTabs, ReadState, canOperate, replacePath, since, useMe } from "../ui";
 import { StageState, StepRow } from "../wizard";
 import { AddNodeButton, sessionText, useAddNodeSession } from "./AddNode";
 import { AddStackButton } from "./AddStack";
@@ -198,7 +198,6 @@ const mm = (title: string, verb: string, extra: Partial<Step> = {}): Step => ({ 
 
 export type SetupTab = "Day 1" | "Day 2";
 // Two menu entries, one page each (they were tabs of one Setup page).
-export const SETUP_TITLE: Record<SetupTab, string> = { "Day 1": "Day 1 setup wizard", "Day 2": "Day 2 wizards" };
 export const SETUP_PATH: Record<SetupTab, string> = { "Day 1": "/setup/day1", "Day 2": "/setup/day2" };
 
 export function Setup({ tab }: { tab?: SetupTab }) {
@@ -214,13 +213,14 @@ export function Setup({ tab }: { tab?: SetupTab }) {
   return (
     <div className="page">
       <div className="page-head">
-        <h1>{SETUP_TITLE[shown]}</h1>
+        <h1>Wizards</h1>
         <span className="muted">
           {shown === "Day 1"
             ? `the installation, derived from the records${todo === null ? "" : todo === 0 ? " · done" : ` · ${todo} to do`} · ${since(r.env?.at)}`
             : "the guided sequences that grow and run the site"}
         </span>
       </div>
+      <PageTabs tabs={(["Day 1", "Day 2"] as SetupTab[]).map((t) => ({ name: t, to: SETUP_PATH[t] }))} on={shown} />
       {shown === "Day 1" ? <Day1 r={r} /> : <Day2 doc={d ?? null} />}
     </div>
   );

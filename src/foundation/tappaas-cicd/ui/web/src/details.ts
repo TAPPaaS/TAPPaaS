@@ -2,7 +2,7 @@
 // selected object is shown in full and changed. An asset (a server, a switch,
 // an access point, any recorded device, a rack's or a room's) its page under
 // Assets; a node its module page when it has one, else its asset; a guest or
-// the firewall its module page; a zone the Network page; a user or a group
+// the firewall its module page; a zone Environments' Zones tab; a user or a group
 // the Identity page. Plain data: the unit tests read it.
 
 import { Sel } from "./physical/layout";
@@ -15,10 +15,10 @@ export interface DetailTarget {
 const enc = encodeURIComponent;
 
 // An asset's page, by its own name or the role it plays; a port's row on it.
-export const assetPath = (name: string, port?: string | null): string => `/assets/${enc(name)}${port ? `#${portAnchor(port)}` : ""}`;
+export const assetPath = (name: string, port?: string | null): string => `/site/assets/${enc(name)}${port ? `#${portAnchor(port)}` : ""}`;
 export const portAnchor = (port: string): string => `port-${port.replace(/[^A-Za-z0-9_-]+/g, "_")}`;
 // The Assets page with a location, a room, a rack or an unrecorded device selected.
-export const assetsSelectPath = (kind: "location" | "room" | "rack" | "device", name: string): string => `/assets?select=${enc(`${kind}:${name}`)}`;
+export const assetsSelectPath = (kind: "location" | "room" | "rack" | "device", name: string): string => `/site/assets?select=${enc(`${kind}:${name}`)}`;
 export const modulePath = (name: string): string => `/modules/${enc(name)}`;
 
 const details = (to: string): DetailTarget => ({ label: "Details", to });
@@ -105,7 +105,7 @@ export function ciDetails(o: CiLike): DetailTarget[] {
     return o.module ? [details(modulePath(o.module)), { label: "Asset", to: assetTo }] : [details(assetTo)];
   }
   if (o.module) return [details(modulePath(o.module))];
-  if (o.class === "zone") return [details(`/zones?zone=${enc(o.name)}`)];
+  if (o.class === "zone") return [details(`/environments/zones?zone=${enc(o.name)}`)];
   if (o.class === "ssid") return [details("/setup/day2#wifi")];
   if (IDENTITY[o.class]) return [details(`/identity?select=${enc(`${IDENTITY[o.class]}:${o.name}`)}`)];
   if (o.class === "environment") return [details(`/environments?env=${enc(o.name)}`)];

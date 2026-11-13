@@ -127,11 +127,11 @@ check(placeFieldsFor(undefined).join() === dev.join(), "no kind: a device's");
 
 // ── the Details of a disk ────────────────────────────────────────────────
 
-check(ciDetails({ class: "disk", ancestors: ["resource", "object"], name: "dsk-01", module: null, relations: [] }).map((x) => x.to).join() === "/assets/dsk-01", "a disk CI: its own page");
+check(ciDetails({ class: "disk", ancestors: ["resource", "object"], name: "dsk-01", module: null, relations: [] }).map((x) => x.to).join() === "/site/assets/dsk-01", "a disk CI: its own page");
 const mods = new Set<string>();
 const sd = selDetails({ kind: "disk", id: "/dev/sdb", node: "tappaas3" }, { modules: mods, diskAsset: "dsk-03" });
-check(sd.length === 2 && sd[0].to === assetPath("dsk-03") && sd[1].to === "/assets/tappaas3", "a Storage disk an asset records: its page, its node's second");
-check(selDetails({ kind: "disk", id: "/dev/sdb", node: "tappaas3" }, { modules: mods, diskAsset: null }).map((x) => x.to).join() === "/assets/tappaas3", "one no asset records: its node");
+check(sd.length === 2 && sd[0].to === assetPath("dsk-03") && sd[1].to === "/site/assets/tappaas3", "a Storage disk an asset records: its page, its node's second");
+check(selDetails({ kind: "disk", id: "/dev/sdb", node: "tappaas3" }, { modules: mods, diskAsset: null }).map((x) => x.to).join() === "/site/assets/tappaas3", "one no asset records: its node");
 
 // ── the Storage view: the gates, a pool's members ────────────────────────
 

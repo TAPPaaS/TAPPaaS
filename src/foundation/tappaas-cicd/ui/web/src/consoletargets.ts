@@ -69,7 +69,7 @@ export const WIZARDS: WizardDef[] = [
     verbs: ["module-manager modify"],
   },
   {
-    name: "modify-zone", title: "Modify", arg: "zone", path: (z) => `/zones?zone=${encodeURIComponent(z)}`, keys: null,
+    name: "modify-zone", title: "Modify", arg: "zone", path: (z) => `/environments/zones?zone=${encodeURIComponent(z)}`, keys: null,
     values: "the zone's fields by name", verbs: ["network-manager modify"],
   },
 ];
@@ -77,21 +77,21 @@ export const WIZARDS: WizardDef[] = [
 // The pages, by path; <module> is a module's name.
 export const PAGES: { path: string; title: string }[] = [
   { path: "/", title: "the Overview (four tiles: Site, Environment, Modules, Identity; Health, the health line and one card per condition type; Alerts, the ten open events that matter most)" },
-  { path: "/setup", title: "the Day 1 setup wizard until the site is set up, then the Day 2 wizards" },
-  { path: "/setup/day1", title: "the Day 1 setup wizard" },
-  { path: "/setup/day2", title: "the Day 2 wizards" },
+  { path: "/setup", title: "Wizards: the Day 1 tab until the site is set up, then the Day 2 tab" },
+  { path: "/setup/day1", title: "Wizards, the Day 1 tab (the setup wizard)" },
+  { path: "/setup/day2", title: "Wizards, the Day 2 tab" },
   { path: "/site", title: "the Site page (its Overview: the site as built, site.json, the update schedule, Update now, the release train, the repositories)" },
   { path: "/site/overview", title: "the site overview (racks, devices and storage summed up, every finding; Add node; site.json, the update schedule, Update now, the release train, the repositories)" },
   { path: "/site/physical", title: "the physical view (racks, faceplates, cables)" },
   { path: "/site/devices", title: "the devices view (the assets that are physical devices, as cabled)" },
   { path: "/site/storage", title: "the storage view (nodes, pools, disks, what each pool holds)" },
   { path: "/environments", title: "Environments (a card per environment with its zones and their modules; a click opens its record and verbs)" },
-  { path: "/zones", title: "Network (the zones graph, each zone's fields and verbs)" },
+  { path: "/environments/zones", title: "Environments, Zones (the zones graph, each zone's fields and verbs)" },
   { path: "/modules", title: "Modules" },
   { path: "/modules/<module>", title: "the module's page" },
   { path: "/identity", title: "Identity" },
-  { path: "/assets", title: "Assets (every asset by location, room and rack, with its stage, role and ports; a room's and a rack's operations; the discovery sweep and the last update sweep)" },
-  { path: "/assets/<asset>", title: "the asset's page (its record, role, placement, ports and cables, disks by bay, allocations, CMDB record; its operations); a disk's (dsk-NN) has the asset it is in and the ones it has been in" },
+  { path: "/site/assets", title: "Site, Assets (every asset by location, room and rack, with its stage, role and ports; a room's and a rack's operations; the discovery sweep and the last update sweep)" },
+  { path: "/site/assets/<asset>", title: "the asset's page (its record, role, placement, ports and cables, disks by bay, allocations, CMDB record; its operations); a disk's (dsk-NN) has the asset it is in and the ones it has been in" },
   { path: "/backup", title: "Backup" },
   { path: "/health", title: "Health (the root causes, the tree, the graph and an object's panel; ?type=, ?class=, ?environment= filter it)" },
   { path: "/security", title: "Security, Vulnerabilities (the CVE risk, what to do, the zones and modules)" },
@@ -153,11 +153,11 @@ export function resolveTarget(target: unknown, values?: unknown): Resolution {
       if (!NAME.test(name)) return { ok: false, reason: `'${name}' is not a module's name` };
       return { ok: true, target: path, kind: "page", path: `/modules/${encodeURIComponent(name)}`, title: `${name}'s page`, wizard: null, arg: name, values: {} };
     }
-    const a = /^\/assets\/([^/]+)$/.exec(path);
+    const a = /^\/(?:site\/)?assets\/([^/]+)$/.exec(path); // and its earlier /assets/<name>
     if (a) {
       const name = decodeURIComponent(a[1]);
       if (!ASSET_NAME.test(name)) return { ok: false, reason: `'${name}' is not an asset's name` };
-      return { ok: true, target: path, kind: "page", path: `/assets/${encodeURIComponent(name)}`, title: `the asset ${name}'s page`, wizard: null, arg: name, values: {} };
+      return { ok: true, target: path, kind: "page", path: `/site/assets/${encodeURIComponent(name)}`, title: `the asset ${name}'s page`, wizard: null, arg: name, values: {} };
     }
     // A tab is a page of its own (/security?tab=threats); else the path alone.
     const p = PAGES.find((x) => x.path === t) ?? PAGES.find((x) => x.path === path);

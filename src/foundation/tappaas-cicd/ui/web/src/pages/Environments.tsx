@@ -11,11 +11,11 @@ import { EnvCard, ZoneLike, envCards } from "../envcards";
 import { ModuleIcon } from "../moduleicon";
 import { StateLegend } from "../physical/state";
 import { CardState, stateClass, stateOf } from "../physical/states";
-import { TYPE_COLOR, ZoneRead } from "./Zones";
+import { ENV_TABS, TYPE_COLOR, ZoneRead } from "./Zones";
 import { fieldsStep } from "../fields";
 import { OperateButton, Step } from "../operate";
 import { EnvironmentRow, ModuleSummary, SiteRead } from "../types";
-import { KV, Link, ReadState, canOperate, navigate, since, useMe } from "../ui";
+import { KV, Link, PageTabs, ReadState, canOperate, navigate, since, useMe } from "../ui";
 
 const env = (title: string, verb: string, extra: Partial<Step> = {}): Step => ({ title, bin: "environment-manager", verb, ...extra });
 
@@ -79,6 +79,7 @@ export function Environments() {
         <span className="spacer" />
         <OperateButton label="Add an environment…" title="Add an environment" steps={addEnvironmentSteps()} kind="primary" />
       </div>
+      <PageTabs tabs={ENV_TABS} on="Environments" />
       <ReadState env={envs.env} failure={envs.failure} what="environments" />
       <div className="env-page">
         {picked ? <EnvPanel c={picked} close={() => pick(null)} siteSize={siteSize} /> : null}
@@ -101,7 +102,7 @@ type Card = EnvCard<EnvironmentRow, ModuleSummary>;
 const modState = (m: ModuleSummary): CardState => (m.badges.health === "fail" ? "fail" : m.badges.health === "warn" ? "warn" : "ok");
 
 // A card: a click on its head opens the panel, on a zone's head the zone on
-// the Network page, on a module its page.
+// the Zones tab, on a module its page.
 // An environment's size (small, medium, large): its own, else the site's.
 export const envSize = (e: EnvironmentRow, siteSize: string): string => e.size ?? `${siteSize} (the site's)`;
 
@@ -127,7 +128,7 @@ function EnvCardView({ c, on, pick, siteSize }: { c: Card; on: boolean; pick: ()
       <div className="env-zones">
         {c.boxes.map((b) => (
           <div key={b.zone ?? "-"} className={`zone-box${b.own ? "" : " zone-box-shared"}`} style={{ borderTopColor: TYPE_COLOR[b.record?.type ?? ""] ?? "var(--slate-400)" }}>
-            <div className={`zone-box-head${b.zone ? " linkish" : ""}`} onClick={b.zone ? () => navigate(`/zones?zone=${encodeURIComponent(b.zone!)}`) : undefined} title={b.zone ? `open ${b.zone} on the Network page` : undefined}>
+            <div className={`zone-box-head${b.zone ? " linkish" : ""}`} onClick={b.zone ? () => navigate(`/environments/zones?zone=${encodeURIComponent(b.zone!)}`) : undefined} title={b.zone ? `open ${b.zone} on the Network page` : undefined}>
               <b>{b.zone ?? "no zone"}</b>
               <span className="muted small">
                 {b.record ? [b.record.vlantag !== undefined ? `vlan ${b.record.vlantag}` : null, b.record.type, b.record.state].filter(Boolean).join(" · ") : b.zone ? "" : "modules without a zone"}
@@ -183,7 +184,7 @@ function EnvPanel({ c, close, siteSize }: { c: Card; close: () => void; siteSize
       <ul className="plain small">
         {c.boxes.filter((b) => b.zone).map((b) => (
           <li key={b.zone}>
-            <Link to={`/zones?zone=${encodeURIComponent(b.zone!)}`}>{b.zone}</Link>{" "}
+            <Link to={`/environments/zones?zone=${encodeURIComponent(b.zone!)}`}>{b.zone}</Link>{" "}
             <span className="muted">{[b.record?.type, b.record?.state, b.sharedWith ? `shared service zone${b.sharedWith.length ? `, with ${b.sharedWith.join(", ")}` : ""}` : b.own ? (b.zone === c.zone ? "its own zone" : "serves it") : "shared, not its own"].filter(Boolean).join(" · ")} · {b.modules.length} module{b.modules.length === 1 ? "" : "s"}</span>
           </li>
         ))}

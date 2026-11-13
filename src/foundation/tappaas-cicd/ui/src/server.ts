@@ -941,7 +941,7 @@ export class ConsoleServer {
     res.statusCode = 200;
     res.setHeader("Content-Type", TYPES[ext] ?? "application/octet-stream");
     // Vite's assets carry a content hash in their names; the page itself does not,
-    // and the Assets page's own route (/assets, /assets/<asset>) is the page.
+    // and the Assets page's earlier route (/assets, /assets/<asset>) is the page.
     const hashed = segs[0] === "assets" && file !== join(web, "index.html");
     res.setHeader("Cache-Control", hashed ? "public, max-age=31536000, immutable" : "no-cache");
     res.end(readFileSync(file));

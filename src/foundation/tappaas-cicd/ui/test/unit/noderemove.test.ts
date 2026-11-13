@@ -115,7 +115,7 @@ check(!!res3.assetTrouble && /asset page/.test(res3.assetTrouble), "an asset ste
 
 // 8. link targets
 check(moduleTarget("nextcloud").to === "/modules/nextcloud", "a module's page");
-check(assetTarget("srv-03").to === "/assets/srv-03", "an asset's page");
+check(assetTarget("srv-03").to === "/site/assets/srv-03", "an asset's page");
 check(switchTarget("USW Pro XG 10 PoE").to === "/site/physical?select=USW%20Pro%20XG%2010%20PoE", "a switch, selected in the Physical view");
 
 done("noderemove");

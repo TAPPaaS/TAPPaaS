@@ -17,8 +17,9 @@ test("ack a warning: type fixed, note blank, until a date, the command quoted", 
   await atCapture(page);
   const journal = new Journal();
   await page.goto(`/health?select=${DISK}`);
-  // A phone opens the panel, a drawer, by Details.
-  if (info.project.name === "phone") await page.getByRole("button", { name: "Details", exact: true }).click();
+  // A phone opens the panel, a drawer, by itself when the address selects an
+  // object; by Details when it does not.
+  if (info.project.name === "phone" && (await page.locator(".health-panel").count()) === 0) await page.getByRole("button", { name: "Details", exact: true }).click();
   const row = page.locator("li.att").filter({ hasText: "operational" }).filter({ hasText: "ZFS DEGRADED" });
   await row.getByRole("button", { name: "Ack…" }).click();
   const d = page.getByRole("dialog", { name: /^Acknowledge operational on / });

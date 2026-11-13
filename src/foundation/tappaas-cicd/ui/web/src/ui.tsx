@@ -155,6 +155,19 @@ export function ReadState<T>({ env, failure, what }: { env: Envelope<T> | null; 
   return null;
 }
 
+// A page's tabs, each its own address: Site, Environments, Wizards.
+export function PageTabs({ tabs, on }: { tabs: { name: string; to: string }[]; on: string }) {
+  return (
+    <div className="tabs" role="tablist">
+      {tabs.map((t) => (
+        <button key={t.to} role="tab" aria-selected={on === t.name} className={on === t.name ? "tab tab-on" : "tab"} onClick={() => navigate(t.to)}>
+          {t.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function Section({ title, aside, children }: { title: ReactNode; aside?: ReactNode; children: ReactNode }) {
   return (
     <section className="section">

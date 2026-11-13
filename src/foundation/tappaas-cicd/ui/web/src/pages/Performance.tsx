@@ -2,9 +2,10 @@
 // (the most saturated resources by USE, the slowest and most failing published
 // services by RED, any performance root cause on top; a site at off says so
 // and offers basic with its cost), Browse (the Health view's tree coloured by
-// the performance condition, an object's charts with its changes), Levels
-// (the cascade, its cost against the logging VM, a change as a job) and
-// Investigations (the timed raises: in force, Extend, Stop, history). Every
+// the performance condition, an object's charts with its changes),
+// Investigations (the timed raises: in force, Extend, Stop, history) and
+// Configuration (the levels' cascade, its cost against the logging VM, a
+// change as a job). Every
 // number is read by the console's server from the metrics store.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -25,10 +26,14 @@ export type PerfTab = "overview" | "browse" | "levels" | "investigations";
 export const PERF_TABS: { tab: PerfTab; label: string; path: string }[] = [
   { tab: "overview", label: "Overview", path: "/performance" },
   { tab: "browse", label: "Browse", path: "/performance/browse" },
-  { tab: "levels", label: "Levels", path: "/performance/levels" },
   { tab: "investigations", label: "Investigations", path: "/performance/investigations" },
+  { tab: "levels", label: "Configuration", path: "/performance/configuration" },
 ];
-export const perfTabOf = (path: string): PerfTab => PERF_TABS.find((t) => t.path === path.replace(/\/+$/, ""))?.tab ?? "overview";
+// /performance/levels was the Configuration tab's earlier address.
+export const perfTabOf = (path: string): PerfTab => {
+  const p = path.replace(/\/+$/, "");
+  return p === "/performance/levels" ? "levels" : PERF_TABS.find((t) => t.path === p)?.tab ?? "overview";
+};
 
 const LEVEL: Record<string, Level> = { ok: "pass", warning: "warn", critical: "fail", unknown: "skip" };
 const browseTo = (id: string): string => `/performance/browse?select=${encodeURIComponent(id)}`;
@@ -125,7 +130,7 @@ function OverviewTab() {
                 <TopRows rows={o.saturated} empty="No node, guest or pool has numbers yet." />
               </Section>
               <Section title="Slowest and most failing services" aside="published services, the user's view">
-                <TopRows rows={o.services} empty="No published service is measured: services are measured from level service. Raise a module to service in Levels." />
+                <TopRows rows={o.services} empty="No published service is measured: services are measured from level service. Raise a module to service in Configuration." />
               </Section>
             </>
           ) : null}

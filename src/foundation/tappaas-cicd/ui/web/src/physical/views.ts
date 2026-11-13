@@ -11,6 +11,9 @@ export const VIEW_NAME: Record<PhysicalView, string> = { overview: "Overview", r
 
 export const VIEW_PATH: Record<PhysicalView, string> = { overview: "/site/overview", rack: "/site/physical", device: "/site/devices", storage: "/site/storage" };
 
+// The Site page's tabs: the views, then every asset (/site/assets, Assets.tsx).
+export const SITE_PAGE_TABS: { name: string; to: string }[] = [...PHYSICAL_TABS.map((v) => ({ name: VIEW_NAME[v], to: VIEW_PATH[v] })), { name: "Assets", to: "/site/assets" }];
+
 // The view an address shows (/site is the Overview), or null.
 export function viewOfPath(path: string): PhysicalView | null {
   if (path === "/site") return "overview";
@@ -25,7 +28,8 @@ export const MOVED_PATHS: Record<string, string> = {
   "/site/physical/cabling": "/site/devices",
   "/site/physical/device": "/site/devices",
   "/site/device": "/site/devices",
-  "/site/assets": "/site/devices",
+  "/assets": "/site/assets",
+  "/zones": "/environments/zones",
   "/site/physical/storage": "/site/storage",
 };
 

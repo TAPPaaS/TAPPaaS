@@ -3,7 +3,7 @@
 // what caused it or what it impacts, its drift against the record, its history,
 // its relations both ways, and the health verbs as jobs: ack and maintenance.
 // Details at its top opens the page that shows the object in full and changes
-// it (details.ts): a module's page, an asset's, the Network page for a zone.
+// it (details.ts): a module's page, an asset's, the Zones tab for a zone.
 // CMDB record opens the CI's record in its place (CiPanel.tsx): attributes and
 // their sources, the full history, the trace up the backbone.
 

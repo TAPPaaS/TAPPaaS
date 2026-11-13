@@ -27,7 +27,8 @@ import { LocationLink, locationOption, useSiteLocations } from "../locations";
 import { AssetRow, AssetTree, AssetTreeItem, AssetTreeLocation, AssetTreePort, Topology } from "../types";
 import { ClassIcon } from "../moduleicon";
 import { CLASS_SYMBOL, assetClassOf } from "../classsymbol";
-import { Badge, KV, Level, Link, ReadState, Section, canOperate, replacePath, since, useMe } from "../ui";
+import { Badge, KV, Level, Link, PageTabs, ReadState, Section, canOperate, replacePath, since, useMe } from "../ui";
+import { SITE_PAGE_TABS } from "../physical/views";
 import { LastUpdateSweep, Sweep } from "./Sweep";
 
 export const STAGE_LEVEL: Record<string, Level> = { ordered: "info", stock: "skip", placed: "info", operational: "pass", disposed: "unknown" };
@@ -383,14 +384,14 @@ export function Assets() {
   }, []);
   const pick = (s: AssetsSel | null) => {
     setSel(s);
-    replacePath(s ? `/assets?select=${encodeURIComponent(assetsSelText(s))}` : "/assets");
+    replacePath(s ? `/site/assets?select=${encodeURIComponent(assetsSelText(s))}` : "/site/assets");
   };
   const counts = useMemo(() => (tree ? stageCounts(tree) : null), [tree]);
   const shown = tree ? tree.locations.map((l) => filterLocation(tree, l, q)).filter((l): l is AssetTreeLocation => l !== null) : [];
   return (
     <div className="page page-wide">
       <div className="page-head">
-        <h1>Assets</h1>
+        <h1>Site</h1>
         <span className="muted">
           {tree ? `${tree.assets.length} asset(s) · ${STAGES.filter((s) => counts?.[s]).map((s) => `${counts![s]} ${s}`).join(" · ")}` : "…"}
           {r.env?.at ? ` · read ${since(r.env.at)}` : ""}
@@ -405,6 +406,7 @@ export function Assets() {
           </span>
         ) : null}
       </div>
+      <PageTabs tabs={SITE_PAGE_TABS} on="Assets" />
       <ReadState env={r.env} failure={r.failure} what="the assets (asset-manager's record, through the topology)" />
       {tree?.allocationsError ? <div className="readstate readstate-warn">The CMDB's allocations were not read: {tree.allocationsError}. The roles shown are asset-manager's record.</div> : null}
       {tree?.disksError && !tree.allocationsError ? <div className="readstate readstate-warn">The CMDB's disks were not read: {tree.disksError}. The disks are listed from asset-manager's record, without their health or pool.</div> : null}

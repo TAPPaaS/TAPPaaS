@@ -17,10 +17,10 @@ import { SiteRead, StorageInventory } from "../types";
 import { Ipv6Read } from "../zonenet";
 import { binaryBytes, bytes } from "../overview";
 import { ReactNode, useEffect } from "react";
-import { KV, Link, ReadState, Section, navigate, since, useHash } from "../ui";
+import { KV, Link, PageTabs, ReadState, Section, since, useHash } from "../ui";
 import { locationAnchor } from "../locations";
 import { publicAddress, publicText } from "../zonegraph";
-import { PHYSICAL_TABS, PhysicalView, VIEW_NAME, VIEW_PATH } from "../physical/views";
+import { PhysicalView, SITE_PAGE_TABS, VIEW_NAME } from "../physical/views";
 import { AddNodeButton } from "./AddNode";
 import { AddRepositoryButton } from "./AddRepository";
 import { AdoptButton } from "./Adopt";
@@ -53,7 +53,6 @@ interface Repo {
   hold?: { reason?: string; until?: string } | null;
 }
 
-export const SITE_TABS = PHYSICAL_TABS.map((v) => ({ view: v, name: VIEW_NAME[v], path: VIEW_PATH[v] }));
 
 // Beside the Overview's site line: the nodes the site gains.
 function NodeActions() {
@@ -359,13 +358,7 @@ export function Site({ view = "overview" }: { view?: PhysicalView }) {
           />
         ) : null}
       </div>
-      <div className="tabs" role="tablist">
-        {SITE_TABS.map((t) => (
-          <button key={t.view} role="tab" aria-selected={view === t.view} className={view === t.view ? "tab tab-on" : "tab"} onClick={() => navigate(t.path)}>
-            {t.name}
-          </button>
-        ))}
-      </div>
+      <PageTabs tabs={SITE_PAGE_TABS} on={VIEW_NAME[view]} />
       {/* The overview is the site's record; the physical views are the other tabs. */}
       {view === "overview" ? <SiteTop r={r} /> : <Physical embedded view={view} />}
     </div>

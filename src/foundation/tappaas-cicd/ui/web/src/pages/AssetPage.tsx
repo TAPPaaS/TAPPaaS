@@ -174,7 +174,7 @@ export function AssetPage({ name }: { name: string }) {
       <div className="page asset-page">
         <div className="page-head">
           <h1>{name}</h1>
-          <span className="muted"><Link to="/assets">Assets</Link></span>
+          <span className="muted"><Link to="/site">Site</Link> › <Link to="/site/assets">Assets</Link></span>
         </div>
         <ReadState env={r.env} failure={r.failure} what="the assets" />
         {tree ? (
@@ -207,7 +207,7 @@ export function AssetPage({ name }: { name: string }) {
       <div className="page-head">
         <h1 className="ci-title"><ClassIcon cls={assetClassOf(a.kind)} size={26} />{a.displayName ?? a.name}</h1>
         <span className="muted">
-          <Link to="/assets">Assets</Link> · {a.kind}
+          <Link to="/site">Site</Link> › <Link to="/site/assets">Assets</Link> · {a.kind}
           {a.displayName && a.displayName !== a.name ? ` · ${a.name}` : ""}
         </span>
         <StageBadge a={a} />
