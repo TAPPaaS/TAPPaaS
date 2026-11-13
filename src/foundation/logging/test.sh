@@ -464,6 +464,29 @@ check_traces() {
         || check_fail "The test span reads '${got:-not found in Tempo}', want host.name=tappaas-cicd tappaas.ci.id=${want:-<its CI id>}"
 }
 
+# CrowdSec runs only while the mothership has written its credentials (the
+# site's security monitoring on); then it must be running, not restarting.
+check_crowdsec() {
+    info "Check 13: CrowdSec reads Loki while security monitoring is on"
+    # shellcheck disable=SC2086
+    if ! ssh ${SSH_OPTS} "tappaas@${VM_HOST}" "sudo test -e /etc/secrets/crowdsec-lapi.yaml" 2>/dev/null; then
+        info "  security monitoring is off here (no credentials) — skipped"
+        return 0
+    fi
+    local state="" _
+    for _ in $(seq 1 18); do
+        # shellcheck disable=SC2086
+        state="$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" "systemctl is-active crowdsec" 2>/dev/null)"
+        [[ "${state}" == "active" ]] && break
+        sleep 5
+    done
+    if [[ "${state}" == "active" ]]; then
+        check_pass "CrowdSec is running"
+    else
+        check_fail "CrowdSec is ${state:-unknown} — journalctl -u crowdsec on ${VM_HOST}"
+    fi
+}
+
 main() {
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         usage
@@ -497,6 +520,7 @@ main() {
     check_alert_delivery
     check_metrics "$@"
     check_traces "$@"
+    check_crowdsec
 
     echo ""
     info "Results: ${PASS_COUNT} passed, ${FAIL_COUNT} failed"

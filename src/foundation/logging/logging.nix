@@ -1014,7 +1014,9 @@ in
   # firewall's crowdsec-converge.sh registers the same machine there.
   services.crowdsec = {
     enable = true;
-    settings.lapi.credentialsFile = "/etc/secrets/crowdsec-lapi.yaml";
+    # systemd hands the file over (LoadCredential below): /etc/secrets is
+    # 0750 root:grafana, and the service's dynamic user cannot enter it.
+    settings.lapi.credentialsFile = "/run/credentials/crowdsec.service/lapi.yaml";
     hub = {
       collections = [ "crowdsecurity/sshd" "firix/authentik" "fulljackz/proxmox" ];
       parsers = [ "crowdsecurity/syslog-logs" "crowdsecurity/dateparse-enrich" "crowdsecurity/whitelists" ];
@@ -1032,6 +1034,7 @@ in
     ];
   };
   systemd.services.crowdsec.unitConfig.ConditionPathExists = "/etc/secrets/crowdsec-lapi.yaml";
+  systemd.services.crowdsec.serviceConfig.LoadCredential = [ "lapi.yaml:/etc/secrets/crowdsec-lapi.yaml" ];
 
   # ============================================================================
   # PROMETHEUS — the metrics store (logging:metrics, ADR-046 P1)
