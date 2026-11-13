@@ -301,8 +301,9 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 
 /* module page */
 .module-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 6px 0 0; }
-.tab { font: inherit; background: none; border: 0; padding: var(--sp-8) 14px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; }
+/* A row of tabs wider than the page scrolls on its own; the page never does. */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 6px 0 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.tab { flex: none; white-space: nowrap; font: inherit; background: none; border: 0; padding: var(--sp-8) 14px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; }
 .tab-on { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
 .kv { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: var(--sp-4) var(--sp-16); }
 .kv-row { display: contents; }
